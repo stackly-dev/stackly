@@ -186,6 +186,14 @@ pub async fn client(socket: &Path) -> (Client, HandshakeAccepted) {
     client_of(socket).await.expect("the client connects")
 }
 
+/// [`client`] that returns the error instead of panicking, for a test that
+/// polls a daemon which may not be up yet.
+pub async fn client_try(
+    socket: &Path,
+) -> Result<(Client, HandshakeAccepted), stackly_ipc::IpcError> {
+    client_of(socket).await
+}
+
 async fn client_of(socket: &Path) -> Result<(Client, HandshakeAccepted), stackly_ipc::IpcError> {
     Client::connect(
         socket,

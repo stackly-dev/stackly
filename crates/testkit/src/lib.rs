@@ -46,6 +46,10 @@
 //! signing port of [`FakePlatform`]: the signature and quarantine of each
 //! file are scripted by path suffix, and every call is logged (spec 0018).
 //!
+//! Native tests of the daemon under launchd load a temporary LaunchAgent
+//! through [`LaunchAgentFixture`], whose plist is derived from the
+//! production golden file and which boots the job out on drop (spec 0015).
+//!
 //! On macOS, [`DiskImage`] attaches a small disk image inside a test root,
 //! so [`fs_cross_device_conformance`] can check that a removal never
 //! crosses onto another device (spec 0007).
@@ -80,6 +84,8 @@ mod fake_secret;
 pub mod fake_server;
 #[cfg(unix)]
 mod fifo;
+#[cfg(target_os = "macos")]
+mod launch_agent;
 mod port;
 #[cfg(unix)]
 mod process_table;
@@ -116,6 +122,11 @@ pub use fake_process::{
 pub use fake_secret::{FakeSecretStore, SecretCall, SecretHold, SecretOp};
 #[cfg(unix)]
 pub use fifo::make_fifo;
+#[cfg(target_os = "macos")]
+pub use launch_agent::{
+    AgentJob, BOOTOUT_TIMEOUT, GOLDEN_DAEMON_PLIST, LaunchAgentFixture, parse_print, plist_json,
+    render_plist,
+};
 pub use port::allocate_port;
 #[cfg(unix)]
 pub use process_table::{ProcessEntry, ProcessTable};

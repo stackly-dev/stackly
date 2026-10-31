@@ -122,13 +122,15 @@ fn cleanup_now() -> Result<ExitCode> {
     if !cfg!(target_os = "macos") {
         bail!("runtime spike --cleanup runs on macOS only");
     }
+    let uid = launchd::uid()?;
+    // Before the lock: test agents never belong to a spike (spec 0015).
+    let agents = cleanup::bootout_test_agents(uid)?;
     let cache = Cache::open()?;
     let _lock = SpikeLock::acquire_within(cache.dir(), LOCK_WAIT)?;
-    let uid = launchd::uid()?;
     let swept = cleanup::sweep(uid)?;
     let tests = cleanup::sweep_test_processes(uid)?;
     println!(
-        "spike cleanup: {} process(es) stopped, agent {}, {} folder(s) deleted, {tests} native test process(es) stopped",
+        "spike cleanup: {} process(es) stopped, agent {}, {} folder(s) deleted, {tests} native test process(es) stopped, {agents} daemon test agent(s) booted out",
         swept.processes,
         if swept.agent { "removed" } else { "not loaded" },
         swept.folders

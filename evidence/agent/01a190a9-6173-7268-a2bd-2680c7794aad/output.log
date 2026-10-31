@@ -1,0 +1,22 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/crates/platform-macos)
+   Compiling stacklyd v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/apps/daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.50s
+     Running tests/native_launchd.rs (target/debug/deps/native_launchd-602dc170c6cfc201)
+
+running 5 tests
+test a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it ...     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+ok
+test a_restart_request_to_the_agent_brings_a_new_launchd_daemon_within_30_seconds ... ok
+test a_stop_request_keeps_the_agent_down_for_longer_than_the_throttle_interval ... ok
+test an_agent_blocked_by_a_manual_daemons_lock_exits_3_until_it_takes_over ... ok
+test sigkill_of_the_agents_daemon_brings_a_new_one_within_20_seconds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 79.47s
+

@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a190aa-3eb5-719e-9c9e-a36cdd09a317",
+  "covers": [
+    "REQ-014",
+    "REQ-028"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "native_launchd",
+    "name": "an_agent_blocked_by_a_manual_daemons_lock_exits_3_until_it_takes_over",
+    "file": "apps/daemon/tests/native_launchd.rs",
+    "line": 311
+  },
+  "status": "PASS",
+  "expected": "while a manual stacklyd holds the lock of the root the agent's daemon exits 3 on every run and the manual daemon keeps serving, and at most 20 seconds after the manual daemon stops a launchd daemon of the agent answers",
+  "actual": "Some(2) runs ending with exit code 3, takeover 10075 ms after the manual daemon stopped",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "launchd",
+      "version": "7.0.0",
+      "digest": null,
+      "source": "external"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-31T06:33:58.709177Z",
+  "finishedAt": "2026-10-31T06:34:19.190857Z",
+  "evidencePath": "output.log"
+}

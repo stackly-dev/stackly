@@ -1,0 +1,442 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+    "sourceDirty": true,
+    "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "native_launchd",
+      "--",
+      "--ignored",
+      "--test-threads",
+      "1"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-10-31T06:33:02.067737Z",
+  "finishedAt": "2026-10-31T06:34:30.165704Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 5,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 5,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 5
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a190a9-8325-7320-9808-e6019c8d98ec",
+      "covers": [
+        "REQ-013",
+        "AC-013"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "native_launchd",
+        "name": "a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it",
+        "file": "apps/daemon/tests/native_launchd.rs",
+        "line": 429
+      },
+      "status": "PASS",
+      "expected": "a running fake instance keeps its pid and start time when the agent's job is restarted with launchctl kickstart -k and when it is booted out, with no AbandonProcessGroup in the plist, and the next launchd daemon adopts it as ready with the same process",
+      "actual": "fake server pid 14424 started at \"2026-10-31T06:33:14.357Z\" stayed the adopted, ready process through kickstart -k, bootout, and the next daemon",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "launchd",
+          "version": "7.0.0",
+          "digest": null,
+          "source": "external"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-31T06:33:10.693576Z",
+      "finishedAt": "2026-10-31T06:33:26.924752Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+        "sourceDirty": true,
+        "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "native_launchd",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a190a9-c293-72d9-b8fd-5d69c3a3ac57",
+      "covers": [
+        "REQ-014",
+        "REQ-028"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "native_launchd",
+        "name": "a_restart_request_to_the_agent_brings_a_new_launchd_daemon_within_30_seconds",
+        "file": "apps/daemon/tests/native_launchd.rs",
+        "line": 197
+      },
+      "status": "PASS",
+      "expected": "a temporary LaunchAgent derived from the golden plist starts stacklyd with launch.context launchd and the test label, and daemon.shutdown restart brings a daemon with another serverInstanceId under the same job within 30 seconds",
+      "actual": "new daemon after 10407 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "launchd",
+          "version": "7.0.0",
+          "digest": null,
+          "source": "external"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-31T06:33:26.931659Z",
+      "finishedAt": "2026-10-31T06:33:37.907881Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+        "sourceDirty": true,
+        "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "native_launchd",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a190a9-ed7c-75a2-a9f4-e984cd0cd21e",
+      "covers": [
+        "REQ-014",
+        "REQ-028"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "native_launchd",
+        "name": "a_stop_request_keeps_the_agent_down_for_longer_than_the_throttle_interval",
+        "file": "apps/daemon/tests/native_launchd.rs",
+        "line": 226
+      },
+      "status": "PASS",
+      "expected": "after daemon.shutdown stop the agent's daemon exits 0, and for at least 20 seconds launchd starts no new process and no daemon answers on the socket",
+      "actual": "last exit code 0, runs Some(1), no process and no answer for 20187 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "launchd",
+          "version": "7.0.0",
+          "digest": null,
+          "source": "external"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-31T06:33:37.91663Z",
+      "finishedAt": "2026-10-31T06:33:58.701196Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+        "sourceDirty": true,
+        "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "native_launchd",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a190aa-3eb5-719e-9c9e-a36cdd09a317",
+      "covers": [
+        "REQ-014",
+        "REQ-028"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "native_launchd",
+        "name": "an_agent_blocked_by_a_manual_daemons_lock_exits_3_until_it_takes_over",
+        "file": "apps/daemon/tests/native_launchd.rs",
+        "line": 311
+      },
+      "status": "PASS",
+      "expected": "while a manual stacklyd holds the lock of the root the agent's daemon exits 3 on every run and the manual daemon keeps serving, and at most 20 seconds after the manual daemon stops a launchd daemon of the agent answers",
+      "actual": "Some(2) runs ending with exit code 3, takeover 10075 ms after the manual daemon stopped",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "launchd",
+          "version": "7.0.0",
+          "digest": null,
+          "source": "external"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-31T06:33:58.709177Z",
+      "finishedAt": "2026-10-31T06:34:19.190857Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+        "sourceDirty": true,
+        "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "native_launchd",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a190aa-8ec0-74d2-9199-6d8beb5f9115",
+      "covers": [
+        "REQ-014",
+        "REQ-028"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "native_launchd",
+        "name": "sigkill_of_the_agents_daemon_brings_a_new_one_within_20_seconds",
+        "file": "apps/daemon/tests/native_launchd.rs",
+        "line": 278
+      },
+      "status": "PASS",
+      "expected": "after SIGKILL of the agent's daemon launchd starts a new daemon, with another pid and serverInstanceId, that answers within 20 seconds",
+      "actual": "new daemon after 10358 ms",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "launchd",
+          "version": "7.0.0",
+          "digest": null,
+          "source": "external"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-10-31T06:34:19.200604Z",
+      "finishedAt": "2026-10-31T06:34:30.155645Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "25021d680a0558b87043db3ed055e5e6e9c82ff1",
+        "sourceDirty": true,
+        "runId": "01a190a9-6173-7268-a2bd-2680c7794aad",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "native_launchd",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
