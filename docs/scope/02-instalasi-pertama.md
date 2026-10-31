@@ -61,7 +61,7 @@ Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arc
 - [x] Verify it: `/check verify catalog & provider detail`
 - [x] Test it: `/test catalog & provider detail`
 
-### 18. Install runtime managed · in-progress · GA
+### 18. Install runtime managed · done · GA
 
 Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke staging, verifikasi digest dan signature, ekstrak aman, validasi binary dan dependency, lalu commit atomik. Termasuk halaman Runtimes untuk melihat hasilnya.
 
@@ -78,7 +78,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
   - [x] Daemon, contract, and CLI: `runtime` protocol DTOs, methods, event, and error codes with fixtures and Swift contract tests, `stacklyd` handlers with `OperationEngine::replay` (built here if feature 7 has not, K12), the catalog gate, and precheck, daemon integration tests (including `runtime_install_refuses_an_artifact_for_another_target` against the spec 0017 fixtures `official/linuxonly` and `official/intelonly`, for AC-002 and AC-005), `stackly runtime install`, `list`, and `inspect` with golden files, and the compatibility record generator with `cargo xtask runtime compat-record` (spec 0018 AC-1 to AC-3, AC-6, AC-10, AC-13 to AC-16, AC-18; build steps 10 to 13; needs milestone 2, feature 6 daemon server and feature 8 CLI framework (`01-foundation.md`); after step 10, steps 11, 12, and 13 can run as three parallel sessions)
   - [x] Runtimes page and the Get button: `StacklyClient` runtime methods, `RuntimeStore`, `RuntimesPage` with Installing, table, locked remove button, and inspector, `RuntimeGetAction` in the Catalog version matrix, "{n} installed" on the Catalog provider card, opaque feedback marked `// provisional: F67`, and the runtime status table in `apps/macos/design.md` (spec 0018 AC-17, AC-18; build steps 14 and 15; needs milestone 3, feature 12, feature 13 step 16 (`ui-macos.md`; gated by feature 10 milestone 2, K18), and the feature 17 Catalog page (spec 0017 milestone 3)) · manual steps skipped by the user (2026-10-23)
   - [x] Native proof: native install tests through the daemon from the xtask spike cache (no network) for every available line whose provider package exists: NATS and Traefik, PostgreSQL 17 and 18 after spec 0019 step 4 (package) and step 7 (`runtime.versionCheck`), and MySQL, ClickHouse, and Valkey recorded `BLOCKED` `no provider package (features 40 to 43)`; a broken signature binary run through `spawn_main` (K7); no quarantine on installed files, no developer tools spawned, the `runtime spike --cleanup` extension, then `nats_installs_from_the_network` after your approval, and 10 minute fuzz runs with manual evidence (spec 0018 AC-5, AC-6, AC-12, AC-19, AC-20; build steps 16, 16a, and 17; needs milestone 3, and spec 0019 steps 4 and 7 for the PostgreSQL tests; step 16a needs your approval for the network run; the fuzz runs (step 17) can run as their own parallel session right after milestone 1)
-- [ ] Verify it: `/check verify install runtime managed`
+- [x] Verify it: `/check verify install runtime managed` · PASS 2026-10-31 on main `cccc08cc`, GUI steps run on screen; fixes `30a4c9c4` (compatibility records) and `5ac758a1` (Get button reason)
 - [ ] Test it: `/test install runtime managed`
 - [ ] Review it (fresh model): `/check review install runtime managed`
 - [ ] Document it: `/document install runtime managed`
