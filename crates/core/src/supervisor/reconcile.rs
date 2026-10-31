@@ -457,6 +457,13 @@ pub(crate) async fn settle_instance(
         if !plan.adopt {
             state.not_running(now);
         }
+        // Spec 0010, *Status dan event*: the restart history is in memory
+        // only, but a crash loop the registry kept still reads exhausted.
+        if instance.lifecycle() == InstanceLifecycle::Failed
+            && instance.last_failure() == Some(&FailureCode::CRASH_LOOP)
+        {
+            state.restart_status.exhausted = true;
+        }
         if plan.then == Then::Respawn {
             state
                 .restart

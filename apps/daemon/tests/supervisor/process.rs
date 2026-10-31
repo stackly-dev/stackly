@@ -1,7 +1,7 @@
 //! A process that does not stop (spec 0010 AC-5), a process that crashes
-//! until its budget is gone (AC-7), a start that is cancelled while the
-//! process is up but not ready (AC-4, AC-8), and the events of one instance
-//! (AC-16).
+//! until its budget is gone (AC-7) and still reads exhausted after a daemon
+//! restart, a start that is cancelled while the process is up but not ready
+//! (AC-4, AC-8), and the events of one instance (AC-16).
 
 use std::time::Duration;
 
@@ -125,6 +125,56 @@ async fn a_process_that_keeps_crashing_ends_failed_with_crash_loop_and_an_exhaus
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;
     ev.pass();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_crash_loop_still_reads_exhausted_after_a_daemon_restart() {
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let id = api
+        .create_ready(
+            "crashy",
+            json!({ "crashAfterMs": 150, "crashExitCode": 70 }),
+        )
+        .await;
+    let accepted = api
+        .start(id)
+        .await
+        .expect("the start is accepted")
+        .accepted
+        .expect("a start from stopped begins an operation");
+    api.wait_instance(id, "failed with an exhausted budget", |summary| {
+        summary.lifecycle == InstanceLifecycle::Failed && summary.restart.exhausted
+    })
+    .await;
+    let _ = api.wait_final(accepted.operation.id).await;
+    drop(api);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+
+    // Spec 0010, *Status dan event*: after a daemon restart `attempts` is
+    // 0, and `exhausted` is true for a `failed` instance whose last
+    // failure is `crash_loop`.
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let loaded = api.get(id).await.expect("the loaded instance can be read");
+    assert_eq!(loaded.lifecycle, InstanceLifecycle::Failed);
+    assert_eq!(
+        loaded
+            .last_failure
+            .as_ref()
+            .map(|failure| failure.code.as_str()),
+        Some("crash_loop")
+    );
+    assert_eq!(loaded.restart.attempts, 0, "{loaded:?}");
+    assert_eq!(loaded.restart.budget, 5, "{loaded:?}");
+    assert!(loaded.restart.exhausted, "{loaded:?}");
+    drop(api);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

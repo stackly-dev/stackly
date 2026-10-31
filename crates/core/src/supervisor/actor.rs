@@ -208,8 +208,9 @@ pub(crate) struct InstanceActor {
 
 impl InstanceActor {
     /// Makes the actor of an instance the daemon has not supervised yet:
-    /// readiness and health `unknown` with reason `daemon_restarted`.
-    pub(crate) fn new(id: InstanceId, now: Timestamp) -> Self {
+    /// readiness and health `unknown` with reason `daemon_restarted`, and
+    /// no restart used of the budget and window `config` sets.
+    pub(crate) fn new(id: InstanceId, now: Timestamp, config: &SupervisorConfig) -> Self {
         let readiness = Readiness::new(
             ReadinessState::Unknown,
             now,
@@ -228,7 +229,7 @@ impl InstanceActor {
             health,
             process: None,
             restart: RestartHistory::new(),
-            restart_status: RestartStatus::default(),
+            restart_status: restart_status(config, 0, None, false),
             blocker: None,
             leftover: Vec::new(),
             ports_final: false,

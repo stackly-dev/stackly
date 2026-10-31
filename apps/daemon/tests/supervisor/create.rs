@@ -249,6 +249,42 @@ async fn a_created_instance_that_never_started_reads_unknown_with_reason_never_o
         .await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_never_started_instance_reports_the_restart_policy_before_and_after_a_daemon_restart() {
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let id = api.create_ready("idle", json!({})).await;
+
+    // Spec 0010, *Restart policy*: 5 attempts in 5 minutes, never 0 of 0.
+    let created = api.get(id).await.expect("the created instance can be read");
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let loaded = api.get(id).await.expect("the loaded instance can be read");
+
+    for summary in [&created, &loaded] {
+        assert_eq!(summary.restart.attempts, 0, "{summary:?}");
+        assert_eq!(summary.restart.budget, 5, "{summary:?}");
+        assert_eq!(summary.restart.window_seconds, 300, "{summary:?}");
+        assert_eq!(summary.restart.next_attempt_at, None, "{summary:?}");
+        assert!(!summary.restart.exhausted, "{summary:?}");
+    }
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn five_creates_released_together_behind_a_keychain_dialog_all_succeed() {
     let ev = evidence!(
