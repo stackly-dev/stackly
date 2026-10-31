@@ -1,9 +1,9 @@
 # Log koordinasi: `02-instalasi-pertama`
 
 - **Scope:** `docs/scope/02-instalasi-pertama.md`
-- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `8d787b2`
-- **Wave aktif:** `4`, mulai `2026-10-21` (program dilanjutkan user lewat `/coordinate Scope 02 · Instalasi pertama`)
-- **Diperbarui:** `2026-10-23 16:38`
+- **Hash awal:** `6b3da2c` · **Hash awal wave aktif:** `f68c80b7`
+- **Wave aktif:** `5`, mulai `2026-10-31` (`/coordinate docs/scope/02-instalasi-pertama.md`, tanpa F15)
+- **Diperbarui:** `2026-10-31 21:45`
 
 ## Sub sesi wave `1` dan `2`
 
@@ -124,6 +124,11 @@
 | `arc-f22-sync` (sesi `chk-f23-m4` dipakai ulang) | `architect (update)` | 22 · catatan retry 9a dihapus, usulan commit terjaga ke spec 0005/0007/0010, Follow-up start/stop dengan nama | `02-instalasi-pertama.md` | index/rationale 0022, index 0005, 0007, 0010, penanda 0020, baris 803 0021 | `claude/arc-f21-update-cc228d` | `opus-5-5 · xhigh` | `merged` 10 commit (`847ba815` sampai `7b4fc282` → `312502e4`), tanpa teks AC |
 | `dev-f22-m2-s5a` (sesi `dev-f20-m6` dipakai ulang) | `developer` | 22 · `stackly instance start` dan `stop` dengan nama (spec 0022 langkah 5a, AC-15) | `02-instalasi-pertama.md` | `apps/cli/src/args.rs`, `commands/instance/{action,mod}.rs`, test `apps/cli/tests/instance/`, verify.md 0022 | `claude/dev-f19-m1-bf9875` | `sonnet-5-5 · high` | `merged` (`ad5f6a8f` → `ede86c30`) |
 | `chk-f22-s5a` (sesi `dev-f17-m3` dipakai ulang) | `checker (verify)` | 22 · verify langkah 5a | `02-instalasi-pertama.md` | langkah 5a `verify.md` 0022 | `claude/dev-f17-m3-f2ed92` | `sonnet-5-5 · high` | PASS (`893fd87f` → `921f60ad`), langkah CLI manual dijalankan terhadap daemon development |
+
+## Sub sesi wave `5`
+
+| Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Keputusan
 
@@ -383,6 +388,12 @@ Checker milestone 3 dimulai setelah fix masuk. | `lead` |
 | `2026-10-23` | User: "Push main to origin now (github.com/stackly-dev/stackly.git), after telling the other two leads." Kedua lead diberi tahu, lalu `main` di-push fast forward tanpa force: `origin/main` `7c495365..110b5735` (206 commit, termasuk merge Scope 03 dan ui-macos sejak 2026-10-22). Worktree dan sesi tetap ada untuk wave lanjutan setelah langkah manual user. | `lead` |
 | `2026-10-23` | User memilih "Skip manual steps (Recommended)": langkah manual di `docs/manual.md` bagian L sampai S dicatat sebagai dilewati user (bukan evidence native), milestone dan Build it dicentang dari evidence otomatis dengan akhiran "manual steps skipped by the user (2026-10-23)" (`29a328b5` sampai `5c496ae7`): F15 milestone GUI dan CLI install dicentang dan run launchd ditandai skipped (kotak tetap terbuka), F15 signing tetap `BLOCKED` (OQ-012) sehingga Build it F15 tetap terbuka; F16 empat milestone, Build it, dan Verify it (dari `chk-f16-verify`); F17, F18, F20, F21, F22, F23 milestone terakhir dan Build it. Berikutnya: verify penuh F17, F18, F20, F21, F22, F23 (Opus high), Test it F16 sampai F23, Review it F18 dan F20 (Opus xhigh, penulis Sonnet), Document it F18 dan F20 oleh lead. | `lead` |
 | `2026-10-23` | User: "commit dan merge semua brach dan worktree dari sesi ini ke main dan push ke orign, kemudia hapus semuanya keculai main di remote dan local". Sesi yang berjalan dihentikan (verify penuh F20 baru mulai; verify F18 dan F21 belum build; test F16 setengah jalan) dan loop tunggu F18 dimatikan lewat PID nya. Sisa kerja di-commit dan di-merge: penanda SKIPPED milestone 4 verify.md 0018 (`676035ea` → `b7815ba1`) dan assertion literal `OnboardingCopyTests` dari `tst-f16-test` (`98d32564` → `c4a7e29a`, gate: swift-format, `OnboardingCopyTests` dan `OnboardingWalkTests` 28 lulus). Kesembilan branch `claude/*` program ini kini tanpa commit di depan main, lalu dihapus bersama worktree nya. `claude/mystifying-rosalind-5cf45e` milik lead Scope 03 (satu commit duplikat F24 M1, sengaja tidak di-merge) tidak disentuh. Kotak yang masih terbuka di scope ini: Verify it dan Test it F17, F18, F20, F21, F22, F23; Test it F16; Review it dan Document it F18 dan F20; Build it, Verify it, Test it F15 (signing `BLOCKED`, OQ-012; run launchd dilewati). | `lead` |
+| `2026-10-31` | Wave 5: semua kotak terbuka scope ini kecuali F15 (dikecualikan user). Bug didebug, keputusan architect diambil dari opsi yang direkomendasikan, worktree dipakai lalu di-merge ke `main`, di-push, dan branch serta worktree dihapus. Rencana dijalankan tanpa persetujuan ulang. | `user` |
+| `2026-10-31` | Effort sesi lead `medium` (user memilih "Langsung mulai"). Tiap sub sesi dinaikkan ke model dan effort tabel langkah 3 lewat `set_session_model`/`set_session_effort` sesudah dibuat. | `lead` |
+| `2026-10-31` | Ruang disk 23 GB bebas, `target/` utama 36 GB: semua sub sesi memakai `CARGO_TARGET_DIR=/Users/ojiepermana/Development/ojiepermana/Stackly/target` dan tidak menjalankan `cargo clean`; maksimal 4 sesi. Langkah verify GUI (satu layar) dijalankan satu checker pada satu waktu. | `lead` |
+| `2026-10-31` | `Cargo.lock` uncommitted di checkout utama (ureq 3.5.0, mematahkan `stackly-platform-macos` di `fetch.rs:421`) dicadangkan di scratchpad lead dan dikembalikan ke `HEAD` supaya pemeriksaan merge `--locked` jalan. | `lead` |
+| `2026-10-31` | Langkah verify keyboard (navigasi keyboard, shortcut) di luar lingkup: dihapus atas permintaan user 2026-10-24 (`AGENTS.md` Interaction policy). Langkah yang butuh mematikan jaringan atau hardware tidak tersedia dicatat `BLOCKED` dengan `reason` dan `owner`; instruksi user "centang semua" dipakai sebagai persetujuan `Verify it` dengan BLOCKED itu. | `lead` |
+| `2026-10-31` | Reviewer F18 dan F20: penulis Opus dan Sonnet keduanya, jadi reviewer `claude-opus-5-5 · xhigh` dengan subagent review di dalam `/check review`. | `lead` |
 
 ## Blocker terbuka
 
