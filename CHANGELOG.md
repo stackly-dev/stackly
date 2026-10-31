@@ -50,12 +50,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stackly secret list`, `status`, `set`, `reveal`, and `delete`. `set` takes the value from a hidden prompt (asked twice), stdin, a file, or an environment variable, or lets the daemon generate one (32 characters within the field's limits) or copy one. `delete` refuses a reference that a resource still uses (see spec 0011).
 - A locked Keychain or a missing value never starts an instance with empty credentials: start and create fail with `secret.needs_secret`, which lists each reference as an item with its reason and carries a hint, so the CLI and the GUI can name what to fill in (see spec 0011).
 - Secret views in `StacklyUI` (`SecretField`, `SecretEntrySheet`, and `RevealableSecretText`), shown today on the Secrets page of the Design Gallery. A shown value hides again after 30 seconds, on Hide, and when the app loses focus, and a Show cut short says why. Copy puts the value on the pasteboard for this Mac only, marked concealed, clears it after 90 seconds, and never overwrites something you copied while it waited (see spec 0011).
+- Managed runtime install: `runtime.install` resolves a selector such as `@17` or `@stable` to one exact version and digest from the catalog, then runs five stages as one operation (Download, Verify digest, Extract, Validate binary, Commit). A download that breaks off resumes from the cache, an artifact whose digest does not match is never run, and the runtime appears in the registry only after the atomic commit (see spec 0018).
+- A safe archive extractor in Rust for `tar_gz`, `zip`, and single binaries that refuses path traversal, symlinks that escape the runtime, and archive bombs, plus a Mach-O reader that checks the architecture, the minimum macOS version, and the library closure of every executable. Fuzz targets `runtime_archive` and `runtime_macho` cover both (see spec 0018).
+- Install errors with their own codes and hints, among them `runtime.digest_mismatch`, `runtime.archive_rejected`, `runtime.architecture_mismatch`, `runtime.os_too_old`, `runtime.signature_invalid`, `runtime.quarantined`, `runtime.binary_rejected_by_os`, `runtime.download_offline`, and `runtime.insufficient_space`. A binary the OS refuses at spawn ends in a diagnosed error instead of a hang (see spec 0018).
+- `runtime.list`, `runtime.get`, `runtime.resolve`, and the `runtime.state_changed` event, with `stackly runtime install`, `list`, and `inspect` on the CLI that show the same data as the Runtimes page (see spec 0018).
+- Compatibility records: each installed version keeps the catalog's records for this Mac, and its support status follows them; a version without a record stays `unverified`. `cargo xtask runtime compat-record` writes a record from an evidence run (see spec 0018).
+- The Runtimes page in the app, with the staged install progress, the runtime table, the inspector, and a Get button in the Catalog version matrix; a provider card shows how many of its versions are installed (see spec 0018).
 
 ### Changed
 
 - `stackly` now reads `STACKLY_ROOT` once at startup, with the same rules as the daemon (see spec 0006).
 - Open enums in the contract read a value from a newer daemon as `unrecognized` instead of failing, in Rust and in Swift (see spec 0006).
 - The test only `testing/fake` provider package is now at revision 0.3.0 and writes its config to the instance's `secrets` folder, so development roots and `stackly instance create` for it use `--revision 0.3.0` (see specs 0009 and 0014).
+
+### Fixed
+
+- The catalog now carries the compatibility records from `versions.json` into support and install, so an installed runtime no longer reads `unverified` when the catalog has a record for this Mac (see spec 0018).
+- `runtime.get` sends the record that decides the support status first and takes the records from the catalog while the artifact is still listed there, so the Runtimes inspector shows the record behind its badge. Protocol 1.15 (see spec 0018).
+- A disabled Get button in the Catalog now says why it cannot run (the install gate or the daemon being unavailable) instead of what it would do (see spec 0018).
 
 ### Security
 
