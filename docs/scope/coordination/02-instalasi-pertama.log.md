@@ -133,8 +133,8 @@
 | `chk-f20-verify` | `checker (verify)` penuh | 20 · Verify it, 6 langkah `NOT_RUN` (M3 baris 106 sampai 107, M4 baris 141 sampai 144) | `02-instalasi-pertama.md` | `verify.md` 0020 | `chk-f20-verify` (dari `main`) | `opus-5-5 · high` (giliran pertama `medium`, lihat Keputusan) | `berjalan`; satu satunya checker GUI saat ini |
 | `tst-f20-test` | `tester` | 20 · Test it, range `d26d0c9a^..1a0e638b` pada path Pointer F20 | `02-instalasi-pertama.md` | test create instance, guard, source; `evidence/` | `claude/tst-f20-test-30d50d` | `sonnet-5-5 · high` (giliran pertama `opus-5-5 · medium`) | `merged` (`1996141c` → `ffee4fa1`); `Test it` dicentang; AC-1 sampai AC-25 sudah punya test, AC-26 ditambah `apps/daemon/tests/create_log_clean.rs`; evidence check lulus |
 | `tst-f21-test` | `tester` | 21 · Test it, range `e6c747f3^..ae4cd29b` pada path Pointer F21 | `02-instalasi-pertama.md` | test connection, detail, data usage; `evidence/` | `tst-f21-test` (dari `main`) | `sonnet-5-5 · high` (giliran pertama `opus-5-5 · medium`) | `berjalan` |
-
 | `tst-f22-test` (sesi `tst-f20-test` dipakai ulang) | `tester` | 22 · Test it, range `1785fcad^..ad5f6a8f` pada path Pointer F22 | `02-instalasi-pertama.md` | test overview, instance list/inspect/action, capacity; `evidence/` | `claude/tst-f20-test-30d50d` | `sonnet-5-5 · high` | `dipakai ulang`, `berjalan` |
+
 **Antrian wave 5:** `tst-f22-test`, `tst-f23-test`, lalu checker GUI satu per satu `chk-f21-verify`, `chk-f22-verify`, `chk-f23-verify`; `chk-f20-review` setelah Verify it dan Test it F20 [x]; `Document it` F18 dan F20 oleh lead setelah Review it masing masing.
 
 ## Keputusan
