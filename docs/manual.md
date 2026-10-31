@@ -28,6 +28,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [R. F22 Overview dan daftar instance](#r-f22-overview-dan-daftar-instance) | F22 milestone 3 dan 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 40 menit | wajib untuk F22 |
 | [S. F23 Provider NATS](#s-f23-provider-nats) | F23 milestone 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 20 menit, sesudah O | wajib untuk F23 |
 | [U. Duplicate di aplikasi](#u-duplicate-di-aplikasi-fitur-24) | F24 milestone 3 dan 4, AC-14 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 35 menit dengan fake provider, ditambah 40 menit dengan PostgreSQL 17 | wajib untuk F24 |
+| [V. Stop, restart, dan reload tanpa jaringan](#v-stop-restart-dan-reload-tanpa-jaringan-fitur-26) | F26 milestone 4, AC-12 dan AC-18 di [scope/04-kerja-harian.md](scope/04-kerja-harian.md) | 30 menit, Wi-Fi kamu matikan sendiri | bukti tambahan untuk F26 (fitur sudah done) |
 
 Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama.
 
@@ -505,6 +506,24 @@ Untuk F24 (spec 0024) milestone 3 dan 4: Duplicate… dari menu More dan ⌘D, d
 **Tangkapan layar (opsional):** ⇧⌘4 untuk sheet Duplicate (langkah 2 bagian 1) dan halaman Instances dengan tiga instance (langkah 5 bagian 2); sebutkan path-nya supaya Claude menyalinnya ke `evidence/manual/files/`.
 
 **Yang dikirim:** versi macOS; untuk bagian 1 nomor serta apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai", plus kode HTTP langkah 7; untuk bagian 2 hasil cek artefak, keluaran langkah 5 dan 6 (`runtimeId`, jumlah postmaster, hasil `to_regclass`, tiga `system_identifier`), atau "BLOCKED: artefak hilang di cache".
+
+## V. Stop, restart, dan reload tanpa jaringan (fitur 26)
+
+Untuk F26 (spec 0026) milestone 4 langkah 18 dan AC-12: stop, restart, reload, dan force stop PostgreSQL lewat app dan CLI saat Mac tidak punya jaringan, ditambah alur pointer AC-18 (stop, restart, inspect hanya dengan mouse). Bukti otomatis sudah ada: harness offline di `apps/daemon/tests/supervisor/stop_restart_reload.rs` dan run native PostgreSQL 18 dan NATS di `apps/daemon/tests/postgresql/lifecycle_ops.rs` dan `apps/daemon/tests/nats/lifecycle_ops.rs`. Bagian ini hanya menambah bukti dengan jaringan yang benar benar mati, yang tidak boleh Claude lakukan sendiri.
+
+Root dev, cache, dan terminal sama seperti T. Artefak yang dipakai hanya PostgreSQL 18.6 (`PG18` di T langkah 2).
+
+1. Kerjakan T langkah 1 sampai 6 (hanya `$PG18`), lalu Get PostgreSQL 18.6 di Catalog dan buat `pg18-dev` dengan Start after creating menyala. Tunggu Ready.
+2. Matikan Wi-Fi dari menu bar dan cabut kabel jaringan bila ada. Cek di Terminal A: `curl -sS -m 5 https://example.com -o /dev/null; echo $?` harus mencetak angka selain 0.
+3. Restart lewat app: buka detail `pg18-dev`, klik tombol ikon Restart (panah melingkar) di toolbar. Tombol menampilkan "Restarting…", lalu kartu umpan balik "Restarted “pg18-dev”." muncul. PID di `$S instance get pg18-dev` berubah, status kembali Ready.
+4. Reload lewat app: klik tombol ikon Reload (petir). Kartu "Reloaded “pg18-dev”." muncul, dan PID tidak berubah.
+5. Lewat CLI: `$S instance restart pg18-dev --wait` mencetak `restarted pg18-dev (pid <pid>)`, dan `$S instance reload pg18-dev --wait` mencetak `reloaded pg18-dev`.
+6. Stop lewat app: klik Stop. Baris berubah menjadi Stopped. Di tab Summary, baris Last exit tidak tampil (exit yang bersih tidak ditampilkan).
+7. Alur pointer (AC-18): kerjakan langkah 3, 4, dan 6 sekali lagi hanya dengan mouse, termasuk membuka menu Instance di menu bar. Item Restart, Reload, dan Force Stop… ada di sana; yang tidak bisa jalan menampilkan alasannya sebagai subjudul (misalnya "Force stop is available while an instance is still stopping.").
+8. Force stop tidak bisa dipicu aman dengan PostgreSQL asli (stop normalnya selesai cepat), jadi cukup cek bahwa `$S instance stop pg18-dev --force` tanpa `--yes` di terminal menanyakan "force stop pg18-dev?" dengan teks risiko, dan jawaban Enter (default no) membatalkan tanpa mengirim apa pun.
+9. Nyalakan lagi Wi-Fi. Bersihkan seperti T langkah 17 (hanya `pg18-dev`).
+
+**Yang dikirim:** versi macOS, keluaran langkah 2, PID sebelum dan sesudah langkah 3 dan 4, keluaran CLI langkah 5, hasil langkah 7 dan 8, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai".
 
 ## Cara mengirim hasil
 

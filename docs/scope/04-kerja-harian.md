@@ -4,7 +4,7 @@
 
 Journey yang paling sering dipakai setelah instance ada: stop, restart, lihat log, pantau metrik, ubah config, dan percaya bahwa instance tetap benar walau GUI ditutup, daemon restart, Mac login ulang, atau tidak ada koneksi internet. Fase ini selesai kalau seluruh pekerjaan harian bisa dilakukan dari GUI, CLI, dan menu bar dengan state yang jujur.
 
-### 26. Stop, restart & reload · in-progress
+### 26. Stop, restart & reload · done
 
 Lifecycle lengkap sesuai capability provider: stop graceful dengan timeout, restart yang diserialisasi, reload hanya kalau provider mendukung (sesuai capability dari spec fitur 9 dan 10), dan opsi force dengan risiko yang jelas setelah timeout.
 
@@ -15,13 +15,13 @@ Lifecycle lengkap sesuai capability provider: stop graceful dengan timeout, rest
 **Pointer:** spec [0026](../specs/0026-stop-restart-reload/index.md) · code in `crates/core/src/supervisor/{force,restart_op,reload,persist}.rs`, `apps/daemon/src/ipc/instance/mod.rs`, `apps/cli/src/commands/instance/action.rs`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Instances/InstanceLifecycleActions.swift`
 
 - [x] Design it (spec): `/architect stop, restart & reload` · spec 0026, two cross checks (Sonnet, Fable 5.1) applied, accepted 2026-11-01
-- [ ] Build it: `/develop stop, restart & reload`
+- [x] Build it: `/develop stop, restart & reload` · 4329277f on `feat/f26-stop-restart-reload`
   - [x] Domain, registry, platform, and core: `ExitKind` and migration `0006_instance_last_exit.sql`, `OperationKind::ForceStopInstance`, the `force_kill` port with `FORCE_KILL_ALLOWED` in `check-deps`, `OperationEngine::force_intent` and the `ExitKind` table on every `exited` path, `supervisor::force`, `supervisor::restart_op`, and the reload lifecycle codes (spec 0026 AC-2 to AC-8, AC-10; build steps 1 to 7)
   - [x] Contract, daemon, CLI, and fixture proof: `instance.restart`, `instance.reload`, `instance.force_stop` with their params, codes, `InstanceSummary.capabilities` and `lastExit`, protocol 1.16 and codegen, the `stacklyd` handlers, socket tests for force, restart, serialization, and the offline harness, then `stackly instance restart`, `reload`, and `stop --force` (spec 0026 AC-1, AC-2, AC-4, AC-6 to AC-13; build steps 8 to 11; after milestone 1)
   - [x] GUI: `InstanceLifecycleActions.resolve`, the Restart and Reload toolbar buttons, the stopping banner with the Force Stop confirmation, feedback cards, the Last exit row, the Instance menu items, and view fixtures (spec 0026 AC-14 to AC-18; build steps 12 to 15; after milestone 2)
-  - [ ] PostgreSQL 18 and NATS on this Mac: stop with an active connection, restart, and reload on PostgreSQL 18; reload refused and restart on NATS; the network off run after your approval (spec 0026 AC-1, AC-6, AC-10 to AC-12; build steps 16 to 18; after milestone 2; runtime artifacts in the xtask cache, else `BLOCKED`)
-- [ ] Verify it: `/check verify stop, restart & reload`
-- [ ] Test it: `/test stop, restart & reload`
+  - [x] PostgreSQL 18 and NATS on this Mac: stop with an active connection, restart, and reload on PostgreSQL 18; reload refused and restart on NATS; the network off run after your approval (spec 0026 AC-1, AC-6, AC-10 to AC-12; build steps 16 to 18; after milestone 2; runtime artifacts in the xtask cache, else `BLOCKED`) · native PASS on this Mac (2026-11-01): PostgreSQL 18 stop clean with a session open, restart with the sentinel kept, reload with the same PID; NATS reload refused with no operation and restart; the network off run and the pointer flow moved to `docs/manual.md` section V (not run yet)
+- [ ] Verify it: `/check verify stop, restart & reload` · skipped for this session by the user (2026-11-01)
+- [ ] Test it: `/test stop, restart & reload` · skipped for this session by the user (2026-11-01)
 
 ### 27. Log per instance · needs a decision
 
