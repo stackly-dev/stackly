@@ -207,14 +207,9 @@ public struct NewInstanceSheet: View {
             get: { model.startAfterCreating }, set: { model.setStartAfterCreating($0) })
     }
 
-    /// The secret inputs of the drafts, built at the click.
+    /// The secret inputs of the click: the model's choice and the text typed here.
     private func secretInputs() -> [SecretFieldInput] {
-        guard let schema = model.schema else { return [] }
-        return schema.rows.compactMap { row in
-            guard case .secret(let limits) = row.control else { return nil }
-            let draft = drafts[row.id] ?? SecretDraft()
-            return draft.input(limits: limits).map { SecretFieldInput(field: row.id, input: $0) }
-        }
+        model.schema?.secretInputs(typed: drafts.mapValues(\.text)) ?? []
     }
 
     private func clearDrafts() {

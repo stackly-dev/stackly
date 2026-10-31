@@ -305,6 +305,30 @@ public final class SchemaFormModel {
         if sourceChanged { onChange?() }
     }
 
+    /// The secret inputs of a Create click: the source and the reference come from the model,
+    /// which is what the preflight judged, and only the typed text from the view. An Enter
+    /// secret whose text does not fit the limits is left out; Create is off in that case.
+    /// - Parameter typed: The text typed for each Enter secret, by field key.
+    public func secretInputs(typed: [String: String]) -> [SecretFieldInput] {
+        rows.compactMap { row in
+            guard case .secret(let limits) = row.control else { return nil }
+            let choice = secretChoice(row.id)
+            switch choice.source {
+            case .generate:
+                return SecretFieldInput(field: row.id, input: .generate)
+            case .enter:
+                guard let text = typed[row.id], limits.violation(for: text) == nil else {
+                    return nil
+                }
+                return SecretFieldInput(field: row.id, input: .value(text))
+            case .copyFrom:
+                return choice.reference.map {
+                    SecretFieldInput(field: row.id, input: .copyFrom($0))
+                }
+            }
+        }
+    }
+
     /// Marks every Enter secret as not typed. The view forgets the typed text once Create is
     /// sent, so the model stops claiming the text fits: Create stays off until it is typed again,
     /// while the source and the reference stay what the person chose.

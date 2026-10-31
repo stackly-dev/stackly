@@ -226,6 +226,30 @@ struct SchemaFormModelTests {
         #expect(schema.secretsAreValid)
     }
 
+    @Test func theInputsOfAClickFollowTheModelsChoiceAndTakeOnlyTheTextFromTheView() throws {
+        let schema = try schema("postgresql")
+        #expect(
+            schema.secretInputs(typed: [:])
+                == [SecretFieldInput(field: "superuserPassword", input: .generate)])
+
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        #expect(schema.secretInputs(typed: [:]).isEmpty)
+        #expect(schema.secretInputs(typed: ["superuserPassword": "short"]).isEmpty)
+        #expect(
+            schema.secretInputs(typed: ["superuserPassword": "long-enough-text"])
+                == [SecretFieldInput(field: "superuserPassword", input: .value("long-enough-text"))]
+        )
+
+        schema.setSecret(
+            "superuserPassword",
+            SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        #expect(
+            schema.secretInputs(typed: ["superuserPassword": "ignored-text"])
+                == [SecretFieldInput(field: "superuserPassword", input: .copyFrom("local:user/x"))]
+        )
+    }
+
     static func field(key: String, kind: FieldKind) -> FormField {
         FormField(
             key: key, title: key, description: nil, kind: kind, required: false, secret: false,
