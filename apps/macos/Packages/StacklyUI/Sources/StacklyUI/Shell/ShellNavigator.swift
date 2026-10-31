@@ -57,15 +57,25 @@ public struct InstanceRequest: Equatable, Sendable {
 /// ``AppShell`` creates one per window, puts it in the environment, and mirrors
 /// ``section`` with its `@SceneStorage` in both directions, since `@SceneStorage` only
 /// lives in a view. A destination that is the Instances page also leaves an
-/// ``InstancesRequest`` the page applies, then clears.
+/// ``InstancesRequest`` or an ``InstanceRequest`` the page applies. The request stays until
+/// the section changes: SwiftUI can build the Instances page a second time right after the
+/// first one applied it (the first visit of a window), and the second page applies it too.
 @MainActor
 @Observable
 public final class ShellNavigator {
-    /// The section that shows.
-    public var section: SidebarSection
-    /// The request the Instances page has not applied yet.
+    /// The section that shows. Showing another section drops the requests for the
+    /// Instances page.
+    public var section: SidebarSection {
+        didSet {
+            if section != .instances {
+                instancesRequest = nil
+                instanceRequest = nil
+            }
+        }
+    }
+    /// The last request for the Instances page, while the Instances section shows.
     public private(set) var instancesRequest: InstancesRequest?
-    /// The detail page the Instances page has not opened yet.
+    /// The last detail page asked of the Instances page, while the Instances section shows.
     public private(set) var instanceRequest: InstanceRequest?
     /// Counts the times the person asked for the table of Instances again, such as a second
     /// click on its sidebar row: the page closes the detail page when it changes.
@@ -100,16 +110,6 @@ public final class ShellNavigator {
     /// Asks the Instances page to go back to its table.
     public func showInstancesTable() {
         instancesResets += 1
-    }
-
-    /// Clears the request after the page applied it.
-    public func consumeInstancesRequest() {
-        instancesRequest = nil
-    }
-
-    /// Clears the request after the page opened the detail page.
-    public func consumeInstanceRequest() {
-        instanceRequest = nil
     }
 }
 

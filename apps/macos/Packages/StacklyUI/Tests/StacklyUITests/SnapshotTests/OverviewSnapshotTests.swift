@@ -52,6 +52,55 @@ extension SnapshotTests {
         @Test(
             .evidence(
                 covers: ["NFR-012"],
+                expected:
+                    "The Overview shows every instance status whole at the 640 pt content width: next to the name when it fits, under the provider line when not"
+            ))
+        func overviewWhoseStatusesAreLong() async throws {
+            let cases = FixtureScenario.instanceCases
+            let reports = InstanceSummary.fixture(
+                number: 12, name: "reports", runtimeVersion: "18.1", port: 5439,
+                lifecycle: .running, desired: .running,
+                readiness: .fixture(
+                    .notReady, reason: "probe_failed",
+                    detail: "FATAL: the database system is starting up"))
+            // Few items in Needs Attention, so the Instances section is in the 748 pt canvas.
+            let rig = await rig(
+                instances: [cases[0], cases[1], cases[7], reports], operations: [],
+                capacity: Self.report(.ok, available: 500_000_000_000))
+            try await assertSnapshot(rig.overviewPage(), named: "overview-long-status")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Instances section of the Overview shows every instance status whole in the narrowest left column of the two column layout"
+            ))
+        func overviewInstancesInTheNarrowestLeftColumn() async throws {
+            let cases = FixtureScenario.instanceCases
+            let summaries = [cases[7], cases[1], cases[10], cases[9], cases[2], cases[0]]
+            let rig = await rig(instances: summaries, operations: [])
+            let rows = InstanceRowModel.rows(of: summaries, catalog: rig.catalog.providers)
+            let context = InstanceActionContext.make(feedbackCenter: nil, navigator: nil)
+            // Two columns start at 820 pt inside the page inset, with Operations at most
+            // 360 pt wide next to the left column.
+            let width = OverviewPage.twoColumnMinWidth - Spacing.sectionGap - 360
+            let section = OverviewInstanceList(
+                rows: rows, total: rows.count,
+                action: { rig.actions.stacklyAction(for: $0, context: context) },
+                open: { _ in }, showAll: {}, browseCatalog: {}
+            )
+            .frame(width: width)
+            .padding(Spacing.pageHorizontal)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(StacklyColor.surfaceWindow)
+            try await assertSnapshot(
+                section, named: "overview-instances-left-column", variants: [.light])
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
                 expected: "The Overview with a critical disk renders in every variant"
             ))
         func overviewWithACriticalDisk() async throws {

@@ -23,7 +23,31 @@ struct ShellNavigatorTests {
         navigator.show(.instances(filter: .failed, select: id))
         #expect(navigator.instancesRequest?.filter == .failed)
         #expect(navigator.instancesRequest?.select == id)
-        navigator.consumeInstancesRequest()
+    }
+
+    @Test func aRequestStaysWhileTheInstancesSectionShows() {
+        let navigator = ShellNavigator()
+        navigator.show(.instances(filter: .failed))
+        navigator.openInstance(UUID())
+        let filter = navigator.instancesRequest
+        let detail = navigator.instanceRequest
+        // `AppShell` writes the section back from its scene storage.
+        navigator.section = .instances
+        navigator.showInstancesTable()
+        #expect(navigator.instancesRequest == filter)
+        #expect(navigator.instanceRequest == detail)
+    }
+
+    @Test func showingAnotherSectionDropsTheRequests() {
+        let navigator = ShellNavigator()
+        navigator.show(.instances(filter: .failed))
+        navigator.openInstance(UUID())
+        navigator.section = .overview
+        #expect(navigator.instancesRequest == nil)
+        #expect(navigator.instanceRequest == nil)
+
+        navigator.show(.instances(filter: .stopped))
+        navigator.show(.overview)
         #expect(navigator.instancesRequest == nil)
     }
 
@@ -48,8 +72,6 @@ struct ShellNavigatorTests {
         #expect(navigator.section == .instances)
         #expect(navigator.instanceRequest?.instance == id)
         #expect(navigator.instancesRequest == nil)
-        navigator.consumeInstanceRequest()
-        #expect(navigator.instanceRequest == nil)
     }
 
     @Test func theInstanceDestinationShowsTheInstancesSection() {
