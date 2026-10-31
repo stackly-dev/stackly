@@ -420,6 +420,7 @@ struct CreateInstanceModelTests {
         await settle("an Enter preflight") {
             rig.service.preflightCalls.last?.secrets?.contains(
                 SecretPlan(field: "superuserPassword", source: .value)) == true
+                && rig.model.createDisabledReason == nil
         }
         rig.answer = { _, _ in .rejected(.create("instance.name_taken", "the name is taken")) }
         let before = rig.service.preflightCalls.count
