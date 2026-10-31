@@ -197,6 +197,7 @@ Catatan kecil, bukan FAIL F23:
 
 - Langkah 117 menulis "Biarkan Automatic", tetapi sheet mulai dengan Fixed 4222 dan 8222. Itu sesuai spec 0020 (*Alur create* langkah 2: setiap endpoint IP `Fixed` dengan `defaultPort`); kedua port dipindah ke Automatic dengan tangan (4222 juga dipakai NATS Homebrew di Mac ini, preflight memberi caution "Also in use on all addresses of this Mac"). Teks langkah bisa diperbaiki menjadi "pilih Automatic" lewat `/architect` atau `/develop`.
 - Halaman detail tidak punya picker tab; isi Summary adalah seluruh halaman. Langkah 118 menyebut "tab Summary".
+- Sekitar 16:54 UTC, otomasi GUI sesi lain (`dbg-f22`) sempat mengenai app ini karena salah PID. Ia membawa jendela ke depan, mengatur frame ke 900×1010, mengklik Instances, mungkin menampilkan inspector, menggeser pembatas sidebar, dan mengambil screenshot. Menit itu hanya persiapan (Catalog Get, `install_runtime` selesai 16:54:32). Langkah 117 dan 118 dimulai sesudahnya (create 16:57:00, 16:58:32, dan 16:59:14), dan semua aksi di sana dari sesi ini, dicek lewat state AX dan log daemon. Perubahan sesi lain itu hanya tata letak, jadi tidak ada langkah yang perlu diulang.
 - Saat sheet menutup setelah create (frame 16:59:15.607), isi sheet sesaat berganti menjadi "Choose a runtime" dan "No installed runtimes in this category" sebelum hilang. Hanya kosmetik, kurang dari 0,2 detik, milik spec 0020.
 
 ### Acceptance-criteria coverage
