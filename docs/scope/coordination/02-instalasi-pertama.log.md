@@ -129,6 +129,12 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| `chk-f18-review` | `checker (review)` | 18 · Review it, range `afc7c52c^..6a2e4248` pada path Pointer F18 | `02-instalasi-pertama.md` | `docs/reviews/2026-10-31-f18-install-runtime-managed.md` | `chk-f18-review` (dari `main` `0274b37b`) | `opus-5-5 · xhigh` | `berjalan` |
+| `chk-f20-verify` | `checker (verify)` penuh | 20 · Verify it, 6 langkah `NOT_RUN` (M3 baris 106 sampai 107, M4 baris 141 sampai 144) | `02-instalasi-pertama.md` | `verify.md` 0020 | `chk-f20-verify` (dari `main`) | `opus-5-5 · high` (giliran pertama `medium`, lihat Keputusan) | `berjalan`; satu satunya checker GUI saat ini |
+| `tst-f20-test` | `tester` | 20 · Test it, range `d26d0c9a^..1a0e638b` pada path Pointer F20 | `02-instalasi-pertama.md` | test create instance, guard, source; `evidence/` | `tst-f20-test` (dari `main`) | `sonnet-5-5 · high` (giliran pertama `opus-5-5 · medium`) | `berjalan` |
+| `tst-f21-test` | `tester` | 21 · Test it, range `e6c747f3^..ae4cd29b` pada path Pointer F21 | `02-instalasi-pertama.md` | test connection, detail, data usage; `evidence/` | `tst-f21-test` (dari `main`) | `sonnet-5-5 · high` (giliran pertama `opus-5-5 · medium`) | `berjalan` |
+
+**Antrian wave 5:** `tst-f22-test`, `tst-f23-test`, lalu checker GUI satu per satu `chk-f21-verify`, `chk-f22-verify`, `chk-f23-verify`; `chk-f20-review` setelah Verify it dan Test it F20 [x]; `Document it` F18 dan F20 oleh lead setelah Review it masing masing.
 
 ## Keputusan
 
@@ -393,6 +399,7 @@ Checker milestone 3 dimulai setelah fix masuk. | `lead` |
 | `2026-10-31` | Ruang disk 23 GB bebas, `target/` utama 36 GB: semua sub sesi memakai `CARGO_TARGET_DIR=/Users/ojiepermana/Development/ojiepermana/Stackly/target` dan tidak menjalankan `cargo clean`; maksimal 4 sesi. Langkah verify GUI (satu layar) dijalankan satu checker pada satu waktu. | `lead` |
 | `2026-10-31` | `Cargo.lock` uncommitted di checkout utama (ureq 3.5.0, mematahkan `stackly-platform-macos` di `fetch.rs:421`) dicadangkan di scratchpad lead dan dikembalikan ke `HEAD` supaya pemeriksaan merge `--locked` jalan. | `lead` |
 | `2026-10-31` | Langkah verify keyboard (navigasi keyboard, shortcut) di luar lingkup: dihapus atas permintaan user 2026-10-24 (`AGENTS.md` Interaction policy). Langkah yang butuh mematikan jaringan atau hardware tidak tersedia dicatat `BLOCKED` dengan `reason` dan `owner`; instruksi user "centang semua" dipakai sebagai persetujuan `Verify it` dengan BLOCKED itu. | `lead` |
+| `2026-10-31` | Model dan effort yang diset sesudah `start_session` berlaku mulai giliran berikutnya: giliran pertama tester dan checker verify berjalan pada model lead (`opus-5-5 · medium`), lalu tabel langkah 3 untuk giliran sesudahnya. Opus di atas Sonnet untuk tester, jadi diterima. | `lead` |
 | `2026-10-31` | Reviewer F18 dan F20: penulis Opus dan Sonnet keduanya, jadi reviewer `claude-opus-5-5 · xhigh` dengan subagent review di dalam `/check review`. | `lead` |
 
 ## Blocker terbuka
