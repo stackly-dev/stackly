@@ -346,7 +346,7 @@ public struct InstancesPage: View {
             TableColumn("") { row in
                 rowAction(row)
             }
-            .width(min: 100, ideal: 124, max: 150)
+            .width(min: 72, ideal: 124, max: 150)
         }
         // A table keeps the column widths it was made with, so a new set of columns, or a page
         // column that the inspector narrowed, makes a new table.
