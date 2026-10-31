@@ -56,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `runtime.list`, `runtime.get`, `runtime.resolve`, and the `runtime.state_changed` event, with `stackly runtime install`, `list`, and `inspect` on the CLI that show the same data as the Runtimes page (see spec 0018).
 - Compatibility records: each installed version keeps the catalog's records for this Mac, and its support status follows them; a version without a record stays `unverified`. `cargo xtask runtime compat-record` writes a record from an evidence run (see spec 0018).
 - The Runtimes page in the app, with the staged install progress, the runtime table, the inspector, and a Get button in the Catalog version matrix; a provider card shows how many of its versions are installed (see spec 0018).
+- Create instance for real: `instance.get_create_form` returns the form a provider's settings schema and resources describe, `instance.preflight` checks a draft without changing anything, and `instance.create` runs as one operation that pins the provider revision, registers the instance in one guarded registry transaction, and initializes data only in a new folder owned by that operation. The daemon is the only one that validates; the GUI and CLI send the same draft and show the same result (see spec 0020).
+- Preflight per field, with codes such as `instance.name_invalid`, `instance.name_taken`, `instance.endpoint_invalid`, `instance.data_not_empty`, `instance.data_overlap`, `instance.insufficient_space`, `instance.runtime_incompatible`, `instance.settings_invalid`, and `catalog.pin_failed`. A fixed port that is in use is an error with a free port offered and never changed silently, overlaps between IPv4, IPv6, and wildcard listeners are found, endpoints bind to loopback by default, and data paths never leave the owned root (see spec 0020).
+- `stackly instance create` with `--dry-run` and `--start`, and an equivalent command the GUI can copy for every draft (see spec 0020).
+- The New Instance sheet in the app: fields drawn from the provider schema with no provider specific SwiftUI, secret fields as secure inputs (Generate, Enter, or Copy from), fields that cannot change after init marked, a category filter for runtimes, and the preflight shown before Create (see spec 0020).
+- The `instance_path` fuzz target for data path validation (see spec 0020).
 
 ### Changed
 
@@ -68,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The catalog now carries the compatibility records from `versions.json` into support and install, so an installed runtime no longer reads `unverified` when the catalog has a record for this Mac (see spec 0018).
 - `runtime.get` sends the record that decides the support status first and takes the records from the catalog while the artifact is still listed there, so the Runtimes inspector shows the record behind its badge. Protocol 1.15 (see spec 0018).
 - A disabled Get button in the Catalog now says why it cannot run (the install gate or the daemon being unavailable) instead of what it would do (see spec 0018).
+- A new instance now reads readiness `unknown (never_observed)` instead of `daemon_restarted`, and an instance the supervisor has not started yet reports its configured restart budget instead of "0 of 0 in 0m", so a crash loop reads "Crash loop after 5 restarts." (see specs 0004 and 0010).
+- The equivalent command of a preflight with `--start` now ends with `--start` (see spec 0020).
+- The New Instance sheet sends the secret source the preflight judged (Generate, Copy from, or the typed value) after a refused, failed, or unknown create and after a runtime change, so a retry never switches to a generated password or reuses the key with another request (see spec 0020).
 
 ### Security
 
