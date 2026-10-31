@@ -157,3 +157,54 @@ Jumlah: Blocker 0, Major 1, Minor 20, Nit 19.
 Kuat: download (`crates/core/tests/runtime_download.rs`: resume, truncation sync, 200 untuk Range, validator berubah, 416, mismatch, klasifikasi retry, ruang, stop), commit (`runtime_commit.rs`), resolve (`runtime_resolve.rs`), alur ujung ke ujung termasuk cancel, crash saat download, dan line katalog yang pindah (`runtime_install.rs`, daemon `tests/runtime/{install,read,resolve,support}.rs`), validasi protocol, test CLI install, field fase 02 `versions.json`, dan test Swift `RuntimeStoreTests`, `RuntimeGetCellTests`, `RuntimeCopyTests`, `RuntimesPageTests`.
 
 Celah: executable yang `@rpath`-nya hanya terselesaikan lewat rpath executable lain; nama cadangan varian huruf; kepala file Mach-O yang pendek atau gagal dibaca; mismatch pada percobaan download ketiga; `.part` lengkap saat restart; `source` pada cache hit; restart level operasi sesudah rename commit dan di extract/validate; `ERANGE` quarantine; `--output id` pada install gagal atau timeout; pilihan record inspector saat record penentu bukan yang pertama; `runtime.resolve` dengan selector `sha256:` rusak; retry `--idempotency-key` setelah katalog pindah; batas waktu dan klaim tanpa runtime di test native offline.
+
+## Konfirmasi fix 2026-10-31
+
+**Diperiksa oleh**: Opus 5.5 · xhigh, inline (penulis fix Sonnet 5.5 menurut trailer kedua commit, family berbeda)
+**Range**: `git diff 16642a50^1 16642a50`, merge `16642a50` dari `dev-f18-fix` dengan dua commit: `854f4884 fix(runtime): send the deciding compatibility record first in runtime.get` dan `742d510a test(runtime): order of runtime compatibility records, NATS fixtures at supported`. Ada 36 file, 18 di antaranya PNG snapshot. Nomor baris mengacu ke `8f74c974` (`main`). Minor dan Nit review asli tidak diulang.
+**Status Major**: terbuka sebagian. Kasus yang dilaporkan sudah tertutup. Major masih terbuka saat record catalog untuk sha256 itu berbeda dari salinan registry, yang terjadi pada update catalog biasa.
+
+### Status Major
+
+**Yang tertutup.** `runtime.get` kini mengambil record penentu dari verdict yang sama dengan badge: `catalog_verdict` (`apps/daemon/src/ipc/runtime.rs:256`), dengan `registry_deciding_record` sebagai cadangan (baris 258). `runtime_detail` (`apps/daemon/src/map/runtime.rs:209`) menaruh record itu di depan, lalu sisanya menurut `testedAt` menurun dengan sort stabil. Doc DTO (`crates/protocol/src/runtime.rs:521`), schema, dan `StacklyProtocol.swift` menyebut urutan yang sama.
+
+Test `an_install_copies_the_catalog_compatibility_records_and_support_follows_them` (`apps/daemon/tests/runtime/install.rs:222`) membedakan urutan dengan benar. Ia mendaftar record runtime untuk mayor host, lalu record runtime terbaru untuk mayor sebelumnya, lalu record provider penentu yang paling lama; kalau urutannya hanya "newest first", test gagal. Untuk install baru, saat salinan registry sama dengan catalog (termasuk contoh NATS 2.15.1 di review asli), record provider kini muncul pertama di bawah badge Supported. Filter `registry_deciding_record` sama dengan `registry_support`, jadi jalur registry juga cocok dengan badge.
+
+#### 🟠 Sisa Major: record penentu dari catalog, daftar dari registry, `apps/daemon/src/map/runtime.rs:209`
+**Problem**: `deciding` (`apps/daemon/src/ipc/runtime.rs:256`) menunjuk ke record di `VersionArtifact::compatibility()` dari catalog yang sedang dimuat. Daftar yang diurutkan berasal dari `ArtifactRecord.compatibility`, salinan registry yang ditulis sekali saat install dan tidak berubah sesudahnya (spec 0018 *Data model*). `Some(*row) != deciding` membandingkan nilai. Bila sesudah install catalog membawa record penentu yang tidak ada di salinan registry, tidak ada baris yang cocok. Semua baris lalu diurutkan "newest first", dan baris pertama bukan penentu. Spec 0018 *Value sourcing* (`docs/specs/0018-install-runtime-managed/index.md:587`) meminta `get.compatibility` diambil dari catalog selama sha256 masih ada di sana, dan dari registry hanya bila tidak. Kode mengirim salinan registry di kedua kasus.
+**Skenario dengan data repo**: user memasang NATS 2.15.1 saat catalog masih di revision 1.0.0, dengan record runtime 2026-10-18 dan record provider 1.0.0 2026-10-22T02:48. Update app membawa revision 1.0.1 beserta record provider 1.0.1 (`providers/nats/versions.json`, commit `7664295c`). Badge menjadi Supported (provider_tested) karena record 1.0.1 di catalog. Salinan registry tidak memuat record itu, jadi inspector menampilkan record provider revision 1.0.0. Menurut BR-025, record itu tidak membenarkan Supported untuk revision 1.0.1. Kontrak baru ("the record that decided the support first") jadi dilanggar pada jalur update biasa, bukan kasus pinggiran.
+**Suggested fix**: Ikuti baris *Value sourcing*. Selama sha256 masih ada di catalog, kirim record catalog, dengan `sourceUrl` dan `sha256` dari artefak catalog, sehingga `deciding` menunjuk ke slice yang sama dan bisa dicocokkan dengan `std::ptr::eq`. Bila tidak, kirim salinan registry dengan `registry_deciding_record`. Kalau salinan registry harus tetap menjadi sumber, kirim record penentu secara eksplisit lewat field opsional `decidingRecord`, dengan kenaikan minor. Tambah test daemon: install dengan catalog A, restart dengan catalog B yang membawa record provider untuk revision baru, lalu assert `compatibility[0]` adalah record B.
+
+#### 🟡 Sisa Minor: inspector menampilkan record walau tidak ada record penentu, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Runtimes/RuntimeInspector.swift:114`
+**Problem**: Baris Support selalu menampilkan `detail?.compatibility?.first`. Untuk verdict tanpa record (`untested`, `fixture_only`, `requires_newer_os`, `no_build_*`, `artifact_blocked`), `deciding` kosong, jadi baris pertama hanya record terbaru. Kontrak baru tidak memberi klien cara membedakan keduanya selain `supportReason`. Doc `RuntimeCopy.recordText` (`RuntimeCopy.swift:90`) juga masih menyebut parameternya "The newest compatibility record".
+**Contoh**: setelah Mac naik ke macOS 28 sementara record hanya ada untuk 27, inspector menulis "Unverified: Not tested on this Mac yet." lalu tepat di bawahnya "Tested on macOS 27.0 …". Spec 0018 *Halaman Runtimes* (index.md:535) meminta "record penentunya", bukan record terbaru.
+**Suggested fix**: Tampilkan record hanya bila `summary.supportReason` adalah `.providerTested` atau `.runtimeTested`, lalu perbarui doc `recordText`. Pilihan lain: nyatakan di doc DTO bahwa elemen pertama hanya menjadi penentu untuk dua reason itu.
+
+### Temuan baru di file yang disentuh fix
+
+Fix ini tidak memunculkan Blocker atau Major baru.
+
+- 🟡 `apps/daemon/src/ipc/runtime.rs:258`: tidak ada test yang menjalankan cabang cadangan registry (`registry_deciding_record`, `apps/daemon/src/map/runtime.rs:375`). Test daemon hanya memakai jalur catalog, dan 71 test `map::` tidak ada yang menguji `runtime_detail` atau `registry_deciding_record`. Tambah test daemon dengan catalog yang tidak lagi memuat sha256 itu, atau unit test `runtime_detail` dengan record acak dan `deciding` dari registry.
+- ⚪ `apps/daemon/src/map/runtime.rs:387`: ada dua definisi "record penentu". `support_status` mengambil record pertama yang cocok menurut urutan catalog (`find` di `crates/core/src/runtime/compatibility.rs:83` dan `:97`), sedangkan `registry_deciding_record` mengambil yang terbaru (`max_by_key`). Hasilnya kini sama karena generator menyimpan satu record per kunci, tetapi samakan aturannya atau tulis perbedaannya di doc.
+- ⚪ `apps/daemon/src/ipc/runtime.rs:256`: `get` menghitung `catalog_verdict` dua kali, sekali lewat `summary_of` → `catalog_support` (baris 237 dan 345) dan sekali di sini, jadi entri catalog dipindai dua kali. Hitung sekali lalu pakai untuk summary dan record penentu; itu juga menjamin keduanya berasal dari verdict yang sama.
+- ⚪ `clients/swift/Tests/StacklyClientTests/Contract/ContractTests.swift:137`: test bernama `protocolIsOnePointEleven` meng-assert 1.15. Fix menyentuh baris assert di bawahnya, tetapi namanya tidak diganti.
+
+### Kontrak, fixture, dan snapshot
+
+- Kenaikan minor sudah benar. Versi 1.14 sudah di `main` sebelum fix, jadi `protocols/contract-versions.json` menambah entri 1.15, bukan `--amend`. Digest 1.15 sama dengan 1.14 (`f8c175ce…`) karena digest membuang `description` (`DOC_KEYWORDS`, `xtask/src/codegen/contract.rs:27`): yang berubah hanya jaminan urutan, bentuk wire tetap. Minor cocok di sini, karena daemon tidak pernah memenuhi jaminan lama "newest first", dan satu satunya klien yang bergantung pada urutan adalah inspector. `version.rs`, `protocol-version.json`, `ContractInfo.swift`, dan schema sudah 1.15, dan tidak ada sisa 1.14 di fixture atau test.
+- Fixture NATS (`protocols/fixtures/catalog/provider-nats.json:71`, `protocols/fixtures/ipc/frame-response-catalog-get-provider.json:77`, dan seed fuzz) kini `supported`/`provider_tested`. Nilai itu sesuai output daemon (`map::catalog::tests::every_detail_reply_of_the_fixture_catalog_is_its_shared_fixture` lulus) dan BR-025. Penyebabnya bukan fix ini: `providers/` tidak berubah di merge ini, dan record provider 1.0.1 masuk lewat `7664295c`, yang sudah di `main` sebelumnya. Pesan commit `742d510a` keliru menyebut penyebabnya. `crates/protocol/tests/catalog_fixtures.rs:195` melonggarkan assert menjadi "supported hanya dengan provider_tested", dan itu cocok dengan BR-025.
+- Ke-18 snapshot catalog dan `runtime-get-*` hanya berubah di sel macOS NATS: badge "Unverified" menjadi "Tested", dengan catatan "macOS: Tested with this provider on this Mac." Ini dicek dengan membandingkan `runtime-get-installed.light.png` lama dan baru. Tidak ada snapshot inspector yang berubah, dan tidak ada test Swift yang menguji record mana yang dipilih inspector.
+
+### Perintah dijalankan
+
+| Perintah | Hasil |
+| --- | --- |
+| `git merge main`, `git diff --stat main...HEAD` | fast forward ke `8f74c974`, diff kosong |
+| `git log --oneline 16642a50^1..16642a50^2`, `git diff 16642a50^1 16642a50` | 2 commit, 36 file (18 PNG) |
+| `touch xtask/src/main.rs crates/protocol/src/version.rs` | dilakukan sebelum build |
+| `cargo test -p stacklyd --lib map::` | lulus, 71 test |
+| `cargo test -p stacklyd --test runtime` | lulus, 15 test |
+| `cargo xtask codegen --check` | lulus, "20 generated files are up to date" |
+| `git show 16642a50^1:<png>` dan `git show 16642a50:<png>` untuk `runtime-get-installed.light.png` | hanya sel macOS NATS yang berubah |
+
+Test Swift (`swift test` di `clients/swift` dan `apps/macos/Packages/StacklyUI`) tidak dijalankan karena di luar perintah yang brief izinkan (NOT_RUN).
