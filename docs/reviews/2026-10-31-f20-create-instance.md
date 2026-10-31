@@ -211,3 +211,48 @@ Celah, masing masing terkait temuan di atas: draft secret dibandingkan dengan `s
 
 ## Questions
 - Bisakah pin bersamaan mengenai pembaca `read_package` di folder yang sama (`facts.rs:361`, `prepare.rs:231`) di bawah `FakeFilesystem`? Pin hanya me-rename saat file belum ada, dan baris registry di-commit setelah pin kembali, jadi jendelanya tampak sangat kecil, tetapi belum ditelusuri.
+
+## Konfirmasi fix 2026-10-31
+
+**Diperiksa oleh**: Opus 5.5 (xhigh), sub sesi `chk-f20-confirm`. Penulis fix menurut trailer: Sonnet 5.5 untuk `d629eb57`, `284c7123`, dan `7ac9a635` (merge `3a7f3999`), jadi reviewer dari family lain.
+**Scope**: `git diff 3a7f3999^1 3a7f3999`, 8 file (`apps/daemon/src/ipc/instance/draft.rs`, `apps/daemon/tests/supervisor/create_form.rs`, `CreateInstanceModel.swift`, `NewInstanceSheet.swift`, `SchemaFormModel.swift`, `SchemaFormView.swift`, `CreateInstanceModelTests.swift`, `SchemaFormModelTests.swift`), dibaca bersama `SecretDraft.swift` dan `SecretField.swift` sebagai konteks. Nomor baris mengacu ke `main` di `f028baab`. Hanya dua Major di atas yang diperiksa ulang; Minor dan Nit review asli tidak diulang.
+**Verdict**: Changes requested. Major 2 tertutup. Major 1 tertutup untuk Enter dan untuk form baru, tetapi masih terbuka untuk Copy from, jadi AC-26 belum terpenuhi.
+
+### Major 2, `start` di `instance.preflight`: tertutup
+
+`from_preflight` sekarang mengisi `start: params.start` (`apps/daemon/src/ipc/instance/draft.rs:85`). `CreateDraft.start` hanya dibaca `command_spec` (`crates/core/src/instance/create/command.rs:52`) dan journal create (`work.rs:838`, yang draftnya dari `from_create` dan tetap `false`); `evaluate` tidak membacanya. Jadi baris preflight, `ready`, dan `fields` tidak berubah oleh flag ini, dan preflight serta precheck create tetap menilai hal yang sama. Toggle "Start after creating" memanggil `draftDidChange`, sehingga perintah setara di sheet ikut berganti, dan `stackly instance create --dry-run --start` sudah mengirim `start: true` (test scripted CLI `dry_run_reads_the_form_asks_for_the_preflight_and_creates_nothing` mengasertnya). Test daemon baru `a_preflight_with_start_ends_the_equivalent_command_with_start` (`apps/daemon/tests/supervisor/create_form.rs:196`) mengirim draft yang sama dengan dan tanpa `start` dan mengasert akhiran ` --start` hanya pada yang pertama. Tidak ada temuan baru.
+
+### Major 1, sumber secret ganda: sebagian tertutup
+
+Yang tertutup:
+
+- **Enter, setelah create kembali ke form** (ditolak, tidak terkirim, hasil tidak diketahui, operasi gagal, dibatalkan, atau `needs_recovery`): `create` memanggil `schema.forgetTypedSecrets()` (`CreateInstanceModel.swift:724`, `SchemaFormModel.swift:311`), jadi model menjadi `{enter, isValid: false}` dan Create mati lewat `hasClientError` ("Fix the errors above."). Field menampilkan Enter kosong karena `startingDraft` sekarang mengambil sumber dari model (`SchemaFormView.swift:42-48`), dan preflight ulang dari `fail()` tetap mengevaluasi `value`. Mengetik lagi mengisi `drafts` dan model sekaligus; sumbernya sama, jadi `onChange` tidak dipanggil, generasi dan `retryKey` tetap, preflight yang ada tetap berlaku, dan retry setelah `outcomeUnknown` mengirim `.value` dengan key yang sama dan varian yang sama (fingerprint me-redact teksnya, bukan variannya).
+- **Ganti runtime, Retry, atau reload form**: `.onChange(of: model.schema.map(ObjectIdentifier.init)) { clearDrafts() }` kembali (`NewInstanceSheet.swift:56`). `reset()` lebih dulu mengeset `schema = nil`, dan `SchemaFormModel` baru mulai dari Generate, jadi tampilan, preflight, dan Create sama sama Generate, dan teks yang diketik tidak hidup lebih lama dari form tempat ia diketik. Karena schema melewati `nil` dulu dan form baru baru datang setelah balasan `getCreateForm`, `onChange` melihat setiap pergantian form.
+
+Yang masih terbuka:
+
+#### 🟠 Copy from yang tidak disentuh lagi setelah create kembali ke form dikirim sebagai Generate, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/CreateInstance/NewInstanceSheet.swift:215`
+
+**Problem**: Fix memindahkan cadangan *tampilan* ke model (`startingDraft`), tetapi jalur *kirim* masih memakai cadangan lama: `secretInputs()` membangun input dari `drafts[row.id] ?? SecretDraft()` (`NewInstanceSheet.swift:211-218`), dan `SecretDraft()` mulai dari Generate (`Secrets/SecretDraft.swift:40-44`). Urutannya: pilih Copy from `local:user/x`, klik Create; `perform` memanggil `secrets()` lalu `didSend` = `clearDrafts` (`CreateInstanceModel.swift:684-686`, `NewInstanceSheet.swift:220-223`), sehingga `drafts` kosong. Create lalu kembali ke form lewat `fail()` (`resource.busy`, `instance.name_taken`, `supervisor.endpoint_conflict`, tidak terkirim, hasil tidak diketahui, atau operasi `failed`, misalnya `secret.invalid_value` dari tahap `secrets` untuk nilai salinan yang terlalu pendek, kasus yang butir *Copy from* spec sebut). Model sengaja tetap `{copyFrom, "local:user/x", isValid: true}` (`forgetTypedSecrets` hanya menyentuh Enter), field menampilkan Copy from `local:user/x` dari `startingDraft`, baris preflight berbunyi "Copied from local:user/x", dan Create aktif lagi (test `aRefusedCreateKeepsACopyFromSecretAsItWas`, `CreateInstanceModelTests.swift:446`, mengasert persis `createDisabledReason == nil`). Klik berikutnya tanpa menyentuh field: `drafts[row.id]` masih `nil`, jadi yang terkirim `SecretInput.generate`.
+
+Sebelum fix, field setidaknya menampilkan Generate; sekarang field dan preflight sama sama berkata Copy from sementara Create mengirim Generate, jadi selisihnya tidak terlihat sama sekali. Setelah `outcomeUnknown`, retry memakai key yang sama dengan varian lain: bila request pertama sebenarnya sampai, jawabannya `operation.idempotency_key_reused`; bila tidak, instance dibuat dengan password bangkitan, bukan salinan. Jalur sempit yang sama juga ada untuk Enter: `drafts` dikosongkan sinkron di `perform`, sedangkan `forgetTypedSecrets` baru jalan di dalam `create` setelah guard (`CreateInstanceModel.swift:719-724`); bila guard itu kembali lebih awal (misalnya `createDisabledReason` berubah antara klik dan `Task`), model tetap `{enter, isValid: true}` dengan `drafts` kosong, dan klik berikutnya juga mengirim Generate.
+
+**Why it matters**: Ini skenario Major 1 butir 1 yang sama (preflight dan create tidak mengevaluasi draft yang sama di bagian secret jalur create), hanya untuk Copy from, dan tepat di jalur retry yang spec 0020 *Sheet New Instance* (*Create*, "percobaan ulang setelah `outcomeUnknown` memakai key yang sama") dan butir *Copy from* minta. Ketiga test model baru memanggil `model.create(secrets:)` dengan input buatan tangan (helper `creating`, `CreateInstanceModelTests.swift:312-316`), jadi tidak ada test yang melewati `secretInputs()`, dan kasus ini lolos.
+
+**Suggested fix**: Bangun input kirim dari sumber yang sama dengan tampilan: sumber dan reference dari `schema.secretChoice(row.id)`, hanya teks dari `drafts` (misalnya `drafts[row.id] ?? startingDraft(of:)` yang sama, atau satu fungsi yang bisa dites yang menerima model dan teks yang diketik). Enter tanpa teks jangan dibuang dari `secrets` begitu saja, karena field secret yang tidak disebut di-generate daemon (AC-7); biarkan Create tetap mati. Panggil `forgetTypedSecrets` di titik yang sama dengan `clearDrafts`, sebelum guard apa pun. Tambah test yang melewati pembangun input itu: Copy from, create ditolak, klik lagi tanpa menyentuh field, lalu yang terkirim `.copyFrom("local:user/x")`; dan `outcomeUnknown` dengan Copy from mengirim ulang key dan varian yang sama.
+
+### Temuan baru dari fix
+
+Tidak ada Blocker atau Major baru. Jalur sempit Enter di atas lahir dari penempatan `forgetTypedSecrets`, tetapi tertutup oleh fix yang sama dengan Copy from, jadi tidak dihitung terpisah. `forgetTypedSecrets` mengubah dictionary selagi iterasi atas salinannya (aman di Swift) dan sengaja tidak memanggil `onChange`, sehingga `retryKey` setelah `outcomeUnknown` tidak hilang.
+
+### Perintah dijalankan
+
+| Perintah | Hasil |
+| --- | --- |
+| `cargo test -p stacklyd --locked --test supervisor create_form` | lulus, 6 dari 6 (termasuk `a_preflight_with_start_ends_the_equivalent_command_with_start`) |
+| `cargo build -p stacklyd -p stackly-fake-server --locked` dan `cargo build -p stacklyd --example skeleton_seed --locked` | lulus |
+| `swift test --package-path apps/macos/Packages/StacklyUI --filter "CreateInstance\|SchemaForm\|NewInstance"` | lulus, 120 test di 8 suite (termasuk empat test baru fix) |
+
+Test yang lulus tidak membuktikan penutupan untuk Copy from: tidak ada test yang melewati `NewInstanceSheet.secretInputs()`.
+
+Jumlah setelah konfirmasi: Blocker 0, Major 1 terbuka (sisa Major 1, Copy from), Major 2 tertutup, temuan baru 0.
