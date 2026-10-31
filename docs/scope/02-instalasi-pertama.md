@@ -23,7 +23,7 @@ Daemon berjalan sebagai helper yang dibundel di dalam `.app` dan didaftarkan lew
 - [ ] Verify it: `/check verify background agent & CLI install`
 - [ ] Test it: `/test background agent & CLI install`
 
-### 16. Onboarding · in-progress
+### 16. Onboarding · done
 
 Halaman pertama yang menjelaskan status daemon dan izin background, lokasi storage, model isolasi yang jujur, trust catalog, dan pilihan memasang CLI, tanpa akun cloud.
 
@@ -40,7 +40,7 @@ Halaman pertama yang menjelaskan status daemon dan izin background, lokasi stora
   - [x] Catalog Trust step: one row from `CatalogStore.info`, error, and unsupported, a toggle only when the catalog is loaded, no community row, and the trust note (spec 0016 AC-7; build step 6; after milestone 1; needs spec 0017 build step 9 (`CatalogStore`, feature 17 milestone 3); can run in parallel with milestone 2) · manual steps skipped by the user (2026-10-23)
   - [x] Full walk and manual evidence: the no side effect walk test with fakes, copy tests for every table, previews in light, dark, and 900 × 600 (feature 68 snapshots if built: per step on the `onboarding` scenario, per table row on content values built by the test), then manual native evidence on a `cargo xtask build-app --install` bundle, with Turn On pressed only after your approval (spec 0016 AC-3, AC-5, AC-8 to AC-11; build steps 7 and 8; after milestones 1 to 3; needs feature 15 milestone 1 `build-app`; the Turn On step joins spec 0015 AC-17 (branch A, B, or C), BLOCKED until a signing identity exists (OQ-012) if ad hoc registration is refused) · manual evidence skipped by the user, Turn On BLOCKED until a signing identity exists (OQ-012) (2026-10-23)
 - [x] Verify it: `/check verify onboarding` · automated PASS in chk-f16-verify (a6c035df), manual steps skipped by the user (2026-10-23)
-- [ ] Test it: `/test onboarding`
+- [x] Test it: `/test onboarding` · 142 onboarding tests PASS, two app wide source rules added for AC-5 and AC-8 (2026-10-31)
 
 ### 17. Catalog & provider detail · done
 

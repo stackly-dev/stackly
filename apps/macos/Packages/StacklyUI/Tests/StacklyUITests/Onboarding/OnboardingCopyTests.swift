@@ -299,6 +299,37 @@ struct OnboardingCopyTests {
         }
     }
 
+    /// Phrases AC-5 and AC-8 keep out of the whole app, not only `Onboarding/`: the old
+    /// mockup sentences about the daemon and the CLI install.
+    static let phrasesNowhere = [
+        "only while the app is open", "/usr/local/bin", "Requires your password once",
+    ]
+
+    // covers: AC-5, AC-8
+    @Test func noSourceOfTheAppSaysTheOldDaemonOrInstallSentences() throws {
+        let files = try SourceTree.swiftFiles()
+        #expect(files.isEmpty == false)
+        for file in files {
+            let code = file.codeLines.joined(separator: "\n")
+            for phrase in Self.phrasesNowhere {
+                #expect(
+                    code.localizedCaseInsensitiveContains(phrase) == false,
+                    "\(file.path) says “\(phrase)”")
+            }
+        }
+    }
+
+    // covers: AC-8
+    @Test func theCommandLineToolSectionWaitsOnlyOnFeature32() throws {
+        let path =
+            "apps/macos/Packages/StacklyUI/Sources/StacklyUI/Diagnostics/"
+            + "CommandLineToolSection.swift"
+        let text = try String(contentsOf: SourceTree.url(of: path), encoding: .utf8)
+        let markers = text.matches(of: /provisional: F(\d+)/).map { String($0.output.1) }
+        #expect(markers.isEmpty == false)
+        #expect(Set(markers) == ["32"])
+    }
+
     @Test func theForbiddenPhraseScanFindsAPhraseInAString() {
         let text = #"let a = Text("Your catalog is up to date")"#
         let code = SourceFile(path: "a", text: text).codeLines.joined(separator: "\n")
