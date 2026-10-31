@@ -58,7 +58,11 @@
         ],
         "logsUnavailable": false,
         "ownership": "manual",
-        "initialized": true
+        "initialized": true,
+        "capabilities": {
+          "reload": true
+        },
+        "lastExit": null
       }
     }
   }

@@ -200,7 +200,7 @@ async fn a_live_process_of_the_last_observation_refuses_the_start_even_without_t
     let mut changes = stackly_core::supervisor::InstanceChanges::new(rig.instance_row(id));
     for event in [
         stackly_domain::LifecycleEvent::StopBegin,
-        stackly_domain::LifecycleEvent::Exited,
+        stackly_domain::LifecycleEvent::Exited { exit: None },
     ] {
         changes
             .apply(|instance| instance.apply_lifecycle(event, rig.fake_now()).map(|_| ()))

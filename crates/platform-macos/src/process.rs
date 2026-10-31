@@ -103,6 +103,17 @@ impl MacosProcessSupervision {
         target: &SignalTarget,
         signal: libc::c_int,
     ) -> Result<(), ProcessError> {
+        self.checked(target, |pid| watch::send(pid, signal))
+    }
+
+    /// Reads the facts of `target` again and calls `send` only while they
+    /// still match, inside the watcher's guard so the PID cannot be reaped
+    /// and reused meanwhile.
+    fn checked(
+        &self,
+        target: &SignalTarget,
+        send: impl FnOnce(Pid) -> Result<(), ProcessError>,
+    ) -> Result<(), ProcessError> {
         let pid = target.pid();
         self.watcher.guarded(pid, || {
             let facts = inspect::facts(pid)?.ok_or(ProcessError::NotFound { pid })?;
@@ -113,7 +124,7 @@ impl MacosProcessSupervision {
             {
                 return Err(ProcessError::IdentityMismatch { pid });
             }
-            watch::send(pid, signal)
+            send(pid)
         })
     }
 }
@@ -257,6 +268,10 @@ impl ProcessSupervision for MacosProcessSupervision {
 
     fn continue_stopped(&self, target: &SignalTarget) -> Result<(), ProcessError> {
         self.checked_signal(target, libc::SIGCONT)
+    }
+
+    fn force_kill(&self, target: &SignalTarget) -> Result<(), ProcessError> {
+        self.checked(target, kill::kill_main)
     }
 
     fn terminate_helper_group(

@@ -37,7 +37,9 @@
             health: InstanceHealth? = nil,
             lastFailure: InstanceLastFailure? = nil,
             restart: InstanceRestart? = nil,
-            blocker: InstanceBlocker? = nil
+            blocker: InstanceBlocker? = nil,
+            capabilities: InstanceCapabilities? = nil,
+            lastExit: InstanceLastExit? = nil
         ) -> InstanceSummary {
             let observed = FixtureClock.minutesAgo(1)
             let isServing = lifecycle == .running && readiness?.state == .ready
@@ -82,7 +84,10 @@
                 leftoverProcesses: nil,
                 logsUnavailable: false,
                 ownership: .manual,
-                initialized: true)
+                initialized: true,
+                capabilities: capabilities
+                    ?? InstanceCapabilities(reload: provider == "official/postgresql"),
+                lastExit: lastExit)
         }
     }
 

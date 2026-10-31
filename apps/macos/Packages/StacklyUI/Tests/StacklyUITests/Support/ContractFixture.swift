@@ -131,7 +131,8 @@ extension InstanceSummary {
         lifecycle: InstanceLifecycle? = nil,
         readiness: InstanceReadiness? = nil,
         health: InstanceHealth? = nil,
-        statusSeq: UInt64? = nil
+        statusSeq: UInt64? = nil,
+        lastExit: InstanceLastExit?? = nil
     ) -> InstanceSummary {
         InstanceSummary(
             id: id ?? self.id, name: name ?? self.name, displayName: displayName,
@@ -142,7 +143,8 @@ extension InstanceSummary {
             statusSeq: statusSeq ?? self.statusSeq, process: process, lastFailure: lastFailure,
             restart: restart, blocker: blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
-            ownership: ownership, initialized: initialized)
+            ownership: ownership, initialized: initialized, capabilities: capabilities,
+            lastExit: lastExit ?? self.lastExit)
     }
 
     /// The `instance.health_changed` content that carries this summary's status fields at

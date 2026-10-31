@@ -211,6 +211,9 @@ code_enum! {
         RestartInstance => "restart_instance",
         /// Reload an instance's configuration.
         ReloadInstance => "reload_instance",
+        /// Send `SIGKILL` to the main process of an instance that is still
+        /// `stopping` (spec 0026).
+        ForceStopInstance => "force_stop_instance",
         /// Rename an instance.
         RenameInstance => "rename_instance",
         /// Remove an instance and keep its data.
@@ -262,20 +265,57 @@ impl OperationKind {
 
     /// Returns what the engine does with an operation of this kind that
     /// the daemon interrupted (spec 0007, "Tabel resume per jenis
-    /// operasi"): start, stop, restart, and reload of an instance close as
-    /// interrupted, because their process outlives the daemon and the
-    /// supervisor adopts it; every other kind is compensated before its
-    /// point of no return.
+    /// operasi"): start, stop, restart, reload, and force stop of an
+    /// instance close as interrupted, because their process outlives the
+    /// daemon and the supervisor adopts it; every other kind is compensated
+    /// before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
         match self {
             Self::StartInstance
             | Self::StopInstance
             | Self::RestartInstance
-            | Self::ReloadInstance => InterruptPolicy::CloseInterrupted,
+            | Self::ReloadInstance
+            | Self::ForceStopInstance => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
+}
+
+/// Returns whether the next exit of an instance's main process is a forced
+/// one (spec 0026, *Handler exit: `last_exit`*), from `history`: the newest
+/// `force_stop_instance` operation of the instance with its journal, then
+/// every operation of the instance created after it, oldest first, as
+/// [`Registry::force_stop_history`](crate::Registry::force_stop_history)
+/// reads them.
+///
+/// It is true when that force stop's `kill` step began (running, done, or
+/// interrupted by a daemon that stopped) and no `start_instance` or
+/// `restart_instance` came after it, because only those run a new process.
+/// A `kill` step that failed sent no signal, so it does not count; neither
+/// does a history that does not begin with a force stop.
+#[must_use]
+pub fn force_intent(history: &[(Operation, JournalView)]) -> bool {
+    let Some(((force, journal), later)) = history.split_first() else {
+        return false;
+    };
+    if force.kind() != OperationKind::ForceStopInstance {
+        return false;
+    }
+    let killed = journal.steps.iter().any(|step| {
+        step.name() == &StageName::KILL
+            && matches!(
+                step.state(),
+                StepState::Running | StepState::Done | StepState::Interrupted
+            )
+    });
+    let respawned = later.iter().any(|(operation, _)| {
+        matches!(
+            operation.kind(),
+            OperationKind::StartInstance | OperationKind::RestartInstance
+        )
+    });
+    killed && !respawned
 }
 
 /// What the engine does with an operation the daemon interrupted, by kind
@@ -794,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_four_instance_process_kinds_close_as_interrupted() {
+    fn only_the_five_instance_process_kinds_close_as_interrupted() {
         let closing: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
@@ -808,6 +848,7 @@ mod tests {
                 "stop_instance",
                 "restart_instance",
                 "reload_instance",
+                "force_stop_instance",
             ]
         );
         assert!(

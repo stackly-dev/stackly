@@ -83,6 +83,16 @@ impl StageName {
     pub const REGISTER: Self = Self::from_static("register");
     /// Initializes the data of a new instance.
     pub const INIT: Self = Self::from_static("init");
+    /// Sends `SIGKILL` to the main process of a force stop (spec 0026).
+    /// Once this step began, the next exit of that process is `forced`.
+    pub const KILL: Self = Self::from_static("kill");
+    /// Waits for the exit handler to record the end of the process.
+    pub const AWAIT_EXIT: Self = Self::from_static("await_exit");
+    /// Waits for the instance lock to be free before a restart starts the
+    /// process again.
+    pub const LOCK_WAIT: Self = Self::from_static("lock_wait");
+    /// The start half of a restart, before its startup stages.
+    pub const START: Self = Self::from_static("start");
 }
 
 #[cfg(test)]

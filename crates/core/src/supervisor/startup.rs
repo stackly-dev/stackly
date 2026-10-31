@@ -33,8 +33,8 @@ use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task
 use super::init::config_invalid;
 use super::lock::{guard_last_observation, take_lock};
 use super::persist::{
-    CommitMode, ExitRecord, apply_event, apply_exit, blocking, commit_instance, read_instance,
-    read_instance_actor,
+    CommitMode, ExitRecord, ExitSeen, apply_event, apply_exit, blocking, commit_exit,
+    commit_instance, exit_kind, read_instance, read_instance_actor,
 };
 use super::prepare::{Checks, Prepared, prepare};
 use super::readiness::spawn_probes;
@@ -240,15 +240,30 @@ async fn run_start(
             state.restart_status = restart_status(&deps.config, 0, None, false);
         });
     }
+    start_stopped(sup, request, &mut ctx, &first_caller).await
+}
 
+/// The startup transaction from its checks on, for an instance that is
+/// `stopped` or `failed`: `lock`, `verify`, `endpoints`, the `journal` that
+/// writes desired `running` and `start_begin`, and the attempts. The start
+/// half of a restart (spec 0026) runs it under the restart's own operation;
+/// a step name the restart already used is not journaled twice.
+pub(crate) async fn start_stopped(
+    sup: &Supervisor,
+    request: &StartRequest,
+    ctx: &mut OperationContext,
+    first_caller: &SecretCaller,
+) -> WorkResult {
+    let deps = sup.deps();
+    let id = request.instance;
     // Everything up to the journal has no side effect: a cancel here leaves
     // nothing behind, and dropping `armed` releases the lock.
     let mut pass = 0;
     let armed = loop {
         pass += 1;
-        let armed = gate(sup, &mut ctx, &first_caller, true).await?;
+        let armed = gate(sup, ctx, first_caller, true).await?;
         ctx.check_cancel()?;
-        enter(&mut ctx, StageName::JOURNAL, true, false).await?;
+        enter(ctx, StageName::JOURNAL, true, false).await?;
         let journaled = commit_instance(
             sup,
             id,
@@ -276,9 +291,9 @@ async fn run_start(
         }
     };
 
-    let result = after_journal(sup, request, &mut ctx, Some(armed), false).await;
+    let result = after_journal(sup, request, ctx, Some(armed), false).await;
     match result {
-        Err(WorkError::Cancelled) => cancel_cleanup(sup, &ctx, id).await,
+        Err(WorkError::Cancelled) => cancel_cleanup(sup, ctx, id).await,
         other => other,
     }
 }
@@ -641,8 +656,14 @@ async fn after_journal(
                         }
                     }
                     Err(Gate::Error(error)) => {
-                        fail_lifecycle(sup, id, &error_failure_code(&error), CommitMode::Operation)
-                            .await;
+                        fail_lifecycle(
+                            sup,
+                            id,
+                            &error_failure_code(&error),
+                            None,
+                            CommitMode::Operation,
+                        )
+                        .await;
                         AttemptEnd::Failed(error)
                     }
                 }
@@ -740,10 +761,17 @@ fn error_failure_code(error: &SupervisorError) -> FailureCode {
 
 /// Records that the start failed: `start_failed` while `starting`, and the
 /// final `crashed` while the instance already runs or recovers. Best
-/// effort: the operation fails with the original error either way.
-async fn fail_lifecycle(sup: &Supervisor, id: InstanceId, reason: &FailureCode, mode: CommitMode) {
+/// effort: the operation fails with the original error either way. `seen`
+/// describes the process that ended, or is `None` when none did.
+async fn fail_lifecycle(
+    sup: &Supervisor,
+    id: InstanceId,
+    reason: &FailureCode,
+    seen: Option<ExitSeen>,
+    mode: CommitMode,
+) {
     let now = sup.deps().platform.clock().now();
-    let committed = commit_instance(sup, id, None, mode, |changes| {
+    let committed = commit_exit(sup, id, None, mode, |changes, force| {
         let event = match changes.instance().lifecycle() {
             InstanceLifecycle::Starting => LifecycleEvent::StartFailed {
                 reason: reason.clone(),
@@ -753,7 +781,9 @@ async fn fail_lifecycle(sup: &Supervisor, id: InstanceId, reason: &FailureCode, 
                 reason: reason.clone(),
             },
             // A stop got here first; the exit ends it.
-            InstanceLifecycle::Stopping => LifecycleEvent::Exited,
+            InstanceLifecycle::Stopping => LifecycleEvent::Exited {
+                exit: seen.map(|seen| exit_kind(force, InstanceLifecycle::Stopping, seen)),
+            },
             _ => return Ok(Vec::new()),
         };
         apply_event(changes, event, now)?;
@@ -774,7 +804,7 @@ async fn fail(
     // The process never ran, so no exit will remove what the render wrote
     // (spec 0010, *Stop*: `start_failed` removes the secret material).
     remove_material(sup, &sup.actor(id)).await;
-    fail_lifecycle(sup, id, &reason, CommitMode::Operation).await;
+    fail_lifecycle(sup, id, &reason, None, CommitMode::Operation).await;
     AttemptEnd::Failed(error)
 }
 
@@ -1035,6 +1065,7 @@ async fn run_attempt(
             done,
             probes_stop,
             drain,
+            sent_signal: None,
         });
         state.op_owns_exit = true;
         state.stopping = false;
@@ -1159,11 +1190,14 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
                 slot.group,
                 Arc::clone(&slot.drain),
                 slot.identity.executable.clone(),
+                slot.sent_signal,
             )
         })
     });
     let mut executable = None;
-    if let Some((generation, group, drain, path)) = target {
+    let mut sent_signal = None;
+    if let Some((generation, group, drain, path, sent)) = target {
+        sent_signal = sent;
         executable = Some(path);
         actor.update(deps, |state| {
             if let Some(slot) = &state.process {
@@ -1189,7 +1223,11 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
     {
         return binary_rejected(sup, id, &path, signal).await;
     }
-    after_unrequested_exit(sup, id, notice, CommitMode::Operation).await
+    let seen = ExitSeen {
+        status: notice.status,
+        sent_signal,
+    };
+    after_unrequested_exit(sup, id, notice, seen, CommitMode::Operation).await
 }
 
 /// Records `crashed { will_retry: false, reason: binary_rejected_by_os }`
@@ -1204,13 +1242,19 @@ async fn binary_rejected(
     let deps = sup.deps();
     let now = deps.platform.clock().now();
     let mut recorded = ExitRecord::Nothing;
-    let committed = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
+    let seen = ExitSeen {
+        status: Some(ExitStatus::Signaled(signal)),
+        sent_signal: None,
+    };
+    let committed = commit_exit(sup, id, None, CommitMode::Operation, |changes, force| {
         recorded = apply_exit(
             changes,
             LifecycleEvent::Crashed {
                 will_retry: false,
                 reason: FailureCode::BINARY_REJECTED_BY_OS,
             },
+            force,
+            Some(seen),
             now,
         )?;
         Ok(Vec::new())
@@ -1242,6 +1286,7 @@ pub(crate) async fn after_unrequested_exit(
     sup: &Supervisor,
     id: InstanceId,
     notice: &ExitNotice,
+    seen: ExitSeen,
     mode: CommitMode,
 ) -> Next {
     let deps = sup.deps();
@@ -1263,7 +1308,7 @@ pub(crate) async fn after_unrequested_exit(
                 == BindOutcome::InUse
             {
                 let reason = FailureCode::ENDPOINT_IN_USE;
-                fail_lifecycle(sup, id, &reason, mode).await;
+                fail_lifecycle(sup, id, &reason, Some(seen), mode).await;
                 return Next::Final(SupervisorError::EndpointInUse(EndpointFault {
                     endpoint: ip.name().to_string(),
                     address: ip.address().to_string(),
@@ -1272,13 +1317,13 @@ pub(crate) async fn after_unrequested_exit(
             }
         }
     }
-    apply_policy(sup, id, crash_reason(notice.status), mode).await
+    apply_policy(sup, id, crash_reason(notice.status), Some(seen), mode).await
 }
 
 /// A respawn whose instance lock was still held counts as a failed attempt
 /// with the reason `data_in_use`.
 async fn on_lock_held(sup: &Supervisor, id: InstanceId, mode: CommitMode) -> Next {
-    apply_policy(sup, id, FailureCode::DATA_IN_USE, mode).await
+    apply_policy(sup, id, FailureCode::DATA_IN_USE, None, mode).await
 }
 
 /// Records a crash in the history and decides: respawn after a pause, or
@@ -1287,6 +1332,7 @@ async fn apply_policy(
     sup: &Supervisor,
     id: InstanceId,
     reason: FailureCode,
+    seen: Option<ExitSeen>,
     mode: CommitMode,
 ) -> Next {
     let deps = sup.deps();
@@ -1300,13 +1346,15 @@ async fn apply_policy(
     match decision {
         RestartDecision::Retry { delay, .. } => {
             let mut recorded = ExitRecord::Nothing;
-            let committed = commit_instance(sup, id, None, mode, |changes| {
+            let committed = commit_exit(sup, id, None, mode, |changes, force| {
                 recorded = apply_exit(
                     changes,
                     LifecycleEvent::Crashed {
                         will_retry: true,
                         reason: reason.clone(),
                     },
+                    force,
+                    seen,
                     now,
                 )?;
                 Ok(Vec::new())
@@ -1323,13 +1371,15 @@ async fn apply_policy(
         }
         RestartDecision::Exhausted { crashes } => {
             let mut recorded = ExitRecord::Nothing;
-            let committed = commit_instance(sup, id, None, mode, |changes| {
+            let committed = commit_exit(sup, id, None, mode, |changes, force| {
                 recorded = apply_exit(
                     changes,
                     LifecycleEvent::Crashed {
                         will_retry: false,
                         reason: FailureCode::CRASH_LOOP,
                     },
+                    force,
+                    seen,
                     now,
                 )?;
                 Ok(Vec::new())

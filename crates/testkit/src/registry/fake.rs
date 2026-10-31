@@ -157,14 +157,21 @@ impl FakeRegistry {
     }
 
     /// Rebuilds a stored instance the way the SQLite registry reads one.
-    fn restored(&self, instance: &Instance) -> Result<Instance, RegistryError> {
-        Instance::restore(stored_instance(instance), self.loaded_at).map_err(|err| {
-            RegistryError::Corrupt {
-                table: "instances",
-                column: "lifecycle",
-                detail: err.to_string(),
-            }
-        })
+    /// Like the SQLite registry, it loads the capabilities of the pinned
+    /// provider revision with the instance.
+    fn restored(&self, state: &State, instance: &Instance) -> Result<Instance, RegistryError> {
+        let mut restored =
+            Instance::restore(stored_instance(instance), self.loaded_at).map_err(|err| {
+                RegistryError::Corrupt {
+                    table: "instances",
+                    column: "lifecycle",
+                    detail: err.to_string(),
+                }
+            })?;
+        if let Some(record) = state.provider_revisions.get(instance.provider_revision()) {
+            restored.set_capabilities(record.revision.capabilities().clone());
+        }
+        Ok(restored)
     }
 }
 
@@ -181,7 +188,7 @@ impl GuardView for StateView<'_> {
             .instances
             .values()
             .filter(|instance| filter.include_retained || instance.retained_at().is_none())
-            .map(|instance| self.registry.restored(instance))
+            .map(|instance| self.registry.restored(self.state, instance))
             .collect::<Result<Vec<_>, _>>()?;
         instances.sort_by(|a, b| (a.name(), a.id()).cmp(&(b.name(), b.id())));
         Ok(instances)
@@ -196,6 +203,13 @@ impl GuardView for StateView<'_> {
         key: &ProviderRevisionKey,
     ) -> Result<Option<ProviderRevisionRecord>, RegistryError> {
         Ok(self.state.provider_revisions.get(key).cloned())
+    }
+
+    fn force_stop_history(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Vec<(Operation, JournalView)>, RegistryError> {
+        Ok(self.state.force_stop_history(instance))
     }
 }
 
@@ -287,7 +301,7 @@ impl Registry for FakeRegistry {
             state
                 .instances
                 .get(&id)
-                .map(|instance| self.restored(instance))
+                .map(|instance| self.restored(state, instance))
                 .transpose()
         })
     }
@@ -301,7 +315,7 @@ impl Registry for FakeRegistry {
                 .instances
                 .values()
                 .find(|instance| instance.retained_at().is_none() && instance.name() == name)
-                .map(|instance| self.restored(instance))
+                .map(|instance| self.restored(state, instance))
                 .transpose()
         })
     }
@@ -312,7 +326,7 @@ impl Registry for FakeRegistry {
                 .instances
                 .values()
                 .filter(|instance| filter.include_retained || instance.retained_at().is_none())
-                .map(|instance| self.restored(instance))
+                .map(|instance| self.restored(state, instance))
                 .collect::<Result<Vec<_>, _>>()?;
             instances.sort_by(|a, b| (a.name(), a.id()).cmp(&(b.name(), b.id())));
             Ok(instances)
@@ -430,6 +444,13 @@ impl Registry for FakeRegistry {
                     Some((operation.clone(), journal.clone()))
                 }))
         })
+    }
+
+    fn force_stop_history(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
+        self.read(|state| Ok(state.force_stop_history(instance)))
     }
 
     fn unfinished_operations(
@@ -1476,6 +1497,29 @@ impl State {
         self.active_config.insert(record.instance, record.id);
         self.config_revisions.insert(record.id, record);
         Ok(())
+    }
+
+    /// The newest force stop of `instance` and every later operation of
+    /// it, with their journals, oldest first, as the SQLite read orders
+    /// them.
+    fn force_stop_history(&self, instance: InstanceId) -> Vec<(Operation, JournalView)> {
+        let mut operations: Vec<&Operation> = self
+            .operations
+            .values()
+            .filter(|operation| operation.resource() == OperationResource::Instance(instance))
+            .collect();
+        operations.sort_by_key(|operation| (operation.created_at(), operation.id()));
+        let Some(start) = operations.iter().rposition(|operation| {
+            operation.kind() == stackly_domain::OperationKind::ForceStopInstance
+        }) else {
+            return Vec::new();
+        };
+        operations[start..]
+            .iter()
+            .filter_map(|operation| {
+                Some(((*operation).clone(), self.journal_view(operation.id())?))
+            })
+            .collect()
     }
 
     /// The journal of an operation with its rows, or `None` without one.

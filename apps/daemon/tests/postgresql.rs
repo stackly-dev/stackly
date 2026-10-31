@@ -30,6 +30,8 @@ mod harness;
 mod install;
 #[path = "postgresql/lifecycle.rs"]
 mod lifecycle;
+#[path = "postgresql/lifecycle_ops.rs"]
+mod lifecycle_ops;
 #[path = "postgresql/mismatch.rs"]
 mod mismatch;
 #[path = "postgresql/phases.rs"]

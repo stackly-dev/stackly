@@ -102,6 +102,8 @@ pub enum ValueKind {
     DesiredState,
     /// A [`StartupPolicy`](crate::StartupPolicy).
     StartupPolicy,
+    /// An [`ExitKind`](crate::ExitKind).
+    ExitKind,
     /// An [`OperationState`](crate::OperationState).
     OperationState,
     /// An [`OperationKind`](crate::OperationKind).
@@ -253,6 +255,7 @@ impl ValueKind {
             Self::InstanceLifecycle => "instance lifecycle",
             Self::DesiredState => "desired state",
             Self::StartupPolicy => "startup policy",
+            Self::ExitKind => "exit kind",
             Self::OperationState => "operation state",
             Self::OperationKind => "operation kind",
             Self::Ownership => "ownership",

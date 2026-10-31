@@ -407,6 +407,7 @@ impl Registry for FaultyRegistry {
         operation_journals(ids: &[OperationId]) -> Result<stackly_domain::Versioned<Vec<stackly_domain::OperationJournal>>, stackly_domain::RegistryError>;
         operation_by_idempotency_key(key: &stackly_domain::IdempotencyKey) -> Result<stackly_domain::Versioned<Option<(stackly_domain::Operation, stackly_domain::OperationJournal)>>, stackly_domain::RegistryError>;
         unfinished_operations() -> Result<stackly_domain::Versioned<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>>, stackly_domain::RegistryError>;
+        force_stop_history(instance: InstanceId) -> Result<stackly_domain::Versioned<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>>, stackly_domain::RegistryError>;
         secret_reference(reference: &SecretRef) -> Result<stackly_domain::Versioned<Option<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_references(filter: stackly_domain::SecretReferenceFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;
@@ -1075,6 +1076,23 @@ impl Rig {
             .sup
             .stop_work(stackly_core::supervisor::StopRequest::new(id));
         self.begin(OperationKind::StopInstance, id, work).await
+    }
+
+    pub async fn force_stop(&self, id: InstanceId) -> OperationId {
+        let work = self
+            .sup
+            .force_stop_work(stackly_core::supervisor::ForceStopRequest::new(id));
+        self.begin(OperationKind::ForceStopInstance, id, work).await
+    }
+
+    pub async fn restart(&self, id: InstanceId) -> OperationId {
+        let work = self
+            .sup
+            .restart_work(stackly_core::supervisor::RestartRequest::new(
+                id,
+                Self::user(),
+            ));
+        self.begin(OperationKind::RestartInstance, id, work).await
     }
 
     pub async fn reload(&self, id: InstanceId) -> OperationId {

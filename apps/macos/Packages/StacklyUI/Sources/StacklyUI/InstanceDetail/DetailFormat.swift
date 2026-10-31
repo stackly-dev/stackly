@@ -274,4 +274,14 @@ nonisolated public enum DetailFormat {
         let missing = Set(secrets.filter { $0.status == .missing }.map(\.reference))
         return ConnectionComposer.references(in: connection.parts).first { missing.contains($0) }
     }
+
+    /// The "Last exit" row (spec 0026, AC-17): "Forced" or "Crashed"; a clean exit, none
+    /// yet, or a value this build does not know shows no row.
+    static func lastExit(_ exit: InstanceLastExit?) -> String? {
+        switch exit {
+        case .forced: "Forced"
+        case .crashed: "Crashed"
+        case .clean, .unrecognized, nil: nil
+        }
+    }
 }

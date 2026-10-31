@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 
 use stackly_core::supervisor::{FAILURE_EXCERPT_LINE_CHARS, InstanceStatus, ProcessStatus};
 use stackly_domain::{
-    DesiredState, Endpoint, HealthState, IdentityCheck, IdentityCheckName as DomainCheckName,
-    IdentityEvidence as DomainEvidence, Instance, InstanceBlocker as DomainBlocker, InstanceId,
-    InstanceLifecycle as DomainLifecycle, LockState, PortRequest as DomainPortRequest,
-    ProcessStart, ReadinessState, Transport,
+    Capability, DesiredState, Endpoint, ExitKind, HealthState, IdentityCheck,
+    IdentityCheckName as DomainCheckName, IdentityEvidence as DomainEvidence, Instance,
+    InstanceBlocker as DomainBlocker, InstanceId, InstanceLifecycle as DomainLifecycle, LockState,
+    PortRequest as DomainPortRequest, ProcessStart, ReadinessState, Transport,
 };
 use stackly_protocol::instance::{
     EndpointPortMode, EndpointStatus, EndpointTransport, IdentityBlocker, IdentityCheckEntry,
@@ -18,10 +18,20 @@ use stackly_protocol::instance::{
     InstanceLifecycle, InstanceLockState, InstanceOwnership, InstanceProcess, InstanceReadiness,
     InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
 };
+use stackly_protocol::instance::{InstanceCapabilities, InstanceLastExit};
 use stackly_protocol::{Sequence, Timestamp};
 
 use crate::ipc::operation::dto::revision;
 use crate::ipc::secret::needs_secret_blocker;
+
+/// The wire value of how the process last ended.
+const fn last_exit(exit: ExitKind) -> InstanceLastExit {
+    match exit {
+        ExitKind::Clean => InstanceLastExit::Clean,
+        ExitKind::Forced => InstanceLastExit::Forced,
+        ExitKind::Crashed => InstanceLastExit::Crashed,
+    }
+}
 
 /// The snapshot of `instance` with the status the supervisor shows now.
 /// `excerpt` is the failure excerpt, which only an instance with a
@@ -77,6 +87,10 @@ pub fn summary(
         logs_unavailable: status.logs_unavailable,
         ownership: InstanceOwnership::Manual,
         initialized: Some(instance.data_initialized_at().is_some()),
+        capabilities: InstanceCapabilities::new(
+            instance.capabilities().contains(Capability::Reload),
+        ),
+        last_exit: instance.last_exit().map(last_exit),
     }
 }
 

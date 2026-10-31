@@ -95,7 +95,8 @@ struct AttentionRulesTests {
                 observedAt: sick.health.observedAt),
             statusSeq: sick.statusSeq, process: sick.process, lastFailure: nil,
             restart: sick.restart, blocker: nil, endpoints: nil, leftoverProcesses: nil,
-            logsUnavailable: false, ownership: .manual, initialized: true)
+            logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
+            lastExit: nil)
         #expect(try items(instances: [bare]).first?.message == "Its health check is failing.")
     }
 
@@ -118,7 +119,7 @@ struct AttentionRulesTests {
                 desired: base.desired, readiness: base.readiness, health: base.health,
                 statusSeq: base.statusSeq, process: nil, lastFailure: nil, restart: restart,
                 blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
-                ownership: .manual, initialized: true)
+                ownership: .manual, initialized: true, capabilities: nil, lastExit: nil)
         }
         let plain = "It crashed and Stackly is starting it again."
         let noTime = InstanceRestart(
@@ -140,7 +141,8 @@ struct AttentionRulesTests {
             runtimeVersion: base.runtimeVersion, lifecycle: .recovering, desired: base.desired,
             readiness: base.readiness, health: base.health, statusSeq: base.statusSeq,
             process: nil, lastFailure: nil, restart: restart, blocker: nil, endpoints: nil,
-            leftoverProcesses: nil, logsUnavailable: false, ownership: .manual, initialized: true)
+            leftoverProcesses: nil, logsUnavailable: false, ownership: .manual, initialized: true,
+            capabilities: nil, lastExit: nil)
         let message = try #require(try items(instances: [summary]).first?.message)
         #expect(Self.plain(message) == "It crashed. Restart 1 of 5 at 10/21/2026, 9:00 AM.")
     }

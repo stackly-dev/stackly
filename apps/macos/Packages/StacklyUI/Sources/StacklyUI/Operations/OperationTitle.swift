@@ -59,6 +59,7 @@ nonisolated public enum OperationTitle {
         case .stopInstance: return "Stop \(subject)"
         case .restartInstance: return "Restart \(subject)"
         case .reloadInstance: return "Reload \(subject)"
+        case .forceStopInstance: return "Force stop \(subject)"
         case .createInstance: return "Create \(subject)"
         case .removeInstance: return "Remove \(subject)"
         case .purgeInstance: return "Purge \(subject)"

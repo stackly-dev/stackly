@@ -124,6 +124,8 @@ pub enum OperationKind {
     RestartInstance,
     /// Reload an instance's configuration.
     ReloadInstance,
+    /// Send `SIGKILL` to an instance that is still stopping (spec 0026).
+    ForceStopInstance,
     /// Rename an instance.
     RenameInstance,
     /// Remove an instance and keep its data.

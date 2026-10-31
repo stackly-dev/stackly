@@ -49,6 +49,8 @@ pub enum ProcessOp {
     Signal,
     /// [`ProcessSupervision::continue_stopped`].
     ContinueStopped,
+    /// [`ProcessSupervision::force_kill`].
+    ForceKill,
     /// [`ProcessSupervision::terminate_helper_group`].
     TerminateHelperGroup,
     /// [`ProcessSupervision::group_members`].
@@ -151,6 +153,10 @@ pub struct FakeSpawn {
 ///   [`continue_stopped`](ProcessSupervision::continue_stopped) refuse with
 ///   `IdentityMismatch` when the start time, user, or session differs from
 ///   the target, and never deliver a signal then.
+/// - [`force_kill`](ProcessSupervision::force_kill) makes the same check,
+///   then ends the process with `Signaled(9)` and delivers its exit, unless
+///   the test made it [survive](Self::survive_force_kill) to act out a
+///   process that does not go away in time.
 /// - Locks are real `flock` locks on real files, and a child really keeps
 ///   the lock it inherited: the fake holds a duplicate of the lock's open
 ///   file until the child exits, so a [`probe_lock`] sees it held after the
@@ -217,6 +223,8 @@ struct State {
     always_faults: Vec<(ProcessOp, ProcessError)>,
     /// The status the next main process dies with while still suspended.
     die_suspended: Option<ExitStatus>,
+    /// Processes a `force_kill` leaves alive.
+    survive_force_kill: Vec<Pid>,
     violations: usize,
 }
 
@@ -274,6 +282,7 @@ impl FakeProcessSupervision {
             next_faults: Vec::new(),
             always_faults: Vec::new(),
             die_suspended: None,
+            survive_force_kill: Vec::new(),
             violations: 0,
         };
         Self {
@@ -435,6 +444,14 @@ impl FakeProcessSupervision {
             .processes
             .get(&pid)
             .map(|process| process.state)
+    }
+
+    /// Makes a later [`force_kill`](ProcessSupervision::force_kill) of `pid`
+    /// pass its check but leave the process alive, so a test can act out a
+    /// process that outlives `FORCE_EXIT_WAIT`. [`exit`](Self::exit) still
+    /// ends it.
+    pub fn survive_force_kill(&self, pid: Pid) {
+        self.lock_state().survive_force_kill.push(pid);
     }
 
     /// Returns the signals a process received, in order.
@@ -925,6 +942,46 @@ impl ProcessSupervision for FakeProcessSupervision {
 
     fn continue_stopped(&self, target: &SignalTarget) -> Result<(), ProcessError> {
         self.checked_signal(ProcessOp::ContinueStopped, target, None)
+    }
+
+    fn force_kill(&self, target: &SignalTarget) -> Result<(), ProcessError> {
+        let pid = target.pid();
+        let mut call = ProcessCall {
+            pid: Some(pid),
+            ..ProcessCall::new(ProcessOp::ForceKill)
+        };
+        let (result, delivery) = {
+            let mut state = self.lock_state();
+            let checked = match state.take_fault(ProcessOp::ForceKill) {
+                Some(error) => Err(error),
+                None => {
+                    let user = state.user.clone();
+                    state.live_mut(pid).and_then(|process| {
+                        let expected = target.expected();
+                        let facts = &process.facts;
+                        if facts.start != expected.start
+                            || facts.uid != user
+                            || facts.session != expected.session
+                        {
+                            Err(ProcessError::IdentityMismatch { pid })
+                        } else {
+                            Ok(())
+                        }
+                    })
+                }
+            };
+            call.error = checked.as_ref().err().cloned();
+            state.calls.push(call);
+            let delivery = match checked {
+                Ok(()) if !state.survive_force_kill.contains(&pid) => {
+                    state.end(pid, Some(ExitStatus::Signaled(9)), None)
+                }
+                _ => None,
+            };
+            (checked, delivery)
+        };
+        deliver(delivery);
+        result
     }
 
     fn terminate_helper_group(

@@ -1324,7 +1324,7 @@ mod tests {
     }
 
     #[test]
-    fn every_allowed_expose_module_of_this_workspace_holds_a_call_site() {
+    fn every_allowed_expose_and_force_kill_module_of_this_workspace_holds_a_call_site() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("xtask sits one directory below the repository root");
@@ -1335,7 +1335,10 @@ mod tests {
             .unwrap();
         let packages = metadata.workspace_packages();
 
-        for (name, modules) in source_scan::EXPOSE_ALLOWED {
+        for &(name, modules) in source_scan::EXPOSE_ALLOWED
+            .iter()
+            .chain(&source_scan::FORCE_KILL_ALLOWED)
+        {
             let package = packages
                 .iter()
                 .find(|package| package.name.as_str() == name)
@@ -1344,6 +1347,7 @@ mod tests {
                 library: false,
                 sockets: false,
                 expose_allowed: &[],
+                force_kill_allowed: &[],
                 cli: false,
                 no_cli_codes: false,
                 process_allowed: None,
@@ -1356,7 +1360,7 @@ mod tests {
                 let folder = format!("/src/{}", module.replace("::", "/"));
                 assert!(
                     calls.iter().any(|call| call.contains(&folder)),
-                    "{name} {module} holds no expose call, so it should leave the allowlist: {calls:?}"
+                    "{name} {module} holds no restricted call, so it should leave the allowlist: {calls:?}"
                 );
             }
         }

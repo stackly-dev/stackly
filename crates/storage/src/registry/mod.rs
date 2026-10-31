@@ -294,6 +294,13 @@ impl Registry for SqliteRegistry {
         self.read(|tx| journal::unfinished(tx))
     }
 
+    fn force_stop_history(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
+        self.read(move |tx| journal::force_stop_history(tx, instance))
+    }
+
     fn secret_reference(
         &self,
         reference: &SecretRef,

@@ -64,6 +64,9 @@ nonisolated public enum CommandID: String, CaseIterable, Hashable, Sendable {
     case welcome
     /// Window > Stackly, the item the main `Window` scene adds itself.
     case showMainWindow
+    /// Instance > Force Stop… (spec 0026), declared last so earlier raw values keep their
+    /// place.
+    case forceStopInstance
 }
 
 /// A menu of the menu bar, in the order SwiftUI places them.
@@ -276,11 +279,16 @@ nonisolated public enum CommandMap {
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Restart",
                 scope: instancesPage,
-                requirements: [.selection, .daemon], owner: 26)
+                requirements: [.selection, .daemon], owner: 26, status: .built)
         case .reloadInstance:
             CommandEntry(
                 id, menu: .instance, group: 2, title: "Reload", scope: instancesPage,
-                requirements: [.selection, .daemon], owner: 26)
+                requirements: [.selection, .daemon], owner: 26, status: .built)
+        case .forceStopInstance:
+            CommandEntry(
+                id, menu: .instance, group: 2, title: "Force Stop…", needsInput: true,
+                scope: instancesPage, requirements: [.selection, .daemon], owner: 26,
+                status: .built)
         case .copyConnectionString:
             CommandEntry(
                 id, menu: .instance, group: 3, title: "Copy Connection String",

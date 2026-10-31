@@ -26,7 +26,7 @@ struct CommandMapTests {
                 "sortInstancesByStatus", "sortInstancesAscending", "sortInstancesDescending",
                 "openInstance", "startInstance", "stopInstance", "restartInstance",
                 "reloadInstance", "copyConnectionString", "duplicateInstance", "removeInstance",
-                "stacklyHelp", "welcome", "showMainWindow",
+                "stacklyHelp", "welcome", "showMainWindow", "forceStopInstance",
             ])
     }
 
@@ -68,6 +68,8 @@ struct CommandMapTests {
         .sortInstancesByEndpoints, .sortInstancesByStatus, .sortInstancesAscending,
         .sortInstancesDescending, .startInstance, .stopInstance, .openInstance, .back,
         .copyConnectionString, .duplicateInstance, .welcome,
+        // Spec 0026.
+        .restartInstance, .reloadInstance, .forceStopInstance,
     ]
 
     @Test func aRowIsBuiltExactlyWhenItsMenuItemExists() {
@@ -111,8 +113,12 @@ struct CommandMapTests {
             ])
         #expect(
             ids(.instance) == [
-                [.openInstance], [.startInstance, .stopInstance], [.copyConnectionString],
-                [.duplicateInstance],
+                [.openInstance],
+                [
+                    .startInstance, .stopInstance, .restartInstance, .reloadInstance,
+                    .forceStopInstance,
+                ],
+                [.copyConnectionString], [.duplicateInstance],
             ]
         )
         #expect(ids(.help) == [[.welcome]])
@@ -147,7 +153,10 @@ struct CommandMapTests {
         #expect(
             ids(.instance) == [
                 [.openInstance],
-                [.startInstance, .stopInstance, .restartInstance, .reloadInstance],
+                [
+                    .startInstance, .stopInstance, .restartInstance, .reloadInstance,
+                    .forceStopInstance,
+                ],
                 [.copyConnectionString], [.duplicateInstance, .removeInstance],
             ])
         #expect(ids(.help) == [[.stacklyHelp], [.welcome]])

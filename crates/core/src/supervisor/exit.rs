@@ -20,7 +20,9 @@ use tokio::sync::watch;
 use super::Supervisor;
 use super::actor::InstanceActor;
 use super::error::SupervisorError;
-use super::persist::{CommitMode, apply_exit, blocking, commit_instance, read_instance_actor};
+use super::persist::{
+    CommitMode, ExitSeen, apply_exit, blocking, commit_exit, read_instance_actor,
+};
 use super::respawn::schedule_respawn;
 use super::startup::{Next, after_unrequested_exit};
 use crate::secret::delivery::remove_secret_material;
@@ -85,9 +87,9 @@ pub(crate) async fn handle_exit(
             .process
             .as_ref()
             .filter(|slot| slot.generation == generation)
-            .map(|slot| (slot.group, Arc::clone(&slot.drain)))
+            .map(|slot| (slot.group, Arc::clone(&slot.drain), slot.sent_signal))
     });
-    let Some((group, drain)) = info else {
+    let Some((group, drain, sent_signal)) = info else {
         return;
     };
     actor.update(deps, |state| {
@@ -100,7 +102,11 @@ pub(crate) async fn handle_exit(
     remove_material(sup, actor).await;
     let leftover = leftover_members(sup, group, notice.pid).await;
 
-    let next = settle(sup, actor.id, notice).await;
+    let seen = ExitSeen {
+        status: notice.status,
+        sent_signal,
+    };
+    let next = settle(sup, actor.id, notice, seen).await;
     finish_process(sup, actor, generation, leftover);
     match next {
         Some(Next::Retry(delay)) => schedule_respawn(sup, actor.id, delay),
@@ -117,7 +123,12 @@ pub(crate) async fn handle_exit(
 /// With desired `running` and a running lifecycle it is a crash and the
 /// restart policy decides (spec 0010, *Restart policy*). A stop in progress,
 /// or a desired `stopped`, ends the instance `stopped`.
-async fn settle(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Option<Next> {
+async fn settle(
+    sup: &Supervisor,
+    id: InstanceId,
+    notice: &ExitNotice,
+    seen: ExitSeen,
+) -> Option<Next> {
     let deps = sup.deps();
     let instance = match read_instance_actor(sup, id).await {
         Ok(instance) => instance,
@@ -136,7 +147,7 @@ async fn settle(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Option
                 | InstanceLifecycle::Recovering
         )
     {
-        return match after_unrequested_exit(sup, id, notice, CommitMode::Actor).await {
+        return match after_unrequested_exit(sup, id, notice, seen, CommitMode::Actor).await {
             Next::Settled => None,
             next => Some(next),
         };
@@ -146,8 +157,8 @@ async fn settle(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Option
         will_retry: false,
         reason: crash_reason(notice.status),
     };
-    let committed = commit_instance(sup, id, None, CommitMode::Actor, |changes| {
-        apply_exit(changes, crash.clone(), now)?;
+    let committed = commit_exit(sup, id, None, CommitMode::Actor, |changes, force| {
+        apply_exit(changes, crash.clone(), force, Some(seen), now)?;
         Ok(Vec::new())
     })
     .await;

@@ -135,6 +135,10 @@ impl ProcessSupervision for CheckFaking {
         self.real().continue_stopped(target)
     }
 
+    fn force_kill(&self, target: &SignalTarget) -> Result<(), ProcessError> {
+        self.real().force_kill(target)
+    }
+
     fn terminate_helper_group(
         &self,
         helper: &HelperHandle,

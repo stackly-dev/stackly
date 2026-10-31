@@ -1,7 +1,8 @@
 //! The `instance` area of the daemon (spec 0010 build step 13, spec 0020
-//! build step 9): the seven methods `instance.create`, `instance.start`,
-//! `instance.stop`, `instance.get`, `instance.list`,
-//! `instance.get_create_form`, and `instance.preflight`.
+//! build step 9, spec 0026 build step 9): `instance.create`,
+//! `instance.start`, `instance.stop`, `instance.restart`,
+//! `instance.reload`, `instance.force_stop`, `instance.get`,
+//! `instance.list`, `instance.get_create_form`, and `instance.preflight`.
 //!
 //! Every method that starts an operation goes through
 //! [`start_operation`](crate::ipc::operation::start_operation): the key
@@ -22,17 +23,21 @@ use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
 };
 use stackly_core::supervisor::SupervisorError;
-use stackly_core::supervisor::{InstanceChanges, StartRequest, StopRequest, Supervisor};
+use stackly_core::supervisor::{
+    ForceStopRequest, InstanceChanges, ReloadRequest, RestartRequest, StartRequest, StopRequest,
+    Supervisor,
+};
 use stackly_domain::{
-    DesiredState, Instance, InstanceFilter, InstanceId, InstanceLifecycle, JournalPayload,
-    LeaseFilter, OperationKind, OperationResource, Registry, ResourceRevision, StopDecision,
-    StopRequest as LeaseStopRequest, evaluate_stop,
+    Capability, DesiredState, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
+    JournalPayload, LeaseFilter, OperationKind, OperationResource, Registry, ResourceRevision,
+    StopDecision, StopRequest as LeaseStopRequest, evaluate_stop,
 };
 use stackly_protocol::codes::resource;
 use stackly_protocol::fingerprint::request_fingerprint;
 use stackly_protocol::instance::{
-    GetInstanceParams, INSTANCE_PAGE_BYTES_MAX, InstanceActionAccepted, InstancePage,
-    InstanceSummary, ListInstancesParams, StartInstanceParams, StopInstanceParams,
+    ForceStopInstanceParams, GetInstanceParams, INSTANCE_PAGE_BYTES_MAX, InstanceActionAccepted,
+    InstancePage, InstanceSummary, ListInstancesParams, ReloadInstanceParams,
+    RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::message::Call;
 use stackly_protocol::{ErrorBody, ResourceKind, ResourceRef};
@@ -205,6 +210,233 @@ pub fn stop<'a>(
         announce(core, id, &outcome).await;
         Ok(action_reply(outcome))
     })
+}
+
+/// The real `instance.restart` (spec 0026): one `restart_instance`
+/// operation that waits behind the operation holding the instance.
+pub fn restart<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: RestartInstanceParams,
+) -> HandlerFuture<'a, InstanceActionAccepted> {
+    let context = context.clone();
+    Box::pin(async move {
+        let supervisor = core.supervision().supervisor()?;
+        let registry = registry_of(core)?;
+        let id = instance_id(params.instance_id)?;
+        let expected = expected_revision(params.expected_revision)?;
+        let fingerprint = request_fingerprint(&Call::InstanceRestart(params));
+        let work = supervisor.restart_work(RestartRequest::new(id, caller(&context)));
+        let precheck: Box<dyn Precheck> =
+            Box::new(move || restart_precheck(&registry, id, expected));
+        let request = move |origin: Origin| BeginRequest {
+            kind: OperationKind::RestartInstance,
+            resource: OperationResource::Instance(id),
+            creates_resource: false,
+            extra_locks: Vec::new(),
+            // A restart waits behind the operation that holds the instance,
+            // a respawn included, then checks the state again (AC-9).
+            busy: BusyPolicy::Queue,
+            expected_revision: None,
+            origin,
+            input: restart_input(),
+            work,
+            precheck: Some(precheck),
+        };
+        let outcome = start_operation(
+            core,
+            &context,
+            OperationStart::new(
+                "instance.restart",
+                context.idempotency_key.as_deref(),
+                fingerprint,
+            ),
+            request,
+        )
+        .await?;
+        Ok(action_reply(outcome))
+    })
+}
+
+/// The real `instance.reload` (spec 0026): a `reload_instance` operation
+/// on a running instance whose provider can reload.
+pub fn reload<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ReloadInstanceParams,
+) -> HandlerFuture<'a, InstanceActionAccepted> {
+    let context = context.clone();
+    Box::pin(async move {
+        let supervisor = core.supervision().supervisor()?;
+        let registry = registry_of(core)?;
+        let id = instance_id(params.instance_id)?;
+        let expected = expected_revision(params.expected_revision)?;
+        let fingerprint = request_fingerprint(&Call::InstanceReload(params));
+        let work = supervisor.reload_work(ReloadRequest::new(id, caller(&context)));
+        let precheck: Box<dyn Precheck> =
+            Box::new(move || reload_precheck(&registry, id, expected));
+        let request = move |origin: Origin| BeginRequest {
+            kind: OperationKind::ReloadInstance,
+            resource: OperationResource::Instance(id),
+            creates_resource: false,
+            extra_locks: Vec::new(),
+            busy: BusyPolicy::Queue,
+            expected_revision: None,
+            origin,
+            input: JournalPayload::empty(),
+            work,
+            precheck: Some(precheck),
+        };
+        let outcome = start_operation(
+            core,
+            &context,
+            OperationStart::new(
+                "instance.reload",
+                context.idempotency_key.as_deref(),
+                fingerprint,
+            ),
+            request,
+        )
+        .await?;
+        Ok(action_reply(outcome))
+    })
+}
+
+/// The real `instance.force_stop` (spec 0026): a `force_stop_instance`
+/// operation, only for an instance that is still `stopping` and that no
+/// other operation holds.
+pub fn force_stop<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ForceStopInstanceParams,
+) -> HandlerFuture<'a, InstanceActionAccepted> {
+    let context = context.clone();
+    Box::pin(async move {
+        let supervisor = core.supervision().supervisor()?;
+        let registry = registry_of(core)?;
+        let id = instance_id(params.instance_id)?;
+        let expected = expected_revision(params.expected_revision)?;
+        let fingerprint = request_fingerprint(&Call::InstanceForceStop(params));
+        let work = supervisor.force_stop_work(ForceStopRequest::new(id));
+        let precheck: Box<dyn Precheck> =
+            Box::new(move || force_stop_precheck(&registry, id, expected));
+        let request = move |origin: Origin| BeginRequest {
+            kind: OperationKind::ForceStopInstance,
+            resource: OperationResource::Instance(id),
+            creates_resource: false,
+            extra_locks: Vec::new(),
+            // Another operation that holds the instance answers
+            // `resource.busy` (AC-2).
+            busy: BusyPolicy::Reject,
+            expected_revision: None,
+            origin,
+            input: JournalPayload::empty(),
+            work,
+            precheck: Some(precheck),
+        };
+        let outcome = start_operation(
+            core,
+            &context,
+            OperationStart::new(
+                "instance.force_stop",
+                context.idempotency_key.as_deref(),
+                fingerprint,
+            ),
+            request,
+        )
+        .await?;
+        Ok(action_reply(outcome))
+    })
+}
+
+/// The journal input of a restart: the trigger it records (spec 0026,
+/// *Supervisor: restart*).
+fn restart_input() -> JournalPayload {
+    JournalPayload::new(
+        r#"{"trigger":"user_restart"}"#,
+        stackly_domain::OperationJournal::INPUT_MAX,
+    )
+    .unwrap_or_else(|_| JournalPayload::empty())
+}
+
+/// Refuses a restart the state decides (spec 0026, AC-7): only `running`
+/// and `recovering` go on, and a refusal makes no operation.
+fn restart_precheck(
+    registry: &SqliteRegistry,
+    id: InstanceId,
+    expected: Option<ResourceRevision>,
+) -> PrecheckOutcome {
+    let instance = match read_for_precheck(registry, id, expected) {
+        Ok(instance) => instance,
+        Err(rejected) => return rejected,
+    };
+    match instance.lifecycle() {
+        InstanceLifecycle::Running | InstanceLifecycle::Recovering => PrecheckOutcome::Proceed,
+        InstanceLifecycle::Stopping => reject(SupervisorError::InstanceStopping),
+        InstanceLifecycle::Unknown => reject(SupervisorError::IdentityUnproven { pid: None }),
+        InstanceLifecycle::Initializing => reject(SupervisorError::InstanceInitializing),
+        InstanceLifecycle::Retained => reject(SupervisorError::InstanceRetained),
+        lifecycle @ (InstanceLifecycle::Starting
+        | InstanceLifecycle::Stopped
+        | InstanceLifecycle::Failed
+        | InstanceLifecycle::Uninitialized) => {
+            reject(SupervisorError::InstanceNotRunning { lifecycle })
+        }
+    }
+}
+
+/// Refuses a reload the provider or the state decides (spec 0026, AC-10):
+/// a provider revision without the `reload` capability first, then any
+/// lifecycle but `running`, both without an operation.
+fn reload_precheck(
+    registry: &SqliteRegistry,
+    id: InstanceId,
+    expected: Option<ResourceRevision>,
+) -> PrecheckOutcome {
+    let instance = match read_for_precheck(registry, id, expected) {
+        Ok(instance) => instance,
+        Err(rejected) => return rejected,
+    };
+    if !instance.capabilities().contains(Capability::Reload) {
+        return reject(SupervisorError::CapabilityUnsupported {
+            capability: Capability::Reload.to_string(),
+        });
+    }
+    match instance.lifecycle() {
+        InstanceLifecycle::Running => PrecheckOutcome::Proceed,
+        InstanceLifecycle::Stopping => reject(SupervisorError::InstanceStopping),
+        InstanceLifecycle::Unknown => reject(SupervisorError::IdentityUnproven { pid: None }),
+        InstanceLifecycle::Retained => reject(SupervisorError::InstanceRetained),
+        lifecycle => reject(SupervisorError::InstanceNotRunning { lifecycle }),
+    }
+}
+
+/// Refuses a force stop the state decides (spec 0026, AC-2): `running`,
+/// `starting`, and `recovering` need a normal stop first, `unknown` is
+/// never signalled, and `stopped` or `failed` answer `alreadyInState`.
+fn force_stop_precheck(
+    registry: &SqliteRegistry,
+    id: InstanceId,
+    expected: Option<ResourceRevision>,
+) -> PrecheckOutcome {
+    let instance = match read_for_precheck(registry, id, expected) {
+        Ok(instance) => instance,
+        Err(rejected) => return rejected,
+    };
+    match instance.lifecycle() {
+        InstanceLifecycle::Stopping => PrecheckOutcome::Proceed,
+        InstanceLifecycle::Stopped
+        | InstanceLifecycle::Failed
+        | InstanceLifecycle::Uninitialized => PrecheckOutcome::NoOp(NoOpReply::nothing()),
+        lifecycle @ (InstanceLifecycle::Running
+        | InstanceLifecycle::Starting
+        | InstanceLifecycle::Recovering) => {
+            reject(SupervisorError::ForceRequiresStopping { lifecycle })
+        }
+        InstanceLifecycle::Unknown => reject(SupervisorError::IdentityUnproven { pid: None }),
+        InstanceLifecycle::Initializing => reject(SupervisorError::InstanceInitializing),
+        InstanceLifecycle::Retained => reject(SupervisorError::InstanceRetained),
+    }
 }
 
 /// Refuses a start the state decides, answers one that has nothing to do,

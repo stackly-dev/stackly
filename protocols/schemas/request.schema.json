@@ -423,6 +423,57 @@
           ]
         },
         {
+          "description": "Restarts a running instance as one operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RestartInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.restart"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Reloads the configuration of a running instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ReloadInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.reload"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Sends `SIGKILL` to an instance that is still stopping.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ForceStopInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.force_stop"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "One instance with its status.",
           "type": "object",
           "properties": {
@@ -810,6 +861,31 @@
       "required": [
         "serverInstanceId",
         "sequence"
+      ]
+    },
+    "ForceStopInstanceParams": {
+      "description": "Params of `instance.force_stop` (spec 0026): only for an instance that\nis still `stopping`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to force stop.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "GetCreateFormParams": {
@@ -1251,6 +1327,31 @@
         "name"
       ]
     },
+    "ReloadInstanceParams": {
+      "description": "Params of `instance.reload` (spec 0026).",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to reload.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
     "ResourceKind": {
       "description": "The kinds of resource Stackly tracks. Open: a newer daemon may add\nvalues, which older clients read as `unrecognized`.",
       "oneOf": [
@@ -1317,6 +1418,31 @@
       "required": [
         "kind",
         "id"
+      ]
+    },
+    "RestartInstanceParams": {
+      "description": "Params of `instance.restart` (spec 0026).",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to restart.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "ResumeOperationParams": {

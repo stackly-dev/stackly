@@ -26,9 +26,10 @@ use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
 use crate::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
-    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
-    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage, InstanceSummary,
-    ListInstancesParams, PreflightCreateParams, StartInstanceParams, StopInstanceParams,
+    ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
+    GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
+    InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
+    ReloadInstanceParams, RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::operation::{
@@ -139,6 +140,15 @@ pub enum Call {
     /// Stops an instance.
     #[serde(rename = "instance.stop")]
     InstanceStop(StopInstanceParams),
+    /// Restarts a running instance as one operation.
+    #[serde(rename = "instance.restart")]
+    InstanceRestart(RestartInstanceParams),
+    /// Reloads the configuration of a running instance.
+    #[serde(rename = "instance.reload")]
+    InstanceReload(ReloadInstanceParams),
+    /// Sends `SIGKILL` to an instance that is still stopping.
+    #[serde(rename = "instance.force_stop")]
+    InstanceForceStop(ForceStopInstanceParams),
     /// One instance with its status.
     #[serde(rename = "instance.get")]
     InstanceGet(GetInstanceParams),
@@ -254,6 +264,16 @@ pub enum Reply {
     /// The operation that stops the instance, or that it already stopped.
     #[serde(rename = "instance.stop")]
     InstanceStop(Box<InstanceActionAccepted>),
+    /// The operation that restarts the instance.
+    #[serde(rename = "instance.restart")]
+    InstanceRestart(Box<InstanceActionAccepted>),
+    /// The operation that reloads the instance.
+    #[serde(rename = "instance.reload")]
+    InstanceReload(Box<InstanceActionAccepted>),
+    /// The operation that force stops the instance, or that it already
+    /// stopped.
+    #[serde(rename = "instance.force_stop")]
+    InstanceForceStop(Box<InstanceActionAccepted>),
     /// The instance.
     #[serde(rename = "instance.get")]
     InstanceGet(Box<InstanceSummary>),
@@ -383,6 +403,9 @@ methods! {
     "instance.create" => InstanceCreate(CreateInstanceParams), recovery refused;
     "instance.start" => InstanceStart(StartInstanceParams), recovery refused;
     "instance.stop" => InstanceStop(StopInstanceParams), recovery refused;
+    "instance.restart" => InstanceRestart(RestartInstanceParams), recovery refused;
+    "instance.reload" => InstanceReload(ReloadInstanceParams), recovery refused;
+    "instance.force_stop" => InstanceForceStop(ForceStopInstanceParams), recovery refused;
     "instance.get" => InstanceGet(GetInstanceParams), recovery refused;
     "instance.list" => InstanceList(ListInstancesParams), recovery refused;
     "storage.get_capacity" => StorageGetCapacity, recovery allowed;
@@ -547,7 +570,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 10
+                == 13
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -561,7 +584,9 @@ mod tests {
             "installing, listing, and reading runtimes need the registry"
         );
         assert_eq!(
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5,
+            // The last 3: `instance.restart`, `instance.reload`, and
+            // `instance.force_stop` (spec 0026).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

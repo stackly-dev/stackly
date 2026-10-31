@@ -391,9 +391,11 @@ pub(super) fn instances(
              i.runtime_id AS runtime_id, i.data_line AS data_line, \
              i.data_version AS data_version, i.data_initialized_at AS data_initialized_at, \
              i.desired AS desired, i.startup AS startup, i.lifecycle AS lifecycle, \
-             i.last_failure AS last_failure, i.revision AS revision, \
+             i.last_failure AS last_failure, i.last_exit AS last_exit, \
+             i.revision AS revision, \
              i.created_at AS created_at, i.created_by_operation AS created_by_operation, \
-             i.retained_at AS retained_at, i.retained_by_operation AS retained_by_operation \
+             i.retained_at AS retained_at, i.retained_by_operation AS retained_by_operation, \
+             p.capabilities AS capabilities \
              FROM instances i JOIN provider_revisions p ON p.pk = i.provider_revision_pk \
              {clause} ORDER BY i.name, i.id"
         ),
@@ -422,13 +424,17 @@ pub(super) fn instances(
                 startup: cells.parse("startup")?,
                 lifecycle: cells.parse::<InstanceLifecycle>("lifecycle")?,
                 last_failure: cells.opt_parse("last_failure")?,
+                last_exit: cells.opt_parse("last_exit")?,
                 revision: cells.revision()?,
                 created_at: cells.ts("created_at")?,
                 created_by: cells.parse("created_by_operation")?,
                 retained_at: cells.opt_ts("retained_at")?,
                 retained_by: cells.opt_parse("retained_by_operation")?,
             };
-            Instance::restore(stored, loaded_at).map_err(|err| inconsistent("instances", &err))
+            let mut instance = Instance::restore(stored, loaded_at)
+                .map_err(|err| inconsistent("instances", &err))?;
+            instance.set_capabilities(capabilities(provider)?);
+            Ok(instance)
         },
     )
 }

@@ -5,8 +5,9 @@
 use std::any::Any;
 use std::fmt;
 
-use crate::id::RuntimeId;
+use crate::id::{InstanceId, RuntimeId};
 use crate::instance::Instance;
+use crate::operation::{JournalView, Operation};
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::{Committed, WriteOp};
 use crate::registry::error::RegistryError;
@@ -41,6 +42,18 @@ pub trait GuardView {
         &self,
         key: &ProviderRevisionKey,
     ) -> Result<Option<ProviderRevisionRecord>, RegistryError>;
+
+    /// Returns what
+    /// [`Registry::force_stop_history`](crate::Registry::force_stop_history)
+    /// returns, read inside the guarded commit.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn force_stop_history(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Vec<(Operation, JournalView)>, RegistryError>;
 }
 
 /// What a guard decided after reading.

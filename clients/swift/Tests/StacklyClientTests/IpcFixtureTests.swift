@@ -63,6 +63,9 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceCreate = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceStart = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceStop = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceRestart = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceReload = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceForceStop = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGet = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceList = $0 { true } else { false } })
         #expect(methods.contains(.storageGetCapacity))
@@ -75,7 +78,7 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceGetDuplicateForm = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGetDetail = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGetDataUsage = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 35)
+        #expect(Set(methods.map(\.methodName)).count == 38)
     }
 
     private func check<Value: Codable & Equatable>(

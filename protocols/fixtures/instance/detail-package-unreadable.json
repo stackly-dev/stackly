@@ -51,7 +51,11 @@
     "leftoverProcesses": [],
     "logsUnavailable": false,
     "ownership": "manual",
-    "initialized": true
+    "initialized": true,
+    "capabilities": {
+      "reload": true
+    },
+    "lastExit": null
   },
   "detail": {
     "instanceId": "0192f3a5-0000-7000-8000-000000000009",

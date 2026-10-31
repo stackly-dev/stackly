@@ -60,7 +60,11 @@
             ],
             "logsUnavailable": false,
             "ownership": "manual",
-            "initialized": true
+            "initialized": true,
+            "capabilities": {
+              "reload": true
+            },
+            "lastExit": null
           },
           {
             "id": "0192f3a5-0000-7000-8000-000000000001",
@@ -137,7 +141,11 @@
             "leftoverProcesses": [],
             "logsUnavailable": false,
             "ownership": "manual",
-            "initialized": true
+            "initialized": true,
+            "capabilities": {
+              "reload": true
+            },
+            "lastExit": null
           }
         ],
         "next": "orders-db_0192f3a5-0000-7000-8000-000000000001"

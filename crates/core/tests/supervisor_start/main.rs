@@ -7,6 +7,7 @@
 mod actor_commit;
 mod common;
 mod data_compat;
+mod force_restart;
 mod init;
 mod launch;
 mod native;

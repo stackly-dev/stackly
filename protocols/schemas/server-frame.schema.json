@@ -3508,7 +3508,7 @@
       ]
     },
     "InstanceActionAccepted": {
-      "description": "The reply of `instance.start` and `instance.stop`.\n\nAn action that changes something starts an operation and returns it in\n`accepted`. An instance already in the asked state answers\n`alreadyInState` with no operation and no bound idempotency key.",
+      "description": "The reply of `instance.start`, `instance.stop`, `instance.restart`,\n`instance.reload`, and `instance.force_stop`.\n\nAn action that changes something starts an operation and returns it in\n`accepted`. An instance already in the asked state answers\n`alreadyInState` with no operation and no bound idempotency key.",
       "type": "object",
       "properties": {
         "accepted": {
@@ -3587,6 +3587,17 @@
           ]
         }
       ]
+    },
+    "InstanceCapabilities": {
+      "description": "What the provider revision an instance pins can do (spec 0026,\nAC-11), read from the pinned revision, never from the catalog. More\ncapabilities join later; an absent one reads as false.",
+      "type": "object",
+      "properties": {
+        "reload": {
+          "description": "The provider reloads its configuration without a restart.",
+          "type": "boolean",
+          "default": false
+        }
+      }
     },
     "InstanceDesired": {
       "description": "Whether the person wants an instance running. Closed.",
@@ -3789,6 +3800,31 @@
           "description": "It does not work.",
           "type": "string",
           "const": "unhealthy"
+        }
+      ]
+    },
+    "InstanceLastExit": {
+      "description": "How the main process of an instance last ended (spec 0026). Open.",
+      "oneOf": [
+        {
+          "description": "It exited while stopping, with no signal the daemon did not send.",
+          "type": "string",
+          "const": "clean"
+        },
+        {
+          "description": "A force stop sent it `SIGKILL`.",
+          "type": "string",
+          "const": "forced"
+        },
+        {
+          "description": "It died on its own, or from a signal the daemon did not send.",
+          "type": "string",
+          "const": "crashed"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
         }
       ]
     },
@@ -4124,6 +4160,13 @@
           ],
           "default": null
         },
+        "capabilities": {
+          "description": "What the pinned provider revision can do. Absent in older daemons,\nwhich reads as nothing.",
+          "$ref": "#/$defs/InstanceCapabilities",
+          "default": {
+            "reload": false
+          }
+        },
         "desired": {
           "description": "What the person wants.",
           "$ref": "#/$defs/InstanceDesired"
@@ -4158,6 +4201,18 @@
           "type": [
             "boolean",
             "null"
+          ],
+          "default": null
+        },
+        "lastExit": {
+          "description": "How the main process last ended; null when it never did, or the\nrow predates the record.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceLastExit"
+            },
+            {
+              "type": "null"
+            }
           ],
           "default": null
         },
@@ -4580,6 +4635,11 @@
           "description": "Reload an instance's configuration.",
           "type": "string",
           "const": "reload_instance"
+        },
+        {
+          "description": "Send `SIGKILL` to an instance that is still stopping (spec 0026).",
+          "type": "string",
+          "const": "force_stop_instance"
         },
         {
           "description": "Rename an instance.",
@@ -6367,6 +6427,57 @@
             "type": {
               "type": "string",
               "const": "instance.stop"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that restarts the instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.restart"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that reloads the instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.reload"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that force stops the instance, or that it already\nstopped.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.force_stop"
             }
           },
           "required": [

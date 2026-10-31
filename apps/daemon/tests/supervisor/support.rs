@@ -273,6 +273,7 @@ impl Site {
                 startup: instance.startup(),
                 lifecycle: instance.lifecycle(),
                 last_failure: instance.last_failure().cloned(),
+                last_exit: instance.last_exit(),
                 revision: ResourceRevision::new(expected.get() + 1)
                     .expect("the next revision is valid"),
                 created_at: instance.created_at(),
@@ -633,6 +634,60 @@ impl Api {
         {
             Reply::InstanceStop(accepted) => Ok(*accepted),
             other => panic!("not a stop reply: {other:?}"),
+        }
+    }
+
+    /// `instance.restart` with a fresh key (spec 0026).
+    pub async fn restart(&self, id: Uuid) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        match self
+            .client
+            .call_detailed(
+                Call::InstanceRestart(stackly_protocol::instance::RestartInstanceParams {
+                    instance_id: id,
+                    expected_revision: None,
+                }),
+                CallOptions::default().with_idempotency_key(key()),
+            )
+            .await?
+        {
+            Reply::InstanceRestart(accepted) => Ok(*accepted),
+            other => panic!("not a restart reply: {other:?}"),
+        }
+    }
+
+    /// `instance.reload` with a fresh key (spec 0026).
+    pub async fn reload(&self, id: Uuid) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        match self
+            .client
+            .call_detailed(
+                Call::InstanceReload(stackly_protocol::instance::ReloadInstanceParams {
+                    instance_id: id,
+                    expected_revision: None,
+                }),
+                CallOptions::default().with_idempotency_key(key()),
+            )
+            .await?
+        {
+            Reply::InstanceReload(accepted) => Ok(*accepted),
+            other => panic!("not a reload reply: {other:?}"),
+        }
+    }
+
+    /// `instance.force_stop` with a fresh key (spec 0026).
+    pub async fn force_stop(&self, id: Uuid) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
+        match self
+            .client
+            .call_detailed(
+                Call::InstanceForceStop(stackly_protocol::instance::ForceStopInstanceParams {
+                    instance_id: id,
+                    expected_revision: None,
+                }),
+                CallOptions::default().with_idempotency_key(key()),
+            )
+            .await?
+        {
+            Reply::InstanceForceStop(accepted) => Ok(*accepted),
+            other => panic!("not a force stop reply: {other:?}"),
         }
     }
 

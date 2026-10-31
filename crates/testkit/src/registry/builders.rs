@@ -426,6 +426,7 @@ impl InstanceBuilder {
                 startup: StartupPolicy::Manual,
                 lifecycle: InstanceLifecycle::Uninitialized,
                 last_failure: None,
+                last_exit: None,
                 revision: ResourceRevision::INITIAL,
                 created_at: FIXTURE_TIME,
                 created_by: OperationId::generate(),

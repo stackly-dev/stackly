@@ -100,6 +100,10 @@ impl ProcessSupervision for RecordingProcesses {
         self.inner.continue_stopped(target)
     }
 
+    fn force_kill(&self, target: &SignalTarget) -> Result<(), ProcessError> {
+        self.inner.force_kill(target)
+    }
+
     fn terminate_helper_group(
         &self,
         helper: &HelperHandle,

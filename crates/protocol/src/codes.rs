@@ -607,7 +607,13 @@ area! {
         INSTANCE_INITIALIZING = "supervisor.instance_initializing", Conflict, retryable false,
             details [], "a stop while the data folder is being initialized";
         INSTANCE_STOPPING = "supervisor.instance_stopping", Conflict, retryable false,
-            details [], "a start while the instance is stopping";
+            details [], "a start, restart, reload, or force stop while the instance is stopping";
+        INSTANCE_NOT_RUNNING = "supervisor.instance_not_running", Conflict, retryable false,
+            details ["lifecycle"], "a restart or reload of an instance that does not run (spec 0026)";
+        FORCE_REQUIRES_STOPPING = "supervisor.force_requires_stopping", Conflict, retryable false,
+            details ["lifecycle"], "a force stop of an instance that is not stopping; stop it first (spec 0026)";
+        FORCE_TIMEOUT = "supervisor.force_timeout", Timeout, retryable false,
+            details ["waitSeconds"], "the process did not exit in time after SIGKILL; it stays watched (spec 0026)";
         INSTANCE_RETAINED = "supervisor.instance_retained", Conflict, retryable false,
             details [], "an action on a retained instance";
         IDENTITY_UNPROVEN = "supervisor.identity_unproven", Conflict, retryable false,
@@ -615,7 +621,8 @@ area! {
             items { kind "check", fields ["name", "result"], max 7 },
             "a start or stop on an instance whose process cannot be proven to be its own";
         DATA_IN_USE = "supervisor.data_in_use", Conflict, retryable false,
-            details ["lockPath", "pid"], "the instance lock is held, or the last observed process still runs";
+            details ["lockPath", "pid", "leftoverProcesses"],
+            "the instance lock is held, or the last observed process still runs; after a restart's stop, leftoverProcesses names the group members left";
         ENDPOINT_IN_USE = "supervisor.endpoint_in_use", Conflict, retryable false,
             details ["endpoint", "address", "port", "omitted"], "another process holds the port of an endpoint";
         ENDPOINT_UNAVAILABLE = "supervisor.endpoint_unavailable", Unavailable, retryable true,
@@ -642,13 +649,13 @@ area! {
         RETRY_BUDGET_EXHAUSTED = "supervisor.retry_budget_exhausted", Failed, retryable false,
             details ["attempts", "lastExitCode", "lastSignal"], "the restart budget ran out during a start";
         STOP_TIMEOUT = "supervisor.stop_timeout", Timeout, retryable false,
-            details ["timeoutSeconds"], "the stop budget ran out";
+            details ["timeoutSeconds", "after"], "the stop budget ran out; after a restart's stop, after is stays_stopped";
         STOP_REQUIRES_OVERRIDE = "supervisor.stop_requires_override", Conflict, retryable false,
             details ["omitted"],
             items { kind "environment", fields ["environmentId"], max 100 },
             "an active environment lease needs an override to stop the instance";
         STOP_COMMAND_FAILED = "supervisor.stop_command_failed", Failed, retryable false,
-            details ["exitCode"], "the stop command exited with a code it does not accept";
+            details ["exitCode", "after"], "the stop command exited with a code it does not accept";
         RELOAD_FAILED = "supervisor.reload_failed", Failed, retryable false,
             details ["reason"], "the reload action or its verification failed";
         CAPABILITY_UNSUPPORTED = "supervisor.capability_unsupported", Unsupported, retryable false,

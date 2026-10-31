@@ -190,7 +190,12 @@ fn instance_keeps_its_exact_runtime_and_revision_until_rebind() {
         (3, LifecycleEvent::StartBegin),
         (4, LifecycleEvent::Spawned),
         (5, LifecycleEvent::StopBegin),
-        (6, LifecycleEvent::Exited),
+        (
+            6,
+            LifecycleEvent::Exited {
+                exit: Some(stackly_domain::ExitKind::Clean),
+            },
+        ),
     ] {
         instance.apply_lifecycle(event, at(seconds)).unwrap();
     }

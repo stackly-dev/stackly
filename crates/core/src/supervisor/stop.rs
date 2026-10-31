@@ -24,7 +24,10 @@ use super::error::SupervisorError;
 use super::exit::finish_process;
 use super::helper::HelperEnd;
 use super::init::config_invalid;
-use super::persist::{CommitMode, apply_event, blocking, commit_instance, read_instance};
+use super::persist::{
+    CommitMode, apply_event, apply_stopping_exit, blocking, commit_exit, commit_instance,
+    read_instance,
+};
 use super::prepare::{Checks, prepare};
 use super::steps::run_command;
 use crate::operation::{
@@ -136,11 +139,11 @@ impl Supervisor {
     /// already being recorded as something else when the stop journaled
     /// (the process died on its own at that moment) could finish before it
     /// saw `stopping`; this closes that window.
-    async fn settle_stopping(&self, id: InstanceId) -> Result<(), SupervisorError> {
+    pub(crate) async fn settle_stopping(&self, id: InstanceId) -> Result<(), SupervisorError> {
         let now = self.deps().platform.clock().now();
-        commit_instance(self, id, None, CommitMode::Actor, |changes| {
+        commit_exit(self, id, None, CommitMode::Actor, |changes, force| {
             if changes.instance().lifecycle() == InstanceLifecycle::Stopping {
-                apply_event(changes, LifecycleEvent::Exited, now)?;
+                apply_stopping_exit(changes, force, now)?;
             }
             Ok(Vec::new())
         })
@@ -152,7 +155,7 @@ impl Supervisor {
     /// left `stopping` goes on to `stopped`.
     async fn settle_gone_process(&self, id: InstanceId) -> Result<(), SupervisorError> {
         let now = self.deps().platform.clock().now();
-        commit_instance(self, id, None, CommitMode::Operation, |changes| {
+        commit_exit(self, id, None, CommitMode::Operation, |changes, force| {
             if changes.instance().desired() != DesiredState::Stopped {
                 changes.apply(|instance| {
                     instance.set_desired(DesiredState::Stopped);
@@ -160,7 +163,7 @@ impl Supervisor {
                 })?;
             }
             if changes.instance().lifecycle() == InstanceLifecycle::Stopping {
-                apply_event(changes, LifecycleEvent::Exited, now)?;
+                apply_stopping_exit(changes, force, now)?;
             }
             Ok(Vec::new())
         })
@@ -214,7 +217,15 @@ impl Supervisor {
                 let target = SignalTarget::new(identity.clone());
                 let sent = blocking(move || platform.processes().signal(&target, signal)).await?;
                 match sent {
-                    Ok(()) => {}
+                    Ok(()) => actor.update(deps, |state| {
+                        if let Some(slot) = state
+                            .process
+                            .as_mut()
+                            .filter(|slot| slot.generation == generation)
+                        {
+                            slot.sent_signal = Some(signal.number());
+                        }
+                    }),
                     // The process is gone already: its exit is on the way.
                     Err(ProcessError::NotFound { .. }) => {}
                     Err(ProcessError::IdentityMismatch { pid }) => {
@@ -307,7 +318,8 @@ impl Supervisor {
                 _ => apply_event(changes, LifecycleEvent::StopBegin, now)?,
             }
             if no_process {
-                apply_event(changes, LifecycleEvent::Exited, now)?;
+                // No process left, so `last_exit` stays as it is.
+                apply_event(changes, LifecycleEvent::Exited { exit: None }, now)?;
             }
             Ok(Vec::new())
         })
@@ -318,7 +330,7 @@ impl Supervisor {
     /// Records that the identity of the process changed: the instance
     /// becomes `unknown`, with the `identityUnproven` blocker, and nothing
     /// is signalled again.
-    async fn identity_lost(&self, id: InstanceId, generation: u64, pid: Pid) {
+    pub(crate) async fn identity_lost(&self, id: InstanceId, generation: u64, pid: Pid) {
         let deps = self.deps();
         let now = deps.platform.clock().now();
         let committed = commit_instance(self, id, None, CommitMode::Actor, |changes| {

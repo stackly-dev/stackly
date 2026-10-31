@@ -43,6 +43,10 @@ pub(crate) struct ProcessSlot {
     pub(crate) probes_stop: watch::Sender<bool>,
     /// Reads the process's spools.
     pub(crate) drain: Arc<DrainSlot>,
+    /// The POSIX number of the stop signal the daemon sent this process,
+    /// so an exit by that signal reads `clean` and any other signal
+    /// `crashed` (spec 0026, *Handler exit: `last_exit`*).
+    pub(crate) sent_signal: Option<i32>,
 }
 
 /// Hands the exit of one process to the tasks waiting for it.

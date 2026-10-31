@@ -7,14 +7,31 @@ nonisolated public enum InstanceVerb: String, Hashable, Sendable {
     case start
     /// `instance.stop`.
     case stop
+    /// `instance.restart` (spec 0026).
+    case restart
+    /// `instance.reload` (spec 0026).
+    case reload
+    /// `instance.force_stop` (spec 0026).
+    case forceStop
 
-    /// "start" or "stop", for the copy of a feedback card.
-    var word: String { rawValue }
+    /// "start", "stop", "restart", "reload", or "force stop", for the copy of a feedback card.
+    var word: String {
+        switch self {
+        case .start: "start"
+        case .stop: "stop"
+        case .restart: "restart"
+        case .reload: "reload"
+        case .forceStop: "force stop"
+        }
+    }
 
     var progressive: String {
         switch self {
         case .start: "Starting"
         case .stop: "Stopping"
+        case .restart: "Restarting"
+        case .reload: "Reloading"
+        case .forceStop: "Force stopping"
         }
     }
 }

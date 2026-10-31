@@ -7,6 +7,16 @@ import SwiftUI
 /// secret carries "Enter Secret…", which opens the sheet of spec 0011 for the missing
 /// references.
 struct InstanceDetailBanner: View {
+    /// The two buttons of the "Still stopping." banner (spec 0026, AC-16).
+    struct Stopping {
+        /// Sends `instance.stop` again, with a new budget.
+        let stopAgain: @MainActor () -> Void
+        /// Force Stop…, which confirms first.
+        let forceStop: StacklyAction
+    }
+
+    @Environment(\.actionHost) private var host
+    @Environment(\.mutationAvailability) private var gate
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -16,8 +26,22 @@ struct InstanceDetailBanner: View {
     let detailError: ErrorBody?
     let retryDetail: @MainActor () -> Void
     let enterSecrets: @MainActor ([SecretNeed]) -> Void
+    var stopping: Stopping? = nil
 
     var body: some View {
+        if let stopping {
+            // Neutral words: `stopping` without an operation also comes from reconciliation
+            // or a stop the daemon lost.
+            StateBanner(
+                tone: .caution, title: "Still stopping.",
+                message: "Stopping hasn’t finished. You can wait, stop again, or force stop.",
+                actions: [
+                    StateAction(title: "Stop Again", mutates: true, perform: stopping.stopAgain),
+                    StateAction(
+                        title: "Force Stop…", mutates: true,
+                        perform: { [host, gate] in stopping.forceStop.run(host: host, gate: gate) }),
+                ], base: .window)
+        }
         if let item = AttentionRules.banner(
             for: summary, now: fixtureNow ?? Date(), locale: locale, timeZone: timeZone)
         {

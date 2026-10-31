@@ -36,6 +36,9 @@ struct DetailsCard: View {
             if let restarts = DetailFormat.restartAttempts(summary.restart) {
                 LabeledContent("Restart attempts") { Text(restarts) }
             }
+            if let lastExit = DetailFormat.lastExit(summary.lastExit) {
+                LabeledContent("Last exit") { Text(lastExit) }
+            }
             LabeledContent("Autostart") {
                 if let detail {
                     Text(DetailFormat.autostart(detail.startup))

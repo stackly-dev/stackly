@@ -194,7 +194,7 @@ fn five_migrations_in_a_row_keep_the_three_newest_snapshots() {
         assert_eq!(summary.migrated_from, Some(base + step - 1));
     }
 
-    let expected: Vec<String> = (3..=5_u32)
+    let mut expected: Vec<String> = (3..=5_u32)
         .map(|step| {
             format!(
                 "v{}-to-v{}-20260101T000{step}00Z.sqlite",
@@ -203,6 +203,8 @@ fn five_migrations_in_a_row_keep_the_three_newest_snapshots() {
             )
         })
         .collect();
+    // The snapshot list is sorted by file name, so v10 sorts before v8.
+    expected.sort();
     assert_eq!(harness.snapshots(), expected);
 }
 
@@ -306,4 +308,35 @@ fn a_snapshot_that_cannot_be_written_is_backup_failed_and_nothing_migrates() {
     assert_eq!(report.snapshot, None);
     assert_eq!(state(&harness), before, "no migration was tried");
     assert!(harness.snapshots().is_empty());
+}
+
+#[test]
+fn ac_5_a_version_5_registry_migrates_to_last_exit_null_and_the_check_refuses_other_values() {
+    // Spec 0026, step 2: migration 6 adds instances.last_exit and leaves
+    // every row that existed before it NULL.
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(5));
+
+    let (registry, summary) = ready(harness.open_with(&OpenOptions::new()));
+    drop(registry);
+
+    assert_eq!(summary.migrated_from, Some(5));
+    let conn = harness.connect();
+    let stored: Vec<Option<String>> = conn
+        .prepare("SELECT last_exit FROM instances ORDER BY id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert!(!stored.is_empty());
+    assert!(stored.iter().all(Option::is_none), "{stored:?}");
+    for value in ["clean", "forced", "crashed"] {
+        conn.execute("UPDATE instances SET last_exit = ?1", [value])
+            .unwrap();
+    }
+    let err = conn
+        .execute("UPDATE instances SET last_exit = 'killed'", [])
+        .unwrap_err();
+    assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
 }

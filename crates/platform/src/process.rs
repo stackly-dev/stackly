@@ -677,6 +677,18 @@ impl ProviderSignal {
             Self::Hup => "hup",
         }
     }
+
+    /// Returns the POSIX signal number, the one
+    /// [`ExitStatus::Signaled`] carries for a process this signal ended.
+    #[must_use]
+    pub const fn number(self) -> i32 {
+        match self {
+            Self::Term => 15,
+            Self::Int => 2,
+            Self::Quit => 3,
+            Self::Hup => 1,
+        }
+    }
 }
 
 impl fmt::Display for ProviderSignal {
@@ -815,7 +827,9 @@ fn for_path(path: Option<&Path>) -> String {
 /// Only the supervisor in `stacklyd` calls it. Every method is sync and
 /// object safe, and safe to call from any thread; core calls it through
 /// `spawn_blocking`. No method takes a process name, and no method can
-/// send `SIGKILL` to a process that ran, except to a helper's group.
+/// send `SIGKILL` to a process that ran, except to a helper's group and
+/// [`force_kill`](ProcessSupervision::force_kill), the force stop of spec
+/// 0026.
 pub trait ProcessSupervision: Send + Sync {
     /// Spawns a main process suspended, in its own session, with the
     /// request's argv, environment, and working directory, its output in
@@ -896,6 +910,18 @@ pub trait ProcessSupervision: Send + Sync {
     ///
     /// The errors of [`signal`](Self::signal).
     fn continue_stopped(&self, target: &SignalTarget) -> Result<(), ProcessError>;
+
+    /// Sends `SIGKILL` to the main process `target` names, and to no other
+    /// process (not its group), after the same check of its facts as
+    /// [`signal`](Self::signal) right before `kill(2)` (spec 0026, AC-3).
+    /// Only the force stop of `stackly-core` calls it, while the instance
+    /// is `stopping`; `cargo xtask check-deps` enforces that.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`signal`](Self::signal): `IdentityMismatch` without
+    /// signalling, and `NotFound` when the process is gone (`ESRCH`).
+    fn force_kill(&self, target: &SignalTarget) -> Result<(), ProcessError>;
 
     /// Sends `SIGTERM` to a helper's process group, or `SIGKILL` when
     /// `force` is true, only while the helper is not reaped yet.
@@ -1024,6 +1050,10 @@ impl ProcessSupervision for UnsupportedProcessSupervision {
     }
 
     fn continue_stopped(&self, _target: &SignalTarget) -> Result<(), ProcessError> {
+        Err(self.not_supported())
+    }
+
+    fn force_kill(&self, _target: &SignalTarget) -> Result<(), ProcessError> {
         Err(self.not_supported())
     }
 

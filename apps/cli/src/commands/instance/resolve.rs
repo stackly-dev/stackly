@@ -26,6 +26,17 @@ pub enum InstanceTarget {
     Name(String),
 }
 
+impl std::fmt::Display for InstanceTarget {
+    /// The argument as it was given (an ID in lower case), for a question
+    /// asked before anything is sent.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(id) => write!(f, "{id}"),
+            Self::Name(name) => f.write_str(name),
+        }
+    }
+}
+
 impl FromStr for InstanceTarget {
     type Err = String;
 

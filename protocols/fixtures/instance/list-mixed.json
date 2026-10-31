@@ -57,7 +57,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000002",
@@ -116,7 +120,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000003",
@@ -175,7 +183,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": false
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000004",
@@ -229,7 +241,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": false
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000005",
@@ -292,7 +308,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000006",
@@ -346,7 +366,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": false
+      "initialized": false,
+      "capabilities": {
+        "reload": false
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000007",
@@ -441,7 +465,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": false
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000008",
@@ -536,7 +564,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000009",
@@ -602,7 +634,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000a",
@@ -661,7 +697,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000b",
@@ -721,7 +761,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": false
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000c",
@@ -780,7 +824,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000d",
@@ -839,7 +887,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000e",
@@ -898,7 +950,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000f",
@@ -952,7 +1008,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000010",
@@ -1006,7 +1066,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000011",
@@ -1060,7 +1124,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000012",
@@ -1114,7 +1182,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": false
+      "initialized": false,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000013",
@@ -1173,7 +1245,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000014",
@@ -1239,7 +1315,11 @@
       "leftoverProcesses": [],
       "logsUnavailable": false,
       "ownership": "manual",
-      "initialized": true
+      "initialized": true,
+      "capabilities": {
+        "reload": true
+      },
+      "lastExit": null
     }
   ],
   "next": null

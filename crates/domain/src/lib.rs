@@ -58,8 +58,8 @@ pub use id::{
     RuntimeId, ShortKey,
 };
 pub use instance::{
-    DesiredState, Instance, InstanceLifecycle, LifecycleEvent, NewInstance, StartupPolicy,
-    StoredInstance,
+    DesiredState, ExitKind, Instance, InstanceLifecycle, LifecycleEvent, NewInstance,
+    StartupPolicy, StoredInstance,
 };
 pub use lease::{
     Lease, LeaseHolder, LeaseState, StopDecision, StopRequest, StoredLease, evaluate_stop,
@@ -79,7 +79,7 @@ pub use operation::{
     NewStep, Operation, OperationEvent, OperationFailure, OperationJournal, OperationKind,
     OperationResource, OperationState, OperationTrigger, Outcome, Progress, RecoveryCause,
     RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
-    StoredStep, TriggerOrigin,
+    StoredStep, TriggerOrigin, force_intent,
 };
 pub use os_version::OsVersion;
 pub use process::{

@@ -29,7 +29,7 @@ use stackly_protocol::operation::OperationSummary;
 use stackly_protocol::{Call, Reply, ResourceKind};
 use uuid::Uuid;
 
-use self::action::{StartArgs, StopArgs};
+use self::action::{ReloadArgs, RestartArgs, StartArgs, StopArgs};
 use self::connection::ConnectionArgs;
 use self::create::CreateArgs;
 use self::duplicate::DuplicateArgs;
@@ -63,11 +63,21 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance start orders-db\n  stackly instance start orders-db --wait --timeout 5m\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001"
     )]
     Start(StartArgs),
-    /// Stop an instance
+    /// Stop an instance, or force stop one that is still stopping
     #[command(
-        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
+        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop orders-db --force --yes --wait\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
     )]
     Stop(StopArgs),
+    /// Restart a running instance: stop with the provider's strategy, then start
+    #[command(
+        after_help = "Examples:\n  stackly instance restart orders-db\n  stackly instance restart orders-db --wait --json"
+    )]
+    Restart(RestartArgs),
+    /// Reload the configuration of a running instance, where the provider can
+    #[command(
+        after_help = "Examples:\n  stackly instance reload orders-db\n  stackly instance reload orders-db --wait --json"
+    )]
+    Reload(ReloadArgs),
     /// List instances with their status and endpoints
     #[command(
         after_help = "Examples:\n  stackly instance list\n  stackly instance list --status running --json"
@@ -98,6 +108,8 @@ impl InstanceCommand {
             Self::Duplicate(args) => execute(*args, cx).await,
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
+            Self::Restart(args) => execute(args, cx).await,
+            Self::Reload(args) => execute(args, cx).await,
             Self::List(args) => execute(args, cx).await,
             Self::Inspect(args) => execute(args, cx).await,
             Self::Connection(args) => execute(args, cx).await,
@@ -115,6 +127,12 @@ enum Verb {
     Start,
     /// `stop`.
     Stop,
+    /// `restart`.
+    Restart,
+    /// `reload`.
+    Reload,
+    /// `stop --force`.
+    ForceStop,
 }
 
 impl Verb {
@@ -122,8 +140,8 @@ impl Verb {
     /// line `already <lifecycle>` when `instance.get` could not say.
     const fn already(&self) -> &'static str {
         match self {
-            Self::Create { .. } | Self::Start => "running",
-            Self::Stop => "stopped",
+            Self::Create { .. } | Self::Start | Self::Restart | Self::Reload => "running",
+            Self::Stop | Self::ForceStop => "stopped",
         }
     }
 }
@@ -161,6 +179,10 @@ impl InstanceAction {
 impl Render for InstanceAction {
     fn render(&self, out: &mut HumanWriter) {
         let Some(operation) = self.operation.as_ref().filter(|_| !self.already) else {
+            if let (Verb::ForceStop, Some(instance)) = (&self.verb, &self.instance) {
+                out.line(&format!("{} is already stopped", escaped(&instance.name)));
+                return;
+            }
             let lifecycle = self.instance.as_ref().map_or_else(
                 || self.verb.already().to_owned(),
                 |i| wire_name(&i.lifecycle),
@@ -180,6 +202,22 @@ impl Render for InstanceAction {
                     wire_name(&instance.lifecycle),
                     wire_name(&instance.readiness.state)
                 )),
+                Verb::Restart => match &instance.process {
+                    Some(process) => out.line(&format!("restarted {name} (pid {})", process.pid)),
+                    None => out.line(&format!("restarted {name}")),
+                },
+                Verb::Reload => out.line(&format!("reloaded {name}")),
+                Verb::ForceStop => {
+                    out.line(&format!("force stopped {name}"));
+                    if !instance.leftover_processes.is_empty() {
+                        let pids: Vec<String> = instance
+                            .leftover_processes
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect();
+                        out.line(&format!("leftover processes: {}", pids.join(", ")));
+                    }
+                }
             }
             return;
         }

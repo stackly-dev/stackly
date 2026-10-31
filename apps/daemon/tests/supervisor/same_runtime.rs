@@ -330,6 +330,7 @@ async fn a_duplicate_form_is_refused_with_the_code_of_the_first_failing_check() 
             startup: row.startup(),
             lifecycle: stackly_domain::InstanceLifecycle::Retained,
             last_failure: None,
+            last_exit: None,
             revision: stackly_domain::ResourceRevision::new(expected.get() + 1)
                 .expect("the next revision is valid"),
             created_at: row.created_at(),

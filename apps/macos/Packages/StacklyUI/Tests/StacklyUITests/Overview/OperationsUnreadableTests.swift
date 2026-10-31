@@ -138,7 +138,8 @@ struct OperationsUnreadableTests {
             desired: adopted.desired, readiness: adopted.readiness, health: adopted.health,
             statusSeq: 1, process: process, lastFailure: nil, restart: adopted.restart,
             blocker: nil, endpoints: adopted.endpoints, leftoverProcesses: nil,
-            logsUnavailable: false, ownership: .manual, initialized: true)
+            logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
+            lastExit: nil)
         let filling = CapacityState(
             report: CapacityReport(
                 checkedAt: FixtureClock.now, totalBytes: 1_000_000_000_000,

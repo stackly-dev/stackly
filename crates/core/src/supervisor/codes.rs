@@ -22,6 +22,12 @@ codes! {
     INSTANCE_INITIALIZING = "supervisor.instance_initializing";
     /// A start while the instance is stopping.
     INSTANCE_STOPPING = "supervisor.instance_stopping";
+    /// A restart or reload of an instance that does not run (spec 0026).
+    INSTANCE_NOT_RUNNING = "supervisor.instance_not_running";
+    /// A force stop of an instance that is not `stopping` (spec 0026).
+    FORCE_REQUIRES_STOPPING = "supervisor.force_requires_stopping";
+    /// The process did not exit within `FORCE_EXIT_WAIT` after `SIGKILL`.
+    FORCE_TIMEOUT = "supervisor.force_timeout";
     /// An action on a retained instance.
     INSTANCE_RETAINED = "supervisor.instance_retained";
     /// A start or stop on an `unknown` instance.

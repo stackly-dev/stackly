@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000732",
+  "idempotencyKey": "force-stop-orders-db-0001",
+  "call": {
+    "type": "instance.force_stop",
+    "content": {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+      "expectedRevision": 7
+    }
+  }
+}

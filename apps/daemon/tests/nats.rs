@@ -15,5 +15,7 @@ mod compatibility;
 mod harness;
 #[path = "nats/lifecycle.rs"]
 mod lifecycle;
+#[path = "nats/lifecycle_ops.rs"]
+mod lifecycle_ops;
 #[path = "supervisor/support.rs"]
 mod support;

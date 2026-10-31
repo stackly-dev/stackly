@@ -92,6 +92,13 @@ impl GuardView for TransactionView<'_> {
     ) -> Result<Option<ProviderRevisionRecord>, RegistryError> {
         read::provider_revision(self.tx, key)
     }
+
+    fn force_stop_history(
+        &self,
+        instance: stackly_domain::InstanceId,
+    ) -> Result<Vec<(Operation, stackly_domain::JournalView)>, RegistryError> {
+        super::journal::force_stop_history(self.tx, instance)
+    }
 }
 
 fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {
@@ -759,6 +766,7 @@ fn write_instance(
         now,
         instance.created_by().to_string(),
         ts(instance.created_at()),
+        instance.last_exit().map(|exit| exit.as_code()),
     ];
     match write {
         Write::Insert => {
@@ -766,9 +774,9 @@ fn write_instance(
                 "INSERT INTO instances (id, name, display_name, provider_revision_pk, software, \
                  runtime_id, data_line, data_version, data_initialized_at, desired, startup, \
                  lifecycle, last_failure, retained_at, retained_by_operation, revision, \
-                 updated_at, created_by_operation, created_at, ownership) \
+                 updated_at, created_by_operation, created_at, last_exit, ownership) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, \
-                 ?17, ?18, ?19, 'created')",
+                 ?17, ?18, ?19, ?20, 'created')",
                 values,
             )
             .map_err(sql_error)?;
@@ -795,7 +803,7 @@ fn write_instance(
                  data_initialized_at = ?9, desired = ?10, startup = ?11, lifecycle = ?12, \
                  last_failure = ?13, retained_at = ?14, retained_by_operation = ?15, \
                  revision = ?16, updated_at = ?17, created_by_operation = ?18, \
-                 created_at = ?19 WHERE id = ?1",
+                 created_at = ?19, last_exit = ?20 WHERE id = ?1",
                 values,
             )
             .map_err(sql_error)?;

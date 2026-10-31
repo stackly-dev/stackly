@@ -15,7 +15,7 @@
 //! instances to run again wait for [`Supervisor::start_reconciled`].
 
 use stackly_domain::{
-    DesiredState, FailureCode, Instance, InstanceBlocker, InstanceFilter, InstanceId,
+    DesiredState, ExitKind, FailureCode, Instance, InstanceBlocker, InstanceFilter, InstanceId,
     InstanceLifecycle, LifecycleEvent, ProcessObservation,
 };
 use tokio::time::Instant;
@@ -25,7 +25,7 @@ use super::classify::{Classification, GoneReason, UnprovenBlocker};
 use super::error::SupervisorError;
 use super::evidence::{Gathered, gather_evidence, unproven_by};
 use super::pending::{PendingKind, PendingRun};
-use super::persist::{CommitMode, apply_event, blocking, commit_instance};
+use super::persist::{CommitMode, apply_event, blocking, commit_exit};
 use super::restart::JitterFactor;
 use super::{Supervisor, recheck};
 use crate::secret::delivery::sweep_secret_material;
@@ -141,6 +141,33 @@ fn interrupted() -> FailureCode {
     FailureCode::INTERRUPTED
 }
 
+/// `exited` for a process reconciliation found gone, with the
+/// [`ExitKind`] its stored lifecycle gives (spec 0026, *Handler exit:
+/// `last_exit`*); [`with_force`] turns it `forced` at commit time.
+const fn exited(exit: ExitKind) -> LifecycleEvent {
+    LifecycleEvent::Exited { exit: Some(exit) }
+}
+
+/// `confirmed_stopped`, with the [`ExitKind`] the stored lifecycle gives,
+/// or `None` for an `unknown` one, which does not tell how the process
+/// ended.
+const fn confirmed(exit: Option<ExitKind>) -> LifecycleEvent {
+    LifecycleEvent::ConfirmedStopped { exit }
+}
+
+/// Turns the exit kind of an event `forced` when a force stop's `kill`
+/// step began for the instance; the table cannot know that, the journal
+/// read inside the commit does.
+fn with_force(event: &LifecycleEvent, force: bool) -> LifecycleEvent {
+    match event {
+        LifecycleEvent::Exited { exit: Some(_) } if force => exited(ExitKind::Forced),
+        LifecycleEvent::ConfirmedStopped { exit: Some(_) } if force => {
+            confirmed(Some(ExitKind::Forced))
+        }
+        other => other.clone(),
+    }
+}
+
 /// The table of spec 0010 (*Rekonsiliasi*): what to do with an instance of
 /// this stored `lifecycle` and `desired` state, given the classification of
 /// its process. A pure function; every pair of lifecycle and event it uses
@@ -186,7 +213,7 @@ pub(crate) fn plan_for(
         L::Running if proven => Plan::new(Vec::new()).adopting(stop_if_wanted),
         L::Running if unproven => Plan::new(vec![E::IdentityLost]),
         L::Running if boot_changed || !wants_running => {
-            Plan::new(vec![E::IdentityLost, E::ConfirmedStopped])
+            Plan::new(vec![E::IdentityLost, confirmed(Some(ExitKind::Crashed))])
         }
         L::Running => Plan::new(vec![E::Crashed {
             will_retry: true,
@@ -195,16 +222,18 @@ pub(crate) fn plan_for(
         .then(Then::Respawn),
         L::Recovering if proven => Plan::new(vec![E::Spawned]).adopting(stop_if_wanted),
         L::Recovering if unproven => Plan::new(vec![E::IdentityLost]),
-        L::Recovering if boot_changed => Plan::new(vec![E::IdentityLost, E::ConfirmedStopped]),
+        L::Recovering if boot_changed => {
+            Plan::new(vec![E::IdentityLost, confirmed(Some(ExitKind::Crashed))])
+        }
         L::Recovering if wants_running => Plan::new(Vec::new()).then(Then::Respawn),
-        L::Recovering => Plan::new(vec![E::StopBegin, E::Exited]),
+        L::Recovering => Plan::new(vec![E::StopBegin, exited(ExitKind::Crashed)]),
         L::Stopping if proven => Plan::new(Vec::new()).adopting(Then::Stop),
         L::Stopping if unproven => Plan::new(vec![E::IdentityLost]),
-        L::Stopping => Plan::new(vec![E::Exited]),
+        L::Stopping => Plan::new(vec![exited(ExitKind::Clean)]),
         L::Unknown if proven => Plan::new(vec![E::Adopted]).adopting(stop_if_wanted),
         L::Unknown if unproven => Plan::new(Vec::new()),
-        L::Unknown if boot_changed => Plan::new(vec![E::ConfirmedStopped]),
-        L::Unknown => Plan::new(vec![E::ConfirmedStopped]).then(start_if_wanted),
+        L::Unknown if boot_changed => Plan::new(vec![confirmed(None)]),
+        L::Unknown => Plan::new(vec![confirmed(None)]).then(start_if_wanted),
         L::Uninitialized | L::Stopped | L::Failed | L::Retained => Plan::new(Vec::new()),
     };
     let mut plan = plan;
@@ -414,9 +443,9 @@ pub(crate) async fn settle_instance(
     let now = deps.platform.clock().now();
     if !plan.events.is_empty() {
         let events = plan.events.clone();
-        let committed = commit_instance(sup, id, None, CommitMode::Actor, |changes| {
+        let committed = commit_exit(sup, id, None, CommitMode::Actor, |changes, force| {
             for event in &events {
-                apply_event(changes, event.clone(), now)?;
+                apply_event(changes, with_force(event, force), now)?;
             }
             Ok(Vec::new())
         })

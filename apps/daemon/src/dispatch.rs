@@ -27,9 +27,10 @@ use stackly_protocol::daemon::{
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
-    GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
-    GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage, InstanceSummary,
-    ListInstancesParams, PreflightCreateParams, StartInstanceParams, StopInstanceParams,
+    ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
+    GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
+    InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
+    ReloadInstanceParams, RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -367,6 +368,36 @@ pub trait Handlers: Send + Sync + 'static {
         params: StopInstanceParams,
     ) -> HandlerFuture<'a, InstanceActionAccepted> {
         instance::stop(core, context, params)
+    }
+
+    /// `instance.restart`.
+    fn restart_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: RestartInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::restart(core, context, params)
+    }
+
+    /// `instance.reload`.
+    fn reload_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ReloadInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::reload(core, context, params)
+    }
+
+    /// `instance.force_stop`.
+    fn force_stop_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ForceStopInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::force_stop(core, context, params)
     }
 
     /// `instance.get`.

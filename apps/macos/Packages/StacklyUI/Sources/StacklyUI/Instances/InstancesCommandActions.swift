@@ -36,6 +36,8 @@ enum InstancesCommandActions {
     ///     `nil` when there is none.
     ///   - duplicate: Opens the New Instance sheet on the settings of the instance in view,
     ///     or `nil` when there is none or the window has no sheet (spec 0024 AC-13).
+    ///   - lifecycle: Restart, Reload, and Force Stop… of the instance in view (spec 0026), or
+    ///     `nil` when there is none.
     static func publish(
         showsInspector: Bool,
         toggleInspector: @escaping @MainActor () -> Void,
@@ -46,7 +48,9 @@ enum InstancesCommandActions {
         open: StacklyAction? = nil,
         back: (@MainActor () -> Void)? = nil,
         copyConnection: StacklyAction? = nil,
-        duplicate: StacklyAction? = nil
+        duplicate: StacklyAction? = nil,
+        lifecycle: (restart: StacklyAction, reload: StacklyAction, forceStop: StacklyAction)? =
+            nil
     ) -> (actions: [CommandID: StacklyAction], checked: Set<CommandID>) {
         var actions: [CommandID: StacklyAction] = [:]
 
@@ -68,7 +72,23 @@ enum InstancesCommandActions {
                 id: command.rawValue, title: CommandMap.entry(for: command).title, mutates: false,
                 perform: { setSort(InstanceSortComparator(sort.key, order: order)) })
         }
-        if let target, let verb = target.verb {
+        if let lifecycle {
+            // Published also while they cannot run, so the menu writes the reason as the
+            // subtitle (spec 0026 AC-15).
+            for (command, action) in [
+                (CommandID.restartInstance, lifecycle.restart),
+                (.reloadInstance, lifecycle.reload),
+                (.forceStopInstance, lifecycle.forceStop),
+            ] {
+                var action = action
+                action.id = command.rawValue
+                if action.isBusy == false {
+                    action.title = CommandMap.entry(for: command).title
+                }
+                actions[command] = action
+            }
+        }
+        if let target, let verb = target.verb, verb == .start || verb == .stop {
             let command: CommandID = verb == .start ? .startInstance : .stopInstance
             var action = target.action
             action.id = command.rawValue

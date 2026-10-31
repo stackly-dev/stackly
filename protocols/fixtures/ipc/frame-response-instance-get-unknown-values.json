@@ -78,7 +78,11 @@
         "leftoverProcesses": [],
         "logsUnavailable": false,
         "ownership": "environment",
-        "initialized": true
+        "initialized": true,
+        "capabilities": {
+          "reload": true
+        },
+        "lastExit": null
       }
     }
   }

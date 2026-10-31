@@ -155,6 +155,43 @@ pub enum InstanceOwnership {
     Unrecognized,
 }
 
+/// How the main process of an instance last ended (spec 0026). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InstanceLastExit {
+    /// It exited while stopping, with no signal the daemon did not send.
+    Clean,
+    /// A force stop sent it `SIGKILL`.
+    Forced,
+    /// It died on its own, or from a signal the daemon did not send.
+    Crashed,
+    /// A value this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// What the provider revision an instance pins can do (spec 0026,
+/// AC-11), read from the pinned revision, never from the catalog. More
+/// capabilities join later; an absent one reads as false.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct InstanceCapabilities {
+    /// The provider reloads its configuration without a restart.
+    #[serde(default)]
+    pub reload: bool,
+}
+
+impl InstanceCapabilities {
+    /// The capabilities with `reload` as given.
+    #[must_use]
+    pub const fn new(reload: bool) -> Self {
+        Self { reload }
+    }
+}
+
 /// The transport of an endpoint. Open.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -497,6 +534,14 @@ pub struct InstanceSummary {
     /// `#[serde(default)]` as optional, and this default is true.
     #[serde(default)]
     pub initialized: Option<bool>,
+    /// What the pinned provider revision can do. Absent in older daemons,
+    /// which reads as nothing.
+    #[serde(default)]
+    pub capabilities: InstanceCapabilities,
+    /// How the main process last ended; null when it never did, or the
+    /// row predates the record.
+    #[serde(default)]
+    pub last_exit: Option<InstanceLastExit>,
 }
 
 impl InstanceSummary {
@@ -748,7 +793,54 @@ pub struct StopInstanceParams {
 
 impl Validate for StopInstanceParams {}
 
-/// The reply of `instance.start` and `instance.stop`.
+/// Params of `instance.restart` (spec 0026).
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartInstanceParams {
+    /// The instance to restart.
+    pub instance_id: Uuid,
+    /// Refuse with `resource.revision_mismatch` unless the instance is at
+    /// this revision.
+    #[serde(default)]
+    pub expected_revision: Option<Revision>,
+}
+
+impl Validate for RestartInstanceParams {}
+
+/// Params of `instance.reload` (spec 0026).
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReloadInstanceParams {
+    /// The instance to reload.
+    pub instance_id: Uuid,
+    /// Refuse with `resource.revision_mismatch` unless the instance is at
+    /// this revision.
+    #[serde(default)]
+    pub expected_revision: Option<Revision>,
+}
+
+impl Validate for ReloadInstanceParams {}
+
+/// Params of `instance.force_stop` (spec 0026): only for an instance that
+/// is still `stopping`.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForceStopInstanceParams {
+    /// The instance to force stop.
+    pub instance_id: Uuid,
+    /// Refuse with `resource.revision_mismatch` unless the instance is at
+    /// this revision.
+    #[serde(default)]
+    pub expected_revision: Option<Revision>,
+}
+
+impl Validate for ForceStopInstanceParams {}
+
+/// The reply of `instance.start`, `instance.stop`, `instance.restart`,
+/// `instance.reload`, and `instance.force_stop`.
 ///
 /// An action that changes something starts an operation and returns it in
 /// `accepted`. An instance already in the asked state answers

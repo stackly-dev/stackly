@@ -50,6 +50,7 @@ mod evidence;
 mod exit;
 #[cfg(feature = "fixture")]
 pub mod fixture;
+mod force;
 mod helper;
 mod http;
 mod init;
@@ -65,6 +66,7 @@ mod reconcile;
 mod reload;
 mod respawn;
 mod restart;
+mod restart_op;
 mod secrets;
 mod sink;
 mod spool;
@@ -81,19 +83,22 @@ pub use classify::{
 pub use commit::{ActorCommitRetry, CommitRetry, InstanceChanges};
 pub use config::{
     AUTO_PORT_ATTEMPTS, COMMIT_BUSY_FIRST_DELAY, COMMIT_BUSY_MAX_DELAY, COMMIT_RETRY_LIMIT,
-    FAILURE_EXCERPT_LINE_CHARS, FAILURE_EXCERPT_LINES, HELPER_TERM_GRACE, HTTP_HEADER_MAX,
-    LOG_LINE_HARD_MAX, LOG_LINE_MAX, READINESS_FAILURE_THRESHOLD, READINESS_REFRESH_INTERVAL,
-    RECONCILE_START_CONCURRENCY, REGISTRY_RETRY_INTERVAL, RESTART_BASE_DELAY, RESTART_BUDGET,
-    RESTART_HEALTHY_RESET, RESTART_MAX_DELAY, RESTART_WINDOW, SPOOL_BACKLOG_MAX,
-    SPOOL_DRAIN_INTERVAL, SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
+    FAILURE_EXCERPT_LINE_CHARS, FAILURE_EXCERPT_LINES, FORCE_EXIT_WAIT, HELPER_TERM_GRACE,
+    HTTP_HEADER_MAX, LOG_LINE_HARD_MAX, LOG_LINE_MAX, READINESS_FAILURE_THRESHOLD,
+    READINESS_REFRESH_INTERVAL, RECONCILE_START_CONCURRENCY, REGISTRY_RETRY_INTERVAL,
+    RESTART_BASE_DELAY, RESTART_BUDGET, RESTART_HEALTHY_RESET, RESTART_LOCK_POLL,
+    RESTART_LOCK_WAIT, RESTART_MAX_DELAY, RESTART_WINDOW, SPOOL_BACKLOG_MAX, SPOOL_DRAIN_INTERVAL,
+    SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
 };
 pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents, WeakSupervisor};
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
+pub use force::ForceStopRequest;
 pub use init::InitRequest;
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};
 pub use reload::ReloadRequest;
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
+pub use restart_op::RestartRequest;
 pub use sink::{LogBatch, LogLine, LogSink, SinkOutcome, SinkSet, TailSink};
 pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};

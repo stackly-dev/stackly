@@ -473,6 +473,10 @@ public struct InstancesPage: View {
                 secrets: models.detailService.secrets,
                 report: { feedbackCenter?.show($0) })
         }
+        let lifecycle = inView.map { row in
+            actions.lifecycleActions(
+                for: row.summary, providerName: row.providerTitle, context: context)
+        }
         var duplicate: StacklyAction?
         if let inView, let duplicateInstance {
             duplicate = duplicateInstance.stacklyAction(
@@ -485,7 +489,7 @@ public struct InstancesPage: View {
             setSort: { sortOrder = [$0] },
 
             target: target, open: open, back: back, copyConnection: copyConnection,
-            duplicate: duplicate)
+            duplicate: duplicate, lifecycle: lifecycle)
     }
 
     private func apply(_ request: InstancesRequest?) {

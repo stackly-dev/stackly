@@ -94,6 +94,37 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["AC-027", "NFR-012"],
+                expected:
+                    "The detail of an instance still stopping without an operation shows the Still stopping banner with Stop Again and Force Stop… in every variant"
+            ))
+        func detailOfAnInstanceStillStopping() async throws {
+            let rig = await rig()
+            try await assertSnapshot(
+                detail(rig, 3), named: "instance-detail-still-stopping", size: Self.canvas)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Details card of a stopped instance whose last stop was forced shows Last exit Forced, and a crashed one Crashed, in every variant"
+            ))
+        func detailOfAnInstanceWhoseLastExitWasForcedOrCrashed() async throws {
+            for (exit, name) in [
+                (InstanceLastExit.forced, "instance-detail-last-exit-forced"),
+                (.crashed, "instance-detail-last-exit-crashed"),
+            ] {
+                let instances = FixtureScenario.instanceCases.map {
+                    $0.id == Self.id(4) ? $0.testing(lastExit: .some(exit)) : $0
+                }
+                let rig = await rig(instances: instances)
+                try await assertSnapshot(detail(rig, 4), named: name, size: Self.canvas)
+            }
+        }
+
+        @Test(
+            .evidence(
                 covers: ["NFR-012"],
                 expected:
                     "The detail of a failed instance with its output and Retry renders in every variant"
@@ -297,6 +328,7 @@ extension InstanceSummary {
             lifecycle: lifecycle, desired: desired, readiness: readiness, health: health,
             statusSeq: statusSeq, process: process, lastFailure: lastFailure, restart: restart,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
-            logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized)
+            logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
+            capabilities: nil, lastExit: nil)
     }
 }

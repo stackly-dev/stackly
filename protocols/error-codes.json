@@ -1923,10 +1923,11 @@
       "retryable": false,
       "details": [
         "lockPath",
-        "pid"
+        "pid",
+        "leftoverProcesses"
       ],
       "items": null,
-      "summary": "the instance lock is held, or the last observed process still runs"
+      "summary": "the instance lock is held, or the last observed process still runs; after a restart's stop, leftoverProcesses names the group members left"
     },
     {
       "code": "supervisor.data_incompatible",
@@ -2002,6 +2003,26 @@
       "summary": "the executable is not a canonical regular file inside its runtime"
     },
     {
+      "code": "supervisor.force_requires_stopping",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "lifecycle"
+      ],
+      "items": null,
+      "summary": "a force stop of an instance that is not stopping; stop it first (spec 0026)"
+    },
+    {
+      "code": "supervisor.force_timeout",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "waitSeconds"
+      ],
+      "items": null,
+      "summary": "the process did not exit in time after SIGKILL; it stays watched (spec 0026)"
+    },
+    {
       "code": "supervisor.identity_unproven",
       "category": "conflict",
       "retryable": false,
@@ -2040,6 +2061,16 @@
       "summary": "a stop while the data folder is being initialized"
     },
     {
+      "code": "supervisor.instance_not_running",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "lifecycle"
+      ],
+      "items": null,
+      "summary": "a restart or reload of an instance that does not run (spec 0026)"
+    },
+    {
       "code": "supervisor.instance_retained",
       "category": "conflict",
       "retryable": false,
@@ -2053,7 +2084,7 @@
       "retryable": false,
       "details": [],
       "items": null,
-      "summary": "a start while the instance is stopping"
+      "summary": "a start, restart, reload, or force stop while the instance is stopping"
     },
     {
       "code": "supervisor.not_initialized",
@@ -2124,7 +2155,8 @@
       "category": "failed",
       "retryable": false,
       "details": [
-        "exitCode"
+        "exitCode",
+        "after"
       ],
       "items": null,
       "summary": "the stop command exited with a code it does not accept"
@@ -2150,10 +2182,11 @@
       "category": "timeout",
       "retryable": false,
       "details": [
-        "timeoutSeconds"
+        "timeoutSeconds",
+        "after"
       ],
       "items": null,
-      "summary": "the stop budget ran out"
+      "summary": "the stop budget ran out; after a restart's stop, after is stays_stopped"
     }
   ]
 }

@@ -11,9 +11,9 @@ use jiff::Timestamp;
 use stackly_domain::{
     BatchError, CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, FailureItem,
     IdempotencyKey, InstanceId, JournalPayload, JournalStep, JournalView, LockKey, NewJournal,
-    NewStep, Operation, OperationId, OperationJournal, OperationState, OperationTrigger,
-    RecoveryCause, RecoveryHint, RegistryError, ResourceRef, RetentionPolicy, Rule, RuntimeId,
-    StepSeq, WriteBatch, WriteOp,
+    NewStep, Operation, OperationId, OperationJournal, OperationKind, OperationResource,
+    OperationState, OperationTrigger, RecoveryCause, RecoveryHint, RegistryError, ResourceRef,
+    RetentionPolicy, Rule, RuntimeId, StepSeq, WriteBatch, WriteOp,
 };
 use stackly_platform::Clock;
 
@@ -27,6 +27,7 @@ pub(super) fn journal(suite: &Suite<'_>) {
     unique_rules(suite);
     idempotency_keys(suite);
     reads(suite);
+    force_history(suite);
     prune(suite);
 }
 
@@ -702,6 +703,64 @@ fn reads(suite: &Suite<'_>) {
          operations with a journal, oldest first",
         unfinished,
         vec![ids[1], ids[2], ids[4], ids[6]],
+    );
+}
+
+/// `force_stop_history` (spec 0026): the newest force stop of an instance
+/// and every later operation of it, oldest first, and nothing for an
+/// instance that never had one.
+fn force_history(suite: &Suite<'_>) {
+    const CHECK: &str = "force_stop_history_starts_at_the_newest_force_stop";
+    let t = suite.clock.now();
+    let instance = InstanceId::generate();
+    let other = InstanceId::generate();
+    let on = |id: InstanceId, kind: OperationKind, seconds: i64| {
+        OperationBuilder::new()
+            .kind(kind)
+            .resource(OperationResource::Instance(id))
+            .state(OperationState::Succeeded)
+            .created_at(shifted(t, seconds))
+            .build()
+    };
+    let stop = on(instance, OperationKind::StopInstance, -50);
+    let old_force = on(instance, OperationKind::ForceStopInstance, -40);
+    let new_force = on(instance, OperationKind::ForceStopInstance, -30);
+    let elsewhere = on(other, OperationKind::StartInstance, -25);
+    let start = on(instance, OperationKind::StartInstance, -20);
+    for operation in [&stop, &old_force, &new_force, &elsewhere, &start] {
+        store(suite, CHECK, operation, false);
+    }
+    suite.commit(
+        CHECK,
+        vec![WriteOp::UpsertStep {
+            operation: new_force.id(),
+            step: step(CHECK, 1, "kill", shifted(t, -29)),
+        }],
+    );
+
+    let history = suite.value(CHECK, suite.registry.force_stop_history(instance));
+    let ids: Vec<OperationId> = history
+        .iter()
+        .map(|(operation, _)| operation.id())
+        .collect();
+    expect_eq(CHECK, ids, vec![new_force.id(), start.id()]);
+    let kill: Vec<String> = history[0]
+        .1
+        .steps
+        .iter()
+        .map(|step| step.name().to_string())
+        .collect();
+    expect_eq(
+        "force_stop_history_carries_the_journal_steps",
+        kill,
+        vec!["kill".to_owned()],
+    );
+    expect(
+        "force_stop_history_is_empty_without_a_force_stop",
+        suite
+            .value(CHECK, suite.registry.force_stop_history(other))
+            .is_empty(),
+        || "an instance without a force stop has a history".to_owned(),
     );
 }
 

@@ -5,9 +5,11 @@
 
 use jiff::Timestamp;
 use stackly_domain::{
-    BatchError, DesiredState, Instance, InstanceId, InstanceLifecycle, LifecycleEvent,
-    RegistryError, WriteBatch, WriteOp,
+    BatchError, CommitGuard, DesiredState, ExitKind, GuardDecision, GuardView, Guarded, Instance,
+    InstanceId, InstanceLifecycle, LifecycleEvent, RegistryError, WriteBatch, WriteOp,
+    force_intent,
 };
+use stackly_platform::ExitStatus;
 
 use super::commit::{ActorCommitRetry, CommitRetry, InstanceChanges};
 use super::error::SupervisorError;
@@ -76,11 +78,50 @@ pub(crate) async fn commit_instance(
     mode: CommitMode,
     mut build: impl FnMut(&mut InstanceChanges) -> Result<Vec<WriteOp>, SupervisorError>,
 ) -> Result<(), SupervisorError> {
+    commit_with(sup, id, base, mode, false, |changes, _| build(changes)).await
+}
+
+/// Like [`commit_instance`], for a commit that writes `exited` (or another
+/// event that records how a process ended): `build` also learns whether a
+/// force stop's `kill` step began for the instance
+/// ([`force_intent`](stackly_domain::force_intent)). For an instance that
+/// ever had a force stop the commit runs as a guarded commit that reads the
+/// journal again inside its transaction, so a force stop that began since
+/// `build` ran makes it build again (spec 0026, *Handler exit:
+/// `last_exit`*).
+///
+/// # Errors
+///
+/// The errors of [`commit_instance`].
+pub(crate) async fn commit_exit(
+    sup: &Supervisor,
+    id: InstanceId,
+    base: Option<&Instance>,
+    mode: CommitMode,
+    build: impl FnMut(&mut InstanceChanges, bool) -> Result<Vec<WriteOp>, SupervisorError>,
+) -> Result<(), SupervisorError> {
+    commit_with(sup, id, base, mode, true, build).await
+}
+
+/// Times a guarded exit commit builds again because a force stop began
+/// between its read and its transaction.
+const FORCE_REBUILD_LIMIT: u32 = 5;
+
+/// The loop behind [`commit_instance`] and [`commit_exit`].
+async fn commit_with(
+    sup: &Supervisor,
+    id: InstanceId,
+    base: Option<&Instance>,
+    mode: CommitMode,
+    force_aware: bool,
+    mut build: impl FnMut(&mut InstanceChanges, bool) -> Result<Vec<WriteOp>, SupervisorError>,
+) -> Result<(), SupervisorError> {
     let deps = sup.deps();
     let actor = sup.actor(id);
     let mut retry = ActorCommitRetry::new(&deps.config);
     let mut degraded = false;
     let mut pinned = base.cloned();
+    let mut rebuilds = 0;
     let result = loop {
         // A daemon that shut down leaves the registry as it is (AC-21).
         if sup.is_shutdown() {
@@ -102,8 +143,27 @@ pub(crate) async fn commit_instance(
                 Err(error) => break Err(error),
             },
         };
+        // `guarded` is set when the instance ever had a force stop: only
+        // then can a `kill` step begin between this read and the commit
+        // that matters. Without one, a force stop that begins later finds
+        // this process already gone, so the exit was not forced.
+        let (force, guarded) = if force_aware {
+            match read_force_history(deps, id).await {
+                Ok(history) => (force_intent(&history), !history.is_empty()),
+                Err(SupervisorError::Registry(error)) if matches!(mode, CommitMode::Actor) => {
+                    let step = retry.next(&BatchError::batch(error.clone()));
+                    if !wait_out(deps, &actor, &mut degraded, step).await {
+                        break Err(SupervisorError::Registry(error));
+                    }
+                    continue;
+                }
+                Err(error) => break Err(error),
+            }
+        } else {
+            (false, false)
+        };
         let mut changes = InstanceChanges::new(instance);
-        let extra = match build(&mut changes) {
+        let extra = match build(&mut changes, force) {
             Ok(extra) => extra,
             Err(error) => break Err(error),
         };
@@ -115,7 +175,34 @@ pub(crate) async fn commit_instance(
             break Ok(());
         }
         let registry = deps.registry.clone();
-        let sent = match blocking(move || registry.commit(WriteBatch::new(ops))).await {
+        let sent = if guarded {
+            let guard: CommitGuard = Box::new(move |view: &dyn GuardView| {
+                let now = force_intent(&view.force_stop_history(id)?);
+                Ok(if now == force {
+                    GuardDecision::Write(ops)
+                } else {
+                    GuardDecision::Refuse(Box::new(()))
+                })
+            });
+            match blocking(move || registry.commit_guarded(guard)).await {
+                Ok(Ok(Guarded::Committed(committed))) => Ok(Ok(committed)),
+                Ok(Ok(Guarded::Refused(_))) => {
+                    rebuilds += 1;
+                    if rebuilds > FORCE_REBUILD_LIMIT {
+                        break Err(SupervisorError::internal(
+                            "force stops kept beginning while an exit was recorded",
+                        ));
+                    }
+                    pinned = None;
+                    continue;
+                }
+                Ok(Err(error)) => Ok(Err(error)),
+                Err(error) => Err(error),
+            }
+        } else {
+            blocking(move || registry.commit(WriteBatch::new(ops))).await
+        };
+        let sent = match sent {
             Ok(sent) => sent,
             Err(error) => break Err(error),
         };
@@ -143,6 +230,22 @@ pub(crate) async fn commit_instance(
         degrade(deps, &actor, &mut degraded, false, "");
     }
     result
+}
+
+/// Reads the newest force stop of `id` and the operations after it.
+///
+/// # Errors
+///
+/// Returns [`SupervisorError::Registry`] when the journal cannot be read.
+async fn read_force_history(
+    deps: &SupervisorDeps,
+    id: InstanceId,
+) -> Result<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>, SupervisorError> {
+    let registry = deps.registry.clone();
+    Ok(blocking(move || registry.force_stop_history(id))
+        .await?
+        .map_err(SupervisorError::Registry)?
+        .value)
 }
 
 /// Waits as `step` says. Returns false when the actor must give up.
@@ -274,11 +377,69 @@ pub(crate) enum ExitRecord {
     Nothing,
 }
 
+/// How the process that ended was seen to end, for [`exit_kind`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ExitSeen {
+    /// The exit status of a child of this daemon; `None` for an adopted
+    /// process, whose status is never known.
+    pub(crate) status: Option<ExitStatus>,
+    /// The number of the stop signal the daemon sent it, if any.
+    pub(crate) sent_signal: Option<i32>,
+}
+
+impl ExitSeen {
+    /// An exit with nothing known about how the process ended: a process
+    /// found gone, or one a stop saw leave.
+    pub(crate) const UNSEEN: Self = Self {
+        status: None,
+        sent_signal: None,
+    };
+}
+
+/// Returns the [`ExitKind`] an exit records (spec 0026, *Handler exit:
+/// `last_exit`*), from the lifecycle the commit read: `forced` whenever a
+/// force stop's `kill` step began; while `stopping`, `crashed` for a
+/// child that a signal the daemon did not send ended, else `clean`; and
+/// `crashed` for every exit while `starting`, `running`, or `recovering`.
+pub(crate) fn exit_kind(force: bool, lifecycle: InstanceLifecycle, seen: ExitSeen) -> ExitKind {
+    if force {
+        return ExitKind::Forced;
+    }
+    match lifecycle {
+        InstanceLifecycle::Stopping => match seen.status {
+            Some(ExitStatus::Signaled(signal)) if Some(signal) != seen.sent_signal => {
+                ExitKind::Crashed
+            }
+            _ => ExitKind::Clean,
+        },
+        _ => ExitKind::Crashed,
+    }
+}
+
+/// Applies `exited` with the [`ExitKind`] of a process that left while the
+/// instance is `stopping` and nothing more is known about it (a stop or
+/// a force stop that found its process gone).
+///
+/// # Errors
+///
+/// Returns [`SupervisorError::Internal`] when the lifecycle is not
+/// `stopping`.
+pub(crate) fn apply_stopping_exit(
+    changes: &mut InstanceChanges,
+    force: bool,
+    at: Timestamp,
+) -> Result<(), SupervisorError> {
+    let exit = exit_kind(force, InstanceLifecycle::Stopping, ExitSeen::UNSEEN);
+    apply_event(changes, LifecycleEvent::Exited { exit: Some(exit) }, at)
+}
+
 /// Applies the meaning of a process exit to the aggregate the commit just
 /// read, so a stop that landed between the actor's decision and its commit
 /// is honoured (AC-22: the event is applied again only if it still holds).
 /// A lifecycle `stopping`, or a running one whose desired state is
 /// `stopped`, ends `stopped`; any other running lifecycle takes `crash`.
+/// The `exited` event carries the [`ExitKind`] of [`exit_kind`] when `seen`
+/// describes a process that ended, and none otherwise.
 ///
 /// # Errors
 ///
@@ -287,12 +448,18 @@ pub(crate) enum ExitRecord {
 pub(crate) fn apply_exit(
     changes: &mut InstanceChanges,
     crash: LifecycleEvent,
+    force: bool,
+    seen: Option<ExitSeen>,
     at: Timestamp,
 ) -> Result<ExitRecord, SupervisorError> {
     let desired = changes.instance().desired();
-    match changes.instance().lifecycle() {
+    let lifecycle = changes.instance().lifecycle();
+    // Without a process that ended (`seen` is `None`), `exited` leaves
+    // `last_exit` as it is.
+    let exit = seen.map(|seen| exit_kind(force, lifecycle, seen));
+    match lifecycle {
         InstanceLifecycle::Stopping => {
-            apply_event(changes, LifecycleEvent::Exited, at)?;
+            apply_event(changes, LifecycleEvent::Exited { exit }, at)?;
             Ok(ExitRecord::Stopped)
         }
         InstanceLifecycle::Starting
@@ -301,7 +468,7 @@ pub(crate) fn apply_exit(
             if desired == DesiredState::Stopped =>
         {
             apply_event(changes, LifecycleEvent::StopBegin, at)?;
-            apply_event(changes, LifecycleEvent::Exited, at)?;
+            apply_event(changes, LifecycleEvent::Exited { exit }, at)?;
             Ok(ExitRecord::Stopped)
         }
         InstanceLifecycle::Starting
@@ -311,5 +478,72 @@ pub(crate) fn apply_exit(
             Ok(ExitRecord::Crashed)
         }
         _ => Ok(ExitRecord::Nothing),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const fn seen(status: Option<ExitStatus>, sent_signal: Option<i32>) -> ExitSeen {
+        ExitSeen {
+            status,
+            sent_signal,
+        }
+    }
+
+    #[test]
+    fn a_force_intent_makes_every_exit_forced() {
+        for lifecycle in InstanceLifecycle::ALL {
+            assert_eq!(
+                exit_kind(true, *lifecycle, seen(Some(ExitStatus::Signaled(9)), None)),
+                ExitKind::Forced
+            );
+        }
+    }
+
+    #[test]
+    fn an_exit_while_stopping_is_clean_unless_a_foreign_signal_ended_it() {
+        let stopping = InstanceLifecycle::Stopping;
+
+        assert_eq!(
+            exit_kind(false, stopping, seen(Some(ExitStatus::Exited(0)), Some(15))),
+            ExitKind::Clean
+        );
+        assert_eq!(
+            exit_kind(
+                false,
+                stopping,
+                seen(Some(ExitStatus::Signaled(15)), Some(15))
+            ),
+            ExitKind::Clean
+        );
+        assert_eq!(
+            exit_kind(
+                false,
+                stopping,
+                seen(Some(ExitStatus::Signaled(11)), Some(15))
+            ),
+            ExitKind::Crashed
+        );
+        assert_eq!(
+            exit_kind(false, stopping, ExitSeen::UNSEEN),
+            ExitKind::Clean,
+            "an adopted process has no status, so it reads clean"
+        );
+    }
+
+    #[test]
+    fn an_exit_while_running_starting_or_recovering_is_crashed() {
+        for lifecycle in [
+            InstanceLifecycle::Starting,
+            InstanceLifecycle::Running,
+            InstanceLifecycle::Recovering,
+        ] {
+            assert_eq!(
+                exit_kind(false, lifecycle, seen(Some(ExitStatus::Exited(0)), None)),
+                ExitKind::Crashed
+            );
+        }
     }
 }

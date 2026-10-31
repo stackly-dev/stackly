@@ -1,4 +1,4 @@
-//! The source scan of `cargo xtask check-deps`. Eight rule sets:
+//! The source scan of `cargo xtask check-deps`. Nine rule sets:
 //!
 //! - Library rules (spec 0004, "Peta modul dan dependency"): library crates
 //!   never read environment variables and never hardcode a machine path.
@@ -40,8 +40,13 @@
 //!   `CreateInstance/` follows the same rule through [`scan_swift_create`].
 //! - `SIGKILL` rule (spec 0010, AC-15, step 15), for every crate: the token
 //!   is named only in [`SIGKILL_ALLOWED`], so a signal that cannot be
-//!   caught reaches a process only through a `HelperHandle` or
-//!   `SuspendedChild::discard`.
+//!   caught reaches a process only through a `HelperHandle`,
+//!   `SuspendedChild::discard`, or `force_kill`.
+//! - Force kill rule (spec 0026, AC-3), for every crate: a call to a method
+//!   named `force_kill` (`.force_kill`, or a path ending in
+//!   `::force_kill`) is allowed only in the modules of
+//!   [`FORCE_KILL_ALLOWED`], so `SIGKILL` reaches a main process only from
+//!   the force stop, read the same way as the expose rule.
 //!
 //! Each crate is read along its module tree, starting at its lib and bin
 //! targets, so `tests/` and a file only a `#[cfg(test)] mod` loads are never
@@ -84,6 +89,14 @@ const SOCKET_NAMES: [&str; 4] = ["TcpListener", "TcpStream", "TcpSocket", "UdpSo
 const SOCKET_RULE: &str = "no tcp or udp sockets (spec 0006)";
 /// The expose rule's message.
 const EXPOSE_RULE: &str = "secret expose outside the allowlist";
+/// The force kill rule's message.
+const FORCE_KILL_RULE: &str =
+    "force_kill is called only from stackly-core supervisor::force (spec 0026, AC-3)";
+/// The modules that may call `force_kill` (spec 0026), each with its
+/// submodules: the force stop of the supervisor, nothing else.
+pub const FORCE_KILL_ALLOWED: [(&str, &[&str]); 1] = [("stackly-core", &["supervisor::force"])];
+/// The method names whose calls are limited to an allowlist of modules.
+const RESTRICTED_CALLS: [&str; 2] = ["expose", "force_kill"];
 /// The macOS adapter, the one crate that spawns processes.
 const MACOS_ADAPTER: &str = "stackly-platform-macos";
 /// The crate the CLI rules scan.
@@ -194,6 +207,9 @@ pub struct Rules {
     pub sockets: bool,
     /// The modules of this crate that may call `expose`, as `a::b` paths.
     pub expose_allowed: &'static [&'static str],
+    /// The modules of this crate that may call `force_kill`, as `a::b`
+    /// paths.
+    pub force_kill_allowed: &'static [&'static str],
     /// The CLI rules: no process spawning paths, no print macros.
     pub cli: bool,
     /// The CLI code rule: no path naming `codes::cli`.
@@ -221,6 +237,10 @@ impl Rules {
             library: SCANNED.contains(&name),
             sockets: SOCKET_SCANNED.contains(&name),
             expose_allowed: EXPOSE_ALLOWED
+                .iter()
+                .find(|(crate_name, _)| *crate_name == name)
+                .map_or(&[], |(_, modules)| *modules),
+            force_kill_allowed: FORCE_KILL_ALLOWED
                 .iter()
                 .find(|(crate_name, _)| *crate_name == name)
                 .map_or(&[], |(_, modules)| *modules),
@@ -466,18 +486,23 @@ impl Scan {
         })
     }
 
-    /// Reports a call to `expose` outside the allowed modules, once per
-    /// line.
-    fn expose_call(&mut self, span: proc_macro2::Span) {
-        let allowed = self.in_modules(self.rules.expose_allowed);
+    /// Reports a call to a method of [`RESTRICTED_CALLS`] (`expose` or
+    /// `force_kill`) outside its allowed modules, once per line.
+    fn restricted_call(&mut self, method: &str, span: proc_macro2::Span) {
+        let (modules, rule) = match method {
+            "expose" => (self.rules.expose_allowed, EXPOSE_RULE),
+            "force_kill" => (self.rules.force_kill_allowed, FORCE_KILL_RULE),
+            _ => return,
+        };
+        let allowed = self.in_modules(modules);
         let line = span.start().line;
         if !allowed
             && !self
                 .findings
                 .iter()
-                .any(|(seen, rule)| *seen == line && rule == EXPOSE_RULE)
+                .any(|(seen, found)| *seen == line && found == rule)
         {
-            self.findings.push((line, EXPOSE_RULE.to_owned()));
+            self.findings.push((line, rule.to_owned()));
         }
     }
 
@@ -488,7 +513,9 @@ impl Scan {
         for (index, token) in tokens.iter().enumerate() {
             match token {
                 TokenTree::Group(group) => self.check_expose_tokens(group.stream()),
-                TokenTree::Ident(ident) if ident == "expose" && index > 0 => {
+                TokenTree::Ident(ident)
+                    if RESTRICTED_CALLS.iter().any(|name| ident == name) && index > 0 =>
+                {
                     let before = &tokens[..index];
                     let method = matches!(
                         before.last(),
@@ -502,7 +529,7 @@ impl Scan {
                                 && second.as_char() == ':'
                     );
                     if method || path {
-                        self.expose_call(ident.span());
+                        self.restricted_call(&ident.to_string(), ident.span());
                     }
                 }
                 _ => {}
@@ -771,8 +798,8 @@ impl<'ast> Visit<'ast> for Scan {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "expose" {
-            self.expose_call(node.method.span());
+        if RESTRICTED_CALLS.iter().any(|name| node.method == name) {
+            self.restricted_call(&node.method.to_string(), node.method.span());
         }
         visit::visit_expr_method_call(self, node);
     }
@@ -786,9 +813,9 @@ impl<'ast> Visit<'ast> for Scan {
             self.env_read(name.span(), &name.to_string());
         }
         if let [_, .., last] = segments.as_slice()
-            && *last == "expose"
+            && RESTRICTED_CALLS.iter().any(|name| *last == name)
         {
-            self.expose_call(last.span());
+            self.restricted_call(&last.to_string(), last.span());
         }
         if let Some(first) = segments.first() {
             let names: Vec<String> = segments.iter().map(ToString::to_string).collect();
@@ -1312,6 +1339,7 @@ mod tests {
                 library: false,
                 sockets: true,
                 expose_allowed: &[],
+                force_kill_allowed: &[],
                 cli: false,
                 no_cli_codes: true,
                 process_allowed: None,
@@ -1326,6 +1354,7 @@ mod tests {
                 library: false,
                 sockets: false,
                 expose_allowed: &[],
+                force_kill_allowed: &[],
                 cli: false,
                 no_cli_codes: true,
                 process_allowed: None,
@@ -1475,6 +1504,48 @@ mod tests {
         assert!(scan_as("stackly-protocol", &files).is_empty());
         let cli = scan_as("stackly-cli", &files);
         assert!(cli.is_empty(), "{cli:?}");
+    }
+
+    const FORCE_KILL: &str =
+        "force_kill is called only from stackly-core supervisor::force (spec 0026, AC-3)";
+
+    #[test]
+    fn force_kill_calls_outside_supervisor_force_are_reported() {
+        let files = [
+            ("src/lib.rs", "mod supervisor;\nmod leak;\n"),
+            ("src/supervisor/mod.rs", "mod force;\nmod stop;\n"),
+            (
+                "src/supervisor/force.rs",
+                "pub fn a(p: &P, t: &T) { let _ = p.processes().force_kill(t); }\n",
+            ),
+            (
+                "src/supervisor/stop.rs",
+                "pub fn b(p: &P, t: &T) { let _ = p.force_kill(t); }\n",
+            ),
+            (
+                "src/leak.rs",
+                "pub fn c(p: &P, t: &T) { let _ = P::force_kill(p, t); }\n\
+                 pub fn d(p: &P, t: &T) { tracing::info!(r = ?p.force_kill(t), \"x\"); }\n",
+            ),
+        ];
+
+        let core = scan_as("stackly-core", &files);
+        assert_eq!(
+            lines_of(&core, FORCE_KILL),
+            [1, 2, 1],
+            "leak.rs lines 1 and 2, then stop.rs line 1: {core:?}"
+        );
+        assert!(
+            core.iter()
+                .all(|found| !found.contains("src/supervisor/force.rs")),
+            "{core:?}"
+        );
+        let daemon = scan_as("stacklyd", &files);
+        assert_eq!(
+            lines_of(&daemon, FORCE_KILL).len(),
+            4,
+            "no other crate may call it, force module or not: {daemon:?}"
+        );
     }
 
     const EXPOSE: &str = "secret expose outside the allowlist";

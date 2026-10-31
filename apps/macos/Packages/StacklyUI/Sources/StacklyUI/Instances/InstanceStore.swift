@@ -196,7 +196,7 @@ extension InstanceSummary {
             blocker: blocker ?? self.blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable ?? self.logsUnavailable, ownership: ownership,
-            initialized: initialized)
+            initialized: initialized, capabilities: capabilities, lastExit: lastExit)
     }
 
     /// A copy with another `statusSeq`.

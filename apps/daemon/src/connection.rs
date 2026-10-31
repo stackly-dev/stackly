@@ -1090,6 +1090,30 @@ async fn dispatch(
             .map(|reply| Reply::InstanceStop(Box::new(reply))),
             None,
         ),
+        Call::InstanceRestart(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.restart_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceRestart(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceReload(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.reload_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceReload(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceForceStop(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.force_stop_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceForceStop(Box::new(reply))),
+            None,
+        ),
         Call::InstanceGet(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_instance(c, x, p)

@@ -47,6 +47,8 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case restartInstance = "restart_instance"
 	/// Reload an instance's configuration.
 	case reloadInstance = "reload_instance"
+	/// Send `SIGKILL` to an instance that is still stopping (spec 0026).
+	case forceStopInstance = "force_stop_instance"
 	/// Rename an instance.
 	case renameInstance = "rename_instance"
 	/// Remove an instance and keep its data.
@@ -3129,6 +3131,21 @@ public struct EventProbe: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `instance.force_stop` (spec 0026): only for an instance that
+/// is still `stopping`.
+public struct ForceStopInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to force stop.
+	public let instanceId: UUID
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.expectedRevision = expectedRevision
+	}
+}
+
 /// Why a subscriber missed events. Open: newer daemons may add values.
 public enum GapReason: String, Codable, Sendable, Equatable {
 	/// The subscriber fell more than the event buffer behind.
@@ -3597,7 +3614,8 @@ public struct OperationAccepted: Codable, Sendable, Equatable {
 	}
 }
 
-/// The reply of `instance.start` and `instance.stop`.
+/// The reply of `instance.start`, `instance.stop`, `instance.restart`,
+/// `instance.reload`, and `instance.force_stop`.
 /// 
 /// An action that changes something starts an operation and returns it in
 /// `accepted`. An instance already in the asked state answers
@@ -3612,6 +3630,18 @@ public struct InstanceActionAccepted: Codable, Sendable, Equatable {
 	public init(accepted: OperationAccepted?, alreadyInState: Bool) {
 		self.accepted = accepted
 		self.alreadyInState = alreadyInState
+	}
+}
+
+/// What the provider revision an instance pins can do (spec 0026,
+/// AC-11), read from the pinned revision, never from the catalog. More
+/// capabilities join later; an absent one reads as false.
+public struct InstanceCapabilities: Codable, Sendable, Equatable {
+	/// The provider reloads its configuration without a restart.
+	public let reload: Bool?
+
+	public init(reload: Bool?) {
+		self.reload = reload
 	}
 }
 
@@ -3948,6 +3978,18 @@ public enum InstanceOwnership: String, Codable, Sendable, Equatable {
 	case unrecognized
 }
 
+/// How the main process of an instance last ended (spec 0026). Open.
+public enum InstanceLastExit: String, Codable, Sendable, Equatable {
+	/// It exited while stopping, with no signal the daemon did not send.
+	case clean
+	/// A force stop sent it `SIGKILL`.
+	case forced
+	/// It died on its own, or from a signal the daemon did not send.
+	case crashed
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
 /// One instance, as `instance.get`, `instance.list`, and
 /// `instance.state_changed` show it.
 public struct InstanceSummary: Codable, Sendable, Equatable {
@@ -4001,8 +4043,14 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 	/// type is optional too: typeshare reads only a plain
 	/// `#[serde(default)]` as optional, and this default is true.
 	public let initialized: Bool?
+	/// What the pinned provider revision can do. Absent in older daemons,
+	/// which reads as nothing.
+	public let capabilities: InstanceCapabilities?
+	/// How the main process last ended; null when it never did, or the
+	/// row predates the record.
+	public let lastExit: InstanceLastExit?
 
-	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?) {
+	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?) {
 		self.id = id
 		self.name = name
 		self.displayName = displayName
@@ -4025,6 +4073,8 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 		self.logsUnavailable = logsUnavailable
 		self.ownership = ownership
 		self.initialized = initialized
+		self.capabilities = capabilities
+		self.lastExit = lastExit
 	}
 }
 
@@ -4552,6 +4602,20 @@ public struct ProviderDetail: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `instance.reload` (spec 0026).
+public struct ReloadInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to reload.
+	public let instanceId: UUID
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.expectedRevision = expectedRevision
+	}
+}
+
 /// One variant per method, tagged by the method name. Methods without
 /// params are unit variants, written without `content`.
 public enum Call: Codable, Sendable, Equatable {
@@ -4602,6 +4666,12 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceStart(StartInstanceParams)
 	/// Stops an instance.
 	case instanceStop(StopInstanceParams)
+	/// Restarts a running instance as one operation.
+	case instanceRestart(RestartInstanceParams)
+	/// Reloads the configuration of a running instance.
+	case instanceReload(ReloadInstanceParams)
+	/// Sends `SIGKILL` to an instance that is still stopping.
+	case instanceForceStop(ForceStopInstanceParams)
 	/// One instance with its status.
 	case instanceGet(GetInstanceParams)
 	/// One page of instances, retained ones left out.
@@ -4654,6 +4724,9 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceCreate = "instance.create",
 			instanceStart = "instance.start",
 			instanceStop = "instance.stop",
+			instanceRestart = "instance.restart",
+			instanceReload = "instance.reload",
+			instanceForceStop = "instance.force_stop",
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
 			storageGetCapacity = "storage.get_capacity",
@@ -4779,6 +4852,21 @@ public enum Call: Codable, Sendable, Equatable {
 			case .instanceStop:
 				if let content = try? container.decode(StopInstanceParams.self, forKey: .content) {
 					self = .instanceStop(content)
+					return
+				}
+			case .instanceRestart:
+				if let content = try? container.decode(RestartInstanceParams.self, forKey: .content) {
+					self = .instanceRestart(content)
+					return
+				}
+			case .instanceReload:
+				if let content = try? container.decode(ReloadInstanceParams.self, forKey: .content) {
+					self = .instanceReload(content)
+					return
+				}
+			case .instanceForceStop:
+				if let content = try? container.decode(ForceStopInstanceParams.self, forKey: .content) {
+					self = .instanceForceStop(content)
 					return
 				}
 			case .instanceGet:
@@ -4911,6 +4999,15 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceStop(let content):
 			try container.encode(CodingKeys.instanceStop, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceRestart(let content):
+			try container.encode(CodingKeys.instanceRestart, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceReload(let content):
+			try container.encode(CodingKeys.instanceReload, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceForceStop(let content):
+			try container.encode(CodingKeys.instanceForceStop, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceGet(let content):
 			try container.encode(CodingKeys.instanceGet, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -5017,6 +5114,13 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceStart(InstanceActionAccepted)
 	/// The operation that stops the instance, or that it already stopped.
 	case instanceStop(InstanceActionAccepted)
+	/// The operation that restarts the instance.
+	case instanceRestart(InstanceActionAccepted)
+	/// The operation that reloads the instance.
+	case instanceReload(InstanceActionAccepted)
+	/// The operation that force stops the instance, or that it already
+	/// stopped.
+	case instanceForceStop(InstanceActionAccepted)
 	/// The instance.
 	case instanceGet(InstanceSummary)
 	/// One page of instances.
@@ -5066,6 +5170,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceCreate = "instance.create",
 			instanceStart = "instance.start",
 			instanceStop = "instance.stop",
+			instanceRestart = "instance.restart",
+			instanceReload = "instance.reload",
+			instanceForceStop = "instance.force_stop",
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
 			storageGetCapacity = "storage.get_capacity",
@@ -5199,6 +5306,21 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .instanceStop:
 				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
 					self = .instanceStop(content)
+					return
+				}
+			case .instanceRestart:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceRestart(content)
+					return
+				}
+			case .instanceReload:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceReload(content)
+					return
+				}
+			case .instanceForceStop:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceForceStop(content)
 					return
 				}
 			case .instanceGet:
@@ -5337,6 +5459,15 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .instanceStop(let content):
 			try container.encode(CodingKeys.instanceStop, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceRestart(let content):
+			try container.encode(CodingKeys.instanceRestart, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceReload(let content):
+			try container.encode(CodingKeys.instanceReload, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceForceStop(let content):
+			try container.encode(CodingKeys.instanceForceStop, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceGet(let content):
 			try container.encode(CodingKeys.instanceGet, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -5388,6 +5519,20 @@ public struct Response: Codable, Sendable, Equatable {
 	public init(requestId: String, reply: Reply) {
 		self.requestId = requestId
 		self.reply = reply
+	}
+}
+
+/// Params of `instance.restart` (spec 0026).
+public struct RestartInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to restart.
+	public let instanceId: UUID
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.expectedRevision = expectedRevision
 	}
 }
 

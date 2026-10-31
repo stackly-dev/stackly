@@ -411,6 +411,38 @@ pub(super) fn unfinished(
     Ok(unfinished)
 }
 
+/// The newest `force_stop_instance` operation of `instance` and every
+/// operation of the instance created after it, each with its journal,
+/// oldest first (spec 0026, *Handler exit: `last_exit`*).
+pub(super) fn force_stop_history(
+    conn: &Connection,
+    instance: stackly_domain::InstanceId,
+) -> Result<Vec<(Operation, JournalView)>, RegistryError> {
+    let operations = collect(
+        conn,
+        &format!(
+            "SELECT {OPERATION_COLUMNS} FROM operations \
+             WHERE resource_kind = 'instance' AND resource_id = ?1 \
+             AND (created_at, id) >= ( \
+                 SELECT created_at, id FROM operations \
+                 WHERE kind = 'force_stop_instance' AND resource_kind = 'instance' \
+                 AND resource_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1) \
+             AND EXISTS (SELECT 1 FROM operation_journal WHERE operation_id = operations.id) \
+             ORDER BY created_at, id"
+        ),
+        [instance.to_string()],
+        "operations",
+        stored_operation,
+    )?;
+    let mut history = Vec::with_capacity(operations.len());
+    for operation in operations {
+        if let Some(view) = journal_view(conn, operation.id())? {
+            history.push((operation, view));
+        }
+    }
+    Ok(history)
+}
+
 fn payload(
     cells: Cells<'_, '_>,
     column: &'static str,

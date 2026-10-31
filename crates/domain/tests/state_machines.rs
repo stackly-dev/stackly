@@ -188,10 +188,10 @@ fn lifecycle_events() -> Vec<(LifecycleEvent, Option<&'static str>)> {
             Some("false"),
         ),
         (LifecycleEvent::StopBegin, None),
-        (LifecycleEvent::Exited, None),
+        (LifecycleEvent::Exited { exit: None }, None),
         (LifecycleEvent::IdentityLost, None),
         (LifecycleEvent::Adopted, None),
-        (LifecycleEvent::ConfirmedStopped, None),
+        (LifecycleEvent::ConfirmedStopped { exit: None }, None),
         (
             LifecycleEvent::Retain {
                 by: OperationId::generate(),

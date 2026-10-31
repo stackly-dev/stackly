@@ -17,12 +17,15 @@ struct SummaryTab: View {
     let secrets: SecretsClient
     let home: String
     let enterSecrets: @MainActor ([SecretNeed]) -> Void
+    /// The actions of the "Still stopping." banner, or `nil` when it does not show.
+    var stopping: InstanceDetailBanner.Stopping? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sectionGap) {
             InstanceDetailBanner(
                 summary: summary, action: action, detailError: model.detailError,
-                retryDetail: { Task { await model.reload() } }, enterSecrets: enterSecrets)
+                retryDetail: { Task { await model.reload() } }, enterSecrets: enterSecrets,
+                stopping: stopping)
             if let reason = action.disabledReason {
                 DisabledReasonText(reason)
             }

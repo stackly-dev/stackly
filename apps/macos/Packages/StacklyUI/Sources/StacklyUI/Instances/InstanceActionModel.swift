@@ -9,14 +9,18 @@ public struct InstanceActionContext {
     public var report: @MainActor (Feedback) -> Void
     /// Opens Operations, for the "Show Operations" button of an unknown outcome.
     public var showOperations: (@MainActor () -> Void)?
+    /// The PIDs a force stop left behind, read when it ended (spec 0026, AC-3).
+    public var leftoverProcesses: (@MainActor (UUID) -> [UInt32])?
 
     /// Creates a context.
     public init(
         report: @escaping @MainActor (Feedback) -> Void,
-        showOperations: (@MainActor () -> Void)? = nil
+        showOperations: (@MainActor () -> Void)? = nil,
+        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil
     ) {
         self.report = report
         self.showOperations = showOperations
+        self.leftoverProcesses = leftoverProcesses
     }
 }
 
@@ -26,15 +30,18 @@ extension InstanceActionContext {
     /// - Parameters:
     ///   - feedbackCenter: The window's feedback center, or `nil`.
     ///   - navigator: The window's navigator, or `nil`.
-    public static func make(feedbackCenter: FeedbackCenter?, navigator: ShellNavigator?)
-        -> InstanceActionContext
-    {
+    ///   - leftoverProcesses: The PIDs a stop left behind by instance, or `nil`.
+    public static func make(
+        feedbackCenter: FeedbackCenter?, navigator: ShellNavigator?,
+        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil
+    ) -> InstanceActionContext {
         var showOperations: (@MainActor () -> Void)?
         if let navigator {
             showOperations = { navigator.show(.operations) }
         }
         return InstanceActionContext(
-            report: { feedbackCenter?.show($0) }, showOperations: showOperations)
+            report: { feedbackCenter?.show($0) }, showOperations: showOperations,
+            leftoverProcesses: leftoverProcesses)
     }
 }
 
@@ -122,6 +129,38 @@ public final class InstanceActionModel {
             })
     }
 
+    /// Restart, Reload, and Force Stop… of an instance as ``StacklyAction``s (spec 0026):
+    /// the toolbar of the detail page and the Instance menu read them. Force Stop… carries
+    /// the destructive confirmation with Cancel as the default.
+    /// - Parameters:
+    ///   - summary: The instance.
+    ///   - providerName: The provider's display name, for the unsupported reload reason.
+    ///   - context: Where it reports.
+    public func lifecycleActions(
+        for summary: InstanceSummary, providerName: String, context: InstanceActionContext
+    ) -> (restart: StacklyAction, reload: StacklyAction, forceStop: StacklyAction) {
+        let resolved = InstanceLifecycleActions.resolve(
+            summary: summary, local: localStatus(for: summary.id), providerName: providerName)
+        func action(_ item: InstanceLifecycleActions.Item, role: ActionRole) -> StacklyAction {
+            StacklyAction(
+                id: item.verb.rawValue, title: item.title, symbol: item.symbol, role: role,
+                mutates: true, disabledReason: item.disabledReason, isBusy: item.isBusy,
+                perform: { [self] in perform(item.verb, for: summary, context: context) })
+        }
+        let force = ActionConfirmation(
+            title: "Force stop “\(summary.name)”?", message: Self.forceRisk,
+            actionTitle: "Force Stop")
+        return (
+            action(resolved.restart, role: .standard(confirmation: nil)),
+            action(resolved.reload, role: .standard(confirmation: nil)),
+            action(resolved.forceStop, role: .destructive(force))
+        )
+    }
+
+    /// What a force stop risks; the CLI asks with the same text (spec 0026, *Copy*).
+    static let forceRisk =
+        "Force stop sends SIGKILL to the main process. Unsaved work is lost and the next start may run crash recovery. Child processes may keep running and hold the data until they exit. The last stop is marked forced, so no backup will call this data clean."
+
     // MARK: - Clicks
 
     /// Sends a click, unless one is in flight or pending for the instance.
@@ -159,6 +198,12 @@ public final class InstanceActionModel {
         case .stop:
             .instanceStop(
                 StopInstanceParams(instanceId: id, expectedRevision: nil, overrideLeases: false))
+        case .restart:
+            .instanceRestart(RestartInstanceParams(instanceId: id, expectedRevision: nil))
+        case .reload:
+            .instanceReload(ReloadInstanceParams(instanceId: id, expectedRevision: nil))
+        case .forceStop:
+            .instanceForceStop(ForceStopInstanceParams(instanceId: id, expectedRevision: nil))
         }
     }
 
@@ -197,7 +242,10 @@ public final class InstanceActionModel {
 
     private static func accepted(in reply: Reply) -> InstanceActionAccepted? {
         switch reply {
-        case .instanceStart(let accepted), .instanceStop(let accepted): accepted
+        case .instanceStart(let accepted), .instanceStop(let accepted),
+            .instanceRestart(let accepted), .instanceReload(let accepted),
+            .instanceForceStop(let accepted):
+            accepted
         default: nil
         }
     }
@@ -228,7 +276,7 @@ public final class InstanceActionModel {
             // The stream ended without a final state: the daemon tells how it ended.
             last = read
         }
-        finish(last, verb: verb, name: name, context: context)
+        finish(last, instance: instance, verb: verb, name: name, context: context)
         clear(instance)
     }
 
@@ -238,10 +286,17 @@ public final class InstanceActionModel {
     }
 
     private func finish(
-        _ operation: OperationSnapshot, verb: InstanceVerb, name: String,
+        _ operation: OperationSnapshot, instance: UUID, verb: InstanceVerb, name: String,
         context: InstanceActionContext
     ) {
         switch operation.state {
+        case .succeeded:
+            if let card = Self.success(
+                verb: verb, name: name,
+                leftover: context.leftoverProcesses?(instance) ?? [])
+            {
+                context.report(card)
+            }
         case .failed:
             let message = "Couldn’t \(verb.word) “\(name)”."
             if let body = operation.failure?.error {
@@ -252,7 +307,7 @@ public final class InstanceActionModel {
         case .cancelled:
             context.report(
                 Feedback.neutral("“\(name)” didn’t \(verb.word): the operation was cancelled."))
-        case .succeeded, .queued, .running, .cancelRequested, .needsRecovery:
+        case .queued, .running, .cancelRequested, .needsRecovery:
             break
         }
     }
@@ -260,11 +315,30 @@ public final class InstanceActionModel {
     /// The card of a click the daemon refused or an operation that failed: it names the
     /// instance, then the daemon's message as a sentence and its code.
     static func failure(verb: InstanceVerb, name: String, body: ErrorBody) -> Feedback {
-        Feedback(
+        let halfway = body.details?.contains { $0.key == "after" && $0.value == "stays_stopped" }
+        return Feedback(
             tone: .critical,
             message: "Couldn’t \(verb.word) “\(name)”.",
-            detail: DaemonText.sentence(body.message),
+            detail: halfway == true
+                ? "The restart stopped halfway. “\(name)” stays stopped; use Start when it has finished stopping."
+                : DaemonText.sentence(body.message),
             code: body.code)
+    }
+
+    /// The card of a restart, reload, or force stop that succeeded (spec 0026, AC-18); start
+    /// and stop show none, their state change is the feedback.
+    static func success(verb: InstanceVerb, name: String, leftover: [UInt32]) -> Feedback? {
+        switch verb {
+        case .start, .stop: nil
+        case .restart: .success("Restarted “\(name)”.")
+        case .reload: .success("Reloaded “\(name)”.")
+        case .forceStop:
+            leftover.isEmpty
+                ? .success("Force stopped “\(name)”.")
+                : .success(
+                    "Force stopped “\(name)”. Still running: PID \(leftover.map(String.init).joined(separator: ", "))."
+                )
+        }
     }
 
     private func clear(_ id: UUID) {
@@ -292,7 +366,9 @@ public final class InstanceActionModel {
             let ended = await readOperation(operationId)
             clear(id)
             if let ended {
-                finish(ended, verb: verb, name: names[id] ?? "instance", context: context)
+                finish(
+                    ended, instance: id, verb: verb, name: names[id] ?? "instance",
+                    context: context)
             }
         }
     }

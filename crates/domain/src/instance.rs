@@ -4,6 +4,7 @@
 
 use jiff::Timestamp;
 
+use crate::capability::CapabilitySet;
 use crate::code::code_enum;
 use crate::endpoint::{Endpoint, PortRequest, endpoints_conflict};
 use crate::error::{DomainError, InvariantDetail, InvariantError, Machine, TransitionError};
@@ -77,13 +78,24 @@ pub enum LifecycleEvent {
     /// A stop begins.
     StopBegin,
     /// The process exited after a stop.
-    Exited,
+    Exited {
+        /// How the process ended (spec 0026, *Handler exit: `last_exit`*),
+        /// or `None` when no process left (a pause between respawns, a
+        /// start cancelled before its process ran): the stored
+        /// [`Instance::last_exit`] stays as it is.
+        exit: Option<ExitKind>,
+    },
     /// The identity of the process can no longer be proven.
     IdentityLost,
     /// A process with a proven identity was found running.
     Adopted,
     /// No process is running after all.
-    ConfirmedStopped,
+    ConfirmedStopped {
+        /// How the process ended when reconciliation can tell from the
+        /// stored lifecycle, or `None` to leave [`Instance::last_exit`]
+        /// as it is.
+        exit: Option<ExitKind>,
+    },
     /// The instance is removed and its data kept.
     Retain {
         /// The operation that retains it.
@@ -104,10 +116,10 @@ impl LifecycleEvent {
             Self::StartFailed { .. } => "start_failed",
             Self::Crashed { .. } => "crashed",
             Self::StopBegin => "stop_begin",
-            Self::Exited => "exited",
+            Self::Exited { .. } => "exited",
             Self::IdentityLost => "identity_lost",
             Self::Adopted => "adopted",
-            Self::ConfirmedStopped => "confirmed_stopped",
+            Self::ConfirmedStopped { .. } => "confirmed_stopped",
             Self::Retain { .. } => "retain",
         }
     }
@@ -139,7 +151,9 @@ impl InstanceLifecycle {
                 }
             }
             (S::Starting | S::Running | S::Recovering, E::StopBegin) => Ok(S::Stopping),
-            (S::Stopping, E::Exited) | (S::Unknown, E::ConfirmedStopped) => Ok(S::Stopped),
+            (S::Stopping, E::Exited { .. }) | (S::Unknown, E::ConfirmedStopped { .. }) => {
+                Ok(S::Stopped)
+            }
             (S::Starting | S::Running | S::Stopping | S::Recovering, E::IdentityLost) => {
                 Ok(S::Unknown)
             }
@@ -161,6 +175,20 @@ code_enum! {
         Running => "running",
         /// The user wants it stopped.
         Stopped => "stopped",
+    }
+}
+
+code_enum! {
+    /// How the main process of an instance last ended (spec 0026, AC-5),
+    /// stored as `instances.last_exit`.
+    pub enum ExitKind: ExitKind {
+        /// It exited while `stopping`, with no signal the daemon did not
+        /// send.
+        Clean => "clean",
+        /// A force stop sent it `SIGKILL`.
+        Forced => "forced",
+        /// It died on its own, or from a signal the daemon did not send.
+        Crashed => "crashed",
     }
 }
 
@@ -225,6 +253,7 @@ pub struct Instance {
     startup: StartupPolicy,
     lifecycle: InstanceLifecycle,
     last_failure: Option<FailureCode>,
+    last_exit: Option<ExitKind>,
     readiness: Readiness,
     health: Health,
     revision: ResourceRevision,
@@ -233,7 +262,23 @@ pub struct Instance {
     retained_at: Option<Timestamp>,
     retained_by: Option<OperationId>,
     blocker: Option<InstanceBlocker>,
+    capabilities: LoadedCapabilities,
 }
+
+/// The capabilities the registry loads with an instance. They belong to the
+/// pinned provider revision, not to the aggregate, so two instances that
+/// differ only in them are equal: a written instance and the same instance
+/// read back compare equal.
+#[derive(Debug, Clone, Default)]
+struct LoadedCapabilities(CapabilitySet);
+
+impl PartialEq for LoadedCapabilities {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for LoadedCapabilities {}
 
 /// Checks the endpoints of a new instance, see [`Instance::new`].
 fn check_new_endpoints(endpoints: &[Endpoint]) -> Result<(), InvariantError> {
@@ -317,6 +362,8 @@ pub struct StoredInstance {
     pub lifecycle: InstanceLifecycle,
     /// Why the last init, start, or process failed.
     pub last_failure: Option<FailureCode>,
+    /// How the main process last ended, `None` before it first did.
+    pub last_exit: Option<ExitKind>,
     /// The revision.
     pub revision: ResourceRevision,
     /// When the instance was created.
@@ -360,6 +407,7 @@ impl Instance {
             startup: new.startup,
             lifecycle: InstanceLifecycle::Uninitialized,
             last_failure: None,
+            last_exit: None,
             readiness: Readiness::unknown(new.created_at, ReasonCode::NEVER_OBSERVED),
             health: Health::unknown(new.created_at, ReasonCode::NEVER_OBSERVED),
             revision: ResourceRevision::INITIAL,
@@ -368,6 +416,7 @@ impl Instance {
             retained_at: None,
             retained_by: None,
             blocker: None,
+            capabilities: LoadedCapabilities::default(),
         })
     }
 
@@ -423,6 +472,7 @@ impl Instance {
             startup: stored.startup,
             lifecycle: stored.lifecycle,
             last_failure: stored.last_failure,
+            last_exit: stored.last_exit,
             readiness: Readiness::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
             health: Health::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
             revision: stored.revision,
@@ -431,6 +481,7 @@ impl Instance {
             retained_at: stored.retained_at,
             retained_by: stored.retained_by,
             blocker: None,
+            capabilities: LoadedCapabilities::default(),
         })
     }
 
@@ -520,6 +571,15 @@ impl Instance {
         self.last_failure.as_ref()
     }
 
+    /// Returns how the main process last ended, or `None` when it never
+    /// did since the instance was created (or since the registry gained
+    /// the column). `exited`, `crashed`, and `confirmed_stopped` write it,
+    /// in the same commit as the lifecycle change.
+    #[must_use]
+    pub const fn last_exit(&self) -> Option<ExitKind> {
+        self.last_exit
+    }
+
     /// Returns the stored readiness. Read it through
     /// [`Readiness::effective`] to age it.
     #[must_use]
@@ -572,6 +632,22 @@ impl Instance {
         self.blocker.as_ref()
     }
 
+    /// Returns the capabilities of the provider revision the instance pins,
+    /// as the registry loaded them with the instance (spec 0026, AC-11).
+    /// They are read only: no write of the instance stores them, and a new
+    /// instance has none until the registry reads it back.
+    #[must_use]
+    pub const fn capabilities(&self) -> &CapabilitySet {
+        &self.capabilities.0
+    }
+
+    /// Sets the capabilities the pinned provider revision declares. Only
+    /// the registry loader and test fakes call it; it never raises the
+    /// revision.
+    pub fn set_capabilities(&mut self, capabilities: CapabilitySet) {
+        self.capabilities = LoadedCapabilities(capabilities);
+    }
+
     /// Applies a lifecycle event at `at`, with the aggregate rules on top
     /// of the pure machine:
     ///
@@ -580,6 +656,9 @@ impl Instance {
     /// - `init_failed`, `start_failed`, and `crashed` record
     ///   `last_failure`; `spawned` and `adopted` clear it. `retain` records
     ///   `retained_at` and `retained_by`.
+    /// - `crashed` records `last_exit` `crashed`; `exited` and
+    ///   `confirmed_stopped` record the [`ExitKind`] they carry and leave
+    ///   `last_exit` alone without one (spec 0026, AC-5).
     /// - Entering `running` sets readiness `not_ready` and health
     ///   `unknown`, both with reason `awaiting_probe`; leaving `running`
     ///   sets both `unknown` with reason `not_running`.
@@ -608,9 +687,17 @@ impl Instance {
         self.lifecycle = next;
         match event {
             LifecycleEvent::InitSucceeded => self.data_initialized_at = Some(at),
-            LifecycleEvent::InitFailed { reason }
-            | LifecycleEvent::StartFailed { reason }
-            | LifecycleEvent::Crashed { reason, .. } => self.last_failure = Some(reason),
+            LifecycleEvent::InitFailed { reason } | LifecycleEvent::StartFailed { reason } => {
+                self.last_failure = Some(reason);
+            }
+            LifecycleEvent::Crashed { reason, .. } => {
+                self.last_failure = Some(reason);
+                self.last_exit = Some(ExitKind::Crashed);
+            }
+            LifecycleEvent::Exited { exit: Some(exit) }
+            | LifecycleEvent::ConfirmedStopped { exit: Some(exit) } => {
+                self.last_exit = Some(exit);
+            }
             LifecycleEvent::Spawned | LifecycleEvent::Adopted => self.last_failure = None,
             LifecycleEvent::Retain { by } => {
                 self.retained_at = Some(at);
@@ -917,6 +1004,84 @@ mod tests {
         assert_eq!(instance.health().reason(), &ReasonCode::NEVER_OBSERVED);
         assert_eq!(instance.revision(), ResourceRevision::INITIAL);
         assert_eq!(instance.data_initialized_at(), None);
+    }
+
+    fn running_instance() -> Instance {
+        let mut instance = instance();
+        for (second, event) in [
+            (1, LifecycleEvent::InitBegin),
+            (2, LifecycleEvent::InitSucceeded),
+            (3, LifecycleEvent::StartBegin),
+            (4, LifecycleEvent::Spawned),
+        ] {
+            instance
+                .apply_lifecycle(event, at(&format!("2026-01-01T00:00:0{second}Z")))
+                .unwrap();
+        }
+        instance
+    }
+
+    #[test]
+    fn exited_records_the_exit_kind_it_carries_and_none_keeps_the_last_one() {
+        let mut instance = running_instance();
+        assert_eq!(instance.last_exit(), None);
+        instance
+            .apply_lifecycle(LifecycleEvent::StopBegin, at("2026-01-01T00:00:05Z"))
+            .unwrap();
+        let before = instance.revision();
+        instance
+            .apply_lifecycle(
+                LifecycleEvent::Exited {
+                    exit: Some(ExitKind::Forced),
+                },
+                at("2026-01-01T00:00:06Z"),
+            )
+            .unwrap();
+
+        assert_eq!(instance.last_exit(), Some(ExitKind::Forced));
+        assert_eq!(instance.revision(), before.next());
+
+        instance
+            .apply_lifecycle(LifecycleEvent::StartBegin, at("2026-01-01T00:00:07Z"))
+            .unwrap();
+        instance
+            .apply_lifecycle(LifecycleEvent::StopBegin, at("2026-01-01T00:00:08Z"))
+            .unwrap();
+        instance
+            .apply_lifecycle(
+                LifecycleEvent::Exited { exit: None },
+                at("2026-01-01T00:00:09Z"),
+            )
+            .unwrap();
+        assert_eq!(instance.last_exit(), Some(ExitKind::Forced));
+    }
+
+    #[test]
+    fn a_crash_records_last_exit_crashed() {
+        let mut instance = running_instance();
+
+        instance
+            .apply_lifecycle(
+                LifecycleEvent::Crashed {
+                    will_retry: true,
+                    reason: failure("process_exited"),
+                },
+                at("2026-01-01T00:00:05Z"),
+            )
+            .unwrap();
+
+        assert_eq!(instance.last_exit(), Some(ExitKind::Crashed));
+    }
+
+    #[test]
+    fn capabilities_never_raise_the_revision() {
+        let mut instance = instance();
+        let before = instance.revision();
+
+        instance.set_capabilities(CapabilitySet::new([crate::Capability::Reload]));
+
+        assert!(instance.capabilities().contains(crate::Capability::Reload));
+        assert_eq!(instance.revision(), before);
     }
 
     #[test]

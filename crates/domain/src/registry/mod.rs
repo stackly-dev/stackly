@@ -336,6 +336,21 @@ pub trait Registry: Send + Sync {
         &self,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError>;
 
+    /// Returns the newest `force_stop_instance` operation of `instance`
+    /// with its journal, then every operation of the instance created
+    /// after it with theirs, ordered by `created_at` and then ID, oldest
+    /// first; empty when the instance never had a force stop. Operations
+    /// without a journal row are left out. [`force_intent`](crate::force_intent)
+    /// reads it (spec 0026).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn force_stop_history(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError>;
+
     /// Returns a secret reference row with every use of it.
     ///
     /// # Errors

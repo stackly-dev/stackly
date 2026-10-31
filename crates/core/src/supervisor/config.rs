@@ -64,6 +64,13 @@ pub const RESTART_BUDGET: u32 = 5;
 pub const RESTART_WINDOW: Duration = Duration::from_secs(5 * 60);
 /// Continuous `ready` time after which the crash history is cleared.
 pub const RESTART_HEALTHY_RESET: Duration = Duration::from_secs(60);
+/// How long a force stop waits for the exit after `SIGKILL` (spec 0026).
+pub const FORCE_EXIT_WAIT: Duration = Duration::from_secs(10);
+/// How long a restart waits for the instance lock to be free after the
+/// process exited (spec 0026).
+pub const RESTART_LOCK_WAIT: Duration = Duration::from_secs(10);
+/// Pause between two tries of the instance lock while a restart waits.
+pub const RESTART_LOCK_POLL: Duration = Duration::from_millis(200);
 
 /// Every constant of the supervisor, with the production values of spec
 /// 0010 as its [`Default`]. Tests change single fields:
@@ -137,6 +144,12 @@ pub struct SupervisorConfig {
     pub restart_window: Duration,
     /// [`RESTART_HEALTHY_RESET`].
     pub restart_healthy_reset: Duration,
+    /// [`FORCE_EXIT_WAIT`].
+    pub force_exit_wait: Duration,
+    /// [`RESTART_LOCK_WAIT`].
+    pub restart_lock_wait: Duration,
+    /// [`RESTART_LOCK_POLL`].
+    pub restart_lock_poll: Duration,
 }
 
 impl Default for SupervisorConfig {
@@ -168,6 +181,9 @@ impl Default for SupervisorConfig {
             restart_budget: RESTART_BUDGET,
             restart_window: RESTART_WINDOW,
             restart_healthy_reset: RESTART_HEALTHY_RESET,
+            force_exit_wait: FORCE_EXIT_WAIT,
+            restart_lock_wait: RESTART_LOCK_WAIT,
+            restart_lock_poll: RESTART_LOCK_POLL,
         }
     }
 }
@@ -206,5 +222,8 @@ mod tests {
         assert_eq!(config.restart_budget, 5);
         assert_eq!(config.restart_window, Duration::from_secs(300));
         assert_eq!(config.restart_healthy_reset, Duration::from_secs(60));
+        assert_eq!(config.force_exit_wait, Duration::from_secs(10));
+        assert_eq!(config.restart_lock_wait, Duration::from_secs(10));
+        assert_eq!(config.restart_lock_poll, Duration::from_millis(200));
     }
 }

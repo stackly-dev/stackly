@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use stackly_domain::{InstanceId, InstanceLifecycle, ResourceRef, StageName};
+use stackly_domain::{InstanceId, InstanceLifecycle, ReadinessState, ResourceRef, StageName};
 use stackly_platform::{ChildRole, ExitStatus, ProcessError, ProviderSignal, SignalTarget};
 use tokio::time::Instant;
 
@@ -61,7 +61,10 @@ impl Supervisor {
     ///
     /// # Errors
     ///
-    /// Returns `supervisor.capability_unsupported` when the provider cannot
+    /// Returns `supervisor.instance_stopping`,
+    /// `supervisor.identity_unproven`, or `supervisor.instance_not_running`
+    /// for an instance that is not `running`;
+    /// `supervisor.capability_unsupported` when the provider cannot
     /// reload, before any signal is sent; `process.signal_refused` when the
     /// identity check fails; and `supervisor.reload_failed` when the action
     /// or the verification fails.
@@ -69,22 +72,18 @@ impl Supervisor {
         let deps = self.deps();
         let id = request.instance;
         let instance = read_instance(deps, id).await?;
-        if instance.lifecycle() != InstanceLifecycle::Running {
-            return Err(SupervisorError::ReloadFailed {
-                reason: format!(
-                    "the instance is {}, not running",
-                    instance.lifecycle().as_code()
-                ),
-            });
-        }
+        reload_allowed(instance.lifecycle())?;
         let actor = self.actor(id);
         let target = actor.read(|state| {
-            state
-                .process
-                .as_ref()
-                .map(|slot| (slot.generation, slot.identity.clone()))
+            state.process.as_ref().map(|slot| {
+                (
+                    slot.generation,
+                    slot.identity.clone(),
+                    state.readiness.state() == ReadinessState::Ready,
+                )
+            })
         });
-        let Some((_generation, identity)) = target else {
+        let Some((generation, identity, was_ready)) = target else {
             return Err(SupervisorError::IdentityUnproven { pid: None });
         };
 
@@ -157,6 +156,23 @@ impl Supervisor {
             }
         }
 
+        // An instance that was not ready before the reload is verified once
+        // the action finished on the same process (spec 0026, AC-10): the
+        // reload may be what makes it ready later.
+        let same_process = actor.read(|state| {
+            state
+                .process
+                .as_ref()
+                .is_some_and(|slot| slot.generation == generation)
+        });
+        if !same_process {
+            return Err(reload_failed(
+                "the process changed during the reload".to_owned(),
+            ));
+        }
+        if !was_ready {
+            return Ok(());
+        }
         if let Some(verify) = &plan.verify {
             let context = ProbeContext {
                 platform: &deps.platform,
@@ -184,6 +200,23 @@ impl Supervisor {
     }
 }
 
+/// Checks the lifecycle a reload may act on (spec 0026, AC-10): only
+/// `running`, whatever its readiness.
+///
+/// # Errors
+///
+/// Returns `supervisor.instance_stopping` for `stopping`,
+/// `supervisor.identity_unproven` for `unknown`, and
+/// `supervisor.instance_not_running` for every other lifecycle.
+pub(crate) fn reload_allowed(lifecycle: InstanceLifecycle) -> Result<(), SupervisorError> {
+    match lifecycle {
+        InstanceLifecycle::Running => Ok(()),
+        InstanceLifecycle::Stopping => Err(SupervisorError::InstanceStopping),
+        InstanceLifecycle::Unknown => Err(SupervisorError::IdentityUnproven { pid: None }),
+        other => Err(SupervisorError::InstanceNotRunning { lifecycle: other }),
+    }
+}
+
 struct ReloadWork {
     sup: Supervisor,
     request: ReloadRequest,
@@ -205,5 +238,33 @@ impl OperationWork for ReloadWork {
                 finalize: None,
             })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::operation::OperationError as _;
+
+    #[test]
+    fn a_reload_needs_a_running_instance_and_names_why_not() {
+        assert!(reload_allowed(InstanceLifecycle::Running).is_ok());
+        let code = |lifecycle| reload_allowed(lifecycle).unwrap_err().code().to_string();
+        assert_eq!(
+            code(InstanceLifecycle::Stopping),
+            "supervisor.instance_stopping"
+        );
+        assert_eq!(
+            code(InstanceLifecycle::Unknown),
+            "supervisor.identity_unproven"
+        );
+        for lifecycle in [
+            InstanceLifecycle::Stopped,
+            InstanceLifecycle::Starting,
+            InstanceLifecycle::Recovering,
+            InstanceLifecycle::Failed,
+        ] {
+            assert_eq!(code(lifecycle), "supervisor.instance_not_running");
+        }
     }
 }

@@ -61,6 +61,40 @@ pub enum SupervisorError {
     /// A start while the instance is stopping.
     #[error("the instance is stopping")]
     InstanceStopping,
+    /// A restart or reload of an instance that does not run (spec 0026).
+    #[error("the instance is {}, not running", .lifecycle.as_code())]
+    InstanceNotRunning {
+        /// The lifecycle it is in.
+        lifecycle: InstanceLifecycle,
+    },
+    /// A force stop of an instance that is not `stopping` (spec 0026,
+    /// AC-2): a normal stop comes first.
+    #[error("force stop needs a stopping instance, this one is {}", .lifecycle.as_code())]
+    ForceRequiresStopping {
+        /// The lifecycle it is in.
+        lifecycle: InstanceLifecycle,
+    },
+    /// The main process did not exit within `FORCE_EXIT_WAIT` after
+    /// `SIGKILL`; it stays watched, and its exit still reads `forced`.
+    #[error("the process did not exit within {wait_seconds} s of SIGKILL")]
+    ForceTimeout {
+        /// The wait.
+        wait_seconds: u64,
+    },
+    /// After the stop half of a restart the instance lock stayed held by
+    /// processes the main process left behind (spec 0026, AC-8).
+    #[error("the instance data is still in use after the restart stopped the process")]
+    DataStillHeld {
+        /// The lock file.
+        lock_path: String,
+        /// The group members left after the main process exited.
+        leftover: Vec<Pid>,
+    },
+    /// The stop half of a restart failed: the instance stays stopped and a
+    /// start is the next step (spec 0026, AC-8). It keeps the code and
+    /// details of the stop error.
+    #[error("the restart stopped halfway: {0}")]
+    RestartStoppedHalfway(Box<SupervisorError>),
     /// An action on a retained instance.
     #[error("the instance is retained")]
     InstanceRetained,
@@ -322,6 +356,14 @@ fn omitted() -> (DetailKey, String) {
     (key("omitted"), "0".to_owned())
 }
 
+/// The PIDs of a `leftoverProcesses` detail, comma separated in order.
+fn pid_list(pids: &[Pid]) -> String {
+    pids.iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 fn endpoint_details(fault: &EndpointFault) -> Vec<(DetailKey, String)> {
     vec![
         (key("endpoint"), fault.endpoint.clone()),
@@ -337,6 +379,11 @@ impl OperationError for SupervisorError {
             Self::NotInitialized { .. } => codes::NOT_INITIALIZED,
             Self::InstanceInitializing => codes::INSTANCE_INITIALIZING,
             Self::InstanceStopping => codes::INSTANCE_STOPPING,
+            Self::InstanceNotRunning { .. } => codes::INSTANCE_NOT_RUNNING,
+            Self::ForceRequiresStopping { .. } => codes::FORCE_REQUIRES_STOPPING,
+            Self::ForceTimeout { .. } => codes::FORCE_TIMEOUT,
+            Self::DataStillHeld { .. } => codes::DATA_IN_USE,
+            Self::RestartStoppedHalfway(error) => error.code(),
             Self::InstanceRetained => codes::INSTANCE_RETAINED,
             Self::IdentityUnproven { .. } => codes::IDENTITY_UNPROVEN,
             Self::DataInUse { .. } => codes::DATA_IN_USE,
@@ -382,8 +429,25 @@ impl OperationError for SupervisorError {
 
     fn details(&self) -> Vec<(DetailKey, String)> {
         match self {
-            Self::NotInitialized { lifecycle } => {
+            Self::NotInitialized { lifecycle }
+            | Self::InstanceNotRunning { lifecycle }
+            | Self::ForceRequiresStopping { lifecycle } => {
                 vec![(key("lifecycle"), lifecycle.as_code().to_owned())]
+            }
+            Self::ForceTimeout { wait_seconds } => {
+                vec![(key("waitSeconds"), wait_seconds.to_string())]
+            }
+            Self::DataStillHeld {
+                lock_path,
+                leftover,
+            } => vec![
+                (key("lockPath"), lock_path.clone()),
+                (key("leftoverProcesses"), pid_list(leftover)),
+            ],
+            Self::RestartStoppedHalfway(error) => {
+                let mut details = error.details();
+                details.push((key("after"), "stays_stopped".to_owned()));
+                details
             }
             Self::IdentityUnproven { pid } => pid
                 .map(|pid| (key("pid"), pid.to_string()))

@@ -127,12 +127,16 @@ async fn a_provider_without_reload_is_refused_without_any_signal() {
 }
 
 #[tokio::test]
-async fn a_reload_of_an_instance_that_does_not_run_fails() {
+async fn a_reload_of_an_instance_that_does_not_run_fails_with_instance_not_running() {
     let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
 
     let reload = rig.reload(id).await;
     let detail = rig.wait_state(reload, OperationState::Failed).await;
 
-    assert_eq!(Rig::failure_code(&detail), codes::RELOAD_FAILED.to_string());
+    // Spec 0026, AC-10: the lifecycle code, not `reload_failed`.
+    assert_eq!(
+        Rig::failure_code(&detail),
+        codes::INSTANCE_NOT_RUNNING.to_string()
+    );
 }

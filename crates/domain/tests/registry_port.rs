@@ -148,6 +148,7 @@ fn stored_instance(instance: &Instance) -> StoredInstance {
         startup: instance.startup(),
         lifecycle: instance.lifecycle(),
         last_failure: instance.last_failure().cloned(),
+        last_exit: instance.last_exit(),
         revision: instance.revision(),
         created_at: instance.created_at(),
         created_by: instance.created_by(),

@@ -34,7 +34,10 @@ struct InstanceDetailPage: View {
     let back: @MainActor () -> Void
 
     private var context: InstanceActionContext {
-        InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
+        InstanceActionContext.make(
+            feedbackCenter: feedbackCenter, navigator: navigator,
+            leftoverProcesses: { [instances] in instances.store.items[$0]?.leftoverProcesses ?? [] }
+        )
     }
 
     var body: some View {
@@ -55,12 +58,18 @@ struct InstanceDetailPage: View {
 
     private func page(_ summary: InstanceSummary) -> some View {
         let action = actions.stacklyAction(for: summary, context: context)
+        let lifecycle = actions.lifecycleActions(
+            for: summary, providerName: providerName(summary), context: context)
         return ScrollView {
             VStack(alignment: .leading, spacing: Spacing.sectionGap) {
                 tabPicker
                 SummaryTab(
                     summary: summary, action: action, model: model, secrets: service.secrets,
-                    home: NSHomeDirectory(), enterSecrets: { secretNeeds = $0 })
+                    home: NSHomeDirectory(), enterSecrets: { secretNeeds = $0 },
+                    stopping: Self.stoppingActions(
+                        summary: summary, local: actions.localStatus(for: summary.id),
+                        stopAgain: { actions.perform(.stop, for: summary, context: context) },
+                        forceStop: lifecycle.forceStop))
             }
             .padding(.horizontal, Spacing.pageHorizontal)
             .padding(.vertical, Spacing.s16)
@@ -71,6 +80,12 @@ struct InstanceDetailPage: View {
             ToolbarItem(placement: .primaryAction) {
                 ActionButton(action, showsReason: false)
                     .help(CommandMap.helpText(for: Self.command(of: action), title: action.title))
+            }
+            ToolbarItem(placement: .primaryAction) {
+                lifecycleButton(lifecycle.restart)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                lifecycleButton(lifecycle.reload)
             }
             ToolbarItem(placement: .primaryAction) {
                 ActionMenu([moreItems(summary)])
@@ -143,15 +158,49 @@ struct InstanceDetailPage: View {
     /// The Instance menu command a main action stands for, for the tooltip of its button:
     /// Stop is `stopInstance`; Start, Retry, and a busy start are `startInstance`.
     static func command(of action: StacklyAction) -> CommandID {
-        action.id == InstanceVerb.stop.rawValue ? .stopInstance : .startInstance
+        switch action.id {
+        case InstanceVerb.stop.rawValue: .stopInstance
+        case InstanceVerb.restart.rawValue: .restartInstance
+        case InstanceVerb.reload.rawValue: .reloadInstance
+        case InstanceVerb.forceStop.rawValue: .forceStopInstance
+        default: .startInstance
+        }
+    }
+
+    /// An icon button of the toolbar for Restart or Reload, with the help text of spec 0026
+    /// (*Copy*): the title, or the reason it cannot run, or the busy label.
+    private func lifecycleButton(_ action: StacklyAction) -> some View {
+        ActionButton(action, showsReason: false)
+            .labelStyle(.iconOnly)
+            .help(
+                action.disabledReason
+                    ?? (action.isBusy
+                        ? action.title
+                        : action.id == InstanceVerb.reload.rawValue
+                            ? "Reload configuration" : "Restart"))
+    }
+
+    /// The actions of the "Still stopping." banner (spec 0026, AC-16): only while the
+    /// instance is `stopping` and this window runs no click for it, since a click shows its
+    /// busy label instead.
+    static func stoppingActions(
+        summary: InstanceSummary, local: InstanceLocalStatus,
+        stopAgain: @escaping @MainActor () -> Void, forceStop: StacklyAction
+    ) -> InstanceDetailBanner.Stopping? {
+        guard summary.lifecycle == .stopping, local == .none else { return nil }
+        return InstanceDetailBanner.Stopping(stopAgain: stopAgain, forceStop: forceStop)
+    }
+
+    /// The provider's display name: the detail's, then the catalog's, then the software.
+    private func providerName(_ summary: InstanceSummary) -> String {
+        model.detail?.provider.displayName
+            ?? catalog?.providers?.first { $0.provider == summary.provider.name }?.displayName
+            ?? summary.software
     }
 
     /// "{provider} {version} · {status}".
     private func subtitle(_ summary: InstanceSummary) -> String {
-        let provider =
-            model.detail?.provider.displayName
-            ?? catalog?.providers?.first { $0.provider == summary.provider.name }?.displayName
-            ?? summary.software
+        let provider = providerName(summary)
         let version = summary.runtimeVersion.isEmpty ? "" : " \(summary.runtimeVersion)"
         return "\(provider)\(version) · \(StatusAdapter.appearance(of: summary).label)"
     }
