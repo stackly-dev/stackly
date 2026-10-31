@@ -669,10 +669,10 @@ public final class CreateInstanceModel {
     }
 
     /// The Create button as an action. The sheet view passes the secret inputs it builds
-    /// from its drafts; they go to ``create(secrets:)`` and nowhere else.
+    /// from its drafts; they go to ``create(secrets:didSend:)`` and nowhere else.
     /// - Parameters:
     ///   - secrets: Builds the secret inputs from the sheet's drafts at the click.
-    ///   - didSend: Called right after the click, to clear the drafts.
+    ///   - didSend: Called once the request goes out, to clear the drafts.
     public func createAction(
         secrets: @escaping @MainActor () -> [SecretFieldInput],
         didSend: @escaping @MainActor () -> Void = {}
@@ -682,8 +682,7 @@ public final class CreateInstanceModel {
             isBusy: isCreateBusy,
             perform: { [self] in
                 let inputs = secrets()
-                didSend()
-                Task { await create(secrets: inputs) }
+                Task { await create(secrets: inputs, didSend: didSend) }
             })
     }
 
@@ -713,15 +712,18 @@ public final class CreateInstanceModel {
     }
 
     /// Sends `instance.create` with the draft and the secret inputs.
-    /// - Parameter secrets: The source of every secret field, with the typed value of an
-    ///   Enter field.
-    public func create(secrets: [SecretFieldInput]) async {
+    /// - Parameters:
+    ///   - secrets: The source of every secret field, with the typed value of an Enter field.
+    ///   - didSend: Called once the request is going out, to clear the drafts; never when the
+    ///     Create gate turned it down, so the form keeps what the person typed.
+    public func create(secrets: [SecretFieldInput], didSend: @MainActor () -> Void = {}) async {
         guard phase == .editing, createDisabledReason == nil, let form, let runtimeID,
             let schema
         else { return }
         phase = .submitting
         banner = nil
         schema.forgetTypedSecrets()
+        didSend()
         let key = retryKey ?? MutationPath.newKey()
         createKey = key
         let params = CreateInstanceParams(

@@ -462,6 +462,105 @@ struct CreateInstanceModelTests {
         await settle("a current preflight") { rig.model.createDisabledReason == nil }
     }
 
+    /// Clicks Create the way the sheet does: the inputs come from the model's choice and the
+    /// typed text, and a send clears the typed text.
+    @MainActor
+    private func click(_ rig: CreateRig, typed: Box<[String: String]>) {
+        let model = rig.model
+        let action = model.createAction(
+            secrets: { model.schema?.secretInputs(typed: typed.value) ?? [] },
+            didSend: { typed.value = [:] })
+        action.invoke(gate: .available, present: { _ in })
+    }
+
+    private func secretsSent(_ rig: CreateRig, at index: Int) -> [SecretFieldInput]? {
+        guard rig.sent.indices.contains(index),
+            case .instanceCreate(let params) = rig.sent[index].call
+        else { return nil }
+        return params.secrets
+    }
+
+    @Test func aCopyFromSecretIsSentAgainAfterARefusedClickWithoutTouchingTheField() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword",
+            SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        await settle("a ready preflight") { rig.model.createDisabledReason == nil }
+        rig.answer = { _, _ in .rejected(.create("resource.busy")) }
+        let typed = Box<[String: String]>([:])
+        let expected = [
+            SecretFieldInput(field: "superuserPassword", input: .copyFrom("local:user/x"))
+        ]
+
+        click(rig, typed: typed)
+        await settle("the refusal") { rig.model.banner != nil && rig.model.phase == .editing }
+        await settle("a ready preflight") { rig.model.createDisabledReason == nil }
+        click(rig, typed: typed)
+        await settle("the second send") { rig.sent.count == 2 }
+
+        #expect(secretsSent(rig, at: 0) == expected)
+        #expect(secretsSent(rig, at: 1) == expected)
+    }
+
+    @Test func aRetryAfterAnUnknownOutcomeSendsTheSameKeyAndTheSameCopyFromSecret() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword",
+            SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        await settle("a ready preflight") { rig.model.createDisabledReason == nil }
+        rig.answer = { _, key in .outcomeUnknown(ClientErrorCatalog.notConnected(), key: key) }
+        let typed = Box<[String: String]>([:])
+
+        click(rig, typed: typed)
+        await settle("the unknown outcome") {
+            rig.model.banner?.title == MutationFeedback.outcomeUnknown
+        }
+        await settle("a ready preflight") { rig.model.createDisabledReason == nil }
+        click(rig, typed: typed)
+        await settle("the retry") { rig.sent.count == 2 }
+
+        #expect(rig.sent[0].key == rig.sent[1].key)
+        #expect(secretsSent(rig, at: 1) == secretsSent(rig, at: 0))
+        #expect(
+            secretsSent(rig, at: 1)
+                == [SecretFieldInput(field: "superuserPassword", input: .copyFrom("local:user/x"))])
+    }
+
+    @Test func anEnterSecretNeedsItsTextAgainAfterARefusedClick() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        await settle("a ready preflight") { rig.model.createDisabledReason == nil }
+        rig.answer = { _, _ in .rejected(.create("resource.busy")) }
+        let typed = Box<[String: String]>(["superuserPassword": "long-enough-text"])
+
+        click(rig, typed: typed)
+        await settle("the refusal") { rig.model.banner != nil && rig.model.phase == .editing }
+
+        #expect(typed.value.isEmpty)
+        #expect(rig.model.createDisabledReason != nil)
+        #expect(schema.secretInputs(typed: typed.value).isEmpty)
+        #expect(rig.sent.count == 1)
+    }
+
+    @Test func aClickTheGateTurnsDownKeepsTheTypedText() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: false))
+        let typed = Box<[String: String]>(["superuserPassword": "long-enough-text"])
+
+        click(rig, typed: typed)
+        await Task.yield()
+        await Task.yield()
+
+        #expect(typed.value == ["superuserPassword": "long-enough-text"])
+        #expect(rig.sent.isEmpty)
+    }
+
     @Test func aNewRuntimeStartsEverySecretOnGenerateEvenAfterAnEnterChoice() async throws {
         let rig = await editing()
         let first = try #require(rig.model.schema)
@@ -606,4 +705,12 @@ struct CreateInstanceModelTests {
             CreateInstanceModel.startKey(createKey: "abc")
                 == "4a3a2491fb167b157187071d489e147d45fcc682bed2471532adf3dada375f3f")
     }
+}
+
+/// A reference the test closures share with the test body.
+@MainActor
+private final class Box<Value> {
+    var value: Value
+
+    init(_ value: Value) { self.value = value }
 }
