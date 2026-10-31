@@ -202,6 +202,30 @@ struct SchemaFormModelTests {
             ])
     }
 
+    @Test func forgettingTheTypedSecretsTurnsEnterOffAndKeepsTheOtherChoices() throws {
+        let schema = try schema("postgresql")
+        var changes = 0
+        schema.onChange = { changes += 1 }
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        #expect(changes == 1)
+        schema.forgetTypedSecrets()
+        #expect(
+            schema.secretChoice("superuserPassword")
+                == SecretChoice(source: .enter, reference: nil, isValid: false))
+        #expect(!schema.secretsAreValid)
+        #expect(changes == 1)
+
+        schema.setSecret(
+            "superuserPassword",
+            SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        schema.forgetTypedSecrets()
+        #expect(
+            schema.secretChoice("superuserPassword")
+                == SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        #expect(schema.secretsAreValid)
+    }
+
     static func field(key: String, kind: FieldKind) -> FormField {
         FormField(
             key: key, title: key, description: nil, kind: kind, required: false, secret: false,

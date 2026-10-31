@@ -412,6 +412,68 @@ struct CreateInstanceModelTests {
         await settle("another preflight") { rig.service.preflightCalls.count == before + 1 }
     }
 
+    @Test func aRefusedCreateLeavesAnEnterSecretOffUntilTheTextIsTypedAgain() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        await settle("an Enter preflight") {
+            rig.service.preflightCalls.last?.secrets?.contains(
+                SecretPlan(field: "superuserPassword", source: .value)) == true
+        }
+        rig.answer = { _, _ in .rejected(.create("instance.name_taken", "the name is taken")) }
+        let before = rig.service.preflightCalls.count
+        await creating(
+            rig,
+            secrets: [SecretFieldInput(field: "superuserPassword", input: .value("typed-text"))])
+        await settle("another preflight") { rig.service.preflightCalls.count == before + 1 }
+
+        #expect(rig.model.phase == .editing)
+        #expect(
+            schema.secretChoice("superuserPassword")
+                == SecretChoice(source: .enter, reference: nil, isValid: false))
+        #expect(rig.model.createDisabledReason != nil)
+        #expect(
+            rig.service.preflightCalls.last?.secrets?.contains(
+                SecretPlan(field: "superuserPassword", source: .value)) == true)
+
+        schema.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        #expect(rig.model.createDisabledReason == nil)
+    }
+
+    @Test func aRefusedCreateKeepsACopyFromSecretAsItWas() async throws {
+        let rig = await editing()
+        let schema = try #require(rig.model.schema)
+        schema.setSecret(
+            "superuserPassword",
+            SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        rig.answer = { _, _ in .rejected(.create("resource.busy")) }
+        await creating(
+            rig,
+            secrets: [
+                SecretFieldInput(field: "superuserPassword", input: .copyFrom("local:user/x"))
+            ])
+
+        #expect(
+            schema.secretChoice("superuserPassword")
+                == SecretChoice(source: .copyFrom, reference: "local:user/x", isValid: true))
+        await settle("a current preflight") { rig.model.createDisabledReason == nil }
+    }
+
+    @Test func aNewRuntimeStartsEverySecretOnGenerateEvenAfterAnEnterChoice() async throws {
+        let rig = await editing()
+        let first = try #require(rig.model.schema)
+        first.setSecret(
+            "superuserPassword", SecretChoice(source: .enter, reference: nil, isValid: true))
+        rig.model.selectRuntime(Self.database)
+        await settle("the new form") { rig.model.schema.map { $0 !== first } == true }
+
+        let second = try #require(rig.model.schema)
+        #expect(second.secretChoice("superuserPassword").source == .generate)
+        #expect(second.secretPlans() == [SecretPlan(field: "superuserPassword", source: .generate)])
+    }
+
     @Test func aCreateThatWasNotSentKeepsTheFormWithACautionBanner() async {
         let rig = await editing()
         rig.answer = { _, _ in .notSent(ClientErrorCatalog.notConnected()) }
