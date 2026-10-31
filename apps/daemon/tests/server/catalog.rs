@@ -258,15 +258,17 @@ async fn the_detail_carries_capabilities_the_matrix_and_the_gate_verdict() {
                 .any(|capability| capability.as_code() == code);
             assert_eq!(status.supported, held, "{id} {code}");
         }
+        // A cell is supported only on the host's OS, by a provider record of
+        // the catalog; the fake package has none.
         for version in &detail.versions {
             assert_eq!(version.support.len(), 3, "{id}");
-            assert!(
-                version
-                    .support
-                    .iter()
-                    .all(|cell| cell.status != stackly_protocol::catalog::SupportStatus::Supported),
-                "{id}"
-            );
+            for cell in &version.support {
+                if cell.status == stackly_protocol::catalog::SupportStatus::Supported {
+                    assert_ne!(id, "testing/fake");
+                    assert_eq!(cell.os, stackly_protocol::catalog::TargetOs::Macos, "{id}");
+                    assert_eq!(cell.reason, Some(SupportReason::ProviderTested), "{id}");
+                }
+            }
         }
         if id == "testing/fake" {
             assert_eq!(

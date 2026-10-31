@@ -25,9 +25,9 @@ pub struct SupportVerdict<'a> {
 
 /// Decides the support status of `artifact` on `host`.
 ///
-/// `records` are the compatibility records of the artifact. The catalog
-/// does not decode them yet, so spec 0017 passes none; an installed runtime
-/// passes the rows its registry copy holds. `revision` is the provider
+/// `records` are the compatibility records of the artifact: the catalog's
+/// ([`VersionArtifact::compatibility`]) for a catalog cell or an install,
+/// and the rows its registry copy holds for an installed runtime. `revision` is the provider
 /// revision whose package holds the artifact.
 ///
 /// The rules apply in order, and the first that fits decides:

@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use stackly_domain::{
-    Arch, ArtifactFormat, ExactVersion, Os, OsVersion, RuntimeLine, Sha256Digest, SoftwareName,
+    Arch, ArtifactFormat, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
+    ExactVersion, Os, OsVersion, ProviderRevisionKey, RuntimeLine, Sha256Digest, SoftwareName,
     Target,
 };
 
@@ -65,6 +66,18 @@ pub struct VersionArtifact {
     pub status: ArtifactStatus,
 }
 
+impl VersionArtifact {
+    /// Returns the compatibility records of an `available` artifact, and
+    /// none for another status.
+    #[must_use]
+    pub fn compatibility(&self) -> &[CompatibilityRecordRow] {
+        match &self.status {
+            ArtifactStatus::Available { compatibility, .. } => compatibility,
+            _ => &[],
+        }
+    }
+}
+
 /// The status of an artifact and the fields that come with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -102,6 +115,9 @@ pub enum ArtifactStatus {
         /// Every library it links, or `None` when the catalog does not
         /// say, which differs from an empty list.
         dependencies: Option<Vec<ArtifactDependency>>,
+        /// The compatibility records the catalog holds for it, in catalog
+        /// order (spec 0018, *Compatibility record*); empty when it has none.
+        compatibility: Vec<CompatibilityRecordRow>,
     },
     /// An artifact that cannot be installed yet, with the recorded reason.
     #[non_exhaustive]
@@ -651,6 +667,12 @@ fn check_artifact(
                 ),
                 None => None,
             },
+            compatibility: artifact
+                .compatibility
+                .iter()
+                .flatten()
+                .map(|record| typed_record(record).ok())
+                .collect::<Option<Vec<_>>>()?,
         },
         "blocked" => {
             let blocked = artifact.blocked.as_ref()?;
@@ -802,6 +824,7 @@ fn check_compatibility(
     let mut keys = BTreeSet::new();
     for (index, record) in records.iter().enumerate() {
         let at = |field: &str| format!("{path}.compatibility[{index}].{field}");
+        let before = issues.count();
         if !matches!(record.scope.as_str(), "runtime" | "provider") {
             issues.at(
                 at("scope"),
@@ -930,7 +953,63 @@ fn check_compatibility(
                 "one record per scope, provider revision, macOS major, and arch",
             );
         }
+        // The registry copies every record at install, so a record that
+        // passed the rules above but does not fit a registry row is reported
+        // here rather than dropped with its artifact.
+        if issues.count() == before
+            && let Err(reason) = typed_record(record)
+        {
+            issues.at(
+                format!("{path}.compatibility[{index}]"),
+                rule,
+                format!("the record does not fit the registry: {reason}"),
+            );
+        }
     }
+}
+
+/// The registry row of a compatibility record, or why it does not fit one.
+fn typed_record(raw: &RawCompatibilityRecord) -> Result<CompatibilityRecordRow, String> {
+    let invalid = |field: &str| format!("{field} is not valid");
+    let revision = raw
+        .provider_revision
+        .as_ref()
+        .map(|revision| -> Result<ProviderRevisionKey, String> {
+            Ok(ProviderRevisionKey::new(
+                revision
+                    .id
+                    .parse()
+                    .map_err(|_| invalid("providerRevision.id"))?,
+                revision
+                    .revision
+                    .parse()
+                    .map_err(|_| invalid("providerRevision.revision"))?,
+                revision
+                    .manifest_sha256
+                    .parse()
+                    .map_err(|_| invalid("providerRevision.manifestSha256"))?,
+            ))
+        })
+        .transpose()?;
+    CompatibilityRecordRow::new(
+        raw.scope
+            .parse::<CompatibilityScope>()
+            .map_err(|_| invalid("scope"))?,
+        revision,
+        raw.os.parse().map_err(|_| invalid("os"))?,
+        raw.os_version.parse().map_err(|_| invalid("osVersion"))?,
+        raw.os_build.clone(),
+        raw.arch.parse().map_err(|_| invalid("arch"))?,
+        raw.result
+            .parse::<CompatibilityResult>()
+            .map_err(|_| invalid("result"))?,
+        raw.checks.clone(),
+        raw.known_limitations.clone(),
+        raw.summary.clone(),
+        raw.tested_at.parse().map_err(|_| invalid("testedAt"))?,
+        raw.evidence.clone(),
+    )
+    .map_err(|error| error.to_string())
 }
 
 /// Whether text is a snake case code of 1 to 64 bytes.
@@ -1077,10 +1156,22 @@ mod tests {
             build,
             unpacked: _,
             dependencies,
+            compatibility,
         } = &artifact.status
         else {
             panic!("the nats artifact is available");
         };
+        let scopes: Vec<_> = compatibility.iter().map(|record| record.scope).collect();
+        assert_eq!(
+            scopes,
+            [
+                CompatibilityScope::Runtime,
+                CompatibilityScope::Provider,
+                CompatibilityScope::Provider
+            ],
+            "every record of the shipped package decodes"
+        );
+        assert_eq!(artifact.compatibility(), compatibility.as_slice());
         assert_eq!(min_os.to_string(), "13.0");
         assert_eq!(*format, ArtifactFormat::TarGz);
         assert_eq!(urls.len(), 1);
@@ -1377,6 +1468,40 @@ mod tests {
             "artifacts[0].compatibility".to_owned(),
             IssueCode::VersionsRule
         )));
+    }
+
+    #[test]
+    fn an_artifact_keeps_its_records_and_one_that_does_not_fit_the_registry_is_reported() {
+        let ok = available_with(&format!(r#""compatibility": [{RUNTIME_RECORD}]"#));
+        let (catalog, codes) = check(&versions_with(&[&ok]), false);
+        assert_eq!(codes, []);
+        let catalog = catalog.unwrap();
+        let records = catalog.artifacts()[0].compatibility();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].os_version, OsVersion::major_minor(27, 0));
+        assert_eq!(records[0].checks, ["closure", "launch_agent"]);
+
+        // Both pass the catalog rules, but a registry row needs a summary
+        // that is not empty and evidence that starts with a letter.
+        for (from, to) in [
+            (r#""summary": "ready in 493 ms""#, r#""summary": """#),
+            (r#""evidence": "runtime/"#, r#""evidence": "7runtime/"#),
+        ] {
+            let odd = available_with(&format!(
+                r#""compatibility": [{}]"#,
+                RUNTIME_RECORD.replace(from, to)
+            ));
+            let (catalog, codes) = check(&versions_with(&[&odd]), false);
+            assert_eq!(
+                codes,
+                [(
+                    "artifacts[0].compatibility[0]".to_owned(),
+                    IssueCode::VersionsRule
+                )],
+                "{to}"
+            );
+            assert!(catalog.is_none(), "{to}");
+        }
     }
 
     #[test]

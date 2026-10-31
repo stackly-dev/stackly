@@ -199,6 +199,12 @@ pub fn digest(bytes: &[u8]) -> Sha256Digest {
 
 /// `providers/nats` with one artifact that describes `archive`.
 pub fn package(archive: &[u8]) -> ValidatedPackage {
+    package_with(archive, "")
+}
+
+/// [`package`] whose artifact also carries `extra`, JSON fields written
+/// after `dependencies` with a leading comma, such as `compatibility`.
+pub fn package_with(archive: &[u8], extra: &str) -> ValidatedPackage {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../providers/nats");
     let mut files: std::collections::BTreeMap<String, Vec<u8>> = [
         "provider.yaml",
@@ -222,7 +228,7 @@ pub fn package(archive: &[u8]) -> ValidatedPackage {
            "licenseUrl": "https://example.test/LICENSE", "executables": ["nats-server"],
            "stable": true, "unpackedSize": 1048576, "entryCount": 10,
            "dependencies": [ {{ "name": "libSystem.B.dylib", "kind": "system",
-                                "installName": "/usr/lib/libSystem.B.dylib" }} ] }} ] }}"#,
+                                "installName": "/usr/lib/libSystem.B.dylib" }} ]{extra} }} ] }}"#,
         digest(archive),
         archive.len()
     );

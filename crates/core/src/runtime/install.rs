@@ -276,24 +276,19 @@ pub enum InputError {
 impl InstallInput {
     /// Freezes what an install needs from the catalog.
     ///
-    /// Of `compatibility` it keeps the records whose OS and architecture are
-    /// the host's, at most [`COMPATIBILITY_MAX`].
+    /// Of the artifact's compatibility records it keeps those whose OS and
+    /// architecture are the host's, at most [`COMPATIBILITY_MAX`].
     ///
     /// # Errors
     ///
     /// Returns [`InputError::NotAvailable`] when `artifact` is not an
     /// `available` one.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one argument per fact the catalog hands to the operation"
-    )]
     pub fn new(
         software: &SoftwareName,
         provider: &str,
         selector: &str,
         host: &HostFacts,
         artifact: &VersionArtifact,
-        compatibility: &[CompatibilityRecordRow],
         revision: &ProviderRevisionKey,
         version_check: Option<&VersionCheckSpec>,
     ) -> Result<Self, InputError> {
@@ -310,6 +305,7 @@ impl InstallInput {
             build,
             unpacked,
             dependencies,
+            compatibility,
             ..
         } = &artifact.status
         else {

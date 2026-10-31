@@ -334,7 +334,7 @@ fn summary_of(
             .unwrap_or_default(),
         _ => &[],
     };
-    let support = catalog_support(catalog, runtime, rows, host)
+    let support = catalog_support(catalog, runtime, host)
         .unwrap_or_else(|| map::runtime::registry_support(rows, host));
     map::runtime::runtime_summary(
         runtime,
@@ -345,11 +345,11 @@ fn summary_of(
     )
 }
 
-/// The support of a runtime whose artifact is still in the catalog.
+/// The support of a runtime whose artifact is still in the catalog, from
+/// the catalog's records (spec 0018, *`support_status`*).
 fn catalog_support(
     catalog: Option<&stackly_core::catalog::CatalogState>,
     runtime: &Runtime,
-    rows: &[stackly_domain::CompatibilityRecordRow],
     host: &HostFacts,
 ) -> Option<(
     stackly_protocol::catalog::SupportStatus,
@@ -374,7 +374,12 @@ fn catalog_support(
             )
         });
         if let Some(artifact) = found {
-            let verdict = support_status(artifact, rows, Some(provider.package.key()), host);
+            let verdict = support_status(
+                artifact,
+                artifact.compatibility(),
+                Some(provider.package.key()),
+                host,
+            );
             return Some(map::runtime::verdict_support(&verdict));
         }
     }
@@ -487,7 +492,7 @@ fn select(core: &DaemonCore, params: &InstallRuntimeParams) -> Result<Selection,
     }
     let key = provider.package.key();
     let software: &SoftwareName = provider.package.software();
-    let verdict = support_status(artifact, &[], Some(key), &host);
+    let verdict = support_status(artifact, artifact.compatibility(), Some(key), &host);
     let resolved = map::runtime::resolved_artifact(
         &entry.id().to_string(),
         software.as_str(),
@@ -505,7 +510,6 @@ fn select(core: &DaemonCore, params: &InstallRuntimeParams) -> Result<Selection,
         &params.selector,
         &host,
         artifact,
-        &[],
         key,
         version_check.as_ref(),
     )

@@ -5,10 +5,12 @@
 //! that leaves no runtime and carries its hint.
 
 use stackly_domain::{Registry, RuntimeState, WriteBatch, WriteOp};
+use stackly_protocol::catalog::{SupportReason, SupportStatus};
 use stackly_protocol::codes::runtime as runtime_codes;
 use stackly_protocol::events::{EventKind, SubscribeParams};
 use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::operation::{ListOperationsParams, OperationState};
+use stackly_protocol::runtime::CompatibilityScope;
 use stackly_protocol::runtime::{
     GetRuntimeParams, InstallOutcome, InstallRuntimeParams, ListRuntimesParams,
     RuntimeState as WireState, SigningPolicy,
@@ -18,7 +20,8 @@ use stackly_testkit::RuntimeBuilder;
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::support::{
-    PATIENCE, Site, URL, archive, call_with_key, catalog, client, digest, nats, package, wait_state,
+    PATIENCE, Site, URL, archive, call_with_key, catalog, client, digest, nats, package,
+    package_with, wait_state,
 };
 
 async fn operation_count(client: &stackly_ipc::Client) -> usize {
@@ -185,6 +188,96 @@ async fn an_install_runs_five_stages_and_leaves_one_runtime_that_can_be_read() {
     assert!(replayed.replayed);
     assert_eq!(replayed.operation.id, accepted.operation.id);
     assert_eq!(replay.resolved.sha256, digest(&archive).to_string());
+    ev.pass();
+}
+
+// covers: AC-13, AC-15
+#[tokio::test]
+async fn an_install_copies_the_catalog_compatibility_records_and_support_follows_them() {
+    let ev = evidence!(
+        covers = ["AC-013", "AC-015"],
+        kind = Kind::Fixture,
+        expected = "the catalog's runtime and provider records for this host make the resolve supported, the install copies both into the registry, and runtime.get shows them with the same support",
+    );
+    let site = Site::new();
+    let archive = archive();
+    site.fake.fetcher().serve(URL, archive.clone());
+    let major = site.platform.info().host_facts().os_version.major();
+    let key = package(&archive).key().clone();
+    let record = |scope: &str, revision: &str| {
+        format!(
+            r#"{{ "scope": "{scope}", "result": "pass", "providerRevision": {revision}, "os": "macos", "osVersion": "{major}.0", "arch": "aarch64", "checks": ["closure"], "knownLimitations": [], "testedAt": "2026-10-18T11:07:19.973Z", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }}"#
+        )
+    };
+    let revision = format!(
+        r#"{{ "id": "{}", "revision": "{}", "manifestSha256": "{}" }}"#,
+        key.provider(),
+        key.revision(),
+        key.manifest_sha256()
+    );
+    let records = format!(
+        r#", "compatibility": [{}, {}]"#,
+        record("runtime", "null"),
+        record("provider", &revision)
+    );
+    let package = package_with(&archive, &records);
+    assert_eq!(
+        package.key(),
+        &key,
+        "the records leave the revision as it was"
+    );
+    let answering = site.answer_checks("nats-server: v2.15.1\n");
+    let _daemon = site.start(catalog(vec![package])).await;
+    let client = client(&site).await;
+
+    let reply = call_with_key(
+        &client,
+        Call::RuntimeInstall(nats("stable")),
+        "install-nats-records",
+    )
+    .await
+    .expect("the install starts");
+    let Reply::RuntimeInstall(started) = reply else {
+        panic!("expected a runtime.install reply");
+    };
+    assert_eq!(
+        (started.resolved.support, started.resolved.support_reason),
+        (SupportStatus::Supported, SupportReason::ProviderTested)
+    );
+    let InstallOutcome::Started(accepted) = started.outcome else {
+        panic!("expected a started outcome");
+    };
+    wait_state(&client, accepted.operation.id, OperationState::Succeeded).await;
+    answering.abort();
+
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .expect("the operation names the runtime")
+        .id
+        .parse()
+        .expect("a runtime id");
+    let Reply::RuntimeGet(detail) = client
+        .call(Call::RuntimeGet(GetRuntimeParams { runtime_id: id }))
+        .await
+        .expect("the runtime can be read")
+    else {
+        panic!("expected a runtime.get reply");
+    };
+    let scopes: Vec<_> = detail
+        .compatibility
+        .iter()
+        .map(|record| record.scope)
+        .collect();
+    assert_eq!(
+        scopes,
+        [CompatibilityScope::Runtime, CompatibilityScope::Provider]
+    );
+    assert_eq!(
+        (detail.summary.support, detail.summary.support_reason),
+        (SupportStatus::Supported, SupportReason::ProviderTested)
+    );
     ev.pass();
 }
 
