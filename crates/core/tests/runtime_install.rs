@@ -25,9 +25,8 @@ use stackly_core::runtime::validate::VersionCheckSpec;
 use stackly_core::secret::Redactor;
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_domain::{
-    Arch, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ErrorCodeName,
-    InstallMode, LockKey, OperationId, OperationKind, OperationResource, OperationState, Os,
-    OsVersion, Registry, ResourceRef, RuntimeId, RuntimeState, Sha256Digest,
+    Arch, ErrorCodeName, InstallMode, LockKey, OperationId, OperationKind, OperationResource,
+    OperationState, Registry, ResourceRef, RuntimeId, RuntimeState, Sha256Digest,
 };
 use stackly_platform::{ChildRole, Clock, ExitStatus, Platform};
 use stackly_testkit::evidence::{Kind, evidence};
@@ -98,12 +97,27 @@ fn package_of(archive: &[u8], sha256: &Sha256Digest, version: &str, url: &str) -
            "licenseUrl": "https://example.test/LICENSE", "executables": ["nats-server"],
            "stable": true, "unpackedSize": 1048576, "entryCount": 10,
            "dependencies": [ {{ "name": "libSystem.B.dylib", "kind": "system",
-                                "installName": "/usr/lib/libSystem.B.dylib" }} ] }} ] }}"#,
-        archive.len()
+                                "installName": "/usr/lib/libSystem.B.dylib" }} ],
+           "compatibility": [{}, {}] }} ] }}"#,
+        archive.len(),
+        record("aarch64"),
+        record("x86_64")
     );
     files.insert("versions.json".to_owned(), versions.into_bytes());
     ValidatedPackage::from_files(PackageFiles::new("nats", files), NameCheck::FolderName)
         .unwrap_or_else(|error| panic!("the test package validates: {:?}", error.issues))
+}
+
+/// A compatibility record the catalog holds for the artifact, for `arch`:
+/// the package carries one for this host and one for Intel that the input
+/// leaves out.
+fn record(arch: &str) -> String {
+    format!(
+        r#"{{ "scope": "runtime", "result": "pass", "providerRevision": null, "os": "macos",
+             "osVersion": "27.0", "osBuild": "26A428", "arch": "{arch}", "checks": ["ready", "stop"],
+             "knownLimitations": ["provider_integration_not_covered"], "summary": "ready in 493 ms",
+             "testedAt": "2026-10-18T11:07:19.973Z", "evidence": "runtime/run/record" }}"#
+    )
 }
 
 impl Harness {
@@ -159,29 +173,6 @@ impl Harness {
         }
     }
 
-    /// The compatibility records the catalog holds for the artifact: one
-    /// for this host, one for Intel that the input leaves out.
-    fn records(&self) -> Vec<CompatibilityRecordRow> {
-        let record = |arch| {
-            CompatibilityRecordRow::new(
-                CompatibilityScope::Runtime,
-                None,
-                Os::Macos,
-                OsVersion::major_minor(27, 0),
-                Some("26A428".to_owned()),
-                arch,
-                CompatibilityResult::Pass,
-                vec!["ready".to_owned(), "stop".to_owned()],
-                vec!["provider_integration_not_covered".to_owned()],
-                Some("ready in 493 ms".to_owned()),
-                "2026-10-18T11:07:19.973Z".parse().expect("a time"),
-                "runtime/run/record".to_owned(),
-            )
-            .expect("a valid record")
-        };
-        vec![record(Arch::Aarch64), record(Arch::X86_64)]
-    }
-
     fn input(&self) -> InstallInput {
         let artifact = &self.package.versions().artifacts()[0];
         let check = self
@@ -194,7 +185,6 @@ impl Harness {
             "stable",
             &self.platform.info().host_facts(),
             artifact,
-            &self.records(),
             self.package.key(),
             check.as_ref(),
         )
@@ -763,7 +753,6 @@ async fn a_catalog_that_moves_a_line_leaves_the_installed_runtime_alone_and_inst
         "2.15",
         &rig.platform.info().host_facts(),
         artifact,
-        &[],
         package.key(),
         check.as_ref(),
     )

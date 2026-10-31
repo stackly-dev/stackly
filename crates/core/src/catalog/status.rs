@@ -240,17 +240,19 @@ pub fn version_support(
 }
 
 /// The status of an artifact for the host OS (spec 0017, *Aturan status*
-/// step 3), from [`support_status`].
-///
-/// The catalog does not decode the compatibility records of `versions.json`
-/// yet, so no record is passed and an `available` artifact is `unverified`
-/// until it does (spec 0018 step 13).
+/// step 3), from [`support_status`] over the artifact's compatibility
+/// records.
 fn host_cell_status(
     entry: &ProviderEntry,
     artifact: &VersionArtifact,
     host: &HostFacts,
 ) -> CellStatus {
-    let verdict = support_status(artifact, &[], Some(entry.package.key()), host);
+    let verdict = support_status(
+        artifact,
+        artifact.compatibility(),
+        Some(entry.package.key()),
+        host,
+    );
     let note = match &artifact.status {
         ArtifactStatus::Blocked { reason, .. } => Some(reason.clone()),
         _ => None,
@@ -464,7 +466,8 @@ mod tests {
     }
 
     #[test]
-    fn an_available_host_artifact_is_unverified_until_feature_18_and_notes_fill_empty_columns() {
+    fn an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns()
+    {
         let nats = entry(repo("nats"), vec![windows_planned()]);
 
         assert_eq!(status_of(nats.clone()).state, EntryState::Available);
@@ -474,8 +477,8 @@ mod tests {
                 (
                     Os::Macos,
                     vec![Arch::Aarch64],
-                    SupportStatus::Unverified,
-                    Some(SupportReason::Untested),
+                    SupportStatus::Supported,
+                    Some(SupportReason::ProviderTested),
                     None
                 ),
                 (
@@ -641,14 +644,10 @@ mod tests {
     }
 
     #[test]
-    fn no_cell_is_ever_supported_before_feature_18() {
-        let entries = [
-            entry(repo("nats"), vec![windows_planned()]),
-            entry(repo("fake"), vec![]),
-            entry(linux_mixed(), vec![]),
-        ]
-        .into_iter()
-        .chain(CatalogFixture::ALL.map(|fixture| entry(fixture.package(), vec![])));
+    fn a_cell_without_compatibility_records_is_never_supported_or_experimental() {
+        let entries = [entry(repo("fake"), vec![])]
+            .into_iter()
+            .chain(CatalogFixture::ALL.map(|fixture| entry(fixture.package(), vec![])));
 
         for entry in entries {
             for (_, _, status, _, _) in cells(&entry) {

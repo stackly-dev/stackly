@@ -89,7 +89,6 @@ pub fn install_cached_artifact(
         "fixture",
         &host,
         artifact,
-        &[],
         package.key(),
         check.as_ref(),
     )
