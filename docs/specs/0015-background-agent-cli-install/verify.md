@@ -1,4 +1,4 @@
-# Verify: Background agent & CLI install · spec 0015 · updated 2026-10-22
+# Verify: Background agent & CLI install · spec 0015 · updated 2026-10-31
 > Rekonsiliasi cakupan 2026-10-24: cek khusus pembaca layar, navigasi dan shortcut keyboard, pengaturan tampilan aksesibilitas, serta identifier UI test sudah dihapus. Cek tersebut berstatus RETIRED dan tidak menjadi penghambat verifikasi. Hasil lama di bawah merupakan riwayat revisi asalnya; nomor AC tetap stabil.
 
 
@@ -41,6 +41,30 @@ _Langkah diturunkan dari acceptance criteria spec 0015. `/check verify` menjalan
 - AC-17 sampai AC-20 · belum, milik Milestone 4 (`BLOCKED` sampai OQ-012)
 - AC-21 · selesai sebelum milestone ini (langkah 0)
 - AC-22 · `--install` terbukti dengan folder sementara pada bundle hasil `build-app` sungguhan
+
+## Milestone 2: launchd nyata tanpa signing
+
+_Langkah 8 dan 9 Build plan, dibangun 2026-10-31 di `feat/f15-launchd-native`. Test native ini memuat job launchd sementara di sesi kamu, jadi hanya berjalan di run native yang kamu setujui. Run pertama yang disetujui: `evidence/agent/01a190a9-6173-7268-a2bd-2680c7794aad/`, 5 record PASS, launchd 7.0.0. Record tambahan ad hoc (bundle di `~/Applications`, Login Items) tidak menahan milestone ini dan tetap belum dijalankan, lihat Milestone 1._
+
+### UI / manual
+
+- [x] **Setelah persetujuan kamu:** `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1` → 5 test lulus dan laporan `0 problems`; setiap record PASS punya subject `launchd` (versi dari `launchctl version`, source `external`) dan actual yang teramati → AC-15, AC-16
+- [x] Setelah run itu, `launchctl list | grep dev.stackly.test.agent` → tidak ada baris, dan `pgrep -f stackly-test-` → tidak ada proses → AC-15 (agent dicabut di setiap jalur keluar)
+- [ ] Hentikan run di tengah test (Ctrl+C saat agent dimuat), lalu `cargo xtask runtime spike --cleanup` → baris ringkasan menyebut `1 daemon test agent(s) booted out` dan `launchctl list` tidak lagi memuat label `dev.stackly.test.agent.*`; langkah ini tetap jalan walau spike sedang dikunci → AC-15
+
+### Commands
+
+- [x] `cargo test -p stackly-testkit --lib launch_agent` → 3 test lulus: plist turunan lulus `plutil` dan hanya berbeda dari golden file di `Label`, `ProgramArguments` (menggantikan `BundleProgram`), dan `EnvironmentVariables` berisi `STACKLY_ROOT` saja, tanpa `AbandonProcessGroup`; label `dev.stackly.test.agent.<pid>-<n>` baru setiap kali; pembacaan `launchctl print` hanya membaca baris job sendiri → AC-15, AC-16
+- [x] `cargo test -p xtask --bin xtask cleanup` → 8 test lulus, termasuk `only_daemon_test_agent_labels_are_picked_from_launchctl_list` → AC-15
+- [x] `native_launchd` `a_restart_request_to_the_agent_brings_a_new_launchd_daemon_within_30_seconds` → `DaemonInfo.launch.context` `launchd` dengan label test, lalu `daemon.shutdown restart` memunculkan daemon dengan `serverInstanceId` lain (teramati sekitar 10,4 detik) → AC-15
+- [x] `native_launchd` `a_stop_request_keeps_the_agent_down_for_longer_than_the_throttle_interval` → exit code 0, `runs` tidak bertambah, dan tidak ada daemon yang menjawab selama 20 detik → AC-15
+- [x] `native_launchd` `sigkill_of_the_agents_daemon_brings_a_new_one_within_20_seconds` → daemon baru dengan PID lain (teramati sekitar 10,4 detik) → AC-15
+- [x] `native_launchd` `an_agent_blocked_by_a_manual_daemons_lock_exits_3_until_it_takes_over` → minimal dua run keluar 3 selagi daemon manual tetap melayani, lalu agent mengambil alih (teramati sekitar 10,1 detik setelah daemon manual berhenti) → AC-15
+- [x] `native_launchd` `a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it` → proses fake server dengan PID dan `startedAt` yang sama tetap `ready` dan `adopted` setelah `kickstart -k`, setelah `bootout`, dan di daemon berikutnya → AC-16
+
+### Acceptance-criteria coverage
+- AC-15 · empat test native di atas, test unit plist dan label, dan langkah `--cleanup`
+- AC-16 · test survival native; hasilnya PASS, jadi spec 0010 tidak perlu kembali ke `/architect`
 
 ## Milestone 3: GUI and CLI install
 
