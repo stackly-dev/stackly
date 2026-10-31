@@ -32,6 +32,7 @@ fn measure(root: &Path, limits: UsageLimits) -> TreeUsage {
         .expect("the tree can be measured")
 }
 
+// covers: AC-5
 #[test]
 fn a_short_deadline_stops_a_large_tree_and_a_long_one_finishes_it() {
     let root = TestRoot::new().unwrap();
@@ -57,6 +58,7 @@ fn a_short_deadline_stops_a_large_tree_and_a_long_one_finishes_it() {
     );
 }
 
+// covers: AC-5
 #[test]
 fn the_entry_limit_stops_a_large_tree_after_the_names_it_may_read() {
     let root = TestRoot::new().unwrap();
@@ -76,6 +78,7 @@ fn the_entry_limit_stops_a_large_tree_after_the_names_it_may_read() {
     assert!(short.bytes <= exact.bytes);
 }
 
+// covers: AC-5
 #[test]
 fn another_volume_inside_the_tree_is_skipped() {
     let root = TestRoot::new().unwrap();
