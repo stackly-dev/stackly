@@ -173,6 +173,8 @@ public struct InstancesPage: View {
             inspector(selected: selected)
         }
         .publishesCommands(.page(.instances), commands.actions, checked: commands.checked)
+        // The navigator keeps a request while Instances shows, so a page that SwiftUI builds
+        // again after the first one applied it applies it too.
         .onChange(of: navigator?.instancesRequest, initial: true) { _, request in
             apply(request)
         }
@@ -494,7 +496,6 @@ public struct InstancesPage: View {
             storedSelection = id.uuidString.lowercased()
             showsInspector = true
         }
-        navigator?.consumeInstancesRequest()
     }
 
     /// Opens the detail page of an instance and keeps its row selected, so Back returns to
@@ -509,7 +510,6 @@ public struct InstancesPage: View {
         withTransaction(transaction) {
             path = [InstanceRoute(request.instance)]
         }
-        navigator?.consumeInstanceRequest()
     }
 
     private func retry() {
