@@ -81,7 +81,7 @@ Resolusi selector (`@17`, `@stable`) ke exact version dan digest, download ke st
 - [x] Verify it: `/check verify install runtime managed` · PASS 2026-10-31 on main `cccc08cc`, GUI steps run on screen; fixes `30a4c9c4` (compatibility records) and `5ac758a1` (Get button reason)
 - [x] Test it: `/test install runtime managed` · 2026-10-31, gaps after the verify fixes `30a4c9c4` and `5ac758a1`
 - [x] Review it (fresh model): `/check review install runtime managed` · 2026-10-31, `docs/reviews/2026-10-31-f18-install-runtime-managed.md`: Blocker 0, Major 1 fixed in two rounds (`16642a50`, `5d9d7fc4`) and confirmed (`ee0688eb`); 20 Minor and 19 Nit left open
-- [ ] Document it: `/document install runtime managed`
+- [x] Document it: `/document install runtime managed` · 2026-10-31, `CHANGELOG.md` (Added and Fixed, range `afc7c52c^..49ab82e4`)
 
 ### 19. Provider PostgreSQL · done
 

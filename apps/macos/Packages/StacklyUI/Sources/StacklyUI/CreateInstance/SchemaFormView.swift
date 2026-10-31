@@ -36,11 +36,14 @@ struct SchemaFormSections: View {
         }
     }
 
-    /// The draft a secret row starts from: Generate, with Copy from pointing at the reference
-    /// the form offers first (the reference the source of a duplicate uses), or at none.
+    /// The draft a secret row starts from: the source and reference the model holds, which is
+    /// Generate with Copy from pointing at the reference the form offers first (the reference
+    /// the source of a duplicate uses) until the person chooses, and no typed text.
     private func startingDraft(of row: SchemaRow) -> SecretDraft {
+        let choice = schema.secretChoice(row.id)
         var draft = SecretDraft()
-        draft.copyFromReference = schema.secretChoice(row.id).reference
+        draft.source = choice.source
+        draft.copyFromReference = choice.reference
         return draft
     }
 
