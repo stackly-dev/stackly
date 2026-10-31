@@ -121,7 +121,7 @@ Data contoh dari mockup UI dijadikan fixture Swift untuk Xcode Previews dan snap
 - [x] Verify it: `/check verify fixture tampilan & cek visual` (2026-10-31: PASS; UI suite 36 PASS, 0 FAIL)
 - [x] Test it: `/test fixture tampilan & cek visual` (2026-10-31: fixture, snapshot, source rule, xtask, and XCTest evidence suites pass; one test added for AC-12)
 
-### 69. Menu aplikasi, perintah & shortcut keyboard · in-progress
+### 69. Menu aplikasi, perintah & shortcut keyboard · done
 
 Menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya setiap aksi utama di mockup UI bisa dijalankan tanpa mouse sesuai idiom macOS.
 
@@ -136,4 +136,4 @@ Menu Stackly, File, Edit, View, Window, dan Help beserta peta shortcut, supaya s
   - [x] Shell commands: `PublishedCommands`, `.publishesCommands`, per window `MainWindowKey`, `CommandItemState` with the run guard, `StacklyCommands` with Reconnect, New Instance, Find, ⌘1 to ⌘7, ⌘0, and Help, `AppShell.select(_:)`, moving every `// provisional: F69` group into the map, the `design.md` section, and manual evidence (spec 0069 AC-3 to AC-10, AC-13, AC-16; after milestone 1; needs feature 67 milestone 1 (`StacklyAction`, `ActionHost`, `.actionHost()` in `AppShell`, menu subtitle check) in `ui-macos.md`; after feature 16 milestone 1 step 2 and feature 20 milestone 3 step 14 in `02-instalasi-pertama.md` when either is running, since they share `StacklyApp.swift` and `AppShell.swift`)
   - [x] Page and instance commands: the Instance menu, Instances page commands (Open, Start, Stop, Copy Connection String, Back, inspector, sort, Find), Catalog Find, removal of `InstancesCommands`, and desktop interaction evidence for PRD AC-027 (spec 0069 AC-10 to AC-12, AC-14, AC-15; after milestone 2; needs feature 22 milestone 3, feature 21 milestone 3, and feature 17 milestone 3 in `02-instalasi-pertama.md`, and feature 67 milestone 3 in `ui-macos.md`; pages merged after milestone 2 register their own commands) (2026-10-31: done; Find and Catalog Find retired with the shortcuts on 2026-10-24, `find` is `planned` again; fixed the detail page losing every page command in the menu)
 - [x] Verify it: `/check verify menu aplikasi, perintah & shortcut keyboard` (2026-10-31: PASS on `d9602317`; pointer only, keyboard checks retired; `InstanceCommandsUITests` 8 PASS, `MenuUITests` 5 PASS)
-- [ ] Test it: `/test menu aplikasi, perintah & shortcut keyboard`
+- [x] Test it: `/test menu aplikasi, perintah & shortcut keyboard` (2026-10-31: source rule for page commands on a pushed page, 4 tests; `ShellCommandsUITests` 9 PASS for AC-4, AC-7, AC-9, AC-13; command unit suites 112 PASS)

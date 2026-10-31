@@ -180,4 +180,90 @@ import Testing
         #expect(problems.isEmpty)
     }
 
+    // MARK: page commands on a pushed page
+
+    /// Whether a page that publishes page commands publishes them again inside each of its
+    /// `navigationDestination` closures.
+    ///
+    /// On macOS 27 a page pushed by a `NavigationStack` does not see the value published
+    /// around the stack, so without the second publisher every page command is off in the
+    /// menu while the pushed page shows (found by `InstanceCommandsUITests`, 2026-10-31).
+    /// The closure is found by counting braces from the `navigationDestination` line.
+    ///
+    /// - Parameter lines: The code lines of one file.
+    /// - Returns: The 1 based line of each `navigationDestination` whose closure publishes no
+    ///   page commands; empty when the file publishes none or every closure does.
+    nonisolated static func destinationsWithoutPageCommands(lines: [String]) -> [Int] {
+        let publishes = ".publishesCommands(.page("
+        guard lines.contains(where: { $0.contains(publishes) }) else { return [] }
+        var missing: [Int] = []
+        for (start, line) in lines.enumerated() where line.contains(".navigationDestination(") {
+            var depth = 0
+            var opened = false
+            var found = false
+            for inner in lines[start...] {
+                if inner.contains(publishes) { found = true }
+                for character in inner {
+                    if character == "{" {
+                        depth += 1
+                        opened = true
+                    } else if character == "}" {
+                        depth -= 1
+                    }
+                }
+                if opened, depth <= 0 { break }
+            }
+            if found == false { missing.append(start + 1) }
+        }
+        return missing
+    }
+
+    // covers: spec 0069 AC-11, AC-12 (detail page commands, milestone 3 fix)
+    @Test func everyPushedPagePublishesThePageCommandsAgain() throws {
+        let files = try SourceTree.swiftFiles()
+        for file in files {
+            for line in Self.destinationsWithoutPageCommands(lines: file.codeLines) {
+                Issue.record(
+                    "\(file.path):\(line) pushes a page that publishes no page commands")
+            }
+        }
+    }
+
+    @Test func aDestinationWithoutPageCommandsIsReported() {
+        let lines = [
+            "NavigationStack {",
+            "    Table()",
+            "    .navigationDestination(for: Route.self) { route in",
+            "        DetailPage(id: route.id)",
+            "    }",
+            "}",
+            ".publishesCommands(.page(.instances), commands.actions)",
+        ]
+        #expect(Self.destinationsWithoutPageCommands(lines: lines) == [3])
+    }
+
+    @Test func aDestinationThatPublishesAgainPasses() {
+        let lines = [
+            "NavigationStack {",
+            "    .navigationDestination(for: Route.self) { route in",
+            "        DetailPage(",
+            "            back: { path.removeAll() }",
+            "        )",
+            "        .publishesCommands(.page(.instances), commands.actions)",
+            "    }",
+            "}",
+            ".publishesCommands(.page(.instances), commands.actions)",
+        ]
+        #expect(Self.destinationsWithoutPageCommands(lines: lines).isEmpty)
+    }
+
+    @Test func aPageWithoutPageCommandsNeedsNoSecondPublisher() {
+        let lines = [
+            ".navigationDestination(for: Route.self) { route in",
+            "    DetailPage(id: route.id)",
+            "}",
+        ]
+        #expect(Self.destinationsWithoutPageCommands(lines: lines).isEmpty)
+    }
+
 }
