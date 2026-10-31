@@ -97,7 +97,10 @@ public struct CatalogPage: View {
         .onChange(of: selected) { _, new in
             storedSelection = new ?? ""
         }
-        .task(id: DetailRequest(provider: selected, revision: catalog.info?.revision)) {
+        .task(
+            id: DetailRequest(
+                provider: selected, revision: catalog.info?.revision, epoch: catalog.detail.epoch)
+        ) {
             if let selected,
                 let revision = visible.first(where: { $0.provider == selected })?.revision
             {
@@ -106,10 +109,12 @@ public struct CatalogPage: View {
         }
     }
 
-    /// The detail a selection asks for, so the task runs again when either changes.
+    /// The detail a selection asks for, so the task runs again when any part changes,
+    /// including a dropped cache.
     private struct DetailRequest: Hashable {
         let provider: String?
         let revision: UInt64?
+        let epoch: Int
     }
 
     /// The segments when they fit, else a menu with the same choices, so no title is cut
