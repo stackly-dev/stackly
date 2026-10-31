@@ -53,7 +53,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 13 | App shell SwiftUI & Swift client | Foundation | done |
 | 14 | Walking skeleton | Skeleton | done |
 | 15 | Background agent & CLI install | Instalasi pertama | in-progress |
-| 16 | Onboarding | Instalasi pertama | in-progress |
+| 16 | Onboarding | Instalasi pertama | done |
 | 17 | Catalog & provider detail | Instalasi pertama | done |
 | 18 | Install runtime managed | Instalasi pertama | done |
 | 19 | Provider PostgreSQL | Instalasi pertama | done |
