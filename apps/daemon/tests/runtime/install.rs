@@ -7,7 +7,7 @@
 use stackly_domain::{Registry, RuntimeState, WriteBatch, WriteOp};
 use stackly_protocol::catalog::{SupportReason, SupportStatus};
 use stackly_protocol::codes::runtime as runtime_codes;
-use stackly_protocol::events::{EventKind, SubscribeParams};
+use stackly_protocol::events::{EventKind, ShutdownReason, SubscribeParams};
 use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::operation::{ListOperationsParams, OperationState};
 use stackly_protocol::runtime::CompatibilityScope;
@@ -23,6 +23,65 @@ use crate::support::{
     PATIENCE, Site, URL, archive, call_with_key, catalog, client, digest, nats, package,
     package_with, wait_state,
 };
+
+/// One passing compatibility record, as the JSON of a `versions.json` entry.
+fn record(scope: &str, revision: &str, os_major: u32, tested_at: &str) -> String {
+    format!(
+        r#"{{ "scope": "{scope}", "result": "pass", "providerRevision": {revision}, "os": "macos", "osVersion": "{os_major}.0", "arch": "aarch64", "checks": ["closure"], "knownLimitations": [], "testedAt": "{tested_at}", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }}"#
+    )
+}
+
+/// The JSON of the provider revision `key` for a provider record.
+fn revision_json(key: &stackly_domain::ProviderRevisionKey) -> String {
+    format!(
+        r#"{{ "id": "{}", "revision": "{}", "manifestSha256": "{}" }}"#,
+        key.provider(),
+        key.revision(),
+        key.manifest_sha256()
+    )
+}
+
+/// The `compatibility` field of a package whose artifact carries `records`.
+fn records_field(records: &[String]) -> String {
+    format!(r#", "compatibility": [{}]"#, records.join(", "))
+}
+
+/// Installs the test package of `site` and returns the new runtime's ID.
+async fn install_nats(client: &stackly_ipc::Client, key: &str) -> uuid::Uuid {
+    let Reply::RuntimeInstall(started) =
+        call_with_key(client, Call::RuntimeInstall(nats("stable")), key)
+            .await
+            .expect("the install starts")
+    else {
+        panic!("expected a runtime.install reply");
+    };
+    let InstallOutcome::Started(accepted) = started.outcome else {
+        panic!("expected a started outcome");
+    };
+    wait_state(client, accepted.operation.id, OperationState::Succeeded).await;
+    accepted
+        .operation
+        .resource
+        .as_ref()
+        .expect("the operation names the runtime")
+        .id
+        .parse()
+        .expect("a runtime id")
+}
+
+async fn runtime_detail(
+    client: &stackly_ipc::Client,
+    runtime_id: uuid::Uuid,
+) -> Box<stackly_protocol::runtime::RuntimeDetail> {
+    let Reply::RuntimeGet(detail) = client
+        .call(Call::RuntimeGet(GetRuntimeParams { runtime_id }))
+        .await
+        .expect("the runtime can be read")
+    else {
+        panic!("expected a runtime.get reply");
+    };
+    detail
+}
 
 async fn operation_count(client: &stackly_ipc::Client) -> usize {
     let Reply::OperationList(page) = client
@@ -204,17 +263,7 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
     site.fake.fetcher().serve(URL, archive.clone());
     let major = site.platform.info().host_facts().os_version.major();
     let key = package(&archive).key().clone();
-    let record = |scope: &str, revision: &str, os_major: u32, tested_at: &str| {
-        format!(
-            r#"{{ "scope": "{scope}", "result": "pass", "providerRevision": {revision}, "os": "macos", "osVersion": "{os_major}.0", "arch": "aarch64", "checks": ["closure"], "knownLimitations": [], "testedAt": "{tested_at}", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }}"#
-        )
-    };
-    let revision = format!(
-        r#"{{ "id": "{}", "revision": "{}", "manifestSha256": "{}" }}"#,
-        key.provider(),
-        key.revision(),
-        key.manifest_sha256()
-    );
+    let revision = revision_json(&key);
     // The catalog lists the records in no useful order: a runtime record for
     // this macOS major, a newer one for the major before, and the provider
     // record that decides the support while being the oldest of the three.
@@ -300,6 +349,142 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
         panic!("expected a runtime.list reply");
     };
     assert_eq!(page.items, std::slice::from_ref(&detail.summary));
+    ev.pass();
+}
+
+// covers: AC-13, AC-15, AC-17
+#[tokio::test]
+async fn a_newer_catalog_record_that_decides_the_support_comes_first_in_runtime_get() {
+    let ev = evidence!(
+        covers = ["AC-013", "AC-015", "AC-017"],
+        kind = Kind::Fixture,
+        expected = "after the catalog changes, runtime.get sends the new catalog's records for the artifact, with the record that decides the support first, though the registry copy made at install does not hold it",
+    );
+    let site = Site::new();
+    let archive = archive();
+    site.fake.fetcher().serve(URL, archive.clone());
+    let major = site.platform.info().host_facts().os_version.major();
+    let key = package(&archive).key().clone();
+    let answering = site.answer_checks("nats-server: v2.15.1\n");
+
+    // Catalog A holds one runtime record, so the install copies that one.
+    let old_runtime = record("runtime", "null", major, "2026-10-18T11:07:19.973Z");
+    let package_a = package_with(&archive, &records_field(std::slice::from_ref(&old_runtime)));
+    let daemon = site.start(catalog(vec![package_a])).await;
+    let first = client(&site).await;
+    let runtime_id = install_nats(&first, "install-nats-catalog-a").await;
+    answering.abort();
+    let before = runtime_detail(&first, runtime_id).await;
+    assert_eq!(
+        (before.summary.support, before.summary.support_reason),
+        (SupportStatus::Experimental, SupportReason::RuntimeTested)
+    );
+    assert_eq!(before.compatibility.len(), 1);
+    drop(first);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+
+    // Catalog B, on the same registry, adds a newer runtime record for the
+    // macOS major before and the provider record of this revision, which is
+    // older than both.
+    let new_runtime = record("runtime", "null", major - 1, "2026-10-28T08:00:00.000Z");
+    let provider = record(
+        "provider",
+        &revision_json(&key),
+        major,
+        "2026-10-20T09:30:00.000Z",
+    );
+    let package_b = package_with(
+        &archive,
+        &records_field(&[old_runtime, new_runtime, provider]),
+    );
+    let _daemon = site.start(catalog(vec![package_b])).await;
+    let client = client(&site).await;
+    let after = runtime_detail(&client, runtime_id).await;
+
+    assert_eq!(
+        (after.summary.support, after.summary.support_reason),
+        (SupportStatus::Supported, SupportReason::ProviderTested)
+    );
+    let scopes: Vec<_> = after
+        .compatibility
+        .iter()
+        .map(|record| record.scope)
+        .collect();
+    assert_eq!(
+        scopes,
+        [
+            CompatibilityScope::Provider,
+            CompatibilityScope::Runtime,
+            CompatibilityScope::Runtime
+        ],
+        "the catalog's records go out, the deciding provider record first"
+    );
+    assert!(after.compatibility[1].tested_at > after.compatibility[2].tested_at);
+    assert_eq!(
+        after.compatibility[0].sha256,
+        digest(&archive).to_string(),
+        "each record names the artifact it came from"
+    );
+    ev.pass();
+}
+
+// covers: AC-13, AC-15, AC-17
+#[tokio::test]
+async fn an_artifact_that_left_the_catalog_keeps_the_registry_copy_with_its_deciding_record_first()
+{
+    let ev = evidence!(
+        covers = ["AC-013", "AC-015", "AC-017"],
+        kind = Kind::Fixture,
+        expected = "when the catalog no longer lists the artifact, runtime.get sends the registry copy, the first passing runtime record for this host first and the rest newest first, and the support is experimental",
+    );
+    let site = Site::new();
+    let archive = archive();
+    site.fake.fetcher().serve(URL, archive.clone());
+    let major = site.platform.info().host_facts().os_version.major();
+    let answering = site.answer_checks("nats-server: v2.15.1\n");
+
+    // The deciding record is the only one for this macOS major, and the
+    // oldest of the three.
+    let records = records_field(&[
+        record("runtime", "null", major - 1, "2026-10-25T08:00:00.000Z"),
+        record("runtime", "null", major, "2026-10-18T11:07:19.973Z"),
+        record("runtime", "null", major - 2, "2026-10-27T08:00:00.000Z"),
+    ]);
+    let daemon = site
+        .start(catalog(vec![package_with(&archive, &records)]))
+        .await;
+    let first = client(&site).await;
+    let runtime_id = install_nats(&first, "install-nats-fallback").await;
+    answering.abort();
+    drop(first);
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+
+    let _daemon = site.start(catalog(Vec::new())).await;
+    let client = client(&site).await;
+    let detail = runtime_detail(&client, runtime_id).await;
+
+    assert_eq!(
+        (detail.summary.support, detail.summary.support_reason),
+        (SupportStatus::Experimental, SupportReason::RuntimeTested)
+    );
+    let versions: Vec<_> = detail
+        .compatibility
+        .iter()
+        .map(|record| record.os_version.clone())
+        .collect();
+    assert_eq!(
+        versions,
+        [
+            format!("{major}.0"),
+            format!("{}.0", major - 2),
+            format!("{}.0", major - 1)
+        ]
+    );
+    assert!(detail.compatibility[1].tested_at > detail.compatibility[2].tested_at);
     ev.pass();
 }
 

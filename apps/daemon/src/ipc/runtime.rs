@@ -234,7 +234,14 @@ pub fn get(core: &DaemonCore, params: GetRuntimeParams) -> HandlerFuture<'_, Box
             ));
         };
         let names = DisplayNames::new(catalog.as_deref());
-        let summary = summary_of(runtime, &read, &names, catalog.as_deref(), &host);
+        let matched = catalog_match(catalog.as_deref(), runtime, &host);
+        let summary = summary_with(
+            runtime,
+            &read,
+            &names,
+            matched.as_ref().map(|(_, verdict)| verdict),
+            &host,
+        );
         let (path, artifact) = match runtime.install() {
             InstallMode::Managed { artifact_sha256 } => (
                 core.prepared()
@@ -251,16 +258,20 @@ pub fn get(core: &DaemonCore, params: GetRuntimeParams) -> HandlerFuture<'_, Box
             ),
             InstallMode::External { root, .. } => (root.display().to_string(), None),
         };
-        // The record behind the summary's support: the catalog's verdict when
-        // the artifact is still listed, else the registry copy's own rule.
-        let deciding = match catalog_verdict(catalog.as_deref(), runtime, &host) {
-            Some(verdict) => verdict.record,
-            None => artifact.and_then(|artifact| {
-                map::runtime::registry_deciding_record(&artifact.compatibility, &host)
-            }),
+        // The records of the artifact: the catalog's while it still lists
+        // the artifact, else the registry copy's, each with the record that
+        // decided the summary's support (spec 0018, *Value sourcing*).
+        let (records, deciding) = match &matched {
+            Some((catalog_artifact, verdict)) => (catalog_artifact.compatibility(), verdict.record),
+            None => {
+                let rows = artifact
+                    .map(|artifact| artifact.compatibility.as_slice())
+                    .unwrap_or_default();
+                (rows, map::runtime::registry_deciding_record(rows, &host))
+            }
         };
         Ok(Box::new(map::runtime::runtime_detail(
-            summary, path, artifact, deciding,
+            summary, path, artifact, records, deciding,
         )))
     })
 }
@@ -322,6 +333,25 @@ fn summary_of(
     catalog: Option<&stackly_core::catalog::CatalogState>,
     host: &HostFacts,
 ) -> RuntimeSummary {
+    let matched = catalog_match(catalog, runtime, host);
+    summary_with(
+        runtime,
+        read,
+        names,
+        matched.as_ref().map(|(_, verdict)| verdict),
+        host,
+    )
+}
+
+/// [`summary_of`] with the catalog's verdict on the runtime's artifact
+/// already worked out, `None` when the catalog no longer lists it.
+fn summary_with(
+    runtime: &Runtime,
+    read: &Read,
+    names: &DisplayNames,
+    verdict: Option<&SupportVerdict<'_>>,
+    host: &HostFacts,
+) -> RuntimeSummary {
     let users = read
         .instances
         .iter()
@@ -342,7 +372,8 @@ fn summary_of(
             .unwrap_or_default(),
         _ => &[],
     };
-    let support = catalog_support(catalog, runtime, host)
+    let support = verdict
+        .map(map::runtime::verdict_support)
         .unwrap_or_else(|| map::runtime::registry_support(rows, host));
     map::runtime::runtime_summary(
         runtime,
@@ -353,26 +384,13 @@ fn summary_of(
     )
 }
 
-/// The support of a runtime whose artifact is still in the catalog, from
-/// the catalog's records (spec 0018, *`support_status`*).
-fn catalog_support(
-    catalog: Option<&stackly_core::catalog::CatalogState>,
-    runtime: &Runtime,
-    host: &HostFacts,
-) -> Option<(
-    stackly_protocol::catalog::SupportStatus,
-    stackly_protocol::catalog::SupportReason,
-)> {
-    catalog_verdict(catalog, runtime, host).map(|verdict| map::runtime::verdict_support(&verdict))
-}
-
-/// The verdict on a runtime whose artifact is still in the catalog, with the
-/// record that decided it.
-fn catalog_verdict<'a>(
+/// The catalog artifact of a runtime that is still listed, with its verdict
+/// on this host and the record that decided it (spec 0018, *`support_status`*).
+fn catalog_match<'a>(
     catalog: Option<&'a stackly_core::catalog::CatalogState>,
     runtime: &Runtime,
     host: &HostFacts,
-) -> Option<SupportVerdict<'a>> {
+) -> Option<(&'a VersionArtifact, SupportVerdict<'a>)> {
     let catalog = loaded_catalog(catalog)?;
     let InstallMode::Managed { artifact_sha256 } = runtime.install() else {
         return None;
@@ -392,12 +410,13 @@ fn catalog_verdict<'a>(
             )
         });
         if let Some(artifact) = found {
-            return Some(support_status(
+            let verdict = support_status(
                 artifact,
                 artifact.compatibility(),
                 Some(provider.package.key()),
                 host,
-            ));
+            );
+            return Some((artifact, verdict));
         }
     }
     None
