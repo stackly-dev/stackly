@@ -256,3 +256,46 @@ Tidak ada Blocker atau Major baru. Jalur sempit Enter di atas lahir dari penempa
 Test yang lulus tidak membuktikan penutupan untuk Copy from: tidak ada test yang melewati `NewInstanceSheet.secretInputs()`.
 
 Jumlah setelah konfirmasi: Blocker 0, Major 1 terbuka (sisa Major 1, Copy from), Major 2 tertutup, temuan baru 0.
+
+## Konfirmasi fix ronde 2 2026-10-31
+
+**Diperiksa oleh**: Opus 5.5 (xhigh), sub sesi `chk-f20-confirm-2`. Penulis fix menurut trailer: Sonnet 5.5 untuk `6c6f3405` (merge `56c8cae5`), jadi reviewer dari family lain.
+**Scope**: `git diff 56c8cae5^1 56c8cae5`, 5 file (`CreateInstanceModel.swift`, `NewInstanceSheet.swift`, `SchemaFormModel.swift`, `CreateInstanceModelTests.swift`, `SchemaFormModelTests.swift`), dibaca bersama `SchemaFormView.swift`, `Secrets/SecretDraft.swift`, `Secrets/SecretField.swift`, `Components/Actions/StacklyAction.swift`, dan `NewInstancePresenter.swift` sebagai konteks. Nomor baris mengacu ke `main` di `3c263aeb`. Hanya sisa Major 1 yang diperiksa; Major 2 sudah tertutup di konfirmasi pertama dan tidak disentuh fix ini.
+**Verdict**: Approved. Major 1 tertutup untuk semua jalur, dan fix tidak memunculkan Blocker atau Major baru. Tidak ada lagi temuan Blocker atau Major yang terbuka, jadi syarat review AC-26 terpenuhi.
+
+### Major 1, sumber secret ganda: tertutup
+
+Inti fix: Create tidak lagi membaca sumber secret dari `drafts`. `SchemaFormModel.secretInputs(typed:)` (`SchemaFormModel.swift:312`) membangun input dari `secretChoice(row.id)`, yaitu `secretChoices` yang sama dengan yang dibaca `secretPlans()` untuk preflight (`:461`) dan `secretsAreValid` untuk Create (`:475`). Dari view hanya teks Enter yang ikut (`NewInstanceSheet.swift:211-213`). Jadi varian `SecretInput` yang dikirim untuk tiap field ditentukan oleh pilihan yang sama dengan `SecretPlan` yang dinilai preflight: Generate menjadi `.generate`, Enter menjadi `.value(teks)`, dan Copy from `ref` menjadi `.copyFrom(ref)`. Keduanya hanya berbeda untuk Enter tanpa teks yang pas atau Copy from tanpa reference, dan dalam dua kasus itu `isValid` juga false, sehingga Create mati.
+
+Yang menulis `secretChoices` tinggal empat: `init` (semua Generate), `setSecret` (dari setter binding di `SchemaFormView.swift:52-64`, yang mengisi drafts dan model dalam event yang sama), `forgetTypedSecrets` (hanya `isValid` Enter, di dalam `create`), dan `preselectCopyFrom` (reference saat field masih Generate, ketika form duplicate dimuat). `fail()`, `operationEnded`, `runPreflight`, dan `apply(issues:)` tidak menyentuhnya. Setiap perubahan sumber atau reference memanggil `onChange`, lalu `draftDidChange` menaikkan generasi, `currentPreflight` menjadi nil, dan `createDisabledReason` berbunyi "Checking…". Akibatnya guard `create` hanya lolos saat preflight yang berlaku menilai pilihan yang sama dengan yang dipakai `secretInputs`.
+
+Per jalur:
+
+- **Generate**: model dan tampilan sama sama Generate, sebelum maupun sesudah `clearDrafts`. `secretInputs` mengirim `.generate` secara eksplisit, sama seperti `SecretDraft()` dulu.
+- **Copy from, lalu create ditolak, tidak terkirim, operasi `failed` (termasuk `secret.invalid_value` dari tahap `secrets`), `cancelled`, atau `needs_recovery`**: semuanya lewat `fail()` (`CreateInstanceModel.swift:771`), yang tidak menyentuh pilihan secret. Model tetap `{copyFrom, ref, isValid: true}`, field menampilkan Copy from `ref` lewat `startingDraft` (`SchemaFormView.swift:42-48`), dan preflight ulang dari `fail()` menilai `copyFrom(ref)`. Klik berikutnya tanpa menyentuh field mengirim `.copyFrom(ref)`, karena sumbernya dari model, bukan dari `drafts` yang sudah kosong. `aCopyFromSecretIsSentAgainAfterARefusedClickWithoutTouchingTheField` (`CreateInstanceModelTests.swift:483`) menjalankan urutan ini lewat `createAction` dan `secretInputs(typed:)` dan mengasert kedua kiriman `.copyFrom("local:user/x")`. Jalur `failed` dan `cancelled` tidak punya test Copy from sendiri, tetapi keduanya lewat `fail()` yang sama.
+- **`outcomeUnknown` dengan key yang sama**: `retryKey` disimpan (`:762`), dan `draftDidChange(fromPerson: false)` di `fail()` tidak membuangnya. Untuk Copy from, key dan varian sama (`aRetryAfterAnUnknownOutcomeSendsTheSameKeyAndTheSameCopyFromSecret`, `:506`, mengasert key sama dan `secrets` identik), dan Generate juga begitu. Untuk Enter, Create mati sampai teks diketik lagi. Mengetik lagi lewat binding hanya mengubah `isValid`, sumbernya tetap, jadi `setSecret` tidak memanggil `onChange`, `retryKey` bertahan, dan kiriman ulang memakai `.value` dengan key yang sama.
+- **Enter, setelah create kembali ke form**: `forgetTypedSecrets()` dan `didSend()` (yaitu `clearDrafts`) jalan berurutan tanpa titik suspend (`CreateInstanceModel.swift:725-726`), jadi model menjadi `{enter, isValid: false}` dan drafts kosong pada saat yang sama. `anEnterSecretNeedsItsTextAgainAfterARefusedClick` (`:531`) mengasert teks hilang, Create mati, dan `secretInputs` kosong.
+- **Jalur sempit Enter, klik yang ditolak**: `didSend` sekarang dipanggil di `create` setelah guard, tidak lagi di `perform` (`createAction`, `:676`). Ada dua tempat penolakan. Pertama, `StacklyAction.invoke` (`Components/Actions/StacklyAction.swift:85-86`, karena `disabledReason`, gate mutation, atau busy) tidak memanggil `perform` sama sekali. Kedua, guard `create` (`:720`) kembali sebelum `forgetTypedSecrets` dan `didSend`. Di kedua kasus drafts dan model tidak berubah dan tetap sama, jadi klik berikutnya membangun input yang sama. `aClickTheGateTurnsDownKeepsTheTypedText` (`:549`) mencakup penolakan pertama.
+- **Ganti runtime, Retry, atau reload form**: tidak berubah dari konfirmasi pertama (`onChange` schema memanggil `clearDrafts`, `NewInstanceSheet.swift:56`, dan model baru mulai dari Generate). Sekarang, bahkan bila `onChange` itu terlewat, yang dikirim tetap pilihan model baru, jadi kiriman dan preflight tidak bisa berbeda lewat jalur ini. Paling jauh tampilannya yang berbeda.
+- **Klik ganda, atau event yang antre di antara klik dan `Task`**: input dibangun di `perform`, sedangkan guard dibaca saat `Task` jalan. Perubahan sumber atau reference di antaranya menaikkan generasi, sehingga guard menolak. Klik kedua menemukan phase `.submitting`, atau, setelah `fail()`, generasi baru dari `draftDidChange(immediately: true)` dengan preflight yang belum kembali. Yang bisa lolos hanya perubahan teks Enter, dan variannya tetap sama.
+- **Sheet ditutup lalu dibuka lagi**: `didClose` memanggil `end()`, yang mereset model, kecuali saat `.creating` (`NewInstancePresenter.swift:77-81`), dan `present` memanggil `begin`, yang membangun schema baru, kecuali saat `.submitting` atau `.creating`. Jadi tidak ada jalur di mana `onDisappear` (`NewInstanceSheet.swift:54`) mengosongkan drafts sementara schema lama dengan `{enter, isValid: true}` dipakai lagi. Membuka lagi selama `.creating` memakai schema yang Enter nya sudah dilupakan saat kirim.
+
+Keluhan konfirmasi pertama bahwa tidak ada test yang melewati pembangun input kini terjawab. Logikanya pindah ke `SchemaFormModel.secretInputs(typed:)`, yang dites langsung (`SchemaFormModelTests.swift:229`) dan lewat helper `click` (`CreateInstanceModelTests.swift:468`). Helper itu meniru satu baris `NewInstanceSheet.secretInputs()`. Satu satunya cara drafts dan model masih bisa berbeda adalah `init(model:initialDrafts:)` (`NewInstanceSheet.swift:35`), yang hanya dipakai suite snapshot (`new-instance-copy-from`, `new-instance-duplicate-copy-from`) dengan preflight fixture yang tetap. Kode produksi selalu memanggilnya dengan `[:]`, jadi ini bukan temuan.
+
+### Temuan baru dari fix ronde 2
+
+Tidak ada Blocker atau Major baru. Ada dua Nit, yang tidak menahan AC-26:
+
+- 🔵 Doc tertinggal. `CreateInstanceModel.swift:23` masih menyebut ``create(secrets:)``, padahal tanda tangannya sekarang `create(secrets:didSend:)`. `NewInstanceSheet.swift:11-12` masih bilang teks secret dikosongkan "as soon as Create is clicked", padahal sekarang teks baru dikosongkan saat request keluar, dan tidak sama sekali saat klik ditolak.
+- 🔵 Guard `create` tidak punya test. `aClickTheGateTurnsDownKeepsTheTypedText` berhenti di `StacklyAction.invoke` (availability dari `disabledReason`), jadi `perform` tidak pernah jalan, dan tidak ada test yang melewati guard di `create(secrets:didSend:)`. Itulah jalur sempit Enter dari konfirmasi pertama: action yang dibangun saat Create masih aktif, lalu di-invoke setelah `createDisabledReason` berubah. Kodenya jelas benar (`didSend` dipanggil sesudah guard), jadi ini hanya celah test. Test yang mencakupnya: bangun `createAction` saat siap, ubah nama (generasi naik), invoke action lama itu, lalu assert `didSend` tidak terpanggil dan tidak ada kiriman.
+
+### Perintah dijalankan ronde 2
+
+| Perintah | Hasil |
+| --- | --- |
+| `cargo build -p stacklyd -p stackly-fake-server --locked` dan `cargo build -p stacklyd --example skeleton_seed --locked` (setelah `touch apps/daemon/src/main.rs crates/protocol/src/version.rs`) | lulus |
+| `swift test --package-path apps/macos/Packages/StacklyUI --filter "CreateInstance\|SchemaForm\|NewInstance"` | lulus, 125 test di 8 suite (termasuk lima test baru fix ronde 2) |
+
+`.build/` Swift di worktree dihapus sesudahnya.
+
+Jumlah setelah konfirmasi ronde 2: Blocker 0, Major 0 terbuka (Major 1 dan Major 2 tertutup), temuan baru: Blocker 0, Major 0, Nit 2.
