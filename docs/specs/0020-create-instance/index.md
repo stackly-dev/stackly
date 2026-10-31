@@ -3,7 +3,7 @@
 
 
 **Date**: 2026-10-20 (update 2026-10-22: dry run `init_plan` tanpa port `Auto`, dari spec 0023, langkah 17; update 2026-10-22: langkah `register` dalam satu transaksi registry, temuan milestone 4, langkah 19 dan 20)
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 

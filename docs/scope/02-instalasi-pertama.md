@@ -101,7 +101,7 @@ Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lo
 - [x] Verify it: `/check verify provider PostgreSQL`
 - [x] Test it: `/test provider PostgreSQL`
 
-### 20. Create instance · in-progress · GA
+### 20. Create instance · done · GA
 
 Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, auth, persistence, storage, dan autostart, dengan preflight dan error per field. Field settings, endpoint, auth, dan storage dirender dari settings schema dan resources manifest provider (kelas field VAL-012), tidak dikodekan khusus untuk PostgreSQL. Inisialisasi hanya terjadi di direktori baru milik operasi itu.
 
@@ -122,7 +122,7 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
 - [x] Verify it: `/check verify create instance` · PASS 2026-10-31 (`04e9ce69`), GUI steps run on screen with PostgreSQL 18.6 and 17.11 from the spike cache; keyboard steps out of scope (removed 2026-10-24)
 - [x] Test it: `/test create instance` · 2026-10-31, `tst-f20-test` (`ffee4fa1`): AC-1 to AC-25 mapped to existing tests, AC-26 log check added
 - [x] Review it (fresh model): `/check review create instance` · 2026-10-31, `docs/reviews/2026-10-31-f20-create-instance.md`: Blocker 0, Major 2 fixed (`3a7f3999`, `56c8cae5`) and confirmed (`99a60e6e`); 23 Minor and 38 Nit left open
-- [ ] Document it: `/document create instance`
+- [x] Document it: `/document create instance` · 2026-10-31, `CHANGELOG.md` (Added and Fixed, range `4434632a..48c8f29e`)
 
 ### 21. Start, readiness & connection · done
 
