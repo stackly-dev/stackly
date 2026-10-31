@@ -6812,7 +6812,7 @@
           "default": null
         },
         "compatibility": {
-          "description": "Its compatibility records, newest first.",
+          "description": "Its compatibility records: the record that decided the support first,\nthen the rest newest first by `testedAt`.",
           "type": "array",
           "default": [],
           "items": {

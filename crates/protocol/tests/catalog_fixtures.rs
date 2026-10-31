@@ -192,7 +192,15 @@ fn every_version_row_has_one_cell_per_os_in_matrix_order() {
         );
         for version in &detail.versions {
             for cell in &version.support {
-                assert_ne!(cell.status, SupportStatus::Supported, "{}", entry.file);
+                // `supported` only ever follows a passing provider record (BR-025).
+                if cell.status == SupportStatus::Supported {
+                    assert_eq!(
+                        cell.reason,
+                        Some(SupportReason::ProviderTested),
+                        "{}",
+                        entry.file
+                    );
+                }
             }
         }
     }

@@ -518,7 +518,8 @@ pub struct RuntimeDetail {
     /// The artifact's executables, relative to the runtime folder.
     #[serde(default)]
     pub executables: Vec<String>,
-    /// Its compatibility records, newest first.
+    /// Its compatibility records: the record that decided the support first,
+    /// then the rest newest first by `testedAt`.
     #[serde(default)]
     pub compatibility: Vec<CompatibilityRecordView>,
 }

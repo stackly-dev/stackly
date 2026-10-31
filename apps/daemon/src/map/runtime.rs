@@ -5,6 +5,8 @@
 //! them. An enum travels by its stable code, which spec 0018 makes the same
 //! as its wire value, so a core value and its DTO value never drift apart.
 
+use std::cmp::Reverse;
+
 use serde::Deserialize;
 use stackly_core::catalog::NotInstallableReason;
 use stackly_core::provider::{ArtifactStatus, VersionArtifact};
@@ -177,11 +179,17 @@ pub fn runtime_summary(
 
 /// The detail of a runtime: its summary, folder, and what the registry
 /// kept of the artifact it came from.
+///
+/// `deciding` is the record that decided the summary's support. The records
+/// go out with it first and the rest newest first by `tested_at`, so a
+/// client that shows the first one shows the record behind the badge; records
+/// tested at the same time keep their catalog order.
 #[must_use]
 pub fn runtime_detail(
     summary: RuntimeSummary,
     path: String,
     artifact: Option<&ArtifactRecord>,
+    deciding: Option<&CompatibilityRecordRow>,
 ) -> RuntimeDetail {
     let info = artifact.map(artifact_info);
     let executables = info
@@ -197,9 +205,9 @@ pub fn runtime_detail(
         .unwrap_or_default();
     let compatibility = artifact
         .map(|artifact| {
-            artifact
-                .compatibility
-                .iter()
+            let mut rows: Vec<_> = artifact.compatibility.iter().collect();
+            rows.sort_by_key(|row| (Some(*row) != deciding, Reverse(row.tested_at)));
+            rows.into_iter()
                 .map(|row| compatibility_view(row, artifact))
                 .collect()
         })
@@ -348,14 +356,7 @@ pub fn registry_support(
     rows: &[CompatibilityRecordRow],
     host: &HostFacts,
 ) -> (stackly_protocol::catalog::SupportStatus, SupportReason) {
-    let tested = rows.iter().any(|row| {
-        row.scope == CompatibilityScope::Runtime
-            && row.result == CompatibilityResult::Pass
-            && row.os == host.target.os()
-            && row.arch == host.target.arch()
-            && row.os_version.major() == host.os_version.major()
-    });
-    if tested {
+    if registry_deciding_record(rows, host).is_some() {
         support(
             SupportStatus::Experimental,
             stackly_core::catalog::SupportReason::RuntimeTested,
@@ -366,6 +367,24 @@ pub fn registry_support(
             stackly_core::catalog::SupportReason::Untested,
         )
     }
+}
+
+/// The record that decides [`registry_support`]: the newest passing runtime
+/// record for this host.
+#[must_use]
+pub fn registry_deciding_record<'a>(
+    rows: &'a [CompatibilityRecordRow],
+    host: &HostFacts,
+) -> Option<&'a CompatibilityRecordRow> {
+    rows.iter()
+        .filter(|row| {
+            row.scope == CompatibilityScope::Runtime
+                && row.result == CompatibilityResult::Pass
+                && row.os == host.target.os()
+                && row.arch == host.target.arch()
+                && row.os_version.major() == host.os_version.major()
+        })
+        .max_by_key(|row| row.tested_at)
 }
 
 /// The install of an unfinished `install_runtime` operation.
