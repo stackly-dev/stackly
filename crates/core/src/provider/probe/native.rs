@@ -177,6 +177,40 @@ mod tests {
         }
     }
 
+    // covers: AC-2
+    #[test]
+    fn the_registry_holds_exactly_nats_readiness() {
+        assert_eq!(NativeProbeKind::ALL, [NativeProbeKind::NatsReadiness]);
+        assert_eq!(
+            NativeProbeKind::from_name("nats-readiness"),
+            Some(NativeProbeKind::NatsReadiness)
+        );
+    }
+
+    // covers: AC-2
+    #[test]
+    fn the_generic_provider_modules_never_name_the_nats_probe() {
+        let modules = [
+            ("validate.rs", include_str!("../validate.rs")),
+            ("manifest.rs", include_str!("../manifest.rs")),
+            ("plan.rs", include_str!("../plan.rs")),
+        ];
+        for (file, source) in modules {
+            for line in source.lines() {
+                // The `natsConf` config format is a different feature.
+                let probe_mention = line
+                    .replace("natsConf", "")
+                    .replace("nats_conf", "")
+                    .to_ascii_lowercase()
+                    .contains("nats");
+                assert!(
+                    !probe_mention,
+                    "{file} names NATS, the probe registry belongs in native.rs: {line}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn a_name_outside_the_registry_has_no_probe() {
         assert_eq!(NativeProbeKind::from_name("mystery"), None);
