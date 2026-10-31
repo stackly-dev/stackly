@@ -29,7 +29,9 @@ public final class ProviderDetailModel {
 
     @ObservationIgnored private let call: (Call) async throws(ClientError) -> Reply
     @ObservationIgnored private let serverInstance: () -> UUID?
-    @ObservationIgnored private var epoch = 0
+    /// Counts the times the cache was dropped. The page keys its detail task on it, so a
+    /// new snapshot (a restarted daemon, say) loads the selected provider again.
+    private(set) var epoch = 0
     @ObservationIgnored private var inFlight: Set<Key> = []
     private var details: [Key: ProviderDetail] = [:]
     private var failures: [Key: FailureContent] = [:]

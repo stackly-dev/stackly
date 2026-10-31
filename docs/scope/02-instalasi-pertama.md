@@ -42,7 +42,7 @@ Halaman pertama yang menjelaskan status daemon dan izin background, lokasi stora
 - [x] Verify it: `/check verify onboarding` · automated PASS in chk-f16-verify (a6c035df), manual steps skipped by the user (2026-10-23)
 - [ ] Test it: `/test onboarding`
 
-### 17. Catalog & provider detail · in-progress
+### 17. Catalog & provider detail · done
 
 Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arch, versi, trust, status kompatibilitas, dependency, kebutuhan disk, dan capability. Kombinasi yang unsupported terlihat jujur, bukan disembunyikan. Di baseline, catalog ikut terpasang bersama aplikasi dan hanya berubah lewat update aplikasi (fitur 61) atau import lokal (fitur 37); sinkronisasi catalog online ada di Deferred.
 
@@ -58,8 +58,8 @@ Catalog bawaan (official) yang menampilkan publisher, revision, kategori, OS/arc
   - [x] `stackly provider list` and `inspect` with text and JSON output and goldens shared with the Swift tests (spec 0017 AC-9; build step 7; needs feature 8 build in `01-foundation.md`; can run in parallel with the Catalog screen)
   - [x] Catalog screen: `CatalogAppearance` and its table in `apps/macos/design.md`, `CatalogStore`, detail model, search, category filter, cards, detail panel with version matrix and capabilities, every `ViewState` shape, replacing `UnbuiltPage(section: .catalog)`, and manual desktop interaction evidence (spec 0017 AC-9 to AC-12; build steps 8 to 10; needs feature 13 milestone 4 through step 16 in `ui-macos.md`, which waits on feature 10 milestone 2 and step 12 in `01-foundation.md`; uses feature 67 components if built; can run in parallel with the CLI) · manual steps skipped by the user (2026-10-23)
   - [x] Bundled catalog and install refusal end to end: catalog location from `AppBundle`, the in process `xtask::catalog::build` step in `cargo xtask build-app` (before signing) with the failing catalog step test, the bundle holds `Contents/Resources/catalog/` with only `official` packages, and F18's `runtime_install_refuses_an_artifact_for_another_target` passes against the `official/linuxonly` fixture with AC-002 evidence (spec 0017 AC-1, AC-2, AC-7; build steps 11 and 12; needs feature 15 `AppBundle` and `build-app` with the catalog step slot in `assemble.rs`, after feature 18 `runtime.install`)
-- [ ] Verify it: `/check verify catalog & provider detail`
-- [ ] Test it: `/test catalog & provider detail`
+- [x] Verify it: `/check verify catalog & provider detail`
+- [x] Test it: `/test catalog & provider detail`
 
 ### 18. Install runtime managed · in-progress · GA
 

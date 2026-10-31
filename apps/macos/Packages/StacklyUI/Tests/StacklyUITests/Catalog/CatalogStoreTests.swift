@@ -109,6 +109,20 @@ struct CatalogStoreTests {
         #expect(store.detail.phase(for: "official/nats", revision: 1) == .loading)
     }
 
+    @Test func aNewSnapshotMovesTheEpochSoTheSelectedDetailLoadsAgain() async throws {
+        let store = script.store()
+        await store.store.resnapshot()
+        await store.detail.load("official/nats", revision: 1)
+        let before = store.detail.epoch
+        await store.store.resnapshot()
+        #expect(store.detail.epoch != before)
+        await store.detail.load("official/nats", revision: 1)
+        #expect(
+            store.detail.phase(for: "official/nats", revision: 1)
+                == .loaded(try CatalogFixture.detail("nats")))
+        #expect(script.getCalls == ["official/nats", "official/nats"])
+    }
+
     @Test func aDetailIsKeptPerDaemonInstance() async {
         var server = UUID()
         let store = script.store(serverInstance: { server })
