@@ -283,7 +283,7 @@ Folder baru `StacklyUI/InstanceDetail/`: `InstanceDetailPage`, `InstanceDetailMo
 
 ### Halaman detail dan navigasi
 
-- `ShellDestination.instance(UUID)` (usulan spec 0022) mengisi `ShellNavigator.instanceRequest` dan memilih bagian Instances; `InstancesPage` menerapkannya lewat `.onChange(of: navigator.instanceRequest, initial: true)` ke `NavigationStack` nya (path `[InstanceRoute]`), lalu mengosongkan request itu, sehingga permintaan tetap diterapkan saat Instances belum tampil. `openInstance(_:)` memanggil `.instance(id)`. Tombol kembali sistem kembali ke tabel dengan pilihan baris tetap; klik ulang Instances di sidebar mengosongkan path lewat hook `onReselect` (lihat *Perintah halaman* di bawah).
+- `ShellDestination.instance(UUID)` (usulan spec 0022) mengisi `ShellNavigator.instanceRequest` dan memilih bagian Instances; `InstancesPage` menerapkannya lewat `.onChange(of: navigator.instanceRequest, initial: true)` ke `NavigationStack` nya (path `[InstanceRoute]`), sehingga permintaan tetap diterapkan saat Instances belum tampil. *(Diubah 2026-10-31, spec 0022 bagian Navigasi butir Umur request.)* `ShellNavigator` menyimpan request itu sampai section berganti dan halaman tidak mengosongkannya, karena SwiftUI bisa membangun halaman Instances dua kali pada kunjungan pertama jendela; halaman menerapkan request yang ada saat muncul dan saat berubah. `openInstance(_:)` memanggil `.instance(id)`. Tombol kembali sistem kembali ke tabel dengan pilihan baris tetap; klik ulang Instances di sidebar mengosongkan path lewat hook `onReselect` (lihat *Perintah halaman* di bawah).
 - Header `.pageChrome(title:subtitle:)`: judul `name`; subjudul nama tampil provider (dari detail, atau `software` sebelum detail termuat), `runtimeVersion`, dan label `StatusLabel` spec 0012 (`StatusAppearance.instance(lifecycle:readiness:health:)`).
 - Toolbar: tombol aksi utama `InstanceActionModel` (simbol `play.fill`, `stop.fill`, atau `arrow.clockwise` untuk Retry, ditambah label teks) lalu menu More (`ellipsis.circle`, label "More") dengan "Copy Connection String" (entri pertama, perilaku Copy yang sama, nonaktif dengan alasan "No connection string available." atau alasan entri; saat `provider.packageReadable` false, alasan nya teks *Copy* `package_unavailable`, 2026-10-22). *(fitur 24, spec 0024: item More kedua adalah "Duplicate…", sesudah Copy Connection String.)* Menu More dibangun langkah 10 sebagai `ActionMenu` dengan satu bagian (`[[StacklyAction]]` spec 0067) yang di fitur ini hanya berisi Copy Connection String; milestone 3 [spec 0024](../0024-instance-kedua-runtime-sama/index.md) menambah `StacklyAction` "duplicate" tepat sesudahnya di bagian yang sama, tanpa pemisah (dirender hanya saat `duplicateInstanceAction` tidak nil, `mutates` true, tanpa shortcut), dan aksi, sheet, serta penerbit nya dibangun spec 0024, bukan spec ini; fitur 54 menambah bagian kedua untuk Remove *(2026-10-22)*. Item yang mengubah state memakai `.mutationGated()`; Copy tidak.
 - *Komponen dan perintah (2026-10-21, spec 0067 dan [spec 0069](../0069-menu-aplikasi-perintah-shortcut/index.md)):* aksi utama adalah `StacklyAction` dari `InstanceActionModel.stacklyAction(for:)` (adapter milik spec 0022 langkah 6) yang dirender `ActionButton(action, showsReason: false)` (wajib untuk tombol toolbar, spec 0067 AC-7), dan alasan nonaktif nya tampil di konten halaman sebagai `DisabledReasonText` di atas kartu Summary, di bawah banner. Menu More adalah `ActionMenu` dengan `StacklyAction` "Copy Connection String" (`mutates` false, `disabledReason` dari copy di atas). Tooltip tombol aksi utama memakai `CommandMap.helpText(for: .startInstance, title: action.title)` atau `.stopInstance` sesuai action nya (misalnya "Retry (⌘R)"); menu More tidak punya `CommandID`, jadi help nya default `ActionMenu` ("More"), dan item More tidak memasang shortcut. Kalimat `.mutationGated()` di atas diwujudkan lewat `availability(gate:)` `StacklyAction`.
@@ -565,7 +565,7 @@ Diterapkan di spec 0019 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 
 #### Spec 0022 (overview dan daftar instance)
 
-Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
+Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`). *Diselaraskan 2026-10-31:* teks butir 2 di bawah kini sama dengan *Navigasi* spec 0022 sesudah merge `b705d978` (commit `84f13ae9`): halaman tidak lagi mengosongkan `instancesRequest` dan `instanceRequest`, dan `ShellNavigator` menyimpan keduanya sampai section berganti (butir *Umur request* spec 0022).
 
 1. *Navigasi*, `ShellDestination`. Ganti:
 
@@ -582,13 +582,13 @@ Diterapkan di spec 0022 pada 2026-10-20 (sesi `upd-0019-0022-0023`).
 2. *Navigasi*, permintaan halaman detail. Sisipkan sesudah:
 
    ```text
-   - `.instances` mengisi `instancesRequest` (filter dan pilihan). `InstancesPage` membacanya lewat `.onChange(of: navigator.instancesRequest, initial: true)`, jadi permintaan tetap diterapkan saat Instances sudah tampil: filter dipasang, pencarian dikosongkan, dan kalau `select` ada, baris itu dipilih dan inspector ditampilkan; lalu `instancesRequest` dikosongkan.
+   - `.instances` mengisi `instancesRequest` (filter dan pilihan). `InstancesPage` membacanya lewat `.onChange(of: navigator.instancesRequest, initial: true)`, jadi permintaan tetap diterapkan saat Instances sudah tampil: filter dipasang, pencarian dikosongkan, dan kalau `select` ada, baris itu dipilih dan inspector ditampilkan. Halaman tidak mengosongkan `instancesRequest` (butir *Umur request* di bawah).
    ```
 
    butir:
 
    ```text
-   - `.instance(id)` memilih bagian Instances dan mengisi `instanceRequest`. `InstancesPage` memegang `NavigationStack` dengan path `[InstanceRoute]` dan membaca request itu lewat `.onChange(of: navigator.instanceRequest, initial: true)`: path diisi `[InstanceRoute(id)]`, baris itu dipilih, lalu `instanceRequest` dikosongkan, jadi permintaan berlaku juga saat Instances belum tampil. Klik ulang Instances di sidebar saat path tidak kosong mengosongkan path (spec 0021).
+   - `.instance(id)` memilih bagian Instances dan mengisi `instanceRequest`. `InstancesPage` memegang `NavigationStack` dengan path `[InstanceRoute]` dan membaca request itu lewat `.onChange(of: navigator.instanceRequest, initial: true)`: path diisi `[InstanceRoute(id)]` dan baris itu dipilih, jadi permintaan berlaku juga saat Instances belum tampil. Halaman tidak mengosongkan `instanceRequest` (butir *Umur request* di bawah). Klik ulang Instances di sidebar saat path tidak kosong mengosongkan path (spec 0021).
    ```
 
 3. *Navigasi*, `openInstance`. Ganti:

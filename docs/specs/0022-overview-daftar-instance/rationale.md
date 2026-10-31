@@ -100,7 +100,7 @@ Kontra: kode sementara.
 
 ### Keputusan 15: navigasi antar halaman
 
-- **Opsi 1 (dipilih): `ShellNavigator` per jendela dengan `ShellDestination` dan permintaan sekali pakai untuk filter dan pilihan.** Pro: Overview bisa membuka Instances dengan filter dan pilihan, dan halaman lain (Runtimes, Catalog) memakai pintu yang sama. Kontra: tambahan kecil di shell spec 0013.
+- **Opsi 1 (dipilih): `ShellNavigator` per jendela dengan `ShellDestination` dan permintaan sekali pakai untuk filter dan pilihan.** *(Sejak 2026-10-31 permintaan bertahan sampai section berganti; lihat bagian Update 2026-10-31 di bawah.)* Pro: Overview bisa membuka Instances dengan filter dan pilihan, dan halaman lain (Runtimes, Catalog) memakai pintu yang sama. Kontra: tambahan kecil di shell spec 0013.
 - **Opsi 2: setiap halaman menulis `@SceneStorage("shell.section")` langsung.** Kontra: filter dan pilihan tidak bisa ikut dibawa.
 
 ### Keputusan 16: pengurutan lewat keyboard
@@ -259,3 +259,13 @@ Retry tetap di placeholder seksi Operations.
 **Cross check (2026-10-31).** `Another model` (Sonnet 5.5), read only, atas draft update ini dan kode. Resep I3 terbukti cocok dengan kode (reconcile, klasifikasi, gate start, respawn, path lock, `flock(2)`), dan pembacaan spec 0012 AC-5 untuk header inspector dinilai wajar. Temuan yang diterapkan: klaim "teks penuh di inspector" diganti "informasi yang sama" dengan pemetaan per detail, karena banner dan baris inspector tidak selalu memakai kata yang sama; cek nama memakai nama skenario `connected-mixed`; tata letak baris Overview dan pengecualian detail not ready dari daemon ditetapkan; spec 0067 dan `design.md` masuk *Usulan update spec lain*; label disebut utuh seluruhnya, bukan kata pertama; nama fungsi `plan_for`; resep langkah 1 menyebut pemegang lock tetap hidup sampai langkah selesai, recheck 30 detik setelah lock dilepas, dan field `result.instance.id`. Gap yang melampaui keputusan lead (nama panjang, header inspector, Overview, detail daemon) dikirim ke lead untuk diterima.
 
 **Teks AC.** AC-13 berubah sesuai keputusan di atas (ID tetap); AC lain tidak berubah. Tidak ada langkah build baru dan tidak ada kontrak baru.
+
+## Update 2026-10-31: request navigasi bertahan sampai section berganti
+
+**Konteks.** Langkah verify 102 (AC-2) gagal di app asli: klik pertama pada kartu Failed setelah app dibuka membuka Instances dengan segmen All dan 11 baris. `dbg-f22` membuktikan dengan log sementara bahwa SwiftUI membangun `InstancesPage` dua kali pada kunjungan pertama jendela. Halaman pertama menerapkan filter lalu mengosongkan request lewat `consumeInstancesRequest()`, jadi halaman kedua mulai dengan state nya sendiri tanpa request. `instanceRequest` hilang dengan cara yang sama, sehingga baris instance Overview sebagai kunjungan pertama membuka tabel, bukan halaman detail.
+
+**Perubahan (keputusan lead, sudah di main lewat merge `b705d978`, commit `84f13ae9`).** `ShellNavigator` menyimpan `instancesRequest` dan `instanceRequest` sampai `section` berganti (`didSet` mengosongkan keduanya begitu section bukan Instances), `consumeInstancesRequest()` dan `consumeInstanceRequest()` dihapus, dan `InstancesPage` tidak lagi mengosongkan request. Butir *Navigasi* di `index.md` kini menulis aturan itu (butir *Umur request*), dan satu baris *Consequences* mencatat akibatnya untuk halaman yang dibangun ulang di section yang sama. Spec 0021 (*Halaman detail dan navigasi* dan blok usulan untuk spec ini) diselaraskan di commit yang sama.
+
+**Keputusan 15.** "Permintaan sekali pakai" di opsi 1 kini berarti satu permintaan per `show(_:)` (setiap request punya `id` baru) yang diterapkan setiap `InstancesPage` yang muncul selama section Instances tampil, bukan request yang dikosongkan sesudah dipakai. Navigator per jendela dan pintu `ShellDestination` tidak berubah.
+
+**Teks AC.** Tidak ada AC yang berubah dan tidak ada langkah build baru. Tidak ada cross check: ini penyelarasan teks dengan kode yang sudah di merge, bukan keputusan baru.
