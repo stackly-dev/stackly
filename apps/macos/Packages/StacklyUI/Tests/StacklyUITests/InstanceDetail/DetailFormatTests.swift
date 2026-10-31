@@ -198,4 +198,61 @@ struct DetailFormatTests {
         #expect(DetailFormat.missingReference(in: entry, secrets: []) == nil)
     }
 
+    // MARK: - Endpoints
+
+    private func endpoint(
+        transport: EndpointTransport = .tcp, host: String? = "127.0.0.1", port: UInt16? = 5432,
+        socketPath: String? = nil
+    ) -> EndpointStatus {
+        EndpointStatus(
+            name: "main", transport: transport, host: host, port: port, portMode: .fixed,
+            bound: false, socketPath: socketPath)
+    }
+
+    // covers: AC-13
+    @Test func anEndpointValueIsHostAndPortWithIpv6InBrackets() {
+        #expect(DetailFormat.endpointValue(endpoint()) == "127.0.0.1:5432")
+        #expect(DetailFormat.endpointValue(endpoint(host: "::1")) == "[::1]:5432")
+        #expect(
+            DetailFormat.endpointValue(endpoint(port: nil)) == "127.0.0.1, port assigned at start")
+        #expect(DetailFormat.endpointValue(endpoint(host: nil)) == "—:5432")
+    }
+
+    // covers: AC-13
+    @Test func aSocketEndpointValueIsItsPathOrASentenceBeforeTheSocketExists() {
+        let path = "/tmp/stackly run/.s.PGSQL.5432"
+        #expect(
+            DetailFormat.endpointValue(
+                endpoint(transport: .unix, host: nil, port: nil, socketPath: path)) == path)
+        #expect(
+            DetailFormat.endpointValue(endpoint(transport: .unix, host: nil, port: nil))
+                == "socket, created at start")
+    }
+
+    // covers: AC-13
+    @Test func copyIsOfferedOnlyForAnAddressThatIsKnown() {
+        #expect(DetailFormat.endpointCopyText(endpoint()) == "127.0.0.1:5432")
+        #expect(DetailFormat.endpointCopyText(endpoint(host: "::1")) == "[::1]:5432")
+        #expect(DetailFormat.endpointCopyText(endpoint(port: nil)) == nil)
+        #expect(DetailFormat.endpointCopyText(endpoint(host: nil)) == nil)
+        #expect(
+            DetailFormat.endpointCopyText(
+                endpoint(transport: .unix, host: nil, port: nil, socketPath: "/s")) == "/s")
+        #expect(
+            DetailFormat.endpointCopyText(endpoint(transport: .unix, host: nil, port: nil)) == nil)
+    }
+
+    // covers: AC-13
+    @Test func uptimeIsADashWithoutAProcessAndTheSharedTextWithOne() throws {
+        let stopped = try triple("nats").instance
+        try #require(stopped.process == nil)
+        #expect(DetailFormat.uptime(stopped, now: Date()) == "—")
+
+        let running = try triple("postgresql").instance
+        let process = try #require(running.process)
+        let now = process.startedAt.addingTimeInterval(3_700)
+        #expect(
+            DetailFormat.uptime(running, now: now)
+                == UptimeText.text(since: process.startedAt, now: now))
+    }
 }
