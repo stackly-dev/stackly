@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a190a9-8325-7320-9808-e6019c8d98ec",
+  "covers": [
+    "REQ-013",
+    "AC-013"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "native_launchd",
+    "name": "a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it",
+    "file": "apps/daemon/tests/native_launchd.rs",
+    "line": 429
+  },
+  "status": "PASS",
+  "expected": "a running fake instance keeps its pid and start time when the agent's job is restarted with launchctl kickstart -k and when it is booted out, with no AbandonProcessGroup in the plist, and the next launchd daemon adopts it as ready with the same process",
+  "actual": "fake server pid 14424 started at \"2026-10-31T06:33:14.357Z\" stayed the adopted, ready process through kickstart -k, bootout, and the next daemon",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "launchd",
+      "version": "7.0.0",
+      "digest": null,
+      "source": "external"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-31T06:33:10.693576Z",
+  "finishedAt": "2026-10-31T06:33:26.924752Z",
+  "evidencePath": "output.log"
+}

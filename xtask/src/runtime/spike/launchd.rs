@@ -86,6 +86,34 @@ pub fn bootout(domain: &str) {
     }
 }
 
+/// The text of `launchctl list`: one `PID\tStatus\tLabel` line per job of
+/// the caller's domain.
+pub fn list() -> Result<String> {
+    let output = Command::new(LAUNCHCTL)
+        .arg("list")
+        .output()
+        .with_context(|| format!("cannot run {LAUNCHCTL}"))?;
+    if !output.status.success() {
+        bail!(
+            "launchctl list failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// `launchctl bootout <domain>/<label>`; true when it succeeded.
+pub fn bootout_label(domain: &str, label: &str) -> Result<bool> {
+    let status = Command::new(LAUNCHCTL)
+        .arg("bootout")
+        .arg(format!("{domain}/{label}"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .with_context(|| format!("cannot run {LAUNCHCTL}"))?;
+    Ok(status.success())
+}
+
 /// Asks launchd about the worker job.
 pub fn job_state(domain: &str) -> Result<JobState> {
     let output = Command::new(LAUNCHCTL)

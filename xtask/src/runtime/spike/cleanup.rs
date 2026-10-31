@@ -16,6 +16,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use stackly_platform::bundle::TEST_AGENT_LABEL_PREFIX;
 
 use super::launchd;
 use super::process::send;
@@ -94,6 +95,41 @@ fn is_socket_name(name: &str) -> bool {
     name.strip_prefix("sk-").is_some_and(|hex| {
         hex.len() == 8 && hex.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'))
     })
+}
+
+/// Boots out every daemon test agent of `uid` (spec 0015, milestone 2):
+/// each job in `launchctl list` whose label starts with
+/// `dev.stackly.test.agent.`. Returns how many were booted out.
+///
+/// It needs no spike lock, because those jobs never belong to a spike, so
+/// `--cleanup` runs it before it waits for the lock.
+pub fn bootout_test_agents(uid: u32) -> Result<usize> {
+    if !launchd::has_gui_session(uid)? {
+        return Ok(0);
+    }
+    let domain = launchd::gui_domain(uid);
+    let mut removed = 0;
+    for label in test_agent_labels(&launchd::list()?) {
+        if launchd::bootout_label(&domain, &label)? {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+/// The labels in the text of `launchctl list` that start with the test
+/// agent prefix and carry something after it.
+fn test_agent_labels(list: &str) -> Vec<String> {
+    list.lines()
+        .filter_map(|line| line.split('\t').nth(2))
+        .map(str::trim)
+        .filter(|label| {
+            label
+                .strip_prefix(TEST_AGENT_LABEL_PREFIX)
+                .is_some_and(|rest| !rest.is_empty())
+        })
+        .map(str::to_owned)
+        .collect()
 }
 
 /// What every native test process carries in its argv: the folder prefix of
@@ -267,6 +303,20 @@ mod tests {
             owned_socket_dirs(temp.path(), uid() + 1)
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn only_daemon_test_agent_labels_are_picked_from_launchctl_list() {
+        let list = "PID\tStatus\tLabel\n\
+                    4242\t0\tdev.stackly.test.agent.77-0\n\
+                    -\t3\tdev.stackly.test.agent.77-1\n\
+                    -\t0\tdev.stackly.test.agent.\n\
+                    501\t0\tcom.ojiepermana.stackly.daemon\n\
+                    -\t0\tdev.stackly.runtime-spike\n";
+        assert_eq!(
+            test_agent_labels(list),
+            ["dev.stackly.test.agent.77-0", "dev.stackly.test.agent.77-1"]
         );
     }
 

@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a190a9-ed7c-75a2-a9f4-e984cd0cd21e",
+  "covers": [
+    "REQ-014",
+    "REQ-028"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "native_launchd",
+    "name": "a_stop_request_keeps_the_agent_down_for_longer_than_the_throttle_interval",
+    "file": "apps/daemon/tests/native_launchd.rs",
+    "line": 226
+  },
+  "status": "PASS",
+  "expected": "after daemon.shutdown stop the agent's daemon exits 0, and for at least 20 seconds launchd starts no new process and no daemon answers on the socket",
+  "actual": "last exit code 0, runs Some(1), no process and no answer for 20187 ms",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "launchd",
+      "version": "7.0.0",
+      "digest": null,
+      "source": "external"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-31T06:33:37.91663Z",
+  "finishedAt": "2026-10-31T06:33:58.701196Z",
+  "evidencePath": "output.log"
+}

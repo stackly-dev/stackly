@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a190a9-c293-72d9-b8fd-5d69c3a3ac57",
+  "covers": [
+    "REQ-014",
+    "REQ-028"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "native_launchd",
+    "name": "a_restart_request_to_the_agent_brings_a_new_launchd_daemon_within_30_seconds",
+    "file": "apps/daemon/tests/native_launchd.rs",
+    "line": 197
+  },
+  "status": "PASS",
+  "expected": "a temporary LaunchAgent derived from the golden plist starts stacklyd with launch.context launchd and the test label, and daemon.shutdown restart brings a daemon with another serverInstanceId under the same job within 30 seconds",
+  "actual": "new daemon after 10407 ms",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "launchd",
+      "version": "7.0.0",
+      "digest": null,
+      "source": "external"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-10-31T06:33:26.931659Z",
+  "finishedAt": "2026-10-31T06:33:37.907881Z",
+  "evidencePath": "output.log"
+}
