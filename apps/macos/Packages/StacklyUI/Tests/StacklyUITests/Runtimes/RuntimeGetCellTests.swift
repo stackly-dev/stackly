@@ -135,4 +135,19 @@ struct RuntimeGetCellTests {
         #expect(
             RuntimeInstallProgress.value(operation: half).compactText == "Download · 10%")
     }
+
+    @Test func theGetHelpIsTheReasonTheButtonCannotRunElseWhatItDoes() {
+        func help(_ availability: ActionAvailability) -> String {
+            RuntimeGetCell.help(for: availability, displayName: "PostgreSQL", version: "17.11")
+        }
+        #expect(help(.enabled) == "Install PostgreSQL 17.11")
+        #expect(help(.busy) == "Install PostgreSQL 17.11")
+        #expect(
+            help(.disabled(reason: "stacklyd is unavailable.", showsReason: false))
+                == "stacklyd is unavailable.",
+            "the mutation gate's reason, not what the button would do")
+        #expect(
+            help(.disabled(reason: "Not tested on this Mac.", showsReason: true))
+                == "Not tested on this Mac.")
+    }
 }

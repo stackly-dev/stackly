@@ -46,6 +46,16 @@ nonisolated enum RuntimeGetCell: Equatable {
         return CatalogCopy.reasonText(version.install.reason ?? .untested)
     }
 
+    /// The help of the Get button: the reason it cannot run, the install gate's or the
+    /// mutation gate's, and otherwise what it does. ``ActionButton`` writes the reason as the
+    /// help of a disabled button, but a help set outside it wins, so this one carries it too.
+    static func help(for availability: ActionAvailability, displayName: String, version: String)
+        -> String
+    {
+        if case .disabled(let reason, _) = availability { return reason }
+        return "Install \(displayName) \(version)"
+    }
+
     /// Decides the cell. The installed runtime wins over a running install, which wins over
     /// the button; the join key is the digest of the artifact (spec 0018).
     /// - Parameters:
@@ -81,6 +91,7 @@ struct RuntimeGetAction: View {
 
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.mutationAvailability) private var gate
 
     let source: RuntimeGetSource
     let version: CatalogVersion
@@ -113,7 +124,10 @@ struct RuntimeGetAction: View {
                     feedbackCenter: feedbackCenter, navigator: navigator))
             ActionButton(action, showsReason: false)
                 .controlSize(.small)
-                .help(reason ?? "Install \(source.displayName) \(version.version)")
+                .help(
+                    RuntimeGetCell.help(
+                        for: action.availability(gate: gate), displayName: source.displayName,
+                        version: version.version))
 
         }
     }
