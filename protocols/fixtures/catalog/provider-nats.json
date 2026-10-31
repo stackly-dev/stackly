@@ -68,8 +68,8 @@
           "arches": [
             "aarch64"
           ],
-          "status": "unverified",
-          "reason": "untested",
+          "status": "supported",
+          "reason": "provider_tested",
           "note": null
         },
         {

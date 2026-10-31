@@ -204,9 +204,9 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
     site.fake.fetcher().serve(URL, archive.clone());
     let major = site.platform.info().host_facts().os_version.major();
     let key = package(&archive).key().clone();
-    let record = |scope: &str, revision: &str| {
+    let record = |scope: &str, revision: &str, os_major: u32, tested_at: &str| {
         format!(
-            r#"{{ "scope": "{scope}", "result": "pass", "providerRevision": {revision}, "os": "macos", "osVersion": "{major}.0", "arch": "aarch64", "checks": ["closure"], "knownLimitations": [], "testedAt": "2026-10-18T11:07:19.973Z", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }}"#
+            r#"{{ "scope": "{scope}", "result": "pass", "providerRevision": {revision}, "os": "macos", "osVersion": "{os_major}.0", "arch": "aarch64", "checks": ["closure"], "knownLimitations": [], "testedAt": "{tested_at}", "evidence": "runtime/01a14eb1-694f-7400-b05e-71b9a321b96b/01a14eb1-6c78-7311-bd09-2b75053ea60d" }}"#
         )
     };
     let revision = format!(
@@ -215,10 +215,14 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
         key.revision(),
         key.manifest_sha256()
     );
+    // The catalog lists the records in no useful order: a runtime record for
+    // this macOS major, a newer one for the major before, and the provider
+    // record that decides the support while being the oldest of the three.
     let records = format!(
-        r#", "compatibility": [{}, {}]"#,
-        record("runtime", "null"),
-        record("provider", &revision)
+        r#", "compatibility": [{}, {}, {}]"#,
+        record("runtime", "null", major, "2026-10-18T11:07:19.973Z"),
+        record("runtime", "null", major - 1, "2026-10-25T08:00:00.000Z"),
+        record("provider", &revision, major, "2026-10-12T09:30:00.000Z")
     );
     let package = package_with(&archive, &records);
     assert_eq!(
@@ -265,6 +269,7 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
     else {
         panic!("expected a runtime.get reply");
     };
+    // The deciding provider record comes first, then the rest newest first.
     let scopes: Vec<_> = detail
         .compatibility
         .iter()
@@ -272,7 +277,15 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
         .collect();
     assert_eq!(
         scopes,
-        [CompatibilityScope::Runtime, CompatibilityScope::Provider]
+        [
+            CompatibilityScope::Provider,
+            CompatibilityScope::Runtime,
+            CompatibilityScope::Runtime
+        ]
+    );
+    assert!(
+        detail.compatibility[1].tested_at > detail.compatibility[2].tested_at,
+        "after the deciding record the rest go newest first"
     );
     assert_eq!(
         (detail.summary.support, detail.summary.support_reason),
