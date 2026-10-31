@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    Health, HealthState, InstanceBlocker, InstanceId, Pid, ProcessIdentity, Readiness,
+    Health, HealthState, Instance, InstanceBlocker, InstanceId, Pid, ProcessIdentity, Readiness,
     ReadinessState, ReasonCode, ResourceRevision,
 };
 use stackly_platform::{ExitListener, ExitNotice, FileIdentity};
@@ -247,6 +247,21 @@ impl InstanceActor {
             state: Mutex::new(state),
             released: Notify::new(),
         }
+    }
+
+    /// Takes readiness and health from an aggregate a create just
+    /// registered, `unknown` with reason `never_observed` (spec 0004), in
+    /// place of `daemon_restarted`. An actor that already published a
+    /// status or ran a process keeps its own. Publishes nothing: the create
+    /// announces the instance itself.
+    pub(crate) fn note_created(&self, instance: &Instance) {
+        let mut state = self.lock();
+        if state.seq > 0 || state.process.is_some() {
+            return;
+        }
+        state.readiness = instance.readiness().clone();
+        state.health = instance.health().clone();
+        state.published = state.snapshot(instance.created_at(), std::time::Duration::MAX);
     }
 
     fn lock(&self) -> MutexGuard<'_, ActorState> {

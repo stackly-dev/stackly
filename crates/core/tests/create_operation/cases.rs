@@ -5,15 +5,15 @@ use std::sync::{Arc, Mutex, PoisonError};
 use stackly_core::instance::create::{CreateHooks, SecretSourceKind};
 use stackly_core::read_instance_manifest;
 use stackly_domain::{
-    CreatedState, Endpoint, Instance, InstanceId, InstanceLifecycle, IpEndpoint, OperationState,
-    Port, PortRequest, ProviderSourceKind, Registry, SecretPurpose, SecretRef, SecretUser,
-    Transport,
+    CreatedState, Endpoint, HealthState, Instance, InstanceId, InstanceLifecycle, IpEndpoint,
+    OperationState, Port, PortRequest, ProviderSourceKind, ReadinessState, ReasonCode, Registry,
+    SecretPurpose, SecretRef, SecretUser, Transport,
 };
 use stackly_evidence::{Kind, evidence};
 use stackly_platform::{ChildRole, ExitStatus, InstanceLock, ProcessSupervision, SecretValue};
 use stackly_testkit::{InstanceBuilder, ProviderRevisionBuilder};
 
-use crate::common::{LOOPBACK, Rig};
+use crate::common::{LOOPBACK, Rig, Spec};
 use crate::harness::CreateRig;
 
 fn reference_of(id: InstanceId, field: &str) -> SecretRef {
@@ -1043,4 +1043,38 @@ async fn a_queued_create_is_rebuilt_from_its_input_unless_it_held_a_value() {
     );
     finish_init(rig, 1).await;
     rig.wait_state(entered, OperationState::Succeeded).await;
+}
+
+#[tokio::test]
+async fn a_created_instance_reads_never_observed_until_it_runs_and_a_later_note_changes_nothing() {
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let id = create_to_the_end(&cr, "fresh").await;
+
+    // Spec 0004: the value of a new instance, not the one of an instance
+    // the daemon loaded when it started.
+    let status = rig.sup.status(id);
+    assert_eq!(status.readiness.state(), ReadinessState::Unknown);
+    assert_eq!(status.readiness.reason(), &ReasonCode::NEVER_OBSERVED);
+    assert_eq!(status.health.state(), HealthState::Unknown);
+    assert_eq!(status.health.reason(), &ReasonCode::NEVER_OBSERVED);
+    assert_eq!(status.status_seq, 0);
+
+    // Once the supervisor published a status, the note keeps it. The fake
+    // init writes no data marker, so the test writes the one a start needs.
+    std::fs::write(
+        rig.paths(id).data.join("FAKE_VERSION"),
+        Spec::default().marker,
+    )
+    .expect("the marker is written");
+    let op = rig.start(id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(op, OperationState::Succeeded).await;
+    let ready = rig.sup.status(id);
+    assert_eq!(ready.readiness.state(), ReadinessState::Ready);
+    rig.sup.note_created(&rig.instance_row(id));
+    let after = rig.sup.status(id);
+    assert_eq!(after.readiness.state(), ReadinessState::Ready);
+    assert_eq!(after.status_seq, ready.status_seq);
 }
