@@ -197,7 +197,7 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
     let ev = evidence!(
         covers = ["AC-013", "AC-015"],
         kind = Kind::Fixture,
-        expected = "the catalog's runtime and provider records for this host make the resolve supported, the install copies both into the registry, and runtime.get shows them with the same support",
+        expected = "the catalog's runtime and provider records for this host make the resolve supported, the install copies both into the registry, and runtime.get and runtime.list show the same support",
     );
     let site = Site::new();
     let archive = archive();
@@ -278,6 +278,15 @@ async fn an_install_copies_the_catalog_compatibility_records_and_support_follows
         (detail.summary.support, detail.summary.support_reason),
         (SupportStatus::Supported, SupportReason::ProviderTested)
     );
+    // runtime.list builds the same summary from the catalog's records.
+    let Reply::RuntimeList(page) = client
+        .call(Call::RuntimeList(ListRuntimesParams::default()))
+        .await
+        .expect("runtimes can be listed")
+    else {
+        panic!("expected a runtime.list reply");
+    };
+    assert_eq!(page.items, std::slice::from_ref(&detail.summary));
     ev.pass();
 }
 

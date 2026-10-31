@@ -18,7 +18,7 @@ use stackly_core::operation::{
 use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
 use stackly_core::runtime::download::DownloadPolicy;
 use stackly_core::runtime::install::{
-    InstallDeps, InstallInput, InstallRuntimeFactory, install_runtime_work,
+    COMPATIBILITY_MAX, InstallDeps, InstallInput, InstallRuntimeFactory, install_runtime_work,
 };
 use stackly_core::runtime::samples::{MachOBuilder, TarBuilder};
 use stackly_core::runtime::validate::VersionCheckSpec;
@@ -74,6 +74,19 @@ fn package(archive: &[u8], sha256: &Sha256Digest) -> ValidatedPackage {
 
 /// The same package for another build of the line.
 fn package_of(archive: &[u8], sha256: &Sha256Digest, version: &str, url: &str) -> ValidatedPackage {
+    let records = [record("aarch64"), record("x86_64")];
+    package_with_records(archive, sha256, version, url, &records)
+}
+
+/// [`package_of`] whose artifact carries `records` as its compatibility
+/// records, in that order.
+fn package_with_records(
+    archive: &[u8],
+    sha256: &Sha256Digest,
+    version: &str,
+    url: &str,
+    records: &[String],
+) -> ValidatedPackage {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../providers/nats");
     let mut files: BTreeMap<String, Vec<u8>> = [
         "provider.yaml",
@@ -98,10 +111,9 @@ fn package_of(archive: &[u8], sha256: &Sha256Digest, version: &str, url: &str) -
            "stable": true, "unpackedSize": 1048576, "entryCount": 10,
            "dependencies": [ {{ "name": "libSystem.B.dylib", "kind": "system",
                                 "installName": "/usr/lib/libSystem.B.dylib" }} ],
-           "compatibility": [{}, {}] }} ] }}"#,
+           "compatibility": [{}] }} ] }}"#,
         archive.len(),
-        record("aarch64"),
-        record("x86_64")
+        records.join(", ")
     );
     files.insert("versions.json".to_owned(), versions.into_bytes());
     ValidatedPackage::from_files(PackageFiles::new("nats", files), NameCheck::FolderName)
@@ -112,9 +124,14 @@ fn package_of(archive: &[u8], sha256: &Sha256Digest, version: &str, url: &str) -
 /// the package carries one for this host and one for Intel that the input
 /// leaves out.
 fn record(arch: &str) -> String {
+    record_for(arch, 27)
+}
+
+/// [`record`] for macOS `major`, so one package can hold a record per major.
+fn record_for(arch: &str, major: u32) -> String {
     format!(
         r#"{{ "scope": "runtime", "result": "pass", "providerRevision": null, "os": "macos",
-             "osVersion": "27.0", "osBuild": "26A428", "arch": "{arch}", "checks": ["ready", "stop"],
+             "osVersion": "{major}.0", "osBuild": "26A428", "arch": "{arch}", "checks": ["ready", "stop"],
              "knownLimitations": ["provider_integration_not_covered"], "summary": "ready in 493 ms",
              "testedAt": "2026-10-18T11:07:19.973Z", "evidence": "runtime/run/record" }}"#
     )
@@ -327,6 +344,45 @@ impl Harness {
     fn scratch(&self, id: OperationId) -> PathBuf {
         self.layout.layout().operations_dir().join(id.to_string())
     }
+}
+
+// covers: AC-13
+#[test]
+fn an_install_input_keeps_at_most_eight_host_records_in_catalog_order() {
+    let archive = archive();
+    let sha256 = Sha256Digest::from_bytes(Sha256::digest(&archive).into());
+    // Ten host records, one per macOS major from 18 to 27, with an Intel
+    // record between them that the input leaves out and does not count.
+    let mut records: Vec<String> = (18..28).map(|major| record_for("aarch64", major)).collect();
+    records.insert(3, record("x86_64"));
+    let package = package_with_records(&archive, &sha256, VERSION, URL, &records);
+    let root = TestRoot::new().expect("a test root");
+    let platform = FakePlatform::new(&root).platform();
+
+    let input = InstallInput::new(
+        package.software(),
+        "official/nats",
+        "stable",
+        &platform.info().host_facts(),
+        &package.versions().artifacts()[0],
+        package.key(),
+        None,
+    )
+    .expect("the input freezes");
+
+    assert_eq!(input.compatibility.len(), COMPATIBILITY_MAX);
+    let kept: Vec<_> = input
+        .compatibility
+        .iter()
+        .map(|record| (record.arch.clone(), record.os_version.clone()))
+        .collect();
+    let expected: Vec<_> = (18..26)
+        .map(|major| ("aarch64".to_owned(), format!("{major}.0")))
+        .collect();
+    assert_eq!(
+        kept, expected,
+        "the first eight host records, in catalog order"
+    );
 }
 
 fn engine_on(

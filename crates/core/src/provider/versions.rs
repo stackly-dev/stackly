@@ -1262,6 +1262,20 @@ mod tests {
         assert_eq!(license.as_deref(), Some("Apache-2.0"));
         assert_eq!(*license_url, None);
         assert_eq!(*build, None);
+        assert_eq!(catalog.artifacts()[0].compatibility(), []);
+    }
+
+    #[test]
+    fn an_available_artifact_without_records_and_a_fixture_artifact_have_no_records() {
+        let fixture = r#"{ "id": "nats-0.0.1-macos-aarch64", "line": "0.0", "version": "0.0.1", "os": "macos", "arch": "aarch64", "status": "fixture", "executables": ["nats-server"] }"#;
+
+        let (available, codes) = check(&versions_with(&[AVAILABLE]), false);
+        assert_eq!(codes, []);
+        let (fixture, codes) = check(&versions_with(&[fixture]), true);
+        assert_eq!(codes, []);
+
+        assert_eq!(available.unwrap().artifacts()[0].compatibility(), []);
+        assert_eq!(fixture.unwrap().artifacts()[0].compatibility(), []);
     }
 
     /// `AVAILABLE` with `extra` JSON fields added before its closing brace.
