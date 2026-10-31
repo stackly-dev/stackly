@@ -52,6 +52,27 @@ extension SnapshotTests {
         @Test(
             .evidence(
                 covers: ["NFR-012"],
+                expected:
+                    "The Overview shows every instance status whole at the 640 pt content width: next to the name when it fits, under the provider line when not"
+            ))
+        func overviewWhoseStatusesAreLong() async throws {
+            let cases = FixtureScenario.instanceCases
+            let reports = InstanceSummary.fixture(
+                number: 12, name: "reports", runtimeVersion: "18.1", port: 5439,
+                lifecycle: .running, desired: .running,
+                readiness: .fixture(
+                    .notReady, reason: "probe_failed",
+                    detail: "FATAL: the database system is starting up"))
+            // Few items in Needs Attention, so the Instances section is in the 748 pt canvas.
+            let rig = await rig(
+                instances: [cases[0], cases[1], cases[7], reports], operations: [],
+                capacity: Self.report(.ok, available: 500_000_000_000))
+            try await assertSnapshot(rig.overviewPage(), named: "overview-long-status")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
                 expected: "The Overview with a critical disk renders in every variant"
             ))
         func overviewWithACriticalDisk() async throws {
