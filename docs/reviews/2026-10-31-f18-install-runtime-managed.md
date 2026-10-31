@@ -208,3 +208,47 @@ Fix ini tidak memunculkan Blocker atau Major baru.
 | `git show 16642a50^1:<png>` dan `git show 16642a50:<png>` untuk `runtime-get-installed.light.png` | hanya sel macOS NATS yang berubah |
 
 Test Swift (`swift test` di `clients/swift` dan `apps/macos/Packages/StacklyUI`) tidak dijalankan karena di luar perintah yang brief izinkan (NOT_RUN).
+
+## Konfirmasi fix ronde 2 2026-10-31
+
+**Diperiksa oleh**: Opus 5.5 · xhigh, inline (penulis fix Sonnet 5.5 menurut trailer kedua commit, family berbeda)
+**Range**: `git diff 5d9d7fc4^1 5d9d7fc4`, merge `5d9d7fc4` dengan dua commit: `7223f7b6 fix(runtime): send the catalog's compatibility records in runtime.get while it lists the artifact` dan `669b5161 fix(runtimes): show a compatibility record under the badge only for a tested support`. Ada 7 file, tanpa perubahan kontrak. Nomor baris mengacu ke `6cf6efba` (`main`), dan ketujuh file tidak berubah sejak `5d9d7fc4`. Minor dan Nit review asli tidak diulang.
+**Status Major**: tertutup.
+
+### Status Major
+
+**Sisa Major (record penentu dari catalog, daftar dari registry): tertutup.** `get` (`apps/daemon/src/ipc/runtime.rs:237`) memanggil `catalog_match` sekali. Fungsi itu (baris 389) kini mengembalikan artefak catalog beserta verdict-nya. Selama catalog memuat sha256 itu, daftar yang dikirim adalah `catalog_artifact.compatibility()`, dan `deciding` adalah `verdict.record` dari `support_status` atas slice yang sama (baris 265). Bila tidak, daftar adalah salinan registry, dan `deciding` datang dari `registry_deciding_record` atas slice itu (baris 266 sampai 271). Ini persis baris *Value sourcing* `get` / `compatibility` (spec 0018, `index.md:587`). `runtime_detail` (`apps/daemon/src/map/runtime.rs:190`) menerima slice itu sebagai `records` dan mencocokkan penentu dengan `std::ptr::eq` (baris 214). Jadi record penentu selalu ada di daftar yang dikirim, dan dua record bernilai sama tidak bisa tertukar. Badge (`summary_with`, `ipc/runtime.rs:348`) dan record penentu kini berasal dari satu verdict, sehingga keduanya tidak bisa menyimpang.
+
+Skenario ronde 1 kini diuji: install dengan catalog A, lalu update app ke catalog B yang membawa record provider untuk revision itu. Test `a_newer_catalog_record_that_decides_the_support_comes_first_in_runtime_get` (`apps/daemon/tests/runtime/install.rs:357`) memasang dengan satu record runtime. Lalu daemon di-restart di registry yang sama dengan catalog B, yang berisi record runtime lama, record runtime lebih baru untuk mayor sebelumnya, dan record provider yang lebih lama dari keduanya. Test meng-assert `supported`/`provider_tested`, urutan scope [provider, runtime, runtime], dan `testedAt` menurun di sisanya. Test ini gagal di kode ronde 1, karena salinan registry hanya punya 1 record. Ia juga gagal bila urutannya hanya "newest first", karena record provider lalu jatuh ke posisi kedua.
+
+`sourceUrl` dan `sha256` tiap view tetap diambil dari baris registry `artifacts` (`compatibility_view`, `map/runtime.rs:331`). `sha256` sama karena pencocokan catalog memakai sha256 itu. `sourceUrl` sesuai doc DTO "Where the artifact was downloaded from" (`crates/protocol/src/runtime.rs:498`), jadi tidak ada penyimpangan baru. Nilai NULL pada cache hit adalah Minor asli (`install.rs:1118`) dan tidak diulang.
+
+**Sisa Minor inspector: tertutup.** `RuntimeCopy.decidingRecord(of:in:)` (`RuntimeCopy.swift:94`) mengembalikan elemen pertama hanya untuk `.providerTested` dan `.runtimeTested`. `support_status` (`crates/core/src/runtime/compatibility.rs:83` sampai 105) memang hanya mengisi `record` untuk dua reason itu. Reason lain, termasuk `.unrecognized`, tidak menampilkan record. `RuntimeInspector.swift:114` memakai fungsi itu, dan doc `recordText` kini berbunyi "The record that decided the support". `summary` di inspector berasal dari baris list, sedangkan `detail` dari `runtime.get`. Cache detail dikunci per server instance dan revision (`RuntimeDetailModel.swift`, `key`), jadi detail dari daemon sebelum restart tidak dipasangkan dengan badge dari catalog baru. Test `onlyATestedSupportShowsTheRecordThatDecidedIt` (`RuntimeCopyTests.swift:89`) menutup tabel reason itu.
+
+**Minor cabang cadangan registry belum diuji: tertutup.** Test `an_artifact_that_left_the_catalog_keeps_the_registry_copy_with_its_deciding_record_first` (`install.rs:435`) memasang dengan tiga record runtime. Penentunya adalah satu satunya record untuk mayor host, sekaligus yang paling lama. Lalu daemon di-restart dengan catalog kosong. Test meng-assert `experimental`/`runtime_tested` dan urutan [mayor host, mayor - 2 (10-27), mayor - 1 (10-25)]. Dengan begitu `registry_support` dan `registry_deciding_record` dijalankan lewat `get`.
+
+**Tiga Nit ronde 1: tertutup.**
+
+- Dua definisi record penentu: `registry_deciding_record` (`map/runtime.rs:383`) kini memakai `find`, record pertama yang lolos, seperti `support_status`. Baris registry dibaca `ORDER BY position`, yaitu urutan catalog saat install. `versions.rs` menegakkan satu record per kunci (doc baris 810), jadi untuk data yang sah kedua aturan memang tidak bisa berbeda.
+- `catalog_verdict` dihitung dua kali: `get` kini memanggil `catalog_match` sekali dan meneruskan verdict-nya ke `summary_with`. `catalog_support` dan `catalog_verdict` dihapus, tanpa pemanggil lain.
+- Nama `protocolIsOnePointEleven`: kini `protocolIsOnePointFifteen` (`ContractTests.swift:137`), sesuai assert 1.15.
+
+### Temuan baru di file yang disentuh fix
+
+Fix ini tidak memunculkan Blocker, Major, atau Minor baru.
+
+- ⚪ `apps/daemon/src/map/runtime.rs:187`: doc `runtime_detail` ("so a client that shows the first one shows the record behind the badge") dan doc DTO `RuntimeDetail.compatibility` (`crates/protocol/src/runtime.rs:521`, tidak disentuh fix) tidak menyebut bahwa ada record penentu hanya untuk `provider_tested` dan `runtime_tested`. Untuk reason lain, elemen pertama hanyalah record terbaru. Syarat itu kini hanya tertulis di doc `RuntimeCopy.decidingRecord`. Tambahkan ke kedua doc Rust supaya klien lain tidak mengulang Minor inspector. Digest kontrak membuang `description`, jadi tidak perlu kenaikan versi.
+
+### Perintah dijalankan
+
+| Perintah | Hasil |
+| --- | --- |
+| `git merge main`, `git diff --stat main...HEAD` | fast forward ke `6cf6efba`, diff kosong |
+| `git log 5d9d7fc4^1..5d9d7fc4^2`, `git diff 5d9d7fc4^1 5d9d7fc4` | 2 commit, 7 file |
+| `git diff --stat 5d9d7fc4 HEAD -- <7 file>` | kosong |
+| `touch xtask/src/main.rs crates/protocol/src/version.rs apps/daemon/src/main.rs` | dilakukan sebelum build |
+| `cargo test -p stacklyd --test runtime` | lulus, 17 test, termasuk dua test baru |
+| `cargo test -p stacklyd --lib map::` | lulus, 71 test |
+| `cargo xtask codegen --check` | lulus, "20 generated files are up to date" |
+
+Test Swift (`swift test` di `clients/swift` dan `apps/macos/Packages/StacklyUI`, termasuk `onlyATestedSupportShowsTheRecordThatDecidedIt`) tidak dijalankan, karena di luar perintah yang brief izinkan (NOT_RUN).
