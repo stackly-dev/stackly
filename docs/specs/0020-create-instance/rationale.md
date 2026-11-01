@@ -916,3 +916,31 @@ Tidak ada gap kelengkapan keputusan yang butuh jawaban user: Keputusan 21 tetap,
 | conformance 16 thread menghitung semua instance yang tidak retained, padahal suite berbagi registry yang sudah berisi data | hitungan hanya untuk prefix nama `guard-<run>-` yang baru per run |
 | teks basi: butir `validate` dan `register` di *Pemeriksaan port*, baris `expected_generation` di *Value sourcing*, dan baris `instance.create` spec 0010 yang masih menyebut `registry.generation_conflict` | kedua baris spec ini ditulis ulang; blok usulan spec 0010 butir 1; teks lama dan baru AC-10 disalin ke bagian di atas |
 | detail yang harus ditebak: `loaded_at` view SQLite, `restored` di view fake, daftar `pub use` di `lib.rs`, `#[non_exhaustive]`, loop terap fake, dan jumlah implementasi `GuardView` | ditulis di *Commit terjaga di langkah `register`* dan langkah 19; `Guarded` dan `GuardDecision` tidak `#[non_exhaustive]`; test daemon dicatat sebagai smoke test, dengan bukti deterministik di conformance dan kasus b dan c |
+
+## Update 2026-11-01: form dari paket pinned saat revision disebut (temuan `/check verify` fitur 26)
+
+### Penyebab
+
+Di root tanpa catalog (`STACKLY_CATALOG_DIR` tidak di set, misalnya root `skeleton_seed`), `instance.get_create_form` membalas `catalog.unavailable`. CLI lalu create tanpa form kalau `--provider` dan `--revision` terisi, sehingga `typed()` tidak tahu jenis field dan setiap `--set` dikirim sebagai teks. `--set ignoreTerm=true` dan `--set readyDelayMs=4000` pada `testing/fake 0.3.0` ditolak `instance.settings_invalid`, padahal `--set-json` dengan nilai yang sama diterima. Create sendiri sudah bisa memakai paket pinned (baris "revision lain" di *Resolusi provider dan revision*); hanya form yang terikat ke catalog. Form duplicate spec 0024 sudah membangun form dari paket pinned lewat `build_form_from_package`.
+
+### Opsi
+
+1. **Form mengikuti resolusi create saat `revision` disebut** (dipilih). Tambah `revision` opsional di `GetCreateFormParams` (minor, protokol 1.17); form dan create memilih paket lewat satu fungsi. Plus: `--set` selalu punya jenis field dari schema yang sama dengan yang dipakai daemon untuk validasi, dan form serta create selalu setuju. Minus: perubahan kontrak dan codegen untuk masalah yang terlihat di CLI saja.
+2. **CLI menebak jenis tanpa form** (`true` atau `false` menjadi boolean, bilangan bulat menjadi integer). Plus: kecil, hanya di CLI. Minus: field teks yang diberi `123` dikirim sebagai angka lalu ditolak, melanggar aturan *CLI* bahwa `text` dikirim apa adanya; tebakan bisa salah tanpa jejak.
+3. **Daemon mengonversi teks menurut schema saat create.** Plus: semua klien terbantu. Minus: daemon menerima dua bentuk untuk satu nilai, bertentangan dengan AC-18 yang menaruh konversi di CLI dan membiarkan daemon menolak tipe yang salah.
+
+### Keputusan kecil (dipilih user 2026-11-01)
+
+- Spec 0020 diupdate di tempat, bukan spec baru, seperti update sebelumnya.
+- `revision` tanpa `provider` mengikuti create: nama provider dipilih seperti sekarang (dari catalog menurut software runtime), jadi tanpa catalog hasilnya tetap `catalog.unavailable`. Tidak ada aturan `Validate` baru untuk pasangan itu, karena create menerima pasangan yang sama.
+- Cabang CLI yang menelan `catalog.unavailable` dan `instance.provider_not_found` dihapus: setelah update ini error form sama dengan error create untuk masukan yang sama, jadi cabang itu tidak lagi punya kasus yang benar.
+
+### Dampak ke spec lain
+
+- Spec 0024: tidak berubah; `build_form_from_package` dipakai ulang apa adanya.
+- Spec 0006: hanya kenaikan minor protokol menurut aturan yang ada.
+- GUI: sheet New Instance tidak mengirim `revision`, jadi perilakunya tidak berubah.
+
+### Cross check update ini (2026-11-01, model lain: Sonnet, baca saja)
+
+Tujuh temuan, semuanya diterapkan atas pilihan user: (1) nama provider tanpa `provider` tetap lewat pemilihan per software runtime, lalu revision diselesaikan untuk nama itu; (2) entri `Planned` atau `Invalid` dengan revision mengikuti create, yaitu jatuh ke folder pinned; (3) urutan pemeriksaan runtime, nama, paket, lalu `instance.runtime_mismatch` dari software paket, dengan pemetaan kode ke baris preflight create; (4) `ProviderProblem::Ambiguous` menjadi `instance.provider_ambiguous` dan detail membawa `revision`; (5) `suggestedName` untuk paket pinned dihitung handler, dan doc `CreateProvider.revision` menjadi revision paket terpilih; (6) `form()` di CLI tidak lagi `Option`, `--json` dan exit code `catalog.unavailable` tetap; (7) fixture params tanpa `revision` untuk klien 1.16 dan default `nil` di Swift. Usulan fungsi bersama `resolve_package` dipakai sebagai bentuk implementasi, karena menghilangkan perbedaan (2) dan (3) sejak awal.

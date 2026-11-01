@@ -57,7 +57,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 17 | Catalog & provider detail | Instalasi pertama | done |
 | 18 | Install runtime managed | Instalasi pertama | done |
 | 19 | Provider PostgreSQL | Instalasi pertama | done |
-| 20 | Create instance | Instalasi pertama | done |
+| 20 | Create instance | Instalasi pertama | in-progress |
 | 21 | Start, readiness & connection | Instalasi pertama | done |
 | 22 | Overview & daftar instance | Instalasi pertama | done |
 | 23 | Provider NATS lewat manifest | Instalasi pertama | done |
