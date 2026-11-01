@@ -101,7 +101,7 @@ Manifest dan adapter PostgreSQL resmi: `initdb` dari runtime yang cocok, auth lo
 - [x] Verify it: `/check verify provider PostgreSQL`
 - [x] Test it: `/test provider PostgreSQL`
 
-### 20. Create instance · in-progress · GA
+### 20. Create instance · done · GA
 
 Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, auth, persistence, storage, dan autostart, dengan preflight dan error per field. Field settings, endpoint, auth, dan storage dirender dari settings schema dan resources manifest provider (kelas field VAL-012), tidak dikodekan khusus untuk PostgreSQL. Inisialisasi hanya terjadi di direktori baru milik operasi itu.
 
@@ -126,8 +126,8 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
 - [x] Document it: `/document create instance` · 2026-10-31, `CHANGELOG.md` (Added and Fixed, range `4434632a..48c8f29e`)
 - [x] Verify it (milestone 7): `/check verify create instance` · PASS 2026-11-01 (`46e7b647`), CLI on a `skeleton_seed` root with no catalog and with a development catalog
 - [x] Test it (milestone 7): `/test create instance` · 2026-11-01: AC-1 and AC-18 mapped to the `46e7b647` tests, AC-1 runtime order with a revision added (`create_form_pinned.rs`)
-- [ ] Review it (fresh model, milestone 7): `/check review create instance`
-- [ ] Document it (milestone 7): `/document create instance`
+- [x] Review it (fresh model, milestone 7): `/check review create instance` · 2026-11-01, `docs/reviews/2026-11-01-f20-form-from-pinned-package.md`: Approve with nits, Blocker 0, Major 0, 3 Minor and 6 Nit left open
+- [x] Document it (milestone 7): `/document create instance` · 2026-11-01, `CHANGELOG.md` (Added and Fixed, range `9865261e..bf86134b`)
 
 ### 21. Start, readiness & connection · done
 

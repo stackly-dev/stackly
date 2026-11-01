@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stackly instance create` with `--dry-run` and `--start`, and an equivalent command the GUI can copy for every draft (see spec 0020).
 - The New Instance sheet in the app: fields drawn from the provider schema with no provider specific SwiftUI, secret fields as secure inputs (Generate, Enter, or Copy from), fields that cannot change after init marked, a category filter for runtimes, and the preflight shown before Create (see spec 0020).
 - The `instance_path` fuzz target for data path validation (see spec 0020).
+- `instance.get_create_form` takes an optional `revision`. With it, the form is built from the package create would use: the catalog entry when the revision matches, otherwise the package pinned in the data folder. It refuses with the same code create reports for the same provider, revision, and runtime. Protocol 1.17 (see spec 0020).
 
 ### Changed
 
@@ -76,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new instance now reads readiness `unknown (never_observed)` instead of `daemon_restarted`, and an instance the supervisor has not started yet reports its configured restart budget instead of "0 of 0 in 0m", so a crash loop reads "Crash loop after 5 restarts." (see specs 0004 and 0010).
 - The equivalent command of a preflight with `--start` now ends with `--start` (see spec 0020).
 - The New Instance sheet sends the secret source the preflight judged (Generate, Copy from, or the typed value) after a refused, failed, or unknown create and after a runtime change, so a retry never switches to a generated password or reuses the key with another request (see spec 0020).
+- `stackly instance create --provider <p> --revision <r>` on a daemon with no catalog, or with a catalog at another revision, now reads field kinds from the pinned package. So `--set ignoreTerm=true` and `--set readyDelayMs=4000` are sent as a boolean and a number instead of text. A revision that is not pinned now stops at the form with `instance.provider_not_found`, and no create is sent (see spec 0020).
 
 ### Security
 
