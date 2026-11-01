@@ -38,7 +38,8 @@ struct CreateClientTests {
         #expect(
             call
                 == .instanceGetCreateForm(
-                    GetCreateFormParams(runtimeId: Self.runtime, provider: "official/example")))
+                    GetCreateFormParams(
+                        runtimeId: Self.runtime, provider: "official/example", revision: nil)))
         #expect(timeout == ContractLimits.callTimeout)
         guard case .instanceGetCreateForm(let expected) = reply else {
             Issue.record("the fixture frame is not an instance.get_create_form reply")
@@ -55,7 +56,7 @@ struct CreateClientTests {
         #expect(
             fake.made.first?.0
                 == .instanceGetCreateForm(
-                    GetCreateFormParams(runtimeId: Self.runtime, provider: nil)))
+                    GetCreateFormParams(runtimeId: Self.runtime, provider: nil, revision: nil)))
     }
 
     @Test func getDuplicateFormSendsTheInstanceAndReadsTheForm() async throws {

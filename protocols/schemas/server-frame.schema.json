@@ -1274,7 +1274,7 @@
           "type": "string"
         },
         "revision": {
-          "description": "The revision of the loaded catalog entry.",
+          "description": "The revision of the package the form was built from: the catalog\nentry's, or the one `GetCreateFormParams::revision` asked for.",
           "type": "string"
         },
         "source": {

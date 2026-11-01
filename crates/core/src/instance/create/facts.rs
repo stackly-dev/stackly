@@ -265,22 +265,47 @@ pub fn gather(deps: &CreateDeps<'_>, draft: &CreateDraft) -> Result<CreateFacts,
     })
 }
 
-/// *Resolusi provider dan revision*.
+/// *Resolusi provider dan revision* for a draft.
 fn resolve_provider(
     deps: &CreateDeps<'_>,
     draft: &CreateDraft,
 ) -> Result<Result<ProviderFound, ProviderProblem>, GatherError> {
-    let asked = draft.provider.revision.as_deref();
-    let entry = match deps.catalog {
-        CatalogState::Loaded(catalog) => draft
-            .provider
-            .name
+    resolve_package(
+        deps.catalog,
+        deps.registry,
+        deps.platform,
+        deps.prepared.layout(),
+        &draft.provider.name,
+        draft.provider.revision.as_deref(),
+    )
+}
+
+/// The package `provider` at `revision` resolves to (spec 0020, *Resolusi
+/// provider dan revision*): the catalog entry when `revision` is empty or
+/// equals the entry's revision, else the one pinned package under the
+/// provider root of `layout`. Create and the create form both call it, so
+/// they pick the same package and refuse with the same problem.
+///
+/// # Errors
+///
+/// Returns [`GatherError`] when the registry cannot be read; a draft that
+/// resolves to no package is the inner [`ProviderProblem`].
+pub fn resolve_package(
+    catalog: &CatalogState,
+    registry: &dyn Registry,
+    platform: &Platform,
+    layout: &DirectoryLayout,
+    provider: &str,
+    revision: Option<&str>,
+) -> Result<Result<ProviderFound, ProviderProblem>, GatherError> {
+    let entry = match catalog {
+        CatalogState::Loaded(catalog) => provider
             .parse::<ProviderName>()
             .ok()
             .and_then(|id| catalog.entry(&id).map(|entry| (catalog, entry))),
         CatalogState::NotConfigured | CatalogState::Unavailable { .. } => None,
     };
-    match (entry, asked) {
+    match (entry, revision) {
         (Some((catalog, CatalogEntry::Provider(entry))), asked)
             if asked
                 .is_none_or(|revision| revision == entry.package.key().revision().to_string()) =>
@@ -302,7 +327,7 @@ fn resolve_provider(
         (Some((_, CatalogEntry::Invalid(_))), None) => {
             Ok(Err(ProviderProblem::Unavailable { state: "invalid" }))
         }
-        (_, None) => Ok(Err(match deps.catalog {
+        (_, None) => Ok(Err(match catalog {
             CatalogState::NotConfigured => ProviderProblem::CatalogUnavailable {
                 reason: "not_configured",
             },
@@ -311,7 +336,7 @@ fn resolve_provider(
             },
             CatalogState::Loaded(_) => ProviderProblem::NotFound,
         })),
-        (_, Some(revision)) => find_pinned(deps, &draft.provider.name, revision),
+        (_, Some(revision)) => find_pinned(registry, platform, layout, provider, revision),
     }
 }
 
@@ -322,7 +347,9 @@ const fn unavailable_code(reason: UnavailableReason) -> &'static str {
 /// The one pinned package of `provider` at `revision`: the folder under the
 /// provider root, read and checked against its digest and the registry.
 fn find_pinned(
-    deps: &CreateDeps<'_>,
+    registry: &dyn Registry,
+    platform: &Platform,
+    layout: &DirectoryLayout,
     provider: &str,
     revision: &str,
 ) -> Result<Result<ProviderFound, ProviderProblem>, GatherError> {
@@ -336,14 +363,12 @@ fn find_pinned(
     {
         return not_found;
     }
-    let base = deps
-        .prepared
-        .layout()
+    let base = layout
         .providers_dir()
         .join(namespace)
         .join(name)
         .join(revision);
-    let Ok(entries) = deps.platform.fs().read_dir(&base) else {
+    let Ok(entries) = platform.fs().read_dir(&base) else {
         return not_found;
     };
     let digests: Vec<_> = entries
@@ -358,7 +383,7 @@ fn find_pinned(
         }));
     };
     let dir = base.join(&one.name);
-    let Some(package) = read_package(deps.platform.fs(), &dir)
+    let Some(package) = read_package(platform.fs(), &dir)
         .ok()
         .and_then(|files| ValidatedPackage::from_files(files, NameCheck::Skip).ok())
     else {
@@ -367,7 +392,7 @@ fn find_pinned(
     let key = package.key();
     let digest_matches = one.name.to_string_lossy() == key.manifest_sha256().to_string();
     let named = key.provider().to_string() == provider && key.revision().to_string() == revision;
-    let known = deps.registry.provider_revision(key)?.value.is_some();
+    let known = registry.provider_revision(key)?.value.is_some();
     if !(digest_matches && named && known) {
         return not_found;
     }

@@ -13,6 +13,7 @@ mod budget;
 mod create;
 mod create_flow;
 mod create_form;
+mod create_form_pinned;
 mod data_compat;
 mod data_usage;
 mod detail;

@@ -1479,7 +1479,8 @@ public enum CreateProviderSource: String, Codable, Sendable, Equatable {
 public struct CreateProvider: Codable, Sendable, Equatable {
 	/// The provider ID, such as `official/nats`.
 	public let name: String
-	/// The revision of the loaded catalog entry.
+	/// The revision of the package the form was built from: the catalog
+	/// entry's, or the one `GetCreateFormParams::revision` asked for.
 	public let revision: String
 	/// SHA-256 of the package, in lowercase hex.
 	public let manifestSha256: String
@@ -3175,10 +3176,15 @@ public struct GetCreateFormParams: Codable, Sendable, Equatable {
 	/// The provider to use, such as `official/nats`. Absent means the
 	/// catalog entry whose software is the software of the runtime.
 	public let provider: String?
+	/// The package revision, such as `0.3.0`. Absent means the revision of
+	/// the catalog entry; another revision means the package pinned in the
+	/// data folder, chosen the way create chooses it. Since protocol 1.17.
+	public let revision: String?
 
-	public init(runtimeId: UUID, provider: String?) {
+	public init(runtimeId: UUID, provider: String?, revision: String?) {
 		self.runtimeId = runtimeId
 		self.provider = provider
+		self.revision = revision
 	}
 }
 

@@ -26,13 +26,15 @@ public struct CreateClient: Sendable {
     ///   - runtimeId: The installed runtime the instance will run on.
     ///   - provider: The provider to use, or `nil` for the catalog entry whose software is
     ///     the software of the runtime.
+    ///   - revision: The package revision, or `nil` for the revision of the catalog entry.
     /// - Throws: ``ClientError``, such as `instance.runtime_not_found` or
     ///   `catalog.unavailable`.
     public func getCreateForm(
-        runtimeId: UUID, provider: String? = nil
+        runtimeId: UUID, provider: String? = nil, revision: String? = nil
     ) async throws(ClientError) -> CreateForm {
         let reply = try await send(
-            .instanceGetCreateForm(GetCreateFormParams(runtimeId: runtimeId, provider: provider)),
+            .instanceGetCreateForm(
+                GetCreateFormParams(runtimeId: runtimeId, provider: provider, revision: revision)),
             .standard)
         guard case .instanceGetCreateForm(let form) = reply else { throw Self.unexpectedReply() }
         return form

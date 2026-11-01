@@ -255,15 +255,27 @@ pub struct GetCreateFormParams {
     /// catalog entry whose software is the software of the runtime.
     #[serde(default)]
     pub provider: Option<String>,
+    /// The package revision, such as `0.3.0`. Absent means the revision of
+    /// the catalog entry; another revision means the package pinned in the
+    /// data folder, chosen the way create chooses it. Since protocol 1.17.
+    #[serde(default)]
+    pub revision: Option<String>,
 }
 
 impl Validate for GetCreateFormParams {
     fn validate(&self) -> Vec<FieldError> {
-        self.provider
+        let mut fields = Vec::new();
+        if let Some(code) = self.provider.as_deref().and_then(provider_id_code) {
+            fields.push(FieldError::new("provider", code));
+        }
+        if let Some(code) = self
+            .revision
             .as_deref()
-            .and_then(provider_id_code)
-            .map(|code| vec![FieldError::new("provider", code)])
-            .unwrap_or_default()
+            .and_then(|revision| length_code(revision, PROVIDER_REVISION_MAX))
+        {
+            fields.push(FieldError::new("revision", code));
+        }
+        fields
     }
 }
 
@@ -274,7 +286,8 @@ impl Validate for GetCreateFormParams {
 pub struct CreateProvider {
     /// The provider ID, such as `official/nats`.
     pub name: String,
-    /// The revision of the loaded catalog entry.
+    /// The revision of the package the form was built from: the catalog
+    /// entry's, or the one `GetCreateFormParams::revision` asked for.
     pub revision: String,
     /// SHA-256 of the package, in lowercase hex.
     pub manifest_sha256: String,

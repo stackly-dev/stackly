@@ -180,6 +180,22 @@ impl Site {
         registry
     }
 
+    /// Pins the package in `package` beside the fake one and records its
+    /// revision, committed with the daemon stopped. No runtime is added.
+    pub fn pin_package(&self, package: &Path) {
+        let record = stackly_core::supervisor::fixture::pin_package(
+            &self.platform,
+            self.prepared.layout(),
+            package,
+        )
+        .expect("the package is pinned");
+        self.open_registry()
+            .commit(stackly_domain::WriteBatch::new(vec![
+                stackly_domain::WriteOp::InsertProviderRevision(record),
+            ]))
+            .expect("the provider revision is recorded");
+    }
+
     /// [`install_fake_runtime`](stackly_core::supervisor::fixture::install_fake_runtime)
     /// for a runtime of `version` and `line` in place of the first artifact
     /// of the package, committed with the daemon stopped (spec 0025, step
@@ -475,11 +491,22 @@ impl Api {
         runtime_id: Uuid,
         provider: Option<&str>,
     ) -> Result<CreateForm, Box<ErrorBody>> {
+        self.form_at(runtime_id, provider, None).await
+    }
+
+    /// `instance.get_create_form` with a revision.
+    pub async fn form_at(
+        &self,
+        runtime_id: Uuid,
+        provider: Option<&str>,
+        revision: Option<&str>,
+    ) -> Result<CreateForm, Box<ErrorBody>> {
         match self
             .client
             .call(Call::InstanceGetCreateForm(GetCreateFormParams {
                 runtime_id,
                 provider: provider.map(str::to_owned),
+                revision: revision.map(str::to_owned),
             }))
             .await?
         {

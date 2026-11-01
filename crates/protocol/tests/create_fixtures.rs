@@ -254,10 +254,38 @@ fn a_preflight_request_carries_no_secret_value_and_a_draft_is_checked_for_shape(
             "ipc/reject-instance-get-create-form-provider.json",
             "provider",
         ),
+        (
+            "ipc/reject-instance-get-create-form-revision.json",
+            "revision",
+        ),
     ] {
         let rejection = decode_request(&read(file)).expect_err(file);
         assert_eq!(rejection.error.code(), "request.invalid_params", "{file}");
         assert_eq!(rejection.error.fields()[0].path(), path, "{file}");
+    }
+}
+
+// covers: AC-1
+#[test]
+fn a_form_request_may_name_a_revision_and_a_request_without_one_still_decodes() {
+    let with = decode_request(&read("ipc/request-instance-get-create-form-revision.json"))
+        .expect("the fixture decodes");
+    let Call::InstanceGetCreateForm(params) = with.call else {
+        panic!("expected instance.get_create_form");
+    };
+    assert_eq!(params.provider.as_deref(), Some("testing/fake"));
+    assert_eq!(params.revision.as_deref(), Some("0.3.0"));
+    assert!(params.validate().is_empty());
+
+    for file in [
+        "ipc/request-instance-get-create-form.json",
+        "ipc/request-instance-get-create-form-without-provider.json",
+    ] {
+        let request = decode_request(&read(file)).expect(file);
+        let Call::InstanceGetCreateForm(params) = request.call else {
+            panic!("expected instance.get_create_form");
+        };
+        assert_eq!(params.revision, None, "{file}");
     }
 }
 

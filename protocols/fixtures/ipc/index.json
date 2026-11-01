@@ -1161,6 +1161,20 @@
       "expect": "decode"
     },
     {
+      "file": "request-instance-get-create-form-revision.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-instance-get-create-form-revision.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
       "file": "reject-instance-get-create-form-provider.json",
       "type": "Request",
       "expect": "reject",

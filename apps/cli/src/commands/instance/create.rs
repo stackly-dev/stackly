@@ -248,7 +248,7 @@ impl CreateArgs {
     /// kind the form says, then `--set-json`. A value that does not read as
     /// its kind goes as text, and a field the form does not know goes as it
     /// is, so the daemon refuses it with its own code.
-    fn settings(&self, form: Option<&CreateForm>) -> SettingsDocument {
+    fn settings(&self, form: &CreateForm) -> SettingsDocument {
         let mut map = self
             .settings_file
             .as_ref()
@@ -256,7 +256,9 @@ impl CreateArgs {
             .unwrap_or_default();
         for setting in &self.settings {
             let kind = form
-                .and_then(|form| form.fields.iter().find(|field| field.key == setting.field))
+                .fields
+                .iter()
+                .find(|field| field.key == setting.field)
                 .map(|field| field.kind);
             map.insert(setting.field.clone(), typed(kind, &setting.value));
         }
@@ -266,13 +268,12 @@ impl CreateArgs {
         SettingsDocument::new(map)
     }
 
-    fn provider(&self, form: Option<&CreateForm>) -> ProviderSelector {
+    fn provider(&self, form: &CreateForm) -> ProviderSelector {
         ProviderSelector {
             name: self
                 .provider
                 .clone()
-                .or_else(|| form.map(|form| form.provider.name.clone()))
-                .unwrap_or_default(),
+                .unwrap_or_else(|| form.provider.name.clone()),
             revision: self.revision.clone(),
         }
     }
@@ -287,34 +288,20 @@ impl CreateArgs {
             .collect()
     }
 
-    /// The create form of the runtime. A daemon without a catalog, or whose
-    /// catalog lacks the provider, has none; a command that names both the
-    /// provider and its revision does not need it, because the daemon then
-    /// uses the pinned package (spec 0020, *Resolusi provider dan
-    /// revision*), and goes on without field kinds: `--set` values are sent
-    /// as text, and the daemon judges the draft all the same.
-    async fn form(
-        &self,
-        cx: &mut Context,
-        runtime_id: Uuid,
-    ) -> Result<Option<CreateForm>, CliFailure> {
+    /// The create form of the runtime, for the package `--provider` and
+    /// `--revision` pick: the daemon chooses it the way create does (spec
+    /// 0020, *Resolusi provider dan revision*), so `--set` reads as the kind
+    /// of the package create uses. A refused form ends the command with its
+    /// code, the code create would answer for the same flags.
+    async fn form(&self, cx: &mut Context, runtime_id: Uuid) -> Result<CreateForm, CliFailure> {
         let call = Call::InstanceGetCreateForm(GetCreateFormParams {
             runtime_id,
             provider: self.provider.clone(),
+            revision: self.revision.clone(),
         });
-        match cx.call(call, CallSpec::control()).await {
-            Ok(Reply::InstanceGetCreateForm(form)) => Ok(Some(*form)),
-            Ok(_) => Err(CliFailure::unexpected_reply(None)),
-            Err(failure)
-                if matches!(
-                    failure.body.code(),
-                    "catalog.unavailable" | "instance.provider_not_found"
-                ) && self.provider.is_some()
-                    && self.revision.is_some() =>
-            {
-                Ok(None)
-            }
-            Err(failure) => Err(failure),
+        match cx.call(call, CallSpec::control()).await? {
+            Reply::InstanceGetCreateForm(form) => Ok(*form),
+            _ => Err(CliFailure::unexpected_reply(None)),
         }
     }
 
@@ -322,7 +309,7 @@ impl CreateArgs {
         &self,
         cx: &mut Context,
         runtime_id: Uuid,
-        form: Option<&CreateForm>,
+        form: &CreateForm,
     ) -> CommandOutput<CreateOutput> {
         let secrets = match secret_plans(&self.sources()) {
             Ok(secrets) => secrets,
@@ -451,7 +438,7 @@ impl RunCommand for CreateArgs {
             Err(failure) => return CommandOutput::failed(failure),
         };
         if self.dry_run {
-            return self.dry_run(cx, runtime_id, form.as_ref()).await;
+            return self.dry_run(cx, runtime_id, &form).await;
         }
         let secrets = match read_secrets(cx, &self.sources()) {
             Ok(secrets) => secrets,
@@ -460,10 +447,10 @@ impl RunCommand for CreateArgs {
         let params = CreateInstanceParams {
             name: self.name.clone(),
             display_name: self.display_name.clone(),
-            provider: self.provider(form.as_ref()),
+            provider: self.provider(&form),
             runtime_id,
             endpoints: self.endpoints(),
-            settings: self.settings(form.as_ref()),
+            settings: self.settings(&form),
             secrets,
         };
         // `--start` needs the create to end first, whatever `--wait` says.

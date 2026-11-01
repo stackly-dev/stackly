@@ -5,7 +5,8 @@
     "type": "instance.get_create_form",
     "content": {
       "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
-      "provider": "official/postgresql"
+      "provider": "official/postgresql",
+      "revision": null
     }
   }
 }

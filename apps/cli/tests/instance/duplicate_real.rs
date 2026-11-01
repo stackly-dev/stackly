@@ -25,7 +25,7 @@ use crate::stacklyd::seed;
 
 const LINE: &str = "Duplicating settings of fake-a; no data is copied.\n";
 
-fn block_on<T: Send + 'static>(
+pub(crate) fn block_on<T: Send + 'static>(
     socket: &std::path::Path,
     work: impl AsyncFnOnce(Client) -> T + Send + 'static,
 ) -> T {

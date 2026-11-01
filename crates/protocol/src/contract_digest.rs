@@ -5,4 +5,4 @@
 /// Sent in the handshake so peers with the same version but another
 /// contract see `contractDrift`.
 pub const CONTRACT_DIGEST: &str =
-    "a3432dd8af90ccb06b794cf2eb4a8561758b6c23aec7747d3274e62c5197f18d";
+    "84fa67c6edd2b3cb22123a883fd838422ac58708ec7c2448e7a851b64aa8daad";

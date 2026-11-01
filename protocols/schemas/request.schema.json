@@ -900,6 +900,14 @@
           ],
           "default": null
         },
+        "revision": {
+          "description": "The package revision, such as `0.3.0`. Absent means the revision of\nthe catalog entry; another revision means the package pinned in the\ndata folder, chosen the way create chooses it. Since protocol 1.17.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "runtimeId": {
           "description": "The installed runtime the instance will run on.",
           "type": "string",

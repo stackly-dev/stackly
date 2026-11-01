@@ -832,3 +832,39 @@ fn start_waits_for_the_create_then_starts_with_a_key_made_from_the_create_key() 
     assert_eq!(value["result"]["operation"]["state"], "succeeded");
     ev.pass();
 }
+
+/// Spec 0020 AC-18 (update 2026-11-01).
+#[test]
+fn the_form_gets_the_revision_and_a_refused_form_ends_the_command_without_a_create() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "create sends --provider and --revision to instance.get_create_form, and a form refused with catalog.unavailable ends the command with that code and exit 6, with no instance.create",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let refusal: ErrorBody = error(
+        "catalog.unavailable",
+        "unavailable",
+        "the provider catalog is not available",
+    );
+    let daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+        Call::InstanceGetCreateForm(_) => vec![Step::Fail(refusal.clone())],
+        _ => Vec::new(),
+    });
+    let mut args = base();
+    args.push("--json");
+
+    let json = run(root.path(), &args);
+
+    assert_eq!(json.code, Some(6), "{json:?}");
+    assert_eq!(envelope(&json)["error"]["code"], "catalog.unavailable");
+    assert_eq!(
+        daemon.methods(),
+        ["daemon.handshake", "instance.get_create_form"],
+        "the refused form ends the command"
+    );
+    let form = &logged_params(&daemon, "instance.get_create_form")[0];
+    assert_eq!(form["provider"], "fake");
+    assert_eq!(form["revision"], "0.3.0");
+    ev.pass();
+}
