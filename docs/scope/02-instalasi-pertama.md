@@ -124,8 +124,8 @@ Wizard dan command untuk membuat instance: ID stabil, nama, runtime, endpoint, a
 - [x] Test it: `/test create instance` · 2026-10-31, `tst-f20-test` (`ffee4fa1`): AC-1 to AC-25 mapped to existing tests, AC-26 log check added
 - [x] Review it (fresh model): `/check review create instance` · 2026-10-31, `docs/reviews/2026-10-31-f20-create-instance.md`: Blocker 0, Major 2 fixed (`3a7f3999`, `56c8cae5`) and confirmed (`99a60e6e`); 23 Minor and 38 Nit left open
 - [x] Document it: `/document create instance` · 2026-10-31, `CHANGELOG.md` (Added and Fixed, range `4434632a..48c8f29e`)
-- [ ] Verify it (milestone 7): `/check verify create instance`
-- [ ] Test it (milestone 7): `/test create instance`
+- [x] Verify it (milestone 7): `/check verify create instance` · PASS 2026-11-01 (`46e7b647`), CLI on a `skeleton_seed` root with no catalog and with a development catalog
+- [x] Test it (milestone 7): `/test create instance` · 2026-11-01: AC-1 and AC-18 mapped to the `46e7b647` tests, AC-1 runtime order with a revision added (`create_form_pinned.rs`)
 - [ ] Review it (fresh model, milestone 7): `/check review create instance`
 - [ ] Document it (milestone 7): `/document create instance`
 

@@ -314,3 +314,83 @@ async fn two_digest_folders_and_other_software_refuse_the_form_like_create() {
     stop(api, daemon).await;
     ev.pass();
 }
+
+/// Marks the runtime of `site` failed in the registry, with the daemon
+/// stopped.
+fn fail_runtime(site: &Site) {
+    use stackly_domain::Registry as _;
+
+    let registry = site.open_registry();
+    let id = stackly_domain::RuntimeId::from_uuid(site.runtime_id).expect("a runtime id");
+    let runtime = registry
+        .runtime(id)
+        .expect("the registry reads")
+        .value
+        .expect("the runtime exists");
+    let expected = runtime.revision();
+    let failed = stackly_domain::Runtime::restore(stackly_domain::StoredRuntime {
+        id: runtime.id(),
+        software: runtime.software().clone(),
+        version: runtime.version().clone(),
+        line: runtime.line().clone(),
+        target: runtime.target(),
+        install: runtime.install().clone(),
+        state: stackly_domain::RuntimeState::Failed,
+        installed_at: runtime.installed_at(),
+        last_verified_at: runtime.last_verified_at(),
+        depends_on: runtime.depends_on().clone(),
+        revision: stackly_domain::ResourceRevision::new(expected.get() + 1)
+            .expect("the next revision is valid"),
+    })
+    .expect("a failed runtime row is consistent");
+    registry
+        .commit(stackly_domain::WriteBatch::new(vec![
+            stackly_domain::WriteOp::UpdateRuntime {
+                runtime: failed,
+                expected,
+            },
+        ]))
+        .expect("the runtime is marked failed");
+}
+
+// covers: AC-1
+#[tokio::test(flavor = "multi_thread")]
+async fn with_a_revision_the_runtime_is_judged_before_the_provider() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "with a revision, an unknown runtime answers instance.runtime_not_found and a failed runtime answers supervisor.runtime_unavailable with state failed, even for a revision that is not pinned, and a preflight of the pinned draft on the failed runtime reports the same code",
+    );
+    let site = Site::new();
+    fail_runtime(&site);
+    let daemon = site.start().await;
+    let api = site.api().await;
+
+    let unknown = api
+        .form_at(uuid::Uuid::now_v7(), Some("testing/fake"), Some("9.9.9"))
+        .await
+        .expect_err("no such runtime");
+    assert_eq!(unknown.code(), "instance.runtime_not_found", "{unknown:?}");
+
+    let failed = api
+        .form_at(site.runtime_id, Some("testing/fake"), Some("9.9.9"))
+        .await
+        .expect_err("the runtime is not installed");
+    assert_eq!(
+        failed.code(),
+        "supervisor.runtime_unavailable",
+        "the runtime wins over the unpinned revision: {failed:?}"
+    );
+    assert_eq!(failed.detail("state"), Some("failed"), "{failed:?}");
+
+    assert_form_refuses_like_create(
+        &api,
+        site.runtime_id,
+        "testing/fake",
+        "0.3.0",
+        "supervisor.runtime_unavailable",
+    )
+    .await;
+    stop(api, daemon).await;
+    ev.pass();
+}
