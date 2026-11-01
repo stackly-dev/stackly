@@ -2229,8 +2229,12 @@ public struct DaemonCounters: Codable, Sendable, Equatable {
 	public let logLinesDropped: UInt64
 	/// Times the socket was bound again after it went missing.
 	public let socketRebinds: UInt64
+	/// `truncated` records the instance log store wrote (spec 0027).
+	public let instanceLogTruncations: UInt64?
+	/// The bytes those `truncated` records stand for.
+	public let instanceLogBytesTruncated: UInt64?
 
-	public init(connectionsOpen: UInt64, connectionsTotal: UInt64, connectionsRejected: UInt64, framesRejected: UInt64, eventsPublished: UInt64, eventsDropped: UInt64, logLinesDropped: UInt64, socketRebinds: UInt64) {
+	public init(connectionsOpen: UInt64, connectionsTotal: UInt64, connectionsRejected: UInt64, framesRejected: UInt64, eventsPublished: UInt64, eventsDropped: UInt64, logLinesDropped: UInt64, socketRebinds: UInt64, instanceLogTruncations: UInt64?, instanceLogBytesTruncated: UInt64?) {
 		self.connectionsOpen = connectionsOpen
 		self.connectionsTotal = connectionsTotal
 		self.connectionsRejected = connectionsRejected
@@ -2239,6 +2243,8 @@ public struct DaemonCounters: Codable, Sendable, Equatable {
 		self.eventsDropped = eventsDropped
 		self.logLinesDropped = logLinesDropped
 		self.socketRebinds = socketRebinds
+		self.instanceLogTruncations = instanceLogTruncations
+		self.instanceLogBytesTruncated = instanceLogBytesTruncated
 	}
 }
 
@@ -4396,6 +4402,466 @@ public struct ListSecretsReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// A position in one instance's log store.
+public struct LogCursor: Codable, Sendable, Equatable {
+	/// The store the `seq` belongs to.
+	public let storeId: UUID
+	/// The record, which may no longer exist.
+	public let seq: UInt64
+
+	public init(storeId: UUID, seq: UInt64) {
+		self.storeId = storeId
+		self.seq = seq
+	}
+}
+
+/// The content of a `before` or `after` position.
+public struct LogAnchor: Codable, Sendable, Equatable {
+	/// The cursor the page is read next to.
+	public let cursor: LogCursor
+
+	public init(cursor: LogCursor) {
+		self.cursor = cursor
+	}
+}
+
+/// An output stream of the main process. Open: newer daemons may add
+/// values.
+public enum LogStream: String, Codable, Sendable, Equatable {
+	/// Standard output.
+	case stdout
+	/// Standard error.
+	case stderr
+	/// A stream this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What a [`LogEntry`] holds. Open: newer daemons may add kinds, and a
+/// kind this build does not know decodes as `unrecognized` whatever its
+/// content.
+public enum LogEntryKind: Codable, Sendable, Equatable {
+	/// One piece of output, already redacted.
+	case line(LogLineEntry)
+	/// Output of the stream that was dropped unread.
+	case truncated(LogTruncated)
+	/// A new main process started.
+	case started(LogStarted)
+	/// The main process exited.
+	case exited(LogExited)
+	/// Output written while Stackly was not running could not be read.
+	case unavailable
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case line,
+			truncated,
+			started,
+			exited,
+			unavailable,
+			unrecognized
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .line:
+				if let content = try? container.decode(LogLineEntry.self, forKey: .content) {
+					self = .line(content)
+					return
+				}
+			case .truncated:
+				if let content = try? container.decode(LogTruncated.self, forKey: .content) {
+					self = .truncated(content)
+					return
+				}
+			case .started:
+				if let content = try? container.decode(LogStarted.self, forKey: .content) {
+					self = .started(content)
+					return
+				}
+			case .exited:
+				if let content = try? container.decode(LogExited.self, forKey: .content) {
+					self = .exited(content)
+					return
+				}
+			case .unavailable:
+				self = .unavailable
+				return
+			case .unrecognized:
+				self = .unrecognized
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(LogEntryKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for LogEntryKind"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .line(let content):
+			try container.encode(CodingKeys.line, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .truncated(let content):
+			try container.encode(CodingKeys.truncated, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .started(let content):
+			try container.encode(CodingKeys.started, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .exited(let content):
+			try container.encode(CodingKeys.exited, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unavailable:
+			try container.encode(CodingKeys.unavailable, forKey: .type)
+		case .unrecognized:
+			try container.encode(CodingKeys.unrecognized, forKey: .type)
+		}
+	}
+}
+
+/// One entry of a page or a `log` frame.
+public struct LogEntry: Codable, Sendable, Equatable {
+	/// Unique for the instance and rising across both streams.
+	public let seq: UInt64
+	/// When the daemon read the line or saw the event, to the millisecond.
+	public let at: Date
+	/// The stream; null for a marker of the process run.
+	public let stream: LogStream?
+	/// What the entry holds.
+	public let kind: LogEntryKind
+
+	public init(seq: UInt64, at: Date, stream: LogStream?, kind: LogEntryKind) {
+		self.seq = seq
+		self.at = at
+		self.stream = stream
+		self.kind = kind
+	}
+}
+
+/// The content of an `exited` entry: a code or a signal, or neither when
+/// the status is not known.
+public struct LogExited: Codable, Sendable, Equatable {
+	/// The exit code.
+	public let code: Int32?
+	/// The signal that ended the process.
+	public let signal: Int32?
+
+	public init(code: Int32?, signal: Int32?) {
+		self.code = code
+		self.signal = signal
+	}
+}
+
+/// Why a follow ended. Open: newer daemons may add values.
+public enum LogFollowEndReason: String, Codable, Sendable, Equatable {
+	/// The instance was deleted.
+	case instanceRemoved = "instance_removed"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why a follow ended.
+public struct LogFollowEnd: Codable, Sendable, Equatable {
+	/// The reason.
+	public let reason: LogFollowEndReason
+
+	public init(reason: LogFollowEndReason) {
+		self.reason = reason
+	}
+}
+
+/// Why a reader missed entries. Open: newer daemons may add values.
+public enum LogGapReason: String, Codable, Sendable, Equatable {
+	/// The entries at the cursor were rotated out.
+	case rotated
+	/// The cursor belongs to another store of the instance.
+	case storeReset = "store_reset"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why the entries after a cursor are not the next ones.
+public struct LogGap: Codable, Sendable, Equatable {
+	/// The reason.
+	public let reason: LogGapReason
+
+	public init(reason: LogGapReason) {
+		self.reason = reason
+	}
+}
+
+/// A `log` frame: entries of one follow, a gap before them, or its end.
+/// Never all three empty.
+public struct LogFrame: Codable, Sendable, Equatable {
+	/// The follow the frame belongs to.
+	public let subscriptionId: UInt32
+	/// The store the entries belong to.
+	public let storeId: UUID?
+	/// The new entries, `seq` rising.
+	public let entries: [LogEntry]?
+	/// Applies before the entries.
+	public let gap: LogGap?
+	/// The follow ended; no frame follows.
+	public let ended: LogFollowEnd?
+
+	public init(subscriptionId: UInt32, storeId: UUID?, entries: [LogEntry]?, gap: LogGap?, ended: LogFollowEnd?) {
+		self.subscriptionId = subscriptionId
+		self.storeId = storeId
+		self.entries = entries
+		self.gap = gap
+		self.ended = ended
+	}
+}
+
+/// How serious a line looks, from a keyword rule on its text. Open: newer
+/// daemons may add values.
+public enum LogLevel: String, Codable, Sendable, Equatable {
+	/// Nothing matched.
+	case normal
+	/// A warning keyword matched.
+	case warning
+	/// An error keyword matched.
+	case error
+	/// A level this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The content of a `line` entry.
+public struct LogLineEntry: Codable, Sendable, Equatable {
+	/// The redacted text, without its line ending.
+	public let text: String
+	/// The level.
+	public let level: LogLevel
+	/// The process had not ended the line yet.
+	public let partial: Bool?
+	/// The piece continues the line of the entry before it.
+	public let continued: Bool?
+	/// The init step whose output this is, by its number.
+	public let step: String?
+
+	public init(text: String, level: LogLevel, partial: Bool?, continued: Bool?, step: String?) {
+		self.text = text
+		self.level = level
+		self.partial = partial
+		self.continued = continued
+		self.step = step
+	}
+}
+
+/// How much a store keeps.
+public struct LogRetention: Codable, Sendable, Equatable {
+	/// The segment files one stream keeps.
+	public let segmentsPerStream: UInt64
+	/// The size at which a segment is closed.
+	public let segmentMaxBytes: UInt64
+
+	public init(segmentsPerStream: UInt64, segmentMaxBytes: UInt64) {
+		self.segmentsPerStream = segmentsPerStream
+		self.segmentMaxBytes = segmentMaxBytes
+	}
+}
+
+/// The bytes a store holds per stream.
+public struct LogStreamBytes: Codable, Sendable, Equatable {
+	/// The segments of stdout.
+	public let stdout: UInt64
+	/// The segments of stderr.
+	public let stderr: UInt64
+
+	public init(stdout: UInt64, stderr: UInt64) {
+		self.stdout = stdout
+		self.stderr = stderr
+	}
+}
+
+/// Reply of `instance.logs_read`.
+public struct LogPage: Codable, Sendable, Equatable {
+	/// The store; null before the instance wrote anything.
+	public let storeId: UUID?
+	/// The entries, `seq` rising.
+	public let entries: [LogEntry]?
+	/// The cursor of the page before; null when nothing older is left.
+	public let earlier: LogCursor?
+	/// The cursor of the page after; null when the page reached the head.
+	public let later: LogCursor?
+	/// The newest entry of the store.
+	public let head: LogCursor?
+	/// Applies before the entries.
+	public let gap: LogGap?
+	/// The read stopped after scanning its budget; the cursors continue
+	/// from where it stopped.
+	public let scanLimited: Bool?
+	/// How much the store keeps.
+	public let retention: LogRetention
+	/// The bytes the store holds now.
+	public let storedBytes: LogStreamBytes
+	/// Whole lines of the store that were not records, met by this read.
+	public let skippedRecords: UInt64?
+
+	public init(storeId: UUID?, entries: [LogEntry]?, earlier: LogCursor?, later: LogCursor?, head: LogCursor?, gap: LogGap?, scanLimited: Bool?, retention: LogRetention, storedBytes: LogStreamBytes, skippedRecords: UInt64?) {
+		self.storeId = storeId
+		self.entries = entries
+		self.earlier = earlier
+		self.later = later
+		self.head = head
+		self.gap = gap
+		self.scanLimited = scanLimited
+		self.retention = retention
+		self.storedBytes = storedBytes
+		self.skippedRecords = skippedRecords
+	}
+}
+
+/// The content of a `started` entry.
+public struct LogStarted: Codable, Sendable, Equatable {
+	/// The PID of the new process.
+	public let pid: UInt32
+
+	public init(pid: UInt32) {
+		self.pid = pid
+	}
+}
+
+/// The content of a `truncated` entry.
+public struct LogTruncated: Codable, Sendable, Equatable {
+	/// How many bytes were dropped.
+	public let bytes: UInt64
+
+	public init(bytes: UInt64) {
+		self.bytes = bytes
+	}
+}
+
+/// Params of `instance.logs_follow`.
+public struct LogsFollowParams: Codable, Sendable, Equatable {
+	/// The instance, retained ones included.
+	public let instance: UUID
+	/// The streams; empty means both. No duplicates.
+	public let streams: [LogStream]?
+	/// Keeps lines that hold this text, in any case.
+	public let contains: String?
+	/// Starts after this cursor; after the current head when left out.
+	public let after: LogCursor?
+
+	public init(instance: UUID, streams: [LogStream]?, contains: String?, after: LogCursor?) {
+		self.instance = instance
+		self.streams = streams
+		self.contains = contains
+		self.after = after
+	}
+}
+
+/// Reply of `instance.logs_follow`: sent before the first `log` frame.
+public struct LogsFollowing: Codable, Sendable, Equatable {
+	/// The follow, for `instance.logs_unfollow` and the frames.
+	public let subscriptionId: UInt32
+	/// The store; null before the instance wrote anything.
+	public let storeId: UUID?
+	/// The newest entry when the follow started.
+	public let head: LogCursor?
+
+	public init(subscriptionId: UInt32, storeId: UUID?, head: LogCursor?) {
+		self.subscriptionId = subscriptionId
+		self.storeId = storeId
+		self.head = head
+	}
+}
+
+/// Where a page starts. Closed: an older daemon refuses the method before
+/// it reads the params.
+public enum LogPosition: Codable, Sendable, Equatable {
+	/// The newest entries.
+	case newest
+	/// The entries with a `seq` below the cursor, the closest ones.
+	case before(LogAnchor)
+	/// The entries with a `seq` above the cursor, the closest ones.
+	case after(LogAnchor)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case newest,
+			before,
+			after
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .newest:
+				self = .newest
+				return
+			case .before:
+				if let content = try? container.decode(LogAnchor.self, forKey: .content) {
+					self = .before(content)
+					return
+				}
+			case .after:
+				if let content = try? container.decode(LogAnchor.self, forKey: .content) {
+					self = .after(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(LogPosition.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for LogPosition"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .newest:
+			try container.encode(CodingKeys.newest, forKey: .type)
+		case .before(let content):
+			try container.encode(CodingKeys.before, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .after(let content):
+			try container.encode(CodingKeys.after, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Params of `instance.logs_read`.
+public struct LogsReadParams: Codable, Sendable, Equatable {
+	/// The instance, retained ones included.
+	public let instance: UUID
+	/// The streams; empty means both. No duplicates.
+	public let streams: [LogStream]?
+	/// Keeps lines that hold this text, in any case: 1 to 256 characters
+	/// without a line break.
+	public let contains: String?
+	/// Where the page starts; the newest entries when left out.
+	public let position: LogPosition?
+	/// The entries at most, 1 to 1000; 200 when left out.
+	public let limit: UInt32?
+
+	public init(instance: UUID, streams: [LogStream]?, contains: String?, position: LogPosition?, limit: UInt32?) {
+		self.instance = instance
+		self.streams = streams
+		self.contains = contains
+		self.position = position
+		self.limit = limit
+	}
+}
+
+/// Params of `instance.logs_unfollow`.
+public struct LogsUnfollowParams: Codable, Sendable, Equatable {
+	/// The follow to end.
+	public let subscriptionId: UInt32
+
+	public init(subscriptionId: UInt32) {
+		self.subscriptionId = subscriptionId
+	}
+}
+
 /// Why a reference needs a value. Open.
 public enum NeedsSecretReason: String, Codable, Sendable, Equatable {
 	/// The store holds no value.
@@ -4705,6 +5171,12 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceGetDetail(GetInstanceDetailParams)
 	/// The size of the data folder of one instance.
 	case instanceGetDataUsage(GetDataUsageParams)
+	/// One page of an instance's stored log (spec 0027).
+	case instanceLogsRead(LogsReadParams)
+	/// Starts pushing an instance's new log entries as `log` frames.
+	case instanceLogsFollow(LogsFollowParams)
+	/// Ends a log follow.
+	case instanceLogsUnfollow(LogsUnfollowParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -4744,7 +5216,10 @@ public enum Call: Codable, Sendable, Equatable {
 			instancePreflight = "instance.preflight",
 			instanceGetDuplicateForm = "instance.get_duplicate_form",
 			instanceGetDetail = "instance.get_detail",
-			instanceGetDataUsage = "instance.get_data_usage"
+			instanceGetDataUsage = "instance.get_data_usage",
+			instanceLogsRead = "instance.logs_read",
+			instanceLogsFollow = "instance.logs_follow",
+			instanceLogsUnfollow = "instance.logs_unfollow"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4933,6 +5408,21 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceGetDataUsage(content)
 					return
 				}
+			case .instanceLogsRead:
+				if let content = try? container.decode(LogsReadParams.self, forKey: .content) {
+					self = .instanceLogsRead(content)
+					return
+				}
+			case .instanceLogsFollow:
+				if let content = try? container.decode(LogsFollowParams.self, forKey: .content) {
+					self = .instanceLogsFollow(content)
+					return
+				}
+			case .instanceLogsUnfollow:
+				if let content = try? container.decode(LogsUnfollowParams.self, forKey: .content) {
+					self = .instanceLogsUnfollow(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -5049,6 +5539,15 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceGetDataUsage(let content):
 			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceLogsRead(let content):
+			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceLogsFollow(let content):
+			try container.encode(CodingKeys.instanceLogsFollow, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceLogsUnfollow(let content):
+			try container.encode(CodingKeys.instanceLogsUnfollow, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -5151,6 +5650,12 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGetDetail(InstanceDetail)
 	/// The size of a data folder, or null when none is cached.
 	case instanceGetDataUsage(DataUsageReply)
+	/// One page of the log.
+	case instanceLogsRead(LogPage)
+	/// The follow started; its `log` frames follow.
+	case instanceLogsFollow(LogsFollowing)
+	/// The follow ended.
+	case instanceLogsUnfollow
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -5190,7 +5695,10 @@ public enum Reply: Codable, Sendable, Equatable {
 			instancePreflight = "instance.preflight",
 			instanceGetDuplicateForm = "instance.get_duplicate_form",
 			instanceGetDetail = "instance.get_detail",
-			instanceGetDataUsage = "instance.get_data_usage"
+			instanceGetDataUsage = "instance.get_data_usage",
+			instanceLogsRead = "instance.logs_read",
+			instanceLogsFollow = "instance.logs_follow",
+			instanceLogsUnfollow = "instance.logs_unfollow"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -5389,6 +5897,19 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceGetDataUsage(content)
 					return
 				}
+			case .instanceLogsRead:
+				if let content = try? container.decode(LogPage.self, forKey: .content) {
+					self = .instanceLogsRead(content)
+					return
+				}
+			case .instanceLogsFollow:
+				if let content = try? container.decode(LogsFollowing.self, forKey: .content) {
+					self = .instanceLogsFollow(content)
+					return
+				}
+			case .instanceLogsUnfollow:
+				self = .instanceLogsUnfollow
+				return
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -5510,6 +6031,14 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .instanceGetDataUsage(let content):
 			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceLogsRead(let content):
+			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceLogsFollow(let content):
+			try container.encode(CodingKeys.instanceLogsFollow, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceLogsUnfollow:
+			try container.encode(CodingKeys.instanceLogsUnfollow, forKey: .type)
 		}
 	}
 }
@@ -5930,7 +6459,9 @@ public struct UnsubscribeParams: Codable, Sendable, Equatable {
 	}
 }
 
-/// Every frame the daemon sends. Adding a variant is a new major.
+/// Every frame the daemon sends. Adding a variant a client may receive
+/// without asking is a new major; `log` is sent only on a connection that
+/// called `instance.logs_follow`, so it came as a minor (spec 0027).
 public enum ServerFrame: Codable, Sendable, Equatable {
 	/// The reply to one request.
 	case response(Response)
@@ -5939,11 +6470,14 @@ public enum ServerFrame: Codable, Sendable, Equatable {
 	case error(ErrorFrame)
 	/// One event for one subscription.
 	case event(Event)
+	/// Log entries of one follow (spec 0027).
+	case log(LogFrame)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case response,
 			error,
-			event
+			event,
+			log
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -5969,6 +6503,11 @@ public enum ServerFrame: Codable, Sendable, Equatable {
 					self = .event(content)
 					return
 				}
+			case .log:
+				if let content = try? container.decode(LogFrame.self, forKey: .content) {
+					self = .log(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(ServerFrame.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for ServerFrame"))
@@ -5985,6 +6524,9 @@ public enum ServerFrame: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .event(let content):
 			try container.encode(CodingKeys.event, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .log(let content):
+			try container.encode(CodingKeys.log, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

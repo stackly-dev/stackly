@@ -61,6 +61,7 @@ lifecycle:
       - "--crash-exit-code=${settings.crashExitCode}"
       - "--log-lines-per-second=${settings.logLinesPerSecond}"
       - "--ignore-term=${settings.ignoreTerm}"
+      - "--leak-token=${settings.leakToken}"
     cwd: "${instance.data}"
   stop: { strategy: gracefulProcess, signal: term }
   reload:

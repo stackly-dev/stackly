@@ -737,6 +737,18 @@ pub(crate) fn check_path(
         issues.at(path, IssueCode::InvalidValue, rule);
         return None;
     }
+    // The durable log store of Stackly owns `captured/` in the log folder
+    // (spec 0027, *Usulan update* for spec 0009).
+    if position == PathPosition::LogFile
+        && components.first().map(String::as_str) == Some(stackly_platform::CAPTURED_LOGS_DIR)
+    {
+        issues.at(
+            path,
+            IssueCode::InvalidValue,
+            "a log file cannot be inside ${instance.logs}/captured, which Stackly keeps",
+        );
+        return None;
+    }
     Some(PathExpr { base, components })
 }
 

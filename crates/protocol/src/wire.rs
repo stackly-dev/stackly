@@ -123,6 +123,13 @@ safe_integer! {
     Count
 }
 
+safe_integer! {
+    /// The `seq` of one record of an instance's log store (spec 0027): unique
+    /// for the instance and rising across both streams, process runs, and
+    /// daemon restarts.
+    LogSeq
+}
+
 /// A signed integer between minus and plus [`MAX_SAFE_INTEGER`], the signed
 /// counterpart of [`Count`]: a setting value or a schema bound that may be
 /// negative. `typeshare.toml` maps it to `Int64`, and decoding rejects a

@@ -78,7 +78,10 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceGetDuplicateForm = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGetDetail = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceGetDataUsage = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 38)
+        #expect(methods.contains { if case .instanceLogsRead = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceLogsFollow = $0 { true } else { false } })
+        #expect(methods.contains { if case .instanceLogsUnfollow = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 41)
     }
 
     private func check<Value: Codable & Equatable>(

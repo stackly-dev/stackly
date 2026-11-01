@@ -836,6 +836,15 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
     assert_manifest_issue(
         Edit::fake_command().replace(
             yaml,
+            "files: [\"${instance.logs}/fake.log\"]",
+            "files: [\"${instance.logs}/captured/fake.log\"]",
+        ),
+        "logs.files[0]",
+        IssueCode::InvalidValue,
+    );
+    assert_manifest_issue(
+        Edit::fake_command().replace(
+            yaml,
             "destination: \"${instance.config}/peers.yaml\"",
             "destination: \"${instance.secrets}/peers.yaml\"",
         ),

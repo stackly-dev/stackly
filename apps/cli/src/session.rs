@@ -11,6 +11,7 @@ use stackly_ipc::{CallOptions, Client, ConnectPolicy, EventStream};
 use stackly_protocol::codes::{daemon, ipc, request};
 use stackly_protocol::events::{SubscribeParams, Subscribed};
 use stackly_protocol::handshake::{ClientInfo, ClientKind, HandshakeAccepted};
+use stackly_protocol::logs::{LogsFollowParams, LogsFollowing};
 use stackly_protocol::{Call, ErrorBody, Reply};
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -268,6 +269,40 @@ impl Session {
                     None,
                     Some(request_id),
                 ))
+            }
+        }
+    }
+}
+
+impl Session {
+    /// Starts `instance.logs_follow`, with a `requestId` and `-v` lines
+    /// like [`Self::subscribe`], under the control time limit (spec 0027).
+    ///
+    /// # Errors
+    ///
+    /// The daemon's error, or `ipc.call_timeout`.
+    pub async fn follow_logs(
+        &self,
+        params: LogsFollowParams,
+        sink: &mut StderrSink,
+        verbose: bool,
+    ) -> Result<(LogsFollowing, EventStream), CliFailure> {
+        let method = "instance.logs_follow";
+        trace(sink, verbose, &format!("-> {method}"));
+        let started = Instant::now();
+        let limit = RequestTimeout::Control.duration();
+        match tokio::time::timeout(limit, self.client.follow_logs(params)).await {
+            Ok(Ok(following)) => {
+                trace_done(sink, verbose, "ok", started);
+                Ok(following)
+            }
+            Ok(Err(body)) => {
+                trace_done(sink, verbose, body.code(), started);
+                Err(CliFailure::daemon(body, None))
+            }
+            Err(_) => {
+                trace_done(sink, verbose, "timeout", started);
+                Err(CliFailure::call_timeout(method, limit, None, None))
             }
         }
     }

@@ -7,6 +7,7 @@ use std::io::BufRead;
 use stackly_ipc::EventStream;
 use stackly_protocol::events::{SubscribeParams, Subscribed};
 use stackly_protocol::handshake::HandshakeAccepted;
+use stackly_protocol::logs::{LogsFollowParams, LogsFollowing};
 use stackly_protocol::operation::OperationDetail;
 use stackly_protocol::{Call, Reply};
 use uuid::Uuid;
@@ -222,6 +223,25 @@ impl Context {
             .ok_or_else(CliFailure::not_connected)?;
         session
             .subscribe(params, &mut self.output.stderr, self.output.verbose)
+            .await
+    }
+
+    /// Starts a log follow, connecting first if needed (spec 0027).
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Session::connect`] and [`Session::follow_logs`].
+    pub async fn follow_logs(
+        &mut self,
+        params: LogsFollowParams,
+    ) -> Result<(LogsFollowing, EventStream), CliFailure> {
+        self.connect().await?;
+        let session = self
+            .session
+            .as_ref()
+            .ok_or_else(CliFailure::not_connected)?;
+        session
+            .follow_logs(params, &mut self.output.stderr, self.output.verbose)
             .await
     }
 

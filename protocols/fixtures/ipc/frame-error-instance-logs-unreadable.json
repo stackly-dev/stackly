@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000001107",
+    "error": {
+      "code": "instance.logs_unreadable",
+      "category": "unavailable",
+      "message": "the log store of the instance can't be read",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "run stackly doctor; the log folder of the instance isn't a private folder you own",
+      "details": [
+        {
+          "key": "reason",
+          "value": "permission_denied"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

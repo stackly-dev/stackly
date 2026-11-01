@@ -50,7 +50,8 @@
       "--crash-after-ms=0",
       "--crash-exit-code=70",
       "--log-lines-per-second=0",
-      "--ignore-term=false"
+      "--ignore-term=false",
+      "--leak-token=false"
     ],
     "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
     "env": [

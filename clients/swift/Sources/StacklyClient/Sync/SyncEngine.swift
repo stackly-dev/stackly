@@ -142,7 +142,7 @@ public actor SyncEngine {
             } else if advance(to: event.sequence, instance: instance) {
                 continuation.yield(.event(event))
             }
-        case .response, .error:
+        case .response, .error, .log:
             break
         }
     }

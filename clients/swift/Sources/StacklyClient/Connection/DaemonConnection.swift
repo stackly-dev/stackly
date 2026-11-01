@@ -174,6 +174,47 @@ public actor DaemonConnection {
         return (subscribed, stream)
     }
 
+    /// Starts `instance.logs_follow` and returns the daemon's reply plus the
+    /// stream of its frames, as ``DecodedFrame/log(_:)``, in order (spec
+    /// 0027). The last frame of a follow whose instance was deleted carries
+    /// `ended`. The stream ends when the connection closes; end the follow
+    /// with ``unfollowLogs(_:options:)``.
+    ///
+    /// - Parameters:
+    ///   - params: What to follow.
+    ///   - options: The time limit for the follow call.
+    /// - Throws: The errors of ``call(_:idempotencyKey:options:)``, such as
+    ///   `events.too_many_subscriptions`.
+    public func followLogs(
+        _ params: LogsFollowParams,
+        options: CallOptions = .standard
+    ) async throws(ClientError) -> (LogsFollowing, EventStream) {
+        let reply = try await call(.instanceLogsFollow(params), options: options)
+        guard case .instanceLogsFollow(let following) = reply,
+            let stream = newStreams.removeValue(forKey: following.subscriptionId)
+        else {
+            throw .outcomeUnknown(closeReason ?? ClientErrorCatalog.protocolViolation())
+        }
+        return (following, stream)
+    }
+
+    /// Ends a log follow and its stream.
+    ///
+    /// - Parameters:
+    ///   - subscriptionId: The follow to end.
+    ///   - options: The time limit for the call.
+    /// - Throws: The errors of ``call(_:idempotencyKey:options:)``, such as
+    ///   `events.unknown_subscription`.
+    public func unfollowLogs(
+        _ subscriptionId: UInt32,
+        options: CallOptions = .standard
+    ) async throws(ClientError) {
+        subscriptions.removeValue(forKey: subscriptionId)?.finish()
+        _ = try await call(
+            .instanceLogsUnfollow(LogsUnfollowParams(subscriptionId: subscriptionId)),
+            options: options)
+    }
+
     /// Closes the connection. Waiting calls fail with `ipc.connection_closed`.
     /// Safe to call more than once.
     public func close() {
@@ -410,6 +451,8 @@ public actor DaemonConnection {
             subscriptions[event.subscriptionId]?.yield(frame)
         case .skipped(let subscriptionId, _, _):
             subscriptions[subscriptionId]?.yield(frame)
+        case .log(let log):
+            subscriptions[log.subscriptionId]?.yield(frame)
         }
     }
 
@@ -428,10 +471,16 @@ public actor DaemonConnection {
             terminate(reason: ClientErrorCatalog.protocolViolation())
             return
         }
-        if case .eventsSubscribe(let subscribed) = response.reply {
+        let subscriptionId: UInt32? =
+            switch response.reply {
+            case .eventsSubscribe(let subscribed): subscribed.subscriptionId
+            case .instanceLogsFollow(let following): following.subscriptionId
+            default: nil
+            }
+        if let subscriptionId {
             let (stream, continuation) = EventStream.makeStream()
-            subscriptions[subscribed.subscriptionId] = continuation
-            newStreams[subscribed.subscriptionId] = stream
+            subscriptions[subscriptionId] = continuation
+            newStreams[subscriptionId] = stream
         }
         if phase == .handshaking, case .daemonHandshake(let accepted) = response.reply {
             accept(accepted)

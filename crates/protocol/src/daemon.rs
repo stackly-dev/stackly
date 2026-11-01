@@ -255,9 +255,19 @@ pub mod subsystem {
     /// The provider catalog (feature 17); `unavailable` without a usable
     /// catalog, `degraded` while an entry failed validation.
     pub const CATALOG: &str = "catalog";
+    /// The durable log store of the instances (feature 27); `degraded`
+    /// while a write fails and for 60 seconds after the last failure.
+    pub const INSTANCE_LOGS: &str = "instance_logs";
     /// Every name, in the order `get_health` lists them.
-    pub const ALL: [&str; 7] = [
-        IPC, EVENT_BUS, LOG_SINK, REGISTRY, OPERATIONS, SUPERVISOR, CATALOG,
+    pub const ALL: [&str; 8] = [
+        IPC,
+        EVENT_BUS,
+        LOG_SINK,
+        REGISTRY,
+        OPERATIONS,
+        SUPERVISOR,
+        CATALOG,
+        INSTANCE_LOGS,
     ];
 }
 
@@ -282,6 +292,12 @@ pub struct DaemonCounters {
     pub log_lines_dropped: Count,
     /// Times the socket was bound again after it went missing.
     pub socket_rebinds: Count,
+    /// `truncated` records the instance log store wrote (spec 0027).
+    #[serde(default)]
+    pub instance_log_truncations: Count,
+    /// The bytes those `truncated` records stand for.
+    #[serde(default)]
+    pub instance_log_bytes_truncated: Count,
 }
 
 /// Reply of `daemon.get_capabilities`.

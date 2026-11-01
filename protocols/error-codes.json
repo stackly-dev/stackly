@@ -575,6 +575,16 @@
       "summary": "the free space is below the minimum to create an instance"
     },
     {
+      "code": "instance.logs_unreadable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the log store of the instance can't be read (spec 0027)"
+    },
+    {
       "code": "instance.name_invalid",
       "category": "invalid_input",
       "retryable": false,

@@ -748,6 +748,8 @@ area! {
             details ["shortKey"], "the short key of the new instance ID is taken";
         DATA_USAGE_UNAVAILABLE = "instance.data_usage_unavailable", Unavailable, retryable false,
             details ["reason"], "the data folder size can't be measured";
+        LOGS_UNREADABLE = "instance.logs_unreadable", Unavailable, retryable false,
+            details ["reason"], "the log store of the instance can't be read (spec 0027)";
 
         @functions
 
@@ -799,6 +801,19 @@ area! {
                         "not_private" => Some(
                             "run stackly doctor; the data folder isn't a private folder you own, or part of it can't be read",
                         ),
+                        "io" => Some("try again"),
+                        _ => None,
+                    };
+                }
+                "instance.logs_unreadable" => {
+                    return match details
+                        .iter()
+                        .find(|detail| detail.key() == "reason")
+                        .map(crate::error::ErrorDetail::value)?
+                    {
+                        "permission_denied" | "not_a_directory" => {
+                            Some("run stackly doctor; the log folder of the instance isn't a private folder you own")
+                        }
                         "io" => Some("try again"),
                         _ => None,
                     };
@@ -1878,6 +1893,11 @@ mod tests {
             ),
             (
                 "instance.data_usage_unavailable",
+                ErrorCategory::Unavailable,
+                &["reason"],
+            ),
+            (
+                "instance.logs_unreadable",
                 ErrorCategory::Unavailable,
                 &["reason"],
             ),

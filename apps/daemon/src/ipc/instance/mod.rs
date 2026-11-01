@@ -648,6 +648,20 @@ fn summary_of(core: &DaemonCore, supervisor: &Supervisor, instance: &Instance) -
     dto::summary(instance, &status, excerpt, &sockets)
 }
 
+/// Checks that the instance `id` exists, retained ones included, and
+/// returns its ID; the log methods answer an unknown one like
+/// `instance.get` (spec 0027).
+///
+/// # Errors
+///
+/// `resource.not_found` for an unknown instance and the registry errors of
+/// `instance.get`.
+pub async fn existing(core: &DaemonCore, id: Uuid) -> Result<InstanceId, Box<ErrorBody>> {
+    let id = instance_id(id)?;
+    read_instance(core, id).await?;
+    Ok(id)
+}
+
 /// Reads one instance, retained ones included.
 async fn read_instance(core: &DaemonCore, id: InstanceId) -> Result<Instance, Box<ErrorBody>> {
     let registry = registry_of(core)?;

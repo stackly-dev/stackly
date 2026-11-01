@@ -76,14 +76,10 @@ impl<'a, T: Serialize> Envelope<'a, T> {
     }
 }
 
-/// One record of a streaming command, before its final `result` record.
-/// The first streaming command arrives with feature 27.
+/// One record of a streaming command, before its final `result` record;
+/// `stackly instance logs` writes one per entry (spec 0027).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "feature 27 writes the first streaming command")
-)]
 pub struct StreamItem<'a, T: Serialize> {
     /// [`CLI_SCHEMA_VERSION`].
     pub schema_version: u32,

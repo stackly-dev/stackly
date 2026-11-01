@@ -32,6 +32,9 @@ use crate::instance::{
     ReloadInstanceParams, RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
+use crate::logs::{
+    LogFrame, LogPage, LogsFollowParams, LogsFollowing, LogsReadParams, LogsUnfollowParams,
+};
 use crate::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
@@ -188,6 +191,15 @@ pub enum Call {
     /// The size of the data folder of one instance.
     #[serde(rename = "instance.get_data_usage")]
     InstanceGetDataUsage(GetDataUsageParams),
+    /// One page of an instance's stored log (spec 0027).
+    #[serde(rename = "instance.logs_read")]
+    InstanceLogsRead(LogsReadParams),
+    /// Starts pushing an instance's new log entries as `log` frames.
+    #[serde(rename = "instance.logs_follow")]
+    InstanceLogsFollow(LogsFollowParams),
+    /// Ends a log follow.
+    #[serde(rename = "instance.logs_unfollow")]
+    InstanceLogsUnfollow(LogsUnfollowParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -310,6 +322,15 @@ pub enum Reply {
     /// The size of a data folder, or null when none is cached.
     #[serde(rename = "instance.get_data_usage")]
     InstanceGetDataUsage(DataUsageReply),
+    /// One page of the log.
+    #[serde(rename = "instance.logs_read")]
+    InstanceLogsRead(Box<LogPage>),
+    /// The follow started; its `log` frames follow.
+    #[serde(rename = "instance.logs_follow")]
+    InstanceLogsFollow(LogsFollowing),
+    /// The follow ended.
+    #[serde(rename = "instance.logs_unfollow")]
+    InstanceLogsUnfollow,
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -418,6 +439,9 @@ methods! {
     "instance.get_duplicate_form" => InstanceGetDuplicateForm(GetDuplicateFormParams), recovery refused;
     "instance.get_detail" => InstanceGetDetail(GetInstanceDetailParams), recovery refused;
     "instance.get_data_usage" => InstanceGetDataUsage(GetDataUsageParams), recovery refused;
+    "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
+    "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
+    "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
 }
 
 impl Reply {
@@ -429,7 +453,9 @@ impl Reply {
     }
 }
 
-/// Every frame the daemon sends. Adding a variant is a new major.
+/// Every frame the daemon sends. Adding a variant a client may receive
+/// without asking is a new major; `log` is sent only on a connection that
+/// called `instance.logs_follow`, so it came as a minor (spec 0027).
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", content = "content", rename_all = "snake_case")]
@@ -441,6 +467,8 @@ pub enum ServerFrame {
     Error(ErrorFrame),
     /// One event for one subscription.
     Event(Event),
+    /// Log entries of one follow (spec 0027).
+    Log(LogFrame),
 }
 
 /// The reply to one request. Replies on one connection may arrive out of
@@ -570,7 +598,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 13
+                == 16
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -584,9 +612,10 @@ mod tests {
             "installing, listing, and reading runtimes need the registry"
         );
         assert_eq!(
-            // The last 3: `instance.restart`, `instance.reload`, and
-            // `instance.force_stop` (spec 0026).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3,
+            // The 3 before last: `instance.restart`, `instance.reload`,
+            // and `instance.force_stop` (spec 0026). The last 3: the log
+            // methods (spec 0027).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

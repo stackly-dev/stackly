@@ -1,0 +1,38 @@
+{
+  "type": "log",
+  "content": {
+    "subscriptionId": 3,
+    "storeId": "0192f3a5-0000-7000-8000-0000000000aa",
+    "entries": [
+      {
+        "seq": 4817,
+        "at": "2026-11-01T07:05:02.000Z",
+        "stream": "stdin",
+        "kind": {
+          "type": "paused",
+          "content": {
+            "for": 1
+          }
+        }
+      },
+      {
+        "seq": 4818,
+        "at": "2026-11-01T07:05:02.000Z",
+        "stream": "stdout",
+        "kind": {
+          "type": "line",
+          "content": {
+            "text": "x",
+            "level": "notice"
+          }
+        }
+      }
+    ],
+    "gap": {
+      "reason": "compacted"
+    },
+    "ended": {
+      "reason": "later"
+    }
+  }
+}

@@ -61,6 +61,9 @@ extension Call {
 		case .instanceGetDuplicateForm: "instance.get_duplicate_form"
 		case .instanceGetDetail: "instance.get_detail"
 		case .instanceGetDataUsage: "instance.get_data_usage"
+		case .instanceLogsRead: "instance.logs_read"
+		case .instanceLogsFollow: "instance.logs_follow"
+		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		}
 	}
 }
@@ -107,6 +110,9 @@ extension Reply {
 		case .instanceGetDuplicateForm: "instance.get_duplicate_form"
 		case .instanceGetDetail: "instance.get_detail"
 		case .instanceGetDataUsage: "instance.get_data_usage"
+		case .instanceLogsRead: "instance.logs_read"
+		case .instanceLogsFollow: "instance.logs_follow"
+		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		}
 	}
 }

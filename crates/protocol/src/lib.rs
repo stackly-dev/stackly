@@ -32,6 +32,7 @@ pub mod handshake;
 pub mod instance;
 pub mod json;
 pub mod limits;
+pub mod logs;
 pub mod message;
 pub mod operation;
 pub mod runtime;
@@ -46,7 +47,7 @@ pub use limits::Limits;
 pub use message::{Call, ErrorFrame, Reply, Request, Response, ServerFrame};
 pub use version::ProtocolVersion;
 pub use wire::{
-    Count, ResourceKind, ResourceRef, Revision, Sequence, SignedSafeInteger, Timestamp,
+    Count, LogSeq, ResourceKind, ResourceRef, Revision, Sequence, SignedSafeInteger, Timestamp,
 };
 
 /// Returns the JSON Schema of every top level contract type, keyed by file

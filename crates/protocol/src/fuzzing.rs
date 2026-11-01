@@ -112,6 +112,7 @@ pub fn server_frame_decode(data: &[u8]) {
         Ok(DecodedFrame::Response(response)) => ServerFrame::Response(response),
         Ok(DecodedFrame::Error(error)) => ServerFrame::Error(error),
         Ok(DecodedFrame::Event(event)) => ServerFrame::Event(event),
+        Ok(DecodedFrame::Log(frame)) => ServerFrame::Log(frame),
         Ok(DecodedFrame::SkippedEvent { .. }) => return,
         Err(error) => {
             assert!(
@@ -128,6 +129,7 @@ pub fn server_frame_decode(data: &[u8]) {
         ServerFrame::Response(response) => DecodedFrame::Response(response),
         ServerFrame::Error(error) => DecodedFrame::Error(error),
         ServerFrame::Event(event) => DecodedFrame::Event(event),
+        ServerFrame::Log(frame) => DecodedFrame::Log(frame),
     };
     assert_eq!(again, expected);
 }

@@ -16,6 +16,7 @@ use stackly_core::catalog::{CatalogLocation, CatalogState};
 use stackly_core::instance::create::{
     CreateHooks, CreateWorkFactory, INSTANCE_REGISTRATION, InstanceRegistrationCompensator,
 };
+use stackly_core::logs::{DurableLog, DurableLogConfig, DurableLogSink};
 use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::secret::{
     Redactor, SECRET_REF_COMPENSATOR, SecretRefCompensator, SecretService, SecretWorker,
@@ -41,6 +42,7 @@ use crate::connection;
 use crate::detail::DataUsageConfig;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
+use crate::ipc::logs::LogService;
 use crate::launch::{self, writes_launch_record};
 use crate::log_sink::LogSink;
 use crate::map::{self, StartFacts};
@@ -111,6 +113,9 @@ pub struct DaemonConfig {
     /// The limits and lifetimes of the data folder scans of
     /// `instance.get_data_usage`; tests shrink them (spec 0021).
     pub data_usage: DataUsageConfig,
+    /// The limits of the durable log store; tests shrink the segments to
+    /// watch a rotation (spec 0027).
+    pub durable_logs: DurableLogConfig,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -141,6 +146,7 @@ impl Default for DaemonConfig {
             capacity_read_timeout: CAPACITY_READ_TIMEOUT,
             create_hooks: CreateHooks::default(),
             data_usage: DataUsageConfig::default(),
+            durable_logs: DurableLogConfig::default(),
         }
     }
 }
@@ -556,6 +562,12 @@ async fn stop_gracefully(
     // actors, probes, spool readers, and exit handling end, with no
     // signal to an instance and no commit (spec 0010 AC-21).
     core.supervision().shutdown();
+    // What the spool readers queued is written and every segment synced
+    // before the connections close (spec 0027).
+    if let Some(logs) = core.logs() {
+        let log = logs.log().clone();
+        let _ = tokio::task::spawn_blocking(move || log.shutdown()).await;
+    }
     // Step 5.
     core.connections()
         .close_all(SHUTDOWN_FLUSH, shutting_down)
@@ -777,6 +789,26 @@ async fn start_slot(
                     });
                 }
                 secrets::probe_all(Arc::clone(&service)).await;
+                // The durable log store opens before the supervisor, so the
+                // first spool batch already has a writer (spec 0027).
+                let logs = match DurableLog::start(
+                    Arc::new(core.platform().clone()),
+                    Arc::new(core.prepared().clone()),
+                    config.durable_logs,
+                ) {
+                    Ok(logs) => {
+                        core.set_logs(LogService::new(logs.clone()));
+                        Some(logs)
+                    }
+                    Err(error) => {
+                        tracing::error!(%error, "the log writer thread could not start; instance logs are not stored");
+                        None
+                    }
+                };
+                let mut sinks = config.extra_log_sinks.clone();
+                if let Some(logs) = &logs {
+                    sinks.push(Arc::new(DurableLogSink::new(logs.clone())));
+                }
                 let supervisor = core.supervision().build(BuildInput {
                     registry: Arc::new(registry.clone()) as Arc<dyn Registry>,
                     platform: core.platform(),
@@ -784,7 +816,8 @@ async fn start_slot(
                     secrets: Arc::clone(&service),
                     redactor: Arc::clone(core.redactor()),
                     bus: core.bus(),
-                    extra_sinks: &config.extra_log_sinks,
+                    extra_sinks: &sinks,
+                    logs,
                     config: config.supervisor.clone(),
                 });
                 recovered = recover_operations(

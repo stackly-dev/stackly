@@ -12,8 +12,9 @@ use typeshare::typeshare;
 
 /// Largest control frame payload, in bytes (1 MiB).
 pub const CONTROL_FRAME_MAX: u32 = 1_048_576;
-/// Largest log batch payload, in bytes (64 KiB). The log batch builder of
-/// feature 27 keeps to it.
+/// Largest log batch payload, in bytes (64 KiB): a `logs_read` reply and a
+/// `log` frame hold entries up to it, and more only for a single entry
+/// (spec 0027).
 pub const LOG_BATCH_MAX: u32 = 65_536;
 /// Deepest JSON nesting a request or a daemon frame may have.
 pub const MAX_JSON_DEPTH: u32 = 32;
@@ -101,6 +102,16 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
         crate::instance::INSTANCE_PAGE_BYTES_MAX as u64,
     ),
     ("logBatchMax", LOG_BATCH_MAX as u64),
+    (
+        "logFilterMaxChars",
+        crate::logs::LOG_FILTER_MAX_CHARS as u64,
+    ),
+    (
+        "logReadLimitDefault",
+        crate::logs::LOG_READ_LIMIT_DEFAULT as u64,
+    ),
+    ("logReadLimitMax", crate::logs::LOG_READ_LIMIT_MAX as u64),
+    ("logReadLimitMin", crate::logs::LOG_READ_LIMIT_MIN as u64),
     ("maxInFlightRequests", MAX_IN_FLIGHT_REQUESTS as u64),
     ("maxJsonDepth", MAX_JSON_DEPTH as u64),
     ("maxSafeInteger", MAX_SAFE_INTEGER),
@@ -234,7 +245,7 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 18] = [
+    const SOURCES: [(&str, &str); 19] = [
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
@@ -246,6 +257,7 @@ mod tests {
         ("instance", include_str!("instance.rs")),
         ("json", include_str!("json.rs")),
         ("limits", include_str!("limits.rs")),
+        ("logs", include_str!("logs.rs")),
         ("message", include_str!("message.rs")),
         ("operation", include_str!("operation.rs")),
         ("runtime", include_str!("runtime.rs")),

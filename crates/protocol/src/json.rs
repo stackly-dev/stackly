@@ -454,6 +454,8 @@ pub enum DecodedFrame {
     Error(ErrorFrame),
     /// An event of a kind this build knows.
     Event(Event),
+    /// Log entries of one follow (spec 0027).
+    Log(crate::logs::LogFrame),
     /// An event of a kind this build does not know. Its sequence still
     /// advances the cursor.
     SkippedEvent {
@@ -518,6 +520,9 @@ pub fn decode_server_frame(bytes: &[u8]) -> Result<DecodedFrame, Box<ErrorBody>>
                 .map(DecodedFrame::Event)
                 .map_err(|_| violation("daemon event does not decode"))
         }
+        "log" => serde_json::from_str(content)
+            .map(DecodedFrame::Log)
+            .map_err(|_| violation("daemon log frame does not decode")),
         _ => Err(violation("daemon frame type is not known")),
     }
 }

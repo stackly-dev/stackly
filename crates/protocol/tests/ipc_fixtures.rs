@@ -221,6 +221,7 @@ fn as_decoded(frame: ServerFrame) -> DecodedFrame {
         ServerFrame::Response(response) => DecodedFrame::Response(response),
         ServerFrame::Error(error) => DecodedFrame::Error(error),
         ServerFrame::Event(event) => DecodedFrame::Event(event),
+        ServerFrame::Log(frame) => DecodedFrame::Log(frame),
     }
 }
 
@@ -318,11 +319,17 @@ fn every_call_reply_frame_and_event_kind_has_a_roundtrip_fixture() {
                 frame_types.insert("event");
                 kinds.insert(event.kind.name());
             }
+            ServerFrame::Log(_) => {
+                frame_types.insert("log");
+            }
         }
     }
     assert_eq!(replies, Call::METHODS.iter().copied().collect());
     assert_eq!(kinds, EventKind::KINDS.iter().copied().collect());
-    assert_eq!(frame_types, BTreeSet::from(["response", "error", "event"]));
+    assert_eq!(
+        frame_types,
+        BTreeSet::from(["response", "error", "event", "log"])
+    );
 }
 
 #[test]

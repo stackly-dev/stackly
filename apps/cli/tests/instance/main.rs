@@ -20,6 +20,7 @@ mod exit_codes;
 mod get;
 mod inspect;
 mod list;
+mod logs_real;
 mod parity;
 #[path = "../operation/play.rs"]
 mod play;

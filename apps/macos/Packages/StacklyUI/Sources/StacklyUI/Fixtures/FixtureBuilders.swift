@@ -261,7 +261,8 @@
                 counters: DaemonCounters(
                     connectionsOpen: 1, connectionsTotal: 1, connectionsRejected: 0,
                     framesRejected: 0, eventsPublished: 0, eventsDropped: 0, logLinesDropped: 0,
-                    socketRebinds: 0),
+                    socketRebinds: 0, instanceLogTruncations: 0,
+                    instanceLogBytesTruncated: 0),
                 recovery: recovery)
         }
     }

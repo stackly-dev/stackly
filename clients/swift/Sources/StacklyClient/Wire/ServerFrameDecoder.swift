@@ -11,6 +11,9 @@ public enum DecodedFrame: Equatable, Sendable {
     /// An event of a kind this client does not know. Its sequence still
     /// advances the cursor.
     case skipped(subscriptionId: UInt32, sequence: UInt64, kind: String)
+    /// Log entries of one follow (spec 0027). Entries of a kind this client
+    /// does not know are left out.
+    case log(LogFrame)
 }
 
 /// Reads one daemon frame in the stages of Rust's `decode_server_frame`
@@ -18,7 +21,7 @@ public enum DecodedFrame: Equatable, Sendable {
 /// `EventProbe`, then the full decode.
 public enum ServerFrameDecoder {
     /// The frame types a daemon sends.
-    static let frameTypes: Set<String> = ["response", "error", "event"]
+    static let frameTypes: Set<String> = ["response", "error", "event", "log"]
 
     /// Decodes `payload`.
     ///
@@ -50,6 +53,12 @@ public enum ServerFrameDecoder {
                 )
             }
         }
+        if probe.type == "log" {
+            guard let log = try? decoder.decode(LogFrameProbe.self, from: data) else {
+                throw violation()
+            }
+            return .log(log.content.frame)
+        }
         guard let frame = try? decoder.decode(ServerFrame.self, from: data) else {
             throw violation()
         }
@@ -57,6 +66,39 @@ public enum ServerFrameDecoder {
         case .response(let response): return .response(response)
         case .error(let error): return .error(error)
         case .event(let event): return .event(event)
+        case .log(let log): return .log(log)
+        }
+    }
+
+    /// A `log` frame whose entries are decoded one by one, so an entry of a
+    /// kind a newer daemon added is dropped instead of failing the frame.
+    private struct LogFrameProbe: Decodable {
+        let content: LenientLogFrame
+    }
+
+    private struct LenientLogFrame: Decodable {
+        let subscriptionId: UInt32
+        let storeId: UUID?
+        let entries: [LenientEntry]?
+        let gap: LogGap?
+        let ended: LogFollowEnd?
+
+        var frame: LogFrame {
+            LogFrame(
+                subscriptionId: subscriptionId,
+                storeId: storeId,
+                entries: entries?.compactMap(\.entry),
+                gap: gap,
+                ended: ended
+            )
+        }
+    }
+
+    private struct LenientEntry: Decodable {
+        let entry: LogEntry?
+
+        init(from decoder: Decoder) throws {
+            entry = try? LogEntry(from: decoder)
         }
     }
 

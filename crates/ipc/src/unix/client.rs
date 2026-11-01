@@ -20,6 +20,7 @@ use stackly_protocol::json::{
     DecodedFrame, FieldCode, decode_server_frame, is_idempotency_key, is_request_id,
 };
 use stackly_protocol::limits::EVENT_BUFFER_LEN;
+use stackly_protocol::logs::{LogsFollowParams, LogsFollowing};
 use stackly_protocol::{
     CONTRACT_DIGEST, Call, ErrorBody, ErrorFrame, FieldError, ProtocolVersion, Reply, Request,
     Response,
@@ -131,6 +132,7 @@ impl Shared {
         }
         let subscription = match &response.reply {
             Reply::EventsSubscribe(subscribed) => Some(subscribed.subscription_id),
+            Reply::InstanceLogsFollow(following) => Some(following.subscription_id),
             _ => None,
         };
         let events = subscription.map(|id| {
@@ -425,6 +427,43 @@ impl Client {
         }
     }
 
+    /// Starts `instance.logs_follow` and returns its reply and the stream of
+    /// its `log` frames, as [`DecodedFrame::Log`] (spec 0027). The last
+    /// frame of a follow whose instance was deleted carries `ended`.
+    ///
+    /// Read the stream steadily, like [`Self::subscribe`]: the daemon keeps
+    /// what is not read on disk, and closes a connection that does not
+    /// read for 30 seconds.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::call`], such as
+    /// `events.too_many_subscriptions`.
+    pub async fn follow_logs(
+        &self,
+        params: LogsFollowParams,
+    ) -> Result<(LogsFollowing, EventStream), Box<ErrorBody>> {
+        match self
+            .request(Call::InstanceLogsFollow(params), CallOptions::default())
+            .await?
+        {
+            Answer {
+                reply: Reply::InstanceLogsFollow(following),
+                events: Some(events),
+            } => Ok((
+                following,
+                EventStream {
+                    subscription_id: following.subscription_id,
+                    events,
+                    shared: Arc::clone(&self.shared),
+                },
+            )),
+            _ => Err(violation(
+                "the daemon answered a log follow with another reply",
+            )),
+        }
+    }
+
     async fn request(&self, call: Call, options: CallOptions) -> Answered {
         let (request_id, idempotency_key) = options.into_parts()?;
         let (sender, receiver) = oneshot::channel();
@@ -542,6 +581,7 @@ async fn read_loop(mut reader: FrameReader, shared: Arc<Shared>) {
 async fn deliver(shared: &Shared, event: DecodedFrame) {
     let id = match &event {
         DecodedFrame::Event(event) => event.subscription_id,
+        DecodedFrame::Log(frame) => frame.subscription_id,
         DecodedFrame::SkippedEvent {
             subscription_id, ..
         } => *subscription_id,

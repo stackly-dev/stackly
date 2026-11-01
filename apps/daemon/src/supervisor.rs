@@ -8,6 +8,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use stackly_core::PreparedLayout;
+use stackly_core::logs::DurableLog;
 use stackly_core::secret::{Redactor, SecretService};
 use stackly_core::supervisor::{
     LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor, SupervisorConfig,
@@ -67,6 +68,9 @@ pub struct BuildInput<'a> {
     pub bus: &'a Arc<EventBus>,
     /// Sinks that see every redacted log line besides the tail.
     pub extra_sinks: &'a [Arc<dyn LogSink>],
+    /// The durable log store, told to drop an instance's store when the
+    /// instance is removed (spec 0027).
+    pub logs: Option<DurableLog>,
     /// The constants.
     pub config: SupervisorConfig,
 }
@@ -108,6 +112,7 @@ impl Supervision {
         ));
         let events = Arc::new(BusSupervisorEvents {
             bus: Arc::clone(input.bus),
+            logs: input.logs.clone(),
             supervisor: Arc::clone(&handle),
             report: Arc::clone(&self.report),
             sockets: Arc::clone(&sockets),
@@ -268,6 +273,7 @@ impl Supervision {
 /// flag.
 pub struct BusSupervisorEvents {
     bus: Arc<EventBus>,
+    logs: Option<DurableLog>,
     /// Weak, because the supervisor holds this sink: a strong handle would
     /// be a cycle that keeps the registry open past the stop.
     supervisor: Arc<OnceLock<WeakSupervisor>>,
@@ -359,6 +365,9 @@ impl SupervisorEvents for BusSupervisorEvents {
 
 impl stackly_core::instance::create::InstanceRemoved for BusSupervisorEvents {
     fn removed(&self, instance: InstanceId, at: ResourceRevision) {
+        if let Some(logs) = &self.logs {
+            logs.remove(instance);
+        }
         self.bus.publish_resource(
             EventKind::InstanceRemoved(InstanceRemoved {
                 instance_id: instance.as_uuid(),
@@ -418,6 +427,7 @@ mod tests {
             redactor,
             bus: &bus,
             extra_sinks: &[],
+            logs: None,
             config: SupervisorConfig::default(),
         });
         (root, supervisor, watch)

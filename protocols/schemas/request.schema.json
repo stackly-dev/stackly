@@ -672,6 +672,57 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "One page of an instance's stored log (spec 0027).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogsReadParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.logs_read"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Starts pushing an instance's new log entries as `log` frames.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogsFollowParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.logs_follow"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Ends a log follow.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogsUnfollowParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.logs_unfollow"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1194,6 +1245,222 @@
           "default": null
         }
       }
+    },
+    "LogAnchor": {
+      "description": "The content of a `before` or `after` position.",
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "description": "The cursor the page is read next to.",
+          "$ref": "#/$defs/LogCursor"
+        }
+      },
+      "required": [
+        "cursor"
+      ]
+    },
+    "LogCursor": {
+      "description": "A position in one instance's log store.",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "description": "The record, which may no longer exist.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "storeId": {
+          "description": "The store the `seq` belongs to.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "storeId",
+        "seq"
+      ]
+    },
+    "LogPosition": {
+      "description": "Where a page starts. Closed: an older daemon refuses the method before\nit reads the params.",
+      "oneOf": [
+        {
+          "description": "The newest entries.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "newest"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "The entries with a `seq` below the cursor, the closest ones.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogAnchor"
+            },
+            "type": {
+              "type": "string",
+              "const": "before"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The entries with a `seq` above the cursor, the closest ones.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogAnchor"
+            },
+            "type": {
+              "type": "string",
+              "const": "after"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "LogStream": {
+      "description": "An output stream of the main process. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "Standard output.",
+          "type": "string",
+          "const": "stdout"
+        },
+        {
+          "description": "Standard error.",
+          "type": "string",
+          "const": "stderr"
+        },
+        {
+          "description": "A stream this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LogsFollowParams": {
+      "description": "Params of `instance.logs_follow`.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "description": "Starts after this cursor; after the current head when left out.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "contains": {
+          "description": "Keeps lines that hold this text, in any case.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instance": {
+          "description": "The instance, retained ones included.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "streams": {
+          "description": "The streams; empty means both. No duplicates.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LogStream"
+          }
+        }
+      },
+      "required": [
+        "instance"
+      ]
+    },
+    "LogsReadParams": {
+      "description": "Params of `instance.logs_read`.",
+      "type": "object",
+      "properties": {
+        "contains": {
+          "description": "Keeps lines that hold this text, in any case: 1 to 256 characters\nwithout a line break.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instance": {
+          "description": "The instance, retained ones included.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "limit": {
+          "description": "The entries at most, 1 to 1000; 200 when left out.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "position": {
+          "description": "Where the page starts; the newest entries when left out.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "streams": {
+          "description": "The streams; empty means both. No duplicates.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LogStream"
+          }
+        }
+      },
+      "required": [
+        "instance"
+      ]
+    },
+    "LogsUnfollowParams": {
+      "description": "Params of `instance.logs_unfollow`.",
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "description": "The follow to end.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ]
     },
     "PortRequest": {
       "description": "How an IP endpoint asks for its port. Tagged `type` and `content`:\n`{ \"type\": \"fixed\", \"content\": 5432 }` or `{ \"type\": \"auto\" }`.",

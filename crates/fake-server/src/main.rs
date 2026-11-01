@@ -18,7 +18,7 @@
 //! - `serve --config=<file> --data=<dir> --port=<p> [--host=<ip>]
 //!   [--label=<text>] [--ready-delay-ms=<n>] [--crash-after-ms=<n>]
 //!   [--crash-exit-code=<c>] [--log-lines-per-second=<n>]
-//!   [--ignore-term=<bool>]` records its argv in `<dir>/argv-serve.json`
+//!   [--ignore-term=<bool>] [--leak-token=<bool>]` records its argv in `<dir>/argv-serve.json`
 //!   and answers HTTP/1.1 on a loopback address until a signal, a crash, or
 //!   `POST /shutdown` ends it.
 //! - `shutdown --port=<p> [--host=<ip>]` sends `POST /shutdown` to a

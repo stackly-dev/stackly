@@ -55,6 +55,7 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
             "crash-exit-code",
             "log-lines-per-second",
             "ignore-term",
+            "leak-token",
         ],
         &[],
     )?;
@@ -66,6 +67,7 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
         .map_err(|error| Failure::Runtime(format!("cannot install signal handlers: {error}")))?;
     write_argv(&options.data.join(ARGV_FILE), argv)?;
     let config = Config::read(&options.config).map_err(Failure::Runtime)?;
+    let leaked = options.leak_token.then(|| config.auth_token.clone());
     let address = SocketAddr::new(options.host, options.port);
     let listener = TcpListener::bind(address)
         .map_err(|error| Failure::Runtime(format!("cannot listen on {address}: {error}")))?;
@@ -86,6 +88,9 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
     if let Some(after) = options.crash_after {
         let code = options.crash_exit_code;
         thread::spawn(move || crash(after, code));
+    }
+    if let Some(token) = leaked {
+        leak_token(&token);
     }
     if options.log_lines_per_second > 0 {
         let rate = options.log_lines_per_second;
@@ -120,6 +125,8 @@ struct Options {
     crash_exit_code: u8,
     log_lines_per_second: u32,
     ignore_term: bool,
+    /// Print the auth token, for the redaction tests of spec 0027.
+    leak_token: bool,
 }
 
 impl Options {
@@ -141,6 +148,7 @@ impl Options {
             crash_exit_code,
             log_lines_per_second: flags.number("log-lines-per-second", 0)?,
             ignore_term: flags.boolean("ignore-term", false)?,
+            leak_token: flags.boolean("leak-token", false)?,
         })
     }
 }
@@ -150,6 +158,7 @@ impl Options {
 #[derive(Debug)]
 struct Config {
     greeting: String,
+    auth_token: String,
 }
 
 impl Config {
@@ -185,8 +194,11 @@ impl Config {
         };
         let greeting = text("greeting")?.to_owned();
         text("instanceName")?;
-        text("authToken")?;
-        Ok(Self { greeting })
+        let auth_token = text("authToken")?.to_owned();
+        Ok(Self {
+            greeting,
+            auth_token,
+        })
     }
 }
 
@@ -408,6 +420,19 @@ fn spam_logs(rate: u32) {
         let next = Duration::from_micros(u64::try_from(next_micros).unwrap_or(u64::MAX));
         thread::sleep(next.saturating_sub(started.elapsed()).min(LOG_TICK));
     }
+}
+
+/// Prints `token` on a stdout line of its own, then inside a 100 KiB
+/// stderr line whose 64 KiB cut falls ten bytes into the token, so the
+/// daemon's redaction is tested at the cut too (spec 0027, AC-9).
+fn leak_token(token: &str) {
+    const LONG_LINE: usize = 100 * 1024;
+    const CUT: usize = 64 * 1024;
+    let _ = writeln!(io::stdout(), "token is {token}");
+    let mut line = "a".repeat(CUT - 10);
+    line.push_str(token);
+    line.push_str(&"b".repeat(LONG_LINE.saturating_sub(line.len())));
+    let _ = writeln!(io::stderr(), "{line}");
 }
 
 /// One spam line of exactly [`LOG_LINE_BYTES`], newline included.

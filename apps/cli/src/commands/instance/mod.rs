@@ -16,6 +16,7 @@ mod get;
 pub mod group;
 mod inspect;
 mod list;
+mod logs;
 pub mod render;
 pub mod resolve;
 
@@ -36,6 +37,7 @@ use self::duplicate::DuplicateArgs;
 use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
+use self::logs::LogsArgs;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -93,6 +95,11 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance connection orders-db\n  stackly instance connection orders-db --format socket\n  stackly instance connection orders-db --all\n  stackly instance connection orders-db --show-password --json"
     )]
     Connection(ConnectionArgs),
+    /// Show the stored output of an instance, and follow it with -f
+    #[command(
+        after_help = "Examples:\n  stackly instance logs orders-db\n  stackly instance logs orders-db --tail 500 --stream stderr --grep fatal\n  stackly instance logs orders-db -f\n  stackly instance logs orders-db --follow --json"
+    )]
+    Logs(LogsArgs),
     /// Show one instance; the same as inspect
     #[command(
         after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
@@ -113,6 +120,7 @@ impl InstanceCommand {
             Self::List(args) => execute(args, cx).await,
             Self::Inspect(args) => execute(args, cx).await,
             Self::Connection(args) => execute(args, cx).await,
+            Self::Logs(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }

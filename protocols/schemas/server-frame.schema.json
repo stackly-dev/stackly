@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ServerFrame",
-  "description": "Every frame the daemon sends. Adding a variant is a new major.",
+  "description": "Every frame the daemon sends. Adding a variant a client may receive\nwithout asking is a new major; `log` is sent only on a connection that\ncalled `instance.logs_follow`, so it came as a minor (spec 0027).",
   "oneOf": [
     {
       "description": "The reply to one request.",
@@ -47,6 +47,23 @@
         "type": {
           "type": "string",
           "const": "event"
+        }
+      },
+      "required": [
+        "type",
+        "content"
+      ]
+    },
+    {
+      "description": "Log entries of one follow (spec 0027).",
+      "type": "object",
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/LogFrame"
+        },
+        "type": {
+          "type": "string",
+          "const": "log"
         }
       },
       "required": [
@@ -1430,6 +1447,22 @@
           "description": "Frames answered with a framing or payload error.",
           "type": "integer",
           "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceLogBytesTruncated": {
+          "description": "The bytes those `truncated` records stand for.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceLogTruncations": {
+          "description": "`truncated` records the instance log store wrote (spec 0027).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
           "maximum": 9007199254740991,
           "minimum": 0
         },
@@ -4443,6 +4476,599 @@
         "store"
       ]
     },
+    "LogCursor": {
+      "description": "A position in one instance's log store.",
+      "type": "object",
+      "properties": {
+        "seq": {
+          "description": "The record, which may no longer exist.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "storeId": {
+          "description": "The store the `seq` belongs to.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "storeId",
+        "seq"
+      ]
+    },
+    "LogEntry": {
+      "description": "One entry of a page or a `log` frame.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "When the daemon read the line or saw the event, to the millisecond.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "kind": {
+          "description": "What the entry holds.",
+          "$ref": "#/$defs/LogEntryKind"
+        },
+        "seq": {
+          "description": "Unique for the instance and rising across both streams.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "stream": {
+          "description": "The stream; null for a marker of the process run.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogStream"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "seq",
+        "at",
+        "kind"
+      ]
+    },
+    "LogEntryKind": {
+      "description": "What a [`LogEntry`] holds. Open: newer daemons may add kinds, and a\nkind this build does not know decodes as `unrecognized` whatever its\ncontent.",
+      "oneOf": [
+        {
+          "description": "One piece of output, already redacted.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogLineEntry"
+            },
+            "type": {
+              "type": "string",
+              "const": "line"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Output of the stream that was dropped unread.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogTruncated"
+            },
+            "type": {
+              "type": "string",
+              "const": "truncated"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A new main process started.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogStarted"
+            },
+            "type": {
+              "type": "string",
+              "const": "started"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The main process exited.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogExited"
+            },
+            "type": {
+              "type": "string",
+              "const": "exited"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Output written while Stackly was not running could not be read.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unrecognized"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "LogExited": {
+      "description": "The content of an `exited` entry: a code or a signal, or neither when\nthe status is not known.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The exit code.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        },
+        "signal": {
+          "description": "The signal that ended the process.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        }
+      }
+    },
+    "LogFollowEnd": {
+      "description": "Why a follow ended.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "The reason.",
+          "$ref": "#/$defs/LogFollowEndReason"
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "LogFollowEndReason": {
+      "description": "Why a follow ended. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The instance was deleted.",
+          "type": "string",
+          "const": "instance_removed"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LogFrame": {
+      "description": "A `log` frame: entries of one follow, a gap before them, or its end.\nNever all three empty.",
+      "type": "object",
+      "properties": {
+        "ended": {
+          "description": "The follow ended; no frame follows.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogFollowEnd"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entries": {
+          "description": "The new entries, `seq` rising.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LogEntry"
+          }
+        },
+        "gap": {
+          "description": "Applies before the entries.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogGap"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storeId": {
+          "description": "The store the entries belong to.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "subscriptionId": {
+          "description": "The follow the frame belongs to.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ]
+    },
+    "LogGap": {
+      "description": "Why the entries after a cursor are not the next ones.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "The reason.",
+          "$ref": "#/$defs/LogGapReason"
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "LogGapReason": {
+      "description": "Why a reader missed entries. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The entries at the cursor were rotated out.",
+          "type": "string",
+          "const": "rotated"
+        },
+        {
+          "description": "The cursor belongs to another store of the instance.",
+          "type": "string",
+          "const": "store_reset"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LogLevel": {
+      "description": "How serious a line looks, from a keyword rule on its text. Open: newer\ndaemons may add values.",
+      "oneOf": [
+        {
+          "description": "Nothing matched.",
+          "type": "string",
+          "const": "normal"
+        },
+        {
+          "description": "A warning keyword matched.",
+          "type": "string",
+          "const": "warning"
+        },
+        {
+          "description": "An error keyword matched.",
+          "type": "string",
+          "const": "error"
+        },
+        {
+          "description": "A level this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LogLineEntry": {
+      "description": "The content of a `line` entry.",
+      "type": "object",
+      "properties": {
+        "continued": {
+          "description": "The piece continues the line of the entry before it.",
+          "type": "boolean",
+          "default": false
+        },
+        "level": {
+          "description": "The level.",
+          "$ref": "#/$defs/LogLevel"
+        },
+        "partial": {
+          "description": "The process had not ended the line yet.",
+          "type": "boolean",
+          "default": false
+        },
+        "step": {
+          "description": "The init step whose output this is, by its number.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "text": {
+          "description": "The redacted text, without its line ending.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "level"
+      ]
+    },
+    "LogPage": {
+      "description": "Reply of `instance.logs_read`.",
+      "type": "object",
+      "properties": {
+        "earlier": {
+          "description": "The cursor of the page before; null when nothing older is left.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entries": {
+          "description": "The entries, `seq` rising.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LogEntry"
+          }
+        },
+        "gap": {
+          "description": "Applies before the entries.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogGap"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "head": {
+          "description": "The newest entry of the store.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "later": {
+          "description": "The cursor of the page after; null when the page reached the head.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retention": {
+          "description": "How much the store keeps.",
+          "$ref": "#/$defs/LogRetention"
+        },
+        "scanLimited": {
+          "description": "The read stopped after scanning its budget; the cursors continue\nfrom where it stopped.",
+          "type": "boolean",
+          "default": false
+        },
+        "skippedRecords": {
+          "description": "Whole lines of the store that were not records, met by this read.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "storeId": {
+          "description": "The store; null before the instance wrote anything.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "storedBytes": {
+          "description": "The bytes the store holds now.",
+          "$ref": "#/$defs/LogStreamBytes"
+        }
+      },
+      "required": [
+        "retention",
+        "storedBytes"
+      ]
+    },
+    "LogRetention": {
+      "description": "How much a store keeps.",
+      "type": "object",
+      "properties": {
+        "segmentMaxBytes": {
+          "description": "The size at which a segment is closed.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "segmentsPerStream": {
+          "description": "The segment files one stream keeps.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "segmentsPerStream",
+        "segmentMaxBytes"
+      ]
+    },
+    "LogStarted": {
+      "description": "The content of a `started` entry.",
+      "type": "object",
+      "properties": {
+        "pid": {
+          "description": "The PID of the new process.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pid"
+      ]
+    },
+    "LogStream": {
+      "description": "An output stream of the main process. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "Standard output.",
+          "type": "string",
+          "const": "stdout"
+        },
+        {
+          "description": "Standard error.",
+          "type": "string",
+          "const": "stderr"
+        },
+        {
+          "description": "A stream this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LogStreamBytes": {
+      "description": "The bytes a store holds per stream.",
+      "type": "object",
+      "properties": {
+        "stderr": {
+          "description": "The segments of stderr.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "stdout": {
+          "description": "The segments of stdout.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "stdout",
+        "stderr"
+      ]
+    },
+    "LogTruncated": {
+      "description": "The content of a `truncated` entry.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "How many bytes were dropped.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "bytes"
+      ]
+    },
+    "LogsFollowing": {
+      "description": "Reply of `instance.logs_follow`: sent before the first `log` frame.",
+      "type": "object",
+      "properties": {
+        "head": {
+          "description": "The newest entry when the follow started.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogCursor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storeId": {
+          "description": "The store; null before the instance wrote anything.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "subscriptionId": {
+          "description": "The follow, for `instance.logs_unfollow` and the frames.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ]
+    },
     "NeedsSecretBlocker": {
       "description": "The content of the `needsSecret` blocker of an instance (spec 0011,\n*Needs secret*): the instance DTO of feature 10 carries it in its\n`blocker` slot as `{type: needsSecret, content: ...}`.",
       "type": "object",
@@ -6687,6 +7313,53 @@
           "required": [
             "type",
             "content"
+          ]
+        },
+        {
+          "description": "One page of the log.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogPage"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.logs_read"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The follow started; its `log` frames follow.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LogsFollowing"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.logs_follow"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The follow ended.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "instance.logs_unfollow"
+            }
+          },
+          "required": [
+            "type"
           ]
         }
       ]

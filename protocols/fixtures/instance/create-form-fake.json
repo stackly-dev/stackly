@@ -221,6 +221,31 @@
       "visibility": "advanced"
     },
     {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": false,
+        "type": "boolean"
+      },
+      "description": "A test switch: the server prints authToken to stdout and inside a 100 KiB stderr line, so a test can prove the token never reaches the stored log (spec 0027, AC-9).",
+      "itemKey": null,
+      "items": [],
+      "key": "leakToken",
+      "kind": "boolean",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Print the auth token",
+      "visibility": "advanced"
+    },
+    {
       "apply": "immutable_after_init",
       "choices": [],
       "default": {
@@ -296,7 +321,7 @@
   "provider": {
     "category": "testing",
     "displayName": "Fake Provider",
-    "manifestSha256": "c621f093548dc59fddfdf8f825ab524821f3f33ed50f5d632b2d1bd2d7357e43",
+    "manifestSha256": "85d066a87e63988c81ebc3753a0f51565f9e697297ca3c0b765328b52a66d9df",
     "name": "testing/fake",
     "revision": "0.3.0",
     "source": "bundled_catalog"

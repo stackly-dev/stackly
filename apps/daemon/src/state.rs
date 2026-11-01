@@ -24,6 +24,7 @@ use crate::catalog;
 use crate::connection::Connections;
 use crate::detail::{DataUsageService, PinnedPackages};
 use crate::events::EventBus;
+use crate::ipc::logs::LogService;
 use crate::log_sink::LogSink;
 use crate::operations::Operations;
 use crate::secrets::Secrets;
@@ -138,6 +139,7 @@ pub struct DaemonCore {
     connections: Connections,
     operations: Operations,
     supervision: Supervision,
+    logs: OnceLock<LogService>,
     redactor: Arc<Redactor>,
     secrets: Secrets,
     storage: Storage,
@@ -192,6 +194,7 @@ impl DaemonCore {
             connections: Connections::default(),
             operations: Operations::default(),
             supervision: Supervision::default(),
+            logs: OnceLock::new(),
             redactor,
             secrets: Secrets::new(secret_target),
             storage: Storage::default(),
@@ -273,6 +276,19 @@ impl DaemonCore {
     #[must_use]
     pub const fn supervision(&self) -> &Supervision {
         &self.supervision
+    }
+
+    /// The durable log store of the instances, once the start slot opened
+    /// it (spec 0027).
+    #[must_use]
+    pub fn logs(&self) -> Option<&LogService> {
+        self.logs.get()
+    }
+
+    /// Records the durable log store the start slot opened; a second call
+    /// keeps the first.
+    pub fn set_logs(&self, logs: LogService) {
+        let _ = self.logs.set(logs);
     }
 
     /// The run's one redactor, shared by the log writer, the error bodies,
@@ -538,6 +554,7 @@ impl DaemonCore {
                 self.catalog.get().map(AsRef::as_ref),
                 self.catalog_source.degraded().as_deref(),
             ),
+            crate::ipc::logs::health(self.logs().map(|logs| logs.log().health())),
         ];
         let status = match self.phase() {
             Phase::Starting => DaemonHealthStatus::Starting,
@@ -557,6 +574,7 @@ impl DaemonCore {
             }
         };
         let counters = &self.counters;
+        let logs_health = self.logs().map(|logs| logs.log().health());
         DaemonHealth {
             status,
             subsystems,
@@ -569,6 +587,12 @@ impl DaemonCore {
                 events_dropped: self.bus.dropped(),
                 log_lines_dropped: self.log.dropped(),
                 socket_rebinds: Counters::get(&counters.socket_rebinds),
+                instance_log_truncations: Count::saturating(
+                    logs_health.map_or(0, |health| health.truncations),
+                ),
+                instance_log_bytes_truncated: Count::saturating(
+                    logs_health.map_or(0, |health| health.bytes_truncated),
+                ),
             },
             recovery: match registry_state {
                 RegistryState::Recovery { recovery } => Some(recovery),

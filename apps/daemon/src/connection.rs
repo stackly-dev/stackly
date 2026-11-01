@@ -34,6 +34,7 @@ use uuid::Uuid;
 
 use crate::dispatch::{HandlerFuture, Handlers, RequestContext};
 use crate::events::BusSubscription;
+use crate::ipc::logs::{FollowNext, LogFollow};
 use crate::ipc::operation::{StartOutcome, StartRequest, TestStartingMethod, start_operation};
 use crate::map;
 use crate::shutdown::DrainGuard;
@@ -169,12 +170,48 @@ struct SubscriptionTable {
     active: HashMap<u32, Slot>,
 }
 
-/// A subscription whose `Subscribed` reply is being queued, or whose
-/// forwarder runs, with the last sequence it queued.
+/// A subscription whose reply is being queued, or whose forwarder runs.
+/// Event subscriptions and log follows share the IDs and the limit
+/// (spec 0027), but each unsubscribe method ends only its own kind.
 #[derive(Debug)]
 enum Slot {
-    Reserved,
+    Reserved(Kind),
+    /// An event forwarder, with the last sequence it queued.
     Running(AbortHandle, Arc<AtomicU64>),
+    /// A log follow.
+    Log(AbortHandle),
+}
+
+/// What a subscription ID stands for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Events,
+    Log,
+}
+
+impl Slot {
+    const fn kind(&self) -> Kind {
+        match self {
+            Self::Reserved(kind) => *kind,
+            Self::Running(..) => Kind::Events,
+            Self::Log(_) => Kind::Log,
+        }
+    }
+}
+
+/// What a request starts once its reply is queued.
+enum Pending {
+    Events(BusSubscription),
+    Log(LogFollow),
+}
+
+impl Pending {
+    fn subscription_id(&self) -> u32 {
+        match self {
+            Self::Events(subscription) => subscription.subscription_id(),
+            Self::Log(follow) => follow.subscription_id(),
+        }
+    }
 }
 
 impl Conn {
@@ -283,26 +320,30 @@ impl Conn {
         lock(&self.running).remove(request_id);
     }
 
+    /// Takes the next subscription ID for `kind`, under the one limit
+    /// event subscriptions and log follows share.
+    fn reserve(&self, kind: Kind) -> Result<u32, Box<ErrorBody>> {
+        let mut table = lock(&self.subscriptions);
+        if table.active.len() >= MAX_SUBSCRIPTIONS as usize {
+            let error = ErrorBody::new(
+                &events::TOO_MANY_SUBSCRIPTIONS,
+                "the connection holds the most subscriptions it may",
+            )
+            .with_detail("max", MAX_SUBSCRIPTIONS.to_string());
+            return Err(Box::new(error));
+        }
+        let id = table.next_id;
+        table.next_id = table.next_id.saturating_add(1);
+        table.active.insert(id, Slot::Reserved(kind));
+        Ok(id)
+    }
+
     fn subscribe(
         &self,
         core: &DaemonCore,
         params: stackly_protocol::events::SubscribeParams,
     ) -> Result<BusSubscription, Box<ErrorBody>> {
-        let id = {
-            let mut table = lock(&self.subscriptions);
-            if table.active.len() >= MAX_SUBSCRIPTIONS as usize {
-                let error = ErrorBody::new(
-                    &events::TOO_MANY_SUBSCRIPTIONS,
-                    "the connection holds the most subscriptions it may",
-                )
-                .with_detail("max", MAX_SUBSCRIPTIONS.to_string());
-                return Err(Box::new(error));
-            }
-            let id = table.next_id;
-            table.next_id = table.next_id.saturating_add(1);
-            table.active.insert(id, Slot::Reserved);
-            id
-        };
+        let id = self.reserve(Kind::Events)?;
         core.bus().subscribe(id, params).inspect_err(|_| {
             lock(&self.subscriptions).active.remove(&id);
         })
@@ -317,7 +358,22 @@ impl Conn {
         let task = tokio::spawn(forward(conn, subscription, Arc::clone(&queued)));
         let mut table = lock(&self.subscriptions);
         match table.active.get_mut(&id) {
-            Some(slot @ Slot::Reserved) => *slot = Slot::Running(task.abort_handle(), queued),
+            Some(slot @ Slot::Reserved(Kind::Events)) => {
+                *slot = Slot::Running(task.abort_handle(), queued);
+            }
+            _ => task.abort(),
+        }
+    }
+
+    /// Starts a log follow whose `LogsFollowing` reply is queued, unless it
+    /// was ended in between.
+    fn start_follow(self: &Arc<Self>, follow: LogFollow) {
+        let id = follow.subscription_id();
+        let conn = Arc::clone(self);
+        let task = tokio::spawn(forward_log(conn, follow));
+        let mut table = lock(&self.subscriptions);
+        match table.active.get_mut(&id) {
+            Some(slot @ Slot::Reserved(Kind::Log)) => *slot = Slot::Log(task.abort_handle()),
             _ => task.abort(),
         }
     }
@@ -334,17 +390,25 @@ impl Conn {
             .values()
             .any(|slot| match slot {
                 Slot::Running(_, queued) => queued.load(Ordering::Acquire) < through.get(),
-                Slot::Reserved => false,
+                Slot::Reserved(_) | Slot::Log(_) => false,
             })
     }
 
-    fn unsubscribe(&self, id: u32) -> Result<(), Box<ErrorBody>> {
-        match lock(&self.subscriptions).active.remove(&id) {
-            Some(Slot::Running(task, _)) => {
+    /// Ends the subscription `id` of `kind`; an ID of the other kind is an
+    /// unknown subscription and keeps running.
+    fn unsubscribe(&self, id: u32, kind: Kind) -> Result<(), Box<ErrorBody>> {
+        let mut table = lock(&self.subscriptions);
+        let removed = match table.active.get(&id) {
+            Some(slot) if slot.kind() == kind => table.active.remove(&id),
+            _ => None,
+        };
+        drop(table);
+        match removed {
+            Some(Slot::Running(task, _) | Slot::Log(task)) => {
                 task.abort();
                 Ok(())
             }
-            Some(Slot::Reserved) => Ok(()),
+            Some(Slot::Reserved(_)) => Ok(()),
             None => Err(Box::new(
                 ErrorBody::new(
                     &events::UNKNOWN_SUBSCRIPTION,
@@ -357,7 +421,7 @@ impl Conn {
 
     fn end_subscriptions(&self) {
         for (_, slot) in lock(&self.subscriptions).active.drain() {
-            if let Slot::Running(task, _) = slot {
+            if let Slot::Running(task, _) | Slot::Log(task) = slot {
                 task.abort();
             }
         }
@@ -780,7 +844,7 @@ async fn run_request(
     let operation_id = named_operation(&call);
     let context = RequestContext::new(conn.id, request_id.clone(), conn.peer, conn.client())
         .with_idempotency_key(idempotency_key);
-    let (result, subscription) = dispatch(&conn, &core, &handlers, context, call).await;
+    let (result, pending) = dispatch(&conn, &core, &handlers, context, call).await;
     // Every error and every operation summary passes the run's redactor
     // before it is encoded (spec 0011 AC-14); only `secret.reveal` sends a
     // value, and its reply is left as it is.
@@ -791,7 +855,7 @@ async fn run_request(
         }
         Err(error) => Err(Box::new(map::redact::error(core.redactor(), *error))),
     };
-    let subscription_id = subscription.as_ref().map(BusSubscription::subscription_id);
+    let subscription_id = pending.as_ref().map(Pending::subscription_id);
     let (mut bytes, mut error) = match result {
         Ok(reply) => (
             encode(&ServerFrame::Response(Response {
@@ -830,8 +894,9 @@ async fn run_request(
         operation_id,
     );
     let delivered = conn.enqueue_bytes(bytes).await;
-    match (subscription, delivered, error) {
-        (Some(subscription), Ok(()), None) => conn.start_forwarder(subscription),
+    match (pending, delivered, error) {
+        (Some(Pending::Events(subscription)), Ok(()), None) => conn.start_forwarder(subscription),
+        (Some(Pending::Log(follow)), Ok(()), None) => conn.start_follow(follow),
         _ => {
             if let Some(id) = subscription_id {
                 conn.forget_subscription(id);
@@ -871,7 +936,7 @@ async fn dispatch(
     handlers: &Arc<dyn Handlers>,
     context: RequestContext,
     call: Call,
-) -> (Result<Reply, Box<ErrorBody>>, Option<BusSubscription>) {
+) -> (Result<Reply, Box<ErrorBody>>, Option<Pending>) {
     if let Some(error) = recovery_refusal(core, call.allowed_in_recovery()) {
         return (Err(error), None);
     }
@@ -915,13 +980,43 @@ async fn dispatch(
                     subscription_id: subscription.subscription_id(),
                     head: subscription.head(),
                 };
-                (Ok(Reply::EventsSubscribe(subscribed)), Some(subscription))
+                (
+                    Ok(Reply::EventsSubscribe(subscribed)),
+                    Some(Pending::Events(subscription)),
+                )
             }
             Err(error) => (Err(error), None),
         },
         Call::EventsUnsubscribe(params) => (
-            conn.unsubscribe(params.subscription_id)
+            conn.unsubscribe(params.subscription_id, Kind::Events)
                 .map(|()| Reply::EventsUnsubscribe),
+            None,
+        ),
+        Call::InstanceLogsRead(params) => (
+            crate::ipc::logs::read(core, params)
+                .await
+                .map(Reply::InstanceLogsRead),
+            None,
+        ),
+        Call::InstanceLogsFollow(params) => {
+            let id = match conn.reserve(Kind::Log) {
+                Ok(id) => id,
+                Err(error) => return (Err(error), None),
+            };
+            match crate::ipc::logs::follow(core, id, params).await {
+                Ok((following, follow)) => (
+                    Ok(Reply::InstanceLogsFollow(following)),
+                    Some(Pending::Log(follow)),
+                ),
+                Err(error) => {
+                    conn.forget_subscription(id);
+                    (Err(error), None)
+                }
+            }
+        }
+        Call::InstanceLogsUnfollow(params) => (
+            conn.unsubscribe(params.subscription_id, Kind::Log)
+                .map(|()| Reply::InstanceLogsUnfollow),
             None,
         ),
         Call::OperationGet(params) => (
@@ -1408,6 +1503,27 @@ async fn forward(conn: Arc<Conn>, mut subscription: BusSubscription, queued: Arc
             break;
         }
         queued.fetch_max(sequence, Ordering::Release);
+    }
+}
+
+/// Queues the frames of one log follow until the instance is deleted, the
+/// follow ends, or the connection closes. The task waits for room in the
+/// outbound queue, so a client that does not read holds only this task
+/// (spec 0027, *Follow*).
+async fn forward_log(conn: Arc<Conn>, mut follow: LogFollow) {
+    let id = follow.subscription_id();
+    loop {
+        let (frame, last) = match follow.next().await {
+            FollowNext::Frame(frame) => (frame, false),
+            FollowNext::Ended(frame) => (frame, true),
+        };
+        if conn.enqueue(&ServerFrame::Log(frame)).await.is_err() {
+            break;
+        }
+        if last {
+            conn.forget_subscription(id);
+            break;
+        }
     }
 }
 

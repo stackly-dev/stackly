@@ -17,6 +17,7 @@ mod create_form_pinned;
 mod data_compat;
 mod data_usage;
 mod detail;
+mod durable_logs;
 mod lifecycle;
 mod list_performance;
 mod logs;

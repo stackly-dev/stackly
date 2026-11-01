@@ -62,6 +62,16 @@
       "default": false,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
     },
+    "leakToken": {
+      "type": "boolean",
+      "title": "Print the auth token",
+      "description": "A test switch: the server prints authToken to stdout and inside a 100 KiB stderr line, so a test can prove the token never reaches the stored log (spec 0027, AC-9).",
+      "default": false,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
+    },
     "failInit": {
       "type": "boolean",
       "title": "Fail initialization",
