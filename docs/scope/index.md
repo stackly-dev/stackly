@@ -64,7 +64,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 24 | Instance kedua dari runtime yang sama | Multi versi & instance | done |
 | 25 | PostgreSQL 17 & 18 berdampingan | Multi versi & instance | done |
 | 26 | Stop, restart & reload | Kerja harian | done |
-| 27 | Log per instance | Kerja harian | planned |
+| 27 | Log per instance | Kerja harian | in-progress |
 | 28 | Metrics & health | Kerja harian | planned |
 | 29 | Edit config, nama & endpoint | Kerja harian | planned |
 | 30 | Reconciliation & restart daemon terencana | Kerja harian | planned |
@@ -139,6 +139,7 @@ Di luar baseline macOS, dicatat supaya rencana tetap jujur.
 - **Jaringan lanjutan**: bind LAN, port privileged, TLS trust otomatis, perubahan DNS atau `/etc/hosts` (OQ-017) · needs a decision · GA
 - **Storage eksternal**: custom data volume, external storage, dan relokasi data instance yang sudah ada (OQ-018) · needs a decision
 - **Extension PostgreSQL lanjutan**: pgvector, PostGIS, PL/Perl, dan PL/Python di artefak PostgreSQL managed, masing masing dengan lisensi dan dependency closure sendiri (from spec 0003) · needs a decision
+- **Log lanjutan**: file log milik provider (`RunPlan.log_files`) sebagai sumber di layar Logs, filter level (errors only), dan pengaturan ukuran rotasi per stream di Settings (from spec 0027) · needs a decision
 
 ## Legend
 
