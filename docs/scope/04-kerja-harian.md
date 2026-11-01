@@ -73,7 +73,7 @@ Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon 
 
 - [ ] Design it (spec): `/architect reconciliation & restart daemon terencana`
 
-### 31. Demand, autostart & login · needs a decision
+### 31. Demand, autostart & login · in-progress
 
 Autostart daemon dan autostart instance sebagai dua setting berbeda, di atas model demand dengan tiga sumber (environment, manual, startup) dan suppression. Aturan evaluasi stop manual terhadap seluruh demand aktif diputuskan di sini; lease environment hanya menjadi sumber demand baru di fitur 46 dan 47.
 
@@ -81,7 +81,17 @@ Autostart daemon dan autostart instance sebagai dua setting berbeda, di atas mod
 
 **Trace:** REQ-014, REQ-022 (bagian evaluasi demand), BR-024, AC-014, AC-062, AC-069, PRD bagian 13.2, 17, 19.5, dan 32.2
 
-- [ ] Design it (spec): `/architect demand, autostart & login`
+**Pointer:** spec [0031](../specs/0031-demand-autostart-login/index.md)
+
+- [x] Design it (spec): `/architect demand, autostart & login` · spec 0031, cross check (Sonnet) applied, aligned with spec 0030 follow ups, accepted 2026-11-02
+- [ ] Build it: `/develop demand, autostart & login`
+  - [ ] Login starts the chosen instances: the audit session spike first (after your approval), the `LoginSessionInfo` port with the macOS adapter and fake, the sessions migration (next free number) with the startup lease index, `plan_session_rotation` (`first`, `new`, `continued`, launchd context only), the start order and the level triggered start queue, `instance.set_startup` and `startup` on create with DTOs, fixtures, and a protocol minor bump, the CLI `--autostart`, `instance autostart`, `inspect` and `daemon status` lines, and the GUI toggles (spec 0031 AC-1 to AC-7, AC-14, AC-16 to AC-19; build steps 1 to 7)
+  - [ ] Stop holds autostart back: manual leases on user start, the session in the stop path, registry only stop for desired running without a process, `autostart.session`, and `instance.stop_all` (spec 0031 AC-8 to AC-10; build steps 8 and 9; after milestone 1)
+  - [ ] Logout and coming back: the logout spike first (after your approval), the signal per context table, the numbered session end with the 15 s budget and its constant relation test, `EndSession`, and reopening the row on `continued` (spec 0031 AC-11 to AC-13; build steps 10 and 11; after milestone 2; spec 0030 restart plans take precedence)
+  - [ ] Agent off and locked Keychain: `ShutdownMode::AgentOff` on spec 0030's `ShutdownAccepted`, `stackly daemon uninstall`, Turn Off… in Diagnostics, the "Won’t start at login" text, and the secret retry timer with the `secret_retry` trigger (spec 0031 AC-15, AC-19, AC-20; build steps 12 and 13; after milestone 3)
+  - [ ] Native records on this Mac after your approval (login, logout, reboot, `kickstart -k`, revoked Login Items, locked Keychain), then the updates to specs 0004, 0005, 0010, 0015, 0020, and 0021 (spec 0031 AC-21; build step 14; after milestone 4)
+- [ ] Verify it: `/check verify demand, autostart & login`
+- [ ] Test it: `/test demand, autostart & login`
 
 ### 32. Menu bar & Settings · needs a decision
 
