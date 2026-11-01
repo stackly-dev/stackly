@@ -598,6 +598,8 @@ fn bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use stackly_protocol::logs::{LogExited, LogLineEntry, LogStarted, LogTruncated};
+
     use super::*;
 
     #[test]
@@ -618,5 +620,168 @@ mod tests {
         assert_eq!(bytes(512), "512 bytes");
         assert_eq!(bytes(1536), "1.5 KiB");
         assert_eq!(bytes(1_048_576), "1.0 MiB");
+    }
+
+    const AT: &str = "2026-11-01T21:36:58.042Z";
+
+    fn printer(tz: TimeZone, color: bool) -> Printer {
+        Printer {
+            json: false,
+            color,
+            tz,
+            command: "instance logs".to_owned(),
+            closed: false,
+        }
+    }
+
+    fn entry(stream: Option<LogStream>, kind: LogEntryKind) -> LogEntry {
+        LogEntry {
+            seq: LogSeq::new(7).unwrap(),
+            at: stackly_protocol::Timestamp::from_jiff(AT.parse().unwrap()),
+            stream,
+            kind,
+        }
+    }
+
+    fn line(text: &str, level: LogLevel) -> LogEntryKind {
+        LogEntryKind::Line(LogLineEntry {
+            text: text.to_owned(),
+            level,
+            partial: false,
+            continued: false,
+            step: None,
+        })
+    }
+
+    fn rendered(printer: &Printer, entry: &LogEntry) -> String {
+        String::from_utf8(printer.entry(entry)).unwrap()
+    }
+
+    fn exited(code: Option<i32>, signal: Option<i32>) -> LogEntryKind {
+        LogEntryKind::Exited(LogExited { code, signal })
+    }
+
+    // covers: AC-10 (local time in the CLI)
+    #[test]
+    fn a_line_shows_its_read_time_to_the_millisecond_in_the_local_zone() {
+        let line = entry(
+            Some(LogStream::Stderr),
+            line("database system is ready", LogLevel::Normal),
+        );
+
+        let utc = rendered(&printer(TimeZone::UTC, false), &line);
+        let jakarta = rendered(&printer(jiff::tz::offset(7).to_time_zone(), false), &line);
+
+        assert_eq!(
+            utc,
+            "2026-11-01 21:36:58.042  stderr   database system is ready\n"
+        );
+        assert_eq!(
+            jakarta,
+            "2026-11-02 04:36:58.042  stderr   database system is ready\n"
+        );
+    }
+
+    // covers: AC-5, AC-11 (markers show as rows whose source is stackly)
+    #[test]
+    fn markers_show_as_stackly_rows_with_their_own_text() {
+        let printer = printer(TimeZone::UTC, false);
+        let cases = [
+            (
+                LogEntryKind::Started(LogStarted { pid: 48213 }),
+                "process started (pid 48213)",
+            ),
+            (exited(Some(0), None), "process exited with code 0"),
+            (exited(Some(1), None), "process exited with code 1"),
+            (exited(None, Some(9)), "process exited with signal 9"),
+            (exited(None, None), "process exited"),
+            (
+                LogEntryKind::Truncated(LogTruncated {
+                    bytes: Count::new(1536).unwrap(),
+                }),
+                "1.5 KiB of output was dropped",
+            ),
+            (
+                LogEntryKind::Unavailable,
+                "output while Stackly was not running could not be read",
+            ),
+        ];
+
+        for (kind, text) in cases {
+            let row = rendered(&printer, &entry(None, kind));
+            assert_eq!(row, format!("2026-11-01 21:36:58.042  stackly  {text}\n"));
+        }
+    }
+
+    #[test]
+    fn a_marker_carried_on_a_stream_still_shows_stackly_as_its_source() {
+        let row = rendered(
+            &printer(TimeZone::UTC, false),
+            &entry(
+                Some(LogStream::Stdout),
+                LogEntryKind::Truncated(LogTruncated {
+                    bytes: Count::new(512).unwrap(),
+                }),
+            ),
+        );
+
+        assert!(row.contains("  stackly  512 bytes of output was dropped"));
+    }
+
+    // covers: AC-5 (gap rows for a rotated cursor and a reset store)
+    #[test]
+    fn gaps_show_as_stackly_rows_without_a_time() {
+        let printer = printer(TimeZone::UTC, false);
+        let rotated = LogGap {
+            reason: LogGapReason::Rotated,
+        };
+        let reset = LogGap {
+            reason: LogGapReason::StoreReset,
+        };
+
+        let rotated = String::from_utf8(printer.gap(&rotated)).unwrap();
+        let reset = String::from_utf8(printer.gap(&reset)).unwrap();
+
+        assert_eq!(
+            rotated,
+            format!("{:23}  stackly  older lines were rotated out\n", "")
+        );
+        assert_eq!(
+            reset,
+            format!("{:23}  stackly  the log store was reset\n", "")
+        );
+    }
+
+    // covers: AC-8 (the level colors a line; stderr alone never does)
+    #[test]
+    fn only_warning_and_error_lines_and_failed_exits_are_painted() {
+        let printer = printer(TimeZone::UTC, true);
+        let painted =
+            |kind| rendered(&printer, &entry(Some(LogStream::Stderr), kind)).contains('\u{1b}');
+
+        assert!(!painted(line(
+            "LOG:  checkpoint starting",
+            LogLevel::Normal
+        )));
+        assert!(painted(line("WARNING:  low disk", LogLevel::Warning)));
+        assert!(painted(line("FATAL:  bad login", LogLevel::Error)));
+        assert!(!painted(exited(Some(0), None)));
+        assert!(painted(exited(Some(1), None)));
+        assert!(painted(exited(None, Some(9))));
+    }
+
+    #[test]
+    fn control_characters_in_a_line_are_escaped_so_they_never_reach_the_terminal() {
+        let row = rendered(
+            &printer(TimeZone::UTC, false),
+            &entry(
+                Some(LogStream::Stdout),
+                line("before\u{1b}[2Jafter\r", LogLevel::Normal),
+            ),
+        );
+
+        assert!(!row.contains('\u{1b}'));
+        assert!(!row.contains('\r'));
+        assert!(row.contains("before\\u{1b}[2Jafter\\u{d}"));
     }
 }
