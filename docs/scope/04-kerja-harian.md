@@ -23,7 +23,7 @@ Lifecycle lengkap sesuai capability provider: stop graceful dengan timeout, rest
 - [ ] Verify it: `/check verify stop, restart & reload` · skipped for this session by the user (2026-11-01)
 - [ ] Test it: `/test stop, restart & reload` · skipped for this session by the user (2026-11-01)
 
-### 27. Log per instance · needs a decision
+### 27. Log per instance · in-progress
 
 Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp, pemisahan stdout dan stderr, batas ukuran, dan rotasi. Subscriber yang lambat tidak boleh menahan pipe proses.
 
@@ -31,7 +31,17 @@ Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp,
 
 **Trace:** REQ-017, PAGE-07, NFR-004, AC-017, PRD bagian 35.2
 
-- [ ] Design it (spec): `/architect log per instance`
+**Pointer:** spec [0027](../specs/0027-log-per-instance/index.md)
+
+- [x] Design it (spec): `/architect log per instance` · spec 0027, cross check (Sonnet) applied, accepted 2026-11-01
+- [ ] Build it: `/develop log per instance`
+  - [ ] Store in core: the spec 0010 changes (`LogBatch.source`, `LogLine.end`, `LogSink::run_event`, redaction overlap at the 64 KiB cut), record format, `level_of`, filter, the per instance store with rotation, recovery, exact dedupe, the bounded write queue and writer thread, the page reader with merge and scan budget, the follow source, and the `FileSystem::create_file_private` and `open_append_private` port methods (spec 0027 AC-1 to AC-9, AC-12, AC-13; build steps 1 to 4; steps 1 and 2 can run as two parallel sessions)
+  - [ ] Contract and daemon: `stackly-protocol::logs`, `LogSeq`, `instance.logs_read`, `instance.logs_follow`, `instance.logs_unfollow`, `ServerFrame::Log`, `instance.logs_unreadable`, subsystem `instance_logs`, minor bump and codegen, the spec 0009 `captured` rule, then `stacklyd::ipc::logs` with the shared subscription counter, the follow tasks, the `DurableLogSink` in `SinkSet`, and socket tests including crash, rotation, failing writes, and the fixture credential (spec 0027 AC-1 to AC-9, AC-12 to AC-14; build steps 5 and 6; after milestone 1)
+  - [ ] CLI: `stackly instance logs` with tail, follow, stream, grep, cursors, text and JSON output, Ctrl+C exit 0 (spec 0027 AC-9, AC-10; build step 7; after milestone 2)
+  - [ ] GUI: `StacklyClient` log methods and the `log` frame, then the Logs tab with `InstanceLogsModel`, Copy Shown Lines, every state, and the spec 0068 view fixtures (spec 0027 AC-7, AC-9, AC-11; build steps 8 and 9; after milestone 2; can run in parallel with milestone 3)
+  - [ ] Evidence on this Mac: the slow client evidence run, the PostgreSQL 17 native test after your approval, and a manual GUI session comparing the Logs tab with `stackly instance logs --follow` (spec 0027 AC-3, AC-6, AC-8, AC-11; build step 10; after milestones 3 and 4; without the PostgreSQL artifact in the xtask runtime cache the native test ends `BLOCKED`)
+- [ ] Verify it: `/check verify log per instance`
+- [ ] Test it: `/test log per instance`
 
 ### 28. Metrics & health · needs a decision
 
