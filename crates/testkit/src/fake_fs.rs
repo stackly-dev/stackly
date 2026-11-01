@@ -43,6 +43,10 @@ pub enum FsOp {
     OpenRead,
     /// [`Filesystem::open_append`].
     OpenAppend,
+    /// [`Filesystem::create_file_private`].
+    CreateFilePrivate,
+    /// [`Filesystem::open_append_private`].
+    OpenAppendPrivate,
     /// [`Filesystem::rename_no_replace`].
     RenameNoReplace,
     /// [`Filesystem::open_tree_writer`].
@@ -82,6 +86,8 @@ impl FsOp {
             Self::RemoveTree => "remove_tree",
             Self::OpenRead => "open_read",
             Self::OpenAppend => "open_append",
+            Self::CreateFilePrivate => "create_file_private",
+            Self::OpenAppendPrivate => "open_append_private",
             Self::RenameNoReplace => "rename_no_replace",
             Self::OpenTreeWriter => "open_tree_writer",
             Self::VolumeSpace => "volume_space",
@@ -560,6 +566,39 @@ impl Filesystem for FakeFilesystem {
         let file = handles::open_append(path)?;
         self.record(FsOp::OpenAppend, path);
         Ok(file)
+    }
+
+    fn create_file_private(&self, path: &Path) -> Result<File, PlatformError> {
+        self.enter(FsOp::CreateFilePrivate, path)?;
+        let file = OpenOptions::new()
+            .read(true)
+            .append(true)
+            .create_new(true)
+            // `O_CREAT | O_EXCL` never follows a symlink in the last
+            // component: it fails because something exists there.
+            .mode(0o600)
+            .open(path)
+            .map_err(|err| PlatformError::from_io("create_file_private", path, &err))?;
+        self.record(FsOp::CreateFilePrivate, path);
+        Ok(file)
+    }
+
+    fn open_append_private(&self, path: &Path) -> Result<File, PlatformError> {
+        self.enter(FsOp::OpenAppendPrivate, path)?;
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.file_type().is_file() => {}
+            Ok(_) => {
+                return Err(PlatformError::NotARegularFile {
+                    path: path.to_path_buf(),
+                });
+            }
+            Err(err) => return Err(PlatformError::from_io("open_append_private", path, &err)),
+        }
+        OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(path)
+            .map_err(|err| PlatformError::from_io("open_append_private", path, &err))
     }
 
     fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {

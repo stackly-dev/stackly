@@ -7,7 +7,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use jiff::Timestamp;
-use stackly_domain::InstanceId;
+use stackly_domain::{InstanceId, Pid, ProcessStart};
 use stackly_platform::OutputStream;
 
 use super::config::{FAILURE_EXCERPT_LINE_CHARS, FAILURE_EXCERPT_LINES, TAIL_LINES};
@@ -25,16 +25,85 @@ pub struct LogLine {
     /// This piece continues the line of the piece before it, because that
     /// line was longer than the limit of one piece.
     pub continued: bool,
+    /// The spool offset right after the logical line this piece belongs
+    /// to (after the cut for a piece cut at the hard limit), so a durable
+    /// sink can drop a line it already stored when a reader starts again
+    /// after a daemon crash (spec 0027, *Buang duplikat*). The pieces of
+    /// one logical line share it. `None` for output that never went
+    /// through a spool, such as an init step.
+    pub end: Option<u64>,
 }
 
 impl LogLine {
-    /// Returns a whole line: neither `partial` nor `continued`.
+    /// Returns a whole line: neither `partial` nor `continued`, with no
+    /// spool offset.
     #[must_use]
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             partial: false,
             continued: false,
+            end: None,
+        }
+    }
+}
+
+/// The process whose spool a batch was read from: the PID and start time
+/// of its compound identity (spec 0010). Two runs never share both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SpoolSource {
+    /// The PID of the main process.
+    pub pid: Pid,
+    /// When the main process started, to the microsecond.
+    pub started_at: ProcessStart,
+}
+
+impl SpoolSource {
+    /// Returns the source of the process `pid` that started at
+    /// `started_at`.
+    #[must_use]
+    pub const fn new(pid: Pid, started_at: ProcessStart) -> Self {
+        Self { pid, started_at }
+    }
+}
+
+/// Something that happened to the main process of an instance, which a
+/// durable sink records as a marker between its lines (spec 0027, AC-5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RunEvent {
+    /// A new main process was spawned, before it ran its first
+    /// instruction.
+    Started {
+        /// Its PID.
+        pid: Pid,
+        /// When the daemon saw it, from its clock.
+        at: Timestamp,
+    },
+    /// The main process exited, after every batch of its run reached the
+    /// sinks.
+    Exited {
+        /// Its exit code, when it exited on its own.
+        code: Option<i32>,
+        /// The signal that ended it.
+        signal: Option<i32>,
+        /// When the daemon saw it, from its clock.
+        at: Timestamp,
+    },
+    /// The daemon adopted a process whose spool could not be opened, so the
+    /// output written while no daemon read it is lost.
+    Unavailable {
+        /// When the daemon saw it, from its clock.
+        at: Timestamp,
+    },
+}
+
+impl RunEvent {
+    /// Returns when the daemon saw the event.
+    #[must_use]
+    pub const fn at(&self) -> Timestamp {
+        match self {
+            Self::Started { at, .. } | Self::Exited { at, .. } | Self::Unavailable { at } => *at,
         }
     }
 }
@@ -56,6 +125,16 @@ pub struct LogBatch {
     /// Bytes dropped unread before the first line because the backlog went
     /// over its limit.
     pub truncated: Option<u64>,
+    /// The process whose spool the lines came from; `None` for output that
+    /// never went through a spool.
+    pub source: Option<SpoolSource>,
+    /// On the first batch of a reader that started again after a daemon
+    /// restart: the spool offset it started at, the first byte that was
+    /// not freed.
+    pub resumed_from: Option<u64>,
+    /// The init step whose output this is, by its number in the plan; only
+    /// for the output of a failed init step.
+    pub step: Option<String>,
 }
 
 impl LogBatch {
@@ -69,6 +148,9 @@ impl LogBatch {
             lines,
             resumed: false,
             truncated: None,
+            source: None,
+            resumed_from: None,
+            step: None,
         }
     }
 
@@ -84,6 +166,19 @@ impl LogBatch {
     pub const fn truncated(mut self, bytes: u64) -> Self {
         self.truncated = Some(bytes);
         self
+    }
+
+    /// Records the process whose spool the lines came from.
+    #[must_use]
+    pub const fn with_source(mut self, source: SpoolSource) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Returns the bytes of text the batch carries.
+    #[must_use]
+    pub fn text_bytes(&self) -> usize {
+        self.lines.iter().map(|line| line.text.len()).sum()
     }
 }
 
@@ -104,6 +199,13 @@ pub enum SinkOutcome {
 pub trait LogSink: Send + Sync {
     /// Offers a batch of one stream of `instance`.
     fn accept(&self, instance: InstanceId, batch: LogBatch) -> SinkOutcome;
+
+    /// Reports something that happened to the main process of `instance`.
+    /// It never blocks and has no answer; a sink that does not record runs
+    /// ignores it.
+    fn run_event(&self, instance: InstanceId, event: RunEvent) {
+        let _ = (instance, event);
+    }
 }
 
 /// Several sinks behind one [`LogSink`].
@@ -172,6 +274,12 @@ impl LogSink for SinkSet {
                 .unwrap_or_else(PoisonError::into_inner)
                 .insert(key, done);
             SinkOutcome::Busy
+        }
+    }
+
+    fn run_event(&self, instance: InstanceId, event: RunEvent) {
+        for sink in &self.sinks {
+            sink.run_event(instance, event);
         }
     }
 }

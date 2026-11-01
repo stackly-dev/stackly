@@ -132,6 +132,14 @@ impl Filesystem for MacosFilesystem {
         handles::open_append(path)
     }
 
+    fn create_file_private(&self, path: &Path) -> Result<std::fs::File, PlatformError> {
+        handles::create_file_private(path)
+    }
+
+    fn open_append_private(&self, path: &Path) -> Result<std::fs::File, PlatformError> {
+        handles::open_append_private(path)
+    }
+
     fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
         rename::rename_no_replace(from, to)
     }

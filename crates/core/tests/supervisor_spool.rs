@@ -498,3 +498,48 @@ fn a_sink_set_with_the_tail_sink_keeps_the_excerpt_and_the_recorder_sees_every_l
     );
     assert_eq!(tail.excerpt(rig.instance), ["b", "c", "d"]);
 }
+
+#[test]
+fn a_secret_split_by_the_hard_limit_cut_is_still_redacted() {
+    // spec 0027 AC-9: a 100 KiB line without a newline, cut at 64 KiB right
+    // inside a learned value.
+    let rig = Rig::new(16);
+    let secret = "fixture-credential-7c1d";
+    rig.redactor
+        .learn(&SecretValue::new(secret.to_owned()).expect("a secret"));
+    let config = SupervisorConfig::default();
+    let hard = config.log_line_hard_max;
+    let mut drain = rig.start(&config);
+    let mut line = "a".repeat(hard - 10);
+    line.push_str(secret);
+    line.push_str(&"b".repeat(100 * 1024 - line.len()));
+    rig.write(line.as_bytes());
+
+    rig.pump_all(&mut drain);
+    drain
+        .finish(&rig.ctx())
+        .expect("the spool reads to its end");
+
+    let lines = rig.sink.lines();
+    let joined: String = lines.iter().map(|l| l.text.as_str()).collect();
+    assert!(!joined.contains(secret));
+    assert!(!joined.contains("fixture-credential"));
+    assert!(lines.iter().all(|piece| !piece.text.contains("7c1d")));
+    assert!(joined.contains("****"));
+    assert!(lines.iter().skip(1).any(|piece| piece.continued));
+    let ends: Vec<Option<u64>> = lines.iter().map(|line| line.end).collect();
+    assert!(ends.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert_eq!(ends.last().copied().flatten(), Some(100 * 1024));
+}
+
+#[test]
+fn every_line_carries_the_spool_offset_right_after_it() {
+    let rig = Rig::new(16);
+    let mut drain = rig.start(&SupervisorConfig::default());
+    rig.write(b"one\ntwo\r\nthree\n");
+
+    rig.pump_all(&mut drain);
+
+    let ends: Vec<Option<u64>> = rig.sink.lines().iter().map(|line| line.end).collect();
+    assert_eq!(ends, [Some(4), Some(9), Some(15)]);
+}

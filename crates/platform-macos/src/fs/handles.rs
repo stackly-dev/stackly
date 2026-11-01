@@ -29,6 +29,32 @@ pub(super) fn open_append(path: &Path) -> Result<Box<dyn AppendFile>, PlatformEr
     }))
 }
 
+/// [`Filesystem::create_file_private`](stackly_platform::Filesystem::create_file_private):
+/// `O_CREAT | O_EXCL | O_NOFOLLOW`, mode 0600, open for append and read.
+pub(super) fn create_file_private(path: &Path) -> Result<File, PlatformError> {
+    let (file, _) = open_regular(
+        OpenOptions::new()
+            .read(true)
+            .append(true)
+            .create_new(true)
+            .mode(0o600),
+        "create_file_private",
+        path,
+    )?;
+    Ok(file)
+}
+
+/// [`Filesystem::open_append_private`](stackly_platform::Filesystem::open_append_private):
+/// an existing regular file, open for append and read, never created.
+pub(super) fn open_append_private(path: &Path) -> Result<File, PlatformError> {
+    let (file, _) = open_regular(
+        OpenOptions::new().read(true).append(true),
+        "open_append_private",
+        path,
+    )?;
+    Ok(file)
+}
+
 /// Opens `path` with `options` and checks through `fstat` that what opened
 /// is a regular file, returning it with its size.
 fn open_regular(

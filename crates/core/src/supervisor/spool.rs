@@ -17,7 +17,7 @@ use stackly_domain::InstanceId;
 use stackly_platform::{Clock, OutputStream, ProcessError, SpoolReader};
 
 use super::config::SupervisorConfig;
-use super::sink::{LogBatch, LogLine, LogSink, SinkOutcome};
+use super::sink::{LogBatch, LogLine, LogSink, SinkOutcome, SpoolSource};
 use crate::secret::Redactor;
 
 /// What one call of [`SpoolDrain::pump`] or [`SpoolDrain::finish`] left
@@ -110,6 +110,9 @@ pub struct SpoolDrain {
     accepted_end: u64,
     pending: Option<Pending>,
     resumed: bool,
+    /// Where a reader that started again began, for its first batch.
+    resumed_from: Option<u64>,
+    source: Option<SpoolSource>,
     truncated: u64,
     release_failed: bool,
     buf: Vec<u8>,
@@ -174,10 +177,21 @@ impl SpoolDrain {
             accepted_end: start,
             pending: None,
             resumed,
+            resumed_from: resumed.then_some(start),
+            source: None,
             truncated: 0,
             release_failed: false,
             buf: Vec::new(),
         }
+    }
+
+    /// Stamps every batch with the process whose spool this is, so a
+    /// durable sink can tell runs apart and drop lines it already stored
+    /// (spec 0027, *Buang duplikat*).
+    #[must_use]
+    pub const fn with_source(mut self, source: Option<SpoolSource>) -> Self {
+        self.source = source;
+        self
     }
 
     /// Returns the stream this reader reads.
@@ -251,7 +265,8 @@ impl SpoolDrain {
         if !self.held.is_empty() {
             let held = std::mem::take(&mut self.held);
             let mut lines = Vec::new();
-            self.emit(ctx.redactor, &held, true, &mut lines);
+            let end = self.read_offset;
+            self.emit(ctx.redactor, &held, true, end, &mut lines);
             self.held_start = self.read_offset;
             self.line_end = self.read_offset;
             self.continuing = false;
@@ -351,13 +366,18 @@ impl SpoolDrain {
             match newline {
                 Some(at) if at <= self.hard_max => {
                     let line = rest[..at].strip_suffix(b"\r").unwrap_or(&rest[..at]);
-                    self.emit(redactor, line, false, out);
+                    let end = self.offset_of(start + at + 1);
+                    self.emit(redactor, line, false, end, out);
                     start += at + 1;
                     self.continuing = false;
                 }
                 _ if rest.len() > self.hard_max => {
-                    let cut = utf8_cut(rest, self.hard_max);
-                    self.emit(redactor, &rest[..cut], true, out);
+                    // A secret that crosses the cut would reach the sink in
+                    // two halves the redactor sees apart, so the cut moves
+                    // back before it and the next piece holds it whole.
+                    let cut = redactor.safe_cut(rest, utf8_cut(rest, self.hard_max));
+                    let end = self.offset_of(start + cut);
+                    self.emit(redactor, &rest[..cut], true, end, out);
                     start += cut;
                     self.continuing = true;
                 }
@@ -369,9 +389,22 @@ impl SpoolDrain {
         self.held = held[start..].to_vec();
     }
 
+    /// Returns the spool offset of byte `at` of `held`.
+    fn offset_of(&self, at: usize) -> u64 {
+        self.held_start + u64::try_from(at).unwrap_or(0)
+    }
+
     /// Redacts `bytes` as one logical line (or the first part of one),
-    /// then cuts the result into pieces of at most `line_max` bytes.
-    fn emit(&self, redactor: &Redactor, bytes: &[u8], partial: bool, out: &mut Vec<LogLine>) {
+    /// then cuts the result into pieces of at most `line_max` bytes, each
+    /// carrying `end`, the spool offset right after the line.
+    fn emit(
+        &self,
+        redactor: &Redactor,
+        bytes: &[u8],
+        partial: bool,
+        end: u64,
+        out: &mut Vec<LogLine>,
+    ) {
         let lossy = String::from_utf8_lossy(bytes);
         let redacted = redactor.redact(&lossy);
         let mut rest: &str = &redacted;
@@ -382,6 +415,7 @@ impl SpoolDrain {
                 text: piece.to_owned(),
                 partial: partial && tail.is_empty(),
                 continued,
+                end: Some(end),
             });
             if tail.is_empty() {
                 break;
@@ -399,6 +433,8 @@ impl SpoolDrain {
         }
         let mut batch = LogBatch::new(self.stream, ctx.clock.now(), lines);
         batch.resumed = std::mem::take(&mut self.resumed);
+        batch.resumed_from = self.resumed_from.take();
+        batch.source = self.source;
         batch.truncated = Some(std::mem::take(&mut self.truncated)).filter(|bytes| *bytes > 0);
         let end = self.line_end;
         match ctx.sink.accept(ctx.instance, batch.clone()) {

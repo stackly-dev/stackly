@@ -102,6 +102,14 @@ impl Filesystem for UnsupportedPlatform {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }
 
+    fn create_file_private(&self, _path: &Path) -> Result<std::fs::File, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
+    fn open_append_private(&self, _path: &Path) -> Result<std::fs::File, PlatformError> {
+        Err(self.not_supported(PlatformCapability::Filesystem))
+    }
+
     fn rename_no_replace(&self, _from: &Path, _to: &Path) -> Result<(), PlatformError> {
         Err(self.not_supported(PlatformCapability::Filesystem))
     }

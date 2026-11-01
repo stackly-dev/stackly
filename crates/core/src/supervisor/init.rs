@@ -312,7 +312,7 @@ impl Supervisor {
                     },
                 };
                 if let Some(captured) = &notice.captured {
-                    deliver_output(deps, prepared.instance.id(), captured);
+                    deliver_output(deps, prepared.instance.id(), index, captured);
                 }
                 Err(fault)
             }
@@ -324,7 +324,7 @@ impl Supervisor {
 /// sinks, so the failure excerpt of the instance shows it (spec 0010: the
 /// output of a helper never enters a spool; core redacts it and uses it
 /// for the failure).
-fn deliver_output(deps: &SupervisorDeps, id: InstanceId, captured: &CapturedOutput) {
+fn deliver_output(deps: &SupervisorDeps, id: InstanceId, step: usize, captured: &CapturedOutput) {
     for stream in OutputStream::ALL {
         let bytes = match stream {
             OutputStream::Stdout => &captured.stdout,
@@ -339,7 +339,8 @@ fn deliver_output(deps: &SupervisorDeps, id: InstanceId, captured: &CapturedOutp
         if lines.is_empty() {
             continue;
         }
-        let batch = LogBatch::new(stream, deps.platform.clock().now(), lines);
+        let mut batch = LogBatch::new(stream, deps.platform.clock().now(), lines);
+        batch.step = Some(step.to_string());
         if deps.sinks.accept(id, batch) == SinkOutcome::Busy {
             tracing::warn!(
                 instance = %id,
@@ -389,6 +390,7 @@ fn output_lines(
                 text: piece.to_owned(),
                 partial: !ended && tail.is_empty(),
                 continued,
+                end: None,
             });
             if tail.is_empty() {
                 break;

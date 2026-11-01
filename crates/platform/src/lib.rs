@@ -66,9 +66,9 @@ pub use fs::{
 pub use identity::{UserId, UserIdentity};
 pub use info::{HostFacts, PlatformInfo, host_target};
 pub use layout::{
-    DirectoryLayout, DirectoryResolver, FixedRoots, INSTANCE_MANIFEST_FILE, InstancePaths,
-    ROOT_OVERRIDE_ENV, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX, SOCKET_PATH_MAX,
-    default_runtime_root, instance_path_entries, validate_root_override,
+    CAPTURED_LOGS_DIR, DirectoryLayout, DirectoryResolver, FixedRoots, INSTANCE_MANIFEST_FILE,
+    InstancePaths, ROOT_OVERRIDE_ENV, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX,
+    SOCKET_PATH_MAX, default_runtime_root, instance_path_entries, validate_root_override,
 };
 pub use platform::Platform;
 pub use private_dir::{PrivateDirViolation, check_private_dir};

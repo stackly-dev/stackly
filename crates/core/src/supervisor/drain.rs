@@ -9,10 +9,11 @@
 use std::sync::{Arc, Mutex, PoisonError};
 
 use stackly_domain::InstanceId;
-use stackly_platform::{OutputStream, ProcessError};
+use stackly_platform::{ExitStatus, OutputStream, ProcessError};
 use tokio::sync::watch;
 
 use super::persist::blocking;
+use super::sink::{RunEvent, SpoolSource};
 use super::{DrainContext, DrainOutcome, SpoolDrain, Supervisor, SupervisorDeps};
 
 /// How a [`DrainSlot`] starts reading.
@@ -33,20 +34,41 @@ pub(crate) struct DrainSlot {
 }
 
 impl DrainSlot {
-    /// Opens the spools of `id` and starts the pump task. The flag is true
-    /// when a spool could not be opened, so the instance reports
-    /// `logsUnavailable`; the other stream is still read.
+    /// Opens the spools of `id`, written by the process `source`, and
+    /// starts the pump task. The flag is true when a spool could not be
+    /// opened, so the instance reports `logsUnavailable`; the other stream
+    /// is still read.
+    ///
+    /// A fresh opening tells the sinks the run started (before the process
+    /// runs, so the marker comes before its lines), and a resumed one whose
+    /// spool could not be opened tells them its output is lost (spec 0027,
+    /// AC-5).
     pub(crate) async fn start(
         sup: &Supervisor,
         id: InstanceId,
         opening: Opening,
+        source: SpoolSource,
     ) -> (Arc<Self>, bool) {
         let deps = sup.deps().clone();
-        let opened = blocking(move || open_all(&deps, id, opening)).await;
+        let opened = blocking(move || open_all(&deps, id, opening, source)).await;
         let (drains, unavailable) = opened.unwrap_or_else(|error| {
             tracing::warn!(instance = %id, %error, "the spools could not be opened");
             (Vec::new(), true)
         });
+        let at = sup.deps().platform.clock().now();
+        match opening {
+            Opening::Fresh => sup.deps().sinks.run_event(
+                id,
+                RunEvent::Started {
+                    pid: source.pid,
+                    at,
+                },
+            ),
+            Opening::Resumed if unavailable => {
+                sup.deps().sinks.run_event(id, RunEvent::Unavailable { at });
+            }
+            Opening::Resumed => {}
+        }
         let (stop, stop_rx) = watch::channel(false);
         let slot = Arc::new(Self {
             stop,
@@ -113,8 +135,27 @@ fn context(deps: &SupervisorDeps, id: InstanceId) -> DrainContext<'_> {
     DrainContext::new(id, &deps.redactor, &*deps.sinks, deps.platform.clock())
 }
 
+/// Tells the sinks the main process of `id` exited with `status`, once
+/// its spools were read to the end, so the marker follows its last line.
+pub(crate) fn exited(sup: &Supervisor, id: InstanceId, status: Option<ExitStatus>) {
+    let (code, signal) = match status {
+        Some(ExitStatus::Exited(code)) => (Some(code), None),
+        Some(ExitStatus::Signaled(signal)) => (None, Some(signal)),
+        None => (None, None),
+    };
+    let at = sup.deps().platform.clock().now();
+    sup.deps()
+        .sinks
+        .run_event(id, RunEvent::Exited { code, signal, at });
+}
+
 /// Opens the stdout and stderr spool readers of `id`.
-fn open_all(deps: &SupervisorDeps, id: InstanceId, opening: Opening) -> (Vec<SpoolDrain>, bool) {
+fn open_all(
+    deps: &SupervisorDeps,
+    id: InstanceId,
+    opening: Opening,
+    source: SpoolSource,
+) -> (Vec<SpoolDrain>, bool) {
     let key = id.short_key();
     let mut drains = Vec::new();
     let mut unavailable = false;
@@ -138,7 +179,7 @@ fn open_all(deps: &SupervisorDeps, id: InstanceId, opening: Opening) -> (Vec<Spo
             Opening::Resumed => SpoolDrain::resume(stream, reader, &deps.config),
         };
         match drain {
-            Ok(drain) => drains.push(drain),
+            Ok(drain) => drains.push(drain.with_source(Some(source))),
             Err(error) => {
                 tracing::warn!(instance = %id, stream = stream.as_code(), %error, "the spool could not be read");
                 unavailable = true;

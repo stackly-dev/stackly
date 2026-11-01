@@ -430,6 +430,20 @@ impl stackly_platform::Filesystem for Swapping {
         self.inner.create_dir_private(path)
     }
 
+    fn create_file_private(
+        &self,
+        path: &Path,
+    ) -> Result<std::fs::File, stackly_platform::PlatformError> {
+        self.inner.create_file_private(path)
+    }
+
+    fn open_append_private(
+        &self,
+        path: &Path,
+    ) -> Result<std::fs::File, stackly_platform::PlatformError> {
+        self.inner.open_append_private(path)
+    }
+
     fn read_dir(
         &self,
         path: &Path,

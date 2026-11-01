@@ -24,6 +24,11 @@ pub const INSTANCE_MANIFEST_FILE: &str = "instance-manifest.json";
 /// Folder under the runtime root that holds one run folder per instance.
 /// One letter, because it counts against the socket path budget.
 const INSTANCE_RUNS_DIR: &str = "i";
+/// The folder of the durable log store inside an instance's log folder
+/// (spec 0027). Provider log files may not use it as their first component
+/// (spec 0009).
+pub const CAPTURED_LOGS_DIR: &str = "captured";
+
 /// Folder name used under both `data` and `logs` for per instance folders.
 const INSTANCES_DIR: &str = "instances";
 /// The software's data directory inside an instance folder.
@@ -267,6 +272,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn instance_log_dir(&self, id: InstanceId) -> PathBuf {
         self.instance_logs_dir().join(id.to_string())
+    }
+
+    /// Returns the durable log store of one instance,
+    /// `logs/instances/<id>/captured/` (spec 0027). The log writer creates
+    /// it with `create_dir_private`; `prepare_layout` does not.
+    #[must_use]
+    pub fn instance_captured_logs_dir(&self, id: InstanceId) -> PathBuf {
+        self.instance_log_dir(id).join(CAPTURED_LOGS_DIR)
     }
 
     /// Returns the folder for downloads.

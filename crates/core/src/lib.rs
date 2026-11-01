@@ -14,6 +14,7 @@ pub mod instance;
 mod instance_dir;
 mod inventory;
 mod layout;
+pub mod logs;
 mod observation;
 pub mod operation;
 mod ownership;

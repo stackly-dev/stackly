@@ -131,6 +131,30 @@ pub trait Filesystem: Send + Sync {
     /// parent does not exist, and other variants when it cannot be opened.
     fn open_append(&self, path: &Path) -> Result<Box<dyn AppendFile>, PlatformError>;
 
+    /// Creates a new regular file with mode 0600 and opens it for
+    /// appending, without following a symlink in the last component. It
+    /// fails when anything exists at `path` (spec 0027, *Usulan update* for
+    /// spec 0004). The durable log store writes its header and segments
+    /// with it, through a plain [`std::fs::File`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::AlreadyExists`] when the path exists,
+    /// [`PlatformError::NotFound`] when the parent does not exist, and
+    /// other variants when the file cannot be created.
+    fn create_file_private(&self, path: &Path) -> Result<std::fs::File, PlatformError>;
+
+    /// Opens an existing regular file for appending and reading, without
+    /// following a symlink in the last component and without creating it:
+    /// the active segment of the durable log store after a daemon restart.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotARegularFile`] when the path is a symlink
+    /// or anything but a regular file, [`PlatformError::NotFound`] when it
+    /// does not exist, and other variants when it cannot be opened.
+    fn open_append_private(&self, path: &Path) -> Result<std::fs::File, PlatformError>;
+
     /// Moves the entry at `from` to `to` in one atomic step and syncs both
     /// parent directories. It never replaces or deletes anything: `to` must
     /// not exist, not even as a symlink, and a symlink at `from` moves as

@@ -42,8 +42,8 @@ use super::respawn::show_pause;
 use super::restart::{JitterFactor, RestartDecision};
 use super::steps::{command_parts, run_render};
 use super::{
-    BindOptions, BindOutcome, DrainContext, DrainOutcome, SpoolDrain, Supervisor, SupervisorDeps,
-    secrets,
+    BindOptions, BindOutcome, DrainContext, DrainOutcome, SpoolDrain, SpoolSource, Supervisor,
+    SupervisorDeps, secrets,
 };
 use crate::instance::data_compat::check_data_compatibility;
 use crate::operation::{
@@ -873,6 +873,17 @@ async fn fresh_spools(
 /// only costs a warning.
 fn drain_old_spools(deps: &SupervisorDeps, id: InstanceId, paths: &[&std::path::PathBuf; 2]) {
     let streams = stackly_platform::OutputStream::ALL;
+    // The old spool was written by the process the registry saw last, so a
+    // durable sink can drop the lines it stored before the daemon stopped.
+    let source = match deps.registry.latest_process_observation(id) {
+        Ok(read) => read
+            .value
+            .map(|seen| SpoolSource::new(seen.identity.pid, seen.identity.start)),
+        Err(error) => {
+            tracing::warn!(instance = %id, %error, "the last process of an old spool could not be read");
+            None
+        }
+    };
     let ctx = DrainContext::new(id, &deps.redactor, &*deps.sinks, deps.platform.clock());
     for (stream, path) in streams.into_iter().zip(paths) {
         let reader = match deps.platform.processes().open_spool(path) {
@@ -884,7 +895,7 @@ fn drain_old_spools(deps: &SupervisorDeps, id: InstanceId, paths: &[&std::path::
             }
         };
         let finished = SpoolDrain::resume(stream, reader, &deps.config)
-            .and_then(|mut drain| drain.finish(&ctx));
+            .and_then(|drain| drain.with_source(source).finish(&ctx));
         match finished {
             Ok(DrainOutcome::Busy) => {
                 tracing::warn!(instance = %id, stream = stream.as_code(), "the log sink was busy; an old spool is dropped unread");
@@ -1048,7 +1059,8 @@ async fn run_attempt(
         return Ok(identity_failed(sup, id, &facts.executable, status).await);
     }
 
-    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh).await;
+    let source = SpoolSource::new(identity.pid, identity.start);
+    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh, source).await;
     let (exit_slot, exit_rx) = ExitSlot::new();
     let (done, _) = watch::channel(false);
     let (probes_stop, probes_stop_rx) = watch::channel(false);
@@ -1205,6 +1217,7 @@ async fn on_exit(sup: &Supervisor, id: InstanceId, notice: &ExitNotice) -> Next 
             }
         });
         drain.finish(sup, id).await;
+        super::drain::exited(sup, id, notice.status);
         remove_material(sup, &actor).await;
         let platform = deps.platform.clone();
         let main = notice.pid;

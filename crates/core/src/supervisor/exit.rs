@@ -99,6 +99,7 @@ pub(crate) async fn handle_exit(
     });
 
     drain.finish(sup, actor.id).await;
+    super::drain::exited(sup, actor.id, notice.status);
     remove_material(sup, actor).await;
     let leftover = leftover_members(sup, group, notice.pid).await;
 

@@ -202,6 +202,45 @@ impl Redactor {
         Cow::Owned(out)
     }
 
+    /// Returns the length in bytes of the longest value learned so far, 0
+    /// when none is (spec 0027, *Usulan update* for spec 0010).
+    #[must_use]
+    pub fn max_secret_len(&self) -> usize {
+        let known = self.known.read().unwrap_or_else(PoisonError::into_inner);
+        known.values.first().map_or(0, SecretValue::len)
+    }
+
+    /// Returns where to cut `bytes` at `cut` or before it so no learned
+    /// value crosses the cut: a value that starts in the last
+    /// `max_secret_len() - 1` bytes before `cut` and runs past it, or whose
+    /// start is all that `bytes` holds so far, moves the cut back to where
+    /// it starts. The spool reader cuts a line without a newline at the
+    /// hard limit this way, so the next piece holds the value whole and the
+    /// redactor sees it. A cut that would move to 0 stays at `cut`.
+    #[must_use]
+    pub fn safe_cut(&self, bytes: &[u8], cut: usize) -> usize {
+        let cut = cut.min(bytes.len());
+        let known = self.known.read().unwrap_or_else(PoisonError::into_inner);
+        let Some(longest) = known.values.first().map(SecretValue::len) else {
+            return cut;
+        };
+        let from = cut.saturating_sub(longest.saturating_sub(1)).max(1);
+        for at in from..cut {
+            if !known.first_bytes[usize::from(bytes[at])] {
+                continue;
+            }
+            let rest = &bytes[at..];
+            let crosses = known.values.iter().any(|value| {
+                let value = value.expose().as_bytes();
+                at + value.len() > cut && (rest.starts_with(value) || value.starts_with(rest))
+            });
+            if crosses {
+                return at;
+            }
+        }
+        cut
+    }
+
     /// Layer 2: where each known value appears, the longest first at each
     /// position.
     fn known_values(&self, text: &str) -> Vec<Range<usize>> {

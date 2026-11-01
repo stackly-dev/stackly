@@ -99,7 +99,7 @@ pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};
 pub use reload::ReloadRequest;
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
 pub use restart_op::RestartRequest;
-pub use sink::{LogBatch, LogLine, LogSink, SinkOutcome, SinkSet, TailSink};
+pub use sink::{LogBatch, LogLine, LogSink, RunEvent, SinkOutcome, SinkSet, SpoolSource, TailSink};
 pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};
 pub use status::{InstanceStatus, ProcessStatus, RestartStatus};

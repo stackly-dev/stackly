@@ -19,6 +19,7 @@ use super::exit::{finish_process, spawn_exit_task};
 use super::persist::{CommitMode, apply_event, blocking, commit_instance};
 use super::prepare::{Checks, prepare};
 use super::readiness::spawn_probes;
+use super::sink::SpoolSource;
 use crate::provider::{HealthPlan, ProbePlan};
 
 /// A proven process to adopt.
@@ -65,7 +66,8 @@ pub(crate) async fn adopt_process(sup: &Supervisor, adoption: Adoption) -> bool 
     let (exit_slot, exit_rx) = ExitSlot::new();
     let (done, _) = watch::channel(false);
     let (probes_stop, probes_stop_rx) = watch::channel(false);
-    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Resumed).await;
+    let source = SpoolSource::new(identity.pid, identity.start);
+    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Resumed, source).await;
     let pid = identity.pid;
     let generation = actor.update(deps, |state| {
         let generation = state.next_generation;
