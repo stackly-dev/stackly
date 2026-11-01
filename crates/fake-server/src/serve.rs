@@ -30,8 +30,14 @@ const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 /// Exit code of a crash when `--crash-exit-code` is absent, the same as
 /// the `crashExitCode` default in the `testing/fake` settings.
 const DEFAULT_CRASH_EXIT_CODE: u8 = 70;
-/// Every spam line is this long, newline included.
-const LOG_LINE_BYTES: usize = 100;
+/// Every spam line is this long, newline included, when
+/// `--log-line-bytes` is absent.
+const DEFAULT_LOG_LINE_BYTES: usize = 100;
+/// The shortest spam line: the longest prefix, a dot, and the newline.
+const MIN_LOG_LINE_BYTES: usize = 42;
+/// The longest spam line, the `maximum` of `logLineBytes` in the fake
+/// package.
+const MAX_LOG_LINE_BYTES: usize = 4096;
 /// Longest sleep between two checks of the log line schedule.
 const LOG_TICK: Duration = Duration::from_millis(50);
 /// Longest wait for the last line before the process exits anyway.
@@ -54,6 +60,7 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
             "crash-after-ms",
             "crash-exit-code",
             "log-lines-per-second",
+            "log-line-bytes",
             "ignore-term",
             "leak-token",
         ],
@@ -94,7 +101,8 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
     }
     if options.log_lines_per_second > 0 {
         let rate = options.log_lines_per_second;
-        thread::spawn(move || spam_logs(rate));
+        let bytes = options.log_line_bytes;
+        thread::spawn(move || spam_logs(rate, bytes));
     }
 
     for stream in listener.incoming() {
@@ -124,6 +132,8 @@ struct Options {
     crash_after: Option<Duration>,
     crash_exit_code: u8,
     log_lines_per_second: u32,
+    /// The length of every spam line, newline included.
+    log_line_bytes: usize,
     ignore_term: bool,
     /// Print the auth token, for the redaction tests of spec 0027.
     leak_token: bool,
@@ -138,6 +148,12 @@ impl Options {
                 "--crash-exit-code must be 1 to 255, got \"0\"".to_owned(),
             ));
         }
+        let log_line_bytes = flags.number("log-line-bytes", DEFAULT_LOG_LINE_BYTES)?;
+        if !(MIN_LOG_LINE_BYTES..=MAX_LOG_LINE_BYTES).contains(&log_line_bytes) {
+            return Err(Failure::Usage(format!(
+                "--log-line-bytes must be {MIN_LOG_LINE_BYTES} to {MAX_LOG_LINE_BYTES}, got \"{log_line_bytes}\""
+            )));
+        }
         Ok(Self {
             config: flags.required_path("config")?,
             data: flags.required_path("data")?,
@@ -147,6 +163,7 @@ impl Options {
             crash_after: (crash_after_ms > 0).then(|| Duration::from_millis(crash_after_ms)),
             crash_exit_code,
             log_lines_per_second: flags.number("log-lines-per-second", 0)?,
+            log_line_bytes,
             ignore_term: flags.boolean("ignore-term", false)?,
             leak_token: flags.boolean("leak-token", false)?,
         })
@@ -395,7 +412,7 @@ fn exit_with(code: i32, stream: Stream, line: String) -> ! {
 /// Writes `rate` lines a second, alternating stdout and stderr, until a
 /// stream is closed. Lines due at once are written in a burst, so high rates
 /// keep pace without a sleep per line.
-fn spam_logs(rate: u32) {
+fn spam_logs(rate: u32, bytes: usize) {
     let started = Instant::now();
     let rate = u128::from(rate);
     let mut written: u64 = 0;
@@ -405,11 +422,11 @@ fn spam_logs(rate: u32) {
             let result = if written.is_multiple_of(2) {
                 io::stdout()
                     .lock()
-                    .write_all(log_line(written, "stdout").as_bytes())
+                    .write_all(log_line(written, "stdout", bytes).as_bytes())
             } else {
                 io::stderr()
                     .lock()
-                    .write_all(log_line(written, "stderr").as_bytes())
+                    .write_all(log_line(written, "stderr", bytes).as_bytes())
             };
             if result.is_err() {
                 return;
@@ -435,10 +452,10 @@ fn leak_token(token: &str) {
     let _ = writeln!(io::stderr(), "{line}");
 }
 
-/// One spam line of exactly [`LOG_LINE_BYTES`], newline included.
-fn log_line(sequence: u64, stream: &str) -> String {
+/// One spam line of exactly `bytes`, newline included.
+fn log_line(sequence: u64, stream: &str, bytes: usize) -> String {
     let text = format!("log line {sequence:010} on {stream} ");
-    format!("{text:.<width$}\n", width = LOG_LINE_BYTES - 1)
+    format!("{text:.<width$}\n", width = bytes - 1)
 }
 
 #[cfg(test)]
@@ -447,11 +464,22 @@ mod tests {
 
     #[test]
     fn log_lines_are_exactly_one_hundred_bytes() {
-        let line = log_line(42, "stderr");
+        let line = log_line(42, "stderr", DEFAULT_LOG_LINE_BYTES);
 
-        assert_eq!(line.len(), LOG_LINE_BYTES);
+        assert_eq!(line.len(), DEFAULT_LOG_LINE_BYTES);
         assert!(line.starts_with("log line 0000000042 on stderr ."));
         assert!(line.ends_with(".\n"));
-        assert_eq!(log_line(u64::MAX, "stdout").len(), LOG_LINE_BYTES);
+        assert_eq!(
+            log_line(u64::MAX, "stdout", DEFAULT_LOG_LINE_BYTES).len(),
+            DEFAULT_LOG_LINE_BYTES
+        );
+    }
+
+    #[test]
+    fn log_lines_take_the_length_asked_for_down_to_the_shortest() {
+        assert_eq!(log_line(7, "stdout", 512).len(), 512);
+        let shortest = log_line(u64::MAX, "stderr", MIN_LOG_LINE_BYTES);
+        assert_eq!(shortest.len(), MIN_LOG_LINE_BYTES);
+        assert!(shortest.ends_with(".\n"));
     }
 }

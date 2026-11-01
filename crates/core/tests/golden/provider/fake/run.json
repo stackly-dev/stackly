@@ -50,6 +50,7 @@
       "--crash-after-ms=0",
       "--crash-exit-code=70",
       "--log-lines-per-second=0",
+      "--log-line-bytes=100",
       "--ignore-term=false",
       "--leak-token=false"
     ],

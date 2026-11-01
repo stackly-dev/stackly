@@ -60,6 +60,7 @@ lifecycle:
       - "--crash-after-ms=${settings.crashAfterMs}"
       - "--crash-exit-code=${settings.crashExitCode}"
       - "--log-lines-per-second=${settings.logLinesPerSecond}"
+      - "--log-line-bytes=${settings.logLineBytes}"
       - "--ignore-term=${settings.ignoreTerm}"
       - "--leak-token=${settings.leakToken}"
     cwd: "${instance.data}"

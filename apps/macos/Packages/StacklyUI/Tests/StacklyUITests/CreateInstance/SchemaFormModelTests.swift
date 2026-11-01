@@ -106,9 +106,9 @@ struct SchemaFormModelTests {
 
     @Test func theFakeFormHasASecretAndBasicAndAdvancedFields() throws {
         let schema = try schema("fake")
-        #expect(schema.rows.count == 10)
+        #expect(schema.rows.count == 12)
         #expect(schema.rows.last?.control == .secret(SecretLimits(minLength: 1, maxLength: 256)))
-        #expect(schema.rows.filter(\.isAdvanced).count == 6)
+        #expect(schema.rows.filter(\.isAdvanced).count == 8)
         #expect(schema.row("failInit")?.isSetOnce == true)
         #expect(schema.row("failInit")?.control == .toggle)
     }

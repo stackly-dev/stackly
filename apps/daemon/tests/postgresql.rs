@@ -32,6 +32,8 @@ mod install;
 mod lifecycle;
 #[path = "postgresql/lifecycle_ops.rs"]
 mod lifecycle_ops;
+#[path = "postgresql/logs.rs"]
+mod logs;
 #[path = "postgresql/mismatch.rs"]
 mod mismatch;
 #[path = "postgresql/phases.rs"]

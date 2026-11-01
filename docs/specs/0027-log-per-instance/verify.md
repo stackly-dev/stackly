@@ -30,7 +30,8 @@ _Steps derived from spec 0027 acceptance criteria and its Value sourcing table. 
 - [ ] `cargo test -p stackly-cli --test instance logs_real` → passes → AC-9, AC-10
 - [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstanceLogs"` → model tests and the six Logs snapshots pass → AC-7, AC-11
 - [ ] `swift test --package-path clients/swift --filter aLogFollowWhileNotConnectedIsNotSent` → passes → AC-7
-- [ ] `cargo xtask evidence run` with the slow client scenario → `daemon.get_info` p99 under 100 ms, daemon memory within 64 MiB of baseline, fake not slowed → AC-3 (milestone 5, not run yet)
+- [ ] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test supervisor slow_logs -- --nocapture` → against the `stacklyd` binary, `daemon.get_info` p99 under 100 ms, the daemon's footprint within 64 MiB of baseline, the fake at 95 percent or more of the lines due, one connection closed by `ipc.write_timeout`, the slow follower in `seq` order; plus the in process test that a follow behind a rotation gets `gap rotated` then ordered entries → AC-3, AC-7 (run 2026-11-02: PASS, p99 1 ms, +15 MiB)
+- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql postgresql_17_writes_ready -- --ignored` → `database system is ready to accept connections` on stderr as `normal`, the `FATAL` line of a wrong login as `error`, read through `stackly instance logs --json`; `BLOCKED` without the artifact in the xtask cache → AC-6, AC-8 (run 2026-11-02: PASS on 17.11)
 
 ## Value sourcing
 
@@ -53,12 +54,12 @@ _Steps derived from spec 0027 acceptance criteria and its Value sourcing table. 
 
 - AC-1 · Commands 1, 2; Value sourcing `seq`, `at`
 - AC-2 · Commands 1
-- AC-3 · Commands 6 (evidence run, milestone 5)
+- AC-3 · Commands 6 (evidence run)
 - AC-4 · Commands 1; Value sourcing `src`
 - AC-5 · UI stop and start; Value sourcing `truncated`, `exited`, `storeId`
 - AC-6 · UI source, filter, Load Earlier; Commands 1, 2
 - AC-7 · UI follow, reconnect; Commands 4, 5; Value sourcing `subscriptionId`, `ended`
-- AC-8 · Value sourcing `level`
+- AC-8 · Value sourcing `level`; Commands 7 (native)
 - AC-9 · UI fixture credential; Commands 3
 - AC-10 · UI CLI comparison; Value sourcing CLI time, `ended`
 - AC-11 · every UI step; Commands 4

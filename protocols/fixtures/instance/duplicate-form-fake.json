@@ -237,6 +237,31 @@
         "apply": "restart",
         "choices": [],
         "default": {
+          "content": 100,
+          "type": "integer"
+        },
+        "description": "Bytes in every log line, newline included, for the slow client evidence run of spec 0027 (AC-3).",
+        "itemKey": null,
+        "items": [],
+        "key": "logLineBytes",
+        "kind": "integer",
+        "managed": false,
+        "maxItems": null,
+        "maxLength": null,
+        "maximum": 4096,
+        "minItems": null,
+        "minLength": null,
+        "minimum": 42,
+        "printableOnly": false,
+        "required": false,
+        "secret": false,
+        "title": "Log line length",
+        "visibility": "advanced"
+      },
+      {
+        "apply": "restart",
+        "choices": [],
+        "default": {
           "content": false,
           "type": "boolean"
         },
@@ -359,7 +384,7 @@
     "provider": {
       "category": "testing",
       "displayName": "Fake Provider",
-      "manifestSha256": "85d066a87e63988c81ebc3753a0f51565f9e697297ca3c0b765328b52a66d9df",
+      "manifestSha256": "e2fb34cc625facdf6c90f31ac006a54c3d672508f30c913195e44c1b0335117a",
       "name": "testing/fake",
       "revision": "0.3.0",
       "source": "pinned"
