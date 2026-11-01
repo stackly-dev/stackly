@@ -7,9 +7,11 @@ import SwiftUI
 /// that ends more than 24 pt above the bottom turns `follow` off; turning it on scrolls
 /// to the bottom. Scrolling back to the bottom does not turn it on again: the toggle
 /// of feature 27 does. The screen sets the height of the view.
+/// With `copyText`, a line whose copy text is not `nil` has a context menu with Copy Line.
 public struct LogView: View {
     private let lines: [LogLine]
     @Binding private var follow: Bool
+    private let copyText: (@MainActor (LogLine) -> String?)?
 
     private let timeTemplate: String
     private let sourceTemplate: String
@@ -23,12 +25,16 @@ public struct LogView: View {
     ///   - follow: Whether the view follows the newest line.
     ///   - timeTemplate: Text as wide as the widest time, which sets the time column's     minimum width.
     ///   - sourceTemplate: Text as wide as the usual source, which sets the source     column's minimum width.
+    ///   - copyText: What Copy Line copies for a line, `nil` for a line without the menu;
+    ///     no menu at all when left out.
     public init(
         _ lines: [LogLine], follow: Binding<Bool>,
-        timeTemplate: String = "00:00:00.000", sourceTemplate: String = "stderr"
+        timeTemplate: String = "00:00:00.000", sourceTemplate: String = "stderr",
+        copyText: (@MainActor (LogLine) -> String?)? = nil
     ) {
         self.lines = lines
         _follow = follow
+        self.copyText = copyText
 
         self.timeTemplate = timeTemplate
         self.sourceTemplate = sourceTemplate
@@ -42,7 +48,13 @@ public struct LogView: View {
                     LogRow(
                         line: line,
                         timeTemplate: showsTime ? timeTemplate : nil,
-                        sourceTemplate: showsSource ? sourceTemplate : nil)
+                        sourceTemplate: showsSource ? sourceTemplate : nil
+                    )
+                    .contextMenu {
+                        if let text = copyText?(line) {
+                            Button("Copy Line") { PlainPasteboard.write(text) }
+                        }
+                    }
                 }
             }
             .scrollTargetLayout()

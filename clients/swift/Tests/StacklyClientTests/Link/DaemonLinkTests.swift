@@ -242,6 +242,25 @@ struct DaemonLinkTests {
         await link.stop()
     }
 
+    @Test func aLogFollowWhileNotConnectedIsNotSent() async throws {
+        let link = makeLink()
+        var states = StateWatcher(link)
+        await link.start()
+        _ = await states.next { if case .unreachable = $0 { true } else { false } }
+        let params = LogsFollowParams(instance: UUID(), streams: nil, contains: nil, after: nil)
+        do {
+            _ = try await link.followLogs(params)
+            Issue.record("a follow without a connection must not be sent")
+        } catch {
+            guard case .notSent(let body) = error else {
+                Issue.record("expected notSent, got \(error)")
+                return
+            }
+            #expect(body.code == "ipc.endpoint_missing")
+        }
+        await link.stop()
+    }
+
     @Test func aHeartbeatTimeoutMakesTheDaemonUnreachable() async throws {
         let server = try FakeDaemonServer(path: root.endpoint.socketPath)
         server.serve { session in

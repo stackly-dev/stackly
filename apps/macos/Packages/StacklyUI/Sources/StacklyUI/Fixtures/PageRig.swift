@@ -197,16 +197,19 @@
             await catalog.store.resnapshot()
         }
 
-        /// The Instances page over these stores, inside the action host of a window.
+        /// The Instances page over these stores, inside the action host of a window. The Logs
+        /// tab of a detail page answers from the `logs` fixture.
         func instancesPage(
             waiting: FailureContent? = nil, hasConnection: Bool = true, opening: UUID? = nil,
+            openingTab: InstanceTab = .summary, logs: FixtureLogs.Case = .follow,
             selection: String = "", showsInspector: Bool = true, filter: InstanceFilter = .all,
             query: String = "", sortOrder: InstanceSortComparator = .default
         ) -> some View {
             InstancesPage(
                 instances: instances, catalog: catalog, actions: actions, operations: operations,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
-                detail: detail, opening: opening, selection: selection,
+                detail: detail, logs: FixtureLogs.service(logs), opening: opening,
+                openingTab: openingTab, selection: selection,
                 showsInspector: showsInspector, filter: filter, query: query,
                 sortOrder: sortOrder
             )

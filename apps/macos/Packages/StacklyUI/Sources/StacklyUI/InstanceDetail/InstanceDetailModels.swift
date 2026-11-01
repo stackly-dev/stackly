@@ -8,6 +8,8 @@ import StacklyClient
 @MainActor
 public final class InstanceDetailModels {
     private let service: InstanceDetailService
+    private let logsService: InstanceLogsService
+    private var logs: [UUID: InstanceLogsModel] = [:]
     private let reload: Duration
     private let sleep: @Sendable (Duration) async throws -> Void
     private var models: [UUID: InstanceDetailModel] = [:]
@@ -18,10 +20,12 @@ public final class InstanceDetailModels {
     /// Creates an empty registry.
     /// - Parameters:
     ///   - service: The reads, the event stream, and the secret methods.
+    ///   - logs: The log reads and follows of the Logs tab (spec 0027).
     ///   - reload: The pause before a reload after a revision change.
     ///   - sleep: Waits for a duration and throws when cancelled.
     public init(
         service: InstanceDetailService,
+        logs: InstanceLogsService = .disconnected,
         reload: Duration = InstanceDetailModel.reloadDebounce,
 
         sleep: @escaping @Sendable (Duration) async throws -> Void = {
@@ -29,6 +33,7 @@ public final class InstanceDetailModels {
         }
     ) {
         self.service = service
+        self.logsService = logs
         self.reload = reload
         self.sleep = sleep
     }
@@ -43,12 +48,26 @@ public final class InstanceDetailModels {
         return made
     }
 
+    /// The Logs tab model of an instance, made on first use, so the tab keeps one model and
+    /// at most one follow per instance.
+    /// - Parameter id: The instance.
+    func logsModel(for id: UUID) -> InstanceLogsModel {
+        if let held = logs[id] { return held }
+        let made = InstanceLogsModel(instanceId: id, service: logsService)
+        logs[id] = made
+        return made
+    }
+
     /// Drops the models of instances that are not in `ids`: they are gone from the store.
     /// - Parameter ids: The instances that exist.
     public func keep(_ ids: Set<UUID>) {
         for (id, model) in models where ids.contains(id) == false {
             model.close()
             models[id] = nil
+        }
+        for (id, model) in logs where ids.contains(id) == false {
+            model.stop()
+            logs[id] = nil
         }
     }
 }

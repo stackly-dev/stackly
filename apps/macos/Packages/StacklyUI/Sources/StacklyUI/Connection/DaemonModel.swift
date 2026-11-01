@@ -20,6 +20,9 @@ public struct LinkHandle: Sendable {
     /// The link's status right now, which may be ahead of what ``states`` has
     /// delivered; `nil` when unknown.
     public var currentState: @Sendable () -> ConnectionState?
+    /// Follows the log of an instance on the open connection (spec 0027).
+    public var followLogs:
+        @Sendable (LogsFollowParams) async throws(ClientError) -> LogFollowSession
 
     /// Creates a handle from closures.
     public init(
@@ -29,7 +32,10 @@ public struct LinkHandle: Sendable {
         call: @escaping @Sendable (Call, String?, CallOptions) async throws(ClientError) -> Reply,
         refresh: @escaping @Sendable () async -> Void,
         stopNow: @escaping @Sendable () -> Void,
-        currentState: @escaping @Sendable () -> ConnectionState? = { nil }
+        currentState: @escaping @Sendable () -> ConnectionState? = { nil },
+        followLogs:
+            @escaping @Sendable (LogsFollowParams) async throws(ClientError) -> LogFollowSession =
+            { _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) }
     ) {
         self.states = states
         self.start = start
@@ -38,6 +44,7 @@ public struct LinkHandle: Sendable {
         self.refresh = refresh
         self.stopNow = stopNow
         self.currentState = currentState
+        self.followLogs = followLogs
     }
 
     /// The handle of a real ``DaemonLink``.
@@ -51,7 +58,8 @@ public struct LinkHandle: Sendable {
             },
             refresh: { await link.refreshDaemon() },
             stopNow: { link.stopNow() },
-            currentState: { link.currentState }
+            currentState: { link.currentState },
+            followLogs: { params throws(ClientError) in try await link.followLogs(params) }
         )
     }
 }
@@ -302,6 +310,14 @@ public final class DaemonModel {
         return SecretsClient { call, options throws(ClientError) in
             try await link.call(call, nil, options)
         }
+    }
+
+    /// Follows the log of an instance on the open connection (spec 0027). Like ``read(_:options:)``
+    /// it changes nothing and does not check the mutation gate.
+    /// - Throws: `ipc.not_connected` while not connected, or the daemon's error.
+    public func followLogs(_ params: LogsFollowParams) async throws(ClientError) -> LogFollowSession
+    {
+        try await link.followLogs(params)
     }
 
     /// Whether the link holds an open connection.

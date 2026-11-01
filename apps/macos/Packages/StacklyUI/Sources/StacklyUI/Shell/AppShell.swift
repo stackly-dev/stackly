@@ -278,7 +278,8 @@ public struct AppShell: View {
                     hasConnection: presentation.hasConnection,
                     reconnect: reconnect,
                     openDiagnostics: { select(.diagnostics) },
-                    detail: daemon.map(InstanceDetailService.live)
+                    detail: daemon.map(InstanceDetailService.live),
+                    logs: daemon.map(InstanceLogsService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)

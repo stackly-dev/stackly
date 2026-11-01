@@ -63,6 +63,7 @@ public struct InstancesPage: View {
     private let actions: InstanceActionModel
     private let operations: OperationCenter?
     private let completedRounds: Int
+    private let openingTab: InstanceTab
     private let waiting: FailureContent?
     private let hasConnection: Bool
     private let reconnect: @MainActor () -> Void
@@ -85,8 +86,11 @@ public struct InstancesPage: View {
     ///   - openDiagnostics: Opens Diagnostics.
     ///   - detail: What the detail page and the inspector read from the daemon, or `nil` for
     ///     a window with no daemon, where they show their failed state.
+    ///   - logs: What the Logs tab of the detail page reads and follows, or `nil` for a window
+    ///     with no daemon.
     ///   - opening: The instance whose detail page the page starts on, or `nil` for the table.
     ///     Previews and snapshots set it.
+    ///   - openingTab: The tab that detail page starts on. Previews and snapshots set it.
     ///   - selection: The instance ID a window with no saved choice starts on; empty selects
     ///     none. Previews and snapshots set it.
     ///   - showsInspector: Whether a window with no saved choice starts with the inspector
@@ -105,7 +109,9 @@ public struct InstancesPage: View {
         reconnect: @escaping @MainActor () -> Void,
         openDiagnostics: @escaping @MainActor () -> Void,
         detail: InstanceDetailService? = nil,
+        logs: InstanceLogsService? = nil,
         opening: UUID? = nil,
+        openingTab: InstanceTab = .summary,
         selection: String = "",
         showsInspector: Bool = true,
         filter: InstanceFilter = .all,
@@ -117,7 +123,10 @@ public struct InstancesPage: View {
         _filter = State(initialValue: filter)
         _query = State(initialValue: query)
         _sortOrder = State(initialValue: [sortOrder])
-        _models = State(initialValue: InstanceDetailModels(service: detail ?? .disconnected))
+        _models = State(
+            initialValue: InstanceDetailModels(
+                service: detail ?? .disconnected, logs: logs ?? .disconnected))
+        self.openingTab = openingTab
         _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
         self.catalog = catalog
@@ -156,7 +165,8 @@ public struct InstancesPage: View {
                 InstanceDetailPage(
                     id: route.id, instances: instances, catalog: catalog, actions: actions,
                     model: models.model(for: route.id), service: models.detailService,
-                    back: { path.removeAll() }
+                    logs: models.logsModel(for: route.id), completedRounds: completedRounds,
+                    tab: openingTab, back: { path.removeAll() }
                 )
                 // On macOS 27 a pushed page does not see the value published around the
                 // stack, so the menu would turn every page command off on the detail page.

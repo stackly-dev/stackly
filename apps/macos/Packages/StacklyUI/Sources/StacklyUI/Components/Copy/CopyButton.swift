@@ -17,7 +17,8 @@ public struct CopyButton: View {
     @State private var confirmation = CopyConfirmation()
     @State private var task: Task<Void, Never>?
 
-    private let text: String
+    private let text: @MainActor () -> String
+    private let title: String
     private let what: String
     private let style: CopyButtonStyle
 
@@ -30,16 +31,35 @@ public struct CopyButton: View {
         what: String,
         style: CopyButtonStyle = .text
     ) {
-        self.text = text
+        self.text = { text }
+        self.title = "Copy"
         self.what = what
         self.style = style
 
+    }
+
+    /// A text button with its own title whose text is built only when pressed, for content
+    /// too large to build on every render, such as the shown lines of a log (spec 0027).
+    /// - Parameters:
+    ///   - title: The title, such as "Copy Shown Lines".
+    ///   - what: What it copies, in lower case: "shown lines".
+    ///   - text: Builds what to copy.
+    public init(
+        title: String,
+        what: String,
+        text: @escaping @MainActor () -> String
+    ) {
+        self.text = text
+        self.title = title
+        self.what = what
+        self.style = .text
     }
 
     /// The button's content.
     public var body: some View {
         CopyButtonFace(
             style: style,
+            title: title,
             what: what,
             isConfirming: confirmation.isConfirming,
             action: press
@@ -52,7 +72,7 @@ public struct CopyButton: View {
     private func press() {
         task?.cancel()
         let confirmation = confirmation
-        let text = text
+        let text = text()
 
         task = Task {
             await confirmation.copy(text)
@@ -64,6 +84,7 @@ public struct CopyButton: View {
 /// gallery can show "Copied" without a press.
 struct CopyButtonFace: View {
     let style: CopyButtonStyle
+    var title = "Copy"
     let what: String
     let isConfirming: Bool
     let action: () -> Void
@@ -85,10 +106,10 @@ struct CopyButtonFace: View {
 
     }
 
-    /// "Copy" and "Copied" stacked, so the button keeps the width of the longer one.
+    /// The title and "Copied" stacked, so the button keeps the width of the longer one.
     private var textLabel: some View {
         ZStack {
-            Text("Copy")
+            Text(title)
                 .opacity(isConfirming ? 0 : 1)
             Label {
                 Text("Copied")

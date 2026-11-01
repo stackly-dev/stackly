@@ -197,6 +197,26 @@ public actor DaemonLink {
         return (subscribed, stream, daemon.accepted)
     }
 
+    /// Follows the log of an instance on the open connection (spec 0027). The follow's
+    /// ``LogFollowSession/unfollow`` goes to that same connection, so it never ends a follow of a
+    /// later connection that reuses the subscription ID.
+    ///
+    /// - Throws: ``ClientError/notSent(_:)`` while not connected, otherwise the errors of
+    ///   ``DaemonConnection/followLogs(_:options:)``.
+    public func followLogs(
+        _ params: LogsFollowParams,
+        options: CallOptions = .standard
+    ) async throws(ClientError) -> LogFollowSession {
+        guard let connection = connected?.connection else {
+            throw .notSent(lastError ?? ClientErrorCatalog.notConnected())
+        }
+        let (following, frames) = try await connection.followLogs(params, options: options)
+        let id = following.subscriptionId
+        return LogFollowSession(
+            following: following, frames: frames,
+            unfollow: { try? await connection.unfollowLogs(id) })
+    }
+
     /// The daemon announced `daemon.shutting_down`: the link closes the
     /// connection at once and reports `unreachable`, without waiting for EOF.
     public func daemonShuttingDown() async {

@@ -22,7 +22,7 @@ struct InstanceDetailPage: View {
     @Environment(\.loadingDelay) private var loadingDelay
     @State private var lookup = Lookup.searching
     @State private var hadSummary = false
-    @State private var tab = InstanceTab.summary
+    @State private var tab: InstanceTab
     @State private var secretNeeds: [SecretNeed]?
 
     let id: UUID
@@ -31,7 +31,26 @@ struct InstanceDetailPage: View {
     let actions: InstanceActionModel
     let model: InstanceDetailModel
     let service: InstanceDetailService
+    let logs: InstanceLogsModel
+    let completedRounds: Int
     let back: @MainActor () -> Void
+
+    init(
+        id: UUID, instances: InstanceStore, catalog: CatalogStore?, actions: InstanceActionModel,
+        model: InstanceDetailModel, service: InstanceDetailService, logs: InstanceLogsModel,
+        completedRounds: Int, tab: InstanceTab = .summary, back: @escaping @MainActor () -> Void
+    ) {
+        self.id = id
+        self.instances = instances
+        self.catalog = catalog
+        self.actions = actions
+        self.model = model
+        self.service = service
+        self.logs = logs
+        self.completedRounds = completedRounds
+        _tab = State(initialValue: tab)
+        self.back = back
+    }
 
     private var context: InstanceActionContext {
         InstanceActionContext.make(
@@ -60,20 +79,36 @@ struct InstanceDetailPage: View {
         let action = actions.stacklyAction(for: summary, context: context)
         let lifecycle = actions.lifecycleActions(
             for: summary, providerName: providerName(summary), context: context)
-        return ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.sectionGap) {
-                tabPicker
-                SummaryTab(
-                    summary: summary, action: action, model: model, secrets: service.secrets,
-                    home: NSHomeDirectory(), enterSecrets: { secretNeeds = $0 },
-                    stopping: Self.stoppingActions(
-                        summary: summary, local: actions.localStatus(for: summary.id),
-                        stopAgain: { actions.perform(.stop, for: summary, context: context) },
-                        forceStop: lifecycle.forceStop))
+        return Group {
+            switch tab {
+            case .summary:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                        tabPicker
+                        SummaryTab(
+                            summary: summary, action: action, model: model,
+                            secrets: service.secrets,
+                            home: NSHomeDirectory(), enterSecrets: { secretNeeds = $0 },
+                            stopping: Self.stoppingActions(
+                                summary: summary, local: actions.localStatus(for: summary.id),
+                                stopAgain: {
+                                    actions.perform(.stop, for: summary, context: context)
+                                },
+                                forceStop: lifecycle.forceStop))
+                    }
+                    .padding(.horizontal, Spacing.pageHorizontal)
+                    .padding(.vertical, Spacing.s16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            case .logs:
+                VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                    tabPicker
+                    InstanceLogsTab(model: logs, completedRounds: completedRounds)
+                }
+                .padding(.horizontal, Spacing.pageHorizontal)
+                .padding(.vertical, Spacing.s16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .padding(.horizontal, Spacing.pageHorizontal)
-            .padding(.vertical, Spacing.s16)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .pageChrome(title: summary.name, subtitle: subtitle(summary))
         .toolbar {

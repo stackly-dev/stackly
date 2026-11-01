@@ -13,11 +13,13 @@ nonisolated public struct InstanceRoute: Hashable, Sendable {
     }
 }
 
-/// A tab of the detail page. Summary is the only one built; the picker shows when there is
-/// more than one (spec 0021, *Halaman detail dan navigasi*).
+/// A tab of the detail page; the picker shows when there is more than one (spec 0021,
+/// *Halaman detail dan navigasi*; Logs from spec 0027).
 nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiable, Sendable {
     /// Endpoints, connection, dependents, and details.
     case summary
+    /// The captured stdout and stderr of the instance.
+    case logs
 
     /// The tab's identity.
     public var id: String { rawValue }
@@ -26,6 +28,7 @@ nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiabl
     public var title: String {
         switch self {
         case .summary: "Summary"
+        case .logs: "Logs"
         }
     }
 }
