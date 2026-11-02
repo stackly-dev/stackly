@@ -869,3 +869,30 @@ fn the_form_gets_the_revision_and_a_refused_form_ends_the_command_without_a_crea
     assert_eq!(form["revision"], "0.4.0");
     ev.pass();
 }
+
+/// Spec 0031 AC-18.
+#[test]
+fn create_sends_startup_at_login_only_with_autostart() {
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(
+        &root,
+        data::scripted(accepted(OperationState::Queued, 1, false), Vec::new(), None),
+    );
+    let mut with = base();
+    with.extend(["--autostart", "--idempotency-key", KEY, "--json"]);
+    let mut without = base();
+    without.extend(["--idempotency-key", "create-demo-0002", "--json"]);
+
+    let first = run(root.path(), &with);
+    let second = run(root.path(), &without);
+
+    assert_eq!(first.code, Some(0), "{first:?}");
+    assert_eq!(second.code, Some(0), "{second:?}");
+    let sent = params(&daemon);
+    assert_eq!(sent[0]["startup"], "at_login");
+    assert_eq!(
+        sent[1]["startup"],
+        serde_json::Value::Null,
+        "no flag sends no policy, so the daemon keeps manual"
+    );
+}

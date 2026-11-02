@@ -33,6 +33,9 @@ pub mod warning {
     /// `restart` saw an instance that was `unknown` before the restart and
     /// still is: its process was never touched (spec 0030).
     pub const RESTART_INSTANCE_UNKNOWN: &str = "cli.restart_instance_unknown";
+    /// `instance autostart on` while the background agent is not enabled, so
+    /// the instance will not start at login (spec 0031).
+    pub const AGENT_OFF: &str = "cli.agent_off";
 }
 
 /// The final record of a command.

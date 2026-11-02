@@ -9,7 +9,7 @@ Version       17.2.0
 Digest        sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90
 Data          /Users/test/Library/Application Support/Stackly/instances/orders-db/data
 Data size     1.3 GB
-Autostart     At login
+Autostart     at login
 Ownership     manual
 Initialized   yes
 Lifecycle     running

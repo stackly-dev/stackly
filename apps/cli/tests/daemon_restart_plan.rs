@@ -634,3 +634,46 @@ fn daemon_status_shows_the_last_restart() {
     drop(without);
     ev.pass();
 }
+
+#[test]
+fn daemon_status_shows_the_login_session() {
+    let root = TestRoot::new().unwrap();
+    let _daemon = ScriptedDaemon::serve(&root, |call, _| match call {
+        Call::DaemonGetInfo => {
+            let mut info = dto::info(true);
+            info.session = Some(stackly_protocol::daemon::DaemonSessionInfo {
+                id: "6f9619ff-8b86-4011-b42d-00c04fc964ff/100014".to_owned(),
+                started_at: "2026-11-02T07:58:00Z".parse().unwrap(),
+                rotation: stackly_protocol::daemon::SessionRotationKind::New,
+                previous_end: Some(stackly_protocol::daemon::SessionEndKind::Clean),
+            });
+            vec![Step::Reply(Reply::DaemonGetInfo(info))]
+        }
+        Call::DaemonGetHealth => vec![Step::Reply(Reply::DaemonGetHealth(dto::health(
+            stackly_protocol::daemon::DaemonHealthStatus::Ready,
+        )))],
+        _ => vec![Step::Fail(error(
+            "test.unexpected",
+            "failed",
+            "unexpected call",
+        ))],
+    });
+
+    let text = run(root.path(), &["daemon", "status"]);
+    let json = run(root.path(), &["daemon", "status", "--json"]);
+
+    let row = text
+        .stdout
+        .lines()
+        .find(|line| line.starts_with("Session"))
+        .unwrap_or_else(|| panic!("no Session row in {}", text.stdout));
+    assert!(
+        row.contains("6f9619ff-8b86-4011-b42d-00c04fc964ff/100014")
+            && row.contains("rotation new")
+            && row.contains("previous ended clean"),
+        "{row}"
+    );
+    let value = envelope(&json);
+    assert_eq!(value["result"]["info"]["session"]["rotation"], "new");
+    assert_eq!(value["result"]["info"]["session"]["previousEnd"], "clean");
+}

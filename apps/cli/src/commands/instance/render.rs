@@ -2,6 +2,7 @@
 //! failure output (spec 0014 AC-7, spec 0022 *CLI*). `inspect` and its
 //! alias `get` write it, so label, order, and format stay here.
 
+use stackly_protocol::instance::AutostartSession;
 use stackly_protocol::instance::connection::ConnectionPartKind;
 use stackly_protocol::instance::{
     ConnectionAvailability, ConnectionString, ConnectionUnavailableReason, DataUsage,
@@ -124,7 +125,7 @@ pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
                 "Data size",
                 Cell::fixed(data_size(inspect.data_usage.as_ref(), inspect.usage_note())),
             ),
-            ("Autostart", Cell::fixed(autostart(detail.startup))),
+            ("Autostart", Cell::text(&autostart_line(inspect))),
         ],
     );
     if !instance.leftover_processes.is_empty() {
@@ -214,15 +215,6 @@ fn digest(detail: &InstanceDetail) -> String {
         (InstallModeKind::External, _) => "External runtime".to_owned(),
         (_, Some(sha)) => format!("sha256:{sha}"),
         (_, None) => String::new(),
-    }
-}
-
-/// `Off`, `At login`, or `Unknown`.
-const fn autostart(startup: StartupPolicyKind) -> &'static str {
-    match startup {
-        StartupPolicyKind::Manual => "Off",
-        StartupPolicyKind::AtLogin => "At login",
-        StartupPolicyKind::Unrecognized => "Unknown",
     }
 }
 
@@ -391,6 +383,24 @@ pub(super) fn last_failure_line(out: &HumanWriter, failure: &InstanceLastFailure
 }
 
 /// What stops the instance, in words.
+/// The `Autostart` row: `off`, `at login`, `at login (stopped for this
+/// session)`, or `at login (won’t start: background agent {state})`.
+fn autostart_line(inspect: &InstanceInspect) -> String {
+    let autostart = &inspect.instance.autostart;
+    match inspect.detail.startup {
+        StartupPolicyKind::AtLogin => {}
+        StartupPolicyKind::Manual => return "off".to_owned(),
+        StartupPolicyKind::Unrecognized => return "unknown".to_owned(),
+    }
+    if let Some(state) = inspect.agent_off() {
+        return format!("at login (won’t start: background agent {state})");
+    }
+    if autostart.session == AutostartSession::Suppressed {
+        return "at login (stopped for this session)".to_owned();
+    }
+    "at login".to_owned()
+}
+
 fn blocker(blocker: &InstanceBlocker) -> String {
     match blocker {
         InstanceBlocker::IdentityUnproven(content) => {
