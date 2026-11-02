@@ -9,6 +9,7 @@ mod column;
 mod journal;
 mod prune;
 mod read;
+mod restart;
 mod secret;
 mod source;
 mod supervision;
@@ -27,9 +28,9 @@ use stackly_domain::{
     InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
     Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProcessObservation,
     ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
-    PruneReport, Registry, RegistryError, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
-    SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest,
-    Versioned, WriteBatch,
+    PruneReport, Registry, RegistryError, RestartPlan, RetentionPolicy, Runtime, RuntimeId,
+    RuntimeReferences, SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse,
+    SecretUser, Sha256Digest, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -309,6 +310,14 @@ impl Registry for SqliteRegistry {
         self.read(|tx| journal::unfinished(tx))
     }
 
+    fn open_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
+        self.read(|tx| restart::open_plan(tx))
+    }
+
+    fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
+        self.read(|tx| restart::latest_plan(tx))
+    }
+
     fn force_stop_history(
         &self,
         instance: InstanceId,
@@ -370,6 +379,7 @@ impl Registry for SqliteRegistry {
                     History::AuditEvents => &mut report.audit_events,
                     History::ReleasedLeases => &mut report.released_leases,
                     History::ProcessObservations => &mut report.process_observations,
+                    History::RestartPlans => &mut report.restart_plans,
                 };
                 *count += u64::try_from(deleted).unwrap_or(u64::MAX);
                 if deleted < history.batch_rows() {

@@ -99,6 +99,10 @@ impl GuardView for TransactionView<'_> {
     ) -> Result<Vec<(Operation, stackly_domain::JournalView)>, RegistryError> {
         super::journal::force_stop_history(self.tx, instance)
     }
+
+    fn open_restart_plan(&self) -> Result<Option<stackly_domain::RestartPlan>, RegistryError> {
+        super::restart::open_plan(self.tx)
+    }
 }
 
 fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {
@@ -286,6 +290,8 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
             expected,
             operation,
         } => source::delete_instance_created_by(conn, *id, *expected, *operation),
+        WriteOp::InsertRestartPlan(plan) => super::restart::insert_plan(conn, plan, op),
+        WriteOp::UpdateRestartPlan(plan) => super::restart::update_plan(conn, plan),
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),

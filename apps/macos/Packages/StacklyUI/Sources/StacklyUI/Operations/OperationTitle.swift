@@ -76,6 +76,7 @@ nonisolated public enum OperationTitle {
         case .environmentDown: return "Bring down environment"
         case .updateProviderRevision: return "Update provider"
         case .updateManager: return "Update Stackly"
+        case .daemonRestart: return "Restart stacklyd"
         case .unrecognized: return "Operation"
         }
     }

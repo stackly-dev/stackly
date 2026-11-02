@@ -1,0 +1,54 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 302,
+    "at": "2026-11-02T08:00:41.000Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "daemon.restart_plan",
+      "content": {
+        "id": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d40",
+        "state": "finished",
+        "createdAt": "2026-11-02T08:00:00.000Z",
+        "handedOverAt": "2026-11-02T08:00:03.000Z",
+        "reconciledAt": "2026-11-02T08:00:05.000Z",
+        "finishedAt": "2026-11-02T08:00:09.000Z",
+        "closeReason": null,
+        "instances": [
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d31",
+            "name": "orders-db",
+            "decision": "keep",
+            "reason": "handover_proven",
+            "stoppedAt": null,
+            "readyAt": "2026-11-02T08:00:05.000Z",
+            "outcome": "adopted",
+            "failureCode": null
+          },
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d32",
+            "name": "cache",
+            "decision": "stop_restore",
+            "reason": "handover_unproven",
+            "stoppedAt": "2026-11-02T08:00:02.000Z",
+            "readyAt": "2026-11-02T08:00:09.000Z",
+            "outcome": "restored",
+            "failureCode": null
+          },
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d33",
+            "name": "legacy-db",
+            "decision": "keep",
+            "reason": "identity_unproven",
+            "stoppedAt": null,
+            "readyAt": null,
+            "outcome": "failed",
+            "failureCode": "identity_unproven"
+          }
+        ]
+      }
+    }
+  }
+}

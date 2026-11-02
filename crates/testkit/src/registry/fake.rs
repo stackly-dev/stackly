@@ -19,10 +19,10 @@ use stackly_domain::{
     OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
     PlatformStoreKey, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
     ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry,
-    RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
-    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
-    SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
-    WriteBatch, WriteOp,
+    RegistryError, ResourceRef, ResourceRevision, RestartPlan, RestartPlanId, RetentionPolicy,
+    Runtime, RuntimeId, RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter,
+    SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest,
+    StepSeq, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -211,6 +211,10 @@ impl GuardView for StateView<'_> {
         instance: InstanceId,
     ) -> Result<Vec<(Operation, JournalView)>, RegistryError> {
         Ok(self.state.force_stop_history(instance))
+    }
+
+    fn open_restart_plan(&self) -> Result<Option<RestartPlan>, RegistryError> {
+        Ok(self.state.open_restart_plan())
     }
 }
 
@@ -479,6 +483,20 @@ impl Registry for FakeRegistry {
         self.read(|state| Ok(state.force_stop_history(instance)))
     }
 
+    fn open_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
+        self.read(|state| Ok(state.open_restart_plan()))
+    }
+
+    fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
+        self.read(|state| {
+            Ok(state
+                .restart_plans
+                .values()
+                .max_by_key(|plan| (plan.stored().created_at, plan.id()))
+                .cloned())
+        })
+    }
+
     fn unfinished_operations(
         &self,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError> {
@@ -642,6 +660,7 @@ impl Registry for FakeRegistry {
     ) -> Result<PruneReport, RegistryError> {
         let mut state = self.state();
         let mut report = PruneReport::default();
+        report.restart_plans = state.prune_restart_plans(policy);
         report.operations = state.prune_operations(policy, now);
         report.audit_events = state.prune_audit_events(policy, now);
         report.released_leases = state.prune_released_leases(policy, now);
@@ -731,6 +750,7 @@ struct State {
     active_config: BTreeMap<InstanceId, ConfigRevisionId>,
     secret_references: BTreeMap<SecretRef, SecretReferenceRecord>,
     secret_uses: BTreeSet<SecretUse>,
+    restart_plans: BTreeMap<RestartPlanId, RestartPlan>,
     written: HashMap<ResourceRef, WrittenAt>,
 }
 
@@ -759,6 +779,7 @@ impl State {
             active_config: BTreeMap::new(),
             secret_references: BTreeMap::new(),
             secret_uses: BTreeSet::new(),
+            restart_plans: BTreeMap::new(),
             written: HashMap::new(),
         }
     }
@@ -862,6 +883,8 @@ impl State {
                 expected,
                 operation,
             } => self.delete_instance_created_by(id, expected, operation),
+            WriteOp::InsertRestartPlan(plan) => self.insert_restart_plan(plan),
+            WriteOp::UpdateRestartPlan(plan) => self.update_restart_plan(plan),
             other => panic!(
                 "FakeRegistry has no case for the op on {}; add one with the spec 0005 change \
                  that added it",
@@ -1727,6 +1750,60 @@ impl State {
         );
     }
 
+    /// The open restart plan, if any.
+    fn open_restart_plan(&self) -> Option<RestartPlan> {
+        self.restart_plans
+            .values()
+            .find(|plan| plan.state().is_open())
+            .cloned()
+    }
+
+    /// `InsertRestartPlan`: a new ID, an existing operation, then the
+    /// unique rule of one open plan, as the SQLite index ends it.
+    fn insert_restart_plan(&mut self, plan: RestartPlan) -> Result<(), RegistryError> {
+        if self.restart_plans.contains_key(&plan.id()) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::RestartPlan(plan.id()),
+            });
+        }
+        let operation = plan.stored().operation;
+        if !self.operations.contains_key(&operation) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::Operation(operation),
+            });
+        }
+        if plan.state().is_open() && self.open_restart_plan().is_some() {
+            return Err(unique_failed("daemon_restart_plan.(1)"));
+        }
+        self.restart_plans.insert(plan.id(), plan);
+        Ok(())
+    }
+
+    /// `UpdateRestartPlan`: the plan exists, then the new value.
+    fn update_restart_plan(&mut self, plan: RestartPlan) -> Result<(), RegistryError> {
+        let Some(stored) = self.restart_plans.get_mut(&plan.id()) else {
+            return Err(RegistryError::NotFound {
+                resource: ResourceRef::RestartPlan(plan.id()),
+            });
+        };
+        *stored = plan;
+        Ok(())
+    }
+
+    fn prune_restart_plans(&mut self, policy: &RetentionPolicy) -> u64 {
+        let rows = self
+            .restart_plans
+            .values()
+            .filter(|plan| !plan.state().is_open())
+            .map(|plan| (plan.stored().created_at, plan.id()))
+            .collect();
+        let doomed = beyond_retention(rows, Timestamp::MIN, policy.restart_plans);
+        for id in &doomed {
+            self.restart_plans.remove(id);
+        }
+        count(doomed.len())
+    }
+
     fn prune_operations(&mut self, policy: &RetentionPolicy, now: Timestamp) -> u64 {
         let finished = self
             .operations
@@ -1743,6 +1820,9 @@ impl State {
             self.operations.remove(id);
             self.journals.remove(id);
         }
+        // A restart plan goes with its operation, as the cascade does.
+        self.restart_plans
+            .retain(|_, plan| !doomed.contains(&plan.stored().operation));
         // The journal rows go with their operation, as the cascade does.
         self.steps.retain(|(owner, _), _| !doomed.contains(owner));
         self.created.retain(|(owner, _), _| !doomed.contains(owner));

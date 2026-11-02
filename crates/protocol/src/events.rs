@@ -17,6 +17,7 @@ use crate::instance::{
 };
 use crate::json::{FieldCode, Validate};
 use crate::operation::OperationSummary;
+use crate::restart::RestartPlanView;
 use crate::secret::SecretChanged;
 use crate::wire::{ResourceRef, Revision, Sequence, Timestamp};
 
@@ -49,7 +50,8 @@ pub struct Event {
 
 /// What happened. Each kind is `<area>.<name>`; the owner of an area adds
 /// its kinds here. Clients skip kinds they do not know through
-/// [`EventProbe`], so a new kind is a minor bump.
+/// [`EventProbe`], yet a client that decodes `EventKind` whole fails on a
+/// kind it does not know, so a new kind is a major bump (spec 0030).
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", content = "content")]
@@ -98,6 +100,11 @@ pub enum EventKind {
     /// there is no payload, so clients fetch it again with `runtime.get`.
     #[serde(rename = "runtime.state_changed")]
     RuntimeStateChanged,
+    /// A restart plan was written or changed: its state, or the outcome of
+    /// one of its instances (spec 0030). A daemon event: no resource, no
+    /// revision.
+    #[serde(rename = "daemon.restart_plan")]
+    DaemonRestartPlan(Box<RestartPlanView>),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -131,6 +138,7 @@ event_kinds! {
     "instance.removed" => InstanceRemoved;
     "daemon.reconciling" => DaemonReconciling;
     "runtime.state_changed" => RuntimeStateChanged;
+    "daemon.restart_plan" => DaemonRestartPlan;
 }
 
 impl EventKind {

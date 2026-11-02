@@ -57,6 +57,7 @@ pub fn info(id: Uuid) -> DaemonInfo {
         registry_schema: Some(2),
         secret_store: None,
         launch: None,
+        restart: None,
     }
 }
 

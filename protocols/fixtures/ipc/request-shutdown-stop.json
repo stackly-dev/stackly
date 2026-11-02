@@ -4,7 +4,9 @@
   "call": {
     "type": "daemon.shutdown",
     "content": {
-      "mode": "stop"
+      "mode": "stop",
+      "expectedPlanDigest": null,
+      "force": false
     }
   }
 }

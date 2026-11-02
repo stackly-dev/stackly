@@ -28,12 +28,16 @@ pub struct RetentionPolicy {
     pub audit_max_rows: u32,
     /// Most process observations kept per instance.
     pub observations_per_instance: u32,
+    /// Most final daemon restart plans kept, newest `created_at` first;
+    /// an open plan is never deleted or counted (spec 0030).
+    pub restart_plans: u32,
 }
 
 impl RetentionPolicy {
     /// 30 days and 100,000 rows of operations and audit events, 30 days of
-    /// released leases, and 20 process observations per instance, until
-    /// Settings (features 32 and 35) make them configurable.
+    /// released leases, 20 process observations per instance, and 20 final
+    /// restart plans, until Settings (features 32 and 35) make them
+    /// configurable.
     pub const DEFAULT: Self = Self {
         operation_max_age: Duration::from_secs(30 * DAY_SECS),
         audit_max_age: Duration::from_secs(30 * DAY_SECS),
@@ -41,6 +45,7 @@ impl RetentionPolicy {
         operation_max_rows: 100_000,
         audit_max_rows: 100_000,
         observations_per_instance: 20,
+        restart_plans: 20,
     };
 }
 
@@ -63,12 +68,18 @@ pub struct PruneReport {
     pub released_leases: u64,
     /// Process observations.
     pub process_observations: u64,
+    /// Final daemon restart plans, with their instance rows.
+    pub restart_plans: u64,
 }
 
 impl PruneReport {
     /// Returns the rows deleted in all.
     #[must_use]
     pub const fn total(&self) -> u64 {
-        self.operations + self.audit_events + self.released_leases + self.process_observations
+        self.operations
+            + self.audit_events
+            + self.released_leases
+            + self.process_observations
+            + self.restart_plans
     }
 }

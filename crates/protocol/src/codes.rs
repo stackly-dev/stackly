@@ -212,6 +212,14 @@ area! {
             details ["launchContext"], "a restart was asked of a daemon that launchd did not start, so nothing would start it again";
         LOCK_HELD = "daemon.lock_held", Conflict, retryable false,
             details ["pid", "serverInstanceId", "version", "startedAt"], "another daemon holds the lock, only ever printed to stderr";
+        RESTART_PENDING = "daemon.restart_pending", Conflict, retryable true,
+            details ["planId"], "a planned restart is quiescing or stopping instances, so the daemon takes no new request that starts an operation";
+        RESTART_PLAN_CHANGED = "daemon.restart_plan_changed", Conflict, retryable false,
+            details ["expected", "actual"], "the restart plan differs from the one the client confirmed, so nothing was stopped";
+        RESTART_BUSY = "daemon.restart_busy", Conflict, retryable false,
+            details ["omitted"],
+            items { kind "operation", fields ["operationId", "kind"], max 32 },
+            "an operation that cannot resume still ran after the quiesce wait, so the restart was refused and nothing was stopped";
     }
 }
 
@@ -930,6 +938,10 @@ area! {
             details ["action", "seconds"], "the daemon did not appear or disappear within the limit of the command (spec 0015)";
         CONNECTION_NOT_FOUND = "cli.connection_not_found", NotFound, retryable false,
             details ["format", "available"], "no connection string has the name the command was given, or the provider describes none (spec 0021)";
+        RESTART_ABORTED = "cli.restart_aborted", Failed, retryable false,
+            details ["planId", "closeReason"], "the planned restart was aborted, so the old daemon kept running and the plan names the instance that did not stop";
+        RESTART_RESTORE_FAILED = "cli.restart_restore_failed", Failed, retryable false,
+            details ["planId"], "the daemon restarted but at least one instance did not end up running";
         CONNECTION_UNAVAILABLE = "cli.connection_unavailable", Conflict, retryable false,
             details ["format", "reason"], "the selected connection string cannot be built now, or the pinned package cannot be read (spec 0021)";
     }
@@ -1322,6 +1334,7 @@ mod tests {
                 "resource.busy",
                 "daemon.starting",
                 "daemon.shutting_down",
+                "daemon.restart_pending",
                 "operation.queue_full",
                 "supervisor.endpoint_unavailable",
                 "supervisor.auto_port_unavailable",
@@ -1492,6 +1505,16 @@ mod tests {
                 "cli.connection_not_found",
                 ErrorCategory::NotFound,
                 &["format", "available"],
+            ),
+            (
+                "cli.restart_aborted",
+                ErrorCategory::Failed,
+                &["planId", "closeReason"],
+            ),
+            (
+                "cli.restart_restore_failed",
+                ErrorCategory::Failed,
+                &["planId"],
             ),
             (
                 "cli.connection_unavailable",

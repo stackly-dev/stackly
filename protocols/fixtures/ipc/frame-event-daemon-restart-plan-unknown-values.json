@@ -1,0 +1,28 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 304,
+    "at": "2026-11-02T08:00:41.000Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "daemon.restart_plan",
+      "content": {
+        "id": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d40",
+        "state": "paused",
+        "createdAt": "2026-11-02T08:00:00.000Z",
+        "closeReason": "power_loss",
+        "instances": [
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d32",
+            "name": "cache",
+            "decision": "pause",
+            "reason": "cold",
+            "outcome": "moved"
+          }
+        ]
+      }
+    }
+  }
+}

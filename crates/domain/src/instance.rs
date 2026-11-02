@@ -167,6 +167,11 @@ pub enum LifecycleEvent {
         /// The operation that retains it.
         by: OperationId,
     },
+    /// Reconciliation found the data folder of an initialized instance
+    /// with no process gone, empty, or without its data marker (spec
+    /// 0030). The instance fails with `data_missing` and is never
+    /// initialized again outside a create.
+    DataMissing,
 }
 
 impl LifecycleEvent {
@@ -187,6 +192,7 @@ impl LifecycleEvent {
             Self::Adopted => "adopted",
             Self::ConfirmedStopped { .. } => "confirmed_stopped",
             Self::Retain { .. } => "retain",
+            Self::DataMissing => "data_missing",
         }
     }
 }
@@ -224,6 +230,7 @@ impl InstanceLifecycle {
                 Ok(S::Unknown)
             }
             (S::Uninitialized | S::Stopped | S::Failed, E::Retain { .. }) => Ok(S::Retained),
+            (S::Stopped | S::Failed, E::DataMissing) => Ok(S::Failed),
             _ => Err(TransitionError::new(
                 Machine::InstanceLifecycle,
                 self.as_code(),
@@ -782,6 +789,7 @@ impl Instance {
                 self.last_failure = Some(reason);
                 self.last_exit = Some(ExitKind::Crashed);
             }
+            LifecycleEvent::DataMissing => self.last_failure = Some(FailureCode::DATA_MISSING),
             LifecycleEvent::Exited { exit: Some(exit) }
             | LifecycleEvent::ConfirmedStopped { exit: Some(exit) } => {
                 self.last_exit = Some(exit);

@@ -244,6 +244,9 @@ code_enum! {
         /// Rewrite config files changed outside Stackly from the active
         /// revision's copies (spec 0029).
         ResolveConfigDrift => "resolve_config_drift",
+        /// Restart the daemon with a plan (spec 0030); its resource is the
+        /// manager.
+        DaemonRestart => "daemon_restart",
     }
 }
 
@@ -276,8 +279,9 @@ impl OperationKind {
     /// operasi"): start, stop, restart, reload, and force stop of an
     /// instance close as interrupted, because their process outlives the
     /// daemon and the supervisor adopts it, and so do apply config and
-    /// change endpoints, whose commit cannot be undone (spec 0029); every
-    /// other kind is compensated before its point of no return.
+    /// change endpoints, whose commit cannot be undone (spec 0029), and a
+    /// daemon restart, whose plan the next daemon carries on (spec 0030);
+    /// every other kind is compensated before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
         match self {
@@ -287,7 +291,8 @@ impl OperationKind {
             | Self::ReloadInstance
             | Self::ForceStopInstance
             | Self::ApplyConfig
-            | Self::ChangeEndpoints => InterruptPolicy::CloseInterrupted,
+            | Self::ChangeEndpoints
+            | Self::DaemonRestart => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
@@ -845,7 +850,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_instance_process_kinds_and_config_commits_close_as_interrupted() {
+    fn the_instance_process_kinds_config_commits_and_the_daemon_restart_close_as_interrupted() {
         let closing: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
@@ -862,6 +867,7 @@ mod tests {
                 "force_stop_instance",
                 "apply_config",
                 "change_endpoints",
+                "daemon_restart",
             ]
         );
         assert!(

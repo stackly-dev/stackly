@@ -16,6 +16,7 @@ public enum ContractNames {
 		"instance.removed",
 		"daemon.reconciling",
 		"runtime.state_changed",
+		"daemon.restart_plan",
 	]
 }
 
@@ -28,6 +29,7 @@ extension Call {
 		case .daemonGetHealth: "daemon.get_health"
 		case .daemonGetCapabilities: "daemon.get_capabilities"
 		case .daemonShutdown: "daemon.shutdown"
+		case .daemonRestartPreview: "daemon.restart_preview"
 		case .eventsSubscribe: "events.subscribe"
 		case .eventsUnsubscribe: "events.unsubscribe"
 		case .operationGet: "operation.get"
@@ -77,6 +79,7 @@ extension Reply {
 		case .daemonGetHealth: "daemon.get_health"
 		case .daemonGetCapabilities: "daemon.get_capabilities"
 		case .daemonShutdown: "daemon.shutdown"
+		case .daemonRestartPreview: "daemon.restart_preview"
 		case .eventsSubscribe: "events.subscribe"
 		case .eventsUnsubscribe: "events.unsubscribe"
 		case .operationGet: "operation.get"
@@ -131,6 +134,7 @@ extension EventKind {
 		case .instanceRemoved: "instance.removed"
 		case .daemonReconciling: "daemon.reconciling"
 		case .runtimeStateChanged: "runtime.state_changed"
+		case .daemonRestartPlan: "daemon.restart_plan"
 		}
 	}
 }

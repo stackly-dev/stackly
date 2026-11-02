@@ -1,0 +1,47 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003004",
+    "reply": {
+      "type": "daemon.restart_preview",
+      "content": {
+        "digest": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "launchContext": "launchd",
+        "supervisorAvailable": true,
+        "instances": [
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d31",
+            "name": "orders-db",
+            "provider": "postgresql",
+            "lifecycle": "running",
+            "decision": "keep",
+            "reason": "handover_proven"
+          },
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d32",
+            "name": "cache",
+            "provider": "valkey",
+            "lifecycle": "running",
+            "decision": "stop_restore",
+            "reason": "handover_unproven"
+          },
+          {
+            "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d33",
+            "name": "legacy-db",
+            "provider": "postgresql",
+            "lifecycle": "unknown",
+            "decision": "keep",
+            "reason": "identity_unproven"
+          }
+        ],
+        "blockingOperations": [
+          {
+            "operationId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d50",
+            "kind": "create_instance",
+            "resumable": false
+          }
+        ]
+      }
+    }
+  }
+}

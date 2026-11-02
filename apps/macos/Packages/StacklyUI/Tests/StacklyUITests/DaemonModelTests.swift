@@ -115,7 +115,7 @@ struct DaemonModelTests {
             roots: DaemonRoots(
                 data: "/d", logs: "/l", cache: "/c", runtime: "/t/stackly", rootOverride: false),
             socketPath: "/t/stackly/stacklyd.sock", registrySchema: 2, secretStore: nil,
-            launch: nil)
+            launch: nil, restart: nil)
         return ConnectedDaemon(
             accepted: accepted, info: info, health: health,
             connectedAt: launch.addingTimeInterval(seconds))

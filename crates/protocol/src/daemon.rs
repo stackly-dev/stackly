@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
+use crate::restart::{RestartPlanView, is_plan_digest};
 use crate::secret::SecretStoreStatus;
 use crate::version::ProtocolVersion;
 use crate::wire::{Count, Timestamp};
@@ -49,6 +50,10 @@ pub struct DaemonInfo {
     /// (spec 0015).
     #[serde(default)]
     pub launch: Option<DaemonLaunch>,
+    /// The open restart plan, or the last plan when it became final less
+    /// than ten minutes ago, else null (spec 0030).
+    #[serde(default)]
+    pub restart: Option<Box<RestartPlanView>>,
 }
 
 /// Who started the daemon and from which app bundle (spec 0015).
@@ -82,23 +87,58 @@ pub enum LaunchContextKind {
 }
 
 /// Params of `daemon.shutdown`.
+///
+/// A `restart` starts the `daemon_restart` operation (spec 0030), so it
+/// needs the request's `idempotencyKey`; a `stop` does not.
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ShutdownParams {
     /// Whether the daemon only stops or stops so launchd starts it again.
     pub mode: ShutdownMode,
+    /// The `digest` of the `daemon.restart_preview` the person confirmed;
+    /// a restart whose plan has another digest is refused with
+    /// `daemon.restart_plan_changed`. Only read for `restart`.
+    #[serde(default)]
+    pub expected_plan_digest: Option<String>,
+    /// Restart even when an operation that cannot resume still runs after
+    /// the quiesce wait. Only read for `restart`.
+    #[serde(default)]
+    pub force: bool,
+}
+
+impl ShutdownParams {
+    /// Params for `mode` with no expected digest and no force.
+    #[must_use]
+    pub const fn new(mode: ShutdownMode) -> Self {
+        Self {
+            mode,
+            expected_plan_digest: None,
+            force: false,
+        }
+    }
 }
 
 impl Validate for ShutdownParams {
-    /// Refuses a mode this build does not know with `mode`
+    /// Refuses a mode this build does not know with `mode` and a digest
+    /// that is not 64 lowercase hex digits with `expectedPlanDigest`
     /// (`request.invalid_params`).
     fn validate(&self) -> Vec<FieldError> {
+        let mut fields = Vec::new();
         if self.mode == ShutdownMode::Unrecognized {
-            vec![FieldError::new("mode", FieldCode::UnknownValue)]
-        } else {
-            Vec::new()
+            fields.push(FieldError::new("mode", FieldCode::UnknownValue));
         }
+        if self
+            .expected_plan_digest
+            .as_deref()
+            .is_some_and(|digest| !is_plan_digest(digest))
+        {
+            fields.push(FieldError::new(
+                "expectedPlanDigest",
+                FieldCode::InvalidFormat,
+            ));
+        }
+        fields
     }
 }
 
@@ -127,6 +167,10 @@ pub struct ShutdownAccepted {
     pub server_instance_id: Uuid,
     /// The mode it accepted.
     pub mode: ShutdownMode,
+    /// The restart plan it wrote, for `restart`; its progress follows in
+    /// `daemon.restart_plan` events (spec 0030).
+    #[serde(default)]
+    pub plan_id: Option<Uuid>,
 }
 
 /// The daemon's resolved (not canonical) roots, as lossy UTF-8 text.
@@ -395,8 +439,28 @@ mod tests {
         assert_eq!(fields[0].path(), "mode");
         assert_eq!(fields[0].code(), "unknown_value");
         for mode in [ShutdownMode::Stop, ShutdownMode::Restart] {
-            assert!(ShutdownParams { mode }.validate().is_empty());
+            assert!(ShutdownParams::new(mode).validate().is_empty());
         }
+    }
+
+    #[test]
+    fn a_restart_digest_must_be_sixty_four_lowercase_hex_digits() {
+        let mut params = ShutdownParams::new(ShutdownMode::Restart);
+        params.expected_plan_digest = Some("ABC".to_owned());
+        let fields = params.validate();
+        assert_eq!(fields.len(), 1);
+        assert_eq!(
+            (fields[0].path(), fields[0].code()),
+            ("expectedPlanDigest", "invalid_format")
+        );
+        params.expected_plan_digest = Some("0f".repeat(32));
+        assert!(params.validate().is_empty());
+    }
+
+    #[test]
+    fn shutdown_params_from_an_older_client_decode_with_defaults() {
+        let params: ShutdownParams = serde_json::from_str(r#"{"mode":"restart"}"#).unwrap();
+        assert_eq!(params, ShutdownParams::new(ShutdownMode::Restart));
     }
 
     #[test]

@@ -8,6 +8,7 @@ mod journal;
 mod prune;
 mod races;
 mod reads;
+mod restart;
 mod secrets;
 mod supervision;
 mod writes;
@@ -43,7 +44,8 @@ use crate::FakeClock;
 /// updates of feature 10 (spec 0005 "Tambahan fitur 10"), the provider
 /// sources, `source_id`, and `DeleteInstanceCreatedBy` of feature 20 (spec 0005
 /// "Tambahan fitur 20"), guarded commits (spec 0020, "Commit terjaga di langkah
-/// `register`"), retention with
+/// `register`"), the daemon restart plans of spec 0030 (one open plan,
+/// round trips, and their prune), retention with
 /// the 20 observations kept per instance, and three races of 16 threads (same name, same
 /// artifact, same revision).
 ///
@@ -104,6 +106,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     reads::operation_pages(&suite);
     secrets::secrets(&suite);
     supervision::supervision(&suite);
+    restart::restart_plans(&suite);
     journal::journal(&suite);
     races::races(&suite);
     prune::prune(&suite);

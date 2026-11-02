@@ -4,7 +4,8 @@
 use std::fmt;
 
 use crate::id::{
-    EnvironmentId, InstanceId, LeaseId, OperationId, ProviderSourceId, RuntimeId, ShortKey,
+    EnvironmentId, InstanceId, LeaseId, OperationId, ProviderSourceId, RestartPlanId, RuntimeId,
+    ShortKey,
 };
 use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
@@ -46,6 +47,9 @@ pub enum ResourceRef {
     /// A provider source, a place provider packages come from (feature
     /// 20). It has no resource kind on the wire.
     ProviderSource(ProviderSourceId),
+    /// A daemon restart plan (spec 0030). It has no resource kind on the
+    /// wire.
+    RestartPlan(RestartPlanId),
 }
 
 /// Why a resource cannot be deleted by the op that tried.
@@ -98,6 +102,7 @@ impl fmt::Display for ResourceRef {
             Self::AuditEvent(id) => write!(f, "audit event {id}"),
             Self::ConfigRevision(id) => write!(f, "config revision {id}"),
             Self::ProviderSource(id) => write!(f, "provider source {id}"),
+            Self::RestartPlan(id) => write!(f, "restart plan {id}"),
         }
     }
 }

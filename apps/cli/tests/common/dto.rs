@@ -35,6 +35,7 @@ pub fn info(root_override: bool) -> DaemonInfo {
         registry_schema: Some(2),
         secret_store: None,
         launch: None,
+        restart: None,
     }
 }
 

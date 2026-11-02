@@ -410,6 +410,8 @@ impl Registry for FaultyRegistry {
         operation_by_idempotency_key(key: &stackly_domain::IdempotencyKey) -> Result<stackly_domain::Versioned<Option<(stackly_domain::Operation, stackly_domain::OperationJournal)>>, stackly_domain::RegistryError>;
         unfinished_operations() -> Result<stackly_domain::Versioned<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>>, stackly_domain::RegistryError>;
         force_stop_history(instance: InstanceId) -> Result<stackly_domain::Versioned<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>>, stackly_domain::RegistryError>;
+        open_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
+        latest_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
         secret_reference(reference: &SecretRef) -> Result<stackly_domain::Versioned<Option<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_references(filter: stackly_domain::SecretReferenceFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;

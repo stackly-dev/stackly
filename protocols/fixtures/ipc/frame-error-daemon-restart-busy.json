@@ -1,0 +1,33 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003008",
+    "error": {
+      "code": "daemon.restart_busy",
+      "category": "conflict",
+      "message": "an operation that cannot resume is still running",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "operation",
+          "fields": [
+            {
+              "key": "operationId",
+              "value": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d50"
+            },
+            {
+              "key": "kind",
+              "value": "create_instance"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

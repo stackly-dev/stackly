@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003009",
+    "error": {
+      "code": "daemon.restart_pending",
+      "category": "conflict",
+      "message": "a planned restart is in progress",
+      "retryable": true,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "planId",
+          "value": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d40"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

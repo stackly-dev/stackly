@@ -47,7 +47,11 @@ fn set(conn: &Connection, id: &str, items: &str, rule: Option<&str>) -> rusqlite
 fn migrating_v3_gives_old_rows_no_items_and_no_rule_and_keeps_the_data() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(3));
-    let kept = |table: &str| table != "schema_migrations" && table != "compatibility_records";
+    let kept = |table: &str| {
+        table != "schema_migrations"
+            && table != "compatibility_records"
+            && !table.starts_with("daemon_restart_plan")
+    };
     let mut before = row_counts(&harness.connect());
     before.retain(|(table, _)| kept(table));
 

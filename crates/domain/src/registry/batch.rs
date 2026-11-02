@@ -19,6 +19,7 @@ use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord, ProviderSo
 use crate::registry::secret::{
     AuditEventRecord, PlatformStoreKey, SecretFieldName, SecretReferenceRecord, SecretUser,
 };
+use crate::restart::RestartPlan;
 use crate::runtime::{InstallMode, Runtime};
 use crate::secret::{SecretRef, SecretStatus};
 use crate::value::ResourceRevision;
@@ -313,6 +314,15 @@ pub enum WriteOp {
         /// The `create_instance` operation being compensated.
         operation: OperationId,
     },
+    /// Records a daemon restart plan and its instance rows (spec 0030).
+    /// Fails with `DuplicateResource` when its ID exists, and
+    /// `MissingReference` when its operation does not exist. A second open
+    /// plan breaks the registry's unique rule and ends as `Integrity`;
+    /// callers write plans through a guard that refuses it first.
+    InsertRestartPlan(RestartPlan),
+    /// Rewrites a restart plan and the recorded fields of its instance
+    /// rows; the instance set never changes. Fails with `NotFound`.
+    UpdateRestartPlan(RestartPlan),
 }
 
 impl WriteOp {
@@ -369,6 +379,9 @@ impl WriteOp {
             Self::PruneConfigRevisions { instance, .. } => ResourceRef::Instance(*instance),
             Self::InsertProviderSource(record) => ResourceRef::ProviderSource(record.id),
             Self::DeleteInstanceCreatedBy { id, .. } => ResourceRef::Instance(*id),
+            Self::InsertRestartPlan(plan) | Self::UpdateRestartPlan(plan) => {
+                ResourceRef::RestartPlan(plan.id())
+            }
         }
     }
 
@@ -428,7 +441,9 @@ impl WriteOp {
             | Self::InsertConfigRevision(_)
             | Self::MarkConfigRevisionReady { .. }
             | Self::PruneConfigRevisions { .. }
-            | Self::DeleteInstanceCreatedBy { .. } => None,
+            | Self::DeleteInstanceCreatedBy { .. }
+            | Self::InsertRestartPlan(_)
+            | Self::UpdateRestartPlan(_) => None,
         }
     }
 

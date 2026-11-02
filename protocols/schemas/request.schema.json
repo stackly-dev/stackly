@@ -125,6 +125,19 @@
           ]
         },
         {
+          "description": "The plan a restart asked for now would write (spec 0030).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "daemon.restart_preview"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
           "description": "Starts an event subscription.",
           "type": "object",
           "properties": {
@@ -2102,9 +2115,22 @@
       ]
     },
     "ShutdownParams": {
-      "description": "Params of `daemon.shutdown`.",
+      "description": "Params of `daemon.shutdown`.\n\nA `restart` starts the `daemon_restart` operation (spec 0030), so it\nneeds the request's `idempotencyKey`; a `stop` does not.",
       "type": "object",
       "properties": {
+        "expectedPlanDigest": {
+          "description": "The `digest` of the `daemon.restart_preview` the person confirmed;\na restart whose plan has another digest is refused with\n`daemon.restart_plan_changed`. Only read for `restart`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "force": {
+          "description": "Restart even when an operation that cannot resume still runs after\nthe quiesce wait. Only read for `restart`.",
+          "type": "boolean",
+          "default": false
+        },
         "mode": {
           "description": "Whether the daemon only stops or stops so launchd starts it again.",
           "$ref": "#/$defs/ShutdownMode"

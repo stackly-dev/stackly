@@ -348,6 +348,7 @@ impl SupervisorEvents for BusSupervisorEvents {
                 adopted: Count::saturating(0),
                 unknown: Count::saturating(0),
                 restarting: Count::saturating(0),
+                findings: Vec::new(),
             },
             ReconcilePhase::Finished(report) => DaemonReconciling {
                 phase: WirePhase::Finished,
@@ -355,6 +356,8 @@ impl SupervisorEvents for BusSupervisorEvents {
                 adopted: Count::saturating(u64::from(report.adopted)),
                 unknown: Count::saturating(u64::from(report.unknown)),
                 restarting: Count::saturating(u64::from(report.restarting)),
+                // provisional: F30 (milestone 2 fills the findings)
+                findings: Vec::new(),
             },
             _ => return,
         };

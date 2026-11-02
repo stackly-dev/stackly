@@ -71,6 +71,9 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case updateManager = "update_manager"
 	/// Migrate an instance's data to another line.
 	case migrateData = "migrate_data"
+	/// Restart the daemon with a plan (spec 0030); its resource is the
+	/// manager.
+	case daemonRestart = "daemon_restart"
 	/// A kind this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -739,6 +742,23 @@ public struct ArtifactInfo: Codable, Sendable, Equatable {
 		self.signature = signature
 		self.dependencies = dependencies
 		self.warnings = warnings
+	}
+}
+
+/// An operation that may hold up a restart.
+public struct BlockingOperation: Codable, Sendable, Equatable {
+	/// The operation.
+	public let operationId: UUID
+	/// What it does.
+	public let kind: OperationKind
+	/// Whether the next daemon resumes it; a resumable operation never
+	/// refuses a restart.
+	public let resumable: Bool
+
+	public init(operationId: UUID, kind: OperationKind, resumable: Bool) {
+		self.operationId = operationId
+		self.kind = kind
+		self.resumable = resumable
 	}
 }
 
@@ -2470,6 +2490,144 @@ public struct DaemonLaunch: Codable, Sendable, Equatable {
 	}
 }
 
+/// The state of a restart plan. Open: newer daemons may add values.
+public enum PlanState: String, Codable, Sendable, Equatable {
+	/// The old daemon stops the `stop_restore` instances.
+	case stopping
+	/// Every `stop_restore` instance stopped; the old daemon exits.
+	case handedOver = "handed_over"
+	/// The new daemon adopts and starts the instances again.
+	case restoring
+	/// Every instance has an outcome; final.
+	case finished
+	/// A stop timed out, so the old daemon kept running; final.
+	case aborted
+	/// The Mac booted again before the plan finished; final.
+	case expired
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why a plan closed without finishing. Open: newer daemons may add
+/// values.
+public enum PlanCloseReason: String, Codable, Sendable, Equatable {
+	/// A `stop_restore` instance did not stop within its provider's stop
+	/// timeout.
+	case stopTimeout = "stop_timeout"
+	/// The new daemon runs in another boot session.
+	case bootChanged = "boot_changed"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What a planned restart does with one instance. Open: newer daemons may
+/// add values.
+public enum PlanDecision: String, Codable, Sendable, Equatable {
+	/// Left alone; the new daemon adopts it.
+	case keep
+	/// Stopped before the old daemon exits, started again by the new one.
+	case stopRestore = "stop_restore"
+	/// A decision this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why an instance got its [`PlanDecision`]. Open: newer daemons may add
+/// values.
+public enum PlanReason: String, Codable, Sendable, Equatable {
+	/// Its provider line has native evidence that its process survives a
+	/// daemon restart.
+	case handoverProven = "handover_proven"
+	/// Its provider line has no such evidence.
+	case handoverUnproven = "handover_unproven"
+	/// It waits for a respawn and has no process.
+	case respawnPending = "respawn_pending"
+	/// It is `unknown`, so it is never signalled.
+	case identityUnproven = "identity_unproven"
+	/// The registry is in recovery mode, so nothing is stopped.
+	case supervisorUnavailable = "supervisor_unavailable"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What became of one instance of a plan. Open: newer daemons may add
+/// values.
+public enum PlanOutcome: String, Codable, Sendable, Equatable {
+	/// The new daemon adopted its process.
+	case adopted
+	/// It stopped and reached `ready` again.
+	case restored
+	/// It did not end up running; see `failureCode`.
+	case failed
+	/// It was removed, lost its data, or the plan closed first.
+	case skipped
+	/// An outcome this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One instance of a [`RestartPlanView`].
+public struct RestartPlanInstance: Codable, Sendable, Equatable {
+	/// The instance; it may be gone since.
+	public let instanceId: UUID
+	/// The instance name when the plan was written.
+	public let name: String
+	/// What the restart does with it.
+	public let decision: PlanDecision
+	/// Why.
+	public let reason: PlanReason
+	/// When the old daemon stopped it, for `stop_restore`.
+	public let stoppedAt: Date?
+	/// When it was `ready` again, or adopted.
+	public let readyAt: Date?
+	/// What became of it, or null while the plan is open.
+	public let outcome: PlanOutcome?
+	/// The failure or blocker code of a `failed` outcome, such as
+	/// `data_missing` or `identity_unproven`.
+	public let failureCode: String?
+
+	public init(instanceId: UUID, name: String, decision: PlanDecision, reason: PlanReason, stoppedAt: Date?, readyAt: Date?, outcome: PlanOutcome?, failureCode: String?) {
+		self.instanceId = instanceId
+		self.name = name
+		self.decision = decision
+		self.reason = reason
+		self.stoppedAt = stoppedAt
+		self.readyAt = readyAt
+		self.outcome = outcome
+		self.failureCode = failureCode
+	}
+}
+
+/// A restart plan as clients see it: in `DaemonInfo.restart`, in the
+/// `daemon.restart_plan` event, and in `stackly daemon restart --json`.
+public struct RestartPlanView: Codable, Sendable, Equatable {
+	/// The plan ID, a lowercase UUID v7.
+	public let id: UUID
+	/// Where the plan is.
+	public let state: PlanState
+	/// When the plan was written.
+	public let createdAt: Date
+	/// When every `stop_restore` instance had stopped.
+	public let handedOverAt: Date?
+	/// When the new daemon finished reconciling.
+	public let reconciledAt: Date?
+	/// When the plan became final.
+	public let finishedAt: Date?
+	/// Why an `aborted` or `expired` plan closed.
+	public let closeReason: PlanCloseReason?
+	/// Every instance of the plan, sorted by instance ID.
+	public let instances: [RestartPlanInstance]?
+
+	public init(id: UUID, state: PlanState, createdAt: Date, handedOverAt: Date?, reconciledAt: Date?, finishedAt: Date?, closeReason: PlanCloseReason?, instances: [RestartPlanInstance]?) {
+		self.id = id
+		self.state = state
+		self.createdAt = createdAt
+		self.handedOverAt = handedOverAt
+		self.reconciledAt = reconciledAt
+		self.finishedAt = finishedAt
+		self.closeReason = closeReason
+		self.instances = instances
+	}
+}
+
 /// Reply of `daemon.get_info`: who the daemon is and where it keeps things.
 public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The daemon's version.
@@ -2500,8 +2658,11 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// Who started this daemon run, or null from an older daemon
 	/// (spec 0015).
 	public let launch: DaemonLaunch?
+	/// The open restart plan, or the last plan when it became final less
+	/// than ten minutes ago, else null (spec 0030).
+	public let restart: RestartPlanView?
 
-	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?, launch: DaemonLaunch?) {
+	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?, launch: DaemonLaunch?, restart: RestartPlanView?) {
 		self.version = version
 		self.protocol = `protocol`
 		self.contractDigest = contractDigest
@@ -2514,6 +2675,7 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 		self.registrySchema = registrySchema
 		self.secretStore = secretStore
 		self.launch = launch
+		self.restart = restart
 	}
 }
 
@@ -2525,6 +2687,34 @@ public enum ReconcilePhase: String, Codable, Sendable, Equatable {
 	case finished
 	/// A phase this build does not know. The daemon never sends it.
 	case unrecognized
+}
+
+/// What a [`ReconcileFinding`] found. Open: newer daemons may add values.
+public enum ReconcileFindingCode: String, Codable, Sendable, Equatable {
+	/// The data folder is gone, empty, or has no data marker, while an
+	/// adopted process still runs.
+	case dataMissing = "data_missing"
+	/// The runtime executable is gone from the runtime's install folder,
+	/// while an adopted process still runs.
+	case runtimeMissing = "runtime_missing"
+	/// A code this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// A problem the reconciliation found on one instance (spec 0030).
+public struct ReconcileFinding: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The instance name.
+	public let name: String
+	/// What is wrong.
+	public let code: ReconcileFindingCode
+
+	public init(instanceId: UUID, name: String, code: ReconcileFindingCode) {
+		self.instanceId = instanceId
+		self.name = name
+		self.code = code
+	}
 }
 
 /// Content of `daemon.reconciling`, a daemon event published at the start
@@ -2540,13 +2730,17 @@ public struct DaemonReconciling: Codable, Sendable, Equatable {
 	public let unknown: UInt64
 	/// Instances that restart.
 	public let restarting: UInt64
+	/// One entry per instance per problem the reconciliation found and
+	/// left in place; empty for `started` (spec 0030).
+	public let findings: [ReconcileFinding]?
 
-	public init(phase: ReconcilePhase, instances: UInt64, adopted: UInt64, unknown: UInt64, restarting: UInt64) {
+	public init(phase: ReconcilePhase, instances: UInt64, adopted: UInt64, unknown: UInt64, restarting: UInt64, findings: [ReconcileFinding]?) {
 		self.phase = phase
 		self.instances = instances
 		self.adopted = adopted
 		self.unknown = unknown
 		self.restarting = restarting
+		self.findings = findings
 	}
 }
 
@@ -2922,7 +3116,8 @@ public struct ErrorFrame: Codable, Sendable, Equatable {
 
 /// What happened. Each kind is `<area>.<name>`; the owner of an area adds
 /// its kinds here. Clients skip kinds they do not know through
-/// [`EventProbe`], so a new kind is a minor bump.
+/// [`EventProbe`], yet a client that decodes `EventKind` whole fails on a
+/// kind it does not know, so a new kind is a major bump (spec 0030).
 public enum EventKind: Codable, Sendable, Equatable {
 	/// The subscriber missed events; take a new snapshot.
 	case eventsGap(Gap)
@@ -2958,6 +3153,10 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// event's resource is the runtime and its revision the runtime's;
 	/// there is no payload, so clients fetch it again with `runtime.get`.
 	case runtimeStateChanged
+	/// A restart plan was written or changed: its state, or the outcome of
+	/// one of its instances (spec 0030). A daemon event: no resource, no
+	/// revision.
+	case daemonRestartPlan(RestartPlanView)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
@@ -2969,7 +3168,8 @@ public enum EventKind: Codable, Sendable, Equatable {
 			instanceHealthChanged = "instance.health_changed",
 			instanceRemoved = "instance.removed",
 			daemonReconciling = "daemon.reconciling",
-			runtimeStateChanged = "runtime.state_changed"
+			runtimeStateChanged = "runtime.state_changed",
+			daemonRestartPlan = "daemon.restart_plan"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3028,6 +3228,11 @@ public enum EventKind: Codable, Sendable, Equatable {
 			case .runtimeStateChanged:
 				self = .runtimeStateChanged
 				return
+			case .daemonRestartPlan:
+				if let content = try? container.decode(RestartPlanView.self, forKey: .content) {
+					self = .daemonRestartPlan(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -3065,6 +3270,9 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .runtimeStateChanged:
 			try container.encode(CodingKeys.runtimeStateChanged, forKey: .type)
+		case .daemonRestartPlan(let content):
+			try container.encode(CodingKeys.daemonRestartPlan, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -5101,6 +5309,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case daemonGetCapabilities
 	/// Stops the daemon, or stops it so launchd starts it again.
 	case daemonShutdown(ShutdownParams)
+	/// The plan a restart asked for now would write (spec 0030).
+	case daemonRestartPreview
 	/// Starts an event subscription.
 	case eventsSubscribe(SubscribeParams)
 	/// Ends an event subscription.
@@ -5184,6 +5394,7 @@ public enum Call: Codable, Sendable, Equatable {
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
 			daemonShutdown = "daemon.shutdown",
+			daemonRestartPreview = "daemon.restart_preview",
 			eventsSubscribe = "events.subscribe",
 			eventsUnsubscribe = "events.unsubscribe",
 			operationGet = "operation.get",
@@ -5249,6 +5460,9 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .daemonShutdown(content)
 					return
 				}
+			case .daemonRestartPreview:
+				self = .daemonRestartPreview
+				return
 			case .eventsSubscribe:
 				if let content = try? container.decode(SubscribeParams.self, forKey: .content) {
 					self = .eventsSubscribe(content)
@@ -5443,6 +5657,8 @@ public enum Call: Codable, Sendable, Equatable {
 		case .daemonShutdown(let content):
 			try container.encode(CodingKeys.daemonShutdown, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .daemonRestartPreview:
+			try container.encode(CodingKeys.daemonRestartPreview, forKey: .type)
 		case .eventsSubscribe(let content):
 			try container.encode(CodingKeys.eventsSubscribe, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -5583,6 +5799,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case daemonGetCapabilities(Capabilities)
 	/// The daemon accepted the request and now runs the stop order.
 	case daemonShutdown(ShutdownAccepted)
+	/// The plan a restart would write and what would refuse it.
+	case daemonRestartPreview(RestartPreview)
 	/// The subscription started; its events follow.
 	case eventsSubscribe(Subscribed)
 	/// The subscription ended.
@@ -5663,6 +5881,7 @@ public enum Reply: Codable, Sendable, Equatable {
 			daemonGetHealth = "daemon.get_health",
 			daemonGetCapabilities = "daemon.get_capabilities",
 			daemonShutdown = "daemon.shutdown",
+			daemonRestartPreview = "daemon.restart_preview",
 			eventsSubscribe = "events.subscribe",
 			eventsUnsubscribe = "events.unsubscribe",
 			operationGet = "operation.get",
@@ -5732,6 +5951,11 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .daemonShutdown:
 				if let content = try? container.decode(ShutdownAccepted.self, forKey: .content) {
 					self = .daemonShutdown(content)
+					return
+				}
+			case .daemonRestartPreview:
+				if let content = try? container.decode(RestartPreview.self, forKey: .content) {
+					self = .daemonRestartPreview(content)
 					return
 				}
 			case .eventsSubscribe:
@@ -5933,6 +6157,9 @@ public enum Reply: Codable, Sendable, Equatable {
 		case .daemonShutdown(let content):
 			try container.encode(CodingKeys.daemonShutdown, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .daemonRestartPreview(let content):
+			try container.encode(CodingKeys.daemonRestartPreview, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .eventsSubscribe(let content):
 			try container.encode(CodingKeys.eventsSubscribe, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -6068,6 +6295,58 @@ public struct RestartInstanceParams: Codable, Sendable, Equatable {
 	public init(instanceId: UUID, expectedRevision: UInt64?) {
 		self.instanceId = instanceId
 		self.expectedRevision = expectedRevision
+	}
+}
+
+/// One instance of a [`RestartPreview`].
+public struct RestartPreviewInstance: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The instance name now.
+	public let name: String
+	/// The provider name the instance is pinned to, such as `postgresql`.
+	public let provider: String
+	/// The lifecycle the decision was made from.
+	public let lifecycle: InstanceLifecycle
+	/// What the restart does with the instance.
+	public let decision: PlanDecision
+	/// Why.
+	public let reason: PlanReason
+
+	public init(instanceId: UUID, name: String, provider: String, lifecycle: InstanceLifecycle, decision: PlanDecision, reason: PlanReason) {
+		self.instanceId = instanceId
+		self.name = name
+		self.provider = provider
+		self.lifecycle = lifecycle
+		self.decision = decision
+		self.reason = reason
+	}
+}
+
+/// Reply of `daemon.restart_preview`: the plan a restart asked for now
+/// would write, and what would refuse it.
+public struct RestartPreview: Codable, Sendable, Equatable {
+	/// The sha256 hex digest of the plan's `instanceId:decision:reason`
+	/// lines, sorted by instance ID; `daemon.shutdown` takes it back as
+	/// `expectedPlanDigest`.
+	public let digest: String
+	/// Who started the daemon; only `launchd` can restart.
+	public let launchContext: LaunchContextKind
+	/// False while the registry is in recovery mode, so every instance is
+	/// `keep` with `supervisor_unavailable`.
+	public let supervisorAvailable: Bool
+	/// Every instance in the plan, sorted by instance ID.
+	public let instances: [RestartPreviewInstance]?
+	/// Queued and running operations; those with `resumable` false that
+	/// still run after the quiesce wait refuse the restart.
+	public let blockingOperations: [BlockingOperation]?
+
+	public init(digest: String, launchContext: LaunchContextKind, supervisorAvailable: Bool, instances: [RestartPreviewInstance]?, blockingOperations: [BlockingOperation]?) {
+		self.digest = digest
+		self.launchContext = launchContext
+		self.supervisorAvailable = supervisorAvailable
+		self.instances = instances
+		self.blockingOperations = blockingOperations
 	}
 }
 
@@ -6348,20 +6627,36 @@ public struct ShutdownAccepted: Codable, Sendable, Equatable {
 	public let serverInstanceId: UUID
 	/// The mode it accepted.
 	public let mode: ShutdownMode
+	/// The restart plan it wrote, for `restart`; its progress follows in
+	/// `daemon.restart_plan` events (spec 0030).
+	public let planId: UUID?
 
-	public init(serverInstanceId: UUID, mode: ShutdownMode) {
+	public init(serverInstanceId: UUID, mode: ShutdownMode, planId: UUID?) {
 		self.serverInstanceId = serverInstanceId
 		self.mode = mode
+		self.planId = planId
 	}
 }
 
 /// Params of `daemon.shutdown`.
+/// 
+/// A `restart` starts the `daemon_restart` operation (spec 0030), so it
+/// needs the request's `idempotencyKey`; a `stop` does not.
 public struct ShutdownParams: Codable, Sendable, Equatable {
 	/// Whether the daemon only stops or stops so launchd starts it again.
 	public let mode: ShutdownMode
+	/// The `digest` of the `daemon.restart_preview` the person confirmed;
+	/// a restart whose plan has another digest is refused with
+	/// `daemon.restart_plan_changed`. Only read for `restart`.
+	public let expectedPlanDigest: String?
+	/// Restart even when an operation that cannot resume still runs after
+	/// the quiesce wait. Only read for `restart`.
+	public let force: Bool?
 
-	public init(mode: ShutdownMode) {
+	public init(mode: ShutdownMode, expectedPlanDigest: String?, force: Bool?) {
 		self.mode = mode
+		self.expectedPlanDigest = expectedPlanDigest
+		self.force = force
 	}
 }
 

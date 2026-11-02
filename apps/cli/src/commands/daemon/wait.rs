@@ -230,7 +230,7 @@ impl DaemonProbe for LiveProbe {
                 Err(failure) if failure.body.is(&daemon::SHUTTING_DOWN) => None,
                 Err(failure) => return Err(failure),
             };
-            let call = Call::DaemonShutdown(ShutdownParams { mode });
+            let call = Call::DaemonShutdown(ShutdownParams::new(mode));
             let server_instance_id = match session
                 .call_once(call, &CallSpec::control(), &mut sink, false)
                 .await

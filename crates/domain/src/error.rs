@@ -213,6 +213,16 @@ pub enum ValueKind {
     TeamId,
     /// A [`RuntimeSelector`](crate::RuntimeSelector).
     RuntimeSelector,
+    /// A [`PlanState`](crate::PlanState).
+    PlanState,
+    /// A [`PlanDecision`](crate::PlanDecision).
+    PlanDecision,
+    /// A [`PlanReason`](crate::PlanReason).
+    PlanReason,
+    /// A [`PlanOutcome`](crate::PlanOutcome).
+    PlanOutcome,
+    /// A [`PlanCloseReason`](crate::PlanCloseReason).
+    PlanCloseReason,
 }
 
 impl ValueKind {
@@ -318,6 +328,11 @@ impl ValueKind {
             Self::CompatibilityRecord => "compatibility record",
             Self::TeamId => "team ID",
             Self::RuntimeSelector => "runtime selector",
+            Self::PlanState => "restart plan state",
+            Self::PlanDecision => "restart plan decision",
+            Self::PlanReason => "restart plan reason",
+            Self::PlanOutcome => "restart plan outcome",
+            Self::PlanCloseReason => "restart plan close reason",
         }
     }
 }
@@ -379,6 +394,8 @@ pub enum Machine {
     JournalStep,
     /// The state of one item an operation recorded as created.
     CreatedRecord,
+    /// The state of a daemon restart plan (spec 0030).
+    RestartPlan,
 }
 
 impl Machine {
@@ -391,6 +408,7 @@ impl Machine {
             Self::Operation => "operation",
             Self::JournalStep => "journal_step",
             Self::CreatedRecord => "created_record",
+            Self::RestartPlan => "restart_plan",
         }
     }
 
@@ -404,6 +422,7 @@ impl Machine {
             Self::Operation => "operation",
             Self::JournalStep => "journal step",
             Self::CreatedRecord => "created record",
+            Self::RestartPlan => "restart plan",
         }
     }
 }

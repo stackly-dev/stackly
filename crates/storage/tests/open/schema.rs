@@ -414,6 +414,37 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("updated_at", "TEXT", true, 0),
         ],
     ),
+    (
+        "daemon_restart_plan",
+        &[
+            ("id", "TEXT", true, 1),
+            ("operation_id", "TEXT", true, 0),
+            ("state", "TEXT", true, 0),
+            ("digest", "TEXT", true, 0),
+            ("boot_id", "TEXT", true, 0),
+            ("server_instance_id_before", "TEXT", true, 0),
+            ("server_instance_id_after", "TEXT", false, 0),
+            ("created_at", "TEXT", true, 0),
+            ("handed_over_at", "TEXT", false, 0),
+            ("reconciled_at", "TEXT", false, 0),
+            ("finished_at", "TEXT", false, 0),
+            ("close_reason", "TEXT", false, 0),
+        ],
+    ),
+    (
+        "daemon_restart_plan_instance",
+        &[
+            ("plan_id", "TEXT", true, 1),
+            ("instance_id", "TEXT", true, 2),
+            ("name", "TEXT", true, 0),
+            ("decision", "TEXT", true, 0),
+            ("reason", "TEXT", true, 0),
+            ("stopped_at", "TEXT", false, 0),
+            ("ready_at", "TEXT", false, 0),
+            ("outcome", "TEXT", false, 0),
+            ("failure_code", "TEXT", false, 0),
+        ],
+    ),
 ];
 
 /// The PRD section 17 fields that are not a column of the same name, and
@@ -542,7 +573,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 26);
+    assert_eq!(tables.len(), 28);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()

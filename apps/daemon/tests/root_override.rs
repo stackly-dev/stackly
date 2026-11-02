@@ -214,7 +214,10 @@ fn an_accepted_override_starts_the_daemon_with_a_registry_and_sigterm_stops_it_w
     assert_roots(start, &root);
     assert_eq!(field(start, "pid"), pid);
     assert_eq!(field(start, "version"), env!("CARGO_PKG_VERSION"));
-    assert_eq!(field(start, "protocol_major"), 1);
+    assert_eq!(
+        field(start, "protocol_major"),
+        stackly_protocol::ProtocolVersion::CURRENT.major
+    );
     assert_eq!(
         field(start, "contract_digest"),
         stackly_protocol::CONTRACT_DIGEST

@@ -47,6 +47,12 @@ impl FailureCode {
     /// not send, before it was ready, for example for a broken signature
     /// (spec 0018, K7).
     pub const BINARY_REJECTED_BY_OS: Self = Self::from_static("binary_rejected_by_os");
+    /// The data folder of an initialized instance is gone, empty, or has
+    /// no data marker, so nothing starts on it (spec 0030).
+    pub const DATA_MISSING: Self = Self::from_static("data_missing");
+    /// The runtime record of the instance is not installed, so the start
+    /// failed before the spawn (spec 0030).
+    pub const RUNTIME_UNAVAILABLE: Self = Self::from_static("runtime_unavailable");
 }
 
 impl StageName {
@@ -121,6 +127,8 @@ mod tests {
             FailureCode::INIT_TIMEOUT,
             FailureCode::QUARANTINED,
             FailureCode::BINARY_REJECTED_BY_OS,
+            FailureCode::DATA_MISSING,
+            FailureCode::RUNTIME_UNAVAILABLE,
         ];
 
         let text: Vec<_> = codes.iter().map(FailureCode::as_str).collect();
@@ -143,6 +151,8 @@ mod tests {
                 "init_timeout",
                 "quarantined",
                 "binary_rejected_by_os",
+                "data_missing",
+                "runtime_unavailable",
             ]
         );
         for code in codes {
