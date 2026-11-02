@@ -13,14 +13,16 @@ use std::time::Duration;
 use stackly_ipc::EventStream;
 use stackly_protocol::codes::{daemon, ipc};
 use stackly_protocol::daemon::{DaemonInfo, ShutdownMode, ShutdownParams};
-use stackly_protocol::events::SubscribeParams;
+use stackly_protocol::events::{EventKind, SubscribeParams};
+use stackly_protocol::json::DecodedFrame;
+use stackly_protocol::restart::{PlanState, RestartPlanView, RestartPreview};
 use stackly_protocol::{Call, Reply};
 use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::failure::CliFailure;
 use crate::output::stderr::StderrSink;
-use crate::session::{CallSpec, Connector, HANDSHAKE_METHOD, Session};
+use crate::session::{CallSpec, Connector, HANDSHAKE_METHOD, RequestTimeout, Session};
 
 /// How often the daemon is tried while waiting for it.
 pub const DAEMON_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -28,6 +30,9 @@ pub const DAEMON_POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub const DAEMON_START_WAIT: Duration = Duration::from_secs(30);
 /// How long `stop` and `restart` wait for the old daemon to go.
 pub const DAEMON_STOP_WAIT: Duration = Duration::from_secs(20);
+/// How long `restart` follows a restart plan, from the preview to the last
+/// instance (spec 0030).
+pub const DAEMON_RESTORE_WAIT: Duration = Duration::from_secs(600);
 /// How long past the throttle interval `restart` lets launchd take to start
 /// the daemon again before it starts it through macOS.
 pub const RESPAWN_GRACE: Duration = Duration::from_secs(5);
@@ -54,6 +59,48 @@ pub struct Shutdown {
     pub eof: bool,
 }
 
+/// What `daemon.shutdown { mode: restart }` is asked with (spec 0030).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestartRequest {
+    /// The `digest` of the preview the person confirmed.
+    pub expected_plan_digest: Option<String>,
+    /// Restart although an operation that cannot resume still runs.
+    pub force: bool,
+    /// The request's idempotency key, which a restart needs.
+    pub idempotency_key: String,
+}
+
+/// How a restart request went on the old daemon.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestartHandover {
+    /// The daemon run that accepted the restart.
+    pub server_instance_id: Uuid,
+    /// The plan the daemon wrote, or `None` when it wrote none.
+    pub plan_id: Option<Uuid>,
+    /// The last state of that plan the old daemon published.
+    pub plan: Option<RestartPlanView>,
+    /// Whether the old daemon closed the connection within the limit.
+    pub eof: bool,
+}
+
+/// What [`DaemonProbe::watch_plan`] saw.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanWatch {
+    /// The plan as last seen, or `None` when the daemon never showed it.
+    pub plan: Option<RestartPlanView>,
+    /// Whether the plan reached a final state before the limit.
+    pub settled: bool,
+}
+
+/// Whether `state` is final: no daemon changes the plan any more.
+#[must_use]
+pub const fn plan_is_final(state: PlanState) -> bool {
+    matches!(
+        state,
+        PlanState::Finished | PlanState::Aborted | PlanState::Expired
+    )
+}
+
 /// What the commands need from the daemon.
 pub trait DaemonProbe: Send + Sync {
     /// One connect plus handshake, with nothing retried.
@@ -70,6 +117,28 @@ pub trait DaemonProbe: Send + Sync {
         mode: ShutdownMode,
         eof_limit: Duration,
     ) -> BoxFuture<'_, Result<Shutdown, CliFailure>>;
+
+    /// Reads `daemon.restart_preview` (spec 0030).
+    fn restart_preview(&self) -> BoxFuture<'_, Result<RestartPreview, CliFailure>>;
+
+    /// Sends `daemon.shutdown { mode: restart }` under the interactive
+    /// time limit, then reads the same connection until the daemon closes
+    /// it or publishes an `aborted` plan, for up to `eof_limit`. An answer
+    /// of `daemon.shutting_down` counts as accepted, without a plan.
+    fn restart(
+        &self,
+        request: &RestartRequest,
+        eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<RestartHandover, CliFailure>>;
+
+    /// Follows plan `plan_id` on the daemon that runs now, connecting
+    /// again when the connection ends, until the plan is final or `limit`
+    /// passes.
+    fn watch_plan(
+        &self,
+        plan_id: Uuid,
+        limit: Duration,
+    ) -> BoxFuture<'_, Result<PlanWatch, CliFailure>>;
 }
 
 /// The launch record the daemon writes under launchd.
@@ -256,6 +325,176 @@ impl DaemonProbe for LiveProbe {
             })
         })
     }
+
+    fn restart_preview(&self) -> BoxFuture<'_, Result<RestartPreview, CliFailure>> {
+        Box::pin(async move {
+            let session = self.session().await?;
+            let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
+            match session
+                .call(
+                    &Call::DaemonRestartPreview,
+                    &CallSpec::control(),
+                    &mut sink,
+                    false,
+                )
+                .await?
+            {
+                Reply::DaemonRestartPreview(preview) => Ok(preview),
+                _ => Err(CliFailure::unexpected_reply(None)),
+            }
+        })
+    }
+
+    fn restart(
+        &self,
+        request: &RestartRequest,
+        eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<RestartHandover, CliFailure>> {
+        let request = request.clone();
+        Box::pin(async move {
+            let session = self.session().await?;
+            let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
+            let subscribe = SubscribeParams {
+                kinds: vec!["daemon.".to_owned()],
+                ..SubscribeParams::default()
+            };
+            let mut stream = match session.subscribe(subscribe, &mut sink, false).await {
+                Ok((_, stream)) => Some(stream),
+                Err(failure) if failure.body.is(&daemon::SHUTTING_DOWN) => None,
+                Err(failure) => return Err(failure),
+            };
+            let params = ShutdownParams {
+                mode: ShutdownMode::Restart,
+                expected_plan_digest: request.expected_plan_digest,
+                force: request.force,
+            };
+            let spec = CallSpec {
+                timeout: RequestTimeout::Interactive,
+                idempotency_key: Some(request.idempotency_key),
+            };
+            let accepted = match session
+                .call_once(Call::DaemonShutdown(params), &spec, &mut sink, false)
+                .await
+            {
+                Ok(Reply::DaemonShutdown(accepted)) => Some(accepted),
+                Ok(_) => return Err(CliFailure::unexpected_reply(None)),
+                Err(failure) if failure.body.is(&daemon::SHUTTING_DOWN) => None,
+                Err(failure) => return Err(failure),
+            };
+            let server_instance_id = accepted.map_or_else(
+                || session.accepted().server_instance_id,
+                |accepted| accepted.server_instance_id,
+            );
+            let plan_id = accepted.and_then(|accepted| accepted.plan_id);
+            let mut plan = None;
+            let eof = match stream.as_mut() {
+                Some(stream) => {
+                    tokio::time::timeout(eof_limit, read_plan_to_end(stream, plan_id, &mut plan))
+                        .await
+                        .is_ok_and(|ended| ended)
+                }
+                None => tokio::time::timeout(eof_limit, self.until_absent())
+                    .await
+                    .is_ok(),
+            };
+            Ok(RestartHandover {
+                server_instance_id,
+                plan_id,
+                plan,
+                eof,
+            })
+        })
+    }
+
+    fn watch_plan(
+        &self,
+        plan_id: Uuid,
+        limit: Duration,
+    ) -> BoxFuture<'_, Result<PlanWatch, CliFailure>> {
+        Box::pin(async move {
+            let deadline = Instant::now() + limit;
+            let mut last: Option<RestartPlanView> = None;
+            loop {
+                if Instant::now() >= deadline {
+                    return Ok(PlanWatch {
+                        plan: last,
+                        settled: false,
+                    });
+                }
+                let step = tokio::time::timeout_at(deadline, self.watch_once(plan_id, &mut last));
+                match step.await {
+                    Ok(Ok(true)) => {
+                        return Ok(PlanWatch {
+                            plan: last,
+                            settled: true,
+                        });
+                    }
+                    Ok(Ok(false)) => {}
+                    Ok(Err(failure)) if not_up_yet(&failure) => {}
+                    Ok(Err(failure)) => return Err(failure),
+                    Err(_) => {
+                        return Ok(PlanWatch {
+                            plan: last,
+                            settled: false,
+                        });
+                    }
+                }
+                tokio::time::sleep(DAEMON_POLL_INTERVAL).await;
+            }
+        })
+    }
+}
+
+impl LiveProbe {
+    /// One connection to the daemon: subscribes to the plan events, reads
+    /// `daemon.get_info` for what happened before, then the events. True
+    /// when the plan reached a final state; false when the connection
+    /// ended first.
+    async fn watch_once(
+        &self,
+        plan_id: Uuid,
+        last: &mut Option<RestartPlanView>,
+    ) -> Result<bool, CliFailure> {
+        let session = self.session().await?;
+        let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
+        let subscribe = SubscribeParams {
+            kinds: vec!["daemon.restart_plan".to_owned()],
+            ..SubscribeParams::default()
+        };
+        // Subscribing first and reading the info second leaves no gap.
+        let (_, mut stream) = session.subscribe(subscribe, &mut sink, false).await?;
+        let info = match session
+            .call(&Call::DaemonGetInfo, &CallSpec::control(), &mut sink, false)
+            .await?
+        {
+            Reply::DaemonGetInfo(info) => info,
+            _ => return Err(CliFailure::unexpected_reply(None)),
+        };
+        if let Some(view) = info.restart.filter(|view| view.id == plan_id) {
+            let settled = plan_is_final(view.state);
+            *last = Some(*view);
+            if settled {
+                return Ok(true);
+            }
+        }
+        loop {
+            match stream.next().await {
+                Ok(Some(DecodedFrame::Event(event))) => {
+                    if let EventKind::DaemonRestartPlan(view) = event.kind
+                        && view.id == plan_id
+                    {
+                        let settled = plan_is_final(view.state);
+                        *last = Some(*view);
+                        if settled {
+                            return Ok(true);
+                        }
+                    }
+                }
+                Ok(Some(_)) => {}
+                Ok(None) | Err(_) => return Ok(false),
+            }
+        }
+    }
 }
 
 impl LiveProbe {
@@ -269,6 +508,33 @@ impl LiveProbe {
                 return;
             }
             tokio::time::sleep(DAEMON_POLL_INTERVAL).await;
+        }
+    }
+}
+
+/// Reads `stream` until the daemon ends it, keeping the last state of plan
+/// `plan_id` in `plan`. Returns false when the plan was `aborted`: the
+/// daemon then keeps running, so waiting for its end would be in vain.
+async fn read_plan_to_end(
+    stream: &mut EventStream,
+    plan_id: Option<Uuid>,
+    plan: &mut Option<RestartPlanView>,
+) -> bool {
+    loop {
+        match stream.next().await {
+            Ok(Some(DecodedFrame::Event(event))) => {
+                if let EventKind::DaemonRestartPlan(view) = event.kind
+                    && Some(view.id) == plan_id
+                {
+                    let aborted = view.state == PlanState::Aborted;
+                    *plan = Some(*view);
+                    if aborted {
+                        return false;
+                    }
+                }
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => return true,
         }
     }
 }
