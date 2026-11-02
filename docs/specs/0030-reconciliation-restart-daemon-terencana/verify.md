@@ -174,3 +174,13 @@ cargo test -p stacklyd --lib restart::
 cargo test -p stacklyd --test restart_plan -- --test-threads=1
 cargo test -p stackly-domain --lib restart
 ```
+
+### Perbaikan evidence native dan rencana kosong (dev-f30-fix-2)
+
+- **Penanda evidence** · `evidence!` dengan `Kind::Native` kini ada di tiap test `#[ignore = "native: ..."]`: `postgresql_17_survives_...` dan `postgresql_18_survives_...` membuat penandanya sendiri dan meneruskannya ke helper `postgresql_survives(&ev, line)`, yang tidak lagi punya makro. `cargo xtask evidence check` lulus tanpa pelanggaran (63 record manual, 906 file Rust, 577 file Swift)
+- **Rencana kosong di launchd nyata** · `a_planned_restart_with_an_empty_plan_finishes_under_launchd_and_the_next_mutation_is_accepted` di `native_launchd.rs`: `stackly daemon restart --yes` terhadap daemon launchd dari test root sendiri, sekali tanpa instance dan sekali hanya dengan instance `stopped`. Tiap restart keluar 0 dengan rencana `finished` dan nol entri, daemon launchd berikutnya melaporkan rencana `finished` di `daemon.get_info`, instance `stopped` tetap tidak punya proses, dan `instance create --wait` sesudah tiap restart diterima. Ini membuktikan `a_restart_with_no_instance_in_the_plan_still_finishes` di daemon nyata. Run native 2026-11-02: run `01a19b26-868e-77c6-8b4f-0dbb9f2c0dbe`, record `01a19b26-b7fb-76b9-b4f2-8f993dd0af11`, PASS, 63 detik (`sourceDirty`: run sebelum commit)
+
+```bash
+cargo xtask evidence check
+cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 a_planned_restart_with_an_empty_plan
+```

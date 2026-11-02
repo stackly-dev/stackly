@@ -728,16 +728,13 @@ fn stop_and_check(rig: &Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen
     }
 }
 
-fn postgresql_survives(line: pg::Pg) {
-    let ev = evidence!(
-        covers = ["REQ-013", "AC-013"],
-        kind = Kind::Native,
-        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
-    );
-    if !gui_session(&ev) {
+/// The PostgreSQL sequence for `line`, recorded under `ev` of the test that
+/// calls it.
+fn postgresql_survives(ev: &Evidence, line: pg::Pg) {
+    if !gui_session(ev) {
         return;
     }
-    let Some(site) = pg::Site::open(&ev, line) else {
+    let Some(site) = pg::Site::open(ev, line) else {
         return;
     };
     let manual = site.binary(&[]);
@@ -761,14 +758,24 @@ fn postgresql_survives(line: pg::Pg) {
 #[test]
 #[ignore = "native: launchd gui domain"]
 fn postgresql_17_survives_kickstart_bootout_and_planned_restart() {
-    postgresql_survives(pg::PG17);
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+    );
+    postgresql_survives(&ev, pg::PG17);
 }
 
 /// Spec 0030 AC-8, PostgreSQL 18.
 #[test]
 #[ignore = "native: launchd gui domain"]
 fn postgresql_18_survives_kickstart_bootout_and_planned_restart() {
-    postgresql_survives(pg::PG18);
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+    );
+    postgresql_survives(&ev, pg::PG18);
 }
 
 /// Spec 0030 AC-8, NATS.
@@ -800,5 +807,100 @@ fn nats_survives_kickstart_bootout_and_planned_restart() {
     ev.pass_with(&format!(
         "nats-server pid {} started at {:?} stayed the adopted, ready process through kickstart -k, bootout, and a planned restart",
         seen.pid, seen.started_at
+    ));
+}
+
+/// `instance create` on the agent's daemon; returns the new instance's ID.
+fn create_stopped(cli: &CliRunner, name: &str, runtime_id: &str, revision: &str) -> String {
+    let (code, created) = json(
+        cli,
+        &[
+            "instance",
+            "create",
+            name,
+            "--runtime",
+            runtime_id,
+            "--provider",
+            PROVIDER,
+            "--revision",
+            revision,
+            "--port",
+            "http=auto",
+            "--wait",
+        ],
+    );
+    assert_eq!(code, Some(0), "{created}");
+    created["result"]["instance"]["id"]
+        .as_str()
+        .expect("the envelope names an instance")
+        .to_owned()
+}
+
+/// `stackly daemon restart --yes` against the agent's daemon: it exits 0,
+/// the next launchd daemon serves, and the plan it prints is `finished`
+/// with `members` entries. Returns the new daemon's info.
+fn restart_to_a_finished_plan(
+    rig: &Rig,
+    cli: &CliRunner,
+    before: &DaemonInfo,
+    members: usize,
+) -> DaemonInfo {
+    let (code, restarted) = json(cli, &["daemon", "restart", "--yes"]);
+    assert_eq!(code, Some(0), "{restarted}");
+    let plan = &restarted["result"]["plan"];
+    assert_eq!(plan["state"], "finished", "{restarted}");
+    assert_eq!(
+        plan["instances"].as_array().map(Vec::len),
+        Some(members),
+        "{restarted}"
+    );
+    let after = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != before.server_instance_id
+        })
+        .expect("the job runs a new daemon after the restart");
+    let settled = wait_info(&rig.socket, SLOW, |info| {
+        info.restart
+            .as_ref()
+            .is_some_and(|plan| plan.state == stackly_protocol::restart::PlanState::Finished)
+    })
+    .and_then(|info| info.restart)
+    .expect("the new daemon reports the plan as finished");
+    assert_eq!(settled.instances.len(), members);
+    after
+}
+
+/// Spec 0030 AC-8 and AC-9: a planned restart whose plan has no instance to
+/// keep or stop still ends `finished` under a real launchd job, and the new
+/// daemon accepts mutations.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn a_planned_restart_with_an_empty_plan_finishes_under_launchd_and_the_next_mutation_is_accepted() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "stackly daemon restart --yes against a launchd daemon with no running instance exits 0 with a finished plan, once with no instance at all and once with only a stopped instance, the next launchd daemon reports the plan as finished, and an instance create after each restart is accepted",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let root = TestRoot::new().expect("a test root");
+    let (runtime_id, revision) = seed(&root);
+    let mut rig = Rig::on(root);
+    let cli = CliRunner::new(&cargo_bin("stackly-cli", "stackly"), rig.root().path());
+
+    let first = rig.bootstrap();
+    let second = restart_to_a_finished_plan(&rig, &cli, &first, 0);
+    let stopped = create_stopped(&cli, "after-empty", &runtime_id, &revision);
+
+    let third = restart_to_a_finished_plan(&rig, &cli, &second, 0);
+    assert_ne!(third.server_instance_id, second.server_instance_id);
+    let instance = get_until(&cli, &stopped, |instance| {
+        instance["lifecycle"] == "stopped" || instance["process"].is_null()
+    });
+    assert!(servers(rig.root(), &stopped).is_empty(), "{instance}");
+    create_stopped(&cli, "after-stopped", &runtime_id, &revision);
+    ev.pass_with(&format!(
+        "daemon restart --yes ended finished with an empty plan twice, once with no instance and once with only the stopped instance {stopped}, and instance create was accepted after each"
     ));
 }
