@@ -50,6 +50,10 @@ pub const HANDOVER_PROVEN: &[HandoverProof] = &[
     // `launchctl kickstart -k` and `bootout`.
     HandoverProof::new("testing/fake", "0.3", "spec-0015-ac-16"),
     HandoverProof::new("testing/fake", "0.4", "spec-0015-ac-16"),
+    // Spec 0030 AC-8: native launchd runs of PostgreSQL 17, PostgreSQL 18,
+    // and NATS through `kickstart -k`, `bootout`, and a planned restart.
+    HandoverProof::new("official/postgresql", "1", "spec-0030-ac-8"),
+    HandoverProof::new("official/nats", "1", "spec-0030-ac-8"),
 ];
 
 /// Returns the line of a semver `revision`: its major, or major and minor
@@ -222,15 +226,21 @@ mod tests {
     }
 
     #[test]
-    fn the_built_in_list_covers_the_fake_provider() {
-        assert!(is_handover_proven(
-            HANDOVER_PROVEN,
-            &key("testing/fake", "0.4.0")
-        ));
-        assert!(!is_handover_proven(
-            HANDOVER_PROVEN,
-            &key("official/postgresql", "1.0.0")
-        ));
+    fn the_built_in_list_covers_only_the_providers_with_a_native_proof() {
+        for (provider, revision, expected) in [
+            ("testing/fake", "0.4.0", true),
+            ("official/postgresql", "1.0.0", true),
+            ("official/nats", "1.0.1", true),
+            ("official/postgresql", "2.0.0", false),
+            ("official/traefik", "1.0.0", false),
+            ("official/clickhouse", "1.0.0", false),
+        ] {
+            assert_eq!(
+                is_handover_proven(HANDOVER_PROVEN, &key(provider, revision)),
+                expected,
+                "{provider}@{revision}"
+            );
+        }
     }
 
     fn instance(lifecycle: InstanceLifecycle, provider: &str, revision: &str) -> Instance {

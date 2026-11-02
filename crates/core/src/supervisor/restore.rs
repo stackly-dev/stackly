@@ -176,6 +176,20 @@ impl Supervisor {
                 .await;
             return;
         }
+        // Spec 0030 (spec 0031 amendment): an instance that nobody wants
+        // any more (a user stop, `agent_off`, a session rotation) is not
+        // started by the plan, and the plan can still finish.
+        if failed.is_none()
+            && matches!(
+                lifecycle,
+                InstanceLifecycle::Stopped | InstanceLifecycle::Failed
+            )
+            && instance.is_some_and(|instance| instance.desired() == DesiredState::Stopped)
+        {
+            self.record_plan_outcome(id, PlanOutcome::Skipped, false, None)
+                .await;
+            return;
+        }
         match lifecycle {
             InstanceLifecycle::Running if failed.is_none() => {
                 let outcome = match entry.decision {

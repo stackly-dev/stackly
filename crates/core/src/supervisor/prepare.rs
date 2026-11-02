@@ -290,20 +290,29 @@ pub(crate) fn check_instance_folder(
 
 /// Says why the data of an initialized instance is gone, or `None` when it
 /// is there (spec 0030, *Pemeriksaan rekonsiliasi tambahan*): the data
-/// folder does not exist or is empty, or the package declares a data
-/// marker and the file is missing. Only reads. A folder or marker that
-/// cannot be read is not missing; the data check of spec 0025 judges it.
+/// folder does not exist, the package declares a data marker and the folder
+/// is empty or the marker file is missing. Only reads. A folder or marker
+/// that cannot be read is not missing; the data check of spec 0025 judges
+/// it.
+///
+/// An empty folder counts only for a package that declares a marker: NATS
+/// has no init step that writes data, so its folder is empty until the
+/// server first runs, and that is not a loss.
+// provisional: F30 (spec 0030 says an empty folder is missing for every
+// package; the native NATS run of milestone 3 shows it is not)
 pub(crate) fn data_missing(
     fs: &dyn stackly_platform::Filesystem,
     package: &ValidatedPackage,
     paths: &InstancePaths,
 ) -> Option<String> {
+    let marker = package.data_marker_path(paths);
     match fs.symlink_metadata(&paths.data) {
         Ok(None) | Err(stackly_platform::PlatformError::NotFound { .. }) => {
             return Some("the data folder is missing".to_owned());
         }
         Ok(Some(info))
-            if info.kind == stackly_platform::FileKind::Dir
+            if marker.is_some()
+                && info.kind == stackly_platform::FileKind::Dir
                 && fs
                     .read_dir(&paths.data)
                     .is_ok_and(|entries| entries.is_empty()) =>
@@ -312,7 +321,7 @@ pub(crate) fn data_missing(
         }
         _ => {}
     }
-    let marker = package.data_marker_path(paths)?;
+    let marker = marker?;
     matches!(
         MarkerRead::from_read(fs.read_file_limited(&marker, DATA_MARKER_MAX_LEN)),
         MarkerRead::Missing

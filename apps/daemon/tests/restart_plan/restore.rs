@@ -257,3 +257,54 @@ async fn a_foreign_listener_fails_the_restore_with_endpoint_in_use() {
     harness.stop().await;
     ev.pass();
 }
+
+// covers: AC-9
+#[tokio::test(flavor = "multi_thread")]
+async fn an_instance_nobody_wants_any_more_is_skipped_and_the_plan_still_finishes() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Fixture,
+        expected = "a stop_restore instance whose desired state became stopped before the restore is not started, its outcome is skipped, and the plan finishes",
+    );
+    let mut harness = RestartHarness::new(Vec::new());
+    let api = harness.start().await;
+    let stays = create_at(&api, "stays", "0.4.0", json!({})).await;
+    api.start_ready(stays).await;
+    api.confirmed_restart()
+        .await
+        .expect("the restart is accepted");
+    drop(api);
+    assert_eq!(
+        harness.exit().await,
+        stackly_protocol::daemon::ShutdownMode::Restart
+    );
+    {
+        use stackly_domain::{DesiredState, InstanceId, Registry, WriteBatch, WriteOp};
+        let registry = harness.site.open_registry();
+        let current = registry
+            .instance(InstanceId::from_uuid(stays).unwrap())
+            .unwrap()
+            .value
+            .expect("the instance exists");
+        let expected = current.revision();
+        let mut changed = current;
+        changed.set_desired(DesiredState::Stopped);
+        registry
+            .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+                instance: changed,
+                expected,
+            }]))
+            .expect("the desired state is rewritten");
+    }
+
+    let api = harness.start().await;
+
+    let plan = api.wait_plan(PlanState::Finished).await;
+    assert_eq!(plan.instances[0].outcome, Some(PlanOutcome::Skipped));
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let summary = api.get(stays).await.unwrap();
+    assert_eq!(summary.lifecycle, InstanceLifecycle::Stopped);
+    assert!(summary.process.is_none());
+    harness.stop().await;
+    ev.pass();
+}
