@@ -230,6 +230,21 @@ impl Registry for SqliteRegistry {
         self.read(move |tx| supervision::active_config_revision(tx, instance))
     }
 
+    fn config_revisions(
+        &self,
+        instance: InstanceId,
+        limit: u32,
+    ) -> Result<Versioned<Vec<ConfigRevisionRecord>>, RegistryError> {
+        self.read(move |tx| supervision::config_revisions(tx, instance, limit))
+    }
+
+    fn last_known_good(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError> {
+        self.read(move |tx| supervision::last_known_good(tx, instance))
+    }
+
     fn instance_paths(
         &self,
         id: InstanceId,

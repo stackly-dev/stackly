@@ -1,1 +1,1 @@
-${instance.secrets}/token
+${instance.config}/dynamic

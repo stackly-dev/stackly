@@ -63,7 +63,7 @@ async fn a_create_without_a_revision_pins_the_catalog_and_the_source_row_is_reco
         .parse()
         .expect("an instance id");
     let created = api.get(id).await.expect("the instance can be read");
-    assert_eq!(created.provider.revision, "0.3.0");
+    assert_eq!(created.provider.revision, "0.4.0");
     drop(api);
     stop(daemon).await;
 

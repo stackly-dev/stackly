@@ -49,7 +49,7 @@ fn create(root: &TestRoot, runtime: &str, name: &str) -> String {
             "--provider",
             "testing/fake",
             "--revision",
-            "0.3.0",
+            "0.4.0",
             "--wait",
             "--timeout",
             "60s",

@@ -17,6 +17,7 @@ use crate::code::code_enum;
 use crate::error::{ValueError, ValueKind};
 use crate::id::{EnvironmentId, InstanceId};
 use crate::process::IdentityEvidence;
+use crate::registry::RelativePath;
 use crate::text::serde_as_text;
 
 /// The longest secret reference, in bytes, the `local:` prefix included.
@@ -486,7 +487,8 @@ impl NeedsSecretItem {
 ///
 /// An instance holds at most one blocker. When several apply, the
 /// supervisor shows `identityUnproven`, then `dataInUse`, then
-/// `needsSecret` (spec 0010, *Status dan event*).
+/// `needsSecret` (spec 0010, *Status dan event*), then `configDrift`, which
+/// is set only in an empty slot (spec 0029).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InstanceBlocker {
@@ -513,6 +515,16 @@ pub enum InstanceBlocker {
         /// What gathering evidence found, with the error if one stopped it.
         evidence: IdentityEvidence,
         /// When the evidence was gathered.
+        observed_at: Timestamp,
+    },
+    /// Config files differ from the copies of the active revision's last
+    /// render, so nothing renders, starts, or applies until the user keeps
+    /// the revision (spec 0029).
+    ConfigDrift {
+        /// The changed or missing files, relative to the config folder,
+        /// ordered by path.
+        files: Vec<RelativePath>,
+        /// When the check ran.
         observed_at: Timestamp,
     },
 }
@@ -552,6 +564,19 @@ impl InstanceBlocker {
         }
     }
 
+    /// Builds a config drift blocker, with the files ordered and without
+    /// duplicates.
+    #[must_use]
+    pub fn config_drift(
+        files: impl IntoIterator<Item = RelativePath>,
+        observed_at: Timestamp,
+    ) -> Self {
+        let mut files: Vec<_> = files.into_iter().collect();
+        files.sort();
+        files.dedup();
+        Self::ConfigDrift { files, observed_at }
+    }
+
     /// Returns the stable snake_case code, for example `needs_secret`.
     #[must_use]
     pub const fn as_code(&self) -> &'static str {
@@ -559,6 +584,7 @@ impl InstanceBlocker {
             Self::NeedsSecret { .. } => "needs_secret",
             Self::DataInUse { .. } => "data_in_use",
             Self::IdentityUnproven { .. } => "identity_unproven",
+            Self::ConfigDrift { .. } => "config_drift",
         }
     }
 
@@ -568,7 +594,8 @@ impl InstanceBlocker {
         match self {
             Self::NeedsSecret { observed_at, .. }
             | Self::DataInUse { observed_at, .. }
-            | Self::IdentityUnproven { observed_at, .. } => *observed_at,
+            | Self::IdentityUnproven { observed_at, .. }
+            | Self::ConfigDrift { observed_at, .. } => *observed_at,
         }
     }
 
@@ -580,7 +607,7 @@ impl InstanceBlocker {
             Self::DataInUse { evidence, .. } | Self::IdentityUnproven { evidence, .. } => {
                 Some(evidence)
             }
-            Self::NeedsSecret { .. } => None,
+            Self::NeedsSecret { .. } | Self::ConfigDrift { .. } => None,
         }
     }
 }

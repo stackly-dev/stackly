@@ -264,6 +264,22 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         WriteOp::InsertConfigRevision(record) => {
             supervision::insert_config_revision(conn, record, op)
         }
+        WriteOp::ActivateConfigRevision {
+            instance,
+            expected,
+            record,
+        } => {
+            expect_revision(conn, "instances", &instance.id().to_string(), op, *expected)?;
+            let pk = check_instance(conn, instance, Write::Update)?;
+            write_instance(conn, instance, pk, now, Write::Update)?;
+            supervision::activate_config_revision(conn, instance, record, op)
+        }
+        WriteOp::MarkConfigRevisionReady { revision, at } => {
+            supervision::mark_config_revision_ready(conn, *revision, *at)
+        }
+        WriteOp::PruneConfigRevisions { instance, keep } => {
+            supervision::prune_config_revisions(conn, *instance, *keep)
+        }
         WriteOp::InsertProviderSource(record) => source::insert(conn, record),
         WriteOp::DeleteInstanceCreatedBy {
             id,

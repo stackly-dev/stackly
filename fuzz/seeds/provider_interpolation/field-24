@@ -1,1 +1,1 @@
-${instance.config}/dynamic/routes.yaml
+nats://${endpoint.client.address}

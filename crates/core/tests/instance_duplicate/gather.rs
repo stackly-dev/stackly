@@ -179,6 +179,7 @@ fn settings_that_are_not_a_json_object_are_a_corrupt_registry() {
         stackly_domain::ConfigRevisionId::generate(),
         source.id(),
         stackly_domain::ConfigValuesJson::new("{not json}".to_owned()).expect("braces"),
+        stackly_domain::EndpointRequests::of(&source),
         None,
         site.fake.clock().now(),
     );

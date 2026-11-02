@@ -32,6 +32,22 @@
         },
         "sensitive": true
       }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/fake.conf",
+        "content": {
+          "configFile": "fakeConf",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\n  \"greeting\": \"hello from stackly\",\n  \"label\": \"$(touch pwned); rm -rf ~ `id` \\\"q\\\" 'q' | & > ü 空\"\n}\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
     }
   ],
   "action": {

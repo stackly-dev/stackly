@@ -1,1 +1,1 @@
-${instance.config}/nats.conf
+--ignore-term=${settings.ignoreTerm}

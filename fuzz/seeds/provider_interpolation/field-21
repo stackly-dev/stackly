@@ -1,1 +1,1 @@
-http://${endpoint.monitoring.address}
+${instance.config}/nats.conf

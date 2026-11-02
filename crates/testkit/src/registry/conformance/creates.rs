@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use stackly_domain::{
-    ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, InstanceLifecycle,
+    ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, EndpointRequests, InstanceLifecycle,
     NotDeletableReason, OperationId, PlatformStoreKey, ProviderRevisionKey, ProviderSourceId,
     ProviderSourceKind, ProviderSourceRecord, RegistryError, ResourceRef, SecretFieldName,
     SecretOwner, SecretPurpose, SecretRef, SecretReferenceId, SecretReferenceRecord, SecretUser,
@@ -209,6 +209,7 @@ pub(super) fn delete_created_instance(suite: &Suite<'_>) {
             "make config values",
             ConfigValuesJson::new(r#"{"token":"x"}"#.to_owned()),
         ),
+        EndpointRequests::default(),
         Some(operation),
         suite.clock_now(),
     );

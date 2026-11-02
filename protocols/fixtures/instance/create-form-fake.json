@@ -348,7 +348,7 @@
     "displayName": "Fake Provider",
     "manifestSha256": "e2fb34cc625facdf6c90f31ac006a54c3d672508f30c913195e44c1b0335117a",
     "name": "testing/fake",
-    "revision": "0.3.0",
+    "revision": "0.4.0",
     "source": "bundled_catalog"
   },
   "runtime": {

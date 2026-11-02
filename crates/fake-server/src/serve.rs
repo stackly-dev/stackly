@@ -21,6 +21,8 @@ use crate::{Failure, write_argv};
 const ARGV_FILE: &str = "argv-serve.json";
 /// Every key the rendered `fakeConfig` holds, and no other.
 const CONFIG_KEYS: [&str; 3] = ["greeting", "instanceName", "authToken"];
+/// Every key the rendered `fakeConf` holds, and no other (spec 0029).
+const CONF_KEYS: [&str; 2] = ["greeting", "label"];
 /// The file `PUT /sentinel` writes in the data folder.
 const SENTINEL_FILE: &str = "SENTINEL";
 /// Largest sentinel `PUT /sentinel` takes, in bytes.
@@ -52,6 +54,7 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
         args,
         &[
             "config",
+            "conf",
             "data",
             "port",
             "host",
@@ -74,6 +77,12 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
         .map_err(|error| Failure::Runtime(format!("cannot install signal handlers: {error}")))?;
     write_argv(&options.data.join(ARGV_FILE), argv)?;
     let config = Config::read(&options.config).map_err(Failure::Runtime)?;
+    let conf = options
+        .conf
+        .as_deref()
+        .map(Conf::read)
+        .transpose()
+        .map_err(Failure::Runtime)?;
     let leaked = options.leak_token.then(|| config.auth_token.clone());
     let address = SocketAddr::new(options.host, options.port);
     let listener = TcpListener::bind(address)
@@ -81,8 +90,10 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
 
     let server = Arc::new(Server {
         config_path: options.config,
+        conf_path: options.conf,
         data: options.data,
         config: Mutex::new(config),
+        conf: Mutex::new(conf),
         started: Instant::now(),
         ready_delay: options.ready_delay,
     });
@@ -124,6 +135,8 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
 #[derive(Debug)]
 struct Options {
     config: PathBuf,
+    /// The non sensitive `fake.conf` of spec 0029, when `--conf` is given.
+    conf: Option<PathBuf>,
     data: PathBuf,
     host: IpAddr,
     port: u16,
@@ -156,6 +169,7 @@ impl Options {
         }
         Ok(Self {
             config: flags.required_path("config")?,
+            conf: flags.optional_path("conf")?,
             data: flags.required_path("data")?,
             host: flags.host()?,
             port: flags.port()?,
@@ -182,27 +196,7 @@ impl Config {
     /// Reads and checks the config. The message never holds a config value,
     /// because `authToken` is a secret.
     fn read(path: &Path) -> Result<Self, String> {
-        let mut bytes = Vec::new();
-        File::open(path)
-            .and_then(|file| file.take(MAX_CONFIG_BYTES + 1).read_to_end(&mut bytes))
-            .map_err(|error| format!("cannot read config {}: {error}", path.display()))?;
-        if bytes.len() as u64 > MAX_CONFIG_BYTES {
-            return Err(format!("config {} is larger than 1 MiB", path.display()));
-        }
-        let value: serde_json::Value = serde_json::from_slice(&bytes)
-            .map_err(|error| format!("config {} is not valid json: {error}", path.display()))?;
-        let object = value
-            .as_object()
-            .ok_or_else(|| format!("config {} is not a json object", path.display()))?;
-        if let Some(key) = object
-            .keys()
-            .find(|key| !CONFIG_KEYS.contains(&key.as_str()))
-        {
-            return Err(format!(
-                "config {} has an unknown key {key:?}",
-                path.display()
-            ));
-        }
+        let object = read_object(path, &CONFIG_KEYS)?;
         let text = |key: &str| {
             object
                 .get(key)
@@ -219,12 +213,58 @@ impl Config {
     }
 }
 
+/// Reads a rendered JSON config that holds only `keys`. The message never
+/// holds a value, because a config can hold a secret.
+fn read_object(
+    path: &Path,
+    keys: &[&str],
+) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let mut bytes = Vec::new();
+    File::open(path)
+        .and_then(|file| file.take(MAX_CONFIG_BYTES + 1).read_to_end(&mut bytes))
+        .map_err(|error| format!("cannot read config {}: {error}", path.display()))?;
+    if bytes.len() as u64 > MAX_CONFIG_BYTES {
+        return Err(format!("config {} is larger than 1 MiB", path.display()));
+    }
+    let value: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("config {} is not valid json: {error}", path.display()))?;
+    let serde_json::Value::Object(object) = value else {
+        return Err(format!("config {} is not a json object", path.display()));
+    };
+    if let Some(key) = object.keys().find(|key| !keys.contains(&key.as_str())) {
+        return Err(format!(
+            "config {} has an unknown key {key:?}",
+            path.display()
+        ));
+    }
+    Ok(object)
+}
+
+/// The rendered `fakeConf`: plain settings in `config/`, which a drift
+/// test edits and `GET /conf` serves back as read.
+#[derive(Debug, Clone)]
+struct Conf(serde_json::Value);
+
+impl Conf {
+    fn read(path: &Path) -> Result<Self, String> {
+        let object = read_object(path, &CONF_KEYS)?;
+        for key in CONF_KEYS {
+            if !object.get(key).is_some_and(serde_json::Value::is_string) {
+                return Err(format!("config {} needs {key} as a string", path.display()));
+            }
+        }
+        Ok(Self(serde_json::Value::Object(object)))
+    }
+}
+
 /// State every connection and the signal watcher share.
 #[derive(Debug)]
 struct Server {
     config_path: PathBuf,
+    conf_path: Option<PathBuf>,
     data: PathBuf,
     config: Mutex<Config>,
+    conf: Mutex<Option<Conf>>,
     started: Instant,
     ready_delay: Duration,
 }
@@ -256,6 +296,12 @@ impl Server {
                 let body = serde_json::json!({ "greeting": self.greeting() }).to_string();
                 http::write_response(&mut stream, 200, JSON, body.as_bytes())
             }
+            ("GET", "/conf") => match self.conf() {
+                Some(conf) => {
+                    http::write_response(&mut stream, 200, JSON, conf.0.to_string().as_bytes())
+                }
+                None => http::write_response(&mut stream, 404, TEXT, b"not found\n"),
+            },
             ("PUT", "/sentinel") => self.put_sentinel(&mut stream, &request.body),
             ("GET", "/sentinel") => self.get_sentinel(&mut stream),
             ("POST", "/shutdown") => {
@@ -313,9 +359,29 @@ impl Server {
             .clone()
     }
 
-    /// Reads the config again. A config that no longer reads keeps the
+    fn conf(&self) -> Option<Conf> {
+        self.conf
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Reads both configs again. A config that no longer reads keeps the
     /// previous one in place, like a real server that rejects a bad reload.
     fn reload(&self) {
+        if let Some(path) = &self.conf_path {
+            match Conf::read(path) {
+                Ok(conf) => {
+                    *self.conf.lock().unwrap_or_else(PoisonError::into_inner) = Some(conf);
+                }
+                Err(message) => {
+                    note(
+                        Stream::Stderr,
+                        format!("cannot reload conf, keeping the previous one: {message}"),
+                    );
+                }
+            }
+        }
         match Config::read(&self.config_path) {
             Ok(config) => {
                 *self.config.lock().unwrap_or_else(PoisonError::into_inner) = config;

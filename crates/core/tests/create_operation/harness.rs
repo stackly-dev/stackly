@@ -80,7 +80,7 @@ fn fresh_package(original: &ValidatedPackage, revision: &str) -> ValidatedPackag
             let text = String::from_utf8(bytes).expect("the manifest is UTF-8");
             bytes = text
                 .replacen(
-                    "revision: \"0.3.0\"",
+                    "revision: \"0.4.0\"",
                     &format!("revision: \"{revision}\""),
                     1,
                 )

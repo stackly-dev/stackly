@@ -205,6 +205,11 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("status", "TEXT", true, 0),
             ("created_by_operation", "TEXT", false, 0),
             ("created_at", "TEXT", true, 0),
+            ("number", "INTEGER", true, 0),
+            ("endpoints", "TEXT", true, 0),
+            ("ready_at", "TEXT", false, 0),
+            ("origin", "TEXT", true, 0),
+            ("source_number", "INTEGER", false, 0),
         ],
     ),
     (

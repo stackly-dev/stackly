@@ -1,1 +1,1 @@
-${secret.authToken}
+--config=${instance.secrets}/conf/server.json

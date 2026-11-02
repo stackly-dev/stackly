@@ -1,0 +1,43 @@
+{
+  "type": "log",
+  "content": {
+    "subscriptionId": 3,
+    "storeId": "0192f3a5-0000-7000-8000-0000000000aa",
+    "entries": [
+      {
+        "seq": 4811,
+        "at": "2026-11-01T07:03:22.118Z",
+        "stream": "stderr",
+        "kind": {
+          "type": "line",
+          "content": {
+            "text": "2026-11-01 07:03:22.118 UTC [4123] LOG:  database system is ready to accept connections",
+            "level": "normal",
+            "partial": false,
+            "continued": false,
+            "step": null
+          }
+        }
+      },
+      {
+        "seq": 4812,
+        "at": "2026-11-01T07:03:22.118Z",
+        "stream": "stderr",
+        "kind": {
+          "type": "line",
+          "content": {
+            "text": "FATAL:  password authentication failed for user \"app\"",
+            "level": "error",
+            "partial": false,
+            "continued": false,
+            "step": null
+          }
+        }
+      }
+    ],
+    "gap": {
+      "reason": "store_reset"
+    },
+    "ended": null
+  }
+}

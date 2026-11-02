@@ -1,7 +1,7 @@
 # 0029. Edit config, nama, dan endpoint
 
 **Date**: 2026-11-02
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

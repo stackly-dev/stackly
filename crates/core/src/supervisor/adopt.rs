@@ -83,6 +83,7 @@ pub(crate) async fn adopt_process(sup: &Supervisor, adoption: Adoption) -> bool 
             probes_stop,
             drain,
             sent_signal: None,
+            applied_revision: None,
         });
         state.op_owns_exit = false;
         state.stopping = false;

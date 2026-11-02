@@ -45,7 +45,7 @@ fn no_reload_package() -> (stackly_testkit::TestRoot, std::path::PathBuf) {
         edit(dir, "  reload: true", "  reload: false");
         edit(
             dir,
-            "  reload:\n    render: [fakeConfig]\n    action: signal\n    signal: hup\n    verify: readiness\n",
+            "  reload:\n    render: [fakeConfig, fakeConf]\n    action: signal\n    signal: hup\n    verify: readiness\n",
             "",
         );
         edit(dir, "  reloadSeconds: 10\n", "");

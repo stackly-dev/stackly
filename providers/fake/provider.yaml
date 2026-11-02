@@ -4,7 +4,7 @@ metadata:
   id: testing/fake
   software: fake
   displayName: Fake Provider
-  revision: "0.3.0"
+  revision: "0.4.0"
   category: testing
   description: Dummy server for Stackly tests. Never part of the app catalog.
 compatibility:
@@ -34,6 +34,10 @@ configFiles:
     format: json
     destination: "${instance.secrets}/fake.json"
     sensitive: true
+  fakeConf:
+    template: templates/fake.conf.tmpl
+    format: json
+    destination: "${instance.config}/fake.conf"
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
@@ -52,6 +56,7 @@ lifecycle:
     args:
       - serve
       - "--config=${instance.secrets}/fake.json"
+      - "--conf=${instance.config}/fake.conf"
       - "--data=${instance.data}"
       - "--port=${endpoint.http.port}"
       - "--host=${endpoint.http.host}"
@@ -66,7 +71,7 @@ lifecycle:
     cwd: "${instance.data}"
   stop: { strategy: gracefulProcess, signal: term }
   reload:
-    render: [fakeConfig]
+    render: [fakeConfig, fakeConf]
     action: signal
     signal: hup
     verify: readiness

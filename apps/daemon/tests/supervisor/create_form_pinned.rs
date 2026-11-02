@@ -97,7 +97,7 @@ async fn without_a_catalog_the_form_of_a_pinned_revision_reads_the_pinned_packag
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "with no catalog, get_create_form for testing/fake 0.3.0 answers the pinned package with ignoreTerm as a boolean and readyDelayMs as an integer, refuses without a provider with catalog.unavailable and an unpinned revision with instance.provider_not_found like create, and writes no file",
+        expected = "with no catalog, get_create_form for testing/fake 0.4.0 answers the pinned package with ignoreTerm as a boolean and readyDelayMs as an integer, refuses without a provider with catalog.unavailable and an unpinned revision with instance.provider_not_found like create, and writes no file",
     );
     let site = Site::new();
     let daemon = site.start().await;
@@ -106,12 +106,12 @@ async fn without_a_catalog_the_form_of_a_pinned_revision_reads_the_pinned_packag
     let before = files_under(&providers);
 
     let form = api
-        .form_at(site.runtime_id, Some("testing/fake"), Some("0.3.0"))
+        .form_at(site.runtime_id, Some("testing/fake"), Some("0.4.0"))
         .await
         .expect("the form of the pinned package is built");
 
     assert_eq!(form.provider.source, CreateProviderSource::Pinned);
-    assert_eq!(form.provider.revision, "0.3.0");
+    assert_eq!(form.provider.revision, "0.4.0");
     let kind = |key: &str| {
         form.fields
             .iter()
@@ -129,7 +129,7 @@ async fn without_a_catalog_the_form_of_a_pinned_revision_reads_the_pinned_packag
     );
 
     let error = api
-        .form_at(site.runtime_id, None, Some("0.3.0"))
+        .form_at(site.runtime_id, None, Some("0.4.0"))
         .await
         .expect_err("no provider and no catalog");
     assert_eq!(error.code(), "catalog.unavailable", "{error:?}");
@@ -163,7 +163,7 @@ async fn with_a_catalog_the_revision_picks_the_entry_or_the_pinned_package() {
         let text = std::fs::read_to_string(&manifest).expect("the manifest reads");
         std::fs::write(
             &manifest,
-            text.replace("revision: \"0.3.0\"", "revision: \"0.3.1\""),
+            text.replace("revision: \"0.4.0\"", "revision: \"0.4.1\""),
         )
         .expect("the manifest is written");
     });
@@ -173,24 +173,24 @@ async fn with_a_catalog_the_revision_picks_the_entry_or_the_pinned_package() {
     let api = site.api().await;
 
     let catalog = api
-        .form_at(site.runtime_id, Some("testing/fake"), Some("0.3.0"))
+        .form_at(site.runtime_id, Some("testing/fake"), Some("0.4.0"))
         .await
         .expect("the form of the catalog revision is built");
     assert_eq!(
         catalog.provider.source,
         CreateProviderSource::DevelopmentCatalog
     );
-    assert_eq!(catalog.provider.revision, "0.3.0");
+    assert_eq!(catalog.provider.revision, "0.4.0");
 
     let pinned = api
-        .form_at(site.runtime_id, None, Some("0.3.1"))
+        .form_at(site.runtime_id, None, Some("0.4.1"))
         .await
         .expect("the form of the pinned revision is built");
     assert_eq!(pinned.provider.name, "testing/fake");
     assert_eq!(pinned.provider.source, CreateProviderSource::Pinned);
-    assert_eq!(pinned.provider.revision, "0.3.1");
+    assert_eq!(pinned.provider.revision, "0.4.1");
     assert_eq!(
-        preflight_code(&api, "testing/fake", Some("0.3.1")).await,
+        preflight_code(&api, "testing/fake", Some("0.4.1")).await,
         None
     );
     stop(api, daemon).await;
@@ -221,12 +221,12 @@ async fn a_planned_entry_with_a_pinned_revision_reads_the_pinned_package_like_cr
     let api = site.api().await;
 
     let form = api
-        .form_at(site.runtime_id, Some("testing/fake"), Some("0.3.0"))
+        .form_at(site.runtime_id, Some("testing/fake"), Some("0.4.0"))
         .await
         .expect("the form of the pinned package is built");
     assert_eq!(form.provider.source, CreateProviderSource::Pinned);
     assert_eq!(
-        preflight_code(&api, "testing/fake", Some("0.3.0")).await,
+        preflight_code(&api, "testing/fake", Some("0.4.0")).await,
         None
     );
 
@@ -270,7 +270,7 @@ async fn two_digest_folders_and_other_software_refuse_the_form_like_create() {
         .prepared
         .layout()
         .providers_dir()
-        .join("testing/fake/0.3.0");
+        .join("testing/fake/0.4.0");
     let digest = std::fs::read_dir(&revision)
         .expect("the pinned revision folder reads")
         .flatten()
@@ -294,19 +294,19 @@ async fn two_digest_folders_and_other_software_refuse_the_form_like_create() {
         &api,
         site.runtime_id,
         "testing/fake",
-        "0.3.0",
+        "0.4.0",
         "instance.provider_ambiguous",
     )
     .await;
 
     let error = api
-        .form_at(site.runtime_id, Some("testing/other"), Some("0.3.0"))
+        .form_at(site.runtime_id, Some("testing/other"), Some("0.4.0"))
         .await
         .expect_err("the pinned package runs other software");
     assert_eq!(error.code(), "instance.runtime_mismatch", "{error:?}");
     assert_eq!(error.detail("providerSoftware"), Some("other"), "{error:?}");
     assert_eq!(
-        preflight_code(&api, "testing/other", Some("0.3.0"))
+        preflight_code(&api, "testing/other", Some("0.4.0"))
             .await
             .as_deref(),
         Some("instance.runtime_mismatch")
@@ -387,7 +387,7 @@ async fn with_a_revision_the_runtime_is_judged_before_the_provider() {
         &api,
         site.runtime_id,
         "testing/fake",
-        "0.3.0",
+        "0.4.0",
         "supervisor.runtime_unavailable",
     )
     .await;

@@ -5,9 +5,9 @@
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    BatchError, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, Instance, InstanceId,
-    OperationId, Pid, ProcessIdentity, ProcessObservation, ProcessStart, Registry, RegistryError,
-    WriteOp,
+    BatchError, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, EndpointRequests,
+    Instance, InstanceId, OperationId, Pid, ProcessIdentity, ProcessObservation, ProcessStart,
+    Registry, RegistryError, WriteOp,
 };
 
 use crate::common::Harness;
@@ -33,6 +33,7 @@ fn first_revision(instance: InstanceId, values: &str, at: Timestamp) -> ConfigRe
         ConfigRevisionId::generate(),
         instance,
         ConfigValuesJson::new(values.to_owned()).expect("the test passes object text"),
+        EndpointRequests::default(),
         Some(OperationId::generate()),
         at,
     )
@@ -225,4 +226,81 @@ fn an_unknown_config_status_reads_as_corrupt() {
         ),
         "{err:?}"
     );
+}
+
+#[test]
+fn the_endpoint_snapshot_is_canonical_json_and_a_bad_one_reads_as_corrupt() {
+    // Spec 0029, "Model data": `{"<name>": {"type": "fixed", "content": N}
+    // | {"type": "auto"}}`, names sorted.
+    let harness = Harness::new();
+    let instance = stored_instance(&harness);
+    let mut record = first_revision(instance.id(), "{}", harness.now());
+    record.endpoints = EndpointRequests::of(&instance);
+    harness.commit(vec![WriteOp::InsertConfigRevision(record.clone())]);
+    let id = record.id.to_string();
+
+    let text = harness
+        .raw("SELECT endpoints FROM config_revisions WHERE id = ?1", &id)
+        .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert!(
+        parsed.as_object().is_some_and(|object| !object.is_empty()),
+        "{text}"
+    );
+    assert!(text.contains(r#"{"type":"#), "{text}");
+    assert_eq!(
+        harness
+            .raw(
+                "SELECT CAST(number AS TEXT) || ' ' || origin FROM config_revisions WHERE id = ?1",
+                &id
+            )
+            .as_deref(),
+        Some("1 created")
+    );
+    assert_eq!(
+        harness
+            .registry
+            .active_config_revision(instance.id())
+            .unwrap()
+            .value,
+        Some(record.clone())
+    );
+
+    for bad in [
+        r#"{"main":{"type":"fixed","content":0}}"#,
+        r#"{"main":{"type":"fixed"}}"#,
+        r#"{"main":{"type":"auto","content":1}}"#,
+        r#"{"Main":{"type":"auto"}}"#,
+    ] {
+        harness
+            .side()
+            .execute(
+                "UPDATE config_revisions SET endpoints = ?2 WHERE id = ?1",
+                [id.as_str(), bad],
+            )
+            .unwrap();
+        let err = harness
+            .registry
+            .active_config_revision(instance.id())
+            .unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                RegistryError::Corrupt {
+                    table: "config_revisions",
+                    column: "endpoints",
+                    ..
+                }
+            ),
+            "{bad}: {err:?}"
+        );
+    }
+    let err = harness
+        .side()
+        .execute(
+            "UPDATE config_revisions SET endpoints = '[]' WHERE id = ?1",
+            [id.as_str()],
+        )
+        .unwrap_err();
+    assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
 }

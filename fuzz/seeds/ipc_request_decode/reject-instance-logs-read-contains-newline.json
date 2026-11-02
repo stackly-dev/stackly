@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000001105",
+  "idempotencyKey": null,
+  "call": {
+    "type": "instance.logs_read",
+    "content": {
+      "instance": "0192f3a5-0000-7000-8000-000000000001",
+      "contains": "a\nb"
+    }
+  }
+}

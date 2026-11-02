@@ -22,6 +22,7 @@ use tokio::time::Instant;
 
 use super::adopt::{Adoption, adopt_process};
 use super::classify::{Classification, GoneReason, UnprovenBlocker};
+use super::drift;
 use super::error::SupervisorError;
 use super::evidence::{Gathered, gather_evidence, unproven_by};
 use super::pending::{PendingKind, PendingRun};
@@ -330,6 +331,12 @@ impl Supervisor {
                     instance.1 = InstanceLifecycle::Unknown;
                 }
                 report.unknown += 1;
+            }
+        }
+        // Spec 0029, *Drift*: once per instance, after the blockers above.
+        for instance in &instances {
+            if let Err(error) = drift::observe_active(self, instance.id()).await {
+                tracing::warn!(instance = %instance.id(), %error, "the config drift check did not run");
             }
         }
         deps.events.reconciling(&ReconcilePhase::Finished(report));

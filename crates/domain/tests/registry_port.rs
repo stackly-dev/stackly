@@ -674,15 +674,23 @@ fn observation_and_config_revision_ops_carry_no_revision() {
         ConfigRevisionId::generate(),
         instance,
         ConfigValuesJson::new("{}".to_owned()).unwrap(),
+        stackly_domain::EndpointRequests::default(),
         Some(OperationId::generate()),
         at(0),
     );
     let observe = WriteOp::RecordProcessObservation(observation);
     let configure = WriteOp::InsertConfigRevision(config.clone());
+    let ready = WriteOp::MarkConfigRevisionReady {
+        revision: config.id,
+        at: at(1),
+    };
+    let prune = WriteOp::PruneConfigRevisions { instance, keep: 20 };
 
     assert_eq!(observe.resource(), ResourceRef::Instance(instance));
     assert_eq!(configure.resource(), ResourceRef::ConfigRevision(config.id));
-    for op in [&observe, &configure] {
+    assert_eq!(ready.resource(), ResourceRef::ConfigRevision(config.id));
+    assert_eq!(prune.resource(), ResourceRef::Instance(instance));
+    for op in [&observe, &configure, &ready, &prune] {
         assert_eq!((op.revision(), op.expected()), (None, None));
         assert_eq!(op.journal_operation(), None);
         op.check_shape().unwrap();

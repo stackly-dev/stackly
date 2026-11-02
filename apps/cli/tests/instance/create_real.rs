@@ -20,7 +20,7 @@ fn without_a_catalog_set_values_read_as_the_kinds_of_the_pinned_package() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "with no catalog, create --provider testing/fake --revision 0.3.0 --set ignoreTerm=true --set readyDelayMs=4000 succeeds with a JSON boolean and number in the active settings, and an unpinned revision exits with instance.provider_not_found from the form without an instance.create",
+        expected = "with no catalog, create --provider testing/fake --revision 0.4.0 --set ignoreTerm=true --set readyDelayMs=4000 succeeds with a JSON boolean and number in the active settings, and an unpinned revision exits with instance.provider_not_found from the form without an instance.create",
     );
     let root = TestRoot::new().expect("a test root");
     let runtime = seed(&root);
@@ -51,7 +51,7 @@ fn without_a_catalog_set_values_read_as_the_kinds_of_the_pinned_package() {
         )
     };
 
-    let created = create("typed", "0.3.0");
+    let created = create("typed", "0.4.0");
     assert_eq!(created.code, Some(0), "{created:?}");
     let id = envelope(&created)["result"]["instance"]["id"]
         .as_str()

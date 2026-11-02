@@ -274,7 +274,7 @@ fn a_form_request_may_name_a_revision_and_a_request_without_one_still_decodes() 
         panic!("expected instance.get_create_form");
     };
     assert_eq!(params.provider.as_deref(), Some("testing/fake"));
-    assert_eq!(params.revision.as_deref(), Some("0.3.0"));
+    assert_eq!(params.revision.as_deref(), Some("0.4.0"));
     assert!(params.validate().is_empty());
 
     for file in [

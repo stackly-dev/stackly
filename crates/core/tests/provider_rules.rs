@@ -352,7 +352,7 @@ fn another_api_version_or_kind_stops_before_the_rest_is_read() {
 #[test]
 fn capabilities_that_cannot_be_fulfilled_are_rejected() {
     let yaml = "provider.yaml";
-    let reload_block = "  reload:\n    render: [fakeConfig]\n    action: signal\n    signal: hup\n    verify: readiness\n";
+    let reload_block = "  reload:\n    render: [fakeConfig, fakeConf]\n    action: signal\n    signal: hup\n    verify: readiness\n";
     assert_manifest_issue(
         Edit::fake().replace(yaml, reload_block, ""),
         "capabilities.reload",
@@ -915,6 +915,7 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
     );
     let secrets = context.paths.run.join("secrets");
     let file = secrets.join("fake.json");
+    let conf = context.paths.config.join("fake.conf");
 
     let init = package.init_plan(&context).expect("the init plan builds");
     let run = package.run_plan(&context).expect("the run plan builds");
@@ -930,7 +931,15 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
         init.steps
     );
     assert!(
-        matches!(run.render.as_slice(), [InitStep::EnsureDirectories(dirs), InitStep::WriteFile(write)] if dirs == std::slice::from_ref(&secrets) && write.path == file),
+        matches!(
+            run.render.as_slice(),
+            [InitStep::EnsureDirectories(dirs), InitStep::WriteFile(plain), InitStep::WriteFile(write)]
+                if dirs == &[context.paths.config.clone(), secrets.clone()]
+                    && plain.path == conf
+                    && !plain.sensitive
+                    && write.path == file
+                    && write.sensitive
+        ),
         "{:#?}",
         run.render
     );
@@ -1449,7 +1458,7 @@ fn provider_ids_and_revisions_follow_val_002() {
         assert_manifest_issue(
             Edit::fake().replace(
                 "provider.yaml",
-                "revision: \"0.3.0\"",
+                "revision: \"0.4.0\"",
                 &format!("revision: {revision}"),
             ),
             "metadata.revision",
@@ -1795,7 +1804,7 @@ fn plans_report_unresolved_and_lan_endpoints_and_long_arguments() {
     assert_eq!(
         long.run_plan(&context).unwrap_err(),
         PlanError::ArgumentTooLong {
-            position: "lifecycle.start.args[5]".into()
+            position: "lifecycle.start.args[6]".into()
         }
     );
 }
@@ -2033,12 +2042,13 @@ fn a_package_without_config_files_renders_nothing_before_the_spawn() {
     let package = Edit::fake()
         .replace(
             yaml,
-            "configFiles:\n  fakeConfig:\n    template: templates/fake.json.tmpl\n    format: json\n    destination: \"${instance.secrets}/fake.json\"\n    sensitive: true\n",
+            "configFiles:\n  fakeConfig:\n    template: templates/fake.json.tmpl\n    format: json\n    destination: \"${instance.secrets}/fake.json\"\n    sensitive: true\n  fakeConf:\n    template: templates/fake.conf.tmpl\n    format: json\n    destination: \"${instance.config}/fake.conf\"\n",
             "",
         )
         .replace(yaml, "    - { primitive: renderConfig, file: fakeConfig }\n", "")
-        .replace(yaml, "render: [fakeConfig]", "render: []")
+        .replace(yaml, "render: [fakeConfig, fakeConf]", "render: []")
         .remove("templates/fake.json.tmpl")
+        .remove("templates/fake.conf.tmpl")
         .validate()
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
     let context = context_for(

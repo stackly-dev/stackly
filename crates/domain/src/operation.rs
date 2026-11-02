@@ -236,6 +236,14 @@ code_enum! {
         UpdateManager => "update_manager",
         /// Migrate an instance's data to another line.
         MigrateData => "migrate_data",
+        /// Activate a new config revision with new settings and reload,
+        /// restart, or keep the instance for its next start (spec 0029).
+        ApplyConfig => "apply_config",
+        /// Activate a new config revision with new ports (spec 0029).
+        ChangeEndpoints => "change_endpoints",
+        /// Rewrite config files changed outside Stackly from the active
+        /// revision's copies (spec 0029).
+        ResolveConfigDrift => "resolve_config_drift",
     }
 }
 
@@ -267,8 +275,9 @@ impl OperationKind {
     /// the daemon interrupted (spec 0007, "Tabel resume per jenis
     /// operasi"): start, stop, restart, reload, and force stop of an
     /// instance close as interrupted, because their process outlives the
-    /// daemon and the supervisor adopts it; every other kind is compensated
-    /// before its point of no return.
+    /// daemon and the supervisor adopts it, and so do apply config and
+    /// change endpoints, whose commit cannot be undone (spec 0029); every
+    /// other kind is compensated before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
         match self {
@@ -276,7 +285,9 @@ impl OperationKind {
             | Self::StopInstance
             | Self::RestartInstance
             | Self::ReloadInstance
-            | Self::ForceStopInstance => InterruptPolicy::CloseInterrupted,
+            | Self::ForceStopInstance
+            | Self::ApplyConfig
+            | Self::ChangeEndpoints => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
@@ -834,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_five_instance_process_kinds_close_as_interrupted() {
+    fn only_the_instance_process_kinds_and_config_commits_close_as_interrupted() {
         let closing: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
@@ -849,6 +860,8 @@ mod tests {
                 "restart_instance",
                 "reload_instance",
                 "force_stop_instance",
+                "apply_config",
+                "change_endpoints",
             ]
         );
         assert!(

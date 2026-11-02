@@ -47,6 +47,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "instance_restart_total",
         sql: include_str!("../migrations/0007_instance_restart_total.sql"),
     },
+    Migration {
+        version: 8,
+        name: "config_revision_history",
+        sql: include_str!("../migrations/0008_config_revision_history.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -81,6 +86,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         7,
         "15733ad01129754b2249639bc2287f969bcc5f1ec078aab92761af25590eb1da",
+    ),
+    (
+        8,
+        "ecba327fde38ec332681dd5b3b46f90c4a9fa0d6eec23450a64d3a91ba4ac9f1",
     ),
 ];
 
@@ -307,7 +316,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 7);
+        assert_eq!(set.latest(), 8);
     }
 
     #[test]

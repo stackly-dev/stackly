@@ -1,1 +1,1 @@
---delay-ms=${settings.initDelayMs}
+--fail=${settings.failInit}

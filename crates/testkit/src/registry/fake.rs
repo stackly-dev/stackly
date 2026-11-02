@@ -11,17 +11,18 @@ use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
-    ConfigRevisionId, ConfigRevisionRecord, CreatedRecord, CreatedSeq, Environment, EnvironmentId,
-    Generation, GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance,
-    InstanceFilter, InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep,
-    JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LockKey, NotDeletableReason,
-    Operation, OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
-    OperationResource, OperationState, Ownership, PlatformStoreKey, ProcessObservation,
-    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind,
-    ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
-    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretFieldName, SecretRef,
-    SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse,
-    SecretUser, Sha256Digest, StepSeq, Versioned, WriteBatch, WriteOp,
+    ConfigRevisionId, ConfigRevisionRecord, ConfigRevisionStatus, CreatedRecord, CreatedSeq,
+    EndpointRequests, Environment, EnvironmentId, Generation, GuardDecision, GuardView, Guarded,
+    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
+    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
+    LeaseId, LeaseState, LockKey, NotDeletableReason, Operation, OperationCursor, OperationId,
+    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
+    PlatformStoreKey, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
+    ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry,
+    RegistryError, ResourceRef, ResourceRevision, RetentionPolicy, Runtime, RuntimeId,
+    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
+    SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest, StepSeq, Versioned,
+    WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -363,6 +364,31 @@ impl Registry for FakeRegistry {
                 .get(&instance)
                 .and_then(|id| state.config_revisions.get(id))
                 .cloned())
+        })
+    }
+
+    fn config_revisions(
+        &self,
+        instance: InstanceId,
+        limit: u32,
+    ) -> Result<Versioned<Vec<ConfigRevisionRecord>>, RegistryError> {
+        self.read(|state| {
+            state.expect_instance(instance)?;
+            Ok(state
+                .revisions_newest_first(instance)
+                .take(usize::try_from(limit).unwrap_or(usize::MAX))
+                .cloned()
+                .collect())
+        })
+    }
+
+    fn last_known_good(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError> {
+        self.read(|state| {
+            state.expect_instance(instance)?;
+            Ok(state.last_known_good(instance).cloned())
         })
     }
 
@@ -809,6 +835,27 @@ impl State {
             }
             WriteOp::RecordProcessObservation(observation) => self.record_observation(observation),
             WriteOp::InsertConfigRevision(record) => self.insert_config_revision(record),
+            WriteOp::ActivateConfigRevision {
+                instance,
+                expected,
+                record,
+            } => {
+                self.write_instance(instance.clone(), Some(expected), now)?;
+                self.activate_config_revision(&instance, *record)
+            }
+            WriteOp::MarkConfigRevisionReady { revision, at } => {
+                let stored =
+                    self.config_revisions
+                        .get_mut(&revision)
+                        .ok_or(RegistryError::NotFound {
+                            resource: ResourceRef::ConfigRevision(revision),
+                        })?;
+                stored.ready_at.get_or_insert(at);
+                Ok(())
+            }
+            WriteOp::PruneConfigRevisions { instance, keep } => {
+                self.prune_config_revisions(instance, keep)
+            }
             WriteOp::InsertProviderSource(record) => self.insert_provider_source(record, now),
             WriteOp::DeleteInstanceCreatedBy {
                 id,
@@ -1494,8 +1541,123 @@ impl State {
                 }
             }
         }
+        if self
+            .config_revisions
+            .values()
+            .any(|stored| stored.instance == record.instance && stored.number == record.number)
+        {
+            return Err(RegistryError::Integrity {
+                detail: "UNIQUE constraint failed: config_revisions.instance_id, \
+                         config_revisions.number"
+                    .to_owned(),
+            });
+        }
         self.active_config.insert(record.instance, record.id);
         self.config_revisions.insert(record.id, record);
+        Ok(())
+    }
+
+    /// Every config revision of `instance`, newest number first.
+    fn revisions_newest_first(
+        &self,
+        instance: InstanceId,
+    ) -> impl Iterator<Item = &ConfigRevisionRecord> {
+        let mut revisions: Vec<_> = self
+            .config_revisions
+            .values()
+            .filter(|revision| revision.instance == instance)
+            .collect();
+        revisions.sort_by_key(|revision| std::cmp::Reverse(revision.number));
+        revisions.into_iter()
+    }
+
+    /// The revision of `instance` with `ready_at` set and the highest
+    /// number.
+    fn last_known_good(&self, instance: InstanceId) -> Option<&ConfigRevisionRecord> {
+        self.revisions_newest_first(instance)
+            .find(|revision| revision.ready_at.is_some())
+    }
+
+    /// The record half of `ActivateConfigRevision`, with the checks of the
+    /// SQLite registry in the same order.
+    fn activate_config_revision(
+        &mut self,
+        instance: &Instance,
+        record: ConfigRevisionRecord,
+    ) -> Result<(), RegistryError> {
+        let integrity = |detail: &str| RegistryError::Integrity {
+            detail: detail.to_owned(),
+        };
+        if self.config_revisions.contains_key(&record.id) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::ConfigRevision(record.id),
+            });
+        }
+        let active = self
+            .active_config
+            .get(&instance.id())
+            .and_then(|id| self.config_revisions.get(id))
+            .cloned()
+            .ok_or(RegistryError::MissingReference {
+                resource: ResourceRef::Instance(instance.id()),
+            })?;
+        if record.instance != instance.id() {
+            return Err(integrity("the config revision belongs to another instance"));
+        }
+        if record.status != ConfigRevisionStatus::Active {
+            return Err(integrity("an activated config revision must be active"));
+        }
+        if record.previous != Some(active.id) || record.number != active.number.next() {
+            return Err(integrity(
+                "an activated config revision must follow the active one with the next number",
+            ));
+        }
+        if record.endpoints != EndpointRequests::of(instance) {
+            return Err(integrity(
+                "the endpoint snapshot differs from the instance's port requests",
+            ));
+        }
+        if let Some(stored) = self.config_revisions.get_mut(&active.id) {
+            stored.status = ConfigRevisionStatus::Superseded;
+        }
+        self.active_config.insert(record.instance, record.id);
+        self.config_revisions.insert(record.id, record);
+        Ok(())
+    }
+
+    /// `PruneConfigRevisions`: the instance exists; every revision outside
+    /// the `keep` newest numbers goes, except the active one and the last
+    /// known good. A deleted revision that a later one followed leaves its
+    /// `previous` empty, like `ON DELETE SET NULL`.
+    fn prune_config_revisions(
+        &mut self,
+        instance: InstanceId,
+        keep: u32,
+    ) -> Result<(), RegistryError> {
+        if !self.instances.contains_key(&instance) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::Instance(instance),
+            });
+        }
+        let active = self.active_config.get(&instance).copied();
+        let good = self.last_known_good(instance).map(|revision| revision.id);
+        let doomed: Vec<ConfigRevisionId> = self
+            .revisions_newest_first(instance)
+            .skip(usize::try_from(keep).unwrap_or(usize::MAX))
+            .map(|revision| revision.id)
+            .filter(|id| Some(*id) != active && Some(*id) != good)
+            .collect();
+        for id in &doomed {
+            self.config_revisions.remove(id);
+        }
+        for revision in self.config_revisions.values_mut() {
+            if revision
+                .previous
+                .is_some_and(|previous| doomed.contains(&previous))
+            {
+                revision.previous = None;
+            }
+        }
         Ok(())
     }
 

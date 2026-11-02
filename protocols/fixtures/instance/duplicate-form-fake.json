@@ -12,7 +12,7 @@
     "name": "fake-a-copy-2",
     "provider": {
       "name": "testing/fake",
-      "revision": "0.3.0"
+      "revision": "0.4.0"
     },
     "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
     "secrets": [
@@ -386,7 +386,7 @@
       "displayName": "Fake Provider",
       "manifestSha256": "e2fb34cc625facdf6c90f31ac006a54c3d672508f30c913195e44c1b0335117a",
       "name": "testing/fake",
-      "revision": "0.3.0",
+      "revision": "0.4.0",
       "source": "pinned"
     },
     "runtime": {

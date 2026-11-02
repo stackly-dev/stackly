@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 use stackly_domain::{
-    CommitGuard, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, GuardDecision,
-    GuardView, Guarded, InstallMode, Instance, InstanceId, InstanceManifest, JournalPayload,
-    ManifestRuntime, NewInstance, NewInstanceManifest, Operation, OperationId, OperationResource,
-    ProviderSourceId, ReasonCode, RegistryError, ResourceRef, SecretFieldName, SecretOwner,
-    SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
+    CommitGuard, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, EndpointRequests,
+    GuardDecision, GuardView, Guarded, InstallMode, Instance, InstanceId, InstanceManifest,
+    JournalPayload, ManifestRuntime, NewInstance, NewInstanceManifest, Operation, OperationId,
+    OperationResource, ProviderSourceId, ReasonCode, RegistryError, ResourceRef, SecretFieldName,
+    SecretOwner, SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
 };
 use stackly_platform::{InstancePaths, Platform, SecretValue, WriteMode, check_private_dir};
 
@@ -597,6 +597,7 @@ async fn register(
         ConfigRevisionId::generate(),
         id,
         values,
+        EndpointRequests::of(&instance),
         Some(ctx.id()),
         now,
     );

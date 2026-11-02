@@ -397,6 +397,8 @@ impl Registry for FaultyRegistry {
         known_instance_ids() -> Result<stackly_domain::Versioned<Vec<InstanceId>>, stackly_domain::RegistryError>;
         latest_process_observation(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProcessObservation>>, stackly_domain::RegistryError>;
         active_config_revision(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<ConfigRevisionRecord>>, stackly_domain::RegistryError>;
+        config_revisions(instance: InstanceId, limit: u32) -> Result<stackly_domain::Versioned<Vec<ConfigRevisionRecord>>, stackly_domain::RegistryError>;
+        last_known_good(instance: InstanceId) -> Result<stackly_domain::Versioned<Option<ConfigRevisionRecord>>, stackly_domain::RegistryError>;
         instance_paths(id: InstanceId) -> Result<stackly_domain::Versioned<Option<Vec<stackly_domain::InstancePathEntry>>>, stackly_domain::RegistryError>;
         environment(id: stackly_domain::EnvironmentId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Environment>>, stackly_domain::RegistryError>;
         environments() -> Result<stackly_domain::Versioned<Vec<stackly_domain::Environment>>, stackly_domain::RegistryError>;
@@ -627,7 +629,7 @@ impl Rig {
                 let text = replace(text, "  reload: true", "  reload: false");
                 let text = replace(
                     &text,
-                    "  reload:\n    render: [fakeConfig]\n    action: signal\n    signal: hup\n    verify: readiness\n",
+                    "  reload:\n    render: [fakeConfig, fakeConf]\n    action: signal\n    signal: hup\n    verify: readiness\n",
                     "",
                 );
                 replace(&text, "  reloadSeconds: 10\n", "")
@@ -992,6 +994,7 @@ impl Rig {
             id,
             ConfigValuesJson::new(serde_json::Value::Object(values).to_string())
                 .expect("the settings fit"),
+            stackly_domain::EndpointRequests::of(&instance),
             None,
             now,
         );

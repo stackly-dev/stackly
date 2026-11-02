@@ -17,7 +17,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use stackly_domain::{Health, HealthState, Readiness, ReadinessState};
+use stackly_domain::{
+    Health, HealthState, Readiness, ReadinessState, RegistryError, WriteBatch, WriteOp,
+};
 use stackly_platform::HoldsFile;
 use tokio::sync::watch;
 use tokio::time::Instant;
@@ -179,6 +181,7 @@ impl Probes {
             state.readiness = Readiness::new(ReadinessState::Ready, now, PROBE_OK, None);
             state.restart.note_ready(Instant::now(), &config);
         });
+        mark_ready(&self.sup, &self.actor, self.generation);
         if self.stopped() {
             return false;
         }
@@ -206,13 +209,18 @@ impl Probes {
                 ProbeOutcome::Ok => {
                     failures = 0;
                     let config = deps.config.clone();
+                    let mut back = false;
                     self.update(|state| {
+                        back = state.readiness.state() != ReadinessState::Ready;
                         state.readiness =
                             Readiness::new(ReadinessState::Ready, now, PROBE_OK, None);
                         if state.restart.note_ready(Instant::now(), &config) {
                             state.restart_status = restart_status(&config, 0, None, false);
                         }
                     });
+                    if back {
+                        mark_ready(&self.sup, &self.actor, self.generation);
+                    }
                 }
                 ProbeOutcome::Failed { reason, detail } => {
                     failures += 1;
@@ -240,6 +248,53 @@ impl Probes {
             self.actor.refresh(&deps);
         }
     }
+}
+
+/// Marks the revision the process of `generation` was rendered for as
+/// ready, once, when it is still the active revision (spec 0029, *Last
+/// known good*). The write runs on a blocking thread outside the probe
+/// task, and readiness in memory never waits for it; a write that fails is
+/// logged and tried again at the next ready transition.
+pub(crate) fn mark_ready(sup: &Supervisor, actor: &InstanceActor, generation: u64) {
+    let applied = actor.read(|state| {
+        state
+            .process
+            .as_ref()
+            .filter(|slot| slot.generation == generation)
+            .and_then(|slot| slot.applied_revision)
+    });
+    let Some(revision) = applied else {
+        return;
+    };
+    let deps = sup.deps().clone();
+    let id = actor.id;
+    tokio::spawn(async move {
+        let at = deps.platform.clock().now();
+        let registry = deps.registry.clone();
+        let written = blocking(move || -> Result<bool, RegistryError> {
+            let active = registry.active_config_revision(id)?.value;
+            if active.is_none_or(|active| active.id != revision || active.ready_at.is_some()) {
+                return Ok(false);
+            }
+            registry
+                .commit(WriteBatch::new(vec![WriteOp::MarkConfigRevisionReady {
+                    revision,
+                    at,
+                }]))
+                .map_err(|error| error.error)?;
+            Ok(true)
+        })
+        .await;
+        match written {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(instance = %id, %revision, %error, "the ready config revision could not be recorded");
+            }
+            Err(error) => {
+                tracing::warn!(instance = %id, %revision, %error, "the ready config revision could not be recorded");
+            }
+        }
+    });
 }
 
 struct HealthLoop {

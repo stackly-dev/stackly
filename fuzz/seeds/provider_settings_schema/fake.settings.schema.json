@@ -56,11 +56,30 @@
       "default": 0,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
     },
+    "logLineBytes": {
+      "type": "integer",
+      "title": "Log line length",
+      "description": "Bytes in every log line, newline included, for the slow client evidence run of spec 0027 (AC-3).",
+      "minimum": 42,
+      "maximum": 4096,
+      "default": 100,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
     "ignoreTerm": {
       "type": "boolean",
       "title": "Ignore SIGTERM",
       "default": false,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "leakToken": {
+      "type": "boolean",
+      "title": "Print the auth token",
+      "description": "A test switch: the server prints authToken to stdout and inside a 100 KiB stderr line, so a test can prove the token never reaches the stored log (spec 0027, AC-9).",
+      "default": false,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
     },
     "failInit": {
       "type": "boolean",

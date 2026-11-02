@@ -319,7 +319,7 @@ fn the_fake_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "testing/fake");
-    assert_eq!(key.revision().as_str(), "0.3.0");
+    assert_eq!(key.revision().as_str(), "0.4.0");
     assert_eq!(package.software().as_str(), "fake");
     assert_eq!(
         package
@@ -568,7 +568,7 @@ fn every_argument_is_one_argv_element_as_written() {
         .run_plan(&context)
         .expect("the fake run plan builds");
 
-    assert_eq!(run.spawn.args[5], format!("--label={NASTY_LABEL}"));
+    assert_eq!(run.spawn.args[6], format!("--label={NASTY_LABEL}"));
     assert_eq!(run.spawn.program.relative, Path::new("stackly-fake-server"));
     let keys: Vec<&str> = run.spawn.env.iter().map(|(key, _)| key.as_str()).collect();
     assert_eq!(keys, ["HOME", "PATH", "TMPDIR"]);
@@ -583,7 +583,7 @@ fn reload_of_a_provider_without_reload_is_unsupported() {
         String::from_utf8(files.get("provider.yaml").expect("manifest").to_vec()).expect("UTF-8");
     let without = text
         .replace("  reload: true\n", "")
-        .replace("  reload:\n    render: [fakeConfig]\n    action: signal\n    signal: hup\n    verify: readiness\n", "")
+        .replace("  reload:\n    render: [fakeConfig, fakeConf]\n    action: signal\n    signal: hup\n    verify: readiness\n", "")
         .replace("  reloadSeconds: 10\n", "");
     let schema = String::from_utf8(
         files

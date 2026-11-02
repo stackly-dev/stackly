@@ -219,6 +219,14 @@ pub enum SupervisorError {
         /// The exit code.
         exit_code: i32,
     },
+    /// Config files differ from the copies of the active revision's last
+    /// render, so nothing renders until the user keeps the revision (spec
+    /// 0029, AC-11).
+    #[error("config files changed outside stackly: {}", files.join(", "))]
+    ConfigDrift {
+        /// The drifted paths, relative to `config/`.
+        files: Vec<String>,
+    },
     /// The reload action or its verification failed.
     #[error("the reload failed: {reason}")]
     ReloadFailed {
@@ -402,6 +410,7 @@ impl OperationError for SupervisorError {
             Self::StopTimeout { .. } => codes::STOP_TIMEOUT,
             Self::StopRequiresOverride => codes::STOP_REQUIRES_OVERRIDE,
             Self::StopCommandFailed { .. } => codes::STOP_COMMAND_FAILED,
+            Self::ConfigDrift { .. } => crate::instance::config::codes::DRIFT_DETECTED,
             Self::ReloadFailed { .. } => codes::RELOAD_FAILED,
             Self::CapabilityUnsupported { .. } => codes::CAPABILITY_UNSUPPORTED,
             Self::InitFailed { .. } => codes::INIT_FAILED,
@@ -520,6 +529,7 @@ impl OperationError for SupervisorError {
             Self::StopCommandFailed { exit_code } => {
                 vec![(key("exitCode"), exit_code.to_string())]
             }
+            Self::ConfigDrift { files } => vec![(key("files"), files.join(","))],
             Self::ReloadFailed { reason } => vec![(key("reason"), reason.clone())],
             Self::CapabilityUnsupported { capability } => {
                 vec![(key("capability"), capability.clone())]

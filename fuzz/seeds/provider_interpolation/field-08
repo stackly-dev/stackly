@@ -1,1 +1,1 @@
---host=${endpoint.http.host}
+--conf=${instance.config}/fake.conf

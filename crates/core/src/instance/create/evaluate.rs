@@ -1352,7 +1352,7 @@ fn port_notes(
 }
 
 /// The path of a settings problem as a field issue.
-fn settings_path(location: &Location) -> String {
+pub(crate) fn settings_path(location: &Location) -> String {
     match location {
         Location::Field(path) if !path.is_empty() && path != "." => format!("settings.{path}"),
         _ => "settings".to_owned(),
@@ -1361,7 +1361,7 @@ fn settings_path(location: &Location) -> String {
 
 /// The `FieldCode` of a kind of settings problem (spec 0020, *Field
 /// error*).
-const fn field_code(kind: SettingsIssueKind) -> FieldCode {
+pub(crate) const fn field_code(kind: SettingsIssueKind) -> FieldCode {
     match kind {
         SettingsIssueKind::Unknown | SettingsIssueKind::Enum => FieldCode::UnknownValue,
         SettingsIssueKind::Pattern => FieldCode::InvalidFormat,

@@ -50,7 +50,7 @@ fn logs_read_pages_filter_and_follow_until_sigint_against_a_real_daemon() {
                 "--provider",
                 "testing/fake",
                 "--revision",
-                "0.3.0",
+                "0.4.0",
                 "--set",
                 &format!("logLinesPerSecond={rate}"),
                 "--start",

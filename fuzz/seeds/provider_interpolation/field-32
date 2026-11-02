@@ -1,1 +1,1 @@
---label=${settings.mode}
+${instance.secrets}/conf/server.json

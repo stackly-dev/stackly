@@ -28,6 +28,7 @@ use tokio::time::Instant;
 
 use super::actor::{ExitSlot, InstanceActor, ProcessSlot, restart_status};
 use super::drain::{DrainSlot, Opening};
+use super::drift;
 use super::error::{EndpointFault, SupervisorError, UnavailableReason};
 use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task};
 use super::init::config_invalid;
@@ -949,7 +950,15 @@ async fn run_attempt(
             return Ok(fail(sup, id, FailureCode::CONFIG_RENDER_FAILED, error).await);
         }
     };
-    if let Err(error) = run_render(deps, &plan.render, &secrets).await {
+    let target = prepared.render_target();
+    if let Err(error) = drift::gate(sup, id, &target).await {
+        let reason = match error {
+            SupervisorError::ConfigDrift { .. } => FailureCode::CONFIG_DRIFT,
+            _ => FailureCode::CONFIG_RENDER_FAILED,
+        };
+        return Ok(fail(sup, id, reason, error).await);
+    }
+    if let Err(error) = run_render(deps, &plan.render, &secrets, &target).await {
         return Ok(fail(sup, id, FailureCode::CONFIG_RENDER_FAILED, error).await);
     }
     remove_stale_sockets(sup, &prepared).await;
@@ -1098,6 +1107,7 @@ async fn run_attempt(
             probes_stop,
             drain,
             sent_signal: None,
+            applied_revision: Some(prepared.revision),
         });
         state.op_owns_exit = true;
         state.stopping = false;

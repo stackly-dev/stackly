@@ -66,7 +66,7 @@ const URL: &str = "https://downloads.example.test/fake-0.2.0.tar.gz";
 /// The provider of the fake package.
 const PROVIDER: &str = "testing/fake";
 /// The revision of the fake package.
-const REVISION: &str = "0.3.0";
+const REVISION: &str = "0.4.0";
 /// The auth token the instances are created with.
 const TOKEN: &str = "fixture-token-for-the-fake-provider";
 
@@ -390,6 +390,7 @@ fn package(archive: &[u8]) -> ValidatedPackage {
         "provider.yaml",
         "schemas/settings.schema.json",
         "templates/fake.json.tmpl",
+        "templates/fake.conf.tmpl",
     ]
     .into_iter()
     .map(|path| {
