@@ -448,3 +448,44 @@ async fn a_plan_that_is_not_the_confirmed_one_is_refused_before_anything_stops()
     harness.stop().await;
     ev.pass();
 }
+
+// covers: AC-7
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restart_in_recovery_mode_exits_75_without_a_plan() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Fixture,
+        expected = "in recovery mode, where no supervisor serves, daemon.shutdown with mode restart is accepted without a plan, asks for the stop order of a restart, and a repeated request is refused with daemon.shutting_down instead of registry.unavailable",
+    );
+    let mut harness = RestartHarness::new(Vec::new());
+    harness.start().await;
+    harness.stop().await;
+    // A registry newer than the app puts the next start in recovery mode.
+    let db = harness.site.prepared.layout().registry_db();
+    let mut bytes = std::fs::read(&db).expect("the registry file can be read");
+    bytes[60..64].copy_from_slice(&999_u32.to_be_bytes());
+    std::fs::write(&db, &bytes).expect("the registry file can be written");
+    let api = harness.start().await;
+    assert!(
+        harness.daemon().health().recovery.is_some(),
+        "the daemon is in recovery mode"
+    );
+    let preview = api.preview().await.expect("the preview is served");
+    assert!(!preview.supervisor_available);
+
+    let accepted = api
+        .restart_daemon(&key(), None, false)
+        .await
+        .expect("the restart is accepted");
+
+    assert_eq!(accepted.mode, ShutdownMode::Restart);
+    assert_eq!(accepted.plan_id, None);
+    assert_eq!(
+        harness.stop_requested_within(Duration::from_secs(2)).await,
+        Some(ShutdownMode::Restart)
+    );
+    let again = api.restart_daemon(&key(), None, false).await.unwrap_err();
+    assert_eq!(again.code(), "daemon.shutting_down", "{again:?}");
+    harness.stop().await;
+    ev.pass();
+}

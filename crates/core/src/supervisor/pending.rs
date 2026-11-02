@@ -23,6 +23,9 @@ use crate::operation::{BeginError, BeginRequest, BusyPolicy, Origin};
 
 /// The journal input of an operation reconciliation begins.
 const TRIGGER_INPUT: &str = r#"{"trigger":"reconcile"}"#;
+/// The journal input of the start that restores an instance a planned
+/// daemon restart stopped (spec 0030, *Alur*, step 10).
+const PLANNED_RESTART_INPUT: &str = r#"{"trigger":"planned_restart"}"#;
 /// How often the runner looks at an operation it waits for.
 const POLL: Duration = Duration::from_millis(50);
 
@@ -152,10 +155,11 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
                 None => None,
             }
         }
-        PendingKind::Start | PendingKind::Restore => start_again(sup, id).await,
+        PendingKind::Start => start_again(sup, id, TRIGGER_INPUT).await,
+        PendingKind::Restore => start_again(sup, id, PLANNED_RESTART_INPUT).await,
         PendingKind::Stop => {
             let make = || sup.stop_work(StopRequest::reconcile(id));
-            match begin(sup, id, OperationKind::StopInstance, &make).await {
+            match begin(sup, id, OperationKind::StopInstance, TRIGGER_INPUT, &make).await {
                 Some(operation) => wait_final(sup, operation).await,
                 None => None,
             }
@@ -164,14 +168,22 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
             // The stop writes no desired state, so the restore that
             // follows finds the instance wanted.
             let make = || sup.stop_work(StopRequest::planned_restart(id));
-            let stopped = match begin(sup, id, OperationKind::StopInstance, &make).await {
+            let stopped = match begin(
+                sup,
+                id,
+                OperationKind::StopInstance,
+                PLANNED_RESTART_INPUT,
+                &make,
+            )
+            .await
+            {
                 Some(operation) => wait_final(sup, operation).await,
                 None => None,
             };
             if stopped.is_some() {
                 stopped
             } else {
-                start_again(sup, id).await
+                start_again(sup, id, PLANNED_RESTART_INPUT).await
             }
         }
     };
@@ -181,7 +193,7 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
 /// The system `start_instance` that follows reconciliation (trigger
 /// `reconcile`, or `planned_restart` for a restore), when the instance is
 /// stopped and wanted. Returns the code the operation failed with.
-async fn start_again(sup: &Supervisor, id: InstanceId) -> Option<String> {
+async fn start_again(sup: &Supervisor, id: InstanceId, trigger: &'static str) -> Option<String> {
     let instance = read_instance_actor(sup, id).await.ok()?;
     if !matches!(
         instance.lifecycle(),
@@ -191,7 +203,7 @@ async fn start_again(sup: &Supervisor, id: InstanceId) -> Option<String> {
         return None;
     }
     let make = || sup.start_work(StartRequest::background(id));
-    let operation = begin(sup, id, OperationKind::StartInstance, &make).await?;
+    let operation = begin(sup, id, OperationKind::StartInstance, trigger, &make).await?;
     wait_final(sup, operation).await
 }
 
@@ -203,10 +215,11 @@ async fn begin(
     sup: &Supervisor,
     id: InstanceId,
     kind: OperationKind,
+    trigger: &'static str,
     make: &(dyn Fn() -> Box<dyn crate::operation::OperationWork> + Send + Sync),
 ) -> Option<OperationId> {
     let engine = sup.operations()?;
-    let input = JournalPayload::new(TRIGGER_INPUT, crate::operation::limits::INPUT_MAX).ok()?;
+    let input = JournalPayload::new(trigger, crate::operation::limits::INPUT_MAX).ok()?;
     loop {
         if sup.is_shutdown() {
             return None;
