@@ -105,7 +105,16 @@ Pemeriksaan data, runtime, dan port diletakkan di jalur yang sudah ada (rekonsil
 | Bentuk restart terencana di engine | operasi `daemon_restart` dengan lock key setiap instance `stop_restore` | semua mutasi adalah operasi (AGENTS.md); lock key menserialisasi dengan start dan stop instance yang sama | logika di dispatch `daemon.shutdown` tanpa operasi (tidak terlihat di `operation.list`) |
 | Stop tanpa mengubah desired | `StopIntent::PlannedRestart` di jalur stop yang ada | strategi stop provider dan timeout yang sama; hanya penulisan desired yang dilewati | operasi `stop_instance` lalu menulis desired kembali (dua commit, jendela desired salah) |
 | Pemicu restore | `PendingKind::Restore` yang membaca baris rencana, dijalankan sebagai operasi sistem `start_instance` dengan pemicu `planned_restart` bersama daftar "jalankan lagi" spec 0010 | tabel rekonsiliasi tidak pernah menyalakan `stopped`; jenis pending baru memakai ulang konkurensi, interaksi `Never`, dan semua precheck start | jalur respawn actor (budget restart policy tidak cocok untuk restore) |
-| Stop dan start di dalam operasi `daemon_restart` | panggilan supervisor langsung di bawah lock key yang sudah dipegang | operasi anak akan menunggu lock key induknya sendiri (deadlock) | melepas lock key sebelum stop (membuka celah start dari client) |
+| Stop di dalam operasi `daemon_restart` | panggilan supervisor langsung di bawah lock key yang sudah dipegang | operasi anak akan menunggu lock key induknya sendiri (deadlock) | melepas lock key sebelum stop (membuka celah start dari client) |
+| Start ulang saat abort (2026-11-02, dari verify milestone 3) | `PendingKind::Restore` yang diantre lalu dijalankan sebagai operasi sistem `start_instance` tepat setelah operasi `daemon_restart` final | langkah jurnal sebuah operasi tidak bisa diulang per instance, dan setelah operasi final lock key nya sudah lepas, jadi operasi sistem tidak deadlock; jalurnya sama dengan restore daemon baru | start langsung di dalam operasi (pilihan awal; satu langkah jurnal untuk banyak start, hasil per instance tidak tercatat) |
+| Urutan quiesce dan operasi (2026-11-02, dari verify milestone 3) | quiesce dan penantian lebih dulu, operasi `daemon_restart` dimulai sesudahnya | `restart_busy` adalah penolakan sebelum ada pekerjaan, jadi tidak perlu baris operasi `failed` di `operation.list` | operasi dulu lalu quiesce (pilihan awal) |
+| `closeReason` saat abort (2026-11-02) | selalu `stop_timeout`, untuk timeout maupun stop gagal lain | timeout adalah penyebab yang realistis; nilai lain butuh enum baru di kontrak untuk kasus langka (instance berubah `unknown` di antara preview dan stop), dan error persisnya sudah ada di operasi `failed` | nilai baru `stop_failed` (contract minor) |
+| Isi `DaemonInfo.restart` (2026-11-02, keputusan lead: spec mengikuti kode) | rencana terakhir yang dilihat daemon run ini, di memori, terbuka atau terminal kurang dari 10 menit | tanpa baca registry di setiap `daemon.info` dan handshake; daemon baru selalu melihat rencana yang ia ambil alih, jadi alur normal tetap lengkap | membaca rencana terminal terakhir dari registry saat start (ringkasan bertahan melewati restart kedua) |
+| Sumber `lastRestart` di `daemon status` (2026-11-02, gap kecil, pilihan architect) | salinan `DaemonInfo.restart` | tanpa method atau field kontrak baru; CLI dan GUI melihat hal yang sama | method baru untuk membaca riwayat rencana dari registry (milik Diagnostics nanti) |
+| Key restart di CLI dan GUI (2026-11-02, gap kecil, pilihan architect) | UUID v7 baru untuk setiap konfirmasi, tanpa flag `--idempotency-key` | key wajib sejak `daemon.shutdown { restart }` memulai operasi; konfirmasi ulang membawa digest lain sehingga key lama tidak boleh dipakai; request yang hilang balasannya dan diulang dengan key baru tetap aman karena quiesce atau rencana terbuka menolaknya `daemon.restart_pending`, dan setelah handover `daemon.shutting_down` | flag `--idempotency-key` seperti perintah async spec 0008 |
+| Timeout GUI untuk restart (2026-11-02, gap kecil, pilihan architect) | `CallOptions(timeout:)` 190 detik, anggaran interaktif `SecretsClient.interactiveTimeout` yang sudah ada | reply bisa datang sampai sekitar 70 detik; default 10 detik akan memutus restart yang sah, dan CLI juga memakai anggaran interaktif nya | konstanta GUI baru 80 detik |
+| Keluaran rencana `aborted` (2026-11-02, gap kecil, pilihan architect) | dua daftar dari `stoppedAt` ("did not stop, still running" dan "stopped, starting again"), `durations` null kecuali `finished` | semua outcome `skipped` saat abort, jadi `stoppedAt` satu satunya pembeda yang ada di kontrak; durasi tanpa handover tidak bermakna | field baru di `RestartPlanView` untuk penyebab dan hasil start ulang (contract minor) |
+| Kecocokan provider di `HANDOVER_PROVEN` (2026-11-02, dari verify milestone 3) | ID provider penuh (`official/postgresql`, `testing/fake`) | ID penuh yang ada di `ProviderRevisionKey`; nama pendek bisa bertabrakan dengan provider pihak ketiga yang memakai nama sama | nama pendek (`postgresql`) |
 | Kode data dan runtime hilang | pakai ulang `supervisor.data_unavailable`, `executable_invalid`, `runtime_unavailable`, `endpoint_in_use` | satu penyebab satu kode; tanpa kode baru yang menyaingi kode lama | kode baru `instance.data_missing` |
 | Event baru | protokol mayor | `EventKind` tertutup, client lama gagal decode kind yang tidak dikenal | menyaring event hanya untuk subscriber yang meminta (aturan langganan baru) |
 | Digest rencana | sha256 dari `instanceId:decision:reason` terurut | stabil, murah, tidak bergantung pada urutan nama | `statusSeq` per instance (berubah karena probe, membuat digest terlalu sering berbeda) |
@@ -119,6 +128,37 @@ Pemeriksaan data, runtime, dan port diletakkan di jalur yang sudah ada (rekonsil
 | Waktu inventory AC-17 | dari handshake pertama ke daemon baru sampai `reconciling finished` plus `instance.list` lengkap | itulah yang dilihat client; tidak bergantung pada log internal | dari exit daemon lama (mengukur launchd, bukan rekonsiliasi) |
 | Provider uji untuk `stop_restore` | fake dengan `SupervisorConfig.handover_proven` kosong di test | tanpa package fixture baru | package fixture terpisah |
 | Folder data kosong (2026-11-02, temuan run native NATS di milestone 3, keputusan lead atas delegasi user) | hilang hanya untuk paket yang mendeklarasikan `compatibility.dataMarker`; folder yang tidak ada dan marker `Missing` tetap hilang untuk semua paket | NATS tidak punya init yang menulis data, jadi foldernya sah kosong sampai server pertama jalan; paket dengan marker selalu punya isi setelah init, jadi folder kosong di sana memang berarti data hilang | folder kosong selalu hilang (menolak NATS yang baru dibuat) |
+
+## Pembaruan dari verify milestone 2 dan 3 (2026-11-02)
+
+Temuan `/check verify` milestone 2 dan 3, diteruskan lead. Kode di `main` sudah berperilaku begini; spec menyesuaikan, dan perubahan teks AC menunggu persetujuan kamu.
+
+| No | Temuan | Perubahan spec |
+| --- | --- | --- |
+| 1 | PID milik executable lain: `dataInUse` kalau lock dipegang pihak lain, `Gone` (`stopped`) kalau lock bebas, sesuai tabel `classify` spec 0010; `identityUnproven` hanya kalau keenam pemeriksaan lulus tanpa lock | AC-3, test `pid_reuse.rs` |
+| 2 | abort menyalakan lagi instance yang sudah berhenti lewat operasi sistem `start_instance` sesudah operasi `daemon_restart` final; setiap stop gagal memakai `stop_timeout` | AC-11, *Alur* langkah 7, outcome saat `aborted`, Keputusan kecil |
+| 3 | `DaemonInfo.restart` hanya rencana yang dilihat daemon run ini | tabel API, Value sourcing, GUI, AC-15 (`daemon status`), Consequences |
+| 4 | operasi `daemon_restart` dimulai sesudah quiesce dan penantian; `restart_busy` tanpa baris operasi | AC-10, *Alur* langkah 2 sampai 4, `BusyPolicy::Queue` (nilai `Wait` tidak ada), `PREPARE_GRACE` |
+| 5 | `HANDOVER_PROVEN` memakai ID provider penuh, fake line `0.3` dan `0.4` | *Gerbang handover*, Value sourcing, Build plan langkah 10 |
+| 6 | `daemon.shutdown { restart }` wajib `idempotencyKey` (di envelope request, bukan di `ShutdownParams`) | *Alur* langkah 1, tabel API, paragraf CLI, GUI, Build plan langkah 11 dan 12 |
+| 7 | `persist_plan` yang gagal setelah abort melewatkan `queue_restore` | *Edge cases* dan test `/test`, tanpa perubahan perilaku |
+
+### Cross check pembaruan ini
+
+Cross check 2026-11-02 oleh model lain (Sonnet, hanya membaca) atas pembaruan di atas: 10 temuan (0 high, 5 medium, 3 low medium, 2 low). Setiap fakta kode diperiksa ulang sebelum diterapkan.
+
+| No | Temuan | Disposisi |
+| --- | --- | --- |
+| 1 | abort yang gagal disimpan: error operasi adalah error registry, event terakhir tetap `stopping`, CLI menunggu sampai exit 8, banner GUI tidak hilang | diterapkan: *Edge cases* dan rujukan di *Alur* langkah 7; AC-11 tidak diberi pengecualian (risiko untuk `/test` dan review) |
+| 2 | reply restart bisa sampai sekitar 70 detik; timeout GUI tidak bersumber | diterapkan: *Alur* langkah 3, paragraf CLI, timeout GUI 190 detik (Keputusan kecil) |
+| 3 | `failure_code` untuk `unknown` selalu `identity_unproven`; stop, force stop, start gagal `supervisor.identity_unproven` | diterapkan: outcome di *State rencana*, AC-3 |
+| 4 | request ulang dengan key yang sama mendapat `ShutdownAccepted` juga untuk operasi yang `failed` (`restart.rs`, `Replay` tanpa state) | tidak diubah di spec: spec tetap meminta reply pertama (spec 0007), jadi ini celah kode; dilaporkan ke lead. CLI dan GUI memakai key baru untuk setiap konfirmasi |
+| 5 | restart di recovery mode kini gagal `registry.unavailable` atau `daemon.starting`, padahal Keputusan kecil "Restart di recovery mode" memilih diizinkan | tidak diubah di spec: keputusan lama tetap sampai kamu memilih; dilaporkan ke lead dengan rekomendasi jatuh ke restart spec 0015 tanpa rencana saat supervisor tidak jalan |
+| 6 | pemicu `planned_restart` tidak tercatat; input jurnal restore selalu `{"trigger":"reconcile"}` (`pending.rs`) | tidak diubah di spec (AC-9, langkah 10): celah kode, dilaporkan ke lead |
+| 7 | bentuk `restart_busy`: `items` dengan `operationId` dan `kind` plus `details.omitted`; bisa kosong saat timeout lock | diterapkan: AC-10, *Alur* langkah 3 |
+| 8 | keluaran `aborted` di CLI dan GUI, `durations`, penyebab abort | diterapkan: paragraf keluaran `aborted`, Value sourcing, *Alur* langkah 7 |
+| 9 | teks basi: `NoOpenRestartPlan`, diagram "stop timeout", invariant `commit_guarded`, waktu entri handover, `PREPARE_GRACE` | diterapkan |
+| 10 | `provider` di preview adalah nama pendek; nama check `executable_matches`; varian rencana AC-3 belum ada | diterapkan: Value sourcing, AC-3, baris test (untuk `/test`) |
 
 ## Cross check
 
