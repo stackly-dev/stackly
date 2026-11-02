@@ -295,7 +295,8 @@ struct InstancesPageTests {
 
     @Test func notReadyWithoutADetailIsJustNotReady() {
         let readiness = InstanceReadiness(
-            state: .notReady, reason: "probe_failed", detail: nil, observedAt: FixtureClock.now)
+            state: .notReady, reason: "probe_failed", detail: nil, observedAt: FixtureClock.now,
+            latencyMs: nil)
         let base = InstanceSummary.fixture(lifecycle: .running, readiness: readiness)
         #expect(ReadinessText.text(for: base) == "Not ready")
     }

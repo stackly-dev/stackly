@@ -20,7 +20,7 @@ struct ProcessTextTests {
             runtimeId: running.runtimeId, runtimeVersion: running.runtimeVersion,
             lifecycle: .running, desired: running.desired, readiness: running.readiness,
             health: running.health, statusSeq: running.statusSeq, process: adopted,
-            lastFailure: nil, restart: running.restart, blocker: nil,
+            lastFailure: nil, restart: running.restart, restartTotal: 0, blocker: nil,
             endpoints: running.endpoints, leftoverProcesses: running.leftoverProcesses,
             logsUnavailable: false, ownership: running.ownership, initialized: true,
             capabilities: nil, lastExit: nil)
@@ -45,7 +45,7 @@ struct ProcessTextTests {
         let waiting = running.testing(
             readiness: InstanceReadiness(
                 state: .notReady, reason: "awaiting_probe", detail: nil,
-                observedAt: running.readiness.observedAt))
+                observedAt: running.readiness.observedAt, latencyMs: nil))
         #expect(ProcessText.text(for: waiting) == "Running (PID 4001)")
         #expect(ReadinessText.text(for: waiting) == "Waiting for probe")
     }

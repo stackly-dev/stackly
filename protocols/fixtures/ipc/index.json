@@ -1607,6 +1607,14 @@
       "file": "frame-response-instance-get-metrics-unknown-values.json",
       "type": "ServerFrame",
       "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-get-metrics-unknown-types.json",
+      "type": "ServerFrame",
+      "expect": "decode",
+      "langs": [
+        "rust"
+      ]
     }
   ]
 }

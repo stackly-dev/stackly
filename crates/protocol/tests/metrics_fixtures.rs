@@ -88,16 +88,31 @@ fn the_reset_reply_marks_samples_the_client_must_replace() {
 
 // covers: AC-3
 #[test]
-fn every_open_value_of_the_metrics_reads_as_unrecognized() {
+fn every_open_enum_value_of_the_metrics_reads_as_unrecognized() {
     let reply = metrics("frame-response-instance-get-metrics-unknown-values.json");
 
     assert_eq!(reply.state, MetricsState::Unrecognized);
     assert_eq!(reply.samples[0].main.scope, UsageScope::Unrecognized);
-    assert_eq!(reply.samples[0].main.cpu, NumberMetric::Unrecognized);
+    assert!(matches!(
+        reply.samples[0].main.cpu,
+        NumberMetric::Unavailable(content) if content.reason == UnavailableReason::Unrecognized
+    ));
     assert!(matches!(
         reply.samples[0].main.memory,
         CountMetric::Unavailable(content) if content.reason == UnavailableReason::Unrecognized
     ));
+    assert!(matches!(
+        reply.data_usage,
+        DataUsageMetric::Unavailable(content) if content.reason == UnavailableReason::Unrecognized
+    ));
+}
+
+// covers: AC-3
+#[test]
+fn a_metric_type_this_build_does_not_know_reads_as_unrecognized() {
+    let reply = metrics("frame-response-instance-get-metrics-unknown-types.json");
+
+    assert_eq!(reply.samples[0].main.cpu, NumberMetric::Unrecognized);
     assert_eq!(reply.samples[0].main.disk_read, CountMetric::Unrecognized);
     assert_eq!(reply.data_usage, DataUsageMetric::Unrecognized);
     assert_eq!(reply.latest_processes[0].cpu, NumberMetric::Unrecognized);

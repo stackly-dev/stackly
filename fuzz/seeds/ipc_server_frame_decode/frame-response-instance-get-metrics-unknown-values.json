@@ -24,9 +24,9 @@
               "processCount": 1,
               "measuredCount": 1,
               "cpu": {
-                "type": "estimated",
+                "type": "unavailable",
                 "content": {
-                  "value": 1.0
+                  "reason": "quantum_flux"
                 }
               },
               "memory": {
@@ -36,8 +36,8 @@
                 }
               },
               "diskRead": {
-                "type": "estimated",
-                "content": {}
+                "type": "value",
+                "content": 3
               },
               "diskWrite": {
                 "type": "unavailable",
@@ -77,8 +77,10 @@
             "name": "postgres",
             "isMain": true,
             "cpu": {
-              "type": "estimated",
-              "content": {}
+              "type": "unavailable",
+              "content": {
+                "reason": "quantum_flux"
+              }
             },
             "memory": {
               "type": "unavailable",
@@ -115,9 +117,9 @@
           "latencyMs": 3
         },
         "dataUsage": {
-          "type": "cached",
+          "type": "unavailable",
           "content": {
-            "bytes": 1
+            "reason": "quantum_flux"
           }
         }
       }
