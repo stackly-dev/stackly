@@ -160,7 +160,7 @@ pub struct PortFacts {
 
 impl PortFacts {
     /// Whether steps 4 to 6 found nothing to report.
-    const fn clean(&self) -> bool {
+    pub(crate) const fn clean(&self) -> bool {
         matches!(self.exact, BindOutcome::Free)
             && matches!(self.wildcard, None | Some(BindOutcome::Free))
             && matches!(self.other_loopback, None | Some(BindOutcome::Free))
@@ -289,4 +289,77 @@ pub(super) fn gather_ports(
         facts.insert(slot.name.clone(), found);
     }
     facts
+}
+
+/// Why a changed fixed port is refused (spec 0029, AC-14).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PortProblem {
+    /// Another endpoint of the same instance has the port (step 2).
+    Sibling,
+    /// Another instance has the port (step 3).
+    Instance(InstanceId),
+    /// The trial bind of the exact address was not free (step 4).
+    Bind(BindOutcome),
+}
+
+/// Runs the create checks of spec 0020 for one endpoint of an existing
+/// instance whose request changes to `Fixed(port)` (spec 0029, AC-14):
+/// `siblings` are the other endpoints of the instance as they will be, and
+/// `others` the other instances that are not retained. `own_bound` is the
+/// port the endpoint is bound to now: the same port skips the trial bind,
+/// because the instance's own process holds it, and is still checked
+/// against every other endpoint and instance. A failure carries the first
+/// free port after `port` that passes the same checks.
+pub(crate) fn judge_change(
+    port_probe: &dyn PortProbe,
+    endpoint: &IpEndpoint,
+    port: Port,
+    siblings: &[Endpoint],
+    others: &[Instance],
+    own_bound: Option<Port>,
+) -> Result<(), (PortProblem, Option<Port>)> {
+    let slot = Slot::of(endpoint);
+    let problem = |candidate: Port| -> Option<PortProblem> {
+        let moved = slot.endpoint(PortRequest::Fixed(candidate));
+        if siblings
+            .iter()
+            .any(|sibling| endpoints_conflict(&moved, sibling))
+        {
+            return Some(PortProblem::Sibling);
+        }
+        if let Some(other) = conflicts_with_instances(others, &slot, candidate) {
+            return Some(PortProblem::Instance(other));
+        }
+        if own_bound == Some(candidate) {
+            return None;
+        }
+        let found = probe(port_probe, &slot, candidate);
+        (found.exact != BindOutcome::Free).then_some(PortProblem::Bind(found.exact))
+    };
+    let Some(failure) = problem(port) else {
+        return Ok(());
+    };
+    let start = (u32::from(port.get()) + 1).max(PORT_SUGGESTION_MIN);
+    let suggestion = (start..=u32::from(u16::MAX))
+        .take(PORT_SUGGESTION_ATTEMPTS)
+        .filter_map(|candidate| {
+            u16::try_from(candidate)
+                .ok()
+                .and_then(|n| Port::new(n).ok())
+        })
+        .find(|&candidate| {
+            problem(candidate).is_none() && probe(port_probe, &slot, candidate).clean()
+        });
+    Err((failure, suggestion))
+}
+
+/// The first of `others` whose effective or fixed port conflicts with
+/// `endpoint` asking for `Fixed(port)` (spec 0029, AC-14: the check the
+/// guarded commit runs again).
+pub(crate) fn fixed_port_owner(
+    others: &[Instance],
+    endpoint: &IpEndpoint,
+    port: Port,
+) -> Option<InstanceId> {
+    conflicts_with_instances(others, &Slot::of(endpoint), port)
 }

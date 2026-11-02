@@ -42,6 +42,8 @@
 
 mod actor;
 mod adopt;
+mod change;
+mod change_guard;
 mod classify;
 pub mod codes;
 mod commit;
@@ -82,6 +84,7 @@ mod stop;
 
 use stackly_domain::ObservationDetail;
 
+pub use change::{ChangeRequest, RenameRequest};
 pub use classify::{
     Classification, GoneReason, UnprovenBlocker, classify, identity_checks, six_checks_passed,
 };

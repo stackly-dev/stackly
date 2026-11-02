@@ -40,6 +40,7 @@ pub use form::{
 pub use ids::ScriptedIds;
 pub use ids::{IdSource, SystemIds, fresh_instance_id};
 pub use port::PortFacts;
+pub(crate) use port::{PortProblem, fixed_port_owner, judge_change};
 pub use work::{
     CreateHooks, CreateInstanceWork, CreateWorkDeps, CreateWorkFactory, Hook, SourceRecorder,
     encode_input,

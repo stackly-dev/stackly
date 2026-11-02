@@ -5,14 +5,20 @@
 //! check of the rendered config files.
 
 pub mod codes;
+mod error;
 mod evaluate;
 mod gather;
+mod plan;
 mod preview;
 
+pub use error::ConfigError;
 pub use evaluate::{
     ChangeEvaluation, ConfigImpact, SettingChange, diff_settings, evaluate_change, impact_of,
 };
 pub use gather::{ConfigFacts, RuntimeFact, gather_config};
+pub use plan::{
+    ChangePlan, ConfigChange, EndpointIssue, Planned, Rejected, plan_change, refusal_error,
+};
 pub use preview::{EffectiveFile, changed_lines, preview};
 
 /// How many config revisions of one instance the registry keeps (spec

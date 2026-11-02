@@ -1110,6 +1110,75 @@ impl Rig {
         self.begin(OperationKind::ReloadInstance, id, work).await
     }
 
+    /// The active config revision of an instance.
+    pub fn active(&self, id: InstanceId) -> ConfigRevisionRecord {
+        self.registry
+            .active_config_revision(id)
+            .expect("the registry reads")
+            .value
+            .expect("the instance has an active revision")
+    }
+
+    /// Starts `change` on `id` as `kind` (`apply_config` or
+    /// `change_endpoints`), read at revision `base`.
+    pub async fn change(
+        &self,
+        kind: OperationKind,
+        id: InstanceId,
+        base: u64,
+        change: stackly_core::instance::config::ConfigChange,
+    ) -> OperationId {
+        let work = self
+            .sup
+            .change_work(stackly_core::supervisor::ChangeRequest::new(
+                id,
+                stackly_domain::ConfigRevisionNumber::new(base).expect("a revision number"),
+                change,
+                Self::user(),
+            ));
+        self.begin(kind, id, work).await
+    }
+
+    /// Applies `patch` over the active settings of `id`, read at the
+    /// active revision.
+    pub async fn apply(&self, id: InstanceId, patch: serde_json::Value) -> OperationId {
+        let active = self.active(id);
+        let mut values: serde_json::Value =
+            serde_json::from_str(active.values.as_str()).expect("the settings are JSON");
+        for (key, value) in patch.as_object().expect("a patch is an object") {
+            values[key] = value.clone();
+        }
+        self.change(
+            OperationKind::ApplyConfig,
+            id,
+            active.number.get(),
+            stackly_core::instance::config::ConfigChange::Settings(values),
+        )
+        .await
+    }
+
+    /// Starts the rename of `id` to `name`.
+    pub async fn rename(&self, id: InstanceId, name: &str) -> OperationId {
+        let work = self
+            .sup
+            .rename_work(stackly_core::supervisor::RenameRequest::new(
+                id,
+                name.parse().expect("a valid instance name"),
+            ));
+        self.begin(OperationKind::RenameInstance, id, work).await
+    }
+
+    /// Starts `resolve_config_drift` on `id`.
+    pub async fn keep_revision(&self, id: InstanceId) -> OperationId {
+        let work =
+            self.sup
+                .resolve_drift_work(stackly_core::supervisor::drift::ResolveDriftRequest::new(
+                    id,
+                ));
+        self.begin(OperationKind::ResolveConfigDrift, id, work)
+            .await
+    }
+
     pub async fn wait_state(&self, id: OperationId, state: OperationState) -> OperationDetailView {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
         loop {

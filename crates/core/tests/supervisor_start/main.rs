@@ -6,6 +6,7 @@
 
 mod actor_commit;
 mod common;
+mod config;
 mod data_compat;
 mod force_restart;
 mod init;
