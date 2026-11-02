@@ -10,6 +10,8 @@ public final class InstanceDetailModels {
     private let service: InstanceDetailService
     private let logsService: InstanceLogsService
     private var logs: [UUID: InstanceLogsModel] = [:]
+    private let metricsService: InstanceMetricsService
+    private var metrics: [UUID: InstanceMetricsModel] = [:]
     private let reload: Duration
     private let sleep: @Sendable (Duration) async throws -> Void
     private var models: [UUID: InstanceDetailModel] = [:]
@@ -26,12 +28,14 @@ public final class InstanceDetailModels {
     /// - Parameters:
     ///   - service: The reads, the event stream, and the secret methods.
     ///   - logs: The log reads and follows of the Logs tab (spec 0027).
+    ///   - metrics: The reads of the Metrics tab (spec 0028).
     ///   - openIn: What Open In asks of the system; NSWorkspace in the app.
     ///   - reload: The pause before a reload after a revision change.
     ///   - sleep: Waits for a duration and throws when cancelled.
     public init(
         service: InstanceDetailService,
         logs: InstanceLogsService = .disconnected,
+        metrics: InstanceMetricsService = .disconnected,
         openIn: OpenInPorts = .system,
         reload: Duration = InstanceDetailModel.reloadDebounce,
 
@@ -41,6 +45,7 @@ public final class InstanceDetailModels {
     ) {
         self.service = service
         self.logsService = logs
+        self.metricsService = metrics
         self.openIn = OpenInModel(
             locator: openIn.locator, opener: openIn.opener, fileExists: openIn.fileExists,
             prepareTerminal: service.prepareTerminal, secrets: service.secrets)
@@ -68,6 +73,16 @@ public final class InstanceDetailModels {
         return made
     }
 
+    /// The Metrics tab model of an instance, made on first use, so the tab keeps one history
+    /// and at most one poll per instance.
+    /// - Parameter id: The instance.
+    func metricsModel(for id: UUID) -> InstanceMetricsModel {
+        if let held = metrics[id] { return held }
+        let made = InstanceMetricsModel(instanceId: id, service: metricsService)
+        metrics[id] = made
+        return made
+    }
+
     /// Drops the models of instances that are not in `ids`: they are gone from the store.
     /// - Parameter ids: The instances that exist.
     public func keep(_ ids: Set<UUID>) {
@@ -78,6 +93,10 @@ public final class InstanceDetailModels {
         for (id, model) in logs where ids.contains(id) == false {
             model.stop()
             logs[id] = nil
+        }
+        for (id, model) in metrics where ids.contains(id) == false {
+            model.stop()
+            metrics[id] = nil
         }
     }
 }

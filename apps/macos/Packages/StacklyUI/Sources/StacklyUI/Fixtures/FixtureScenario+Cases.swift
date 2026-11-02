@@ -7,8 +7,8 @@
         public static let instanceCases: [InstanceSummary] = [
             .fixture(
                 number: 1, name: "pg17-dev", lifecycle: .running, desired: .running,
-                readiness: .fixture(.ready, reason: "probe_ok"),
-                health: .fixture(.healthy, reason: "probe_ok")),
+                readiness: .fixture(.ready, reason: "probe_ok", latencyMs: 3),
+                health: .fixture(.healthy, reason: "probe_ok", latencyMs: 3), restartTotal: 2),
             .fixture(
                 number: 2, name: "orders-db", runtimeVersion: "18.1", port: 5433,
                 lifecycle: .running, desired: .running,

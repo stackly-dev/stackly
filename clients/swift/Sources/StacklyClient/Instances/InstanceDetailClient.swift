@@ -1,7 +1,7 @@
 import Foundation
 
-/// The detail methods of an instance (spec 0021, *Method IPC*) as typed calls:
-/// `instance.get_detail` and `instance.get_data_usage`.
+/// The detail methods of an instance (spec 0021, *Method IPC*; spec 0028 for metrics) as typed
+/// calls: `instance.get_detail`, `instance.get_data_usage`, and `instance.get_metrics`.
 ///
 /// It wraps one `send` closure, the same shape ``SecretsClient`` uses, so a test answers
 /// with a fixed reply and the app passes ``DaemonLink`` through ``DaemonLink/instanceDetails``.
@@ -51,6 +51,31 @@ public struct InstanceDetailClient: Sendable {
         let reply = try await send(.instanceGetDataUsage(params), .standard)
         guard case .instanceGetDataUsage(let usage) = reply else { throw Self.unexpectedReply() }
         return usage.usage
+    }
+
+    /// `instance.get_metrics`: the samples of an instance after a cursor, with its restarts,
+    /// readiness, health, and data size (spec 0028, AC-11).
+    ///
+    /// The daemon never starts a scan or a probe for it. Pass the `historyId` of the last reply
+    /// and the newest `seq` held to receive only the newer samples; the reply says
+    /// `historyReset` when everything held must be dropped first.
+    ///
+    /// - Parameters:
+    ///   - instanceId: The instance.
+    ///   - historyId: The `historyId` of the last reply, or `nil` for the first call.
+    ///   - afterSeq: The newest `seq` held in that history; the daemon refuses it without a
+    ///     `historyId`.
+    /// - Returns: The reply, for the same instance.
+    /// - Throws: ``ClientError``, such as `instance.not_found`.
+    public func getMetrics(
+        instanceId: UUID, historyId: String? = nil, afterSeq: UInt64? = nil
+    ) async throws(ClientError) -> MetricsReply {
+        let params = GetMetricsParams(
+            instanceId: instanceId, historyId: historyId, afterSeq: afterSeq)
+        let reply = try await send(.instanceGetMetrics(params), .standard)
+        guard case .instanceGetMetrics(let metrics) = reply, metrics.instanceId == instanceId
+        else { throw Self.unexpectedReply() }
+        return metrics
     }
 
     /// The error for a reply of the wrong kind: the call only reads, but the outcome is not
