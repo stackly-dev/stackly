@@ -11,7 +11,7 @@ _Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) s
 - [x] Mulai daemon dengan root uji (`STACKLY_ROOT=$(mktemp -d) cargo run -q -p stacklyd`), buat dan jalankan satu instance fake lewat `cargo run -q -p stacklyd --example skeleton_seed -- --root <R>` (perintah `stackly instance create` yang dicetaknya), lalu `stackly instance metrics <nama>` → baris Process, Uptime, Restarts "0 since created", Readiness, Health, Data size, dan dua blok "main process (pid ...)" serta "process tree (...)" dengan daftar proses; hitungan pertama menampilkan `unavailable (warming_up)` untuk CPU dan Disk I/O, bukan 0 → AC-1, AC-3, AC-12
 - [x] `stackly instance metrics <nama> --watch` → satu baris per sampel baru kira kira tiap 5 detik; stop instance lalu jalankan lagi, muncul "not running (stopped)" dan sesudah running lagi "history reset"; Ctrl+C keluar 0 → AC-12
 - [x] `stackly instance metrics <nama> --json` → satu amplop dengan `result` sama dengan balasan `instance.get_metrics` → AC-11, AC-12
-- [ ] Pembuktian di Mac asli (PostgreSQL 17 dan NATS native, pohon proses nyata) ikut langkah 9.
+- [x] Pembuktian di Mac asli (PostgreSQL 17 dan NATS native, pohon proses nyata) ikut langkah 9.
 
 ### Commands
 
