@@ -52,8 +52,13 @@ pub struct DaemonPaths {
 /// Resolves the paths exactly as the daemon does with `STACKLY_ROOT` set
 /// to the test root.
 pub fn daemon_paths(root: &TestRoot) -> DaemonPaths {
-    let platform =
-        MacosPlatform::new(Some(root.path().into())).expect("a test root is a valid override");
+    daemon_paths_at(root.path())
+}
+
+/// [`daemon_paths`] for a root override at `path`, which need not be a test
+/// root itself (the NATS tests serve a folder inside one).
+pub fn daemon_paths_at(path: &Path) -> DaemonPaths {
+    let platform = MacosPlatform::new(Some(path.into())).expect("a root override is valid");
     let roots = platform
         .directories()
         .roots()

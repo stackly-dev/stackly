@@ -26,13 +26,14 @@ mod work;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::Duration;
 
 use stackly_domain::{ClientCode, OperationCursor};
 use stackly_domain::{
-    CompensatorName, CreatedRecord, IdempotencyKey, JournalPayload, JournalStep, LockKey,
-    MethodName, Operation, OperationId, OperationJournal, OperationKind, OperationQuery,
+    CompensatorName, CreatedRecord, IdempotencyKey, InterruptPolicy, JournalPayload, JournalStep,
+    LockKey, MethodName, Operation, OperationId, OperationJournal, OperationKind, OperationQuery,
     OperationResource, OperationState, Registry, RegistryError, ResourceRevision, Sha256Digest,
 };
 use stackly_platform::{Platform, PlatformError};
@@ -253,6 +254,10 @@ pub enum BeginError {
     /// The daemon is shutting down.
     #[error("the operation engine is shutting down")]
     ShuttingDown,
+    /// A planned daemon restart is being prepared, so the engine takes no
+    /// new request (spec 0030, quiesce).
+    #[error("a daemon restart is pending")]
+    RestartPending,
     /// A caller bug, for example a new resource with an expected revision.
     #[error("invalid operation request: {reason}")]
     InvalidRequest {
@@ -310,6 +315,18 @@ pub enum BeginError {
     /// The registry failed.
     #[error(transparent)]
     Registry(RegistryError),
+}
+
+/// An operation that may hold up a planned daemon restart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ActiveOperation {
+    /// The operation.
+    pub id: OperationId,
+    /// What it does.
+    pub kind: OperationKind,
+    /// Whether the next daemon resumes it, so it never refuses a restart.
+    pub resumable: bool,
 }
 
 /// Why an operation cannot resume.
@@ -595,6 +612,8 @@ struct Inner {
     begin_gate: tokio::sync::Mutex<()>,
     phase: Mutex<Phase>,
     counters: Mutex<Counters>,
+    /// Set while a planned daemon restart prepares (spec 0030).
+    quiesce: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -678,6 +697,7 @@ impl OperationEngine {
                 begin_gate: tokio::sync::Mutex::new(()),
                 phase: Mutex::new(Phase::Created),
                 counters: Mutex::new(Counters::default()),
+                quiesce: AtomicBool::new(false),
             }),
         }
     }
@@ -837,6 +857,64 @@ impl OperationEngine {
             .unwrap_or(Err(EngineError::Internal {
                 reason: "the abandon task stopped",
             }))
+    }
+
+    /// Turns the quiesce of a planned daemon restart on or off (spec 0030
+    /// AC-10). While it is on, `begin` refuses every client request except
+    /// a `daemon_restart` with [`BeginError::RestartPending`]; operations
+    /// the daemon starts itself ([`Origin::Background`]) and the ones that
+    /// already exist are not touched.
+    pub fn set_quiesce(&self, on: bool) {
+        self.inner.quiesce.store(on, Ordering::SeqCst);
+    }
+
+    /// Returns whether the quiesce of a planned daemon restart is on.
+    #[must_use]
+    pub fn is_quiesced(&self) -> bool {
+        self.inner.quiesce.load(Ordering::SeqCst)
+    }
+
+    /// Returns the operations that are `queued`, `running`, or asked to
+    /// cancel, newest first, for the preview of a planned restart and the
+    /// wait that comes before it (spec 0030). Operations of a kind that
+    /// closes as interrupted, which every shutdown leaves for the next
+    /// start, and the `daemon_restart` itself are not listed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::Registry`] when the registry cannot be read.
+    pub async fn active_operations(&self) -> Result<Vec<ActiveOperation>, EngineError> {
+        let page = self
+            .list(OperationQuery {
+                active_only: true,
+                resource: None,
+                limit: OperationQuery::LIMIT_MAX,
+                before: None,
+            })
+            .await?;
+        Ok(page
+            .items
+            .iter()
+            .filter(|view| {
+                matches!(
+                    view.operation.state(),
+                    OperationState::Queued
+                        | OperationState::Running
+                        | OperationState::CancelRequested
+                )
+            })
+            .map(|view| view.operation.kind())
+            .zip(page.items.iter().map(|view| view.operation.id()))
+            .filter(|(kind, _)| {
+                *kind != OperationKind::DaemonRestart
+                    && kind.interrupt_policy() != InterruptPolicy::CloseInterrupted
+            })
+            .map(|(kind, id)| ActiveOperation {
+                id,
+                kind,
+                resumable: kind.resumable(),
+            })
+            .collect())
     }
 
     /// Returns the engine's counters.

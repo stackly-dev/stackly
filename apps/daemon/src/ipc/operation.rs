@@ -518,6 +518,7 @@ pub fn begin_error(error: &BeginError, method: &str) -> ErrorBody {
     match error {
         BeginError::NotReady => starting(subsystem::OPERATIONS),
         BeginError::ShuttingDown => shutting_down(),
+        BeginError::RestartPending => *super::restart::restart_pending(None),
         BeginError::InvalidRequest { reason } => {
             tracing::error!(
                 method,

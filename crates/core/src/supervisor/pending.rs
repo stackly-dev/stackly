@@ -38,6 +38,13 @@ pub(crate) enum PendingKind {
     /// A proven process runs with desired `stopped`: a system
     /// `stop_instance` (trigger `reconcile`, no lease check).
     Stop,
+    /// The instance is `stopped` with desired `running` because a planned
+    /// daemon restart stopped it: a system `start_instance` (trigger
+    /// `planned_restart`, no dialog).
+    Restore,
+    /// A proven process a planned restart was stopping: the rest of that
+    /// stop, which writes no desired state, then the restore.
+    PlannedStop,
 }
 
 /// One instance reconciliation decided to run again.
@@ -112,7 +119,7 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
             instance.lifecycle() == InstanceLifecycle::Recovering
                 && instance.desired() == DesiredState::Running
         }
-        PendingKind::Start => {
+        PendingKind::Start | PendingKind::Restore => {
             matches!(
                 instance.lifecycle(),
                 InstanceLifecycle::Stopped | InstanceLifecycle::Failed
@@ -124,52 +131,82 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
                 InstanceLifecycle::Running | InstanceLifecycle::Stopping
             ) && instance.desired() == DesiredState::Stopped
         }
+        PendingKind::PlannedStop => {
+            matches!(
+                instance.lifecycle(),
+                InstanceLifecycle::Running | InstanceLifecycle::Stopping
+            ) && instance.desired() == DesiredState::Running
+        }
     };
     if !wanted {
+        // A plan entry that waited for this run has nothing to wait for.
+        sup.settle_restored(id, None).await;
         return;
     }
-    let operation = match run.kind {
+    let error = match run.kind {
         PendingKind::Respawn => {
             let delay = deps.config.restart_base_delay;
             let (actor, cancel) = arm_pause(sup, id, delay);
-            pause_then_respawn(sup, &actor, delay, cancel).await
+            match pause_then_respawn(sup, &actor, delay, cancel).await {
+                Some(operation) => wait_final(sup, operation).await,
+                None => None,
+            }
         }
-        PendingKind::Start => {
-            begin(
-                sup,
-                id,
-                OperationKind::StartInstance,
-                sup.start_work(StartRequest::background(id)),
-            )
-            .await
-        }
+        PendingKind::Start | PendingKind::Restore => start_again(sup, id).await,
         PendingKind::Stop => {
-            begin(
-                sup,
-                id,
-                OperationKind::StopInstance,
-                sup.stop_work(StopRequest::reconcile(id)),
-            )
-            .await
+            let make = || sup.stop_work(StopRequest::reconcile(id));
+            match begin(sup, id, OperationKind::StopInstance, &make).await {
+                Some(operation) => wait_final(sup, operation).await,
+                None => None,
+            }
+        }
+        PendingKind::PlannedStop => {
+            // The stop writes no desired state, so the restore that
+            // follows finds the instance wanted.
+            let make = || sup.stop_work(StopRequest::planned_restart(id));
+            let stopped = match begin(sup, id, OperationKind::StopInstance, &make).await {
+                Some(operation) => wait_final(sup, operation).await,
+                None => None,
+            };
+            if stopped.is_some() {
+                stopped
+            } else {
+                start_again(sup, id).await
+            }
         }
     };
-    if let Some(operation) = operation {
-        wait_final(sup, operation).await;
+    sup.settle_restored(id, error).await;
+}
+
+/// The system `start_instance` that follows reconciliation (trigger
+/// `reconcile`, or `planned_restart` for a restore), when the instance is
+/// stopped and wanted. Returns the code the operation failed with.
+async fn start_again(sup: &Supervisor, id: InstanceId) -> Option<String> {
+    let instance = read_instance_actor(sup, id).await.ok()?;
+    if !matches!(
+        instance.lifecycle(),
+        InstanceLifecycle::Stopped | InstanceLifecycle::Failed
+    ) || instance.desired() != DesiredState::Running
+    {
+        return None;
     }
+    let make = || sup.start_work(StartRequest::background(id));
+    let operation = begin(sup, id, OperationKind::StartInstance, &make).await?;
+    wait_final(sup, operation).await
 }
 
 /// Begins a system operation of reconciliation. It queues behind a user
 /// operation that already holds the instance, and tries again while the
-/// engine is not ready.
+/// engine is not ready. `make` builds the work again each time the engine
+/// takes the request back.
 async fn begin(
     sup: &Supervisor,
     id: InstanceId,
     kind: OperationKind,
-    work: Box<dyn crate::operation::OperationWork>,
+    make: &(dyn Fn() -> Box<dyn crate::operation::OperationWork> + Send + Sync),
 ) -> Option<OperationId> {
     let engine = sup.operations()?;
     let input = JournalPayload::new(TRIGGER_INPUT, crate::operation::limits::INPUT_MAX).ok()?;
-    let mut work = Some(work);
     loop {
         if sup.is_shutdown() {
             return None;
@@ -183,19 +220,12 @@ async fn begin(
             expected_revision: None,
             origin: Origin::Background,
             input: input.clone(),
-            work: work.take()?,
+            work: make(),
             precheck: None,
         };
         match engine.begin(request).await {
             Ok(outcome) => return outcome.view().map(|view| view.operation.id()),
-            Err(BeginError::NotReady) => {
-                // The work went with the request; make it again.
-                work = Some(match kind {
-                    OperationKind::StopInstance => sup.stop_work(StopRequest::reconcile(id)),
-                    _ => sup.start_work(StartRequest::background(id)),
-                });
-                tokio::time::sleep(POLL).await;
-            }
+            Err(BeginError::NotReady) => tokio::time::sleep(POLL).await,
             Err(error) => {
                 tracing::warn!(instance = %id, %error, "an operation of reconciliation could not begin");
                 return None;
@@ -204,19 +234,24 @@ async fn begin(
     }
 }
 
-/// Waits until `operation` reaches a final state, or the daemon shuts down.
-async fn wait_final(sup: &Supervisor, operation: OperationId) {
-    let Some(engine) = sup.operations() else {
-        return;
-    };
+/// Waits until `operation` reaches a final state, or the daemon shuts
+/// down. Returns the code a failed operation stored.
+pub(crate) async fn wait_final(sup: &Supervisor, operation: OperationId) -> Option<String> {
+    let engine = sup.operations()?;
     loop {
         if sup.is_shutdown() {
-            return;
+            return None;
         }
         match engine.get(operation).await {
-            Ok(Some(detail)) if detail.view.operation.state().is_final() => return,
+            Ok(Some(detail)) if detail.view.operation.state().is_final() => {
+                return detail
+                    .view
+                    .journal
+                    .failure_error()
+                    .map(|error| error.code().to_string());
+            }
             Ok(Some(_)) => {}
-            Ok(None) | Err(_) => return,
+            Ok(None) | Err(_) => return None,
         }
         tokio::time::sleep(POLL).await;
     }

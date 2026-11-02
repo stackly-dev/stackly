@@ -19,7 +19,7 @@ use std::time::Instant;
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
-use stackly_protocol::codes::{daemon, request};
+use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
@@ -52,6 +52,7 @@ use stackly_protocol::storage::CapacityReport;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
+use crate::ipc::restart;
 use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::state::DaemonCore;
@@ -145,8 +146,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: ShutdownParams,
     ) -> HandlerFuture<'a, ShutdownAccepted> {
-        let _ = context;
-        shutdown(core, params)
+        shutdown(core, context, params)
     }
 
     /// `daemon.restart_preview` (spec 0030).
@@ -156,7 +156,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
     ) -> HandlerFuture<'a, RestartPreview> {
         let _ = context;
-        restart_preview(core)
+        restart::preview(core)
     }
 
     /// `catalog.list_providers`.
@@ -541,7 +541,16 @@ pub fn get_info(core: &DaemonCore) -> HandlerFuture<'_, DaemonInfo> {
 /// a daemon that launchd did not start, because nothing would start it
 /// again. Only the first request counts; a later one gets
 /// `daemon.shutting_down`.
-pub fn shutdown(core: &DaemonCore, params: ShutdownParams) -> HandlerFuture<'_, ShutdownAccepted> {
+pub fn shutdown<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ShutdownParams,
+) -> HandlerFuture<'a, ShutdownAccepted> {
+    if params.mode == ShutdownMode::Restart
+        && restart::launch_context(core) == LaunchContextKind::Launchd
+    {
+        return restart::restart(core, context, params);
+    }
     Box::pin(async move {
         let mode = params.mode;
         if mode == ShutdownMode::Restart {
@@ -560,6 +569,20 @@ pub fn shutdown(core: &DaemonCore, params: ShutdownParams) -> HandlerFuture<'_, 
                 ));
             }
         }
+        if core.shutdown_pending() {
+            return Err(Box::new(ErrorBody::new(
+                &daemon::SHUTTING_DOWN,
+                "the daemon is already stopping",
+            )));
+        }
+        // A planned restart is quiescing or stopping instances (spec 0030).
+        if core
+            .operations()
+            .engine()
+            .is_some_and(|engine| engine.is_quiesced())
+        {
+            return Err(restart::restart_pending(None));
+        }
         if !core.request_shutdown(mode) {
             return Err(Box::new(ErrorBody::new(
                 &daemon::SHUTTING_DOWN,
@@ -571,19 +594,6 @@ pub fn shutdown(core: &DaemonCore, params: ShutdownParams) -> HandlerFuture<'_, 
             mode,
             plan_id: None,
         })
-    })
-}
-
-/// `daemon.restart_preview` before milestone 3 of spec 0030 builds the
-/// plan: answered as a method this daemon does not serve yet.
-// provisional: F30
-pub fn restart_preview(core: &DaemonCore) -> HandlerFuture<'_, RestartPreview> {
-    let _ = core;
-    Box::pin(async move {
-        Err(Box::new(ErrorBody::new(
-            &request::UNKNOWN_METHOD,
-            "daemon.restart_preview is not built yet",
-        )))
     })
 }
 

@@ -13,12 +13,18 @@
 #![cfg(target_os = "macos")]
 
 mod common;
+#[path = "nats/harness.rs"]
+mod nats;
+#[path = "postgresql/harness.rs"]
+mod pg;
+#[path = "supervisor/support.rs"]
+mod support;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use common::{STACKLYD, daemon_paths, runtime, start_daemon};
+use common::{STACKLYD, daemon_paths, daemon_paths_at, runtime, start_daemon};
 use serde_json::Value;
 use stackly_protocol::daemon::{DaemonInfo, LaunchContextKind, ShutdownMode, ShutdownParams};
 use stackly_protocol::{Call, Reply};
@@ -49,7 +55,7 @@ struct Rig {
     agent: LaunchAgentFixture,
     _guard: ReapGuard,
     socket: PathBuf,
-    root: TestRoot,
+    root: Option<TestRoot>,
 }
 
 impl Rig {
@@ -59,9 +65,16 @@ impl Rig {
     }
 
     fn on(root: TestRoot) -> Self {
-        let paths = daemon_paths(&root);
-        let guard = ReapGuard::new(root.path(), &paths.runtime);
-        let agent = LaunchAgentFixture::new(root.path(), Path::new(STACKLYD), root.path())
+        let path = root.path().to_path_buf();
+        Self::at(&path, &path, Some(root))
+    }
+
+    /// An agent whose plist lies in `folder` and whose daemon serves the
+    /// root override `stackly_root`; `root` is kept alive with the rig.
+    fn at(folder: &Path, stackly_root: &Path, root: Option<TestRoot>) -> Self {
+        let paths = daemon_paths_at(stackly_root);
+        let guard = ReapGuard::new(folder, &paths.runtime);
+        let agent = LaunchAgentFixture::new(folder, Path::new(STACKLYD), stackly_root)
             .expect("the agent plist is written");
         Self {
             agent,
@@ -69,6 +82,11 @@ impl Rig {
             socket: paths.socket,
             root,
         }
+    }
+
+    /// The test root of a rig made with [`Rig::on`].
+    fn root(&self) -> &TestRoot {
+        self.root.as_ref().expect("this rig owns a test root")
     }
 
     /// Checks the derived plist against the golden file once more, then
@@ -317,7 +335,7 @@ fn an_agent_blocked_by_a_manual_daemons_lock_exits_3_until_it_takes_over() {
         return;
     }
     let mut rig = Rig::new();
-    let manual = start_daemon(&rig.root);
+    let manual = start_daemon(rig.root());
     rig.agent.bootstrap().expect("the agent loads");
 
     let deadline = Instant::now() + FIRST_START;
@@ -437,11 +455,11 @@ fn a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it(
     let root = TestRoot::new().expect("a test root");
     let (runtime_id, revision) = seed(&root);
     let mut rig = Rig::on(root);
-    let cli = CliRunner::new(&cargo_bin("stackly-cli", "stackly"), rig.root.path());
+    let cli = CliRunner::new(&cargo_bin("stackly-cli", "stackly"), rig.root().path());
 
     // The instance starts under a manual daemon, which a SIGTERM ends
     // without stopping it.
-    let manual = start_daemon(&rig.root);
+    let manual = start_daemon(rig.root());
     let (code, created) = json(
         &cli,
         &[
@@ -472,7 +490,7 @@ fn a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it(
         .clone();
     let pid = u32::try_from(process["pid"].as_u64().expect("a pid")).expect("a pid fits");
     manual.stop().expect("the manual daemon stops");
-    assert_eq!(servers(&rig.root, &id), [pid]);
+    assert_eq!(servers(rig.root(), &id), [pid]);
 
     let same_process = |instance: &Value| {
         instance["readiness"]["state"] == "ready"
@@ -490,21 +508,297 @@ fn a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it(
     })
     .expect("the job runs a new daemon after kickstart -k");
     get_until(&cli, &id, same_process);
-    assert_eq!(servers(&rig.root, &id), [pid], "after kickstart -k");
+    assert_eq!(servers(rig.root(), &id), [pid], "after kickstart -k");
 
     rig.agent.bootout().expect("the job boots out");
     assert!(info(&rig.socket).is_none(), "no daemon after bootout");
-    assert_eq!(servers(&rig.root, &id), [pid], "after bootout");
+    assert_eq!(servers(rig.root(), &id), [pid], "after bootout");
 
     rig.bootstrap();
     get_until(&cli, &id, same_process);
-    assert_eq!(servers(&rig.root, &id), [pid], "after the next daemon");
+    assert_eq!(servers(rig.root(), &id), [pid], "after the next daemon");
 
     let (code, stopped) = json(&cli, &["instance", "stop", &id, "--wait"]);
     assert_eq!(code, Some(0), "{stopped}");
-    assert!(servers(&rig.root, &id).is_empty());
+    assert!(servers(rig.root(), &id).is_empty());
     ev.pass_with(&format!(
         "fake server pid {pid} started at {} stayed the adopted, ready process through kickstart -k, bootout, and the next daemon",
         process["startedAt"]
+    ));
+}
+
+// Spec 0030 AC-8: PostgreSQL 17, PostgreSQL 18, and NATS outlive the daemon
+// and its restarts. Each test starts the instance under a manual daemon,
+// hands the root to the agent, and checks that the same process, with the
+// same PID and start time, is adopted as ready after every kind of end.
+
+/// How long a state that needs a whole daemon start gets.
+const SLOW: Duration = Duration::from_secs(60);
+
+/// The process an instance runs, as the first daemon showed it.
+struct Seen {
+    pid: u32,
+    started_at: stackly_protocol::Timestamp,
+}
+
+/// Runs `work` on a thread of its own with its own runtime, so a sync test
+/// can use the async client.
+fn call<T: Send + 'static>(work: impl std::future::Future<Output = T> + Send + 'static) -> T {
+    std::thread::spawn(move || runtime().block_on(work))
+        .join()
+        .expect("the client thread ends")
+}
+
+/// A typed client of the agent's daemon, once its supervisor serves.
+async fn served(socket: &Path, runtime_id: uuid::Uuid) -> Option<support::Api> {
+    let (client, _) = tokio::time::timeout(Duration::from_secs(5), common::client_try(socket))
+        .await
+        .ok()?
+        .ok()?;
+    let api = support::Api::new(client, runtime_id);
+    let ready = tokio::time::timeout(
+        Duration::from_secs(10),
+        api.client.call(Call::InstanceList(
+            stackly_protocol::instance::ListInstancesParams::default(),
+        )),
+    )
+    .await;
+    matches!(ready, Ok(Ok(_))).then_some(api)
+}
+
+/// The instance as the agent's daemon shows it right now.
+fn summary_of(
+    socket: &Path,
+    runtime_id: uuid::Uuid,
+    id: uuid::Uuid,
+) -> Option<stackly_protocol::instance::InstanceSummary> {
+    let socket = socket.to_path_buf();
+    call(async move { served(&socket, runtime_id).await?.get(id).await.ok() })
+}
+
+/// Waits until the instance is the process `seen`, adopted and ready.
+fn wait_same(rig: &Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen, when: &str) {
+    let deadline = Instant::now() + SLOW;
+    loop {
+        let same = summary_of(&rig.socket, runtime_id, id).is_some_and(|summary| {
+            summary.readiness.state == stackly_protocol::instance::InstanceReadinessState::Ready
+                && summary.process.as_ref().is_some_and(|process| {
+                    process.pid == seen.pid
+                        && process.started_at == seen.started_at
+                        && process.adopted
+                })
+        });
+        if same {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{when}: pid {} is not the adopted ready process of the instance",
+            seen.pid
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// Starts `id` and returns the process it runs.
+async fn started(api: &support::Api, id: uuid::Uuid) -> Seen {
+    let summary = api.start_ready(id).await;
+    let process = summary.process.expect("a ready instance has a process");
+    Seen {
+        pid: process.pid,
+        started_at: process.started_at,
+    }
+}
+
+/// `daemon.restart_preview` and then the confirmed `daemon.shutdown
+/// restart`, on the agent's daemon. Returns what the plan decided for `id`.
+fn planned_restart(
+    socket: &Path,
+    id: uuid::Uuid,
+) -> stackly_protocol::restart::RestartPreviewInstance {
+    let socket = socket.to_path_buf();
+    call(async move {
+        let (client, _) = common::client(&socket).await;
+        let preview = match client.call(Call::DaemonRestartPreview).await {
+            Ok(Reply::DaemonRestartPreview(preview)) => preview,
+            other => panic!("expected a preview, got {other:?}"),
+        };
+        let entry = preview
+            .instances
+            .iter()
+            .find(|entry| entry.instance_id == id)
+            .cloned()
+            .expect("the running instance is in the plan");
+        let key = uuid::Uuid::now_v7().to_string();
+        let reply = client
+            .call_detailed(
+                Call::DaemonShutdown(ShutdownParams {
+                    mode: ShutdownMode::Restart,
+                    expected_plan_digest: Some(preview.digest),
+                    force: false,
+                }),
+                stackly_ipc::CallOptions::default().with_idempotency_key(&key),
+            )
+            .await;
+        match reply {
+            Ok(Reply::DaemonShutdown(accepted)) => assert!(accepted.plan_id.is_some()),
+            other => panic!("expected an accepted restart, got {other:?}"),
+        }
+        entry
+    })
+}
+
+/// The whole sequence for one instance that already runs under a manual
+/// daemon that has ended: the agent adopts it, `kickstart -k`, `bootout`,
+/// and a planned restart leave the process alone.
+fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen) {
+    let first = rig.bootstrap();
+    wait_same(rig, runtime_id, id, seen, "after the first daemon");
+
+    rig.agent.kickstart_kill().expect("kickstart -k runs");
+    let second = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != first.server_instance_id
+        })
+        .expect("the job runs a new daemon after kickstart -k");
+    wait_same(rig, runtime_id, id, seen, "after kickstart -k");
+
+    rig.agent.bootout().expect("the job boots out");
+    assert!(info(&rig.socket).is_none(), "no daemon after bootout");
+    assert!(support::alive(seen.pid), "after bootout");
+    let third = rig.bootstrap();
+    wait_same(rig, runtime_id, id, seen, "after bootout and bootstrap");
+    assert_ne!(third.server_instance_id, second.server_instance_id);
+
+    let decision = planned_restart(&rig.socket, id);
+    assert_eq!(
+        (decision.decision, decision.reason),
+        (
+            stackly_protocol::restart::PlanDecision::Keep,
+            stackly_protocol::restart::PlanReason::HandoverProven
+        ),
+        "the provider is in HANDOVER_PROVEN only when this test passes"
+    );
+    rig.wait_launchd(RESTART_BOUND, |info| {
+        info.server_instance_id != third.server_instance_id
+    })
+    .expect("the job runs a new daemon after the planned restart");
+    wait_same(rig, runtime_id, id, seen, "after the planned restart");
+    let plan = wait_info(&rig.socket, SLOW, |info| {
+        info.restart
+            .as_ref()
+            .is_some_and(|plan| plan.state == stackly_protocol::restart::PlanState::Finished)
+    })
+    .and_then(|info| info.restart)
+    .expect("the next daemon finishes the plan");
+    let outcome = plan
+        .instances
+        .iter()
+        .find(|entry| entry.instance_id == id)
+        .and_then(|entry| entry.outcome);
+    assert_eq!(
+        outcome,
+        Some(stackly_protocol::restart::PlanOutcome::Adopted)
+    );
+}
+
+/// Stops the instance through the agent's daemon and checks its process
+/// ended.
+fn stop_and_check(rig: &Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen) {
+    let socket = rig.socket.clone();
+    call(async move {
+        let api = served(&socket, runtime_id)
+            .await
+            .expect("the daemon serves");
+        let accepted = api
+            .stop_when_free(id)
+            .await
+            .accepted
+            .expect("a stop starts an operation");
+        api.wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Succeeded,
+        )
+        .await;
+    });
+    let deadline = Instant::now() + PATIENCE;
+    while support::alive(seen.pid) {
+        assert!(Instant::now() < deadline, "pid {} still runs", seen.pid);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn postgresql_survives(line: pg::Pg) {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let Some(site) = pg::Site::open(&ev, line) else {
+        return;
+    };
+    let manual = site.binary(&[]);
+    let (id, seen) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let made = pg::create_instance(&site, &api, "survivor").await;
+        let seen = started(&api, made.id).await;
+        (made.id, seen)
+    });
+    manual.stop();
+    let mut rig = Rig::at(site.root.path(), site.root.path(), None);
+    survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &seen);
+    ev.pass_with(&format!(
+        "postgres pid {} started at {:?} stayed the adopted, ready process through kickstart -k, bootout, and a planned restart",
+        seen.pid, seen.started_at
+    ));
+}
+
+/// Spec 0030 AC-8, PostgreSQL 17.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn postgresql_17_survives_kickstart_bootout_and_planned_restart() {
+    postgresql_survives(pg::PG17);
+}
+
+/// Spec 0030 AC-8, PostgreSQL 18.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn postgresql_18_survives_kickstart_bootout_and_planned_restart() {
+    postgresql_survives(pg::PG18);
+}
+
+/// Spec 0030 AC-8, NATS.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn nats_survives_kickstart_bootout_and_planned_restart() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running NATS instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let Some(site) = nats::Site::open(&ev, nats::Serve::Binary) else {
+        return;
+    };
+    let manual = site.spawn();
+    let (id, seen) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let id = nats::create_instance(&site, &api, "survivor", serde_json::json!({})).await;
+        let seen = started(&api, id).await;
+        (id, seen)
+    });
+    manual.stop().expect("the manual daemon stops");
+    let mut rig = Rig::at(site.root.path(), &site.data_root, None);
+    survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &seen);
+    ev.pass_with(&format!(
+        "nats-server pid {} started at {:?} stayed the adopted, ready process through kickstart -k, bootout, and a planned restart",
+        seen.pid, seen.started_at
     ));
 }

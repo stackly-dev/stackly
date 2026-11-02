@@ -4,11 +4,13 @@
 //! slot are free.
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use stackly_domain::{
     FailureCode, IdempotencyKey, LockKey, NewJournal, NewOperation, Operation, OperationCursor,
-    OperationEvent, OperationFailure, OperationId, OperationJournal, OperationResource,
-    OperationState, OperationTrigger, RegistryError, ResourceRevision, WriteBatch, WriteOp,
+    OperationEvent, OperationFailure, OperationId, OperationJournal, OperationKind,
+    OperationResource, OperationState, OperationTrigger, RegistryError, ResourceRevision,
+    WriteBatch, WriteOp,
 };
 use tokio::time::Instant;
 
@@ -315,6 +317,12 @@ pub(crate) async fn begin(
     mut request: BeginRequest,
 ) -> Result<BeginOutcome, BeginError> {
     check_phase(inner)?;
+    if inner.quiesce.load(Ordering::SeqCst)
+        && matches!(request.origin, Origin::Request(_))
+        && request.kind != OperationKind::DaemonRestart
+    {
+        return Err(BeginError::RestartPending);
+    }
     if request.creates_resource && request.expected_revision.is_some() {
         return Err(BeginError::InvalidRequest {
             reason: "a new resource has no revision to expect",

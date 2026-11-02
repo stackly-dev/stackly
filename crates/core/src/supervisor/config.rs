@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use stackly_platform::HELPER_CAPTURE_MAX;
 
+use super::handover::{HANDOVER_PROVEN, HandoverProof};
 use crate::READINESS_MAX_AGE;
 
 /// Pause between two routine readiness probes once the instance is ready.
@@ -71,6 +72,10 @@ pub const FORCE_EXIT_WAIT: Duration = Duration::from_secs(10);
 pub const RESTART_LOCK_WAIT: Duration = Duration::from_secs(10);
 /// Pause between two tries of the instance lock while a restart waits.
 pub const RESTART_LOCK_POLL: Duration = Duration::from_millis(200);
+
+/// How long a planned restart waits for the operations in flight before it
+/// refuses with `daemon.restart_busy` (spec 0030).
+pub const RESTART_QUIESCE_WAIT: Duration = Duration::from_secs(30);
 
 /// Every constant of the supervisor, with the production values of spec
 /// 0010 as its [`Default`]. Tests change single fields:
@@ -150,6 +155,12 @@ pub struct SupervisorConfig {
     pub restart_lock_wait: Duration,
     /// [`RESTART_LOCK_POLL`].
     pub restart_lock_poll: Duration,
+    /// [`RESTART_QUIESCE_WAIT`].
+    pub restart_quiesce_wait: Duration,
+    /// The provider lines whose processes survive a daemon restart
+    /// ([`HANDOVER_PROVEN`] by default; the daemon never plans with
+    /// another list).
+    pub handover_proven: Vec<HandoverProof>,
 }
 
 impl Default for SupervisorConfig {
@@ -184,6 +195,8 @@ impl Default for SupervisorConfig {
             force_exit_wait: FORCE_EXIT_WAIT,
             restart_lock_wait: RESTART_LOCK_WAIT,
             restart_lock_poll: RESTART_LOCK_POLL,
+            restart_quiesce_wait: RESTART_QUIESCE_WAIT,
+            handover_proven: HANDOVER_PROVEN.to_vec(),
         }
     }
 }
@@ -225,5 +238,7 @@ mod tests {
         assert_eq!(config.force_exit_wait, Duration::from_secs(10));
         assert_eq!(config.restart_lock_wait, Duration::from_secs(10));
         assert_eq!(config.restart_lock_poll, Duration::from_millis(200));
+        assert_eq!(config.restart_quiesce_wait, Duration::from_secs(30));
+        assert_eq!(config.handover_proven, HANDOVER_PROVEN);
     }
 }

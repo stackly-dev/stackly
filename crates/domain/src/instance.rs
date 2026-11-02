@@ -898,6 +898,15 @@ impl Instance {
         self.bump_revision();
     }
 
+    /// Records the failure of a start that ended before it began, so the
+    /// lifecycle stays as it is: the start of a planned restart that found
+    /// the port taken or the runtime gone while the instance was `stopped`
+    /// (spec 0030 AC-5, AC-6).
+    pub fn record_start_refusal(&mut self, reason: FailureCode) {
+        self.last_failure = Some(reason);
+        self.bump_revision();
+    }
+
     /// Sets the desired state.
     pub fn set_desired(&mut self, desired: DesiredState) {
         self.desired = desired;

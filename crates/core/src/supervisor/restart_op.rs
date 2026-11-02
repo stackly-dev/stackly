@@ -12,7 +12,7 @@
 
 use stackly_domain::{
     IdentityEvidence, InstanceBlocker, InstanceId, InstanceLifecycle, LockState as DomainLock,
-    ResourceRef, StageName,
+    ResourceRef, StageName, StopIntent,
 };
 use stackly_platform::LockState;
 use tokio::time::Instant;
@@ -153,7 +153,10 @@ pub(crate) async fn restart_steps(
         .await?;
     ctx.set_stage(StageName::JOURNAL).await?;
     let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
-    let journaled = sup.journal_stop(id, no_process).await.map_err(failed)?;
+    let journaled = sup
+        .journal_stop(id, no_process, StopIntent::User)
+        .await
+        .map_err(failed)?;
     // The restart window starts from zero, whatever came before (AC-6).
     actor.update(deps, |state| {
         state.restart.clear();
