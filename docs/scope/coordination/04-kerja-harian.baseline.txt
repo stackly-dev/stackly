@@ -1,0 +1,52 @@
+test failure::tests::there_is_one_constructor_per_cli_code_and_each_follows_the_catalog ... FAILED
+error: test failed, to rerun pass `-p stackly-cli --bin stackly`
+test inspect::inspect_writes_the_identity_capabilities_matrix_and_artifacts ... FAILED
+error: test failed, to rerun pass `-p stackly-cli --test provider`
+test catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns ... FAILED
+error: test failed, to rerun pass `-p stackly-core --lib`
+test the_catalog_frames_carry_the_catalog_fixtures ... FAILED
+error: test failed, to rerun pass `-p stackly-protocol --test catalog_fixtures`
+test the_frames_carry_the_create_form_fixture ... FAILED
+error: test failed, to rerun pass `-p stackly-protocol --test create_fixtures`
+test the_response_frame_carries_the_postgresql_fixture_and_foreign_values_stay_decodable ... FAILED
+error: test failed, to rerun pass `-p stackly-protocol --test duplicate_fixtures`
+test ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value ... FAILED
+error: test failed, to rerun pass `-p stacklyd --lib`
+test catalog::get_provider_suggests_the_full_id_for_a_bare_name_and_refuses_a_bad_id ... FAILED
+test events::a_reconnect_with_the_last_cursor_gets_the_missed_events_once_then_live_ones ... FAILED
+test handshake::a_client_of_major_1_is_accepted_whatever_its_minor ... FAILED
+test events::a_cursor_older_than_the_ring_starts_with_a_cursor_expired_gap ... FAILED
+test events::subscribed_comes_before_any_event_of_the_subscription ... FAILED
+test events::gaps_and_shutdown_events_pass_any_filter ... FAILED
+test events::an_unsubscribed_subscription_gets_no_more_events ... FAILED
+test catalog::a_catalog_at_every_limit_fits_list_and_detail_replies_in_a_control_frame ... FAILED
+test handshake::a_second_handshake_is_refused_and_the_connection_stays_up ... FAILED
+test handshake::another_major_with_broken_params_gets_major_mismatch_and_nothing_behind_it_runs ... FAILED
+test handshake::a_major_given_in_another_json_shape_is_still_refused ... FAILED
+test handshake::every_refused_handshake_counts_once_in_connections_rejected ... FAILED
+test handshake::broken_json_or_bad_handshake_params_as_the_first_frame_get_their_request_code ... FAILED
+test lifecycle::a_second_stop_request_skips_the_drain ... FAILED
+test limits::a_handler_that_panics_answers_internal_unexpected_and_the_daemon_keeps_serving ... FAILED
+test lifecycle::the_stop_unlinks_first_tells_subscribers_refuses_new_requests_and_drains ... FAILED
+test limits::a_reply_above_the_frame_limit_becomes_reply_too_large ... FAILED
+test limits::a_huge_bad_kinds_list_and_positional_requests_are_answered_and_the_connection_stays_up ... FAILED
+test limits::every_payload_error_is_answered_and_the_connection_stays_up ... FAILED
+test limits::invalid_params_name_the_field_path_relative_to_the_params ... FAILED
+test limits::framing_errors_after_the_handshake_send_the_error_and_close ... FAILED
+test limits::the_33rd_running_request_and_a_repeated_request_id_are_refused ... FAILED
+test limits::the_65th_connection_gets_too_many_connections ... FAILED
+test limits::the_9th_subscription_and_an_unknown_unsubscribe_are_refused ... FAILED
+test secret::a_change_is_published_as_secret_changed_and_a_delete_raises_the_revision ... FAILED
+test secret::no_value_reaches_an_error_frame_even_one_a_handler_built_with_the_value_in_it ... FAILED
+test secret::params_that_break_the_value_or_reference_rules_never_reach_the_store ... FAILED
+test shutdown::a_second_request_after_the_first_is_refused_as_shutting_down ... FAILED
+test shutdown::an_unknown_mode_is_invalid_params ... FAILED
+test shutdown::shutdown_is_served_while_the_daemon_starts ... FAILED
+test shutdown::restart_under_launchd_is_accepted ... FAILED
+test shutdown::get_info_reports_the_launch_context_and_the_bundle ... FAILED
+test shutdown::restart_of_a_manual_daemon_is_refused_and_the_daemon_keeps_running ... FAILED
+test shutdown::stop_is_answered_and_reaches_the_stop_loop ... FAILED
+test shutdown::shutdown_is_served_in_recovery_mode ... FAILED
+error: test failed, to rerun pass `-p stacklyd --test server`
+test slow_logs::a_follower_that_rotation_passed_gets_the_gap_and_then_entries_in_order ... FAILED
+error: test failed, to rerun pass `-p stacklyd --test supervisor`
