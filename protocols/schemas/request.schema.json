@@ -48,6 +48,44 @@
         "expectedRevision"
       ]
     },
+    "ApplyConfigParams": {
+      "description": "Params of `instance.config.apply`: writes `change` as the next\nrevision and makes it take effect.",
+      "type": "object",
+      "properties": {
+        "baseRevision": {
+          "description": "The revision the client read; another active revision is\n`config.revision_conflict`, before and after the operation queues.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "change": {
+          "description": "The change.",
+          "$ref": "#/$defs/ConfigChangeRequest"
+        },
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to change.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId",
+        "baseRevision",
+        "change"
+      ]
+    },
     "Call": {
       "description": "One variant per method, tagged by the method name. Methods without\nparams are unit variants, written without `content`.",
       "oneOf": [
@@ -704,6 +742,108 @@
           ]
         },
         {
+          "description": "The active config revision of one instance with its history, drift,\nand non sensitive config files (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetConfigParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Judges a config change and writes nothing (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ValidateConfigParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.validate"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Writes a config change as the next revision and makes it take\neffect (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ApplyConfigParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.apply"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Writes the config files of the active revision back over a drift\n(spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/KeepRevisionParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.keep_revision"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Renames an instance (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RenameInstanceParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.rename"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Changes the ports of an instance's IP endpoints (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ChangeEndpointsParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.change_endpoints"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "One page of an instance's stored log (spec 0027).",
           "type": "object",
           "properties": {
@@ -787,6 +927,41 @@
         "operationId"
       ]
     },
+    "ChangeEndpointsParams": {
+      "description": "Params of `instance.change_endpoints`.",
+      "type": "object",
+      "properties": {
+        "baseRevision": {
+          "description": "The revision the client read.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "dryRun": {
+          "description": "True to judge the ports and write nothing.",
+          "type": "boolean"
+        },
+        "endpoints": {
+          "description": "The IP endpoints that get another port request; the others stay.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "instanceId": {
+          "description": "The instance to change.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId",
+        "baseRevision",
+        "endpoints",
+        "dryRun"
+      ]
+    },
     "ClientInfo": {
       "description": "Who a client is: for the daemon log, and for handlers that pick how to\ninteract with the person behind it (spec 0011).",
       "type": "object",
@@ -840,6 +1015,62 @@
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
+        }
+      ]
+    },
+    "ConfigChangeRequest": {
+      "description": "What a config change asks for. Tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "The whole proposed settings document, secrets as their references.\nThe ports stay as they are.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "type": {
+              "type": "string",
+              "const": "settings"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The settings and ports of an older revision of the history.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "uint64",
+              "maximum": 9007199254740991,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "restore"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The settings and ports of the last known good revision.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "rollback"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -978,6 +1209,20 @@
         },
         "instanceId": {
           "description": "The instance to force stop.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "GetConfigParams": {
+      "description": "Params of `instance.config.get`.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance to read; a retained one is refused.",
           "type": "string",
           "format": "uuid"
         }
@@ -1203,6 +1448,20 @@
       "required": [
         "provider",
         "selector"
+      ]
+    },
+    "KeepRevisionParams": {
+      "description": "Params of `instance.config.keep_revision`: write the config files of the\nactive revision back over a drift.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance whose files go back to the active revision.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
       ]
     },
     "ListInstancesParams": {
@@ -1724,6 +1983,36 @@
       },
       "required": [
         "instanceId"
+      ]
+    },
+    "RenameInstanceParams": {
+      "description": "Params of `instance.rename`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to rename.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "The new name; the daemon checks the format and the uniqueness.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name"
       ]
     },
     "ResourceKind": {
@@ -2332,6 +2621,33 @@
       },
       "required": [
         "subscriptionId"
+      ]
+    },
+    "ValidateConfigParams": {
+      "description": "Params of `instance.config.validate`: judges `change` against the\nrevision the client read, and writes nothing.",
+      "type": "object",
+      "properties": {
+        "baseRevision": {
+          "description": "The revision the client read; another active revision is\n`config.revision_conflict`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "change": {
+          "description": "The change.",
+          "$ref": "#/$defs/ConfigChangeRequest"
+        },
+        "instanceId": {
+          "description": "The instance to judge the change for.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId",
+        "baseRevision",
+        "change"
       ]
     }
   }

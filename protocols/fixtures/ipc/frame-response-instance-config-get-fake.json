@@ -1,0 +1,221 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b10",
+    "reply": {
+      "type": "instance.config.get",
+      "content": {
+        "revision": {
+          "number": 2,
+          "createdAt": "2026-11-02T08:20:00.000Z",
+          "origin": "applied",
+          "sourceNumber": null,
+          "readyAt": "2026-11-02T08:30:00.000Z",
+          "isActive": true,
+          "isLastKnownGood": true,
+          "values": {
+            "greeting": "hello",
+            "workers": 4,
+            "dataSeed": "seed",
+            "adminToken": "secret:fake-orders/adminToken"
+          },
+          "endpoints": [
+            {
+              "name": "main",
+              "port": {
+                "type": "fixed",
+                "content": 5555
+              }
+            }
+          ]
+        },
+        "lastKnownGood": 2,
+        "fields": [
+          {
+            "field": {
+              "key": "greeting",
+              "title": "Greeting",
+              "description": null,
+              "kind": "text",
+              "required": false,
+              "secret": false,
+              "printableOnly": false,
+              "managed": false,
+              "visibility": "basic",
+              "apply": "reload",
+              "default": {
+                "type": "text",
+                "content": "hello"
+              },
+              "minLength": null,
+              "maxLength": null,
+              "minimum": null,
+              "maximum": null,
+              "choices": [],
+              "minItems": null,
+              "maxItems": null,
+              "itemKey": null,
+              "items": []
+            },
+            "locked": false
+          },
+          {
+            "field": {
+              "key": "workers",
+              "title": "Workers",
+              "description": null,
+              "kind": "integer",
+              "required": false,
+              "secret": false,
+              "printableOnly": false,
+              "managed": false,
+              "visibility": "basic",
+              "apply": "restart",
+              "default": {
+                "type": "integer",
+                "content": 2
+              },
+              "minLength": null,
+              "maxLength": null,
+              "minimum": 1,
+              "maximum": 64,
+              "choices": [],
+              "minItems": null,
+              "maxItems": null,
+              "itemKey": null,
+              "items": []
+            },
+            "locked": false
+          },
+          {
+            "field": {
+              "key": "dataSeed",
+              "title": "Data seed",
+              "description": null,
+              "kind": "text",
+              "required": false,
+              "secret": false,
+              "printableOnly": false,
+              "managed": false,
+              "visibility": "basic",
+              "apply": "immutable_after_init",
+              "default": {
+                "type": "text",
+                "content": "seed"
+              },
+              "minLength": null,
+              "maxLength": null,
+              "minimum": null,
+              "maximum": null,
+              "choices": [],
+              "minItems": null,
+              "maxItems": null,
+              "itemKey": null,
+              "items": []
+            },
+            "locked": true
+          },
+          {
+            "field": {
+              "key": "adminToken",
+              "title": "Admin token",
+              "description": null,
+              "kind": "text",
+              "required": false,
+              "secret": true,
+              "printableOnly": false,
+              "managed": false,
+              "visibility": "basic",
+              "apply": "immutable_after_init",
+              "default": null,
+              "minLength": null,
+              "maxLength": null,
+              "minimum": null,
+              "maximum": null,
+              "choices": [],
+              "minItems": null,
+              "maxItems": null,
+              "itemKey": null,
+              "items": []
+            },
+            "locked": true
+          }
+        ],
+        "endpoints": [
+          {
+            "name": "main",
+            "transport": "tcp",
+            "host": "127.0.0.1",
+            "request": {
+              "type": "fixed",
+              "content": 5555
+            },
+            "boundPort": 5555,
+            "changeable": true
+          }
+        ],
+        "history": [
+          {
+            "number": 2,
+            "createdAt": "2026-11-02T08:20:00.000Z",
+            "origin": "applied",
+            "sourceNumber": null,
+            "readyAt": "2026-11-02T08:30:00.000Z",
+            "isActive": true,
+            "isLastKnownGood": true,
+            "values": {
+              "greeting": "hello",
+              "workers": 4,
+              "dataSeed": "seed",
+              "adminToken": "secret:fake-orders/adminToken"
+            },
+            "endpoints": [
+              {
+                "name": "main",
+                "port": {
+                  "type": "fixed",
+                  "content": 5555
+                }
+              }
+            ]
+          },
+          {
+            "number": 1,
+            "createdAt": "2026-11-02T08:00:00.000Z",
+            "origin": "created",
+            "sourceNumber": null,
+            "readyAt": "2026-11-02T08:05:00.000Z",
+            "isActive": false,
+            "isLastKnownGood": true,
+            "values": {
+              "greeting": "hello",
+              "workers": 2,
+              "dataSeed": "seed",
+              "adminToken": "secret:fake-orders/adminToken"
+            },
+            "endpoints": [
+              {
+                "name": "main",
+                "port": {
+                  "type": "auto"
+                }
+              }
+            ]
+          }
+        ],
+        "effectiveFiles": [
+          {
+            "path": "fake.conf",
+            "content": "greeting = hello\nworkers = 4\n",
+            "changedLines": [],
+            "preview": false,
+            "portNote": null
+          }
+        ],
+        "effectiveFilesNote": null,
+        "drift": null,
+        "reloadSupported": true
+      }
+    }
+  }
+}

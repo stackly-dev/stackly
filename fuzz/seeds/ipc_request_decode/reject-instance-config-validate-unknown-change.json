@@ -1,0 +1,15 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000b0c",
+  "idempotencyKey": null,
+  "call": {
+    "type": "instance.config.validate",
+    "content": {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+      "baseRevision": 1,
+      "change": {
+        "type": "replace",
+        "content": {}
+      }
+    }
+  }
+}

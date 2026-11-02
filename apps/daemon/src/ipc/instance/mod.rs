@@ -13,6 +13,7 @@
 //! (AC-23). `ipc::instance` never calls `expose()` on a secret (K15); the
 //! conversion of a wire secret is `ipc::secret`'s.
 
+mod config;
 mod create;
 mod detail;
 mod draft;
@@ -47,6 +48,9 @@ use stackly_protocol::{ErrorBody, ResourceKind, ResourceRef};
 use stackly_storage::SqliteRegistry;
 use uuid::Uuid;
 
+pub use config::{
+    apply_config, change_endpoints, get_config, keep_revision, rename, validate_config,
+};
 pub use create::{create, work_deps};
 pub use detail::{get_data_usage, get_instance_detail};
 pub use duplicate::get_duplicate_form;

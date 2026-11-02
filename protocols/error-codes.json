@@ -57,6 +57,10 @@
       "owner": "spec 0010"
     },
     {
+      "name": "config",
+      "owner": "spec 0029"
+    },
+    {
       "name": "process",
       "owner": "spec 0010"
     },
@@ -468,6 +472,35 @@
       ],
       "items": null,
       "summary": "the wait timeout ran out before the operation reached a final state"
+    },
+    {
+      "code": "config.drift_detected",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "files"
+      ],
+      "items": null,
+      "summary": "a config file was changed outside Stackly, so nothing renders until the active revision is kept"
+    },
+    {
+      "code": "config.no_last_known_good",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "no revision other than the active one has reached ready"
+    },
+    {
+      "code": "config.revision_conflict",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "baseRevision",
+        "activeRevision"
+      ],
+      "items": null,
+      "summary": "baseRevision is not the active config revision"
     },
     {
       "code": "daemon.lock_held",
@@ -2061,6 +2094,7 @@
         "endpoint",
         "port",
         "otherInstance",
+        "suggestedPort",
         "omitted"
       ],
       "items": null,
@@ -2074,6 +2108,7 @@
         "endpoint",
         "address",
         "port",
+        "suggestedPort",
         "omitted"
       ],
       "items": null,
@@ -2088,6 +2123,7 @@
         "address",
         "port",
         "reason",
+        "suggestedPort",
         "omitted"
       ],
       "items": null,

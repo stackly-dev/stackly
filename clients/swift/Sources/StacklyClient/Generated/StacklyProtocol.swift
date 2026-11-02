@@ -51,6 +51,13 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case forceStopInstance = "force_stop_instance"
 	/// Rename an instance.
 	case renameInstance = "rename_instance"
+	/// Write a new config revision and make it take effect (spec 0029).
+	case applyConfig = "apply_config"
+	/// Change the ports of an instance's endpoints (spec 0029).
+	case changeEndpoints = "change_endpoints"
+	/// Write the config files of the active revision back over a drift
+	/// (spec 0029).
+	case resolveConfigDrift = "resolve_config_drift"
 	/// Remove an instance and keep its data.
 	case removeInstance = "remove_instance"
 	/// Delete an instance and its data.
@@ -573,6 +580,85 @@ public struct AbandonReply: Codable, Sendable, Equatable {
 	public init(operation: OperationSummary, leftovers: [CreatedItemInfo]?) {
 		self.operation = operation
 		self.leftovers = leftovers
+	}
+}
+
+/// What a config change asks for. Tagged `type` and `content`.
+public enum ConfigChangeRequest: Codable, Sendable, Equatable {
+	/// The whole proposed settings document, secrets as their references.
+	/// The ports stay as they are.
+	case settings(JSONObject)
+	/// The settings and ports of an older revision of the history.
+	case restore(UInt64)
+	/// The settings and ports of the last known good revision.
+	case rollback
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case settings,
+			restore,
+			rollback
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .settings:
+				if let content = try? container.decode(JSONObject.self, forKey: .content) {
+					self = .settings(content)
+					return
+				}
+			case .restore:
+				if let content = try? container.decode(UInt64.self, forKey: .content) {
+					self = .restore(content)
+					return
+				}
+			case .rollback:
+				self = .rollback
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(ConfigChangeRequest.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for ConfigChangeRequest"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .settings(let content):
+			try container.encode(CodingKeys.settings, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .restore(let content):
+			try container.encode(CodingKeys.restore, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .rollback:
+			try container.encode(CodingKeys.rollback, forKey: .type)
+		}
+	}
+}
+
+/// Params of `instance.config.apply`: writes `change` as the next
+/// revision and makes it take effect.
+public struct ApplyConfigParams: Codable, Sendable, Equatable {
+	/// The instance to change.
+	public let instanceId: UUID
+	/// The revision the client read; another active revision is
+	/// `config.revision_conflict`, before and after the operation queues.
+	public let baseRevision: UInt64
+	/// The change.
+	public let change: ConfigChangeRequest
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, baseRevision: UInt64, change: ConfigChangeRequest, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.baseRevision = baseRevision
+		self.change = change
+		self.expectedRevision = expectedRevision
 	}
 }
 
@@ -1194,6 +1280,84 @@ public struct CatalogVersion: Codable, Sendable, Equatable {
 	}
 }
 
+/// How an IP endpoint asks for its port. Tagged `type` and `content`:
+/// `{ "type": "fixed", "content": 5432 }` or `{ "type": "auto" }`.
+public enum PortRequest: Codable, Sendable, Equatable {
+	/// Exactly this port, never a substitute.
+	case fixed(UInt16)
+	/// Any free port, picked when the process starts.
+	case auto
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case fixed,
+			auto
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .fixed:
+				if let content = try? container.decode(UInt16.self, forKey: .content) {
+					self = .fixed(content)
+					return
+				}
+			case .auto:
+				self = .auto
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(PortRequest.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for PortRequest"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .fixed(let content):
+			try container.encode(CodingKeys.fixed, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .auto:
+			try container.encode(CodingKeys.auto, forKey: .type)
+		}
+	}
+}
+
+/// The port request of one manifest endpoint.
+public struct EndpointRequest: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// The port it asks for.
+	public let port: PortRequest
+
+	public init(name: String, port: PortRequest) {
+		self.name = name
+		self.port = port
+	}
+}
+
+/// Params of `instance.change_endpoints`.
+public struct ChangeEndpointsParams: Codable, Sendable, Equatable {
+	/// The instance to change.
+	public let instanceId: UUID
+	/// The revision the client read.
+	public let baseRevision: UInt64
+	/// The IP endpoints that get another port request; the others stay.
+	public let endpoints: [EndpointRequest]
+	/// True to judge the ports and write nothing.
+	public let dryRun: Bool
+
+	public init(instanceId: UUID, baseRevision: UInt64, endpoints: [EndpointRequest], dryRun: Bool) {
+		self.instanceId = instanceId
+		self.baseRevision = baseRevision
+		self.endpoints = endpoints
+		self.dryRun = dryRun
+	}
+}
+
 /// Who a client is: for the daemon log, and for handlers that pick how to
 /// interact with the person behind it (spec 0011).
 public struct ClientInfo: Codable, Sendable, Equatable {
@@ -1304,114 +1468,137 @@ public struct CompatibilityRecordView: Codable, Sendable, Equatable {
 	}
 }
 
-/// What one [`ConnectionPart`] holds. Open.
-public enum ConnectionPartKind: String, Codable, Sendable, Equatable {
-	/// Text that is already percent encoded.
-	case text
-	/// A secret value the client fills in.
-	case secret
-	/// A kind this build does not know.
-	case unrecognized
-}
+/// The reply, or the part of the reply, of every method that starts an
+/// operation (spec 0007, *Idempotency*). The method's own reply may wrap
+/// it.
+public struct OperationAccepted: Codable, Sendable, Equatable {
+	/// The operation, as created or as it stands now.
+	public let operation: OperationSummary
+	/// True when the idempotency key named an operation an earlier request
+	/// started, so nothing new ran.
+	public let replayed: Bool
 
-/// The secret a secret part stands for.
-public struct ConnectionSecretPart: Codable, Sendable, Equatable {
-	/// The settings field of the secret.
-	public let field: String
-	/// The reference `secret.reveal` takes.
-	public let reference: String
-
-	public init(field: String, reference: String) {
-		self.field = field
-		self.reference = reference
+	public init(operation: OperationSummary, replayed: Bool) {
+		self.operation = operation
+		self.replayed = replayed
 	}
 }
 
-/// One piece of a connection string: [`text`](Self::text) for a text part,
-/// [`secret`](Self::secret) for a secret part.
-public struct ConnectionPart: Codable, Sendable, Equatable {
-	/// What the part holds.
-	public let kind: ConnectionPartKind
-	/// The text of a text part, already percent encoded, written as is.
-	public let text: String?
-	/// The secret of a secret part: its field and its reference, never its
-	/// value.
-	public let secret: ConnectionSecretPart?
+/// What applying a change does to the instance. Open: newer daemons may add
+/// values.
+public enum ConfigImpact: String, Codable, Sendable, Equatable {
+	/// Nothing changes.
+	case none
+	/// The instance does not run: the revision applies at its next start.
+	case nextStart = "next_start"
+	/// A reload applies it and the process stays.
+	case reload
+	/// A restart applies it.
+	case restart
+	/// An impact this build does not know. The daemon never sends it.
+	case unrecognized
+}
 
-	public init(kind: ConnectionPartKind, text: String?, secret: ConnectionSecretPart?) {
+/// Reply of `instance.config.apply`.
+/// 
+/// A change that starts an operation returns it in `accepted`. A change
+/// equal to the active revision answers `unchanged` with no operation, no
+/// revision, and no bound idempotency key.
+public struct ConfigApplyAccepted: Codable, Sendable, Equatable {
+	/// The operation, as created or as it stands now; absent when nothing
+	/// ran.
+	public let accepted: OperationAccepted?
+	/// True when the change equals the active revision.
+	public let unchanged: Bool
+	/// The revision the operation writes (the active one plus one), or
+	/// the active revision when `unchanged`.
+	public let revision: UInt64
+	/// What the operation does to the instance.
+	public let impact: ConfigImpact
+
+	public init(accepted: OperationAccepted?, unchanged: Bool, revision: UInt64, impact: ConfigImpact) {
+		self.accepted = accepted
+		self.unchanged = unchanged
+		self.revision = revision
+		self.impact = impact
+	}
+}
+
+/// How a config file drifted. Open.
+public enum DriftKind: String, Codable, Sendable, Equatable {
+	/// The file differs from the copy.
+	case modified
+	/// The file is gone.
+	case missing
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What one line of a drift diff is. Open.
+public enum DiffLineKind: String, Codable, Sendable, Equatable {
+	/// In both texts.
+	case context
+	/// Only on disk.
+	case added
+	/// Only in the copy Stackly wrote.
+	case removed
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One line of a drift diff.
+public struct DiffLine: Codable, Sendable, Equatable {
+	/// What the line is.
+	public let kind: DiffLineKind
+	/// The text, without the line end.
+	public let text: String
+
+	public init(kind: DiffLineKind, text: String) {
 		self.kind = kind
 		self.text = text
-		self.secret = secret
 	}
 }
 
-/// Whether a connection string could be built. Open.
-public enum ConnectionAvailability: String, Codable, Sendable, Equatable {
-	/// The string is ready except for its secrets.
-	case available
-	/// The string cannot be built now; `reason` says why.
-	case unavailable
-	/// A state this build does not know. The daemon never sends it.
-	case unrecognized
-}
+/// One config file that drifted.
+public struct DriftFile: Codable, Sendable, Equatable {
+	/// The path relative to the `config/` folder.
+	public let path: String
+	/// How it drifted.
+	public let kind: DriftKind
+	/// The copy Stackly wrote against what is on disk.
+	public let diff: [DiffLine]
 
-/// Why a connection string cannot be built. Open.
-public enum ConnectionUnavailableReason: String, Codable, Sendable, Equatable {
-	/// An endpoint the string names has no effective port yet.
-	case portNotAssigned = "port_not_assigned"
-	/// The package of the instance cannot be used to render the string.
-	case packageUnavailable = "package_unavailable"
-	/// The instance was removed and kept.
-	case retained
-	/// A reason this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// One connection string of an instance, in manifest order.
-/// 
-/// When `state` is `available`, `masked` holds the string with every secret
-/// as `****`, `parts` is not empty, and `reason` is null. When it is
-/// `unavailable`, `reason` is set, `masked` is null, and `parts` is empty.
-/// [`ConnectionString::is_consistent`] checks that.
-public struct ConnectionString: Codable, Sendable, Equatable {
-	/// The entry name from the manifest, such as `uri`.
-	public let name: String
-	/// The label a client shows.
-	public let title: String
-	/// Whether the string could be built.
-	public let state: ConnectionAvailability
-	/// Set if and only if the string is unavailable.
-	public let reason: ConnectionUnavailableReason?
-	/// The string with each secret as four stars; set if and only if the
-	/// string is available.
-	public let masked: String?
-	/// The string in order: encoded text and secret references, never a
-	/// value. Empty when unavailable.
-	public let parts: [ConnectionPart]
-	/// True when the port may differ the next time the instance starts.
-	public let portMayChange: Bool
-
-	public init(name: String, title: String, state: ConnectionAvailability, reason: ConnectionUnavailableReason?, masked: String?, parts: [ConnectionPart], portMayChange: Bool) {
-		self.name = name
-		self.title = title
-		self.state = state
-		self.reason = reason
-		self.masked = masked
-		self.parts = parts
-		self.portMayChange = portMayChange
+	public init(path: String, kind: DriftKind, diff: [DiffLine]) {
+		self.path = path
+		self.kind = kind
+		self.diff = diff
 	}
 }
 
-/// Content of a `counted` progress.
-public struct CountedProgress: Codable, Sendable, Equatable {
-	/// What is done, such as bytes downloaded.
-	public let done: UInt64
-	/// What there is in all.
-	public let total: UInt64
+/// The drift of the active revision (spec 0029, AC-10).
+public struct ConfigDrift: Codable, Sendable, Equatable {
+	/// When the check found it.
+	public let observedAt: Date
+	/// The drifted files, ordered by path.
+	public let files: [DriftFile]
 
-	public init(done: UInt64, total: UInt64) {
-		self.done = done
-		self.total = total
+	public init(observedAt: Date, files: [DriftFile]) {
+		self.observedAt = observedAt
+		self.files = files
+	}
+}
+
+/// The content of the `configDrift` blocker (spec 0029): the config files
+/// that differ from the copy of the last render, or are gone.
+public struct ConfigDriftBlocker: Codable, Sendable, Equatable {
+	/// The drifted files, relative to the `config/` folder, ordered by path.
+	public let files: [String]
+	/// When the check found the drift.
+	public let observedAt: Date
+
+	public init(files: [String], observedAt: Date) {
+		self.files = files
+		self.observedAt = observedAt
 	}
 }
 
@@ -1427,204 +1614,28 @@ public enum EndpointTransport: String, Codable, Sendable, Equatable {
 	case unrecognized
 }
 
-/// What an endpoint of the package is for. Open. The form lists endpoints
-/// by purpose: `client`, `admin`, `monitoring`, then by name.
-public enum EndpointPurpose: String, Codable, Sendable, Equatable {
-	/// Where applications connect.
-	case client
-	/// Where an administrator connects.
-	case admin
-	/// Where metrics and health are read.
-	case monitoring
-	/// A purpose this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// One endpoint of the package, as the form shows it.
-public struct CreateEndpoint: Codable, Sendable, Equatable {
+/// One endpoint of the instance on the Configuration page.
+public struct ConfigEndpoint: Codable, Sendable, Equatable {
 	/// The endpoint name from the manifest.
 	public let name: String
-	/// `tcp`, `udp`, or `unix`.
+	/// The transport.
 	public let transport: EndpointTransport
-	/// What it is for.
-	public let purpose: EndpointPurpose
-	/// The loopback host, for `tcp` and `udp`.
+	/// The host of an IP endpoint.
 	public let host: String?
-	/// The port the form starts with, for `tcp` and `udp`.
-	public let defaultPort: UInt16?
-	/// The `socketName` template as the manifest writes it, for `unix`.
-	public let socketName: String?
+	/// The port request of the active revision, for an IP endpoint.
+	public let request: PortRequest?
+	/// The port the process has now, once one was bound.
+	public let boundPort: UInt16?
+	/// Whether `instance.change_endpoints` can change it: an IP endpoint.
+	public let changeable: Bool
 
-	public init(name: String, transport: EndpointTransport, purpose: EndpointPurpose, host: String?, defaultPort: UInt16?, socketName: String?) {
+	public init(name: String, transport: EndpointTransport, host: String?, request: PortRequest?, boundPort: UInt16?, changeable: Bool) {
 		self.name = name
 		self.transport = transport
-		self.purpose = purpose
 		self.host = host
-		self.defaultPort = defaultPort
-		self.socketName = socketName
-	}
-}
-
-/// The category of a provider. Open.
-public enum ProviderCategory: String, Codable, Sendable, Equatable {
-	/// A database server.
-	case database
-	/// A message broker.
-	case messaging
-	/// An analytics store.
-	case analytics
-	/// A cache.
-	case cache
-	/// A proxy.
-	case proxy
-	/// A test provider.
-	case testing
-	/// A category this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// Where the package of a form comes from. Open.
-public enum CreateProviderSource: String, Codable, Sendable, Equatable {
-	/// The catalog that ships with Stackly.
-	case bundledCatalog = "bundled_catalog"
-	/// A development catalog.
-	case developmentCatalog = "development_catalog"
-	/// A package already pinned in the data folder.
-	case pinned
-	/// A source this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// The provider a form was built from.
-public struct CreateProvider: Codable, Sendable, Equatable {
-	/// The provider ID, such as `official/nats`.
-	public let name: String
-	/// The revision of the package the form was built from: the catalog
-	/// entry's, or the one `GetCreateFormParams::revision` asked for.
-	public let revision: String
-	/// SHA-256 of the package, in lowercase hex.
-	public let manifestSha256: String
-	/// The name to show.
-	public let displayName: String
-	/// The category.
-	public let category: ProviderCategory
-	/// Where the package comes from.
-	public let source: CreateProviderSource
-
-	public init(name: String, revision: String, manifestSha256: String, displayName: String, category: ProviderCategory, source: CreateProviderSource) {
-		self.name = name
-		self.revision = revision
-		self.manifestSha256 = manifestSha256
-		self.displayName = displayName
-		self.category = category
-		self.source = source
-	}
-}
-
-/// How a runtime was installed. Open.
-public enum InstallModeKind: String, Codable, Sendable, Equatable {
-	/// Stackly downloaded and installed it.
-	case managed
-	/// Found on the system and registered.
-	case external
-	/// A mode this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// The state of a runtime. Open.
-public enum RuntimeState: String, Codable, Sendable, Equatable {
-	/// Removed.
-	case absent
-	/// The selector resolved to an exact identity.
-	case resolving
-	/// The artifact is downloading.
-	case downloading
-	/// The artifact is being verified.
-	case verifying
-	/// The files are being installed.
-	case installing
-	/// Ready to use.
-	case installed
-	/// A step before `installed` failed.
-	case failed
-	/// The installed files are gone.
-	case missing
-	/// The installed files changed.
-	case drifted
-	/// A state this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// An instance that uses a runtime.
-public struct RuntimeUser: Codable, Sendable, Equatable {
-	/// The instance.
-	public let instanceId: UUID
-	/// Its name.
-	public let name: String
-	/// True for a removed instance whose data is kept.
-	public let retained: Bool
-
-	public init(instanceId: UUID, name: String, retained: Bool) {
-		self.instanceId = instanceId
-		self.name = name
-		self.retained = retained
-	}
-}
-
-/// One runtime as a list row or a card shows it.
-public struct RuntimeSummary: Codable, Sendable, Equatable {
-	/// The runtime.
-	public let id: UUID
-	/// Its revision, raised by every change.
-	public let revision: UInt64
-	/// The software, such as `postgresql`.
-	public let software: String
-	/// The catalog's display name for the software; the software name when
-	/// the catalog has none.
-	public let displayName: String
-	/// The exact version.
-	public let version: String
-	/// The line.
-	public let line: String
-	/// The OS and architecture.
-	public let target: HostTarget
-	/// How it was installed.
-	public let installMode: InstallModeKind
-	/// Its state.
-	public let state: RuntimeState
-	/// The SHA-256 of the artifact it came from; null for an external
-	/// runtime.
-	public let artifactSha256: String?
-	/// When it was installed.
-	public let installedAt: Date?
-	/// When it was last verified.
-	public let lastVerifiedAt: Date?
-	/// How supported it is on this Mac.
-	public let support: SupportStatus
-	/// Why.
-	public let supportReason: SupportReason
-	/// The instances that use it, retained ones included.
-	public let usedBy: [RuntimeUser]?
-	/// The runtimes that depend on it.
-	public let dependentRuntimes: [UUID]?
-
-	public init(id: UUID, revision: UInt64, software: String, displayName: String, version: String, line: String, target: HostTarget, installMode: InstallModeKind, state: RuntimeState, artifactSha256: String?, installedAt: Date?, lastVerifiedAt: Date?, support: SupportStatus, supportReason: SupportReason, usedBy: [RuntimeUser]?, dependentRuntimes: [UUID]?) {
-		self.id = id
-		self.revision = revision
-		self.software = software
-		self.displayName = displayName
-		self.version = version
-		self.line = line
-		self.target = target
-		self.installMode = installMode
-		self.state = state
-		self.artifactSha256 = artifactSha256
-		self.installedAt = installedAt
-		self.lastVerifiedAt = lastVerifiedAt
-		self.support = support
-		self.supportReason = supportReason
-		self.usedBy = usedBy
-		self.dependentRuntimes = dependentRuntimes
+		self.request = request
+		self.boundPort = boundPort
+		self.changeable = changeable
 	}
 }
 
@@ -1905,6 +1916,476 @@ public struct FormField: Codable, Sendable, Equatable {
 	}
 }
 
+/// One settings field of the Configuration page.
+public struct ConfigField: Codable, Sendable, Equatable {
+	/// The field as the create form shows it, including its `apply` class
+	/// and `secret` and `managed` flags.
+	public let field: FormField
+	/// True when no change can edit it: a managed field, a field that is
+	/// set once, and a secret.
+	public let locked: Bool
+
+	public init(field: FormField, locked: Bool) {
+		self.field = field
+		self.locked = locked
+	}
+}
+
+/// How a config revision came to be. Open: newer daemons may add values.
+public enum ConfigRevisionOrigin: String, Codable, Sendable, Equatable {
+	/// Written by `instance.create`, from the provider defaults.
+	case created
+	/// A settings change.
+	case applied
+	/// A port change.
+	case endpoints
+	/// A roll back to the last known good revision.
+	case rollback
+	/// A restore of an older revision.
+	case restored
+	/// An origin this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One config revision of the history.
+public struct ConfigRevisionSummary: Codable, Sendable, Equatable {
+	/// The number, rising by one per revision and never reused.
+	public let number: UInt64
+	/// When it was written.
+	public let createdAt: Date
+	/// How it came to be.
+	public let origin: ConfigRevisionOrigin
+	/// The revision a `rollback` or `restored` revision copies; it may
+	/// have left the history since.
+	public let sourceNumber: UInt64?
+	/// When the instance first reached ready on this revision; absent
+	/// while it never did.
+	public let readyAt: Date?
+	/// Whether it is the active revision.
+	public let isActive: Bool
+	/// Whether it is the last known good revision.
+	public let isLastKnownGood: Bool
+	/// Its settings, secrets as their reference text. Restore loads them
+	/// into the form.
+	public let values: JSONObject
+	/// Its port requests, one per IP endpoint.
+	public let endpoints: [EndpointRequest]
+
+	public init(number: UInt64, createdAt: Date, origin: ConfigRevisionOrigin, sourceNumber: UInt64?, readyAt: Date?, isActive: Bool, isLastKnownGood: Bool, values: JSONObject, endpoints: [EndpointRequest]) {
+		self.number = number
+		self.createdAt = createdAt
+		self.origin = origin
+		self.sourceNumber = sourceNumber
+		self.readyAt = readyAt
+		self.isActive = isActive
+		self.isLastKnownGood = isLastKnownGood
+		self.values = values
+		self.endpoints = endpoints
+	}
+}
+
+/// One setting a change touches. A value is its compact JSON text, except
+/// that a string is its text without quotes; a secret shows its reference.
+/// A key is a field name, `routes[name=api]` for an item of a list with a
+/// key, `routes[name=api].rule` for one of its fields, or `items[2].x` for
+/// an item of a list without one. `old` is absent for an added item and
+/// `new` for a removed one.
+public struct SettingChange: Codable, Sendable, Equatable {
+	/// What changes.
+	public let key: String
+	/// The value in the active revision.
+	public let old: String?
+	/// The proposed value.
+	public let new: String?
+
+	public init(key: String, old: String?, new: String?) {
+		self.key = key
+		self.old = old
+		self.new = new
+	}
+}
+
+/// The port request of one endpoint, before and after a change.
+public struct EndpointChange: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// The request in the active revision.
+	public let old: PortRequest
+	/// The proposed request.
+	public let new: PortRequest
+
+	public init(name: String, old: PortRequest, new: PortRequest) {
+		self.name = name
+		self.old = old
+		self.new = new
+	}
+}
+
+/// One non sensitive config file as the Configuration page shows it.
+public struct EffectiveFile: Codable, Sendable, Equatable {
+	/// The path relative to the `config/` folder.
+	public let path: String
+	/// The text.
+	public let content: String
+	/// The 1 based lines of `content` a proposal changes; empty outside a
+	/// preview of a change.
+	public let changedLines: [UInt32]
+	/// True when the text is rendered from the values now, rather than the
+	/// copy of the active revision's last render.
+	public let preview: Bool
+	/// A note for an Automatic port shown with its default port.
+	public let portNote: String?
+
+	public init(path: String, content: String, changedLines: [UInt32], preview: Bool, portNote: String?) {
+		self.path = path
+		self.content = content
+		self.changedLines = changedLines
+		self.preview = preview
+		self.portNote = portNote
+	}
+}
+
+/// Reply of `instance.config.validate`.
+public struct ConfigValidation: Codable, Sendable, Equatable {
+	/// True exactly when `fieldErrors` is empty.
+	public let valid: Bool
+	/// Every field with a problem: `settings.<key>` or an item path such
+	/// as `settings.routes[2].rule`, with the codes of create plus
+	/// `immutable_after_init` and `secret_read_only`.
+	public let fieldErrors: [FieldError]
+	/// The settings that change, in schema order; empty while invalid.
+	public let changes: [SettingChange]
+	/// The ports that change, for a restore or a roll back.
+	public let endpointChanges: [EndpointChange]
+	/// What applying it now does.
+	public let impact: ConfigImpact
+	/// The non sensitive config files the change would render, with the
+	/// changed lines marked. Empty while invalid or when the runtime is
+	/// missing.
+	public let preview: [EffectiveFile]
+
+	public init(valid: Bool, fieldErrors: [FieldError], changes: [SettingChange], endpointChanges: [EndpointChange], impact: ConfigImpact, preview: [EffectiveFile]) {
+		self.valid = valid
+		self.fieldErrors = fieldErrors
+		self.changes = changes
+		self.endpointChanges = endpointChanges
+		self.impact = impact
+		self.preview = preview
+	}
+}
+
+/// What one [`ConnectionPart`] holds. Open.
+public enum ConnectionPartKind: String, Codable, Sendable, Equatable {
+	/// Text that is already percent encoded.
+	case text
+	/// A secret value the client fills in.
+	case secret
+	/// A kind this build does not know.
+	case unrecognized
+}
+
+/// The secret a secret part stands for.
+public struct ConnectionSecretPart: Codable, Sendable, Equatable {
+	/// The settings field of the secret.
+	public let field: String
+	/// The reference `secret.reveal` takes.
+	public let reference: String
+
+	public init(field: String, reference: String) {
+		self.field = field
+		self.reference = reference
+	}
+}
+
+/// One piece of a connection string: [`text`](Self::text) for a text part,
+/// [`secret`](Self::secret) for a secret part.
+public struct ConnectionPart: Codable, Sendable, Equatable {
+	/// What the part holds.
+	public let kind: ConnectionPartKind
+	/// The text of a text part, already percent encoded, written as is.
+	public let text: String?
+	/// The secret of a secret part: its field and its reference, never its
+	/// value.
+	public let secret: ConnectionSecretPart?
+
+	public init(kind: ConnectionPartKind, text: String?, secret: ConnectionSecretPart?) {
+		self.kind = kind
+		self.text = text
+		self.secret = secret
+	}
+}
+
+/// Whether a connection string could be built. Open.
+public enum ConnectionAvailability: String, Codable, Sendable, Equatable {
+	/// The string is ready except for its secrets.
+	case available
+	/// The string cannot be built now; `reason` says why.
+	case unavailable
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Why a connection string cannot be built. Open.
+public enum ConnectionUnavailableReason: String, Codable, Sendable, Equatable {
+	/// An endpoint the string names has no effective port yet.
+	case portNotAssigned = "port_not_assigned"
+	/// The package of the instance cannot be used to render the string.
+	case packageUnavailable = "package_unavailable"
+	/// The instance was removed and kept.
+	case retained
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One connection string of an instance, in manifest order.
+/// 
+/// When `state` is `available`, `masked` holds the string with every secret
+/// as `****`, `parts` is not empty, and `reason` is null. When it is
+/// `unavailable`, `reason` is set, `masked` is null, and `parts` is empty.
+/// [`ConnectionString::is_consistent`] checks that.
+public struct ConnectionString: Codable, Sendable, Equatable {
+	/// The entry name from the manifest, such as `uri`.
+	public let name: String
+	/// The label a client shows.
+	public let title: String
+	/// Whether the string could be built.
+	public let state: ConnectionAvailability
+	/// Set if and only if the string is unavailable.
+	public let reason: ConnectionUnavailableReason?
+	/// The string with each secret as four stars; set if and only if the
+	/// string is available.
+	public let masked: String?
+	/// The string in order: encoded text and secret references, never a
+	/// value. Empty when unavailable.
+	public let parts: [ConnectionPart]
+	/// True when the port may differ the next time the instance starts.
+	public let portMayChange: Bool
+
+	public init(name: String, title: String, state: ConnectionAvailability, reason: ConnectionUnavailableReason?, masked: String?, parts: [ConnectionPart], portMayChange: Bool) {
+		self.name = name
+		self.title = title
+		self.state = state
+		self.reason = reason
+		self.masked = masked
+		self.parts = parts
+		self.portMayChange = portMayChange
+	}
+}
+
+/// Content of a `counted` progress.
+public struct CountedProgress: Codable, Sendable, Equatable {
+	/// What is done, such as bytes downloaded.
+	public let done: UInt64
+	/// What there is in all.
+	public let total: UInt64
+
+	public init(done: UInt64, total: UInt64) {
+		self.done = done
+		self.total = total
+	}
+}
+
+/// What an endpoint of the package is for. Open. The form lists endpoints
+/// by purpose: `client`, `admin`, `monitoring`, then by name.
+public enum EndpointPurpose: String, Codable, Sendable, Equatable {
+	/// Where applications connect.
+	case client
+	/// Where an administrator connects.
+	case admin
+	/// Where metrics and health are read.
+	case monitoring
+	/// A purpose this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One endpoint of the package, as the form shows it.
+public struct CreateEndpoint: Codable, Sendable, Equatable {
+	/// The endpoint name from the manifest.
+	public let name: String
+	/// `tcp`, `udp`, or `unix`.
+	public let transport: EndpointTransport
+	/// What it is for.
+	public let purpose: EndpointPurpose
+	/// The loopback host, for `tcp` and `udp`.
+	public let host: String?
+	/// The port the form starts with, for `tcp` and `udp`.
+	public let defaultPort: UInt16?
+	/// The `socketName` template as the manifest writes it, for `unix`.
+	public let socketName: String?
+
+	public init(name: String, transport: EndpointTransport, purpose: EndpointPurpose, host: String?, defaultPort: UInt16?, socketName: String?) {
+		self.name = name
+		self.transport = transport
+		self.purpose = purpose
+		self.host = host
+		self.defaultPort = defaultPort
+		self.socketName = socketName
+	}
+}
+
+/// The category of a provider. Open.
+public enum ProviderCategory: String, Codable, Sendable, Equatable {
+	/// A database server.
+	case database
+	/// A message broker.
+	case messaging
+	/// An analytics store.
+	case analytics
+	/// A cache.
+	case cache
+	/// A proxy.
+	case proxy
+	/// A test provider.
+	case testing
+	/// A category this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Where the package of a form comes from. Open.
+public enum CreateProviderSource: String, Codable, Sendable, Equatable {
+	/// The catalog that ships with Stackly.
+	case bundledCatalog = "bundled_catalog"
+	/// A development catalog.
+	case developmentCatalog = "development_catalog"
+	/// A package already pinned in the data folder.
+	case pinned
+	/// A source this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The provider a form was built from.
+public struct CreateProvider: Codable, Sendable, Equatable {
+	/// The provider ID, such as `official/nats`.
+	public let name: String
+	/// The revision of the package the form was built from: the catalog
+	/// entry's, or the one `GetCreateFormParams::revision` asked for.
+	public let revision: String
+	/// SHA-256 of the package, in lowercase hex.
+	public let manifestSha256: String
+	/// The name to show.
+	public let displayName: String
+	/// The category.
+	public let category: ProviderCategory
+	/// Where the package comes from.
+	public let source: CreateProviderSource
+
+	public init(name: String, revision: String, manifestSha256: String, displayName: String, category: ProviderCategory, source: CreateProviderSource) {
+		self.name = name
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+		self.displayName = displayName
+		self.category = category
+		self.source = source
+	}
+}
+
+/// How a runtime was installed. Open.
+public enum InstallModeKind: String, Codable, Sendable, Equatable {
+	/// Stackly downloaded and installed it.
+	case managed
+	/// Found on the system and registered.
+	case external
+	/// A mode this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The state of a runtime. Open.
+public enum RuntimeState: String, Codable, Sendable, Equatable {
+	/// Removed.
+	case absent
+	/// The selector resolved to an exact identity.
+	case resolving
+	/// The artifact is downloading.
+	case downloading
+	/// The artifact is being verified.
+	case verifying
+	/// The files are being installed.
+	case installing
+	/// Ready to use.
+	case installed
+	/// A step before `installed` failed.
+	case failed
+	/// The installed files are gone.
+	case missing
+	/// The installed files changed.
+	case drifted
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An instance that uses a runtime.
+public struct RuntimeUser: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// True for a removed instance whose data is kept.
+	public let retained: Bool
+
+	public init(instanceId: UUID, name: String, retained: Bool) {
+		self.instanceId = instanceId
+		self.name = name
+		self.retained = retained
+	}
+}
+
+/// One runtime as a list row or a card shows it.
+public struct RuntimeSummary: Codable, Sendable, Equatable {
+	/// The runtime.
+	public let id: UUID
+	/// Its revision, raised by every change.
+	public let revision: UInt64
+	/// The software, such as `postgresql`.
+	public let software: String
+	/// The catalog's display name for the software; the software name when
+	/// the catalog has none.
+	public let displayName: String
+	/// The exact version.
+	public let version: String
+	/// The line.
+	public let line: String
+	/// The OS and architecture.
+	public let target: HostTarget
+	/// How it was installed.
+	public let installMode: InstallModeKind
+	/// Its state.
+	public let state: RuntimeState
+	/// The SHA-256 of the artifact it came from; null for an external
+	/// runtime.
+	public let artifactSha256: String?
+	/// When it was installed.
+	public let installedAt: Date?
+	/// When it was last verified.
+	public let lastVerifiedAt: Date?
+	/// How supported it is on this Mac.
+	public let support: SupportStatus
+	/// Why.
+	public let supportReason: SupportReason
+	/// The instances that use it, retained ones included.
+	public let usedBy: [RuntimeUser]?
+	/// The runtimes that depend on it.
+	public let dependentRuntimes: [UUID]?
+
+	public init(id: UUID, revision: UInt64, software: String, displayName: String, version: String, line: String, target: HostTarget, installMode: InstallModeKind, state: RuntimeState, artifactSha256: String?, installedAt: Date?, lastVerifiedAt: Date?, support: SupportStatus, supportReason: SupportReason, usedBy: [RuntimeUser]?, dependentRuntimes: [UUID]?) {
+		self.id = id
+		self.revision = revision
+		self.software = software
+		self.displayName = displayName
+		self.version = version
+		self.line = line
+		self.target = target
+		self.installMode = installMode
+		self.state = state
+		self.artifactSha256 = artifactSha256
+		self.installedAt = installedAt
+		self.lastVerifiedAt = lastVerifiedAt
+		self.support = support
+		self.supportReason = supportReason
+		self.usedBy = usedBy
+		self.dependentRuntimes = dependentRuntimes
+	}
+}
+
 /// Reply of `instance.get_create_form`.
 public struct CreateForm: Codable, Sendable, Equatable {
 	/// The provider the form was built from.
@@ -1947,65 +2428,6 @@ public struct ProviderSelector: Codable, Sendable, Equatable {
 	public init(name: String, revision: String?) {
 		self.name = name
 		self.revision = revision
-	}
-}
-
-/// How an IP endpoint asks for its port. Tagged `type` and `content`:
-/// `{ "type": "fixed", "content": 5432 }` or `{ "type": "auto" }`.
-public enum PortRequest: Codable, Sendable, Equatable {
-	/// Exactly this port, never a substitute.
-	case fixed(UInt16)
-	/// Any free port, picked when the process starts.
-	case auto
-
-	enum CodingKeys: String, CodingKey, Codable {
-		case fixed,
-			auto
-	}
-
-	private enum ContainerCodingKeys: String, CodingKey {
-		case type, content
-	}
-
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
-		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
-			switch type {
-			case .fixed:
-				if let content = try? container.decode(UInt16.self, forKey: .content) {
-					self = .fixed(content)
-					return
-				}
-			case .auto:
-				self = .auto
-				return
-			}
-		}
-		throw DecodingError.typeMismatch(PortRequest.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for PortRequest"))
-	}
-
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
-		switch self {
-		case .fixed(let content):
-			try container.encode(CodingKeys.fixed, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .auto:
-			try container.encode(CodingKeys.auto, forKey: .type)
-		}
-	}
-}
-
-/// The port request of one manifest endpoint.
-public struct EndpointRequest: Codable, Sendable, Equatable {
-	/// The endpoint name from the manifest.
-	public let name: String
-	/// The port it asks for.
-	public let port: PortRequest
-
-	public init(name: String, port: PortRequest) {
-		self.name = name
-		self.port = port
 	}
 }
 
@@ -3060,6 +3482,23 @@ public struct DuplicateForm: Codable, Sendable, Equatable {
 	}
 }
 
+/// One port request that cannot be applied.
+public struct EndpointProblem: Codable, Sendable, Equatable {
+	/// The endpoint the request names.
+	public let endpoint: String
+	/// The error code, such as `supervisor.endpoint_conflict`.
+	public let code: String
+	/// The first free port after the requested one, for a fixed port that
+	/// is taken.
+	public let suggestedPort: UInt16?
+
+	public init(endpoint: String, code: String, suggestedPort: UInt16?) {
+		self.endpoint = endpoint
+		self.code = code
+		self.suggestedPort = suggestedPort
+	}
+}
+
 /// How an IP endpoint asked for its port. Open.
 public enum EndpointPortMode: String, Codable, Sendable, Equatable {
 	/// Exactly the requested port.
@@ -3097,6 +3536,25 @@ public struct EndpointStatus: Codable, Sendable, Equatable {
 		self.portMode = portMode
 		self.bound = bound
 		self.socketPath = socketPath
+	}
+}
+
+/// Reply of a dry run of `instance.change_endpoints`.
+public struct EndpointValidation: Codable, Sendable, Equatable {
+	/// True exactly when `problems` is empty.
+	public let valid: Bool
+	/// Every request that cannot be applied, in the order asked.
+	public let problems: [EndpointProblem]
+	/// The ports that change; empty while invalid or when nothing moves.
+	public let changes: [EndpointChange]
+	/// What applying it now does.
+	public let impact: ConfigImpact
+
+	public init(valid: Bool, problems: [EndpointProblem], changes: [EndpointChange], impact: ConfigImpact) {
+		self.valid = valid
+		self.problems = problems
+		self.changes = changes
+		self.impact = impact
 	}
 }
 
@@ -3393,6 +3851,16 @@ public struct Gap: Codable, Sendable, Equatable {
 
 	public init(reason: GapReason) {
 		self.reason = reason
+	}
+}
+
+/// Params of `instance.config.get`.
+public struct GetConfigParams: Codable, Sendable, Equatable {
+	/// The instance to read; a retained one is refused.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
 	}
 }
 
@@ -3851,22 +4319,6 @@ public struct InstallingRuntime: Codable, Sendable, Equatable {
 	}
 }
 
-/// The reply, or the part of the reply, of every method that starts an
-/// operation (spec 0007, *Idempotency*). The method's own reply may wrap
-/// it.
-public struct OperationAccepted: Codable, Sendable, Equatable {
-	/// The operation, as created or as it stands now.
-	public let operation: OperationSummary
-	/// True when the idempotency key named an operation an earlier request
-	/// started, so nothing new ran.
-	public let replayed: Bool
-
-	public init(operation: OperationSummary, replayed: Bool) {
-		self.operation = operation
-		self.replayed = replayed
-	}
-}
-
 /// The reply of `instance.start`, `instance.stop`, `instance.restart`,
 /// `instance.reload`, and `instance.force_stop`.
 /// 
@@ -3895,6 +4347,44 @@ public struct InstanceCapabilities: Codable, Sendable, Equatable {
 
 	public init(reload: Bool?) {
 		self.reload = reload
+	}
+}
+
+/// Reply of `instance.config.get`.
+public struct InstanceConfigView: Codable, Sendable, Equatable {
+	/// The active revision, with its settings and port requests.
+	public let revision: ConfigRevisionSummary
+	/// The last known good revision: the highest number that reached
+	/// ready. Absent when none did.
+	public let lastKnownGood: UInt64?
+	/// The settings fields, in the order the schema declares them.
+	public let fields: [ConfigField]
+	/// The endpoints of the instance.
+	public let endpoints: [ConfigEndpoint]
+	/// The newest revisions, newest first, 20 at most; the active one and
+	/// the last known good are always in it.
+	public let history: [ConfigRevisionSummary]
+	/// The non sensitive config files.
+	public let effectiveFiles: [EffectiveFile]
+	/// Why `effectiveFiles` is empty although the provider renders files:
+	/// `Runtime missing, preview unavailable` when the active revision has
+	/// no copy and the runtime folder is gone.
+	public let effectiveFilesNote: String?
+	/// The drift of the active revision, absent when there is none.
+	public let drift: ConfigDrift?
+	/// Whether the pinned provider revision can reload.
+	public let reloadSupported: Bool
+
+	public init(revision: ConfigRevisionSummary, lastKnownGood: UInt64?, fields: [ConfigField], endpoints: [ConfigEndpoint], history: [ConfigRevisionSummary], effectiveFiles: [EffectiveFile], effectiveFilesNote: String?, drift: ConfigDrift?, reloadSupported: Bool) {
+		self.revision = revision
+		self.lastKnownGood = lastKnownGood
+		self.fields = fields
+		self.endpoints = endpoints
+		self.history = history
+		self.effectiveFiles = effectiveFiles
+		self.effectiveFilesNote = effectiveFilesNote
+		self.drift = drift
+		self.reloadSupported = reloadSupported
 	}
 }
 
@@ -4095,7 +4585,8 @@ public struct InstanceReadiness: Codable, Sendable, Equatable {
 }
 
 /// Why an instance cannot start or be trusted, one value with the priority
-/// `identityUnproven`, then `dataInUse`, then `needsSecret`. A blocker this
+/// `identityUnproven`, then `dataInUse`, then `needsSecret`, then
+/// `configDrift`. A blocker this
 /// build does not know makes the snapshot fail to decode, so a new blocker
 /// is a protocol major.
 public enum InstanceBlocker: Codable, Sendable, Equatable {
@@ -4107,11 +4598,15 @@ public enum InstanceBlocker: Codable, Sendable, Equatable {
 	case dataInUse(IdentityBlocker)
 	/// A secret the instance needs cannot be read (spec 0011).
 	case needsSecret(NeedsSecretBlocker)
+	/// A config file was changed outside Stackly, so nothing renders until
+	/// the user keeps the active revision (spec 0029).
+	case configDrift(ConfigDriftBlocker)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case identityUnproven,
 			dataInUse,
-			needsSecret
+			needsSecret,
+			configDrift
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4137,6 +4632,11 @@ public enum InstanceBlocker: Codable, Sendable, Equatable {
 					self = .needsSecret(content)
 					return
 				}
+			case .configDrift:
+				if let content = try? container.decode(ConfigDriftBlocker.self, forKey: .content) {
+					self = .configDrift(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(InstanceBlocker.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for InstanceBlocker"))
@@ -4153,6 +4653,9 @@ public enum InstanceBlocker: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .needsSecret(let content):
 			try container.encode(CodingKeys.needsSecret, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .configDrift(let content):
+			try container.encode(CodingKeys.configDrift, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -4464,6 +4967,17 @@ public struct InstanceStateChanged: Codable, Sendable, Equatable {
 
 	public init(instance: InstanceSummary) {
 		self.instance = instance
+	}
+}
+
+/// Params of `instance.config.keep_revision`: write the config files of the
+/// active revision back over a drift.
+public struct KeepRevisionParams: Codable, Sendable, Equatable {
+	/// The instance whose files go back to the active revision.
+	public let instanceId: UUID
+
+	public init(instanceId: UUID) {
+		self.instanceId = instanceId
 	}
 }
 
@@ -5797,6 +6311,23 @@ public struct ReloadInstanceParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `instance.rename`.
+public struct RenameInstanceParams: Codable, Sendable, Equatable {
+	/// The instance to rename.
+	public let instanceId: UUID
+	/// The new name; the daemon checks the format and the uniqueness.
+	public let name: String
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, name: String, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.name = name
+		self.expectedRevision = expectedRevision
+	}
+}
+
 /// One variant per method, tagged by the method name. Methods without
 /// params are unit variants, written without `content`.
 public enum Call: Codable, Sendable, Equatable {
@@ -5885,6 +6416,21 @@ public enum Call: Codable, Sendable, Equatable {
 	/// The metrics samples of one running instance after a cursor (spec
 	/// 0028).
 	case instanceGetMetrics(GetMetricsParams)
+	/// The active config revision of one instance with its history, drift,
+	/// and non sensitive config files (spec 0029).
+	case instanceConfigGet(GetConfigParams)
+	/// Judges a config change and writes nothing (spec 0029).
+	case instanceConfigValidate(ValidateConfigParams)
+	/// Writes a config change as the next revision and makes it take
+	/// effect (spec 0029).
+	case instanceConfigApply(ApplyConfigParams)
+	/// Writes the config files of the active revision back over a drift
+	/// (spec 0029).
+	case instanceConfigKeepRevision(KeepRevisionParams)
+	/// Renames an instance (spec 0029).
+	case instanceRename(RenameInstanceParams)
+	/// Changes the ports of an instance's IP endpoints (spec 0029).
+	case instanceChangeEndpoints(ChangeEndpointsParams)
 	/// One page of an instance's stored log (spec 0027).
 	case instanceLogsRead(LogsReadParams)
 	/// Starts pushing an instance's new log entries as `log` frames.
@@ -5936,6 +6482,12 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceGetDetail = "instance.get_detail",
 			instanceGetDataUsage = "instance.get_data_usage",
 			instanceGetMetrics = "instance.get_metrics",
+			instanceConfigGet = "instance.config.get",
+			instanceConfigValidate = "instance.config.validate",
+			instanceConfigApply = "instance.config.apply",
+			instanceConfigKeepRevision = "instance.config.keep_revision",
+			instanceRename = "instance.rename",
+			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
@@ -6136,6 +6688,36 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceGetMetrics(content)
 					return
 				}
+			case .instanceConfigGet:
+				if let content = try? container.decode(GetConfigParams.self, forKey: .content) {
+					self = .instanceConfigGet(content)
+					return
+				}
+			case .instanceConfigValidate:
+				if let content = try? container.decode(ValidateConfigParams.self, forKey: .content) {
+					self = .instanceConfigValidate(content)
+					return
+				}
+			case .instanceConfigApply:
+				if let content = try? container.decode(ApplyConfigParams.self, forKey: .content) {
+					self = .instanceConfigApply(content)
+					return
+				}
+			case .instanceConfigKeepRevision:
+				if let content = try? container.decode(KeepRevisionParams.self, forKey: .content) {
+					self = .instanceConfigKeepRevision(content)
+					return
+				}
+			case .instanceRename:
+				if let content = try? container.decode(RenameInstanceParams.self, forKey: .content) {
+					self = .instanceRename(content)
+					return
+				}
+			case .instanceChangeEndpoints:
+				if let content = try? container.decode(ChangeEndpointsParams.self, forKey: .content) {
+					self = .instanceChangeEndpoints(content)
+					return
+				}
 			case .instanceLogsRead:
 				if let content = try? container.decode(LogsReadParams.self, forKey: .content) {
 					self = .instanceLogsRead(content)
@@ -6277,6 +6859,24 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceGetMetrics(let content):
 			try container.encode(CodingKeys.instanceGetMetrics, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceConfigGet(let content):
+			try container.encode(CodingKeys.instanceConfigGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigValidate(let content):
+			try container.encode(CodingKeys.instanceConfigValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigApply(let content):
+			try container.encode(CodingKeys.instanceConfigApply, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigKeepRevision(let content):
+			try container.encode(CodingKeys.instanceConfigKeepRevision, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceRename(let content):
+			try container.encode(CodingKeys.instanceRename, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceChangeEndpoints(let content):
+			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceLogsRead(let content):
 			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -6395,6 +6995,20 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGetDataUsage(DataUsageReply)
 	/// The samples after the cursor and the facts next to them.
 	case instanceGetMetrics(MetricsReply)
+	/// The config of the instance.
+	case instanceConfigGet(InstanceConfigView)
+	/// The verdict on a config change.
+	case instanceConfigValidate(ConfigValidation)
+	/// The operation that applies the change, or that nothing changed.
+	case instanceConfigApply(ConfigApplyAccepted)
+	/// The operation that keeps the active revision, or that nothing
+	/// drifted.
+	case instanceConfigKeepRevision(InstanceActionAccepted)
+	/// The operation that renames the instance, or that the name is the
+	/// same.
+	case instanceRename(InstanceActionAccepted)
+	/// The operation that changes the ports, or the verdict of a dry run.
+	case instanceChangeEndpoints(ChangeEndpointsReply)
 	/// One page of the log.
 	case instanceLogsRead(LogPage)
 	/// The follow started; its `log` frames follow.
@@ -6445,6 +7059,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceGetDetail = "instance.get_detail",
 			instanceGetDataUsage = "instance.get_data_usage",
 			instanceGetMetrics = "instance.get_metrics",
+			instanceConfigGet = "instance.config.get",
+			instanceConfigValidate = "instance.config.validate",
+			instanceConfigApply = "instance.config.apply",
+			instanceConfigKeepRevision = "instance.config.keep_revision",
+			instanceRename = "instance.rename",
+			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
@@ -6657,6 +7277,36 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceGetMetrics(content)
 					return
 				}
+			case .instanceConfigGet:
+				if let content = try? container.decode(InstanceConfigView.self, forKey: .content) {
+					self = .instanceConfigGet(content)
+					return
+				}
+			case .instanceConfigValidate:
+				if let content = try? container.decode(ConfigValidation.self, forKey: .content) {
+					self = .instanceConfigValidate(content)
+					return
+				}
+			case .instanceConfigApply:
+				if let content = try? container.decode(ConfigApplyAccepted.self, forKey: .content) {
+					self = .instanceConfigApply(content)
+					return
+				}
+			case .instanceConfigKeepRevision:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceConfigKeepRevision(content)
+					return
+				}
+			case .instanceRename:
+				if let content = try? container.decode(InstanceActionAccepted.self, forKey: .content) {
+					self = .instanceRename(content)
+					return
+				}
+			case .instanceChangeEndpoints:
+				if let content = try? container.decode(ChangeEndpointsReply.self, forKey: .content) {
+					self = .instanceChangeEndpoints(content)
+					return
+				}
 			case .instanceLogsRead:
 				if let content = try? container.decode(LogPage.self, forKey: .content) {
 					self = .instanceLogsRead(content)
@@ -6801,6 +7451,24 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceGetMetrics(let content):
 			try container.encode(CodingKeys.instanceGetMetrics, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigGet(let content):
+			try container.encode(CodingKeys.instanceConfigGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigValidate(let content):
+			try container.encode(CodingKeys.instanceConfigValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigApply(let content):
+			try container.encode(CodingKeys.instanceConfigApply, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceConfigKeepRevision(let content):
+			try container.encode(CodingKeys.instanceConfigKeepRevision, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceRename(let content):
+			try container.encode(CodingKeys.instanceRename, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceChangeEndpoints(let content):
+			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .instanceLogsRead(let content):
 			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
@@ -7341,6 +8009,73 @@ public struct UnsubscribeParams: Codable, Sendable, Equatable {
 
 	public init(subscriptionId: UInt32) {
 		self.subscriptionId = subscriptionId
+	}
+}
+
+/// Params of `instance.config.validate`: judges `change` against the
+/// revision the client read, and writes nothing.
+public struct ValidateConfigParams: Codable, Sendable, Equatable {
+	/// The instance to judge the change for.
+	public let instanceId: UUID
+	/// The revision the client read; another active revision is
+	/// `config.revision_conflict`.
+	public let baseRevision: UInt64
+	/// The change.
+	public let change: ConfigChangeRequest
+
+	public init(instanceId: UUID, baseRevision: UInt64, change: ConfigChangeRequest) {
+		self.instanceId = instanceId
+		self.baseRevision = baseRevision
+		self.change = change
+	}
+}
+
+/// Reply of `instance.change_endpoints`: the operation that changes the
+/// ports, or the verdict of a dry run. Tagged `type` and `content`.
+public enum ChangeEndpointsReply: Codable, Sendable, Equatable {
+	/// The change was accepted or equals the active revision.
+	case applied(ConfigApplyAccepted)
+	/// The verdict of `dryRun: true`; nothing was written.
+	case dryRun(EndpointValidation)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case applied,
+			dryRun
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .applied:
+				if let content = try? container.decode(ConfigApplyAccepted.self, forKey: .content) {
+					self = .applied(content)
+					return
+				}
+			case .dryRun:
+				if let content = try? container.decode(EndpointValidation.self, forKey: .content) {
+					self = .dryRun(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(ChangeEndpointsReply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for ChangeEndpointsReply"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .applied(let content):
+			try container.encode(CodingKeys.applied, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .dryRun(let content):
+			try container.encode(CodingKeys.dryRun, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
 	}
 }
 

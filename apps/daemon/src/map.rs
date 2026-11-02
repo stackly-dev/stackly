@@ -4,6 +4,7 @@
 //! in what the daemon sends.
 
 pub mod catalog;
+pub mod config;
 pub mod create;
 pub mod detail;
 pub mod duplicate;

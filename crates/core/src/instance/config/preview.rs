@@ -3,9 +3,10 @@
 //! without resolving a secret, and the lines a proposal changes.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
-use stackly_domain::{Endpoint, Instance, Port, PortRequest};
-use stackly_platform::InstancePaths;
+use stackly_domain::{ConfigRevisionId, Endpoint, Instance, Port, PortRequest};
+use stackly_platform::{FileKind, Filesystem, InstancePaths, PlatformError};
 
 use crate::provider::{
     InitStep, PlanContext, PlanError, ResolvedEndpoint, RuntimeContext, Segment, SettingsValues,
@@ -121,6 +122,71 @@ pub fn preview(
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
+}
+
+/// Largest history copy the page reads.
+const MAX_COPY: u64 = 16 * 1024 * 1024;
+/// Deepest folder nesting below a history folder.
+const MAX_COPY_DEPTH: usize = 8;
+
+/// The copies of the last render of `revision`, as the page shows them
+/// (spec 0029, AC-1, AC-10): every file in `config-history/<revision>/`,
+/// ordered by path. A revision that was never rendered has none.
+///
+/// # Errors
+///
+/// Returns the [`PlatformError`] of a folder or file that cannot be read.
+pub fn recorded_files(
+    fs: &dyn Filesystem,
+    paths: &InstancePaths,
+    revision: ConfigRevisionId,
+) -> Result<Vec<EffectiveFile>, PlatformError> {
+    let history = crate::supervisor::drift::history_dir(paths, revision);
+    let mut relatives = Vec::new();
+    if fs
+        .symlink_metadata(&history)?
+        .is_some_and(|info| info.kind == FileKind::Dir)
+    {
+        collect(fs, &history, Path::new(""), 0, &mut relatives)?;
+    }
+    let mut files = Vec::new();
+    for relative in relatives {
+        let bytes = fs.read_file_limited(&history.join(&relative), MAX_COPY)?;
+        let Some(path) = relative.to_str() else {
+            continue;
+        };
+        files.push(EffectiveFile {
+            path: path.to_owned(),
+            content: String::from_utf8_lossy(&bytes).into_owned(),
+            changed_lines: Vec::new(),
+            preview: false,
+            port_note: None,
+        });
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(files)
+}
+
+/// The regular files below `dir`, relative to the history folder.
+fn collect(
+    fs: &dyn Filesystem,
+    dir: &Path,
+    relative: &Path,
+    depth: usize,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), PlatformError> {
+    if depth > MAX_COPY_DEPTH {
+        return Ok(());
+    }
+    for entry in fs.read_dir(&dir.join(relative))? {
+        let name = relative.join(&entry.name);
+        match entry.info.kind {
+            FileKind::Dir => collect(fs, dir, &name, depth + 1, out)?,
+            FileKind::File => out.push(name),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// The 1 based lines of `new` that are not in the longest common line

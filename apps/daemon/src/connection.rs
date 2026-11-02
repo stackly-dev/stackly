@@ -1183,6 +1183,54 @@ async fn dispatch(
             .map(Reply::InstanceGetDataUsage),
             None,
         ),
+        Call::InstanceConfigGet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_config(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceConfigGet),
+            None,
+        ),
+        Call::InstanceConfigValidate(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.validate_config(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceConfigValidate),
+            None,
+        ),
+        Call::InstanceConfigApply(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.apply_config(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceConfigApply),
+            None,
+        ),
+        Call::InstanceConfigKeepRevision(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.keep_revision(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceConfigKeepRevision(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceRename(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.rename_instance(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceRename(Box::new(reply))),
+            None,
+        ),
+        Call::InstanceChangeEndpoints(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.change_endpoints(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceChangeEndpoints),
+            None,
+        ),
         Call::InstanceGetMetrics(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_metrics(c, x, p)
