@@ -53,3 +53,14 @@ Disusun oleh `chk-f30-m4` (2026-11-02). Rig-nya (daemon launchd di test root sen
 5. Bersihkan lewat skrip `down` dari rig.
 
 Langkah `restart_busy` (create yang berjalan lebih dari 30 detik) tidak bisa dibuat dengan provider fake tanpa mengubah kode. Lead menerimanya sebagai tercakup oleh test `a_create_that_outlasts_the_quiesce_wait...` dan `DaemonRestartModelTests`.
+
+## F28 · Tab Metrics (spec 0028 milestone 3)
+
+Disusun oleh `chk-f28-m3` (2026-11-02). Rig: daemon di root uji dengan `skeleton_seed` dan satu instance fake yang running, lalu app `target/app/Debug/Stackly.app` dengan `STACKLY_ROOT` root itu (disiapkan sub sesi atas permintaan lead).
+
+1. Buka instance, tab Metrics: ada lima kartu, grafik 60 sampel dengan "sampled every 5 s", daftar Processes, dan header health dengan jam dan latensi. Sampel pertama tiba dalam 5 detik; CPU "Measuring…" lalu terisi (AC-13).
+2. Pindah Main Process dan Process Tree: subjudul kartu berubah, sedangkan daftar Processes tetap menampilkan seluruh pohon (AC-4, AC-13).
+3. Pindah ke Summary lalu kembali: selama tab tersembunyi tidak ada `instance.get_metrics` di log daemon level debug, dan history lama langsung tampil (AC-13).
+4. Stop instance dari toolbar saat tab Metrics terbuka: tampil "No Live Metrics" dengan tombol Start aktif. Start memulai history baru (AC-13).
+5. Hentikan daemon saat tab Metrics terbuka: data tetap tampil tanpa diredupkan, banner offline shell muncul, dan tidak ada permintaan baru. Jalankan daemon lagi: polling lanjut tanpa reload (AC-13).
+6. Summary: baris Restarts "{n} since created" dan Readiness "{status} · {n} ms" pada instance running. Inspector: Restarts dengan total dan jendela restart, serta Readiness dengan latensi (AC-6, AC-7).
