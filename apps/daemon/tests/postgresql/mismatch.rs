@@ -39,8 +39,8 @@ async fn refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(
     let daemon = site.in_process(|_| {}).await;
     let api = site.api().await;
     let error = refused_start(&api, made.id).await;
-    assert_eq!(error.code(), "supervisor.data_incompatible", "{error:?}");
-    assert_eq!(error.detail("outcome"), Some("marker_missing"));
+    // Spec 0030: a marker that is gone means the data is gone.
+    assert_eq!(error.code(), "supervisor.data_unavailable", "{error:?}");
     nothing_was_spawned(&data);
 
     std::fs::write(&marker, "16\n").expect("PG_VERSION can be written");
@@ -59,7 +59,7 @@ async fn refuses_data_of_another_major_and_a_marker_that_is_missing_or_changed(
 
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(&format!(
-        "data {} refused on runtime {}, marker_missing, marker_mismatch, and a start once PG_VERSION was back",
+        "data {} refused on runtime {}, a missing marker as data_unavailable, marker_mismatch, and a start once PG_VERSION was back",
         pg.major, other.major
     ));
 }
@@ -74,7 +74,7 @@ async fn postgresql_17_data_is_refused_by_a_runtime_18_and_a_missing_or_changed_
         covers = ["REQ-035", "AC-035", "BR-009"],
         kind = Kind::Native,
         expected = &format!(
-            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is marker_missing, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
+            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is supervisor.data_unavailable, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
             pg.major, other.major
         ),
     );
@@ -91,7 +91,7 @@ async fn postgresql_18_data_is_refused_by_a_runtime_17_and_a_missing_or_changed_
         covers = ["REQ-035", "AC-035", "BR-009"],
         kind = Kind::Native,
         expected = &format!(
-            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is marker_missing, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
+            "data initialized by PostgreSQL {} is refused by a runtime of {} with supervisor.data_incompatible before any process is spawned, a missing PG_VERSION is supervisor.data_unavailable, PG_VERSION 16 is marker_mismatch, and the instance starts again once the marker is back",
             pg.major, other.major
         ),
     );
