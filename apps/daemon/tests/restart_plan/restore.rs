@@ -7,8 +7,11 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use serde_json::json;
+use stackly_domain::{OperationId, Registry};
 use stackly_protocol::instance::{InstanceDesired, InstanceLifecycle, InstanceReadinessState};
+use stackly_protocol::operation::{ListOperationsParams, OperationKind};
 use stackly_protocol::restart::{PlanCloseReason, PlanOutcome, PlanState};
+use stackly_protocol::{Call, Reply, ResourceKind, ResourceRef};
 use stackly_testkit::allocate_port;
 use stackly_testkit::evidence::{Kind, evidence};
 use uuid::Uuid;
@@ -16,6 +19,46 @@ use uuid::Uuid;
 use crate::harness::RestartHarness;
 use crate::plan::{create_at, handover_newer, pid_of, pin_newer, short_stop_package};
 use crate::support::{Api, PATIENCE, Site, alive};
+
+/// The journal inputs of the `start_instance` operations on `instance`,
+/// newest first, read from the registry after the daemon stopped.
+async fn start_inputs(harness: &mut RestartHarness, api: &Api, instance: Uuid) -> Vec<String> {
+    let page = match api
+        .client
+        .call(Call::OperationList(ListOperationsParams {
+            resource: Some(ResourceRef {
+                kind: ResourceKind::Instance,
+                id: instance.to_string(),
+            }),
+            ..ListOperationsParams::default()
+        }))
+        .await
+    {
+        Ok(Reply::OperationList(page)) => page,
+        other => panic!("operation.list: {other:?}"),
+    };
+    let ids: Vec<Uuid> = page
+        .items
+        .iter()
+        .filter(|item| item.kind == OperationKind::StartInstance)
+        .map(|item| item.id)
+        .collect();
+    harness.stop().await;
+    let registry = harness.site.open_registry();
+    ids.into_iter()
+        .map(|id| {
+            registry
+                .operation_journal(OperationId::from_uuid(id).expect("an operation id"))
+                .expect("the journal reads")
+                .value
+                .expect("the operation has a journal")
+                .journal
+                .input()
+                .as_str()
+                .to_owned()
+        })
+        .collect()
+}
 
 async fn wait_ready_with_new_pid(api: &Api, id: Uuid, old: u32) -> u32 {
     let summary = api
@@ -81,6 +124,40 @@ async fn the_next_daemon_adopts_the_kept_instance_and_starts_the_stopped_one_aga
         api.get(stays).await.unwrap().desired,
         InstanceDesired::Running
     );
+    // The start that restores the instance carries the trigger of the plan.
+    let inputs = start_inputs(&mut harness, &api, stays).await;
+    assert_eq!(
+        inputs.first().map(String::as_str),
+        Some(r#"{"trigger":"planned_restart"}"#),
+        "{inputs:?}"
+    );
+    ev.pass();
+}
+
+// covers: AC-9
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restart_with_no_instance_in_the_plan_still_finishes() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Fixture,
+        expected = "a planned restart of a registry without instances writes an empty plan, the next daemon takes it over and finishes it once it reconciled, and a mutation afterwards is accepted",
+    );
+    let mut harness = RestartHarness::new(Vec::new());
+    let api = harness.start().await;
+    let accepted = api
+        .confirmed_restart()
+        .await
+        .expect("the restart is accepted");
+    assert!(accepted.plan_id.is_some());
+    drop(api);
+
+    let api = harness.next_daemon().await;
+
+    let plan = api.wait_plan(PlanState::Finished).await;
+    assert!(plan.instances.is_empty());
+    assert!(plan.reconciled_at.is_some() && plan.finished_at.is_some());
+    assert_eq!(plan.close_reason, None);
+    create_at(&api, "after", "0.4.0", json!({})).await;
     harness.stop().await;
     ev.pass();
 }
