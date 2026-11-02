@@ -58,22 +58,22 @@ Langkah build 8 dan 9. Yang belum: tabel sinyal dan Akhir sesi (langkah 11), `ag
 
 ### UI / manual
 
-- [ ] Buka `crates/core/src/supervisor/stop.rs` `run_stop` → stop oleh pengguna membaca lease sekali, memakai `manual_stop_ops` (lease manual dilepas, lease startup sesi ini `suppressed`), dan menulisnya dalam commit yang sama dengan desired `stopped`; stop untuk instance yang desired nya `running` tanpa proses hanya mengubah registry dengan efek lease yang sama → AC-8
-- [ ] Buka `crates/core/src/supervisor/startup.rs` `manual_lease_ops` → hanya `StartTrigger::User` menulis lease manual (tanpa sesi di daemon manual); start sistem, restart, dan restart terencana tidak → AC-9
-- [ ] Buka `crates/core/src/instance/stop_all.rs` → `select` fungsi murni dengan tujuh aturan berurutan, dan `read_view` yang membaca ulang kalau generation berbeda di antara pembacaan → AC-10
-- [ ] Buka `crates/core/src/supervisor/stop_all.rs` → satu langkah `stop` yang `irreversible`, paling banyak `RECONCILE_START_CONCURRENCY` bersamaan, `select` dijalankan lagi sebelum setiap stop, cancel tidak memulai langkah baru dan sisanya `skipped` `operation.cancelled` → AC-10
-- [ ] Buka `apps/daemon/src/ipc/stop_all.rs` → `replay_operation` lebih dulu, `BeginRequest` resource `Manager` dengan `LockKey::Instance` per langkah dan `BusyPolicy::Queue`, `cancel_open_starts` sesudah begin, balasan dibangun dari keadaan akhir operasi (juga untuk replay) → AC-10
-- [ ] Buka `protocols/contract-versions.json` → versi 2.5 tercatat tanpa `--amend` → AC-17
+- [x] Buka `crates/core/src/supervisor/stop.rs` `run_stop` → stop oleh pengguna membaca lease sekali, memakai `manual_stop_ops` (lease manual dilepas, lease startup sesi ini `suppressed`), dan menulisnya dalam commit yang sama dengan desired `stopped`; stop untuk instance yang desired nya `running` tanpa proses hanya mengubah registry dengan efek lease yang sama → AC-8
+- [x] Buka `crates/core/src/supervisor/startup.rs` `manual_lease_ops` → hanya `StartTrigger::User` menulis lease manual (tanpa sesi di daemon manual); start sistem, restart, dan restart terencana tidak → AC-9
+- [x] Buka `crates/core/src/instance/stop_all.rs` → `select` fungsi murni dengan tujuh aturan berurutan, dan `read_view` yang membaca ulang kalau generation berbeda di antara pembacaan → AC-10
+- [x] Buka `crates/core/src/supervisor/stop_all.rs` → satu langkah `stop` yang `irreversible`, paling banyak `RECONCILE_START_CONCURRENCY` bersamaan, `select` dijalankan lagi sebelum setiap stop, cancel tidak memulai langkah baru dan sisanya `skipped` `operation.cancelled` → AC-10
+- [x] Buka `apps/daemon/src/ipc/stop_all.rs` → `replay_operation` lebih dulu, `BeginRequest` resource `Manager` dengan `LockKey::Instance` per langkah dan `BusyPolicy::Queue`, `cancel_open_starts` sesudah begin, balasan dibangun dari keadaan akhir operasi (juga untuk replay) → AC-10
+- [x] Buka `protocols/contract-versions.json` → versi 2.5 tercatat tanpa `--amend` → AC-17
 
 ### Commands
 
-- [ ] `cargo test -p stackly-core --test supervisor_start leases` → lease manual di start pengguna (dengan dan tanpa sesi), tidak ada di start daemon, stop melepas lease manual dan menekan lease startup, stop registry saja → AC-8, AC-9
-- [ ] `cargo test -p stackly-core --test stop_all_select` → setiap baris tabel *Pilihan stop all*, urutan nama lalu ID, demand dan lease startup sesi, tampilan satu instance → AC-10
-- [ ] `cargo test -p stackly-core --test supervisor_start stop_all` → operasi menghentikan setiap instance dan menulis desired `stopped`; cancel membiarkan stop yang jalan selesai, tidak memulai yang baru, dan sisanya `operation.cancelled` → AC-10
-- [ ] `cargo test -p stacklyd --test supervisor stop_all` dan `login` → preview dan `instance.stop_all` memilih himpunan yang sama, instance berlease environment `skipped` `supervisor.stop_requires_override` dan tetap jalan, kunci yang sama menjawab sama, pilihan kosong tetap membuat operasi, `autostart.session` menjadi `suppressed` dan instance tidak menyala lagi di sesi yang sama → AC-8, AC-10
-- [ ] `cargo xtask codegen --check` dan `cargo test -p stackly-protocol` → fixture `instance.preview_stop_all`, `instance.stop_all` (penuh dan sebagian), nilai tidak dikenal, kode `operation.cancelled`, 2.5 → AC-17
-- [ ] `swift test --package-path clients/swift` → semua lulus, 53 method punya fixture round trip → AC-17
-- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan cek Windows → bersih
+- [x] `cargo test -p stackly-core --test supervisor_start leases` → lease manual di start pengguna (dengan dan tanpa sesi), tidak ada di start daemon, stop melepas lease manual dan menekan lease startup, stop registry saja → AC-8, AC-9
+- [x] `cargo test -p stackly-core --test stop_all_select` → setiap baris tabel *Pilihan stop all*, urutan nama lalu ID, demand dan lease startup sesi, tampilan satu instance → AC-10
+- [x] `cargo test -p stackly-core --test supervisor_start stop_all` → operasi menghentikan setiap instance dan menulis desired `stopped`; cancel membiarkan stop yang jalan selesai, tidak memulai yang baru, dan sisanya `operation.cancelled` → AC-10
+- [x] `cargo test -p stacklyd --test supervisor stop_all` dan `login` → preview dan `instance.stop_all` memilih himpunan yang sama, instance berlease environment `skipped` `supervisor.stop_requires_override` dan tetap jalan, kunci yang sama menjawab sama, pilihan kosong tetap membuat operasi, `autostart.session` menjadi `suppressed` dan instance tidak menyala lagi di sesi yang sama → AC-8, AC-10
+- [x] `cargo xtask codegen --check` dan `cargo test -p stackly-protocol` → fixture `instance.preview_stop_all`, `instance.stop_all` (penuh dan sebagian), nilai tidak dikenal, kode `operation.cancelled`, 2.5 → AC-17
+- [x] `swift test --package-path clients/swift` → semua lulus, 53 method punya fixture round trip → AC-17
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan cek Windows → bersih
 
 ### Acceptance-criteria coverage
 
