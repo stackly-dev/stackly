@@ -113,14 +113,14 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Di terminal, jalankan `stackly daemon restart` terhadap daemon launchd dari test root sendiri dengan satu instance `stop_restore` → rencana tampil di stderr, `[y/N]` muncul, `n` keluar 9, `y` menjalankan restart sampai rencana `finished` dan mencetak tabel per instance plus baris `Took` dengan tiga durasi → AC-15
-- [ ] `stackly daemon status` sesudah restart → baris `Last restart` berbunyi `finished <umur>: N adopted, M restored`; tanpa restart baris itu tidak ada → AC-15
+- [x] Di terminal, jalankan `stackly daemon restart` terhadap daemon launchd dari test root sendiri dengan satu instance `stop_restore` → rencana tampil di stderr, `[y/N]` muncul, `n` keluar 9, `y` menjalankan restart sampai rencana `finished` dan mencetak tabel per instance plus baris `Took` dengan tiga durasi → AC-15
+- [x] `stackly daemon status` sesudah restart → baris `Last restart` berbunyi `finished <umur>: N adopted, M restored`; tanpa restart baris itu tidak ada → AC-15
 - [ ] Buka Settings (Stackly menu, Settings) dengan daemon launchd dari test root sendiri → tab General dengan bagian Daemon: baris `stacklyd` bersubtitle "Connected over Unix socket · protocol N" dan tombol Restart Daemon aktif; tanpa tab atau baris lain → AC-16
 - [ ] Putuskan daemon (hentikan test root) → subtitle "Disconnected · reconnecting" dan tombol mati; jalankan daemon `manual` → subtitle "Runs outside launchd, so it can't restart itself" dan tombol mati → AC-16
 - [ ] Tekan Restart Daemon dengan satu instance fake yang provider nya tidak ada di `HANDOVER_PROVEN` → sheet daftar "Keeps running" dan "Stops, then starts again" dengan alasan, plus "Operations in flight" bila ada; Cancel menutup tanpa efek → AC-16
 - [ ] Tekan Restart di sheet → jendela utama menampilkan banner "stacklyd is restarting" (jumlah yang tetap jalan dan yang berhenti), baris instance `stop_restore` bertanda "Stopped for daemon restart"; sesudah daemon kembali banner ringkasan, lalu toast "Daemon restarted. N instances adopted, M started again." dan banner hilang → AC-16
 - [ ] Mulai operasi create yang lama lalu tekan Restart → sheet menampilkan penolakan `daemon.restart_busy` dengan operasi penghalang dan tetap terbuka → AC-16
-- [ ] Catatan: jangan pernah menjalankan langkah ini terhadap agent milik pengguna (`com.ojiepermana.stackly.daemon`); pakai `STACKLY_ROOT` test root sendiri → AC-8 (bagian CLI)
+- [x] Catatan: jangan pernah menjalankan langkah ini terhadap agent milik pengguna (`com.ojiepermana.stackly.daemon`); pakai `STACKLY_ROOT` test root sendiri → AC-8 (bagian CLI)
 
 ### Commands
 
