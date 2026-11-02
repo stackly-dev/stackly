@@ -50,6 +50,18 @@ pub trait SupervisorEvents: Send + Sync + 'static {
         let _ = phase;
     }
 
+    /// A commit changed the startup lease of this session for an instance
+    /// (spec 0031): `state` is what it is now. It is called before the
+    /// `instance_changed` of the same commit, so a summary built there
+    /// already shows it.
+    fn startup_lease_changed(
+        &self,
+        instance: InstanceId,
+        state: crate::session::StartupLeaseState,
+    ) {
+        let _ = (instance, state);
+    }
+
     /// A daemon restart plan was written or changed (`daemon.restart_plan`,
     /// spec 0030).
     fn restart_plan(&self, plan: &stackly_domain::RestartPlan) {
@@ -168,6 +180,9 @@ pub(crate) struct Shared {
     /// Announces wakes from sleep to the probe loops and the start
     /// deadlines (spec 0028 AC-9).
     pub(crate) wake: super::wake::WakeWatch,
+    /// The login session of this daemon run, once the rotation ran (spec
+    /// 0031); `None` for a daemon that launchd did not start.
+    session: Mutex<Option<stackly_domain::SessionId>>,
 }
 
 /// The process supervisor: one actor per instance, and the operations that
@@ -223,6 +238,7 @@ impl Supervisor {
                 plan: tokio::sync::Mutex::new(None),
                 recheck_running: AtomicBool::new(false),
                 wake: super::wake::WakeWatch::new(),
+                session: Mutex::new(None),
             }),
         }
     }
@@ -272,6 +288,27 @@ impl Supervisor {
         for actor in actors {
             actor.stop_background(self.deps());
         }
+    }
+
+    /// Tells the supervisor which login session this daemon run belongs to
+    /// (spec 0031): a stop suppresses the startup lease of that session, and
+    /// a start writes its manual lease for it.
+    pub fn set_session(&self, session: Option<stackly_domain::SessionId>) {
+        *self
+            .shared
+            .session
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = session;
+    }
+
+    /// The login session of this daemon run, if it has one.
+    #[must_use]
+    pub fn session(&self) -> Option<stackly_domain::SessionId> {
+        self.shared
+            .session
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// Returns true once [`shutdown`](Self::shutdown) was called.

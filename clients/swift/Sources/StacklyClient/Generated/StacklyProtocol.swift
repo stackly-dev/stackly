@@ -53,6 +53,8 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case renameInstance = "rename_instance"
 	/// Change when an instance starts on its own (spec 0031).
 	case setInstanceStartup = "set_instance_startup"
+	/// Stop every instance that is wanted or runs (spec 0031).
+	case stopAllInstances = "stop_all_instances"
 	/// Write a new config revision and make it take effect (spec 0029).
 	case applyConfig = "apply_config"
 	/// Change the ports of an instance's endpoints (spec 0029).
@@ -5038,6 +5040,19 @@ public struct InstancePage: Codable, Sendable, Equatable {
 	}
 }
 
+/// An instance named without its state.
+public struct InstanceRef: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+
+	public init(instanceId: UUID, name: String) {
+		self.instanceId = instanceId
+		self.name = name
+	}
+}
+
 /// Content of `instance.removed`: the instance row was deleted. The event's
 /// revision is the last revision plus one, and a client drops the instance
 /// from its list. No daemon sends it before feature 20.
@@ -6524,6 +6539,10 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceRename(RenameInstanceParams)
 	/// Sets when an instance starts on its own (spec 0031).
 	case instanceSetStartup(SetStartupParams)
+	/// Reads what Stop All would stop (spec 0031).
+	case instancePreviewStopAll
+	/// Stops every instance that is wanted or runs (spec 0031).
+	case instanceStopAll(StopAllParams)
 	/// Changes the ports of an instance's IP endpoints (spec 0029).
 	case instanceChangeEndpoints(ChangeEndpointsParams)
 	/// One page of an instance's stored log (spec 0027).
@@ -6583,6 +6602,8 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceConfigKeepRevision = "instance.config.keep_revision",
 			instanceRename = "instance.rename",
 			instanceSetStartup = "instance.set_startup",
+			instancePreviewStopAll = "instance.preview_stop_all",
+			instanceStopAll = "instance.stop_all",
 			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
@@ -6814,6 +6835,14 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceSetStartup(content)
 					return
 				}
+			case .instancePreviewStopAll:
+				self = .instancePreviewStopAll
+				return
+			case .instanceStopAll:
+				if let content = try? container.decode(StopAllParams.self, forKey: .content) {
+					self = .instanceStopAll(content)
+					return
+				}
 			case .instanceChangeEndpoints:
 				if let content = try? container.decode(ChangeEndpointsParams.self, forKey: .content) {
 					self = .instanceChangeEndpoints(content)
@@ -6978,6 +7007,11 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceSetStartup(let content):
 			try container.encode(CodingKeys.instanceSetStartup, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instancePreviewStopAll:
+			try container.encode(CodingKeys.instancePreviewStopAll, forKey: .type)
+		case .instanceStopAll(let content):
+			try container.encode(CodingKeys.instanceStopAll, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceChangeEndpoints(let content):
 			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -7113,6 +7147,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceRename(InstanceActionAccepted)
 	/// The instance after its startup policy changed, or as it was.
 	case instanceSetStartup(InstanceSummary)
+	/// What Stop All would stop.
+	case instancePreviewStopAll(StopAllPreview)
+	/// How Stop All ended.
+	case instanceStopAll(StopAllResult)
 	/// The operation that changes the ports, or the verdict of a dry run.
 	case instanceChangeEndpoints(ChangeEndpointsReply)
 	/// One page of the log.
@@ -7171,6 +7209,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceConfigKeepRevision = "instance.config.keep_revision",
 			instanceRename = "instance.rename",
 			instanceSetStartup = "instance.set_startup",
+			instancePreviewStopAll = "instance.preview_stop_all",
+			instanceStopAll = "instance.stop_all",
 			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
@@ -7414,6 +7454,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceSetStartup(content)
 					return
 				}
+			case .instancePreviewStopAll:
+				if let content = try? container.decode(StopAllPreview.self, forKey: .content) {
+					self = .instancePreviewStopAll(content)
+					return
+				}
+			case .instanceStopAll:
+				if let content = try? container.decode(StopAllResult.self, forKey: .content) {
+					self = .instanceStopAll(content)
+					return
+				}
 			case .instanceChangeEndpoints:
 				if let content = try? container.decode(ChangeEndpointsReply.self, forKey: .content) {
 					self = .instanceChangeEndpoints(content)
@@ -7581,6 +7631,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceSetStartup(let content):
 			try container.encode(CodingKeys.instanceSetStartup, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instancePreviewStopAll(let content):
+			try container.encode(CodingKeys.instancePreviewStopAll, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceStopAll(let content):
+			try container.encode(CodingKeys.instanceStopAll, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .instanceChangeEndpoints(let content):
 			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
@@ -8056,6 +8112,111 @@ public struct StartInstanceParams: Codable, Sendable, Equatable {
 	public init(instanceId: UUID, expectedRevision: UInt64?) {
 		self.instanceId = instanceId
 		self.expectedRevision = expectedRevision
+	}
+}
+
+/// One instance that did not stop, with the error code that says why.
+public struct StopAllEntry: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The error code, such as `supervisor.stop_timeout`.
+	public let code: String
+
+	public init(instanceId: UUID, code: String) {
+		self.instanceId = instanceId
+		self.code = code
+	}
+}
+
+/// Why an instance is wanted running, from its active lease. Open.
+public enum DemandSourceKind: String, Codable, Sendable, Equatable {
+	/// A person started it.
+	case manual
+	/// It starts at login and this session holds the lease.
+	case startup
+	/// An environment holds it.
+	case environment
+	/// A source this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One instance Stop All would stop.
+public struct StopAllItem: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// Its lifecycle now.
+	public let lifecycle: InstanceLifecycle
+	/// The sources of its active leases.
+	public let demand: [DemandSourceKind]
+	/// Its startup policy and the lease of this session.
+	public let autostart: InstanceAutostart
+
+	public init(instanceId: UUID, name: String, lifecycle: InstanceLifecycle, demand: [DemandSourceKind], autostart: InstanceAutostart) {
+		self.instanceId = instanceId
+		self.name = name
+		self.lifecycle = lifecycle
+		self.demand = demand
+		self.autostart = autostart
+	}
+}
+
+/// Params of `instance.stop_all`. None yet; the struct keeps room for
+/// fields without a new major.
+public struct StopAllParams: Codable, Sendable, Equatable {
+	public init() {}
+}
+
+/// An instance Stop All leaves alone, and why.
+public struct StopAllSkip: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// The error code that says why, such as `supervisor.identity_unproven`.
+	public let code: String
+
+	public init(instanceId: UUID, name: String, code: String) {
+		self.instanceId = instanceId
+		self.name = name
+		self.code = code
+	}
+}
+
+/// Reply of `instance.preview_stop_all`. Every list is ordered by name and
+/// then ID.
+public struct StopAllPreview: Codable, Sendable, Equatable {
+	/// The instances `instance.stop_all` would stop.
+	public let items: [StopAllItem]
+	/// The instances that are stopping already, on their own.
+	public let alreadyStopping: [InstanceRef]
+	/// The instances left alone.
+	public let skipped: [StopAllSkip]
+	/// How many of `items` start at login.
+	public let atLoginCount: UInt64
+
+	public init(items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: UInt64) {
+		self.items = items
+		self.alreadyStopping = alreadyStopping
+		self.skipped = skipped
+		self.atLoginCount = atLoginCount
+	}
+}
+
+/// Reply of `instance.stop_all`, once the operation ended.
+public struct StopAllResult: Codable, Sendable, Equatable {
+	/// The instances that stopped.
+	public let stopped: [UUID]
+	/// The instances whose stop failed.
+	public let failed: [StopAllEntry]
+	/// The instances left alone, including the ones a cancel reached.
+	public let skipped: [StopAllEntry]
+
+	public init(stopped: [UUID], failed: [StopAllEntry], skipped: [StopAllEntry]) {
+		self.stopped = stopped
+		self.failed = failed
+		self.skipped = skipped
 	}
 }
 

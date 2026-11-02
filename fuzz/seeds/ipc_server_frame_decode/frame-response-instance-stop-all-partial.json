@@ -1,0 +1,30 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000c06",
+    "reply": {
+      "type": "instance.stop_all",
+      "content": {
+        "stopped": [
+          "0192f3a5-0000-7000-8000-000000000001"
+        ],
+        "failed": [
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000002",
+            "code": "supervisor.stop_timeout"
+          }
+        ],
+        "skipped": [
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000003",
+            "code": "operation.cancelled"
+          },
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000004",
+            "code": "supervisor.stop_requires_override"
+          }
+        ]
+      }
+    }
+  }
+}

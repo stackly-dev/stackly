@@ -14,7 +14,7 @@ use stackly_domain::{
     BatchError, DaemonSession, DesiredState, GuardDecision, GuardView, Guarded, Instance,
     InstanceFilter, InstanceId, InstanceLifecycle, Lease, LeaseFilter, LeaseHolder, LeaseId,
     LeaseState, Registry, RegistryError, SESSIONS_KEPT, SessionEndReason, SessionId, StartupPolicy,
-    WriteOp,
+    StopDecision, StopRequest, WriteOp, evaluate_stop,
 };
 use stackly_platform::LoginSession;
 
@@ -288,4 +288,137 @@ pub fn rotate_session(
         previous_end: previous.and_then(DaemonSession::end_reason),
         started,
     })
+}
+
+/// What the startup lease of an instance in this session says (spec 0031,
+/// `InstanceSummary.autostart.session`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum StartupLeaseState {
+    /// The session holds no startup lease for the instance.
+    None,
+    /// The startup lease is active.
+    Active,
+    /// A stop suppressed the startup lease.
+    Suppressed,
+}
+
+/// The startup lease state `ops` leave behind for one instance, or `None`
+/// when they write no startup lease of it.
+#[must_use]
+pub fn startup_lease_effect(instance: InstanceId, ops: &[WriteOp]) -> Option<StartupLeaseState> {
+    ops.iter().rev().find_map(|op| match op {
+        WriteOp::InsertLease(lease) | WriteOp::UpdateLease(lease)
+            if lease.instance_id() == instance && lease.holder() == LeaseHolder::Startup =>
+        {
+            Some(match lease.state() {
+                LeaseState::Active => StartupLeaseState::Active,
+                LeaseState::Suppressed { .. } => StartupLeaseState::Suppressed,
+                LeaseState::Released { .. } => StartupLeaseState::None,
+            })
+        }
+        _ => None,
+    })
+}
+
+/// The startup lease state of `instance` in `session`, read from its
+/// unreleased `leases`.
+#[must_use]
+pub fn startup_lease_state(
+    instance: InstanceId,
+    leases: &[Lease],
+    session: Option<&SessionId>,
+) -> StartupLeaseState {
+    let Some(session) = session else {
+        return StartupLeaseState::None;
+    };
+    leases
+        .iter()
+        .filter(|lease| {
+            lease.instance_id() == instance
+                && lease.holder() == LeaseHolder::Startup
+                && lease.session() == Some(session)
+        })
+        .find_map(|lease| match lease.state() {
+            LeaseState::Active => Some(StartupLeaseState::Active),
+            LeaseState::Suppressed { .. } => Some(StartupLeaseState::Suppressed),
+            LeaseState::Released { .. } => None,
+        })
+        .unwrap_or(StartupLeaseState::None)
+}
+
+/// The lease a user start writes with desired `running` (spec 0031, AC-9):
+/// one active `manual` lease for `session`, unless the instance has one for
+/// it already. Without a session (a daemon that launchd did not start) the
+/// lease has none, and any active manual lease counts as present.
+#[must_use]
+pub fn manual_start_ops(
+    instance: InstanceId,
+    leases: &[Lease],
+    session: Option<&SessionId>,
+    new_lease: LeaseId,
+    now: Timestamp,
+) -> Vec<WriteOp> {
+    let present = leases.iter().any(|lease| {
+        lease.instance_id() == instance
+            && lease.holder() == LeaseHolder::Manual
+            && lease.is_active()
+            && lease.session() == session
+    });
+    if present {
+        return Vec::new();
+    }
+    match Lease::new(
+        new_lease,
+        instance,
+        LeaseHolder::Manual,
+        session.cloned(),
+        now,
+    ) {
+        Ok(lease) => vec![WriteOp::InsertLease(lease)],
+        Err(_) => Vec::new(),
+    }
+}
+
+/// What a user stop does to the leases (spec 0031, AC-8): the active manual
+/// leases are released and the active startup leases of `session` are
+/// suppressed, as [`evaluate_stop`] decides. Returns `None` when
+/// environment leases hold the instance and `override_leases` is not set.
+#[must_use]
+pub fn manual_stop_ops(
+    instance: InstanceId,
+    leases: &[Lease],
+    session: Option<&SessionId>,
+    override_leases: bool,
+    now: Timestamp,
+) -> Option<Vec<WriteOp>> {
+    let decision = evaluate_stop(
+        instance,
+        leases,
+        &StopRequest::Manual {
+            session: session.cloned(),
+            override_leases,
+        },
+    );
+    let StopDecision::Stop {
+        release, suppress, ..
+    } = decision
+    else {
+        return None;
+    };
+    let mut ops = Vec::new();
+    for lease in leases {
+        if release.contains(&lease.id()) {
+            let mut lease = lease.clone();
+            if lease.release(now).is_ok() {
+                ops.push(WriteOp::UpdateLease(lease));
+            }
+        } else if suppress.contains(&lease.id()) {
+            let mut lease = lease.clone();
+            if lease.suppress(now).is_ok() {
+                ops.push(WriteOp::UpdateLease(lease));
+            }
+        }
+    }
+    Some(ops)
 }

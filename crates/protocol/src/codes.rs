@@ -292,6 +292,8 @@ area! {
             details ["field", "max"], "a journal payload is above its limit, a bug in the caller";
         JOURNAL_FULL = "operation.journal_full", Internal, retryable false,
             details ["kind", "max"], "an operation recorded more steps or created items than its journal holds";
+        CANCELLED = "operation.cancelled", Cancelled, retryable false,
+            details [], "a step that never began because the operation was cancelled, as the reason it was skipped";
         INTERRUPTED = "operation.interrupted", Failed, retryable false,
             details [], "the final error of an operation closed after the daemon stopped in the middle of it";
         DAEMON_STOPPING = "operation.daemon_stopping", Unavailable, retryable false,
@@ -2171,6 +2173,7 @@ mod tests {
                 false,
                 &["kind", "max"],
             ),
+            ("operation.cancelled", ErrorCategory::Cancelled, false, &[]),
             ("operation.interrupted", ErrorCategory::Failed, false, &[]),
             (
                 "operation.daemon_stopping",

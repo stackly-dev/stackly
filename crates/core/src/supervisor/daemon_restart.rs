@@ -195,12 +195,31 @@ impl Supervisor {
     /// strategy, with no change to the desired state and no lease check.
     /// An instance that no longer runs is done at once.
     pub(crate) async fn stop_for_plan(&self, id: InstanceId) -> Result<(), SupervisorError> {
+        self.stop_direct(id, StopIntent::PlannedRestart, Vec::new())
+            .await
+    }
+
+    /// Stops one instance under the lock the caller holds, without an
+    /// operation of its own: the provider's stop strategy, and for a person's
+    /// stop the desired state `stopped` and `leases` in the same commit. An
+    /// instance that no longer runs only gets that registry change.
+    pub(crate) async fn stop_direct(
+        &self,
+        id: InstanceId,
+        intent: StopIntent,
+        leases: Vec<WriteOp>,
+    ) -> Result<(), SupervisorError> {
         let deps = self.deps();
         let instance = read_instance(deps, id).await?;
         match instance.lifecycle() {
             InstanceLifecycle::Stopped
             | InstanceLifecycle::Failed
-            | InstanceLifecycle::Uninitialized => return Ok(()),
+            | InstanceLifecycle::Uninitialized => {
+                if intent.writes_desired() {
+                    return self.settle_gone_process(id, intent, leases).await;
+                }
+                return Ok(());
+            }
             InstanceLifecycle::Unknown => {
                 return Err(SupervisorError::IdentityUnproven { pid: None });
             }
@@ -229,9 +248,7 @@ impl Supervisor {
                 InstanceLifecycle::Stopping
                 | InstanceLifecycle::Stopped
                 | InstanceLifecycle::Failed => {
-                    return self
-                        .settle_gone_process(id, StopIntent::PlannedRestart)
-                        .await;
+                    return self.settle_gone_process(id, intent, leases).await;
                 }
                 InstanceLifecycle::Recovering => {}
                 _ => return Err(SupervisorError::IdentityUnproven { pid: None }),
@@ -239,9 +256,7 @@ impl Supervisor {
         }
         actor.cancel_respawn(deps);
         let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
-        let journaled = self
-            .journal_stop(id, no_process, StopIntent::PlannedRestart)
-            .await?;
+        let journaled = self.journal_stop(id, no_process, intent, leases).await?;
         if has_process && journaled == StopJournal::Begun {
             self.stop_process(id, std::future::pending()).await?;
         }

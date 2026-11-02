@@ -27,6 +27,7 @@ mod startup;
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
 };
+use stackly_core::session::{manual_start_ops, manual_stop_ops, startup_lease_state};
 use stackly_core::supervisor::SupervisorError;
 use stackly_core::supervisor::{
     ForceStopRequest, InstanceChanges, ReloadRequest, RestartRequest, StartRequest, StopRequest,
@@ -35,7 +36,7 @@ use stackly_core::supervisor::{
 use stackly_domain::{
     Capability, DesiredState, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
     JournalPayload, LeaseFilter, OperationKind, OperationResource, Registry, ResourceRevision,
-    StopDecision, StopRequest as LeaseStopRequest, evaluate_stop,
+    SessionId, StopDecision, StopRequest as LeaseStopRequest, evaluate_stop,
 };
 use stackly_protocol::codes::resource;
 use stackly_protocol::fingerprint::request_fingerprint;
@@ -142,9 +143,11 @@ pub fn start<'a>(
         let fingerprint = request_fingerprint(&Call::InstanceStart(params));
         let work = supervisor.start_work(StartRequest::user(id, caller(&context)));
         let drift = config::drifted_files(&supervisor, id);
+        let session = core.session().login().map(|login| login.id.clone());
+        let now = core.platform().clock().now();
         let precheck: Box<dyn Precheck> = Box::new(move || {
             drift_refusal(drift.as_deref())
-                .unwrap_or_else(|| start_precheck(&registry, id, expected))
+                .unwrap_or_else(|| start_precheck(&registry, id, expected, session.as_ref(), now))
         });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::StartInstance,
@@ -195,8 +198,18 @@ pub fn stop<'a>(
             stop_request = stop_request.overriding_leases();
         }
         let work = supervisor.stop_work(stop_request);
-        let precheck: Box<dyn Precheck> =
-            Box::new(move || stop_precheck(&registry, id, expected, override_leases));
+        let session = core.session().login().map(|login| login.id.clone());
+        let now = core.platform().clock().now();
+        let precheck: Box<dyn Precheck> = Box::new(move || {
+            stop_precheck(
+                &registry,
+                id,
+                expected,
+                override_leases,
+                session.as_ref(),
+                now,
+            )
+        });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::StopInstance,
             resource: OperationResource::Instance(id),
@@ -477,6 +490,8 @@ fn start_precheck(
     registry: &SqliteRegistry,
     id: InstanceId,
     expected: Option<ResourceRevision>,
+    session: Option<&SessionId>,
+    now: jiff::Timestamp,
 ) -> PrecheckOutcome {
     let instance = match read_for_precheck(registry, id, expected) {
         Ok(instance) => instance,
@@ -493,7 +508,9 @@ fn start_precheck(
         InstanceLifecycle::Unknown => reject(SupervisorError::IdentityUnproven { pid: None }),
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
-        | InstanceLifecycle::Recovering => no_op_with_desired(instance, DesiredState::Running),
+        | InstanceLifecycle::Recovering => {
+            no_op_with_desired(registry, instance, DesiredState::Running, session, now)
+        }
         // A `failed` instance whose init failed has no initialized data
         // yet (BR-008).
         InstanceLifecycle::Stopped | InstanceLifecycle::Failed
@@ -514,6 +531,8 @@ fn stop_precheck(
     id: InstanceId,
     expected: Option<ResourceRevision>,
     override_leases: bool,
+    session: Option<&SessionId>,
+    now: jiff::Timestamp,
 ) -> PrecheckOutcome {
     let instance = match read_for_precheck(registry, id, expected) {
         Ok(instance) => instance,
@@ -529,7 +548,7 @@ fn stop_precheck(
         }
         InstanceLifecycle::Uninitialized => return PrecheckOutcome::NoOp(NoOpReply::nothing()),
         InstanceLifecycle::Stopped | InstanceLifecycle::Failed => {
-            return no_op_with_desired(instance, DesiredState::Stopped);
+            return no_op_with_desired(registry, instance, DesiredState::Stopped, session, now);
         }
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
@@ -585,20 +604,50 @@ fn reject(error: SupervisorError) -> PrecheckOutcome {
 /// The `alreadyInState` answer of an instance that is in the state asked
 /// for: it writes nothing, unless the stored desired state differs, which
 /// one commit then sets.
-fn no_op_with_desired(instance: Instance, desired: DesiredState) -> PrecheckOutcome {
+fn no_op_with_desired(
+    registry: &SqliteRegistry,
+    instance: Instance,
+    desired: DesiredState,
+    session: Option<&SessionId>,
+    now: jiff::Timestamp,
+) -> PrecheckOutcome {
     if instance.desired() == desired {
         return PrecheckOutcome::NoOp(NoOpReply::nothing());
     }
+    // The leases follow the desired state in the same commit (spec 0031,
+    // AC-8, AC-9): a stop ends the manual leases and suppresses the startup
+    // lease of this session, a start writes a manual lease.
+    let id = instance.id();
+    let leases = match registry.leases(id, LeaseFilter::Unreleased) {
+        Ok(leases) => leases.value,
+        Err(error) => return reject(SupervisorError::Registry(error)),
+    };
+    let lease_ops = match desired {
+        DesiredState::Running => manual_start_ops(
+            id,
+            &leases,
+            session,
+            stackly_domain::LeaseId::generate(),
+            now,
+        ),
+        DesiredState::Stopped => {
+            manual_stop_ops(id, &leases, session, true, now).unwrap_or_default()
+        }
+    };
     let mut changes = InstanceChanges::new(instance);
     let applied = changes.apply(|instance| {
         instance.set_desired(desired);
         Ok::<_, SupervisorError>(())
     });
     match applied {
-        Ok(()) => PrecheckOutcome::NoOp(NoOpReply::writing(FinalBatch {
-            expected_generation: None,
-            ops: changes.into_ops(),
-        })),
+        Ok(()) => {
+            let mut ops = changes.into_ops();
+            ops.extend(lease_ops);
+            PrecheckOutcome::NoOp(NoOpReply::writing(FinalBatch {
+                expected_generation: None,
+                ops,
+            }))
+        }
         Err(error) => reject(error),
     }
 }
@@ -615,8 +664,32 @@ async fn announce(core: &DaemonCore, id: InstanceId, outcome: &StartOutcome) {
     let Ok(instance) = read_instance(core, id).await else {
         return;
     };
+    refresh_autostart(core, id).await;
     if let Some(events) = core.supervision().events() {
         stackly_core::supervisor::SupervisorEvents::instance_changed(&*events, &instance);
+    }
+}
+
+/// Reads the startup lease of this session again and keeps it in the
+/// autostart book, after a commit the supervisor did not make (spec 0031).
+async fn refresh_autostart(core: &DaemonCore, id: InstanceId) {
+    let Some(session) = core.session().login().map(|login| login.id.clone()) else {
+        return;
+    };
+    let Ok(registry) = registry_of(core) else {
+        return;
+    };
+    let leases = tokio::task::spawn_blocking(move || {
+        registry
+            .leases(id, LeaseFilter::Unreleased)
+            .map(|leases| leases.value)
+    })
+    .await;
+    if let Ok(Ok(leases)) = leases {
+        let state = startup_lease_state(id, &leases, Some(&session));
+        core.supervision()
+            .autostart()
+            .set(id, crate::session::autostart_of(state));
     }
 }
 

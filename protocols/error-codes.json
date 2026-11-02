@@ -1030,6 +1030,14 @@
       "summary": "the final error of an abandoned operation"
     },
     {
+      "code": "operation.cancelled",
+      "category": "cancelled",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "a step that never began because the operation was cancelled, as the reason it was skipped"
+    },
+    {
       "code": "operation.compensation_failed",
       "category": "failed",
       "retryable": false,

@@ -14,8 +14,7 @@ use std::future::Future;
 
 use stackly_domain::{
     DesiredState, IdentityEvidence, InstanceBlocker, InstanceId, InstanceLifecycle, LeaseFilter,
-    LifecycleEvent, Pid, StageName, StopDecision, StopIntent, StopRequest as LeaseStopRequest,
-    evaluate_stop,
+    LifecycleEvent, Pid, StageName, StopIntent, WriteOp,
 };
 use stackly_platform::{ChildRole, ExitStatus, ProcessError, ProviderSignal, SignalTarget};
 use tokio::time::Instant;
@@ -37,6 +36,7 @@ use crate::operation::{
 };
 use crate::provider::{StopPlan, StopSignal};
 use crate::secret::ResolvedSecrets;
+use crate::session::manual_stop_ops;
 use stackly_domain::ResourceRef;
 
 /// What [`Supervisor::stop_work`] needs.
@@ -171,6 +171,7 @@ impl Supervisor {
         &self,
         id: InstanceId,
         intent: StopIntent,
+        leases: Vec<WriteOp>,
     ) -> Result<(), SupervisorError> {
         let now = self.deps().platform.clock().now();
         commit_exit(self, id, None, CommitMode::Operation, |changes, force| {
@@ -183,7 +184,11 @@ impl Supervisor {
             if changes.instance().lifecycle() == InstanceLifecycle::Stopping {
                 apply_stopping_exit(changes, force, now)?;
             }
-            Ok(Vec::new())
+            Ok(if intent.writes_desired() {
+                leases.clone()
+            } else {
+                Vec::new()
+            })
         })
         .await
     }
@@ -315,6 +320,7 @@ impl Supervisor {
         id: InstanceId,
         no_process: bool,
         intent: StopIntent,
+        leases: Vec<WriteOp>,
     ) -> Result<StopJournal, SupervisorError> {
         let now = self.deps().platform.clock().now();
         let mut journaled = StopJournal::Begun;
@@ -326,12 +332,17 @@ impl Supervisor {
                 })?;
             }
             journaled = StopJournal::Begun;
+            let extra = if intent.writes_desired() {
+                leases.clone()
+            } else {
+                Vec::new()
+            };
             match changes.instance().lifecycle() {
                 InstanceLifecycle::Stopped
                 | InstanceLifecycle::Failed
                 | InstanceLifecycle::Uninitialized => {
                     journaled = StopJournal::AlreadyStopped;
-                    return Ok(Vec::new());
+                    return Ok(extra);
                 }
                 InstanceLifecycle::Stopping => {}
                 _ => apply_event(changes, LifecycleEvent::StopBegin, now)?,
@@ -340,7 +351,7 @@ impl Supervisor {
                 // No process left, so `last_exit` stays as it is.
                 apply_event(changes, LifecycleEvent::Exited { exit: None }, now)?;
             }
-            Ok(Vec::new())
+            Ok(extra)
         })
         .await?;
         Ok(journaled)
@@ -404,6 +415,26 @@ async fn run_stop(
     ctx.begin_step(StepSpec::new(StageName::VALIDATE)).await?;
     ctx.set_stage(StageName::VALIDATE).await?;
     let instance = read_instance(deps, id).await.map_err(failed)?;
+    // A stop a person asks for ends what keeps the instance wanted (spec
+    // 0031, AC-8): the manual leases are released and the startup lease of
+    // this session is suppressed, in the same commit as desired `stopped`.
+    let leases = if request.intent.checks_leases() {
+        let registry = deps.registry.clone();
+        blocking(move || registry.leases(id, LeaseFilter::Unreleased))
+            .await
+            .map_err(failed)?
+            .map_err(|error| failed(SupervisorError::Registry(error)))?
+            .value
+    } else {
+        Vec::new()
+    };
+    let session = sup.session();
+    let now = deps.platform.clock().now();
+    let mut lease_ops = if request.intent.checks_leases() {
+        manual_stop_ops(id, &leases, session.as_ref(), true, now).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     match instance.lifecycle() {
         InstanceLifecycle::Retained => return Err(failed(SupervisorError::InstanceRetained)),
         InstanceLifecycle::Unknown => {
@@ -423,7 +454,7 @@ async fn run_stop(
                         instance.set_desired(DesiredState::Stopped);
                         Ok::<_, SupervisorError>(())
                     })?;
-                    Ok(Vec::new())
+                    Ok(lease_ops.clone())
                 })
                 .await
                 .map_err(failed)?;
@@ -436,22 +467,9 @@ async fn run_stop(
         | InstanceLifecycle::Stopping => {}
     }
     if request.intent.checks_leases() {
-        let registry = deps.registry.clone();
-        let leases = blocking(move || registry.leases(id, LeaseFilter::Unreleased))
-            .await
-            .map_err(failed)?
-            .map_err(|error| failed(SupervisorError::Registry(error)))?
-            .value;
-        let decision = evaluate_stop(
-            id,
-            &leases,
-            &LeaseStopRequest::Manual {
-                session: None,
-                override_leases: request.override_leases,
-            },
-        );
-        if matches!(decision, StopDecision::RequiresOverride { .. }) {
-            return Err(failed(SupervisorError::StopRequiresOverride));
+        match manual_stop_ops(id, &leases, session.as_ref(), request.override_leases, now) {
+            Some(ops) => lease_ops = ops,
+            None => return Err(failed(SupervisorError::StopRequiresOverride)),
         }
     }
 
@@ -479,7 +497,7 @@ async fn run_stop(
             InstanceLifecycle::Stopping
             | InstanceLifecycle::Stopped
             | InstanceLifecycle::Failed => {
-                sup.settle_gone_process(id, request.intent)
+                sup.settle_gone_process(id, request.intent, lease_ops.clone())
                     .await
                     .map_err(failed)?;
                 return Ok(outcome());
@@ -501,7 +519,7 @@ async fn run_stop(
     let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
     // A pause between two respawns has no process to stop.
     let journaled = sup
-        .journal_stop(id, no_process, request.intent)
+        .journal_stop(id, no_process, request.intent, lease_ops)
         .await
         .map_err(failed)?;
 

@@ -67,6 +67,7 @@ nonisolated public enum OperationTitle {
         case .restoreInstance: return "Restore \(subject)"
         case .renameInstance: return "Rename \(subject)"
         case .setInstanceStartup: return "Change autostart of \(subject)"
+        case .stopAllInstances: return "Stop all instances"
         case .applyConfig: return "Apply configuration of \(subject)"
         case .changeEndpoints: return "Change ports of \(subject)"
         case .resolveConfigDrift: return "Keep configuration of \(subject)"

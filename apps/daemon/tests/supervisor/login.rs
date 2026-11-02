@@ -115,10 +115,16 @@ async fn a_new_login_starts_the_at_login_instance_once_and_a_stop_holds_in_the_s
 
     // The user stops it; the same session does not start it again (AC-8).
     api.stop_when_free(id).await;
-    api.wait_instance(id, "stopped", |summary| {
-        summary.lifecycle == InstanceLifecycle::Stopped
-    })
-    .await;
+    let stopped = api
+        .wait_instance(id, "stopped", |summary| {
+            summary.lifecycle == InstanceLifecycle::Stopped
+        })
+        .await;
+    assert_eq!(
+        stopped.autostart.session,
+        AutostartSession::Suppressed,
+        "a stop by the person suppresses the startup lease of this session"
+    );
     drop(api);
     stop(second).await;
     let third = start(&site, launchd(), &session).await;
@@ -354,4 +360,53 @@ async fn a_session_that_cannot_be_read_leaves_the_start_queue_to_the_run_again_l
     api.stop_when_free(id).await;
     drop(api);
     stop(sighted).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stop_all_holds_the_startup_lease_back_for_the_rest_of_the_session() {
+    let site = Site::new();
+    let session = FakeLoginSessionInfo::new();
+    let manual = site.start().await;
+    let id = {
+        let api = site.api().await;
+        api.create_ready("pg", json!({})).await
+    };
+    stop(manual).await;
+    set_at_login(&site, id);
+    let first = start(&site, launchd(), &session).await;
+    stop(first).await;
+    session.set_audit_session(100_002);
+    let second = start(&site, launchd(), &session).await;
+    let api = site.api().await;
+    api.wait_instance(id, "ready after the login", |summary| {
+        summary.readiness.state == InstanceReadinessState::Ready
+    })
+    .await;
+
+    let reply = api
+        .client
+        .call_detailed(
+            Call::InstanceStopAll(stackly_protocol::stop_all::StopAllParams::default()),
+            CallOptions::default().with_idempotency_key(key()),
+        )
+        .await
+        .expect("stop all answers");
+    let Reply::InstanceStopAll(result) = reply else {
+        panic!("not a stop_all reply");
+    };
+    assert_eq!(result.stopped, vec![id]);
+    let stopped = api.get(id).await.expect("the instance reads");
+    assert_eq!(stopped.autostart.session, AutostartSession::Suppressed);
+    drop(api);
+    stop(second).await;
+
+    // The same session again: the instance stays stopped.
+    let third = start(&site, launchd(), &session).await;
+    let api = site.api().await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let summary = api.get(id).await.expect("the instance reads");
+    assert_eq!(summary.lifecycle, InstanceLifecycle::Stopped);
+    assert_eq!(summary.autostart.session, AutostartSession::Suppressed);
+    drop(api);
+    stop(third).await;
 }

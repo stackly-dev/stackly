@@ -38,6 +38,7 @@ pub mod operation;
 pub mod restart;
 pub mod runtime;
 pub mod secret;
+pub mod stop_all;
 pub mod storage;
 mod version;
 pub mod wire;

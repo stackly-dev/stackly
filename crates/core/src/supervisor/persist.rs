@@ -171,6 +171,7 @@ async fn commit_with(
         let after = changes.instance().clone();
         let mut ops = changes.into_ops();
         ops.extend(extra);
+        let lease_effect = crate::session::startup_lease_effect(id, &ops);
         if ops.is_empty() {
             break Ok(());
         }
@@ -209,6 +210,9 @@ async fn commit_with(
         match sent {
             Ok(_) => {
                 actor.note_revision(after.revision());
+                if let Some(state) = lease_effect {
+                    deps.events.startup_lease_changed(id, state);
+                }
                 deps.events.instance_changed(&after);
                 break Ok(());
             }
