@@ -231,3 +231,93 @@ fn watch_writes_one_line_per_new_sample_with_the_cursor_and_a_line_for_a_reset()
     assert_eq!(requests[1].raw["call"]["content"]["afterSeq"], 3);
     ev.pass();
 }
+
+fn restarting(root: &TestRoot) -> ScriptedDaemon {
+    let live = {
+        let mut reply = fixture("live");
+        reply.interval_seconds = 1;
+        reply
+    };
+    let stopped = fixture("not-running");
+    ScriptedDaemon::serve(root, move |call, ctx| match call {
+        Call::InstanceGetMetrics(_) => {
+            let reply = match ctx.nth {
+                0 => live.clone(),
+                1 => stopped.clone(),
+                2 => {
+                    // The process is new and the sampler has not taken its
+                    // first sample: a reset with nothing to show.
+                    let mut reply = live.clone();
+                    reply.history_id = Some("5151-1760950999.000000".to_owned());
+                    reply.samples.clear();
+                    reply.history_reset = true;
+                    reply
+                }
+                _ => {
+                    let mut reply = live.clone();
+                    reply.history_id = Some("5151-1760950999.000000".to_owned());
+                    reply.samples.truncate(1);
+                    reply.samples[0].seq = stackly_protocol::Sequence::new(1).expect("a sequence");
+                    reply.history_reset = false;
+                    reply
+                }
+            };
+            vec![Step::Reply(Reply::InstanceGetMetrics(Box::new(reply)))]
+        }
+        _ => Vec::new(),
+    })
+}
+
+/// Spec 0028 AC-12.
+#[test]
+fn watch_writes_history_reset_when_a_new_process_has_no_sample_yet() {
+    let ev = evidence!(
+        covers = ["REQ-018"],
+        kind = Kind::Fixture,
+        expected = "instance metrics --watch writes not running when the instance stops, and when it starts again and the daemon answers with a new historyId, historyReset, and no samples yet, it writes history reset at once, before the first sample of the new process, and asks again with the new historyId",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = restarting(&root);
+    let mut command = stackly(root.path());
+    command
+        .args(["instance", "metrics", ID, "--watch"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().expect("stackly starts");
+    let mut stdout = BufReader::new(child.stdout.take().expect("stdout is piped"));
+    let started = Instant::now();
+    let mut lines = Vec::new();
+    while lines.len() < 4 {
+        let mut line = String::new();
+        let read = stdout.read_line(&mut line).expect("stdout can be read");
+        assert!(read > 0, "stackly ended early: {lines:?}");
+        lines.push(line.trim_end().to_owned());
+        assert!(started.elapsed() < Duration::from_secs(20), "{lines:?}");
+    }
+    let status = std::process::Command::new("/bin/kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .expect("kill runs");
+    assert!(status.success());
+    let output = child.wait_with_output().expect("stackly ends");
+
+    assert_eq!(output.status.code(), Some(0), "{lines:?}");
+    assert!(lines[0].contains("main cpu"), "{lines:?}");
+    assert_eq!(lines[1], "not running (stopped)", "{lines:?}");
+    assert_eq!(lines[2], "history reset", "{lines:?}");
+    assert!(lines[3].contains("main cpu"), "{lines:?}");
+    let requests: Vec<_> = daemon
+        .log()
+        .into_iter()
+        .filter(|logged| logged.method == "instance.get_metrics")
+        .collect();
+    assert!(requests.len() >= 4, "{requests:?}");
+    // After not running the cursor is empty, and the reply that carried
+    // the reset hands over the new history.
+    assert!(requests[2].raw["call"]["content"]["historyId"].is_null());
+    assert_eq!(
+        requests[3].raw["call"]["content"]["historyId"],
+        "5151-1760950999.000000"
+    );
+    ev.pass();
+}
