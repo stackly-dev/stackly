@@ -12,9 +12,7 @@ struct CatalogViewsTests {
         let nats = try CatalogFixture.detail("nats")
         let notes = VersionMatrix.notes(of: try #require(nats.versions))
         #expect(notes.count == 3)
-        #expect(
-            notes[0]
-                == "macOS: The runtime ran on this Mac; the provider is not tested with it yet.")
+        #expect(notes[0] == "macOS: Tested with this provider on this Mac.")
         #expect(notes[1] == "Linux: No Linux build in this catalog.")
         #expect(notes[2].hasPrefix("Windows: "))
     }
