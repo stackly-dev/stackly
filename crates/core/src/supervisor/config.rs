@@ -76,6 +76,9 @@ pub const RESTART_LOCK_POLL: Duration = Duration::from_millis(200);
 /// How long a planned restart waits for the operations in flight before it
 /// refuses with `daemon.restart_busy` (spec 0030).
 pub const RESTART_QUIESCE_WAIT: Duration = Duration::from_secs(30);
+/// How often the supervisor reads again the secrets of an instance that
+/// waits for a locked or busy Keychain (spec 0031, AC-15).
+pub const LOGIN_SECRET_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 /// How long the end of a login session gives the stops of its instances,
 /// counted from the `SIGTERM` that started it (spec 0031, *Akhir sesi*,
 /// step 4).
@@ -163,6 +166,8 @@ pub struct SupervisorConfig {
     pub restart_quiesce_wait: Duration,
     /// [`SESSION_END_STOP_BUDGET`].
     pub session_end_stop_budget: Duration,
+    /// [`LOGIN_SECRET_RETRY_INTERVAL`].
+    pub login_secret_retry_interval: Duration,
     /// [`WAKE_CHECK_INTERVAL`].
     pub wake_check_interval: Duration,
     /// [`WAKE_GAP_THRESHOLD`].
@@ -209,6 +214,7 @@ impl Default for SupervisorConfig {
             restart_lock_poll: RESTART_LOCK_POLL,
             restart_quiesce_wait: RESTART_QUIESCE_WAIT,
             session_end_stop_budget: SESSION_END_STOP_BUDGET,
+            login_secret_retry_interval: LOGIN_SECRET_RETRY_INTERVAL,
             wake_check_interval: WAKE_CHECK_INTERVAL,
             wake_gap_threshold: WAKE_GAP_THRESHOLD,
             wake_grace: WAKE_GRACE,
@@ -256,6 +262,7 @@ mod tests {
         assert_eq!(config.restart_lock_poll, Duration::from_millis(200));
         assert_eq!(config.restart_quiesce_wait, Duration::from_secs(30));
         assert_eq!(config.session_end_stop_budget, Duration::from_secs(15));
+        assert_eq!(config.login_secret_retry_interval, Duration::from_secs(30));
         assert_eq!(config.handover_proven, HANDOVER_PROVEN);
         assert_eq!(config.wake_check_interval, Duration::from_secs(2));
         assert_eq!(config.wake_gap_threshold, Duration::from_secs(5));

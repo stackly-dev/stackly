@@ -177,6 +177,12 @@ pub(crate) struct Shared {
     pub(crate) plan: tokio::sync::Mutex<Option<stackly_domain::RestartPlan>>,
     /// Whether the recheck task of `unknown` instances runs.
     pub(crate) recheck_running: AtomicBool,
+    /// Whether the task that reads the secrets of waiting instances runs
+    /// (spec 0031, AC-15).
+    pub(crate) secret_retry_running: AtomicBool,
+    /// The instances a `secret_retry` start is working on right now, so a
+    /// slow start is not begun twice.
+    pub(crate) secret_retrying: Mutex<std::collections::HashSet<InstanceId>>,
     /// Announces wakes from sleep to the probe loops and the start
     /// deadlines (spec 0028 AC-9).
     pub(crate) wake: super::wake::WakeWatch,
@@ -245,6 +251,8 @@ impl Supervisor {
                 pending: Mutex::new(Vec::new()),
                 plan: tokio::sync::Mutex::new(None),
                 recheck_running: AtomicBool::new(false),
+                secret_retry_running: AtomicBool::new(false),
+                secret_retrying: Mutex::new(std::collections::HashSet::new()),
                 wake: super::wake::WakeWatch::new(),
                 session: Mutex::new(None),
                 session_closed: AtomicBool::new(false),

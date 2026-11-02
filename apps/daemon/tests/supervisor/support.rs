@@ -59,6 +59,7 @@ pub fn fast() -> DaemonConfig {
     let supervisor = &mut config.supervisor;
     supervisor.helper_term_grace = Duration::from_millis(200);
     supervisor.readiness_refresh_interval = Duration::from_millis(200);
+    supervisor.login_secret_retry_interval = Duration::from_millis(200);
     supervisor.restart_base_delay = Duration::from_millis(50);
     supervisor.restart_max_delay = Duration::from_millis(400);
     supervisor.spool_drain_interval = Duration::from_millis(50);

@@ -24,6 +24,7 @@ mod list_performance;
 mod login;
 mod logs;
 mod metrics;
+mod native_keychain;
 mod offline;
 mod open_with;
 mod process;

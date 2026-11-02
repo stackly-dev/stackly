@@ -129,3 +129,24 @@ Langkah build 11. Langkah 1 (spike audit session) dan langkah 10 (spike logout) 
 - Baris ditutup `interrupted` bila ada stop yang belum final saat tenggat atau gagal; selain itu `clean`. Instance yang masih `stopping` dibiarkan dan rekonsiliasi berikutnya membacanya sebagai `exited` (spec 0010).
 - Kalau sinyal datang sebelum slot start selesai merekonsiliasi (supervisor belum siap), akhir sesi hanya menutup pintu dan tidak menghentikan instance, lalu urutan berhenti biasa berjalan.
 - Kode memakai `StopIntent::PlannedRestart` untuk stop akhir sesi karena artinya sama (tanpa cek lease, tanpa menulis desired); `StopRequest::session_end` menamainya.
+
+## Milestone 4: Agent off dan Keychain terkunci
+
+Langkah build 12 dan 13. Langkah 13 (Keychain terkunci) dikerjakan lebih dulu; langkah 12 menunggu kontrak (`ShutdownMode::AgentOff`) dari F32.
+
+### Langkah 13: Keychain terkunci (AC-15)
+
+#### UI / manual
+
+- [ ] Buka `crates/core/src/supervisor/secret_retry.rs` → satu task per supervisor, setiap `LOGIN_SECRET_RETRY_INTERVAL` (30 detik, `SupervisorConfig::login_secret_retry_interval`) membaca ulang secret instance yang blocker `needsSecret` nya hanya `store_locked` atau `store_busy`, lewat `SecretCaller::background()` (interaksi `Never`), tanpa operasi; start `secret_retry` dimulai hanya kalau secret terbaca, lewat `StartRequest::background` sehingga tidak dihitung ke budget restart → AC-15
+- [ ] Buka `retry_one` → desired `stopped` menghapus blocker dan menghentikan timer; alasan yang berubah menjadi `missing` atau `access_denied` menghentikan pembacaan dan desired tidak diubah → AC-15
+- [ ] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Secrets/SecretNeed.swift` `keychainWaitNote` dan `InstanceDetailBanner.swift` → banner "Needs a secret to start" memuat "The Keychain is locked. Stackly tries again every 30 seconds." hanya kalau semua alasan `store_locked` atau `store_busy`; tombol Enter Secret… tetap → AC-15
+
+#### Commands
+
+- [ ] `cargo test -p stackly-core --test supervisor_start secret_retry` → store terkunci: instance `stopped`, desired `running`, blocker `store_locked`, beberapa interval tanpa operasi baru dan tanpa spawn; buka kunci: tepat satu start dengan trigger `secret_retry`, blocker hilang; stop pengguna menghapus blocker dan tidak ada start; `access_denied` menghentikan pembacaan (jumlah panggilan store tidak naik) dan desired tetap `running` → AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter KeychainWaitTests` → kalimat hanya untuk `store_locked` dan `store_busy` → AC-15
+
+#### Native
+
+- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test supervisor native_keychain -- --ignored --test-threads 1` → keychain file di root sementara (login Keychain tidak disentuh), dikunci dengan `security lock-keychain`, lalu dibuka dengan `security unlock-keychain` → AC-15 · run 2026-11-03: FAIL. Pembacaan pertama dan kedua dari keychain yang dikunci dari luar menjawab `Backend { code: -60008 }` (`errAuthorizationInternal`) walau `state()` sesudahnya `Locked`, jadi start login berakhir `failed` dengan `secret.store_backend`, bukan blocker `needsSecret`, dan timer tidak punya apa pun untuk dicoba lagi. `map_status` di `crates/platform-macos/src/secret.rs` hanya memetakan -25293 dan -25308 ke `Locked`. Diusulkan: `-60008` dengan keychain terkunci menjadi `Locked`. File itu di luar kepemilikan milestone ini, jadi menunggu keputusan lead.
