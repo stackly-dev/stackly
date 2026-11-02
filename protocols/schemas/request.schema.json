@@ -687,6 +687,23 @@
           ]
         },
         {
+          "description": "The metrics samples of one running instance after a cursor (spec\n0028).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/GetMetricsParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_metrics"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "One page of an instance's stored log (spec 0027).",
           "type": "object",
           "properties": {
@@ -1057,6 +1074,39 @@
       "properties": {
         "instanceId": {
           "description": "The instance to read, retained ones included.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId"
+      ]
+    },
+    "GetMetricsParams": {
+      "description": "Params of `instance.get_metrics`.\n\nWithout `historyId`, or with one the daemon no longer holds, every\nsample is sent and `historyReset` is true. With the current one, only\nsamples with a `seq` above `afterSeq` are sent.",
+      "type": "object",
+      "properties": {
+        "afterSeq": {
+          "description": "The `seq` of the newest sample the client holds in that history.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "historyId": {
+          "description": "The `historyId` of the last reply the client holds. Opaque text.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceId": {
+          "description": "The instance to read.",
           "type": "string",
           "format": "uuid"
         }

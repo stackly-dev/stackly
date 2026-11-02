@@ -16,6 +16,7 @@ pub mod connection;
 mod create;
 mod detail;
 mod duplicate;
+mod metrics;
 pub mod open_with;
 
 pub use create::{
@@ -31,6 +32,11 @@ pub use detail::{
     DetailSecret, GetDataUsageParams, GetInstanceDetailParams, InstanceDetail, StartupPolicyKind,
 };
 pub use duplicate::{DuplicateForm, DuplicateSecret, DuplicateSource, GetDuplicateFormParams};
+pub use metrics::{
+    CountMetric, DataUsageMetric, GetMetricsParams, METRICS_HISTORY_ID_MAX, MetricsProcess,
+    MetricsReply, MetricsSample, MetricsState, NumberMetric, ProcessRow, ResourceUsage,
+    ScannedUsage, UnavailableContent, UnavailableReason, UsageScope,
+};
 pub use open_with::{
     EnvPair, OpenAction, OpenActionKind, OpenCommand, PrepareTerminalParams, PrepareTerminalReply,
 };
@@ -254,6 +260,12 @@ pub struct InstanceReadiness {
     pub detail: Option<String>,
     /// When the observation was made.
     pub observed_at: Timestamp,
+    /// How long the probe attempt behind this observation took, in
+    /// milliseconds, rounded up and capped at the probe timeout; null when
+    /// no probe made it, as for `daemon_restarted` or `waking`. A change of
+    /// the latency alone sends no event.
+    #[serde(default)]
+    pub latency_ms: Option<u32>,
 }
 
 /// Health as read now (`effective` at the time of the snapshot).
@@ -270,6 +282,12 @@ pub struct InstanceHealth {
     pub detail: Option<String>,
     /// When the observation was made.
     pub observed_at: Timestamp,
+    /// How long the probe attempt behind this observation took, in
+    /// milliseconds, rounded up and capped at the probe timeout; null when
+    /// no probe made it, as for `daemon_restarted` or `waking`. A change of
+    /// the latency alone sends no event.
+    #[serde(default)]
+    pub latency_ms: Option<u32>,
 }
 
 /// The process of an instance.
@@ -516,6 +534,12 @@ pub struct InstanceSummary {
     pub last_failure: Option<InstanceLastFailure>,
     /// The restart policy.
     pub restart: InstanceRestart,
+    /// The restarts that followed a crash since the instance was created
+    /// (spec 0028 AC-6). A first start, a restart the person asked for,
+    /// reconciliation, and a reload do not count. Absent in older daemons,
+    /// which reads as 0.
+    #[serde(default)]
+    pub restart_total: Count,
     /// Why the instance is blocked, if it is.
     #[serde(default)]
     pub blocker: Option<InstanceBlocker>,
