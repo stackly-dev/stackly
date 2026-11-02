@@ -589,6 +589,9 @@ impl InProcess {
 pub struct BinaryDaemon {
     child: Option<Child>,
     pub socket: PathBuf,
+    /// When the first handshake to this daemon succeeded, on the monotonic
+    /// clock of the test.
+    pub first_handshake: Instant,
 }
 
 impl BinaryDaemon {
@@ -616,6 +619,7 @@ impl BinaryDaemon {
         let mut daemon = Self {
             child: Some(child),
             socket: paths.socket,
+            first_handshake: Instant::now(),
         };
         let deadline = Instant::now() + Duration::from_secs(30);
         while !common::handshakes(&daemon.socket) {
@@ -633,6 +637,7 @@ impl BinaryDaemon {
             );
             std::thread::sleep(Duration::from_millis(50));
         }
+        daemon.first_handshake = Instant::now();
         daemon
     }
 
@@ -938,6 +943,66 @@ pub async fn create_on(api: &Api, runtime_id: Uuid, name: &str) -> Made {
         "{detail:?}"
     );
     Made { id, port, password }
+}
+
+/// [`create_on`] with the smallest settings the package takes, so ten
+/// clusters of one test stay light.
+pub async fn create_small_on(api: &Api, runtime_id: Uuid, name: &str) -> Made {
+    let password = new_password();
+    let port = free_port();
+    let accepted = api
+        .create(create_params_on(
+            runtime_id,
+            name,
+            PortRequest::Fixed(port),
+            &password,
+            json!({ "sharedBuffersMb": 16, "maxConnections": 20 }),
+        ))
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    let detail = api
+        .wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Succeeded,
+        )
+        .await;
+    assert_eq!(
+        detail.operation.state,
+        stackly_protocol::operation::OperationState::Succeeded,
+        "{detail:?}"
+    );
+    Made { id, port, password }
+}
+
+/// Five instances on the runtime of `site` and five on `other` (runtime ID
+/// and major line), created
+/// small and started one after the other. Returns each with the process it
+/// runs.
+pub async fn ten_running_instances(
+    site: &Site,
+    api: &Api,
+    other: (Uuid, &str),
+) -> Vec<(Made, stackly_protocol::instance::InstanceSummary)> {
+    let mut running = Vec::new();
+    for index in 0..10 {
+        let (runtime_id, line) = if index < 5 {
+            (site.runtime_id, site.pg.major)
+        } else {
+            other
+        };
+        let made = create_small_on(api, runtime_id, &format!("ten-{line}-{index}")).await;
+        let summary = api.start_ready(made.id).await;
+        running.push((made, summary));
+    }
+    running
 }
 
 /// Sends the create and returns the acceptance, without waiting.

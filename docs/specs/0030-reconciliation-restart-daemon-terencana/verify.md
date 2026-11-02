@@ -174,3 +174,43 @@ cargo test -p stacklyd --lib restart::
 cargo test -p stacklyd --test restart_plan -- --test-threads=1
 cargo test -p stackly-domain --lib restart
 ```
+
+### Perbaikan evidence native dan rencana kosong (dev-f30-fix-2)
+
+- **Penanda evidence** · `evidence!` dengan `Kind::Native` kini ada di tiap test `#[ignore = "native: ..."]`: `postgresql_17_survives_...` dan `postgresql_18_survives_...` membuat penandanya sendiri dan meneruskannya ke helper `postgresql_survives(&ev, line)`, yang tidak lagi punya makro. `cargo xtask evidence check` lulus tanpa pelanggaran (63 record manual, 906 file Rust, 577 file Swift)
+- **Rencana kosong di launchd nyata** · `a_planned_restart_with_an_empty_plan_finishes_under_launchd_and_the_next_mutation_is_accepted` di `native_launchd.rs`: `stackly daemon restart --yes` terhadap daemon launchd dari test root sendiri, sekali tanpa instance dan sekali hanya dengan instance `stopped`. Tiap restart keluar 0 dengan rencana `finished` dan nol entri, daemon launchd berikutnya melaporkan rencana `finished` di `daemon.get_info`, instance `stopped` tetap tidak punya proses, dan `instance create --wait` sesudah tiap restart diterima. Ini membuktikan `a_restart_with_no_instance_in_the_plan_still_finishes` di daemon nyata. Run native 2026-11-02: run `01a19b26-868e-77c6-8b4f-0dbb9f2c0dbe`, record `01a19b26-b7fb-76b9-b4f2-8f993dd0af11`, PASS, 63 detik (`sourceDirty`: run sebelum commit)
+
+```bash
+cargo xtask evidence check
+cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 a_planned_restart_with_an_empty_plan
+```
+
+## Milestone 5: Evidence on this Mac
+
+Build steps 13 dan 14 (kotak scope milestone 5; di spec milestone 6). Dua test native baru dengan `evidence!` di test itu sendiri, bagian baru `W` di `docs/manual.md`, dan satu helper tambahan di `apps/daemon/tests/postgresql/harness.rs` (`BinaryDaemon::first_handshake`, `create_small_on`, `ten_running_instances`). Tidak ada kode produksi yang berubah.
+
+### UI / manual
+
+- [ ] Kerjakan `docs/manual.md` bagian W, bagian 1 (tiga PostgreSQL 18.6 `ready`, ⌘Q lalu buka app lagi) → `id`, `process.pid`, `process.startedAt`, dan `serverInstanceId` sama sebelum dan sesudah, `select 1` berhasil untuk ketiganya → AC-1 (record manual `native`)
+- [ ] Kerjakan bagian W, bagian 2 (daemon dari job launchd sementara berlabel `dev.stackly.test.agent.f30`, Settings, Restart Daemon) → bagian Daemon, sheet konfirmasi dengan tiga instance "Keeps running", Cancel tanpa efek, banner dan toast "Daemon restarted. 3 instances adopted, 0 started again.", baris `Last restart` di `daemon status`, lalu subtitle dan tombol saat daemon putus dan saat daemon `manual` → AC-16 (bagian tombol Settings dengan PostgreSQL asli)
+- [x] Catatan: langkah manual tidak dijalankan oleh sesi ini; hanya kamu yang menjalankannya, lalu Claude mengisi record di `evidence/manual/`. Jangan pernah memakai agent milikmu (`com.ojiepermana.stackly.daemon`)
+
+### Commands
+
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql -- --ignored --test-threads 1 ten_postgresql_instances_are_inventoried_within_ten_seconds` → PASS. Run `01a19b31-b017-76f6-8c91-318e5431b990`, record `01a19b31-e219-7130-8fdf-7822b8ebe67b`, `sourceDirty` false, Apple M1 Max 32 GiB, macOS 27.0.1 (26A434). Sepuluh PostgreSQL (lima 17.11, lima 18.6, `sharedBuffersMb` 16 dan `maxConnections` 20) berjalan, daemon di `SIGKILL`: `daemon.reconciling finished` diterima 153 ms dan `instance.list` yang memuat ke-10 instance tanpa `unknown` tersedia 160 ms sesudah handshake pertama yang berhasil ke daemon baru (batas NFR-007: 10.000 ms). Hasil rekonsiliasi: 10 diadopsi, 0 `unknown`, 0 restart; sepuluh PID dan `startedAt` sama dengan sebelum, `SELECT 1` berhasil. Run sebelumnya pada tree yang belum di commit: `01a19b2e-6995-70ca-885c-afc273241d08`, 163 ms dan 170 ms → AC-17, NFR-007
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 ten_postgresql_instances_all_kept_record_the_daemon_gap` → PASS. Run `01a19b32-7f70-773f-b06f-0b883ee8e750`, record `01a19b32-abde-761c-b7f5-7190853d64fc`, `sourceDirty` false. `stackly daemon restart --yes` terhadap daemon launchd (job `dev.stackly.test.agent.*`, root uji sendiri) dengan sepuluh instance `keep` (lima 17.11, lima 18.6): rencana `finished`, ke-10 `adopted` dengan PID dan `startedAt` lama. Angka teramati: **`durations.daemonGap` 10.305 ms**, `stopping` 35 ms, `restoring` 47 ms. Run pada tree yang belum di commit: `01a19b30-466b-7213-8525-c994b619a9ce`, `daemonGap` 9.360 ms. Spec tidak menetapkan batas untuk angka ini → AC-17
+- [x] `cargo xtask evidence check` → bersih (63 record manual, 907 file Rust, 577 file Swift)
+- [x] `cargo fmt --all --check`, `cargo clippy -p stacklyd --all-targets --locked -- -D warnings`, dan `cargo xtask check-deps` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-17 (NFR-007) · `ten_postgresql_instances_are_inventoried_within_ten_seconds` di `apps/daemon/tests/postgresql/inventory.rs`. Jam monoton mulai dari `BinaryDaemon::first_handshake`, yaitu saat handshake pertama yang berhasil ke daemon baru (dicatat harness begitu `SpawnedDaemon` menjawab), dan berhenti saat dua syarat sama sama terpenuhi: event `daemon.reconciling` fase `finished` diterima (langganan `events.subscribe` dengan `since` urutan 0 di run yang sama, sehingga event yang terbit sebelum langganan tetap terbaca) dan `instance.list` memuat 10 instance dengan lifecycle selain `unknown`. Test gagal bila lebih dari 10 detik; lulus dengan 160 ms
+- AC-17 (`daemonGap`) · `ten_postgresql_instances_all_kept_record_the_daemon_gap_of_a_planned_restart` di `apps/daemon/tests/native_launchd.rs`. Test ini memerlukan launchd karena restart terencana ditolak konteks `manual`, jadi ia tidak memakai `SpawnedDaemon`; angkanya dicatat dan tidak dibatasi
+- AC-1 · bagian test daemon sudah dicakup milestone 2; record manual `native` menunggu bagian W bagian 1
+- AC-16 · bagian Settings dengan PostgreSQL asli menunggu bagian W bagian 2; sisanya dicakup milestone 4
+
+### Catatan untuk checker
+
+- `daemonGap` 9,4 sampai 10,3 detik kemungkinan besar bukan daemon yang lambat. Dugaan, belum diperiksa lewat log launchd: plist produksi memakai `ThrottleInterval` 10, sehingga launchd menunggu sekitar 10 detik sebelum memulai daemon baru, sedangkan rekonsiliasi sesudah handshake butuh sekitar 160 ms (run AC-17). Angkanya hanya diamati; kode produksi tidak diubah, dan belum ada percobaan dengan jumlah instance lain untuk memisahkan pengaruh sepuluh instance
+- Dua run pertama (`01a19b2e-…` dan `01a19b30-…`) berjalan sebelum commit (`sourceDirty` true); catat dua run `01a19b31-…` dan `01a19b32-…` sebagai bukti
+- Sepuluh instance memakai `sharedBuffersMb` 16 dan `maxConnections` 20, dan dihentikan di akhir test; `ReapGuard` mengambil sisa proses bila test gagal di tengah
