@@ -119,7 +119,7 @@ stopping ──semua stop_restore berhenti──▶ handed_over ──daemon bar
 
 Kemajuan setelah daemon lama keluar dicatat oleh rencana, bukan oleh operasi: operasi `daemon_restart` selesai `succeeded` di `handed_over` (atau `failed` di `aborted`) dan tidak pernah dibuka lagi. Operasi `daemon_restart` yang ditemukan `running` oleh `recover` spec 0007 (daemon crash saat `stopping`) ditutup `failed { interrupted }` seperti `CloseInterrupted` lain, dan rencananya diteruskan rekonsiliasi (AC-14).
 
-`outcome` diisi: `keep` yang diadopsi `adopted`; `keep` dengan `respawn_pending` yang respawn nya `ready` `adopted`; `keep` yang menjadi `unknown` `failed` dengan `failure_code` `identity_unproven` (kode blocker); `keep` lain yang lifecycle akhirnya bukan `running` `failed` dengan `lastFailure.code`; `stop_restore` yang `ready` `restored`; `stop_restore` yang gagal start `failed` dengan `lastFailure.code`; instance yang sudah dihapus atau `data_missing` `skipped`. Pada `aborted` dan `expired` outcome yang kosong diisi `skipped`.
+`outcome` diisi: `keep` yang diadopsi `adopted`; `keep` dengan `respawn_pending` yang respawn nya `ready` `adopted`; `keep` yang menjadi `unknown` `failed` dengan `failure_code` `identity_unproven` (kode blocker); `keep` lain yang lifecycle akhirnya bukan `running` `failed` dengan `lastFailure.code`; `stop_restore` yang `ready` `restored`; `stop_restore` yang gagal start `failed` dengan `lastFailure.code`; instance yang sudah dihapus atau `data_missing` `skipped`; `stop_restore` yang desired nya `stopped` saat restore akan berjalan `skipped` tanpa start, baik dibaca di langkah 10 (lifecycle `stopped` dengan desired `stopped`) maupun ditemukan start `PendingKind::Restore` di bawah lock (spec 0031 *Antrean start*, start sistem memeriksa desired), misalnya karena stop pengguna, Stop All, Turn Off, atau rotasi sesi spec 0031 lebih dulu. Pada `aborted` dan `expired` outcome yang kosong diisi `skipped`.
 
 ### Alur restart terencana
 
@@ -212,6 +212,7 @@ Tidak ada env var baru.
 - `daemon.shutdown { mode: stop }` (atau `agent_off` spec 0031) selama quiesce atau rencana `stopping`: `daemon.restart_pending`; setelah `handed_over`: `daemon.shutting_down`.
 - Instance dihapus antara preview dan konfirmasi: digest berubah, `daemon.restart_plan_changed`.
 - Instance dihapus saat rencana `restoring`: outcome `skipped`.
+- Instance `stop_restore` yang desired nya menjadi `stopped` sebelum restore berjalan (stop pengguna, `instance.stop_all`, `agent_off`, atau rotasi sesi spec 0031): outcome `skipped` tanpa start, jadi rencana tetap bisa `finished`.
 - CLI di Ctrl+C saat menunggu restore: exit 130 `cli.interrupted`, rencana tetap berjalan di daemon.
 - GUI ditutup selama jendela disruption: tidak ada efek; app berikutnya membaca `DaemonInfo.restart`.
 - launchd tidak menyalakan daemon (binary diganti): relaunch spec 0015, lalu restore seperti biasa.
@@ -232,7 +233,7 @@ AC-9 sampai AC-14 memakai helper baru `RestartHarness` di `apps/daemon/tests/com
 | `apps/daemon/tests/restart_plan.rs` `a_foreign_listener_fails_the_restore_with_endpoint_in_use` | fixture | AC-6 |
 | `crates/core/src/supervisor/handover.rs` unit test tabel keputusan dan pencocokan line | unit | AC-7 |
 | `apps/daemon/tests/native_launchd.rs` `postgresql_and_nats_survive_kickstart_bootout_and_planned_restart` | native launchd, setelah persetujuan | AC-8 |
-| `apps/daemon/tests/restart_plan.rs` happy path, quiesce, busy, abort, digest di preview dan di transaksi, expiry boot baru, crash di `stopping` | fixture, `RestartHarness`, `handover_proven` kosong | AC-9 sampai AC-14 |
+| `apps/daemon/tests/restart_plan.rs` happy path, quiesce, busy, abort, digest di preview dan di transaksi, expiry boot baru, crash di `stopping`, `stop_restore` yang desired nya `stopped` sebelum restore (outcome `skipped`, rencana `finished`) | fixture, `RestartHarness`, `handover_proven` kosong | AC-9 sampai AC-14 |
 | `apps/cli/tests/daemon_restart_plan.rs` prompt, `--yes`, `--json`, abort, restore gagal, warning `unknown`, exit code | fixture | AC-15 |
 | `StacklyUI` `SettingsDaemonTests`, `RestartBannerTests`, snapshot sheet dan banner | fixture | AC-16 |
 | `apps/daemon/tests/postgresql/inventory.rs` `ten_postgresql_instances_are_inventoried_within_ten_seconds` | evidence native, `SpawnedDaemon` | AC-17 |
@@ -306,7 +307,7 @@ Journey: setiap milestone menutup satu potongan perjalanan pengguna lengkap deng
 
 ## Follow-up
 
-- [ ] Spec 0031: memperluas `ShutdownAccepted` dari spec ini (bukan mengganti namanya menjadi `ShutdownReply`), menolak `agent_off` selama quiesce atau rencana `stopping`, dan memastikan antrean start nya tidak menyalakan instance `stop_restore` dua kali (restore spec ini atau antrean start, satu saja, dengan restore yang menang selama rencana `restoring`).
+- [x] Spec 0031: memperluas `ShutdownAccepted` dari spec ini (bukan mengganti namanya menjadi `ShutdownReply`), menolak `agent_off` selama quiesce atau rencana `stopping`, dan memastikan antrean start nya tidak menyalakan instance `stop_restore` dua kali (restore spec ini atau antrean start, satu saja, dengan restore yang menang selama rencana `restoring`): diterapkan di spec 0031 (2026-11-02).
 - [ ] Fitur 36 sampai 43: setiap provider baru menambah test native launchd survival sebelum masuk `HANDOVER_PROVEN`.
 - [ ] Fitur 61: update aplikasi memakai `daemon.restart_preview` dan rencana yang sama untuk jendela restart.
 - [ ] Bukti signed (spec 0015 AC-17, AC-19) tetap `BLOCKED` sampai identity ada; restart terencana di build signed diuji ulang saat itu.
