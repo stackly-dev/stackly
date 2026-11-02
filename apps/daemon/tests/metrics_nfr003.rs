@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use stackly_testkit::TestRoot;
-use stackly_testkit::evidence::{Evidence, Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, Source, evidence};
 use uuid::Uuid;
 
 use crate::common::{client, start_daemon};
@@ -175,8 +175,20 @@ fn judge(label: &str, found: &Measured, evidence: &Evidence) {
     evidence.pass_with(&line);
 }
 
+/// The subject of a run with fake instances only: the macOS this Mac runs,
+/// since the fake server is no provider and a native record needs a real one.
+fn subject_is_this_mac(evidence: &Evidence) {
+    let output = Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+        .expect("sw_vers runs");
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    evidence.subject("macos", &version, None, Source::External);
+}
+
 /// Ten fake instances on a fresh root, served by the `stacklyd` binary.
 async fn run_fake(ev: Evidence, with_client: bool, label: &str) {
+    subject_is_this_mac(&ev);
     let root = TestRoot::new().expect("a test root can be created");
     let _reap = reap_guard(&root);
     let runtime_id = seed_root(&root);
