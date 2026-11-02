@@ -21,5 +21,9 @@ mod harness;
 mod lifecycle;
 #[path = "nats/lifecycle_ops.rs"]
 mod lifecycle_ops;
+#[path = "nats/metrics.rs"]
+mod metrics;
+#[path = "supervisor/metrics_calls.rs"]
+mod metrics_calls;
 #[path = "supervisor/support.rs"]
 mod support;

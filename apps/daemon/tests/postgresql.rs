@@ -40,6 +40,10 @@ mod lifecycle;
 mod lifecycle_ops;
 #[path = "postgresql/logs.rs"]
 mod logs;
+#[path = "postgresql/metrics.rs"]
+mod metrics;
+#[path = "supervisor/metrics_calls.rs"]
+mod metrics_calls;
 #[path = "postgresql/mismatch.rs"]
 mod mismatch;
 #[path = "postgresql/phases.rs"]
