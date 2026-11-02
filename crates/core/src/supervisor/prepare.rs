@@ -20,8 +20,8 @@ use super::drift::RenderTarget;
 use super::error::SupervisorError;
 use super::persist::{blocking, read_instance};
 use crate::provider::{
-    NameCheck, PlanContext, ResolvedEndpoint, RuntimeContext, SettingsValues, ValidatedPackage,
-    read_package,
+    DATA_MARKER_MAX_LEN, MarkerRead, NameCheck, PlanContext, ResolvedEndpoint, RuntimeContext,
+    SettingsValues, ValidatedPackage, read_package,
 };
 
 /// Everything the plans of one action are built from.
@@ -132,7 +132,10 @@ pub(crate) async fn prepare(
             let package = load_package(&platform, &layout, &instance)?;
             let paths = layout.layout().instance_paths(instance.id());
             if checks == Checks::Full {
-                check_instance_folder(&platform, &paths)?;
+                // Data that was initialized must still be there: this runs
+                // before any run folder is made (spec 0030, AC-4).
+                let initialized = instance.data_initialized_at().is_some().then_some(&package);
+                check_instance_folder(&platform, &paths, initialized)?;
             }
             let (revision, settings) = settings(&*registry, &package, instance.id())?;
             Ok(Loaded {
@@ -251,10 +254,17 @@ pub(crate) fn load_package(
     Ok(package)
 }
 
-/// The instance folder must be a private folder of the current user.
+/// The instance folder must be a private folder of the current user, and
+/// when `initialized` names the pinned package (the data was initialized)
+/// the data must still be there: see [`data_missing`].
+///
+/// # Errors
+///
+/// Returns [`SupervisorError::DataUnavailable`] naming what failed.
 pub(crate) fn check_instance_folder(
     platform: &stackly_platform::Platform,
     paths: &InstancePaths,
+    initialized: Option<&ValidatedPackage>,
 ) -> Result<(), SupervisorError> {
     let unavailable = |reason: String| SupervisorError::DataUnavailable {
         path: paths.root.display().to_string(),
@@ -269,7 +279,54 @@ pub(crate) fn check_instance_folder(
         .identity()
         .current_user()
         .map_err(|error| unavailable(error.to_string()))?;
-    check_private_dir(&info, &user).map_err(|violation| unavailable(violation.to_string()))
+    check_private_dir(&info, &user).map_err(|violation| unavailable(violation.to_string()))?;
+    if let Some(package) = initialized
+        && let Some(reason) = data_missing(platform.fs(), package, paths)
+    {
+        return Err(unavailable(reason));
+    }
+    Ok(())
+}
+
+/// Says why the data of an initialized instance is gone, or `None` when it
+/// is there (spec 0030, *Pemeriksaan rekonsiliasi tambahan*): the data
+/// folder does not exist, the package declares a data marker and the folder
+/// is empty or the marker file is missing. Only reads. A folder or marker
+/// that cannot be read is not missing; the data check of spec 0025 judges
+/// it.
+///
+/// An empty folder counts only for a package that declares a marker: NATS
+/// has no init step that writes data, so its folder is empty until the
+/// server first runs, and that is not a loss.
+// provisional: F30 (spec 0030 says an empty folder is missing for every
+// package; the native NATS run of milestone 3 shows it is not)
+pub(crate) fn data_missing(
+    fs: &dyn stackly_platform::Filesystem,
+    package: &ValidatedPackage,
+    paths: &InstancePaths,
+) -> Option<String> {
+    let marker = package.data_marker_path(paths);
+    match fs.symlink_metadata(&paths.data) {
+        Ok(None) | Err(stackly_platform::PlatformError::NotFound { .. }) => {
+            return Some("the data folder is missing".to_owned());
+        }
+        Ok(Some(info))
+            if marker.is_some()
+                && info.kind == stackly_platform::FileKind::Dir
+                && fs
+                    .read_dir(&paths.data)
+                    .is_ok_and(|entries| entries.is_empty()) =>
+        {
+            return Some("the data folder is empty".to_owned());
+        }
+        _ => {}
+    }
+    let marker = marker?;
+    matches!(
+        MarkerRead::from_read(fs.read_file_limited(&marker, DATA_MARKER_MAX_LEN)),
+        MarkerRead::Missing
+    )
+    .then(|| "the data marker is missing".to_owned())
 }
 
 /// The active config revision and its settings, validated again against
@@ -295,4 +352,99 @@ fn settings(
         .validate(&document)
         .map(|settings| (revision.id, settings))
         .map_err(|error| invalid(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use stackly_domain::InstanceId;
+    use stackly_platform::DirectoryLayout;
+    use stackly_testkit::{FakeFilesystem, TestRoot};
+
+    use super::*;
+    use crate::provider::read_package;
+
+    fn copy_dir(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).expect("the target folder is made");
+        for entry in std::fs::read_dir(from).expect("the source folder reads") {
+            let entry = entry.expect("an entry reads");
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("the type reads").is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).expect("a file copies");
+            }
+        }
+    }
+
+    /// The package `name` of the repository, copied into the test root,
+    /// because the fake filesystem reads only there.
+    fn package(name: &str, root: &TestRoot, fs: &FakeFilesystem) -> ValidatedPackage {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../providers")
+            .join(name);
+        let dir = root.path().join("packages").join(name);
+        copy_dir(&source, &dir);
+        let files = read_package(fs, &dir).expect("the package reads");
+        ValidatedPackage::from_files(files, NameCheck::Skip).expect("the package validates")
+    }
+
+    /// The instance folders of a fresh test root, the data folder made and
+    /// empty.
+    fn empty_data(root: &TestRoot) -> InstancePaths {
+        let paths = DirectoryLayout::new(root.roots()).instance_paths(InstanceId::generate());
+        std::fs::create_dir_all(&paths.data).expect("the data folder is made");
+        paths
+    }
+
+    #[test]
+    fn an_empty_data_folder_is_lost_only_for_a_package_with_a_data_marker() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+
+        // PostgreSQL declares `PG_VERSION`, so an empty folder is a loss.
+        let postgresql = package("postgresql", &root, &fs);
+        assert_eq!(
+            data_missing(&fs, &postgresql, &paths).as_deref(),
+            Some("the data folder is empty")
+        );
+        // NATS writes nothing at init: an empty folder is how it starts.
+        let nats = package("nats", &root, &fs);
+        assert_eq!(data_missing(&fs, &nats, &paths), None);
+    }
+
+    #[test]
+    fn a_folder_that_is_gone_is_lost_for_every_package() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+        std::fs::remove_dir(&paths.data).expect("the data folder goes");
+
+        for name in ["postgresql", "nats"] {
+            assert_eq!(
+                data_missing(&fs, &package(name, &root, &fs), &paths).as_deref(),
+                Some("the data folder is missing"),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declared_marker_that_is_missing_is_lost_in_a_folder_with_other_files() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+        std::fs::write(paths.data.join("other"), "x").expect("a file is written");
+
+        assert_eq!(
+            data_missing(&fs, &package("postgresql", &root, &fs), &paths).as_deref(),
+            Some("the data marker is missing")
+        );
+        assert_eq!(
+            data_missing(&fs, &package("nats", &root, &fs), &paths),
+            None
+        );
+    }
 }

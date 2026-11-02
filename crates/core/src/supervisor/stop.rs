@@ -14,7 +14,8 @@ use std::future::Future;
 
 use stackly_domain::{
     DesiredState, IdentityEvidence, InstanceBlocker, InstanceId, InstanceLifecycle, LeaseFilter,
-    LifecycleEvent, Pid, StageName, StopDecision, StopRequest as LeaseStopRequest, evaluate_stop,
+    LifecycleEvent, Pid, StageName, StopDecision, StopIntent, StopRequest as LeaseStopRequest,
+    evaluate_stop,
 };
 use stackly_platform::{ChildRole, ExitStatus, ProcessError, ProviderSignal, SignalTarget};
 use tokio::time::Instant;
@@ -47,10 +48,11 @@ pub struct StopRequest {
     /// Whether the user chose to stop it although environments hold it
     /// (BR-015).
     pub override_leases: bool,
-    /// A stop the daemon makes itself after reconciliation (trigger
-    /// `reconcile`): it does not ask whether environments hold the
-    /// instance, because the user already chose `stopped`.
-    pub(crate) system: bool,
+    /// Who asks (spec 0030): a person checks the leases of environments
+    /// and writes desired `stopped`, the daemon after reconciliation
+    /// checks no lease because the user already chose `stopped`, and a
+    /// planned restart writes no desired state at all.
+    pub(crate) intent: StopIntent,
 }
 
 impl StopRequest {
@@ -60,7 +62,7 @@ impl StopRequest {
         Self {
             instance,
             override_leases: false,
-            system: false,
+            intent: StopIntent::User,
         }
     }
 
@@ -70,7 +72,19 @@ impl StopRequest {
         Self {
             instance,
             override_leases: false,
-            system: true,
+            intent: StopIntent::Reconcile,
+        }
+    }
+
+    /// A stop the daemon makes for a planned restart: no lease check, and
+    /// the desired state stays as it is so the next daemon starts the
+    /// instance again.
+    #[must_use]
+    pub(crate) const fn planned_restart(instance: InstanceId) -> Self {
+        Self {
+            instance,
+            override_leases: false,
+            intent: StopIntent::PlannedRestart,
         }
     }
 
@@ -153,10 +167,14 @@ impl Supervisor {
     /// Ends a stop whose process left before the stop took the lock: the
     /// desired state becomes `stopped`, and a lifecycle the exit handler
     /// left `stopping` goes on to `stopped`.
-    async fn settle_gone_process(&self, id: InstanceId) -> Result<(), SupervisorError> {
+    pub(crate) async fn settle_gone_process(
+        &self,
+        id: InstanceId,
+        intent: StopIntent,
+    ) -> Result<(), SupervisorError> {
         let now = self.deps().platform.clock().now();
         commit_exit(self, id, None, CommitMode::Operation, |changes, force| {
-            if changes.instance().desired() != DesiredState::Stopped {
+            if intent.writes_desired() && changes.instance().desired() != DesiredState::Stopped {
                 changes.apply(|instance| {
                     instance.set_desired(DesiredState::Stopped);
                     Ok::<_, SupervisorError>(())
@@ -296,11 +314,12 @@ impl Supervisor {
         &self,
         id: InstanceId,
         no_process: bool,
+        intent: StopIntent,
     ) -> Result<StopJournal, SupervisorError> {
         let now = self.deps().platform.clock().now();
         let mut journaled = StopJournal::Begun;
         commit_instance(self, id, None, CommitMode::Operation, |changes| {
-            if changes.instance().desired() != DesiredState::Stopped {
+            if intent.writes_desired() && changes.instance().desired() != DesiredState::Stopped {
                 changes.apply(|instance| {
                     instance.set_desired(DesiredState::Stopped);
                     Ok::<_, SupervisorError>(())
@@ -396,8 +415,9 @@ async fn run_stop(
         InstanceLifecycle::Uninitialized
         | InstanceLifecycle::Stopped
         | InstanceLifecycle::Failed => {
-            // Nothing runs; only a stored desired `running` changes.
-            if instance.desired() == DesiredState::Running {
+            // Nothing runs; only a stored desired `running` changes, and a
+            // planned restart leaves even that alone.
+            if request.intent.writes_desired() && instance.desired() == DesiredState::Running {
                 commit_instance(sup, id, None, CommitMode::Operation, |changes| {
                     changes.apply(|instance| {
                         instance.set_desired(DesiredState::Stopped);
@@ -415,7 +435,7 @@ async fn run_stop(
         | InstanceLifecycle::Recovering
         | InstanceLifecycle::Stopping => {}
     }
-    if !request.system {
+    if request.intent.checks_leases() {
         let registry = deps.registry.clone();
         let leases = blocking(move || registry.leases(id, LeaseFilter::Unreleased))
             .await
@@ -459,7 +479,9 @@ async fn run_stop(
             InstanceLifecycle::Stopping
             | InstanceLifecycle::Stopped
             | InstanceLifecycle::Failed => {
-                sup.settle_gone_process(id).await.map_err(failed)?;
+                sup.settle_gone_process(id, request.intent)
+                    .await
+                    .map_err(failed)?;
                 return Ok(outcome());
             }
             // A crash with a respawn pending: the stop goes on and ends
@@ -478,7 +500,10 @@ async fn run_stop(
     ctx.set_stage(StageName::JOURNAL).await?;
     let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
     // A pause between two respawns has no process to stop.
-    let journaled = sup.journal_stop(id, no_process).await.map_err(failed)?;
+    let journaled = sup
+        .journal_stop(id, no_process, request.intent)
+        .await
+        .map_err(failed)?;
 
     if has_process && journaled == StopJournal::Begun {
         ctx.begin_step(StepSpec::new(StageName::STOP).irreversible())

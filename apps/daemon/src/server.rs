@@ -17,6 +17,7 @@ use stackly_core::instance::create::{
     CreateHooks, CreateWorkFactory, INSTANCE_REGISTRATION, InstanceRegistrationCompensator,
 };
 use stackly_core::logs::{DurableLog, DurableLogConfig, DurableLogSink};
+use stackly_core::metrics::{MainProcesses, Sampler, SamplerConfig, SamplerTask};
 use stackly_core::operation::{EngineError, OperationEngine};
 use stackly_core::secret::{
     Redactor, SECRET_REF_COMPENSATOR, SecretRefCompensator, SecretService, SecretWorker,
@@ -42,6 +43,7 @@ use crate::connection;
 use crate::detail::DataUsageConfig;
 use crate::dispatch::{DefaultHandlers, Handlers};
 use crate::events::EventBus;
+use crate::ipc::instance::metrics::RegistryMains;
 use crate::ipc::logs::LogService;
 use crate::launch::{self, writes_launch_record};
 use crate::log_sink::LogSink;
@@ -116,6 +118,9 @@ pub struct DaemonConfig {
     /// The limits of the durable log store; tests shrink the segments to
     /// watch a rotation (spec 0027).
     pub durable_logs: DurableLogConfig,
+    /// The constants of the metrics sampler and the scheduled data folder
+    /// scan; tests shorten the interval (spec 0028).
+    pub metrics: SamplerConfig,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -147,6 +152,7 @@ impl Default for DaemonConfig {
             create_hooks: CreateHooks::default(),
             data_usage: DataUsageConfig::default(),
             durable_logs: DurableLogConfig::default(),
+            metrics: SamplerConfig::default(),
         }
     }
 }
@@ -303,6 +309,8 @@ pub struct Stopped {
 #[derive(Debug, Default)]
 struct Tasks {
     prune: Mutex<Option<JoinHandle<()>>>,
+    sampler: Mutex<Option<SamplerTask>>,
+    scans: Mutex<Option<JoinHandle<()>>>,
     started: watch::Sender<bool>,
 }
 
@@ -508,6 +516,26 @@ impl DaemonHandle {
         }
         // The engine's tasks have ended, unless the stop was forced; its
         // last handle goes here, so its registry handle goes with it.
+        // The sampler and the scans read through the registry, so they end
+        // before it closes.
+        let sampler = self
+            .tasks
+            .sampler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        drop(sampler);
+        let scans = self
+            .tasks
+            .scans
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(scans) = scans {
+            scans.abort();
+            let _ = scans.await;
+        }
+        core.metrics().clear();
         core.supervision().shutdown();
         core.operations().close();
         core.supervision().close();
@@ -718,6 +746,7 @@ async fn start_slot(
     let loaded = catalog::load(&core, catalog, config.catalog.take()).await;
     core.set_create_hooks(config.create_hooks.clone());
     core.data_usage().configure(config.data_usage);
+    core.set_sampler_config(config.metrics);
     let opened = open_with_retries(
         &core,
         &version,
@@ -892,6 +921,19 @@ async fn start_slot(
         if let Some(supervisor) = &reconciled {
             supervisor.start_reconciled();
         }
+        // The sampler and the scheduled data folder scans need the
+        // supervisor's status, so they start with the engine (spec 0028).
+        let mains: Arc<dyn MainProcesses> = Arc::new(RegistryMains::new(&core));
+        let sampler = Sampler::new(
+            Arc::new(core.platform().clone()),
+            Arc::clone(&mains),
+            core.metrics().clone(),
+            core.sampler_config(),
+        )
+        .start();
+        *tasks.sampler.lock().unwrap_or_else(PoisonError::into_inner) = Some(sampler);
+        let scans = crate::ipc::instance::metrics::start_data_scans(&core, mains);
+        *tasks.scans.lock().unwrap_or_else(PoisonError::into_inner) = Some(scans);
     }
     tasks.started.send_replace(true);
     let health = core.health(std::time::Instant::now());

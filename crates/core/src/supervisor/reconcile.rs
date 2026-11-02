@@ -16,7 +16,7 @@
 
 use stackly_domain::{
     DesiredState, ExitKind, FailureCode, Instance, InstanceBlocker, InstanceFilter, InstanceId,
-    InstanceLifecycle, LifecycleEvent, ProcessObservation,
+    InstanceLifecycle, LifecycleEvent, PlanDecision, ProcessObservation,
 };
 use tokio::time::Instant;
 
@@ -25,6 +25,7 @@ use super::classify::{Classification, GoneReason, UnprovenBlocker};
 use super::drift;
 use super::error::SupervisorError;
 use super::evidence::{Gathered, gather_evidence, unproven_by};
+use super::integrity::{self, FindingKind, ReconcileFinding};
 use super::pending::{PendingKind, PendingRun};
 use super::persist::{CommitMode, apply_event, blocking, commit_exit};
 use super::restart::JitterFactor;
@@ -45,7 +46,7 @@ pub enum RegistryMode {
 
 /// What a reconciliation did, in numbers (the counts of
 /// `daemon.reconciling { phase: finished }`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct ReconcileReport {
     /// True when the registry was in recovery mode and nothing ran.
@@ -58,10 +59,14 @@ pub struct ReconcileReport {
     pub unknown: u32,
     /// Instances that will start or restart once the engine runs.
     pub restarting: u32,
+    /// The problems found and left in place, one per instance per problem
+    /// (spec 0030): a missing data folder or runtime executable under a
+    /// process that was adopted.
+    pub findings: Vec<ReconcileFinding>,
 }
 
 /// The start or the end of a reconciliation, for `daemon.reconciling`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ReconcilePhase {
     /// It begins.
@@ -103,6 +108,12 @@ pub(crate) enum Then {
     Start,
     /// A system stop of a proven process.
     Stop,
+    /// A system start of an instance a planned restart stopped (spec
+    /// 0030): trigger `planned_restart`, no dialog.
+    Restore,
+    /// A system stop of a proven process that a planned restart was
+    /// stopping, which writes no desired state, and then the restore.
+    PlannedStop,
 }
 
 /// The blocker an evaluation leaves on the instance.
@@ -248,12 +259,46 @@ pub(crate) fn plan_for(
     plan
 }
 
+/// The row of the table for an instance whose data is gone and whose
+/// process is not there (spec 0030, AC-4): the instance ends `stopped`
+/// whatever it wanted, as if it were not wanted, and then `failed` with
+/// `data_missing` (unless it already is). It never runs again on its own,
+/// so the data is never replaced by an empty folder. A process that is
+/// there, proven or not, keeps the ordinary row.
+pub(crate) fn plan_for_missing_data(
+    lifecycle: InstanceLifecycle,
+    classification: &Classification,
+    already_flagged: bool,
+) -> Option<Plan> {
+    if !matches!(classification, Classification::Gone { .. }) {
+        return None;
+    }
+    let mut plan = plan_for(
+        lifecycle,
+        DesiredState::Stopped,
+        classification,
+        Source::Reconcile,
+    );
+    let ends = plan
+        .events
+        .iter()
+        .try_fold(lifecycle, |lifecycle, event| lifecycle.apply(event))
+        .ok()?;
+    if matches!(ends, InstanceLifecycle::Stopped | InstanceLifecycle::Failed) && !already_flagged {
+        plan.events.push(LifecycleEvent::DataMissing);
+    }
+    plan.then = Then::Nothing;
+    Some(plan)
+}
+
 /// What settling one instance left for the caller.
 pub(crate) struct Settled {
     /// The lifecycle the instance has now.
     pub(crate) lifecycle: InstanceLifecycle,
     /// What to run once the engine runs.
     pub(crate) then: Then,
+    /// What is wrong under a process that is about to be adopted.
+    pub(crate) findings: Vec<FindingKind>,
 }
 
 impl Supervisor {
@@ -283,6 +328,8 @@ impl Supervisor {
         }
         let deps = self.deps();
         deps.events.reconciling(&ReconcilePhase::Started);
+        // Spec 0030: the plan of a restart that was under way.
+        self.take_over_plan().await;
         let registry = deps.registry.clone();
         let mut instances = blocking(move || {
             registry.instances(InstanceFilter {
@@ -300,6 +347,8 @@ impl Supervisor {
         };
         let mut lifecycles = Vec::with_capacity(instances.len());
         let mut adoptions = Vec::new();
+        let mut findings = Vec::new();
+        let mut deferred = Vec::new();
         for instance in &instances {
             let settled = settle_instance(self, instance, Source::Reconcile).await;
             let Some((settled, adoption)) = settled else {
@@ -310,12 +359,23 @@ impl Supervisor {
             if settled.lifecycle == InstanceLifecycle::Unknown {
                 report.unknown += 1;
             }
-            if matches!(settled.then, Then::Respawn | Then::Start) {
+            if matches!(
+                settled.then,
+                Then::Respawn | Then::Start | Then::Restore | Then::PlannedStop
+            ) {
                 report.restarting += 1;
+            }
+            if settled.then != Then::Nothing {
+                deferred.push(instance.id());
             }
             self.queue_run(instance, settled.then);
             if let Some(adoption) = adoption {
                 adoptions.push(adoption);
+                findings.extend(settled.findings.into_iter().map(|kind| ReconcileFinding {
+                    instance_id: instance.id(),
+                    name: instance.name().to_string(),
+                    kind,
+                }));
             }
         }
 
@@ -326,6 +386,7 @@ impl Supervisor {
             if adopt_process(self, adoption).await {
                 report.adopted += 1;
             } else {
+                findings.retain(|finding| finding.instance_id != id);
                 tracing::warn!(instance = %id, "a proven process could not be adopted");
                 if let Some(instance) = lifecycles.iter_mut().find(|(other, _)| *other == id) {
                     instance.1 = InstanceLifecycle::Unknown;
@@ -339,7 +400,11 @@ impl Supervisor {
                 tracing::warn!(instance = %instance.id(), %error, "the config drift check did not run");
             }
         }
-        deps.events.reconciling(&ReconcilePhase::Finished(report));
+        report.findings = findings;
+        self.settle_plan_after_reconcile(&lifecycles, &deferred)
+            .await;
+        deps.events
+            .reconciling(&ReconcilePhase::Finished(report.clone()));
         recheck::spawn_recheck(self);
         Ok(report)
     }
@@ -352,6 +417,8 @@ impl Supervisor {
             Then::Respawn => PendingKind::Respawn,
             Then::Start => PendingKind::Start,
             Then::Stop => PendingKind::Stop,
+            Then::Restore => PendingKind::Restore,
+            Then::PlannedStop => PendingKind::PlannedStop,
         };
         self.shared
             .pending
@@ -441,12 +508,54 @@ pub(crate) async fn settle_instance(
         .flatten()
         .map(|ProcessObservation { identity, .. }| identity);
 
-    let plan = plan_for(
-        instance.lifecycle(),
-        instance.desired(),
-        &gathered.classification,
-        source,
-    );
+    // Spec 0030: the data of an initialized instance must still be there.
+    let checks_apply = source == Source::Reconcile && integrity::applies(instance);
+    let data_gone = checks_apply && integrity::data_is_missing(sup, instance).await;
+    let flagged = instance.lifecycle() == InstanceLifecycle::Failed
+        && instance.last_failure() == Some(&FailureCode::DATA_MISSING);
+    let plan = data_gone
+        .then(|| plan_for_missing_data(instance.lifecycle(), &gathered.classification, flagged))
+        .flatten()
+        .unwrap_or_else(|| {
+            plan_for(
+                instance.lifecycle(),
+                instance.desired(),
+                &gathered.classification,
+                source,
+            )
+        });
+    let mut plan = plan;
+    // Spec 0030: what a restart plan under way says about the instance.
+    // The lifecycle it ends with decides whether it starts again.
+    let ends = plan
+        .events
+        .iter()
+        .try_fold(instance.lifecycle(), |lifecycle, event| {
+            lifecycle.apply(event)
+        })
+        .unwrap_or_else(|_| instance.lifecycle());
+    if source == Source::Reconcile
+        && let Some(entry) = sup.planned_entry(id).await
+        && entry.decision == PlanDecision::StopRestore
+        && instance.desired() == DesiredState::Running
+        && !data_gone
+    {
+        if plan.then == Then::Stop && instance.lifecycle() == InstanceLifecycle::Stopping {
+            plan.then = Then::PlannedStop;
+        } else if plan.then == Then::Nothing && ends == InstanceLifecycle::Stopped {
+            plan.then = Then::Restore;
+        }
+    }
+    // What is wrong under a process we keep is reported, not repaired.
+    let mut findings = Vec::new();
+    if plan.adopt && checks_apply {
+        if data_gone {
+            findings.push(FindingKind::DataMissing);
+        }
+        if integrity::runtime_is_missing(sup, instance).await {
+            findings.push(FindingKind::RuntimeMissing);
+        }
+    }
     let now = deps.platform.clock().now();
     if !plan.events.is_empty() {
         let events = plan.events.clone();
@@ -521,6 +630,7 @@ pub(crate) async fn settle_instance(
         Settled {
             lifecycle,
             then: plan.then,
+            findings,
         },
         adoption,
     ))
@@ -799,6 +909,56 @@ mod tests {
                 BlockerPlan::Unproven(UnprovenBlocker::DataInUse)
             );
         }
+    }
+
+    #[test]
+    fn missing_data_ends_every_instance_without_a_process_failed_and_never_runs_it() {
+        let lifecycles = [
+            L::Stopped,
+            L::Failed,
+            L::Starting,
+            L::Running,
+            L::Stopping,
+            L::Recovering,
+            L::Unknown,
+        ];
+        for lifecycle in lifecycles {
+            for classification in [
+                gone(GoneReason::NoRecord),
+                gone(GoneReason::Exited),
+                gone(GoneReason::PidReused),
+                gone(GoneReason::BootChanged),
+            ] {
+                let plan = plan_for_missing_data(lifecycle, &classification, false)
+                    .expect("a gone process gets the row");
+
+                assert_eq!(
+                    codes(&plan).last().copied(),
+                    Some("data_missing"),
+                    "{lifecycle:?} {classification:?}"
+                );
+                assert_eq!(after(lifecycle, &plan), L::Failed);
+                assert_eq!(plan.then, Then::Nothing);
+                assert!(!plan.adopt);
+            }
+        }
+    }
+
+    #[test]
+    fn missing_data_leaves_a_process_that_is_there_to_the_ordinary_table() {
+        assert!(plan_for_missing_data(L::Running, &proven(), false).is_none());
+        assert!(
+            plan_for_missing_data(L::Running, &unproven(UnprovenBlocker::DataInUse), false)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn missing_data_already_recorded_is_not_recorded_again() {
+        let plan = plan_for_missing_data(L::Failed, &gone(GoneReason::NoRecord), true)
+            .expect("a gone process gets the row");
+
+        assert!(plan.events.is_empty());
     }
 
     #[test]

@@ -17,7 +17,7 @@ Desired       running
 Readiness     unknown (not_running), checked <age>
 Health        unknown (not_running), checked <age>
 Process       -
-Restarts      0 of 5 in 1m
+Restarts      0 of 5 in 1m, 0 since created
 Last failure  -
 Blocker       needs secret: local:instance/0192f3a5-0000-7000-8000-000000000001/admin-password (store_locked)
 Logs          available

@@ -11,8 +11,8 @@ use stackly_core::PreparedLayout;
 use stackly_core::logs::DurableLog;
 use stackly_core::secret::{Redactor, SecretService};
 use stackly_core::supervisor::{
-    LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor, SupervisorConfig,
-    SupervisorDeps, SupervisorError, SupervisorEvents, WeakSupervisor,
+    FindingKind, LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor,
+    SupervisorConfig, SupervisorDeps, SupervisorError, SupervisorEvents, WeakSupervisor,
 };
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
@@ -20,8 +20,10 @@ use stackly_protocol::codes::registry;
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
 use stackly_protocol::events::EventKind;
 use stackly_protocol::instance::{
-    DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcilePhase as WirePhase,
+    DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcileFinding,
+    ReconcileFindingCode, ReconcilePhase as WirePhase,
 };
+use stackly_protocol::restart::RestartPlanView;
 use stackly_protocol::{Count, ErrorBody, ResourceKind, ResourceRef};
 
 use crate::events::EventBus;
@@ -43,6 +45,17 @@ enum Slot {
     Unavailable(&'static str),
 }
 
+/// Whether the supervisor serves.
+#[derive(Clone)]
+pub enum Availability {
+    /// Reconciled; it serves.
+    Ready(Supervisor),
+    /// Not reconciled yet.
+    Starting,
+    /// None in this run: the registry is in recovery mode or failed.
+    Unavailable,
+}
+
 /// What the `supervisor` subsystem shows besides the slot.
 #[derive(Debug, Default)]
 struct Report {
@@ -50,6 +63,8 @@ struct Report {
     degraded: Option<String>,
     /// Instances that read `unknown` after reconciliation.
     unknown: u32,
+    /// The latest restart plan this run saw, for `daemon.get_info`.
+    restart: Option<RestartPlanView>,
 }
 
 /// What [`Supervision::build`] needs from the start slot.
@@ -129,6 +144,7 @@ impl Supervision {
         deps.sinks = Arc::new(SinkSet::new(sinks));
         deps.events = Arc::clone(&events) as Arc<dyn SupervisorEvents>;
         deps.config = input.config;
+        deps.server_instance_id = input.bus.server_instance_id();
         let supervisor = Supervisor::new(deps);
         let _ = handle.set(supervisor.downgrade());
         *self.lock_events() = Some(events);
@@ -177,6 +193,23 @@ impl Supervision {
     /// There is no supervisor in this run, for the reason in `detail`.
     pub fn unavailable(&self, detail: &'static str) {
         *self.lock() = Slot::Unavailable(detail);
+    }
+
+    /// The latest restart plan of this run, for `daemon.get_info`.
+    #[must_use]
+    pub fn restart_view(&self) -> Option<RestartPlanView> {
+        self.lock_report().restart.clone()
+    }
+
+    /// Where the supervisor stands, for the methods that answer even when
+    /// it does not serve (`daemon.restart_preview`).
+    #[must_use]
+    pub fn availability(&self) -> Availability {
+        match &*self.lock() {
+            Slot::Ready(supervisor) => Availability::Ready(supervisor.clone()),
+            Slot::Waiting | Slot::Reconciling(_) => Availability::Starting,
+            Slot::Unavailable(_) => Availability::Unavailable,
+        }
     }
 
     /// The supervisor for an instance method.
@@ -356,13 +389,34 @@ impl SupervisorEvents for BusSupervisorEvents {
                 adopted: Count::saturating(u64::from(report.adopted)),
                 unknown: Count::saturating(u64::from(report.unknown)),
                 restarting: Count::saturating(u64::from(report.restarting)),
-                // provisional: F30 (milestone 2 fills the findings)
-                findings: Vec::new(),
+                findings: report
+                    .findings
+                    .iter()
+                    .map(|finding| ReconcileFinding {
+                        instance_id: finding.instance_id.as_uuid(),
+                        name: finding.name.clone(),
+                        code: match finding.kind {
+                            FindingKind::DataMissing => ReconcileFindingCode::DataMissing,
+                            FindingKind::RuntimeMissing => ReconcileFindingCode::RuntimeMissing,
+                            _ => ReconcileFindingCode::Unrecognized,
+                        },
+                    })
+                    .collect(),
             },
             _ => return,
         };
         self.bus
             .publish_daemon(EventKind::DaemonReconciling(content));
+    }
+
+    fn restart_plan(&self, plan: &stackly_domain::RestartPlan) {
+        let view = crate::ipc::restart::plan_view(plan);
+        self.report
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .restart = Some(view.clone());
+        self.bus
+            .publish_daemon(EventKind::DaemonRestartPlan(Box::new(view)));
     }
 }
 

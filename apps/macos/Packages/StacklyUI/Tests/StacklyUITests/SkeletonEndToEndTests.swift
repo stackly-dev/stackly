@@ -319,7 +319,7 @@ struct SkeletonEndToEndTests {
             name: "demo", revision: revision, lifecycle: lifecycle,
             readiness: InstanceReadiness(
                 state: readiness, reason: "test", detail: nil,
-                observedAt: Date(timeIntervalSince1970: 0)),
+                observedAt: Date(timeIntervalSince1970: 0), latencyMs: nil),
             statusSeq: revision)
         return .instanceState(instance)
     }

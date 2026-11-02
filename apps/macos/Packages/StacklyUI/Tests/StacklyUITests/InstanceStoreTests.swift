@@ -211,7 +211,8 @@ struct InstanceStoreTests {
         let incoming = orders.testing(
             revision: 8, lifecycle: .stopping,
             health: InstanceHealth(
-                state: .unhealthy, reason: "x", detail: nil, observedAt: orders.health.observedAt),
+                state: .unhealthy, reason: "x", detail: nil, observedAt: orders.health.observedAt,
+                latencyMs: nil),
             statusSeq: 6)
         store.store.receive(.instanceState(incoming, sequence: 1))
         #expect(store.store.items[orders.id]?.health.state == .unhealthy)
