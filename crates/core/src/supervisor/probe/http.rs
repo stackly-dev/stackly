@@ -85,7 +85,7 @@ where
     })
     .await;
     match result {
-        Ok(Ok(code)) if probe.expect_status.contains(&code) => ProbeOutcome::Ok,
+        Ok(Ok(code)) if probe.expect_status.contains(&code) => ProbeOutcome::passed(),
         Ok(Ok(code)) => {
             ProbeOutcome::failure(UNEXPECTED_STATUS, &format!("status {code}"), redactor)
         }
@@ -163,7 +163,7 @@ mod tests {
     async fn a_status_in_the_expected_range_is_ok() {
         let outcome = over(Some(b"HTTP/1.1 204 No Content\r\n\r\n"), "/ready", LIMIT).await;
 
-        assert_eq!(outcome, ProbeOutcome::Ok);
+        assert_eq!(outcome, ProbeOutcome::passed());
     }
 
     #[tokio::test]

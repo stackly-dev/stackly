@@ -3,19 +3,25 @@
 //! paused), a launch record that changes with time, Ctrl+C at a chosen
 //! moment, and the setup that wires them to `FakeBackgroundAgent`.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use stackly_protocol::codes::ipc;
-use stackly_protocol::daemon::{DaemonInfo, DaemonRoots, ShutdownMode};
+use stackly_protocol::daemon::{DaemonInfo, DaemonRoots, LaunchContextKind, ShutdownMode};
+use stackly_protocol::restart::{RestartPlanView, RestartPreview};
 use stackly_protocol::{CONTRACT_DIGEST, ErrorBody, ProtocolVersion};
 use stackly_testkit::{FakeBackgroundAgent, FakeClock};
 use tokio::time::Instant;
 use uuid::Uuid;
 
 use super::agent::AgentEnv;
-use super::wait::{BoxFuture, DaemonProbe, Interrupt, LaunchRecordSource, Reachable, Shutdown};
+use super::plan::PlanPrompt;
+use super::wait::{
+    BoxFuture, DaemonProbe, Interrupt, LaunchRecordSource, PlanWatch, Reachable, RestartHandover,
+    RestartRequest, Shutdown,
+};
 use crate::failure::CliFailure;
 
 /// The bundle executable the tests run from.
@@ -71,6 +77,23 @@ pub struct ScriptedProbe {
     attempt: Box<AttemptFn>,
     shutdown: Mutex<Option<Result<Shutdown, CliFailure>>>,
     shutdown_modes: Mutex<Vec<ShutdownMode>>,
+    previews: Mutex<VecDeque<Result<RestartPreview, CliFailure>>>,
+    restarts: Mutex<VecDeque<Result<RestartHandover, CliFailure>>>,
+    requests: Mutex<Vec<RestartRequest>>,
+    watch: Mutex<Option<Result<PlanWatch, CliFailure>>>,
+    watch_hangs: bool,
+    infos: Mutex<Option<DaemonInfo>>,
+}
+
+/// A preview with no instances for a launchd daemon.
+pub fn empty_preview() -> RestartPreview {
+    RestartPreview {
+        digest: "0".repeat(64),
+        launch_context: LaunchContextKind::Launchd,
+        supervisor_available: true,
+        instances: Vec::new(),
+        blocking_operations: Vec::new(),
+    }
 }
 
 impl ScriptedProbe {
@@ -85,7 +108,65 @@ impl ScriptedProbe {
             attempt: Box::new(attempt),
             shutdown: Mutex::new(None),
             shutdown_modes: Mutex::new(Vec::new()),
+            previews: Mutex::new(VecDeque::new()),
+            restarts: Mutex::new(VecDeque::new()),
+            requests: Mutex::new(Vec::new()),
+            watch: Mutex::new(None),
+            watch_hangs: false,
+            infos: Mutex::new(None),
         }
+    }
+
+    /// The next preview the probe answers; with none queued, an empty one.
+    #[must_use]
+    pub fn on_preview(self, result: Result<RestartPreview, CliFailure>) -> Self {
+        self.previews
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// The next answer to a restart request; with none queued, the
+    /// shutdown answer without a plan.
+    #[must_use]
+    pub fn on_restart(self, result: Result<RestartHandover, CliFailure>) -> Self {
+        self.restarts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// What following the plan sees.
+    #[must_use]
+    pub fn on_watch(self, result: Result<PlanWatch, CliFailure>) -> Self {
+        *self.watch.lock().unwrap_or_else(PoisonError::into_inner) = Some(result);
+        self
+    }
+
+    /// Following the plan never ends, so only Ctrl+C or the limit does.
+    #[must_use]
+    pub fn hang_on_watch(mut self) -> Self {
+        self.watch_hangs = true;
+        self
+    }
+
+    /// The `daemon.get_info` of the new daemon, with its `restart` field.
+    #[must_use]
+    pub fn with_restart(self, plan: RestartPlanView) -> Self {
+        let mut info = info(run(2));
+        info.restart = Some(Box::new(plan));
+        *self.infos.lock().unwrap_or_else(PoisonError::into_inner) = Some(info);
+        self
+    }
+
+    /// The restart requests so far.
+    pub fn requests(&self) -> Vec<RestartRequest> {
+        self.requests
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// A probe with no daemon.
@@ -133,7 +214,18 @@ impl DaemonProbe for ScriptedProbe {
     fn info(&self) -> BoxFuture<'_, Result<DaemonInfo, CliFailure>> {
         Box::pin(async move {
             let reachable = (self.attempt)(usize::MAX, self.started.elapsed())?;
-            Ok(info(reachable.server_instance_id))
+            let scripted = self
+                .infos
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
+            Ok(scripted.map_or_else(
+                || info(reachable.server_instance_id),
+                |mut scripted| {
+                    scripted.server_instance_id = reachable.server_instance_id;
+                    scripted
+                },
+            ))
         })
     }
 
@@ -153,6 +245,162 @@ impl DaemonProbe for ScriptedProbe {
                 .clone()
                 .unwrap_or_else(|| Err(missing()))
         })
+    }
+
+    fn restart_preview(&self) -> BoxFuture<'_, Result<RestartPreview, CliFailure>> {
+        Box::pin(async move {
+            if let Some(result) = self
+                .previews
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .pop_front()
+            {
+                return result;
+            }
+            // A probe with a scripted shutdown has a daemon to preview; any
+            // other follows its attempts, so no daemon fails the call.
+            if self
+                .shutdown
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_some()
+            {
+                return Ok(empty_preview());
+            }
+            (self.attempt)(usize::MAX, self.started.elapsed()).map(|_| empty_preview())
+        })
+    }
+
+    fn restart(
+        &self,
+        request: &RestartRequest,
+        _eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<RestartHandover, CliFailure>> {
+        let request = request.clone();
+        Box::pin(async move {
+            self.shutdown_modes
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(ShutdownMode::Restart);
+            self.requests
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(request);
+            if let Some(result) = self
+                .restarts
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .pop_front()
+            {
+                return result;
+            }
+            self.shutdown
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+                .unwrap_or_else(|| Err(missing()))
+                .map(|shutdown| RestartHandover {
+                    server_instance_id: shutdown.server_instance_id,
+                    plan_id: None,
+                    plan: None,
+                    eof: shutdown.eof,
+                })
+        })
+    }
+
+    fn watch_plan(
+        &self,
+        _plan_id: Uuid,
+        _limit: Duration,
+    ) -> BoxFuture<'_, Result<PlanWatch, CliFailure>> {
+        Box::pin(async move {
+            if self.watch_hangs {
+                std::future::pending::<()>().await;
+            }
+            self.watch
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+                .unwrap_or(Ok(PlanWatch {
+                    plan: None,
+                    settled: false,
+                }))
+        })
+    }
+}
+
+/// A [`PlanPrompt`] with scripted answers.
+pub struct ScriptedPrompt {
+    can_ask: bool,
+    answers: VecDeque<bool>,
+    /// The digests of the previews shown.
+    pub shown: Vec<String>,
+    /// How many questions were asked, and whether each was an `again`.
+    pub asked: Vec<bool>,
+}
+
+impl ScriptedPrompt {
+    /// A prompt where a person answers `answers` in turn.
+    pub fn answering(answers: &[bool]) -> Self {
+        Self {
+            can_ask: true,
+            answers: answers.iter().copied().collect(),
+            shown: Vec::new(),
+            asked: Vec::new(),
+        }
+    }
+
+    /// A prompt where nobody can answer and `--yes` was not given.
+    pub fn nobody() -> Self {
+        Self {
+            can_ask: false,
+            ..Self::answering(&[])
+        }
+    }
+
+    /// A prompt where `--yes` was given, on a terminal or not.
+    pub fn yes(can_ask: bool) -> Self {
+        Self {
+            can_ask,
+            // Marks "yes": `confirm(false)` passes without asking.
+            answers: VecDeque::new(),
+            ..Self::answering(&[])
+        }
+        .with_yes()
+    }
+
+    fn with_yes(mut self) -> Self {
+        self.asked.clear();
+        self.shown.push(String::from("yes"));
+        self
+    }
+
+    fn approved(&self) -> bool {
+        self.shown.first().is_some_and(|first| first == "yes")
+    }
+}
+
+impl PlanPrompt for ScriptedPrompt {
+    fn can_ask(&self) -> bool {
+        self.can_ask
+    }
+
+    fn show(&mut self, preview: &RestartPreview) {
+        self.shown.push(preview.digest.clone());
+    }
+
+    fn confirm(&mut self, again: bool) -> Result<(), CliFailure> {
+        if !again && self.approved() {
+            return Ok(());
+        }
+        if !self.can_ask {
+            return Err(CliFailure::confirmation_required("--yes"));
+        }
+        self.asked.push(again);
+        match self.answers.pop_front() {
+            Some(true) => Ok(()),
+            _ => Err(CliFailure::confirmation_declined()),
+        }
     }
 }
 

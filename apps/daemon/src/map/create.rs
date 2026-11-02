@@ -285,6 +285,8 @@ pub fn field_errors(issues: &[FieldIssue]) -> Vec<FieldError> {
                     CoreFieldCode::OutOfRange => FieldCode::OutOfRange,
                     CoreFieldCode::TooMany => FieldCode::TooMany,
                     CoreFieldCode::UnknownValue => FieldCode::UnknownValue,
+                    CoreFieldCode::ImmutableAfterInit => FieldCode::ImmutableAfterInit,
+                    CoreFieldCode::SecretReadOnly => FieldCode::SecretReadOnly,
                     _ => FieldCode::InvalidValue,
                 },
             )

@@ -1615,6 +1615,173 @@
       "langs": [
         "rust"
       ]
+    },
+    {
+      "file": "request-instance-config-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-config-validate.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-config-apply.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-config-apply-rollback.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-config-apply-restore.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-config-keep-revision.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-rename.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-change-endpoints.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-change-endpoints-dry-run.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-instance-config-apply-zero-base-revision.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-instance-change-endpoints-empty.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-instance-config-validate-unknown-change.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-instance-config-get-fake.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-get-drift.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-validate-restart.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-validate-invalid.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-validate-restore.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-apply.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-apply-unchanged.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-keep-revision.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-config-keep-revision-no-drift.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-rename.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-rename-unchanged.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-change-endpoints-applied.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-change-endpoints-dry-run.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-config-revision-conflict.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-config-drift-detected.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-config-no-last-known-good.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-settings-invalid-immutable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-supervisor-endpoint-conflict-suggestion.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "dto-instance-blocker-config-drift.json",
+      "type": "InstanceBlocker",
+      "expect": "roundtrip"
     }
   ]
 }

@@ -13,6 +13,11 @@
 //! Health runs on its own interval, or on the readiness attempts when the
 //! probe and the interval are the same. Neither ever starts, stops, or
 //! restarts anything (REQ-012).
+//!
+//! Every observation a probe makes carries the latency of that attempt
+//! (spec 0028 AC-7). A wake from sleep (spec 0028 AC-9) makes the routine
+//! loops read readiness and health `waking`, probe at once, and give the
+//! failures of the next [`WAKE_GRACE`](super::wake::WAKE_GRACE) no weight.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,6 +33,7 @@ use super::Supervisor;
 use super::actor::{InstanceActor, ProcessSlot, restart_status};
 use super::persist::blocking;
 use super::probe::{self, PROBE_OK, ProbeContext, ProbeOutcome};
+use super::wake::{Track, Wake, waking};
 use crate::provider::{HealthPlan, ProbePlan};
 
 /// Starts the probe task of one process and returns the receiver that
@@ -40,6 +46,7 @@ pub(crate) fn spawn_probes(
     health: HealthPlan,
     stop: watch::Receiver<bool>,
 ) -> watch::Receiver<bool> {
+    sup.start_wake_watch();
     let (ready, ready_rx) = watch::channel(false);
     let probes = Probes {
         sup,
@@ -93,6 +100,7 @@ impl Probes {
     async fn run(mut self) {
         let deps = self.sup.deps().clone();
         let readiness = self.readiness.clone();
+        let first_latency;
         loop {
             if self.stopped() {
                 return;
@@ -102,12 +110,20 @@ impl Probes {
                 return;
             }
             match outcome {
-                ProbeOutcome::Ok => break,
-                ProbeOutcome::Failed { reason, detail } => {
+                ProbeOutcome::Ok { latency } => {
+                    first_latency = latency;
+                    break;
+                }
+                ProbeOutcome::Failed {
+                    reason,
+                    detail,
+                    latency,
+                } => {
                     let now = deps.platform.clock().now();
                     self.update(|state| {
                         state.readiness =
-                            Readiness::new(ReadinessState::NotReady, now, reason, detail);
+                            Readiness::new(ReadinessState::NotReady, now, reason, detail)
+                                .with_latency(latency);
                     });
                 }
             }
@@ -115,7 +131,7 @@ impl Probes {
                 return;
             }
         }
-        if !self.first_ready().await {
+        if !self.first_ready(first_latency).await {
             return;
         }
         let share = self.health.probe == self.readiness.probe
@@ -150,7 +166,7 @@ impl Probes {
 
     /// The first successful readiness probe: `holds_file` once, the ports
     /// become final, readiness is `ready`.
-    async fn first_ready(&self) -> bool {
+    async fn first_ready(&self, latency: Duration) -> bool {
         let deps = self.sup.deps();
         let target = self.actor.read(|state| {
             state
@@ -178,7 +194,8 @@ impl Probes {
                 slot.adoptable = Some(adoptable);
             }
             state.ports_final = true;
-            state.readiness = Readiness::new(ReadinessState::Ready, now, PROBE_OK, None);
+            state.readiness =
+                Readiness::new(ReadinessState::Ready, now, PROBE_OK, None).with_latency(latency);
             state.restart.note_ready(Instant::now(), &config);
         });
         mark_ready(&self.sup, &self.actor, self.generation);
@@ -190,15 +207,30 @@ impl Probes {
     }
 
     /// The probes after the first success.
-    async fn routine(mut self, share: bool) {
+    async fn routine(self, share: bool) {
         let deps = self.sup.deps().clone();
         let readiness = self.readiness.clone();
         let health_plan = self.health.clone();
-        let mut failures: u32 = 0;
-        let mut health_failures: u32 = 0;
+        let mut wakes = self.sup.subscribe_wake();
+        let mut ready_track = Track::default();
+        let mut health_track = Track::default();
         loop {
-            if !self.pause(deps.config.readiness_refresh_interval).await {
+            let mut stop = self.stop.clone();
+            let woke = tokio::select! {
+                () = tokio::time::sleep(deps.config.readiness_refresh_interval) => None,
+                wake = wakes.next() => Some(wake),
+                _ = stop.wait_for(|stopped| *stopped) => return,
+            };
+            if self.stopped() {
                 return;
+            }
+            if let Some(wake) = woke {
+                let grace_until = Instant::now() + deps.config.wake_grace;
+                ready_track.wake(grace_until);
+                if share {
+                    health_track.wake(grace_until);
+                }
+                self.note_wake(&wake, share);
             }
             let outcome = self.attempt(&readiness).await;
             if self.stopped() {
@@ -206,14 +238,16 @@ impl Probes {
             }
             let now = deps.platform.clock().now();
             match &outcome {
-                ProbeOutcome::Ok => {
-                    failures = 0;
+                ProbeOutcome::Ok { latency } => {
+                    ready_track.succeeded();
                     let config = deps.config.clone();
+                    let latency = *latency;
                     let mut back = false;
                     self.update(|state| {
                         back = state.readiness.state() != ReadinessState::Ready;
                         state.readiness =
-                            Readiness::new(ReadinessState::Ready, now, PROBE_OK, None);
+                            Readiness::new(ReadinessState::Ready, now, PROBE_OK, None)
+                                .with_latency(latency);
                         if state.restart.note_ready(Instant::now(), &config) {
                             state.restart_status = restart_status(&config, 0, None, false);
                         }
@@ -222,31 +256,54 @@ impl Probes {
                         mark_ready(&self.sup, &self.actor, self.generation);
                     }
                 }
-                ProbeOutcome::Failed { reason, detail } => {
-                    failures += 1;
-                    if failures >= deps.config.readiness_failure_threshold.get() {
-                        let (reason, detail) = (reason.clone(), detail.clone());
+                ProbeOutcome::Failed {
+                    reason,
+                    detail,
+                    latency,
+                } => {
+                    let counted = ready_track.failed(Instant::now());
+                    if counted
+                        && ready_track.failures >= deps.config.readiness_failure_threshold.get()
+                    {
+                        let (reason, detail, latency) = (reason.clone(), detail.clone(), *latency);
                         self.update(|state| {
                             state.readiness =
-                                Readiness::new(ReadinessState::NotReady, now, reason, detail);
+                                Readiness::new(ReadinessState::NotReady, now, reason, detail)
+                                    .with_latency(latency);
                             state.restart.note_not_ready();
                         });
                     }
                 }
             }
             if share {
-                health_failures = observe_health(
+                observe_health(
                     &self.sup,
                     &self.actor,
                     self.generation,
                     &health_plan,
                     &outcome,
-                    health_failures,
+                    &mut health_track,
                 );
             }
             // Time alone may have turned an observation stale.
             self.actor.refresh(&deps);
         }
+    }
+
+    /// A wake: readiness, and health when this loop also runs it, read
+    /// `waking` until a probe answers. Nothing changes while the process
+    /// is being stopped.
+    fn note_wake(&self, wake: &Wake, share: bool) {
+        let (readiness, health) = waking(wake);
+        self.update(|state| {
+            if state.stopping {
+                return;
+            }
+            state.readiness = readiness;
+            if share {
+                state.health = health;
+            }
+        });
     }
 }
 
@@ -308,7 +365,8 @@ struct HealthLoop {
 impl HealthLoop {
     async fn run(self) {
         let deps = self.sup.deps().clone();
-        let mut failures: u32 = 0;
+        let mut wakes = self.sup.subscribe_wake();
+        let mut track = Track::default();
         loop {
             if *self.stop.borrow() {
                 return;
@@ -323,49 +381,75 @@ impl HealthLoop {
             if *self.stop.borrow() {
                 return;
             }
-            failures = observe_health(
+            observe_health(
                 &self.sup,
                 &self.actor,
                 self.generation,
                 &self.plan,
                 &outcome,
-                failures,
+                &mut track,
             );
             let mut stop = self.stop.clone();
             tokio::select! {
                 () = tokio::time::sleep(self.plan.interval) => {}
+                wake = wakes.next() => {
+                    track.wake(Instant::now() + deps.config.wake_grace);
+                    self.note_wake(&wake);
+                }
                 _ = stop.wait_for(|stopped| *stopped) => return,
             }
         }
     }
+
+    /// A wake: health reads `waking` until the probe that follows answers.
+    fn note_wake(&self, wake: &Wake) {
+        let (_, health) = waking(wake);
+        let generation = self.generation;
+        self.actor.update(self.sup.deps(), |state| {
+            let ours = state
+                .process
+                .as_ref()
+                .is_some_and(|slot: &ProcessSlot| slot.generation == generation);
+            if ours && !state.stopping {
+                state.health = health;
+            }
+        });
+    }
 }
 
 /// Applies one health attempt: `healthy` on success, `degraded` below the
-/// failure threshold, `unhealthy` at it. Returns the new count of
-/// consecutive failures.
+/// failure threshold, `unhealthy` at it. `track` holds the count of
+/// consecutive failures; a failure inside the grace of a wake changes
+/// nothing and is not counted.
 fn observe_health(
     sup: &Supervisor,
     actor: &InstanceActor,
     generation: u64,
     plan: &HealthPlan,
     outcome: &ProbeOutcome,
-    failures: u32,
-) -> u32 {
+    track: &mut Track,
+) {
     let deps = sup.deps();
     let now = deps.platform.clock().now();
-    let (failures, health) = match outcome {
-        ProbeOutcome::Ok => (0, Health::new(HealthState::Healthy, now, PROBE_OK, None)),
-        ProbeOutcome::Failed { reason, detail } => {
-            let failures = failures.saturating_add(1);
-            let state = if failures >= u32::from(plan.failure_threshold.get()) {
+    let health = match outcome {
+        ProbeOutcome::Ok { latency } => {
+            track.succeeded();
+            Health::new(HealthState::Healthy, now, PROBE_OK, None).with_latency(*latency)
+        }
+        ProbeOutcome::Failed {
+            reason,
+            detail,
+            latency,
+        } => {
+            if !track.failed(Instant::now()) {
+                return;
+            }
+            let state = if track.failures >= u32::from(plan.failure_threshold.get()) {
                 HealthState::Unhealthy
             } else {
                 HealthState::Degraded
             };
-            (
-                failures,
-                Health::new(state, now, reason.clone(), detail.clone()),
-            )
+            Health::new(state, now, reason.clone(), detail.clone()).with_latency(*latency)
         }
     };
     actor.update(deps, |state| {
@@ -377,5 +461,4 @@ fn observe_health(
             state.health = health;
         }
     });
-    failures
 }

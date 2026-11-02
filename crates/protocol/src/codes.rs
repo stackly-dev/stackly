@@ -632,12 +632,12 @@ area! {
             details ["lockPath", "pid", "leftoverProcesses"],
             "the instance lock is held, or the last observed process still runs; after a restart's stop, leftoverProcesses names the group members left";
         ENDPOINT_IN_USE = "supervisor.endpoint_in_use", Conflict, retryable false,
-            details ["endpoint", "address", "port", "omitted"], "another process holds the port of an endpoint";
+            details ["endpoint", "address", "port", "suggestedPort", "omitted"], "another process holds the port of an endpoint";
         ENDPOINT_UNAVAILABLE = "supervisor.endpoint_unavailable", Unavailable, retryable true,
-            details ["endpoint", "address", "port", "reason", "omitted"],
+            details ["endpoint", "address", "port", "reason", "suggestedPort", "omitted"],
             "the os refused the trial bind of a fixed port, or the address is not available";
         ENDPOINT_CONFLICT = "supervisor.endpoint_conflict", Conflict, retryable false,
-            details ["endpoint", "port", "otherInstance", "omitted"], "the effective port belongs to another instance";
+            details ["endpoint", "port", "otherInstance", "suggestedPort", "omitted"], "the effective port belongs to another instance";
         AUTO_PORT_UNAVAILABLE = "supervisor.auto_port_unavailable", Unavailable, retryable true,
             details ["endpoint"], "no free candidate port for an automatic endpoint";
         RUNTIME_UNAVAILABLE = "supervisor.runtime_unavailable", Conflict, retryable false,
@@ -698,6 +698,21 @@ area! {
                 _ => None,
             }
         }
+    }
+}
+
+area! {
+    /// Config change codes (spec 0029, *Kode error baru*): the refusals of
+    /// `instance.config.apply`, `instance.config.validate`, and
+    /// `instance.change_endpoints` that are about the revision, not about a
+    /// field.
+    pub mod config = "config", owner "spec 0029" {
+        REVISION_CONFLICT = "config.revision_conflict", Conflict, retryable false,
+            details ["baseRevision", "activeRevision"], "baseRevision is not the active config revision";
+        DRIFT_DETECTED = "config.drift_detected", Conflict, retryable false,
+            details ["files"], "a config file was changed outside Stackly, so nothing renders until the active revision is kept";
+        NO_LAST_KNOWN_GOOD = "config.no_last_known_good", Conflict, retryable false,
+            details [], "no revision other than the active one has reached ready";
     }
 }
 
@@ -969,6 +984,7 @@ pub const AREAS: &[Area] = &[
     runtime::AREA,
     secret::AREA,
     supervisor::AREA,
+    config::AREA,
     process::AREA,
     instance::AREA,
     storage::AREA,
@@ -1380,6 +1396,7 @@ mod tests {
                 ("runtime", "spec 0018"),
                 ("secret", "spec 0011"),
                 ("supervisor", "spec 0010"),
+                ("config", "spec 0029"),
                 ("process", "spec 0010"),
                 ("instance", "spec 0010"),
                 ("storage", "spec 0022"),

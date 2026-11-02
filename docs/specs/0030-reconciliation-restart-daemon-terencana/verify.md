@@ -108,3 +108,53 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 ### Sisa kegagalan di luar milestone ini
 
 `stackly-core catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns` (F70 M3) dan `stacklyd ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` (F29 M2) gagal sama seperti di `main`.
+
+## Milestone 4: CLI and GUI
+
+### UI / manual
+
+- [ ] Di terminal, jalankan `stackly daemon restart` terhadap daemon launchd dari test root sendiri dengan satu instance `stop_restore` → rencana tampil di stderr, `[y/N]` muncul, `n` keluar 9, `y` menjalankan restart sampai rencana `finished` dan mencetak tabel per instance plus baris `Took` dengan tiga durasi → AC-15
+- [ ] `stackly daemon status` sesudah restart → baris `Last restart` berbunyi `finished <umur>: N adopted, M restored`; tanpa restart baris itu tidak ada → AC-15
+- [ ] Buka Settings (Stackly menu, Settings) dengan daemon launchd dari test root sendiri → tab General dengan bagian Daemon: baris `stacklyd` bersubtitle "Connected over Unix socket · protocol N" dan tombol Restart Daemon aktif; tanpa tab atau baris lain → AC-16
+- [ ] Putuskan daemon (hentikan test root) → subtitle "Disconnected · reconnecting" dan tombol mati; jalankan daemon `manual` → subtitle "Runs outside launchd, so it can't restart itself" dan tombol mati → AC-16
+- [ ] Tekan Restart Daemon dengan satu instance fake yang provider nya tidak ada di `HANDOVER_PROVEN` → sheet daftar "Keeps running" dan "Stops, then starts again" dengan alasan, plus "Operations in flight" bila ada; Cancel menutup tanpa efek → AC-16
+- [ ] Tekan Restart di sheet → jendela utama menampilkan banner "stacklyd is restarting" (jumlah yang tetap jalan dan yang berhenti), baris instance `stop_restore` bertanda "Stopped for daemon restart"; sesudah daemon kembali banner ringkasan, lalu toast "Daemon restarted. N instances adopted, M started again." dan banner hilang → AC-16
+- [ ] Mulai operasi create yang lama lalu tekan Restart → sheet menampilkan penolakan `daemon.restart_busy` dengan operasi penghalang dan tetap terbuka → AC-16
+- [ ] Catatan: jangan pernah menjalankan langkah ini terhadap agent milik pengguna (`com.ojiepermana.stackly.daemon`); pakai `STACKLY_ROOT` test root sendiri → AC-8 (bagian CLI)
+
+### Commands
+
+- [x] `cargo test -p stackly-cli --bin stackly daemon::` → test unit restart: prompt (tanpa terminal exit 2, jawaban n exit 9, rencana tanpa `stop_restore` tidak bertanya), digest dan key di request, `--force`, `restart_plan_changed` (satu pertanyaan ulang di terminal, exit 3 tanpa terminal atau pada perubahan kedua), `aborted` exit 7, restore gagal exit 7, instance `unknown` hanya warning, rencana terbuka di batas exit 8, `--no-wait-instances`, Ctrl+C exit 130, daemon `manual` ditolak daemon sendiri tanpa pertanyaan, serta semua test penantian spec 0015 yang lama → AC-15
+- [x] `cargo test -p stackly-cli --test daemon_restart_plan` → 11 test dengan daemon terskrip dan binary `stackly` nyata: hasil JSON dan teks, request membawa `expectedPlanDigest` dan idempotency key, `--yes` dan tanpa terminal, prompt pty (n exit 9, y lanjut), `plan_changed` exit 3, `aborted` exit 7, restore gagal exit 7 dengan seluruh rencana di `--json`, warning `cli.restart_instance_unknown`, `--no-wait-instances`, dan `daemon status` dengan `lastRestart` → AC-15
+- [x] `cargo test -p stackly-cli` → seluruh suite hijau; golden `daemon_status.json` berisi `lastRestart` (null) dan urutan kunci `info, health, client, lastRestart, agent` → AC-15
+- [x] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, dan `cargo xtask check-deps` → bersih
+- [x] `stackly completion zsh` dan `stackly manpage` memuat `--yes`, `--force`, dan `--no-wait-instances` untuk `daemon restart` (dihasilkan clap, tidak ada file tulisan tangan) → AC-15
+
+- [x] `swift test --package-path clients/swift` → hijau, termasuk `DaemonRestartClientTests` (preview tanpa key, restart dengan digest, `force`, key, batas 45 detik, balasan salah jenis, penolakan lewat) → AC-16
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "RestartBannerContentTests|DaemonRestartModelTests|DaemonSettingsContentTests|DaemonModelRestartTests"` → banner murni per state, sheet dan penolakannya (`restart_plan_changed`, `restart_busy`, jawaban hilang memakai key yang sama), rencana lewat event dan handshake, tanda baris, toast sekali, dan dua panggilan lewat link → AC-16
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ShellReopenTests` → tiga instance fake `ready`: GUI ditutup lalu dibuka, `id`, `process.pid`, `process.startedAt`, `serverInstanceId`, dan `startedAt` daemon sama, `GET /health` 200, model baru mengambil ulang tiga instance (butuh `cargo build -p stacklyd -p stackly-fake-server` dan contoh `skeleton_seed`) → AC-1
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter RestartSnapshotTests` → snapshot light, dark, dan narrow: sheet (dengan operasi penghalang dan dengan penolakan), banner di tiap state, bagian Daemon di Settings (terhubung, putus, `manual`), dan status baris "Stopped for daemon restart"; lihat lewat `cargo xtask snapshot review` → AC-16
+- [x] `cargo xtask build-app` dan `xcrun swift-format lint --strict` untuk file Swift yang berubah → bersih
+
+### Acceptance-criteria coverage
+
+- AC-15 · prompt, `--yes`, `--json`, `--force`, `--no-wait-instances`, dan exit code 2, 3, 7, 8, 9, 130 dicakup unit test `restart.rs` dan `daemon_restart_plan.rs`; durasi `stopping`, `daemonGap`, `restoring` dalam milidetik dari `handedOverAt`, `reconciledAt`, `finishedAt`; `daemon status` dengan `lastRestart` dicakup `daemon_status_shows_the_last_restart`
+- AC-15 (batas) · `DAEMON_RESTORE_WAIT` 600 detik dicakup unit test (exit 8 membawa `seconds` 600) dengan jam yang di pause, bukan dengan menunggu 10 menit
+- AC-8 (bagian CLI) · `stackly daemon restart` terhadap daemon launchd sungguhan belum dijalankan di milestone ini; test native `native_launchd.rs` milestone 3 memakai IPC langsung. Langkah manual di atas menunggu persetujuan lewat `/check verify`
+- AC-11 (bagian CLI) · rencana `aborted` keluar 7 `cli.restart_aborted` dicakup `an_aborted_plan_exits_7_and_the_old_daemon_keeps_answering`
+- AC-16 · bagian Daemon di tab General (baris `stacklyd`, subtitle, tombol nonaktif dengan alasan) dicakup `DaemonSettingsContentTests` dan snapshot; sheet konfirmasi, banner `restarting`, ringkasan, peringatan `aborted` dan `expired`, tanda baris, dan toast dicakup `RestartBannerContentTests`, `DaemonRestartModelTests`, `DaemonModelRestartTests`, dan `RestartSnapshotTests`; langkah manual di atas menunggu `/check verify`, record manual dari tombol Settings milik milestone 6
+- AC-1 (bagian Swift) · `ShellReopenTests`; test daemon dengan PostgreSQL native dan record manual `native` menunggu milestone 2 dan 6
+
+### Keputusan lokal yang perlu diketahui checker
+
+- Tanpa terminal atau dengan `--json`, rencana yang menghentikan instance tetap butuh `--yes` (exit 2), walau stdin adalah terminal. Dengan `--yes` di terminal, `restart_plan_changed` tetap bertanya sekali lagi karena persetujuan lama berlaku untuk rencana lain.
+- Batas tunggu daemon lama: 20 detik bila preview tidak punya instance `stop_restore`, `DAEMON_RESTORE_WAIT` (10 menit) bila ada. Sisa waktu rencana di daemon baru dihitung dari awal perintah.
+- Rencana `expired` dibaca sebagai `cli.restart_restore_failed` (daemon hidup lagi, instance tidak kembali). Spec tidak menyebutnya; perlu keputusan bila ingin kode lain.
+- Setiap percobaan restart memakai idempotency key baru (v7), termasuk percobaan ulang sesudah `restart_plan_changed`, karena digest di params membuat fingerprint request berbeda.
+
+### Keputusan lokal GUI yang perlu diketahui checker
+
+- Banner restart menggantikan banner daemon selama rencana terbuka (jendela disruption), karena banner daemon hanya akan berkata stacklyd hilang. Banner peringatan (`finished` dengan kegagalan, `aborted`, `expired`) memberi tempat ke banner daemon bila daemon punya banner sendiri, dan hilang oleh Dismiss atau setelah 10 menit (`RESTART_SUMMARY_TTL`). `finished` tanpa kegagalan hanya menghasilkan toast, dan toast hanya muncul untuk rencana yang jendela ini lihat terbuka atau yang jendela ini minta sendiri.
+- Tanda baris "Stopped for daemon restart" dipasang pada instance `stop_restore` yang sudah berhenti (`stoppedAt` terisi) dan belum punya outcome, hanya di halaman Instances; baris Overview belum memakai tanda itu.
+- Tombol Restart di sheet tidak menawarkan `force`; operasi yang menghalangi ditampilkan lalu orang menunggu atau membatalkan. `DaemonModel`, `MutationPath` tidak berubah selain properti `restart`; `daemon.shutdown { restart }` memakai batas 45 detik lewat `DaemonRestartClient`, bukan `MutationPath` (batas standar 10 detik terlalu pendek untuk quiesce 30 detik).
+- Scene Settings di `StacklyApp.swift` kini memakai `SettingsRoot(model:)`; `SettingsPlaceholder` dihapus.

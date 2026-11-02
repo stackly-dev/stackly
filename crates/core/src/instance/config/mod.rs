@@ -19,7 +19,7 @@ pub use gather::{ConfigFacts, RuntimeFact, gather_config};
 pub use plan::{
     ChangePlan, ConfigChange, EndpointIssue, Planned, Rejected, plan_change, refusal_error,
 };
-pub use preview::{EffectiveFile, changed_lines, preview};
+pub use preview::{EffectiveFile, changed_lines, preview, recorded_files};
 
 /// How many config revisions of one instance the registry keeps (spec
 /// 0029, AC-12); the active one and the last known good always stay.

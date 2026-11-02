@@ -12,6 +12,7 @@
 //! a domain type.
 
 pub mod command;
+pub mod config;
 pub mod connection;
 mod create;
 mod detail;
@@ -448,8 +449,21 @@ pub struct IdentityBlocker {
     pub observed_at: Timestamp,
 }
 
+/// The content of the `configDrift` blocker (spec 0029): the config files
+/// that differ from the copy of the last render, or are gone.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigDriftBlocker {
+    /// The drifted files, relative to the `config/` folder, ordered by path.
+    pub files: Vec<String>,
+    /// When the check found the drift.
+    pub observed_at: Timestamp,
+}
+
 /// Why an instance cannot start or be trusted, one value with the priority
-/// `identityUnproven`, then `dataInUse`, then `needsSecret`. A blocker this
+/// `identityUnproven`, then `dataInUse`, then `needsSecret`, then
+/// `configDrift`. A blocker this
 /// build does not know makes the snapshot fail to decode, so a new blocker
 /// is a protocol major.
 #[typeshare]
@@ -464,6 +478,9 @@ pub enum InstanceBlocker {
     DataInUse(IdentityBlocker),
     /// A secret the instance needs cannot be read (spec 0011).
     NeedsSecret(NeedsSecretBlocker),
+    /// A config file was changed outside Stackly, so nothing renders until
+    /// the user keeps the active revision (spec 0029).
+    ConfigDrift(ConfigDriftBlocker),
 }
 
 /// One endpoint of an instance.

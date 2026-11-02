@@ -130,6 +130,13 @@ safe_integer! {
     LogSeq
 }
 
+safe_integer! {
+    /// The number of a config revision of one instance (spec 0029): 1 for
+    /// the revision create writes, then rising by one and never reused. A
+    /// request names one only from 1 up; 0 is out of range.
+    ConfigRevisionNumber
+}
+
 /// A signed integer between minus and plus [`MAX_SAFE_INTEGER`], the signed
 /// counterpart of [`Count`]: a setting value or a schema bound that may be
 /// negative. `typeshare.toml` maps it to `Int64`, and decoding rejects a

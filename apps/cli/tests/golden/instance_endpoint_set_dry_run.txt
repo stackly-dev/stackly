@@ -1,0 +1,2 @@
+not applicable
+  postgres: supervisor.endpoint_conflict, try port 5434

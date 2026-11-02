@@ -129,7 +129,7 @@ async fn http_readiness_follows_the_dummy_servers_ready_endpoint() {
         not_ready.detail().map(|detail| detail.as_str()),
         Some("status 503")
     );
-    assert_eq!(is_ready, ProbeOutcome::Ok);
+    assert!(is_ready.is_ok(), "{:?}", is_ready);
 }
 
 #[tokio::test]
@@ -144,7 +144,7 @@ async fn tcp_readiness_is_ok_while_the_dummy_server_listens_and_fails_after_it_s
 
     // A listener that is not ready yet still accepts a TCP connect: that is
     // why readiness of a real provider never stops at an open port.
-    assert_eq!(listening, ProbeOutcome::Ok);
+    assert!(listening.is_ok(), "{:?}", listening);
     assert_eq!(stopped.reason(), &CONNECT_FAILED);
 }
 
@@ -213,7 +213,7 @@ async fn a_native_probe_is_ready_over_a_real_socket_and_names_a_foreign_server()
 
     let ready = attempt(&root, &nats_probe(port, "golden")).await;
 
-    assert_eq!(ready, ProbeOutcome::Ok);
+    assert!(ready.is_ok(), "{:?}", ready);
     let written = server.await.expect("the server task ends");
     assert!(written.starts_with("CONNECT {"), "{written}");
     assert!(written.ends_with("}\r\nPING\r\n"), "{written}");

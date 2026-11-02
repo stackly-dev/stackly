@@ -1,0 +1,33 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b12",
+    "reply": {
+      "type": "instance.config.validate",
+      "content": {
+        "valid": true,
+        "fieldErrors": [],
+        "changes": [
+          {
+            "key": "workers",
+            "old": "2",
+            "new": "4"
+          }
+        ],
+        "endpointChanges": [],
+        "impact": "restart",
+        "preview": [
+          {
+            "path": "fake.conf",
+            "content": "greeting = hello\nworkers = 4\n",
+            "changedLines": [
+              2
+            ],
+            "preview": true,
+            "portNote": null
+          }
+        ]
+      }
+    }
+  }
+}

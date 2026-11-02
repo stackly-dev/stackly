@@ -50,7 +50,7 @@ pub(super) async fn run(
             Some(ExitStatus::Exited(code))
                 if u8::try_from(code).is_ok_and(|code| spec.success_exit_codes.contains(&code)) =>
             {
-                ProbeOutcome::Ok
+                ProbeOutcome::passed()
             }
             status => {
                 let raw = first_stderr_line(notice.captured.as_ref())
@@ -217,7 +217,7 @@ mod tests {
         let (task, pid) = rig.start(spec(&[0, 2])).await;
         rig.processes().exit(pid, Some(ExitStatus::Exited(2)));
 
-        assert_eq!(task.await.unwrap(), ProbeOutcome::Ok);
+        assert_eq!(task.await.unwrap(), ProbeOutcome::passed());
         let spawn = rig.processes().spawns().pop().unwrap();
         assert_eq!(spawn.role, ChildRole::Probe);
         assert_eq!(

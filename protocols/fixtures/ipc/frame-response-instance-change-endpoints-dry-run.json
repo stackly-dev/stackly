@@ -1,0 +1,24 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b1c",
+    "reply": {
+      "type": "instance.change_endpoints",
+      "content": {
+        "type": "dryRun",
+        "content": {
+          "valid": false,
+          "problems": [
+            {
+              "endpoint": "postgres",
+              "code": "supervisor.endpoint_conflict",
+              "suggestedPort": 5434
+            }
+          ],
+          "changes": [],
+          "impact": "restart"
+        }
+      }
+    }
+  }
+}

@@ -30,6 +30,9 @@ pub mod warning {
     /// `restart` did not see launchd start the daemon again and started it
     /// through macOS.
     pub const AGENT_RELAUNCHED: &str = "cli.agent_relaunched";
+    /// `restart` saw an instance that was `unknown` before the restart and
+    /// still is: its process was never touched (spec 0030).
+    pub const RESTART_INSTANCE_UNKNOWN: &str = "cli.restart_instance_unknown";
 }
 
 /// The final record of a command.

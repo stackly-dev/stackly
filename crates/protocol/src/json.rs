@@ -49,11 +49,17 @@ pub enum FieldCode {
     TooMany,
     /// The value is not one of the known values.
     UnknownValue,
+    /// The field is fixed once the instance is initialized, and a config
+    /// change tried to change it (spec 0029).
+    ImmutableAfterInit,
+    /// The field holds a secret reference, which a config change cannot
+    /// change (spec 0029).
+    SecretReadOnly,
 }
 
 impl FieldCode {
     /// Every field code.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::InvalidValue,
         Self::Required,
         Self::TooShort,
@@ -62,6 +68,8 @@ impl FieldCode {
         Self::OutOfRange,
         Self::TooMany,
         Self::UnknownValue,
+        Self::ImmutableAfterInit,
+        Self::SecretReadOnly,
     ];
 
     /// The wire value, such as `too_long`.
@@ -76,6 +84,8 @@ impl FieldCode {
             Self::OutOfRange => "out_of_range",
             Self::TooMany => "too_many",
             Self::UnknownValue => "unknown_value",
+            Self::ImmutableAfterInit => "immutable_after_init",
+            Self::SecretReadOnly => "secret_read_only",
         }
     }
 
@@ -91,6 +101,8 @@ impl FieldCode {
             Self::OutOfRange => "value is out of range",
             Self::TooMany => "list has too many entries",
             Self::UnknownValue => "value is not one of the known values",
+            Self::ImmutableAfterInit => "value cannot be changed after the instance is created",
+            Self::SecretReadOnly => "secret value cannot be changed here",
         }
     }
 }

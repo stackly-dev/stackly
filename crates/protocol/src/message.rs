@@ -24,6 +24,11 @@ use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, Sh
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
+use crate::instance::config::{
+    ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
+    ConfigValidation, GetConfigParams, InstanceConfigView, KeepRevisionParams,
+    RenameInstanceParams, ValidateConfigParams,
+};
 use crate::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
@@ -200,6 +205,27 @@ pub enum Call {
     /// 0028).
     #[serde(rename = "instance.get_metrics")]
     InstanceGetMetrics(GetMetricsParams),
+    /// The active config revision of one instance with its history, drift,
+    /// and non sensitive config files (spec 0029).
+    #[serde(rename = "instance.config.get")]
+    InstanceConfigGet(GetConfigParams),
+    /// Judges a config change and writes nothing (spec 0029).
+    #[serde(rename = "instance.config.validate")]
+    InstanceConfigValidate(ValidateConfigParams),
+    /// Writes a config change as the next revision and makes it take
+    /// effect (spec 0029).
+    #[serde(rename = "instance.config.apply")]
+    InstanceConfigApply(ApplyConfigParams),
+    /// Writes the config files of the active revision back over a drift
+    /// (spec 0029).
+    #[serde(rename = "instance.config.keep_revision")]
+    InstanceConfigKeepRevision(KeepRevisionParams),
+    /// Renames an instance (spec 0029).
+    #[serde(rename = "instance.rename")]
+    InstanceRename(RenameInstanceParams),
+    /// Changes the ports of an instance's IP endpoints (spec 0029).
+    #[serde(rename = "instance.change_endpoints")]
+    InstanceChangeEndpoints(ChangeEndpointsParams),
     /// One page of an instance's stored log (spec 0027).
     #[serde(rename = "instance.logs_read")]
     InstanceLogsRead(LogsReadParams),
@@ -341,6 +367,26 @@ pub enum Reply {
     /// The samples after the cursor and the facts next to them.
     #[serde(rename = "instance.get_metrics")]
     InstanceGetMetrics(Box<MetricsReply>),
+    /// The config of the instance.
+    #[serde(rename = "instance.config.get")]
+    InstanceConfigGet(Box<InstanceConfigView>),
+    /// The verdict on a config change.
+    #[serde(rename = "instance.config.validate")]
+    InstanceConfigValidate(Box<ConfigValidation>),
+    /// The operation that applies the change, or that nothing changed.
+    #[serde(rename = "instance.config.apply")]
+    InstanceConfigApply(Box<ConfigApplyAccepted>),
+    /// The operation that keeps the active revision, or that nothing
+    /// drifted.
+    #[serde(rename = "instance.config.keep_revision")]
+    InstanceConfigKeepRevision(Box<InstanceActionAccepted>),
+    /// The operation that renames the instance, or that the name is the
+    /// same.
+    #[serde(rename = "instance.rename")]
+    InstanceRename(Box<InstanceActionAccepted>),
+    /// The operation that changes the ports, or the verdict of a dry run.
+    #[serde(rename = "instance.change_endpoints")]
+    InstanceChangeEndpoints(Box<ChangeEndpointsReply>),
     /// One page of the log.
     #[serde(rename = "instance.logs_read")]
     InstanceLogsRead(Box<LogPage>),
@@ -463,6 +509,12 @@ methods! {
     "instance.get_detail" => InstanceGetDetail(GetInstanceDetailParams), recovery refused;
     "instance.get_data_usage" => InstanceGetDataUsage(GetDataUsageParams), recovery refused;
     "instance.get_metrics" => InstanceGetMetrics(GetMetricsParams), recovery refused;
+    "instance.config.get" => InstanceConfigGet(GetConfigParams), recovery refused;
+    "instance.config.validate" => InstanceConfigValidate(ValidateConfigParams), recovery refused;
+    "instance.config.apply" => InstanceConfigApply(ApplyConfigParams), recovery refused;
+    "instance.config.keep_revision" => InstanceConfigKeepRevision(KeepRevisionParams), recovery refused;
+    "instance.rename" => InstanceRename(RenameInstanceParams), recovery refused;
+    "instance.change_endpoints" => InstanceChangeEndpoints(ChangeEndpointsParams), recovery refused;
     "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
     "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
     "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
@@ -553,9 +605,15 @@ mod tests {
     fn method_names_are_unique_and_follow_the_area_dot_name_pattern() {
         let unique: HashSet<_> = Call::METHODS.iter().collect();
         assert_eq!(unique.len(), Call::METHODS.len());
+        // A method is `area.name`, or `area.group.name` for the config
+        // methods of spec 0029 (`instance.config.get`).
         for method in Call::METHODS {
+            let parts: Vec<&str> = method.split('.').collect();
             assert!(
-                crate::events::is_kind_filter(method) && !method.ends_with('.'),
+                (2..=3).contains(&parts.len())
+                    && parts.iter().all(|part| {
+                        crate::events::is_kind_filter(&format!("{part}.x")) && !part.is_empty()
+                    }),
                 "{method}"
             );
         }
@@ -622,7 +680,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 18
+                == 24
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -639,8 +697,9 @@ mod tests {
             // The 3 before the logs: `instance.restart`, `instance.reload`,
             // and `instance.force_stop` (spec 0026). Then the 3 log methods
             // (spec 0027), `instance.prepare_terminal` (spec 0070), and
-            // `instance.get_metrics` (spec 0028).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1,
+            // `instance.get_metrics` (spec 0028), and the 6 config methods
+            // (spec 0029).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

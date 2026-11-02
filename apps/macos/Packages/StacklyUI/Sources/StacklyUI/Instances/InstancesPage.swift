@@ -58,6 +58,7 @@ public struct InstancesPage: View {
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let instances: InstanceStore
     private let catalog: CatalogStore?
@@ -113,6 +114,7 @@ public struct InstancesPage: View {
         openDiagnostics: @escaping @MainActor () -> Void,
         detail: InstanceDetailService? = nil,
         logs: InstanceLogsService? = nil,
+        metrics: InstanceMetricsService? = nil,
         openIn: OpenInPorts = .system,
         opening: UUID? = nil,
         openingTab: InstanceTab = .summary,
@@ -129,7 +131,8 @@ public struct InstancesPage: View {
         _sortOrder = State(initialValue: [sortOrder])
         _models = State(
             initialValue: InstanceDetailModels(
-                service: detail ?? .disconnected, logs: logs ?? .disconnected, openIn: openIn))
+                service: detail ?? .disconnected, logs: logs ?? .disconnected,
+                metrics: metrics ?? .disconnected, openIn: openIn))
         self.openingTab = openingTab
         _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
@@ -171,6 +174,7 @@ public struct InstancesPage: View {
                     id: route.id, instances: instances, catalog: catalog, actions: actions,
                     model: models.model(for: route.id), service: models.detailService,
                     openIn: models.openIn, logs: models.logsModel(for: route.id),
+                    metrics: models.metricsModel(for: route.id),
                     completedRounds: completedRounds,
                     tab: openingTab, back: { path.removeAll() }
                 )
@@ -269,7 +273,8 @@ public struct InstancesPage: View {
         guard instances.loadedCount != nil else { return nil }
         return InstanceRowModel.rows(
             of: instances.instances, catalog: catalog?.providers,
-            failures: Set(instances.store.itemFailures.keys))
+            failures: Set(instances.store.itemFailures.keys),
+            stoppedForRestart: daemon?.restart.markedInstances ?? [])
     }
 
     /// The rows the filter and the search let through, in the order of the table.

@@ -9,9 +9,11 @@
 //! nothing is left to wait for (AC-6).
 
 mod action;
+mod config;
 mod connection;
 mod create;
 mod duplicate;
+mod endpoint;
 mod get;
 pub mod group;
 mod inspect;
@@ -19,6 +21,7 @@ mod list;
 mod logs;
 mod metrics;
 mod open;
+mod rename;
 pub mod render;
 pub mod resolve;
 
@@ -33,15 +36,18 @@ use stackly_protocol::{Call, Reply, ResourceKind};
 use uuid::Uuid;
 
 use self::action::{ReloadArgs, RestartArgs, StartArgs, StopArgs};
+use self::config::ConfigCommand;
 use self::connection::ConnectionArgs;
 use self::create::CreateArgs;
 use self::duplicate::DuplicateArgs;
+use self::endpoint::EndpointCommand;
 use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
 use self::logs::LogsArgs;
 use self::metrics::MetricsArgs;
 use self::open::OpenArgs;
+use self::rename::RenameArgs;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -114,6 +120,17 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance metrics orders-db\n  stackly instance metrics orders-db --json\n  stackly instance metrics orders-db --watch"
     )]
     Metrics(MetricsArgs),
+    /// Show and change the settings of an instance as numbered revisions
+    #[command(subcommand)]
+    Config(ConfigCommand),
+    /// Change the name of an instance; its data, runtime, and process stay
+    #[command(
+        after_help = "Examples:\n  stackly instance rename orders-db orders-primary\n  stackly instance rename orders-db orders-primary --json"
+    )]
+    Rename(RenameArgs),
+    /// Change the ports of an instance's endpoints
+    #[command(subcommand)]
+    Endpoint(EndpointCommand),
     /// Show one instance; the same as inspect
     #[command(
         after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
@@ -137,6 +154,9 @@ impl InstanceCommand {
             Self::Open(args) => execute(args, cx).await,
             Self::Logs(args) => execute(args, cx).await,
             Self::Metrics(args) => execute(args, cx).await,
+            Self::Config(command) => command.run(cx).await,
+            Self::Rename(args) => execute(args, cx).await,
+            Self::Endpoint(command) => command.run(cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }
@@ -157,6 +177,16 @@ enum Verb {
     Reload,
     /// `stop --force`.
     ForceStop,
+    /// `config apply`.
+    Apply,
+    /// `config rollback`.
+    Rollback,
+    /// `config keep-revision`.
+    KeepRevision,
+    /// `rename`.
+    Rename,
+    /// `endpoint set`.
+    EndpointSet,
 }
 
 impl Verb {
@@ -164,7 +194,15 @@ impl Verb {
     /// line `already <lifecycle>` when `instance.get` could not say.
     const fn already(&self) -> &'static str {
         match self {
-            Self::Create { .. } | Self::Start | Self::Restart | Self::Reload => "running",
+            Self::Create { .. }
+            | Self::Start
+            | Self::Restart
+            | Self::Reload
+            | Self::Apply
+            | Self::Rollback
+            | Self::KeepRevision
+            | Self::Rename
+            | Self::EndpointSet => "running",
             Self::Stop | Self::ForceStop => "stopped",
         }
     }
@@ -231,6 +269,13 @@ impl Render for InstanceAction {
                     None => out.line(&format!("restarted {name}")),
                 },
                 Verb::Reload => out.line(&format!("reloaded {name}")),
+                Verb::Apply => out.line(&format!("applied the configuration of {name}")),
+                Verb::Rollback => out.line(&format!("rolled back {name}")),
+                Verb::KeepRevision => out.line(&format!(
+                    "kept the active revision of {name}; a running process reads the files at its next reload or restart"
+                )),
+                Verb::Rename => out.line(&format!("renamed to {name}")),
+                Verb::EndpointSet => out.line(&format!("changed the ports of {name}")),
                 Verb::ForceStop => {
                     out.line(&format!("force stopped {name}"));
                     if !instance.leftover_processes.is_empty() {

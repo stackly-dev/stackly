@@ -220,6 +220,13 @@ nonisolated public enum DetailFormat {
         return "\(restart.attempts) in the last \(restart.windowSeconds / 60) min"
     }
 
+    /// "{n} since created": the restarts that followed a crash since the instance was created
+    /// (spec 0028, AC-6), or `nil` when the daemon sent none.
+    /// - Parameter instance: The instance.
+    public static func restartsSinceCreated(_ instance: InstanceSummary) -> String? {
+        instance.restartTotal.map { "\($0) since created" }
+    }
+
     /// The uptime of the process, or "—" without one.
     /// - Parameters:
     ///   - instance: The instance.

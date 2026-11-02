@@ -128,6 +128,13 @@ pub enum OperationKind {
     ForceStopInstance,
     /// Rename an instance.
     RenameInstance,
+    /// Write a new config revision and make it take effect (spec 0029).
+    ApplyConfig,
+    /// Change the ports of an instance's endpoints (spec 0029).
+    ChangeEndpoints,
+    /// Write the config files of the active revision back over a drift
+    /// (spec 0029).
+    ResolveConfigDrift,
     /// Remove an instance and keep its data.
     RemoveInstance,
     /// Delete an instance and its data.

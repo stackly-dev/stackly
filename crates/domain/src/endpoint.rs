@@ -92,11 +92,18 @@ impl IpEndpoint {
         self.bound = Some(port);
     }
 
-    /// Changes how the endpoint asks for its port and forgets the bound
-    /// port, which belonged to the old request (spec 0029).
+    /// Changes how the endpoint asks for its port (spec 0029). The port the
+    /// process holds now, the bound one or else the fixed one, stays as the
+    /// bound port when the new request is `Auto`, so the stop of the old
+    /// process still has an address and the next start reuses the port when
+    /// it is free; any other request forgets it, since the fixed port is
+    /// the effective one.
     pub(crate) const fn set_request(&mut self, request: PortRequest) {
+        self.bound = match request {
+            PortRequest::Auto => self.effective_port(),
+            PortRequest::Fixed(_) => None,
+        };
         self.request = request;
-        self.bound = None;
     }
 
     /// Returns the effective port: the bound port when there is one, else

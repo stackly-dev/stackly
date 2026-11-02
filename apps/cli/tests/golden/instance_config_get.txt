@@ -1,0 +1,14 @@
+Revision         2
+Origin           applied
+Last known good  2
+Reload           supported
+
+SETTING     VALUE                          APPLIES
+greeting    hello                          reload
+workers     4                              restart
+dataSeed    seed                           set once
+adminToken  secret:fake-orders/adminToken  secret, read only
+
+REVISION  ORIGIN   WRITTEN                     MARKS
+2         applied  2026-11-02 08:20:00 +00:00  active, last known good
+1         created  2026-11-02 08:00:00 +00:00  -

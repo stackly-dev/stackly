@@ -23,6 +23,7 @@ public struct AppShell: View {
     @State private var windowWidth: CGFloat?
     @State private var navigator = ShellNavigator()
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.fixtureNow) private var fixtureNow
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let presentation: ShellPresentation
@@ -120,9 +121,11 @@ public struct AppShell: View {
                 // The nested navigation stack's toolbar backdrop otherwise follows the
                 // page down and blurs its controls below the banner.
                 .toolbarBackgroundVisibility(
-                    presentation.banner == nil ? .automatic : .hidden, for: .windowToolbar
+                    presentation.banner == nil && restartBanner == nil ? .automatic : .hidden,
+                    for: .windowToolbar
                 )
                 .feedbackPresenter()
+                .task(id: daemon?.restart.toast?.id) { showRestartToast() }
                 .navigationSplitViewColumnWidth(
                     min: Self.contentMinWidth,
                     ideal: Self.contentIdealWidth
@@ -225,8 +228,34 @@ public struct AppShell: View {
         )
     }
 
+    /// The restart banner and the model that dismisses it, when it takes the banner slot:
+    /// while the daemon restarts it replaces the daemon banner, which would only say that
+    /// stacklyd is gone; once the plan ended it gives way to a daemon banner.
+    private var restartBanner: (content: RestartBannerContent, model: DaemonRestartModel)? {
+        guard let model = daemon?.restart,
+            let content = model.banner(
+                now: fixtureNow ?? Date(), daemonBannerShown: presentation.banner != nil)
+        else { return nil }
+        return (content, model)
+    }
+
+    /// Shows the toast of a restart that finished, once.
+    private func showRestartToast() {
+        guard let restart = daemon?.restart, let toast = restart.toast else { return }
+        feedbackCenter?.show(.success(toast.message))
+        restart.consumeToast(toast.id)
+    }
+
     @ViewBuilder private var bannerArea: some View {
-        if let banner = presentation.banner {
+        if let (content, model) = restartBanner {
+            RestartBanner(content, dismiss: { model.dismissBanner() })
+                .id(content.title)
+                .frame(minWidth: Self.contentMinWidth - 2 * Spacing.pageHorizontal)
+                .padding(.horizontal, Spacing.pageHorizontal)
+                .padding(.vertical, Spacing.s12)
+                .background(StacklyColor.surfaceWindow)
+                .transition(StacklyMotion.crossfade)
+        } else if let banner = presentation.banner {
             DaemonBanner(
                 banner,
                 isReconnecting: presentation.isReconnecting,
@@ -279,7 +308,8 @@ public struct AppShell: View {
                     reconnect: reconnect,
                     openDiagnostics: { select(.diagnostics) },
                     detail: daemon.map(InstanceDetailService.live),
-                    logs: daemon.map(InstanceLogsService.live)
+                    logs: daemon.map(InstanceLogsService.live),
+                    metrics: daemon.map(InstanceMetricsService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)
