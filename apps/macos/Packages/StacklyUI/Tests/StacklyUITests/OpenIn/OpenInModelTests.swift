@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import StacklyClient
 import StacklyTestSupport
@@ -503,7 +504,55 @@ struct OpenInModelTests {
         #expect(pasteboard.holds(credential.value))
     }
 
+    @Test func theDetailModelAndTheOpenInModelKeepNoPasswordAfterAnOpen() async throws {
+        let detail = detail(for: postgres)
+        let script = DetailScript(detail: detail, instance: postgres)
+        let models = InstanceDetailModels(service: script.service, openIn: fixture.ports)
+        let detailModel = models.model(for: postgres.id)
+        await detailModel.open()
+        let action = try #require(detailModel.detail?.openActions?.first { $0.name == "tableplus" })
+        let reveal = secrets()
+        let sink = DiscardingPasteboard()
+        let openIn = OpenInModel(
+            locator: fixture.ports.locator, opener: fixture.ports.opener,
+            fileExists: fixture.ports.fileExists,
+            prepareTerminal: { _, _ throws(ClientError) in Self.script }, secrets: reveal.client,
+            pasteboard: ConcealedPasteboard(pasteboard: sink))
+
+        _ = await openIn.open(action, summary: postgres, detail: try #require(detailModel.detail))
+
+        credential.assertAbsent(in: Self.dumped(detailModel), what: "InstanceDetailModel")
+        credential.assertAbsent(in: Self.dumped(openIn), what: "OpenInModel")
+        credential.assertAbsent(in: Self.dumped(models.openIn), what: "the shared OpenInModel")
+    }
+
     // MARK: - Helpers
+
+    /// Every stored property of `value`, nested, as text: what a leak into a model would show in.
+    private static func dumped(_ value: some Any) -> String {
+        var text = ""
+        dump(value, to: &text, maxDepth: 12)
+        return text
+    }
+
+    /// A pasteboard that keeps nothing, so a dump of the model reaches no copied password.
+    private final class DiscardingPasteboard: PasteboardStore {
+        private(set) var changeCount = 0
+
+        func prepareForNewContents(with options: NSPasteboard.ContentsOptions) -> Int {
+            changeCount += 1
+            return changeCount
+        }
+
+        func clearContents() -> Int {
+            changeCount += 1
+            return changeCount
+        }
+
+        func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool {
+            true
+        }
+    }
 
     private func isHidden(_ content: OpenInContent) -> Bool {
         if case .hidden = content { return true }
