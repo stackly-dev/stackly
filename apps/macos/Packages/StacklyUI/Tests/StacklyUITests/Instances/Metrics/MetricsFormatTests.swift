@@ -277,6 +277,47 @@ struct MetricsFormatTests {
         #expect(line.text.hasPrefix("Unknown · rechecking after sleep · "))
     }
 
+    @Test func aReadyReadinessStandsInForAnUnknownHealth() {
+        let readiness = InstanceReadiness(
+            state: .ready, reason: "probe_ok", detail: nil, observedAt: observed(0),
+            latencyMs: 4)
+        let line = MetricsFormat.healthLine(
+            reply(health: .fixture(.unknown, reason: "never_observed"), readiness: readiness),
+            timeZone: Self.utc, locale: Self.locale)
+
+        #expect(line.tone == .positive)
+        #expect(line.text.hasPrefix("Ready · probe ok · "))
+        #expect(line.text.hasSuffix(" · 4 ms"))
+    }
+
+    @Test func aKnownHealthLeadsEvenWhenReadinessIsNotReady() {
+        let health = InstanceHealth(
+            state: .degraded, reason: "probe_slow", detail: nil, observedAt: observed(0),
+            latencyMs: 900)
+        let readiness = InstanceReadiness(
+            state: .notReady, reason: "probe_failed", detail: nil, observedAt: observed(0),
+            latencyMs: 12)
+        let line = MetricsFormat.healthLine(
+            reply(health: health, readiness: readiness),
+            timeZone: Self.utc, locale: Self.locale)
+
+        #expect(line.tone == .caution)
+        #expect(line.text.hasPrefix("Degraded · probe slow · "))
+        #expect(line.text.hasSuffix(" · 900 ms"))
+    }
+
+    @Test func whenNeitherHasAnAnswerTheHeaderKeepsTheReasonOfTheHealth() {
+        let line = MetricsFormat.healthLine(
+            reply(
+                health: .fixture(.unknown, reason: "never_observed"),
+                readiness: .fixture(.unknown, reason: "starting")),
+            timeZone: Self.utc, locale: Self.locale)
+
+        #expect(line.tone == .neutral)
+        #expect(line.text.hasPrefix("Unknown · never observed · "))
+        #expect(line.text.contains(" ms") == false)
+    }
+
     // MARK: - Processes and graph
 
     @Test func processRowsKeepTheOrderOfTheTreeAndNeverTurnAMissingValueIntoZero() {

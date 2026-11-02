@@ -88,6 +88,12 @@ nonisolated public enum RestartCopy {
         }
     }
 
+    /// The row of an aborted plan for an instance it stopped and is starting again.
+    public static let stoppedStartingAgain = "Stopped, starting again."
+
+    /// The row of an aborted plan for an instance that did not stop.
+    public static let didNotStopStillRunning = "Did not stop, still running."
+
     /// Why an instance failed to come back, from the plan's failure code.
     public static func failure(_ code: String?) -> String {
         guard let code else { return "Did not come back." }

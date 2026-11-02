@@ -60,6 +60,63 @@ struct DaemonModelRestartTests {
             model.restart.markedInstances == [FixtureID.uuid(kind: FixtureID.instance, number: 3)])
     }
 
+    /// Lets the tasks on the main actor run until `done` holds.
+    private static func settle(_ done: () -> Bool) async {
+        var turns = 0
+        while done() == false, turns < 2000 {
+            await Task.yield()
+            turns += 1
+        }
+    }
+
+    @Test func aFinishedSnapshotReadsTheInfoAgainAndFindsThePlanItMissed() async {
+        let (model, link) = Self.model()
+        model.receive(Self.connected(restart: nil))
+        model.receive(
+            .event(
+                Event(
+                    subscriptionId: 1, sequence: 1, at: FixtureClock.now, resource: nil,
+                    revision: nil,
+                    kind: .daemonRestartPlan(F.plan(.restoring, instances: F.mixedInstances)))))
+        let finished = F.plan(.finished, instances: F.mixedInstances)
+        link.result.withLock {
+            $0 = .success(.daemonGetInfo(DaemonRestartModelTests.info(restart: finished)))
+        }
+
+        model.receive(.resnapshot(.gap(.cursorExpired)))
+        await Self.settle { model.restart.plan?.state == .finished }
+
+        #expect(model.restart.plan?.state == .finished)
+        #expect(model.restart.isRestarting == false)
+        #expect(link.calls.withLock { $0 }.contains { $0.0 == .daemonGetInfo })
+    }
+
+    @Test func aConnectionThatCaughtUpReadsTheInfoAgainToo() async {
+        let (model, link) = Self.model()
+        model.receive(Self.connected(restart: nil))
+        let restoring = F.plan(.restoring, instances: F.mixedInstances)
+        link.result.withLock {
+            $0 = .success(.daemonGetInfo(DaemonRestartModelTests.info(restart: restoring)))
+        }
+
+        model.receive(.caughtUp)
+        await Self.settle { model.restart.plan != nil }
+
+        #expect(model.restart.plan?.state == .restoring)
+    }
+
+    @Test func anInfoThatCannotBeReadAfterASnapshotChangesNothing() async {
+        let (model, link) = Self.model()
+        model.receive(Self.connected(restart: F.plan(.restoring, instances: F.mixedInstances)))
+        link.result.withLock { $0 = .failure(.notSent(ClientErrorCatalog.notConnected())) }
+
+        model.receive(.caughtUp)
+        await Self.settle { link.calls.withLock { $0 }.contains { $0.0 == .daemonGetInfo } }
+        await Task.yield()
+
+        #expect(model.restart.plan?.state == .restoring)
+    }
+
     @Test func theSheetReadsThePreviewAndTheRestartCarriesTheDigestAndAKey() async throws {
         let (model, link) = Self.model()
         model.receive(Self.connected(restart: nil))

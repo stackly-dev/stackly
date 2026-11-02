@@ -103,9 +103,36 @@ struct RestartBannerContentTests {
         let plan = F.plan(.aborted, instances: instances, closeReason: .stopTimeout)
         let banner = try #require(Self.banner(plan))
         #expect(banner.tone == .caution)
-        #expect(banner.title == "Daemon restart cancelled")
+        #expect(banner.title == "Daemon restart aborted")
         #expect(banner.message.hasPrefix("An instance did not stop in time."))
-        #expect(banner.items == [.init(name: "valkey-cache", reason: "Did not stop in time.")])
+        #expect(
+            banner.items == [.init(name: "valkey-cache", reason: "Did not stop, still running.")])
+    }
+
+    @Test func anAbortedRestartListsWhatItStoppedBeforeWhatDidNotStop() throws {
+        let instances = [
+            F.instance(1, "pg17-dev"),
+            F.instance(2, "nats-bus", decision: .stopRestore, stopped: true),
+            F.instance(3, "valkey-cache", decision: .stopRestore),
+            F.instance(4, "traefik-edge", decision: .stopRestore, stopped: true),
+        ]
+        let plan = F.plan(.aborted, instances: instances, closeReason: .stopTimeout)
+        let banner = try #require(Self.banner(plan))
+        #expect(
+            banner.items == [
+                .init(name: "nats-bus", reason: "Stopped, starting again."),
+                .init(name: "traefik-edge", reason: "Stopped, starting again."),
+                .init(name: "valkey-cache", reason: "Did not stop, still running."),
+            ])
+    }
+
+    @Test func anAbortedRestartDoesNotClaimTheInstancesAreBackYet() throws {
+        let instances = [F.instance(2, "nats-bus", decision: .stopRestore, stopped: true)]
+        let plan = F.plan(.aborted, instances: instances, closeReason: .stopTimeout)
+        let banner = try #require(Self.banner(plan))
+        #expect(banner.message.contains("are being started again"))
+        #expect(banner.message.contains("started again.") == false)
+        #expect(banner.message.lowercased().contains("cancel") == false)
     }
 
     @Test func anExpiredRestartSaysTheMacStartedAgain() throws {

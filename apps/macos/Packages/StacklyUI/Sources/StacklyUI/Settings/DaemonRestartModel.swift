@@ -85,26 +85,39 @@ public final class DaemonRestartModel {
 
     // MARK: - From the daemon
 
-    /// Takes the plan of `DaemonInfo.restart` after a handshake. A daemon that reports none
-    /// ends a banner that waited for a plan, or showed one the new daemon does not know.
+    /// Takes the plan of `DaemonInfo.restart` after a handshake, or after the stores were
+    /// loaded again. A daemon that reports none changes nothing: the new daemon opens its
+    /// socket before it takes the plan over, so the first answer is empty while the restart
+    /// goes on. A plan nobody takes over ends with the reconciliation (see
+    /// ``receive(event:)``).
     /// - Parameter info: The reply of `daemon.get_info`, or `nil` when it did not answer.
     public func receive(info: DaemonInfo?) {
-        guard let info else { return }
-        guard let view = info.restart else {
-            if plan?.state.isOpen == true || isAwaitingPlan {
-                plan = nil
-                isAwaitingPlan = false
-                watchedPlan = nil
-            }
-            return
-        }
+        guard let view = info?.restart else { return }
         accept(view)
     }
 
-    /// Takes one `daemon.restart_plan` event.
+    /// Takes one event: a `daemon.restart_plan`, or the end of a reconciliation, which closes
+    /// a plan that the new daemon did not take over.
     public func receive(event: Event) {
-        guard case .daemonRestartPlan(let view) = event.kind else { return }
-        accept(view)
+        switch event.kind {
+        case .daemonRestartPlan(let view):
+            accept(view)
+        case .daemonReconciling(let reconciling) where reconciling.phase == .finished:
+            dropPlanNobodyTook()
+        default:
+            break
+        }
+    }
+
+    /// A reconciliation that ended leaves no plan the old daemon wrote and the new one did
+    /// not take over: such a plan is still `stopping` or `handed_over`, and the banner would
+    /// wait for an event that never comes. The plan stays watched, so a late event for it
+    /// still makes the toast.
+    private func dropPlanNobodyTook() {
+        if let plan, plan.state == .stopping || plan.state == .handedOver {
+            self.plan = nil
+        }
+        isAwaitingPlan = false
     }
 
     private func accept(_ view: RestartPlanView) {

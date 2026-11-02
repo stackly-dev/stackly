@@ -223,12 +223,79 @@ struct DaemonRestartModelTests {
         #expect(model.isAwaitingPlan == false)
     }
 
-    @Test func aNewDaemonThatKnowsNoPlanEndsTheBannerOfAnOpenOne() {
+    private static func reconciling(_ phase: ReconcilePhase, sequence: UInt64) -> Event {
+        Event(
+            subscriptionId: 1, sequence: sequence, at: FixtureClock.now, resource: nil,
+            revision: nil,
+            kind: .daemonReconciling(
+                DaemonReconciling(
+                    phase: phase, instances: 3, adopted: 2, unknown: 0, restarting: 0,
+                    findings: nil)))
+    }
+
+    @Test func aNewDaemonThatDoesNotKnowThePlanYetKeepsTheOpenOne() {
         let model = Script(previews: [.success(F.preview())]).model()
         model.receive(
             event: Self.event(F.plan(.handedOver, instances: F.mixedInstances), sequence: 1))
         model.receive(info: Self.info(restart: nil))
+        #expect(model.plan?.state == .handedOver)
+        #expect(model.banner(now: FixtureClock.now)?.title == RestartCopy.restartingTitle)
+        #expect(model.markedInstances.isEmpty == false)
+    }
+
+    @Test func aRestartThatWaitsForItsPlanKeepsWaitingWhenTheFirstInfoHasNone() async {
+        let script = Script(previews: [.success(F.preview())], outcomes: [Self.accepted])
+        let model = script.model()
+        await model.begin()
+        await model.confirm()
+        model.receive(info: Self.info(restart: nil))
+        #expect(model.isAwaitingPlan)
+        #expect(model.banner(now: FixtureClock.now) != nil)
+    }
+
+    @Test func aPlanTheNewDaemonTakesOverAfterAnEmptyInfoStillMakesTheToast() async {
+        let script = Script(previews: [.success(F.preview())], outcomes: [Self.accepted])
+        let model = script.model()
+        await model.begin()
+        await model.confirm()
+        model.receive(
+            event: Self.event(F.plan(.handedOver, instances: F.mixedInstances), sequence: 1))
+        model.receive(info: Self.info(restart: nil))
+        model.receive(
+            event: Self.event(F.plan(.restoring, instances: F.mixedInstances), sequence: 2))
+        model.receive(
+            event: Self.event(F.plan(.finished, instances: F.mixedInstances), sequence: 3))
+        #expect(model.toast != nil)
+    }
+
+    @Test func aReconciliationThatEndsWithoutThePlanClosesTheBannerOfTheOldOne() {
+        let model = Script(previews: [.success(F.preview())]).model()
+        model.receive(
+            event: Self.event(F.plan(.handedOver, instances: F.mixedInstances), sequence: 1))
+        model.receive(event: Self.reconciling(.started, sequence: 2))
+        #expect(model.plan?.state == .handedOver)
+        model.receive(event: Self.reconciling(.finished, sequence: 3))
         #expect(model.plan == nil)
+        #expect(model.banner(now: FixtureClock.now) == nil)
+        #expect(model.isRestarting == false)
+    }
+
+    @Test func aReconciliationThatEndsLeavesAPlanTheNewDaemonTookOver() {
+        let model = Script(previews: [.success(F.preview())]).model()
+        model.receive(
+            event: Self.event(F.plan(.restoring, instances: F.mixedInstances), sequence: 1))
+        model.receive(event: Self.reconciling(.finished, sequence: 2))
+        #expect(model.plan?.state == .restoring)
+        #expect(model.isRestarting)
+    }
+
+    @Test func aReconciliationThatEndsStopsTheWaitForAPlanThatNeverCame() async {
+        let script = Script(previews: [.success(F.preview())], outcomes: [Self.accepted])
+        let model = script.model()
+        await model.begin()
+        await model.confirm()
+        model.receive(event: Self.reconciling(.finished, sequence: 1))
+        #expect(model.isAwaitingPlan == false)
         #expect(model.banner(now: FixtureClock.now) == nil)
     }
 
