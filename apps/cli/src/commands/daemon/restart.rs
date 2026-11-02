@@ -146,7 +146,23 @@ pub async fn restart(
         } else {
             DAEMON_STOP_WAIT
         };
-        match deps.probe.restart(&request, eof_limit).await {
+        // From here on Ctrl+C ends the command (exit 130) while the daemon
+        // goes on with the restart. A Ctrl+C that came during an answer the
+        // prompt could not give up counts too.
+        deps.interrupt.arm();
+        if deps.interrupt.pending() {
+            return partial(
+                None,
+                None,
+                CliFailure::interrupted_at("confirmation"),
+                Vec::new(),
+            );
+        }
+        let sent = tokio::select! {
+            sent = deps.probe.restart(&request, eof_limit) => sent,
+            () = deps.interrupt.wait() => Err(CliFailure::interrupted_at("restart_request")),
+        };
+        match sent {
             Ok(handover) => break (handover, eof_limit),
             Err(failure)
                 if failure.body.is(&daemon_codes::RESTART_PLAN_CHANGED)
@@ -268,7 +284,8 @@ fn plan_ended(
     let verdict = judge(&plan);
     let mut result = RestartResult::new(previous, agent);
     result.info = info;
-    result.durations = Some(RestartDurations::of(&plan));
+    // Only a finished plan has the three durations.
+    result.durations = (plan.state == PlanState::Finished).then(|| RestartDurations::of(&plan));
     result.plan = Some(plan);
     let mut output = match verdict.failure {
         Some(failure) => CommandOutput::partial(result, failure),
@@ -1132,9 +1149,31 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn an_aborted_plan_exits_7_and_the_old_daemon_keeps_running() {
+    async fn an_aborted_plan_exits_7_names_both_groups_and_has_no_durations() {
         let rig = rig_with_l0(100);
-        let mut aborted = plan(PlanState::Aborted, Vec::new());
+        let mut stopped = plan_instance(
+            "pg1",
+            PlanDecision::StopRestore,
+            PlanReason::HandoverUnproven,
+            PlanOutcome::Skipped,
+            None,
+        );
+        stopped.stopped_at = Some(at_ms(1_000));
+        let stuck = plan_instance(
+            "pg2",
+            PlanDecision::StopRestore,
+            PlanReason::HandoverUnproven,
+            PlanOutcome::Skipped,
+            None,
+        );
+        let kept = plan_instance(
+            "pg0",
+            PlanDecision::Keep,
+            PlanReason::HandoverProven,
+            PlanOutcome::Skipped,
+            None,
+        );
+        let mut aborted = plan(PlanState::Aborted, vec![kept, stopped, stuck]);
         aborted.close_reason = Some(PlanCloseReason::StopTimeout);
         let probe = ScriptedProbe::running(run(1))
             .on_preview(Ok(stopping()))
@@ -1158,9 +1197,57 @@ mod tests {
         assert!(failure.body.is(&cli::RESTART_ABORTED));
         assert_eq!(failure.exit_code(), 7);
         assert_eq!(failure.body.detail("closeReason"), Some("stop_timeout"));
+        assert_eq!(
+            failure.body.hint(),
+            Some("stopped, starting again: pg1; did not stop, still running: pg2")
+        );
         let result = output.result.expect("a partial result");
+        assert_eq!(result.durations, None);
         assert_eq!(result.plan.map(|plan| plan.state), Some(PlanState::Aborted));
         assert!(result.info.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ctrl_c_during_the_restart_request_exits_130_and_leaves_the_plan_to_the_daemon() {
+        let rig = rig_with_l0(100);
+        let probe = planned(stopping()).hang_on_restart();
+        let mut interrupt = AfterInterrupt::new(Some(Duration::from_secs(5)));
+
+        let output = restart_asking(
+            &rig,
+            &probe,
+            &mut interrupt,
+            &mut ScriptedPrompt::answering(&[true]),
+            true,
+        )
+        .await;
+
+        let failure = output.failure.expect("interrupted");
+        assert!(failure.body.is(&cli::INTERRUPTED));
+        assert_eq!(failure.exit_code(), 130);
+        assert_eq!(failure.body.detail("state"), Some("restart_request"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ctrl_c_that_came_during_the_prompt_sends_no_restart_even_after_a_yes() {
+        let rig = rig_with_l0(100);
+        let probe = planned(stopping());
+        // The signal arrived while the answer was read.
+        let mut interrupt = AfterInterrupt::new(Some(Duration::ZERO));
+
+        let output = restart_asking(
+            &rig,
+            &probe,
+            &mut interrupt,
+            &mut ScriptedPrompt::answering(&[true]),
+            true,
+        )
+        .await;
+
+        let failure = output.failure.expect("interrupted");
+        assert_eq!(failure.exit_code(), 130);
+        assert_eq!(failure.body.detail("state"), Some("confirmation"));
+        assert!(probe.requests().is_empty(), "nothing reached the daemon");
     }
 
     #[tokio::test(start_paused = true)]

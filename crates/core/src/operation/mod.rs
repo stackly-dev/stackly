@@ -875,15 +875,37 @@ impl OperationEngine {
     }
 
     /// Returns the operations that are `queued`, `running`, or asked to
-    /// cancel, newest first, for the preview of a planned restart and the
-    /// wait that comes before it (spec 0030). Operations of a kind that
-    /// closes as interrupted, which every shutdown leaves for the next
-    /// start, and the `daemon_restart` itself are not listed.
+    /// cancel, newest first, that can hold up a planned daemon restart
+    /// (spec 0030): the preview lists them and `restart_busy` names them.
+    /// Operations of a kind that closes as interrupted, which every
+    /// shutdown leaves for the next start, and the `daemon_restart` itself
+    /// are not listed; [`in_flight_operations`](Self::in_flight_operations)
+    /// has them.
     ///
     /// # Errors
     ///
     /// Returns [`EngineError::Registry`] when the registry cannot be read.
     pub async fn active_operations(&self) -> Result<Vec<ActiveOperation>, EngineError> {
+        self.active_matching(true).await
+    }
+
+    /// Returns every operation the planned restart waits for (spec 0030
+    /// AC-10): [`active_operations`](Self::active_operations) plus the ones
+    /// that close as interrupted, such as a start or a restart of an
+    /// instance. A shutdown would abandon those, so the wait lets them
+    /// finish; only the `daemon_restart` itself is left out.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::Registry`] when the registry cannot be read.
+    pub async fn in_flight_operations(&self) -> Result<Vec<ActiveOperation>, EngineError> {
+        self.active_matching(false).await
+    }
+
+    async fn active_matching(
+        &self,
+        holds_up_only: bool,
+    ) -> Result<Vec<ActiveOperation>, EngineError> {
         let page = self
             .list(OperationQuery {
                 active_only: true,
@@ -907,7 +929,8 @@ impl OperationEngine {
             .zip(page.items.iter().map(|view| view.operation.id()))
             .filter(|(kind, _)| {
                 *kind != OperationKind::DaemonRestart
-                    && kind.interrupt_policy() != InterruptPolicy::CloseInterrupted
+                    && (!holds_up_only
+                        || kind.interrupt_policy() != InterruptPolicy::CloseInterrupted)
             })
             .map(|(kind, id)| ActiveOperation {
                 id,

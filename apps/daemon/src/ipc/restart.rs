@@ -259,23 +259,29 @@ pub fn restart_pending(plan: Option<Uuid>) -> Box<ErrorBody> {
     })
 }
 
-/// Waits until no operation that can hold up the restart runs, for at most
-/// `wait`. Returns the operations that still run then and cannot resume.
+/// Waits until no operation is in flight, for at most `wait` (spec 0030
+/// AC-10): the ones a shutdown would abandon, such as a start or a restart
+/// of an instance, are waited for too. Returns the operations that still
+/// run then, hold up the restart, and cannot resume.
 async fn wait_for_operations(
     engine: &OperationEngine,
     wait: Duration,
 ) -> Result<Vec<ActiveOperation>, Box<ErrorBody>> {
     let deadline = Instant::now() + wait;
     loop {
-        let active = engine
-            .active_operations()
+        let in_flight = engine
+            .in_flight_operations()
             .await
             .map_err(|error| boxed(engine_error(&error)))?;
-        if active.is_empty() {
-            return Ok(active);
+        if in_flight.is_empty() {
+            return Ok(in_flight);
         }
         if Instant::now() >= deadline {
-            return Ok(active.into_iter().filter(|op| !op.resumable).collect());
+            let holding = engine
+                .active_operations()
+                .await
+                .map_err(|error| boxed(engine_error(&error)))?;
+            return Ok(holding.into_iter().filter(|op| !op.resumable).collect());
         }
         tokio::time::sleep(POLL).await;
     }
