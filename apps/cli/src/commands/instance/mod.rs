@@ -17,6 +17,7 @@ pub mod group;
 mod inspect;
 mod list;
 mod logs;
+mod metrics;
 mod open;
 pub mod render;
 pub mod resolve;
@@ -39,6 +40,7 @@ use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
 use self::logs::LogsArgs;
+use self::metrics::MetricsArgs;
 use self::open::OpenArgs;
 use crate::context::Context;
 use crate::failure::CliFailure;
@@ -107,6 +109,11 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance logs orders-db\n  stackly instance logs orders-db --tail 500 --stream stderr --grep fatal\n  stackly instance logs orders-db -f\n  stackly instance logs orders-db --follow --json"
     )]
     Logs(LogsArgs),
+    /// Show the CPU, memory, and disk use of a running instance, and watch it with --watch
+    #[command(
+        after_help = "Examples:\n  stackly instance metrics orders-db\n  stackly instance metrics orders-db --json\n  stackly instance metrics orders-db --watch"
+    )]
+    Metrics(MetricsArgs),
     /// Show one instance; the same as inspect
     #[command(
         after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
@@ -129,6 +136,7 @@ impl InstanceCommand {
             Self::Connection(args) => execute(args, cx).await,
             Self::Open(args) => execute(args, cx).await,
             Self::Logs(args) => execute(args, cx).await,
+            Self::Metrics(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }

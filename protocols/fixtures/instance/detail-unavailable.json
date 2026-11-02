@@ -18,13 +18,15 @@
       "state": "unknown",
       "reason": "not_running",
       "detail": null,
-      "observedAt": "2026-10-20T09:00:05.000Z"
+      "observedAt": "2026-10-20T09:00:05.000Z",
+      "latencyMs": null
     },
     "health": {
       "state": "unknown",
       "reason": "not_running",
       "detail": null,
-      "observedAt": "2026-10-20T09:00:05.000Z"
+      "observedAt": "2026-10-20T09:00:05.000Z",
+      "latencyMs": null
     },
     "statusSeq": 8,
     "process": null,
@@ -36,6 +38,7 @@
       "nextAttemptAt": null,
       "exhausted": false
     },
+    "restartTotal": 0,
     "blocker": null,
     "endpoints": [
       {

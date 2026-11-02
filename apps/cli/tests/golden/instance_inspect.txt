@@ -17,7 +17,7 @@ Desired       running
 Readiness     unknown (not_running), checked <age>
 Health        unhealthy (crash_loop), checked <age>
 Process       -
-Restarts      5 of 5 in 1m, exhausted
+Restarts      5 of 5 in 1m, exhausted, 0 since created
 Last failure  crash_loop at 2026-10-20 09:03:00 +00:00, exit code 1
 Blocker       -
 Logs          available

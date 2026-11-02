@@ -304,7 +304,7 @@ struct InstanceActionModelTests {
             runtimeVersion: instance.runtimeVersion, lifecycle: instance.lifecycle,
             desired: instance.desired, readiness: instance.readiness, health: instance.health,
             statusSeq: instance.statusSeq, process: nil, lastFailure: nil,
-            restart: instance.restart,
+            restart: instance.restart, restartTotal: 0,
             blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
             ownership: .manual, initialized: true, capabilities: nil, lastExit: nil)
         await model.perform(.start, for: newer, context: context)?.value

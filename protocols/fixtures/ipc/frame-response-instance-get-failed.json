@@ -23,13 +23,15 @@
           "state": "unknown",
           "reason": "not_running",
           "detail": null,
-          "observedAt": "2026-10-20T09:00:05.000Z"
+          "observedAt": "2026-10-20T09:00:05.000Z",
+          "latencyMs": null
         },
         "health": {
           "state": "unhealthy",
           "reason": "crash_loop",
           "detail": null,
-          "observedAt": "2026-10-20T09:00:05.000Z"
+          "observedAt": "2026-10-20T09:00:05.000Z",
+          "latencyMs": null
         },
         "statusSeq": 12,
         "process": null,
@@ -50,6 +52,7 @@
           "nextAttemptAt": null,
           "exhausted": true
         },
+        "restartTotal": 0,
         "blocker": null,
         "endpoints": [],
         "leftoverProcesses": [

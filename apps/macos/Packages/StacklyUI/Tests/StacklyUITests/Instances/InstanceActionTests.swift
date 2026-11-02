@@ -16,7 +16,7 @@ struct InstanceActionTests {
             software: base.software, provider: base.provider, runtimeId: base.runtimeId,
             runtimeVersion: base.runtimeVersion, lifecycle: lifecycle, desired: base.desired,
             readiness: base.readiness, health: base.health, statusSeq: base.statusSeq,
-            process: nil, lastFailure: nil, restart: base.restart, blocker: nil,
+            process: nil, lastFailure: nil, restart: base.restart, restartTotal: 0, blocker: nil,
             endpoints: base.endpoints, leftoverProcesses: nil, logsUnavailable: false,
             ownership: .manual, initialized: initialized, capabilities: nil, lastExit: nil)
         return InstanceAction.resolve(summary: summary, local: local)

@@ -1,0 +1,128 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000a04",
+    "reply": {
+      "type": "instance.get_metrics",
+      "content": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+        "state": "hibernating",
+        "lifecycle": "stopped",
+        "intervalSeconds": 5,
+        "capacity": 60,
+        "historyId": "4242-1760950802.000000",
+        "process": {
+          "pid": 4242,
+          "startedAt": "2026-10-20T09:00:02.000Z"
+        },
+        "samples": [
+          {
+            "seq": 1,
+            "sampledAt": "2026-10-20T09:00:10.000Z",
+            "main": {
+              "scope": "cgroup",
+              "processCount": 1,
+              "measuredCount": 1,
+              "cpu": {
+                "type": "unavailable",
+                "content": {
+                  "reason": "quantum_flux"
+                }
+              },
+              "memory": {
+                "type": "unavailable",
+                "content": {
+                  "reason": "quantum_flux"
+                }
+              },
+              "diskRead": {
+                "type": "value",
+                "content": 3
+              },
+              "diskWrite": {
+                "type": "unavailable",
+                "content": {
+                  "reason": "warming_up"
+                }
+              }
+            },
+            "tree": {
+              "scope": "tree",
+              "processCount": 1,
+              "measuredCount": 1,
+              "cpu": {
+                "type": "value",
+                "content": 1.0
+              },
+              "memory": {
+                "type": "value",
+                "content": 2
+              },
+              "diskRead": {
+                "type": "value",
+                "content": 3
+              },
+              "diskWrite": {
+                "type": "value",
+                "content": 4
+              }
+            }
+          }
+        ],
+        "latestProcesses": [
+          {
+            "pid": 4242,
+            "parentPid": null,
+            "depth": 0,
+            "name": "postgres",
+            "isMain": true,
+            "cpu": {
+              "type": "unavailable",
+              "content": {
+                "reason": "quantum_flux"
+              }
+            },
+            "memory": {
+              "type": "unavailable",
+              "content": {
+                "reason": "quantum_flux"
+              }
+            }
+          }
+        ],
+        "processesTruncated": false,
+        "historyReset": false,
+        "restartTotal": 2,
+        "lastFailure": {
+          "code": "process_exited",
+          "at": null,
+          "exitCode": 1,
+          "signal": null,
+          "excerpt": [
+            "FATAL: terminating connection"
+          ]
+        },
+        "readiness": {
+          "state": "ready",
+          "reason": "probe_ok",
+          "detail": null,
+          "observedAt": "2026-10-20T09:00:35.000Z",
+          "latencyMs": 12
+        },
+        "health": {
+          "state": "healthy",
+          "reason": "probe_ok",
+          "detail": null,
+          "observedAt": "2026-10-20T09:00:35.000Z",
+          "latencyMs": 3
+        },
+        "dataUsage": {
+          "type": "unavailable",
+          "content": {
+            "reason": "quantum_flux"
+          }
+        }
+      }
+    }
+  }
+}

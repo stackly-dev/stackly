@@ -59,10 +59,12 @@
                 desired: desired,
                 readiness: readiness
                     ?? InstanceReadiness(
-                        state: .unknown, reason: "not_running", detail: nil, observedAt: observed),
+                        state: .unknown, reason: "not_running", detail: nil, observedAt: observed,
+                        latencyMs: nil),
                 health: health
                     ?? InstanceHealth(
-                        state: .unknown, reason: "not_running", detail: nil, observedAt: observed),
+                        state: .unknown, reason: "not_running", detail: nil, observedAt: observed,
+                        latencyMs: nil),
                 statusSeq: 1,
                 process: lifecycle == .running
                     ? InstanceProcess(
@@ -72,7 +74,7 @@
                 restart: restart
                     ?? InstanceRestart(
                         attempts: 0, budget: 5, windowSeconds: 60, nextAttemptAt: nil,
-                        exhausted: false),
+                        exhausted: false), restartTotal: 0,
                 blocker: blocker,
                 endpoints: port.map {
                     [
@@ -97,8 +99,8 @@
             _ state: InstanceReadinessState, reason: String, detail: String? = nil
         ) -> InstanceReadiness {
             InstanceReadiness(
-                state: state, reason: reason, detail: detail, observedAt: FixtureClock.minutesAgo(1)
-            )
+                state: state, reason: reason, detail: detail,
+                observedAt: FixtureClock.minutesAgo(1), latencyMs: nil)
         }
     }
 
@@ -108,8 +110,8 @@
             _ state: InstanceHealthState, reason: String, detail: String? = nil
         ) -> InstanceHealth {
             InstanceHealth(
-                state: state, reason: reason, detail: detail, observedAt: FixtureClock.minutesAgo(1)
-            )
+                state: state, reason: reason, detail: detail,
+                observedAt: FixtureClock.minutesAgo(1), latencyMs: nil)
         }
     }
 
