@@ -149,8 +149,11 @@ extension SnapshotTests {
                             instances: F.mixedInstances.dropLast()
                                 + [
                                     F.instance(
+                                        2, "nats-bus", decision: .stopRestore,
+                                        reason: .handoverUnproven, stopped: true),
+                                    F.instance(
                                         3, "valkey-cache", decision: .stopRestore,
-                                        reason: .handoverUnproven)
+                                        reason: .handoverUnproven),
                                 ], closeReason: .stopTimeout))
                 ),
                 (

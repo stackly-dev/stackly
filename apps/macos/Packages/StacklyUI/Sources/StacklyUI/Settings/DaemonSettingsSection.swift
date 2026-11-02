@@ -24,7 +24,10 @@ struct DaemonSettingsSection: View {
                     StacklyAction(
                         id: "settings.daemon.restart",
                         title: RestartCopy.buttonTitle,
-                        mutates: true,
+                        // Not a registry mutation: the daemon restarts in recovery mode too
+                        // (spec 0030 AC-7), so the shell's mutation gate must not block it
+                        // without a reason. Only the connection and the launch context do.
+                        mutates: false,
                         disabledReason: content.disabledReason,
                         isBusy: restart.isLoadingPreview,
                         perform: { Task { await restart.begin() } }),
