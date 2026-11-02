@@ -86,3 +86,38 @@ Rincian `config::` di `apps/daemon/tests/supervisor/config.rs`:
 - `a_running_instance_can_change_a_fixed_port_to_automatic` di-`#[ignore]`: mengubah port Fixed menjadi Auto pada instance yang sedang jalan gagal di langkah `stop` restart dengan `supervisor.config_invalid` ("endpoint http has no concrete address"), karena `Instance::set_port_requests` mengosongkan `bound_port` dan rencana stop memerlukan alamat konkret. Perbaikannya di `crates/core/src/supervisor/` (milik `dev-f30-m3`); hilangkan `#[ignore]` setelah diperbaiki → AC-14
 - Method `instance.config.apply` dan `instance.config.keep_revision` memakai nama `instance.config_apply` dan `instance.config_keep_revision` di rekaman idempotency, karena `MethodName` domain hanya menerima satu titik; nama di kawat tidak berubah
 - `start`, `restart`, dan `reload` menolak `config.drift_detected` dari blocker yang tersimpan di memori (diisi `instance.config.get`, setiap render, dan pemeriksaan saat daemon start); file yang diubah sesudah pemeriksaan terakhir ditangkap gerbang drift pada render, yang menggagalkan operasi sebelum menulis file
+
+## Milestone 4: Provider nyata di Mac ini
+
+_Langkah 16, 17, dan 18 sudah dibangun: test native PostgreSQL 18, NATS, dan Traefik lewat daemon in process dan proses asli dari cache runtime xtask (tanpa unduhan). Langkah 19 (jaringan mati) tetap `BLOCKED` sampai kamu menyetujuinya lewat lead. Tidak ada kode produksi yang diubah; semua perubahan ada di `apps/daemon/tests/`._
+
+### UI / manual
+
+- [ ] BLOCKED, reason: run dengan jaringan mati sungguhan (GUI dan CLI) belum disetujui user, owner: @ojiepermana. Setelah izin: matikan jaringan, jalankan `stackly instance config get`, `config validate`, `config apply`, `config keep-revision`, `rename`, dan `endpoint set` pada instance PostgreSQL 18 yang pinned, lalu buka tab Configuration di app dan terapkan satu perubahan → semuanya berhasil tanpa akses katalog, unduhan, atau pemeriksaan tanda tangan baru → AC-21
+
+### Commands
+
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --test nats --test traefik -- --ignored --test-threads 1 config::` → 6 test lulus (run `01a19b1c-1ba4-718f-8390-d4ecfdc904a6`, 6 record native PASS, 0 problem): PostgreSQL 18 (4), NATS (1), Traefik (1) → AC-4, AC-5, AC-7, AC-8, AC-11, AC-14, AC-16
+- [x] PostgreSQL 18, apply reload dan apply restart (record `01a19b1c-6ca2-754a-9138-9e07ca9fe7b7`): `logStatement` berdampak `reload`, PID dan waktu start postmaster sama, `SHOW log_statement` jadi `all`, revision 2 menjadi last known good; `maxConnections` berdampak `restart`, postmaster baru, `SHOW max_connections` 60, data tetap, revision 3 menjadi last known good, histori 3 baris → AC-4, AC-7
+- [x] PostgreSQL 18, rollback setelah setting yang membuat start gagal (record `01a19b1d-0605-721c-8940-b35a41398564`): salinan paket yang melonggarkan batas `maxConnections` di schema, nilai 300000 ditolak postmaster, operasi apply `failed`, revision 2 tanpa `ready_at`, last known good tetap 1; `Rollback` menulis revision 3 (origin `rollback`, nilai revision 1), instance ready lagi dengan datanya, last known good 3 → AC-8, AC-7
+- [x] PostgreSQL 18, ganti port Fixed (record `01a19b1c-d957-7591-ab39-84d037f547eb`): port yang dipegang listener luar ditolak `supervisor.endpoint_*` dengan `suggestedPort`, tanpa operasi dan PID sama; port bebas me-restart instance, `SHOW port` dan nama socket mengikuti port baru, port lama bebas lagi, revision 2 origin `endpoints` → AC-14
+- [x] PostgreSQL 18, drift `postgresql.conf` (record `01a19b1c-a335-70e5-b602-b09efde7ea1e`): file diedit tangan, `config get` menandai `Modified` dengan diff dan blocker `configDrift`; apply, restart, dan reload ditolak `config.drift_detected` tanpa mengubah file; `keep-revision` menulis ulang salinan, lalu reload berjalan dan postmaster sama → AC-11
+- [x] NATS 2.15.1 (record `01a19b1c-5507-744a-bb87-dbc8d73ec8a2`): `reloadSupported` false, reload ditolak, `maxPayloadBytes` berdampak `restart`, `nats-server` baru dan lama sudah mati, `/varz` `max_payload` 2097152, revision 2 last known good; nilai dikembalikan jadi revision 3 dan last known good 3 → AC-5, AC-7, AC-16
+- [x] Traefik 3.7.15 (record `01a19b1d-3d13-7048-ab27-bc6c3ce20b17`): dua instance berdampingan; nama route ganda ditolak `fieldErrors` di `settings.routes`; route valid pada instance A berdampak `reload`, PID sama, route menjawab `alpha` dari backend, last known good 2; instance B tetap (PID, revision, file `routes.yaml`, 404 untuk host itu) sampai ia mendapat route sendiri → AC-4, AC-16
+- [x] `cargo clippy -p stacklyd --all-targets --locked -- -D warnings` dan `cargo fmt --all --check` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-4 · reload di PostgreSQL 18 dan Traefik pada proses asli, PID sama
+- AC-5 · restart di PostgreSQL 18 dan NATS pada proses asli, proses baru melayani data yang sama (NATS tanpa reload)
+- AC-7 · last known good pada PostgreSQL 18 (revision 2 dan 3), NATS, dan Traefik; kasus adopsi tetap di Milestone 1
+- AC-8 · rollback setelah start yang gagal pada PostgreSQL 18
+- AC-11 · drift `postgresql.conf` pada PostgreSQL 18
+- AC-14 · ganti port Fixed dengan restart dan konflik dengan proses luar pada PostgreSQL 18
+- AC-16 · bagian native: form `routes` Traefik (nama ganda tidak valid) dan setting NATS lewat daemon nyata; tampilan GUI menunggu Milestone 3
+- AC-21 · BLOCKED sampai run jaringan mati disetujui; bagian fixture (harness offline) sudah di Milestone 2
+
+### Catatan
+
+- Test rollback memakai salinan paket di folder sementara dengan batas `maximum` `maxConnections` dinaikkan, karena Mac ini (32 GiB) tetap berhasil start dengan `sharedBuffersMb` 16384, nilai terbesar yang schema asli izinkan; PostgreSQL sendiri menolak `max_connections` di atas 262143. Paket di `providers/` tidak diubah.
+- Harness Traefik (`apps/daemon/tests/traefik/harness.rs`) adalah harness NATS dengan paket dan artefak yang diganti; pemanggil config bersama untuk ketiga crate test ada di `apps/daemon/tests/supervisor/config_calls.rs`.

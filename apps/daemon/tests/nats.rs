@@ -11,6 +11,10 @@
 mod common;
 #[path = "nats/compatibility.rs"]
 mod compatibility;
+#[path = "nats/config.rs"]
+mod config;
+#[path = "supervisor/config_calls.rs"]
+mod config_calls;
 #[path = "nats/harness.rs"]
 mod harness;
 #[path = "nats/lifecycle.rs"]
