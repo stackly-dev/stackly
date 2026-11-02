@@ -90,6 +90,37 @@
           "providerRevision": {
             "id": "official/nats",
             "revision": "1.0.1",
+            "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "honest_readiness",
+            "identity_check",
+            "init",
+            "jetstream_mode",
+            "readiness",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "client_auth_not_configured",
+            "jetstream_persistence_not_covered",
+            "multi_instance_not_covered"
+          ],
+          "summary": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, and stopped with no process left",
+          "testedAt": "2026-11-02T04:12:46.641Z",
+          "evidence": "compatibility/01a19a74-dab1-715d-9449-2d0b0e289fac/01a19a75-0add-732f-b747-d1369bcb8f23"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/nats",
+            "revision": "1.0.1",
             "manifestSha256": "fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd"
           },
           "os": "macos",

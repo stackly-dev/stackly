@@ -1,0 +1,221 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a19a76-50ca-761d-abd1-4d4c61091da3",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "5999879926dcd460d27e8bed9d888a9d7fba197e",
+    "sourceDirty": false,
+    "runId": "01a19a76-50ca-761d-abd1-4d4c61091da3",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "postgresql",
+      "--locked",
+      "--",
+      "--ignored",
+      "compat::"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-02T04:13:27.626844Z",
+  "finishedAt": "2026-11-02T04:14:09.191398Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 2,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 2,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 2
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a19a76-9abb-731f-b382-a56d064dc019",
+      "covers": [
+        "REQ-035",
+        "AC-035",
+        "BR-009",
+        "BR-025"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "postgresql",
+        "name": "compat::postgresql_18_runs_the_package_and_records_what_it_proved",
+        "file": "apps/daemon/tests/postgresql/compat.rs",
+        "line": 203
+      },
+      "status": "PASS",
+      "expected": "a PostgreSQL 18 instance of the final package is created and initialized, started, ready, reloaded without a restart, adopted after a SIGKILL of the daemon, stopped, and its data is refused by the runtime of 17, and compatibility.json lists those seven checks",
+      "actual": "PostgreSQL 18.6 passed init, start, readiness, reload, adoption, stop, major_mismatch_refusal",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "18.6",
+          "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-02T04:13:46.555824Z",
+      "finishedAt": "2026-11-02T04:14:09.165807Z",
+      "evidencePath": "artifacts/01a19a76-9abb-731f-b382-a56d064dc019/",
+      "context": {
+        "sourceCommit": "5999879926dcd460d27e8bed9d888a9d7fba197e",
+        "sourceDirty": false,
+        "runId": "01a19a76-50ca-761d-abd1-4d4c61091da3",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "postgresql",
+          "--locked",
+          "--",
+          "--ignored",
+          "compat::"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a19a76-9abb-731f-b382-a56e999a700c",
+      "covers": [
+        "REQ-035",
+        "AC-035",
+        "BR-009",
+        "BR-025"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "postgresql",
+        "name": "compat::postgresql_17_runs_the_package_and_records_what_it_proved",
+        "file": "apps/daemon/tests/postgresql/compat.rs",
+        "line": 187
+      },
+      "status": "PASS",
+      "expected": "a PostgreSQL 17 instance of the final package is created and initialized, started, ready, reloaded without a restart, adopted after a SIGKILL of the daemon, stopped, and its data is refused by the runtime of 18, and compatibility.json lists those seven checks",
+      "actual": "PostgreSQL 17.11 passed init, start, readiness, reload, adoption, stop, major_mismatch_refusal",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "17.11",
+          "digest": "04b1eff117441c0b6f1cbefa42ded6cf5726d656e54881674defea04b515d6d3",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-02T04:13:46.555839Z",
+      "finishedAt": "2026-11-02T04:14:09.137817Z",
+      "evidencePath": "artifacts/01a19a76-9abb-731f-b382-a56e999a700c/",
+      "context": {
+        "sourceCommit": "5999879926dcd460d27e8bed9d888a9d7fba197e",
+        "sourceDirty": false,
+        "runId": "01a19a76-50ca-761d-abd1-4d4c61091da3",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "postgresql",
+          "--locked",
+          "--",
+          "--ignored",
+          "compat::"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
