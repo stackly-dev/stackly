@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/04-kerja-harian.md` (fitur 28 sampai 32 dan 70, atas permintaan user "mulai dari no 28")
 - **Hash awal:** `36b33e6e` · **Hash awal wave aktif:** `36b33e6e`
 - **Wave aktif:** `1`, mulai `2026-11-02`
-- **Diperbarui:** `2026-11-02 17:40`
+- **Diperbarui:** `2026-11-02 18:00`
 
 ## Sub sesi wave `1`
 
@@ -37,7 +37,9 @@
 | `chk-f28-m4` | checker (verify) | F28 milestone 4 PASS (AC-7 sampai AC-9, `latencyMs: 1` live); temuan kecil: wake tidak berefek pada loop probe pertama proses adopsi | `04-kerja-harian.md` | `verify.md` 0028 Milestone 4 | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; merged `747f694c` |
 | `chk-f30-m4` | checker (verify) | F30 milestone 4: CLI native PASS (daemon launchd di test root: prompt `y` dan `n`, `--json`, `daemon status` `Last restart`, completion, man page), test Swift dan snapshot PASS; FAIL dari milestone 3: rencana restart KOSONG tertahan `restoring` dan memblokir mutasi (`crates/domain/src/restart.rs:532`, `restore.rs` `settle_plan_after_reconcile`), diteruskan ke `dev-f30-fix`; lima langkah GUI manual menunggu user; celah ringan: tanda baris belum di Overview | `04-kerja-harian.md` | `verify.md` 0030 Milestone 4 (3 centang, `b7f72948`) | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; failed (milestone 3), centang menunggu merge |
 | `chk-f28-m3` | checker (verify) | F28 milestone 3: semua langkah Commands PASS (client 10, model 15, format 22, snapshot 7, `build-app`, swift-format); 6 langkah UI/manual menunggu user; temuan kecil: header health jatuh ke readiness juga untuk provider dengan health plan selama health masih `unknown` (kontrak tidak membawa tanda provider tanpa health plan); nit: Disk I/O "0 bytes/s" | `04-kerja-harian.md` | `verify.md` 0028 Milestone 3 (tanpa centang baru) | `claude/dev-f29-m1-6a7d0b` | `sonnet-5-5 · high` | dipakai ulang; done |
-| `chk-f29-m2` | checker (verify) | F29 milestone 2 | `04-kerja-harian.md` | `verify.md` 0029 Milestone 2 | `claude/dev-f70-m2-100be9` | `sonnet-5-5 · high` | dipakai ulang; menunggu sesi idle |
+| `chk-f29-m2` | checker (verify) | F29 milestone 2 PASS (11 langkah; drift, `keep-revision`, `apply`, `rename` lewat daemon nyata); catatan: `config apply --json` tanpa `impact` atau `revision`, teks `verify.md` usang (12 test 1 ignored, 225 Swift) | `04-kerja-harian.md` | `verify.md` 0029 Milestone 2 | `claude/dev-f70-m2-100be9` | `sonnet-5-5 · high` | dipakai ulang; merged `b6143968` |
+| `dev-f29-m3` | developer | F29 milestone 3, langkah 12 sampai 15 (GUI Configuration, sheet Rename dan Ports) | `04-kerja-harian.md` | `StacklyUI/InstanceDetail/Configuration/`, `SchemaFormModel` additive, sheet, menu | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; aktif |
+| `dev-f29-m4` | developer | F29 milestone 4, langkah 16 sampai 18 native (PostgreSQL 18, NATS, Traefik bila ada); langkah 19 jaringan mati `BLOCKED` sampai user setuju | `04-kerja-harian.md` | test native `apps/daemon/tests/postgresql/`, `nats*` | `claude/dev-f70-m2-100be9` | `sonnet-5-5 · high` | dipakai ulang; aktif |
 
 ## Keputusan
 
@@ -86,6 +88,8 @@
 - F32 `Build it`: butuh fitur 31 sampai `instance.stop_all` dan `startup`, plus `arc-f31-update`.
 
 ## Dicentang pada wave ini
+
+- F29 · milestone 2 Contract, daemon, CLI, and fixture proof · laporan `dev-f29-m2` dan `chk-f29-m2` · merge `35bd56be`, centang `b6143968` · `999f550f`
 
 - F28 · milestone 4 Probe latency and wake · laporan `dev-f28-m4` dan `chk-f28-m4` · merge `2942c358`, centang `747f694c` · `8c7b99bf`
 
