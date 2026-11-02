@@ -12,6 +12,8 @@ mod adoption;
 mod common;
 #[path = "postgresql/compat.rs"]
 mod compat;
+#[path = "postgresql/config.rs"]
+mod config;
 #[path = "postgresql/create.rs"]
 mod create;
 #[path = "postgresql/create_cli.rs"]
