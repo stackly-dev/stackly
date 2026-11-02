@@ -102,7 +102,7 @@ Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon 
 - [x] Verify it: `/check verify reconciliation & restart daemon terencana` · automated and native PASS in chk-f30-verify on `a54afaf3` (native launchd run `01a19c0e-4e0a-…`: empty plan, PostgreSQL 17 and 18, NATS, fake; a live `DaemonInfo.restart` TTL probe), code matches the AC texts you approved; manual GUI steps and section W skipped by you (2026-11-02)
 - [x] Test it: `/test reconciliation & restart daemon terencana` · tst-f30-test (merge `259bbebd`): every AC-1 to AC-17 has a test naming it; new tests for the `DaemonInfo.restart` summary TTL on a test clock and for an abort the registry cannot store; suite green
 - [x] Review it (fresh model): `/check review reconciliation & restart daemon terencana` · chk-f30-review (Opus xhigh, cross family subagents) on range `84d767f9..657d2687`: 1 Blocker and 9 Major fixed in two rounds (merges `5144380b`, `9e649990`, `33967577`, `e4e8d9a2`), confirmed with no Blocker or Major left (`eb418357`, merge `7ab3cbff`); Minor and Nit findings are follow ups in `docs/reviews/2026-11-02-f30-reconciliation-restart.md`
-- [ ] Document it: `/document reconciliation & restart daemon terencana`
+- [x] Document it: `/document reconciliation & restart daemon terencana` · 2026-11-02, `CHANGELOG.md` (Added, Changed, and Security; range `9a6bf944^..7ab3cbff`, F30 files)
 
 ### 31. Demand, autostart & login · in-progress
 

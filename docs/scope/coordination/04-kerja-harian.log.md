@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/04-kerja-harian.md` (fitur 28 sampai 32 dan 70, atas permintaan user "mulai dari no 28")
 - **Hash awal:** `36b33e6e` · **Hash awal wave aktif:** `36b33e6e`
 - **Wave aktif:** `1`, mulai `2026-11-02`
-- **Diperbarui:** `2026-11-02 23:40`
+- **Diperbarui:** `2026-11-03 00:10`
 
 ## Sub sesi wave `1`
 
@@ -149,6 +149,7 @@
 - F28 · `Build it` dan `Verify it` · laporan `chk-f28-verify` · merge `421f8e20` · centang lead `3bc346ba`
 - merge tanpa centang: `2e94fe73` → `ebb57df9` (F31 langkah 2 sampai 6; kotak milestone 1 menunggu langkah 7 dan verify) · `claude/dev-f70-m2-100be9` → `9e649990` (fix Swift review F30) · `claude/dev-f29-m1-6a7d0b` → `5144380b` (fix Rust review F30); kotak `Review it` menunggu konfirmasi reviewer
 - F30 · `Review it` · laporan `chk-f30-review` (tiga putaran) · merge `7ab3cbff`
+- F30 · `Document it` · `/document changelog` oleh lead · `CHANGELOG.md` tujuh baris Added, dua Changed, satu Security
 - F31 · milestone 1 Login starts the chosen instances · laporan `dev-f31-m1` dan `chk-f31-m1` · merge `ebb57df9`, `8ee9714e`, centang verify `ddc2ca95`
 - merge tanpa centang: `39f76095` → `8ee9714e` (F31 langkah 7 dan fix regresi) · `23102d2c` → `33967577` (F30 N1) · `41ec0e46` → `e4e8d9a2` (F30 N2) · `f40aabf8` → `04e91b7c` (konfirmasi review pertama)
 - F70 · `Test it` · laporan `tst-f70-test` · merge `2f10c279`
