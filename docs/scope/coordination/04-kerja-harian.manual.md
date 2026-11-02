@@ -64,3 +64,10 @@ Disusun oleh `chk-f28-m3` (2026-11-02). Rig: daemon di root uji dengan `skeleton
 4. Stop instance dari toolbar saat tab Metrics terbuka: tampil "No Live Metrics" dengan tombol Start aktif. Start memulai history baru (AC-13).
 5. Hentikan daemon saat tab Metrics terbuka: data tetap tampil tanpa diredupkan, banner offline shell muncul, dan tidak ada permintaan baru. Jalankan daemon lagi: polling lanjut tanpa reload (AC-13).
 6. Summary: baris Restarts "{n} since created" dan Readiness "{status} · {n} ms" pada instance running. Inspector: Restarts dengan total dan jendela restart, serta Readiness dengan latensi (AC-6, AC-7).
+
+## F29 · Tab Configuration dan sheet (spec 0029 milestone 3)
+
+Disusun oleh `chk-f29-m3` (2026-11-02). Rig: `cargo build -p stacklyd -p stackly-fake-server && cargo run -q -p stacklyd --example skeleton_seed -- --root <R>`, lalu app dengan `STACKLY_ROOT=<R>` (disiapkan sub sesi atas permintaan lead).
+
+1. Pilih instance, buka tab Configuration, ubah satu field, tunggu 300 ms, lalu tekan Apply (konfirmasi bila diminta): kartu "Revision N applied to <nama>." muncul dan History bertambah satu baris.
+2. Menu Instance → "Rename…" dan "Edit Ports…" (tanpa shortcut tertulis), menu More di halaman detail, menu konteks baris di Instances, dan tombol Edit di kartu Endpoints tab Summary: masing-masing membuka sheet yang sama (Rename Instance atau Edit Ports) seperti di snapshot.
