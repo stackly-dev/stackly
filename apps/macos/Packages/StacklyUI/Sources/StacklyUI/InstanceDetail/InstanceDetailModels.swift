@@ -12,6 +12,8 @@ public final class InstanceDetailModels {
     private var logs: [UUID: InstanceLogsModel] = [:]
     private let metricsService: InstanceMetricsService
     private var metrics: [UUID: InstanceMetricsModel] = [:]
+    private let configService: InstanceConfigService
+    private var configurations: [UUID: ConfigurationModel] = [:]
     private let reload: Duration
     private let sleep: @Sendable (Duration) async throws -> Void
     private var models: [UUID: InstanceDetailModel] = [:]
@@ -29,6 +31,8 @@ public final class InstanceDetailModels {
     ///   - service: The reads, the event stream, and the secret methods.
     ///   - logs: The log reads and follows of the Logs tab (spec 0027).
     ///   - metrics: The reads of the Metrics tab (spec 0028).
+    ///   - config: The reads and mutations of the Configuration tab and the Rename and Ports
+    ///     sheets (spec 0029).
     ///   - openIn: What Open In asks of the system; NSWorkspace in the app.
     ///   - reload: The pause before a reload after a revision change.
     ///   - sleep: Waits for a duration and throws when cancelled.
@@ -36,6 +40,7 @@ public final class InstanceDetailModels {
         service: InstanceDetailService,
         logs: InstanceLogsService = .disconnected,
         metrics: InstanceMetricsService = .disconnected,
+        config: InstanceConfigService = .disconnected,
         openIn: OpenInPorts = .system,
         reload: Duration = InstanceDetailModel.reloadDebounce,
 
@@ -46,6 +51,7 @@ public final class InstanceDetailModels {
         self.service = service
         self.logsService = logs
         self.metricsService = metrics
+        self.configService = config
         self.openIn = OpenInModel(
             locator: openIn.locator, opener: openIn.opener, fileExists: openIn.fileExists,
             prepareTerminal: service.prepareTerminal, secrets: service.secrets)
@@ -83,6 +89,19 @@ public final class InstanceDetailModels {
         return made
     }
 
+    /// The Configuration tab model of an instance, made on first use, so the tab keeps its
+    /// pending change while the person looks at another tab.
+    /// - Parameter id: The instance.
+    func configurationModel(for id: UUID) -> ConfigurationModel {
+        if let held = configurations[id] { return held }
+        let made = ConfigurationModel(instanceId: id, service: configService)
+        configurations[id] = made
+        return made
+    }
+
+    /// The config service, for the Rename and Ports sheets.
+    var configuration: InstanceConfigService { configService }
+
     /// Drops the models of instances that are not in `ids`: they are gone from the store.
     /// - Parameter ids: The instances that exist.
     public func keep(_ ids: Set<UUID>) {
@@ -97,6 +116,9 @@ public final class InstanceDetailModels {
         for (id, model) in metrics where ids.contains(id) == false {
             model.stop()
             metrics[id] = nil
+        }
+        for id in configurations.keys where ids.contains(id) == false {
+            configurations[id] = nil
         }
     }
 }

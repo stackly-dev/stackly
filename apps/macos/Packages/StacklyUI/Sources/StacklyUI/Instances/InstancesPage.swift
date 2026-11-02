@@ -115,6 +115,7 @@ public struct InstancesPage: View {
         detail: InstanceDetailService? = nil,
         logs: InstanceLogsService? = nil,
         metrics: InstanceMetricsService? = nil,
+        config: InstanceConfigService? = nil,
         openIn: OpenInPorts = .system,
         opening: UUID? = nil,
         openingTab: InstanceTab = .summary,
@@ -132,7 +133,8 @@ public struct InstancesPage: View {
         _models = State(
             initialValue: InstanceDetailModels(
                 service: detail ?? .disconnected, logs: logs ?? .disconnected,
-                metrics: metrics ?? .disconnected, openIn: openIn))
+                metrics: metrics ?? .disconnected, config: config ?? .disconnected,
+                openIn: openIn))
         self.openingTab = openingTab
         _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
@@ -175,6 +177,7 @@ public struct InstancesPage: View {
                     model: models.model(for: route.id), service: models.detailService,
                     openIn: models.openIn, logs: models.logsModel(for: route.id),
                     metrics: models.metricsModel(for: route.id),
+                    configuration: models.configurationModel(for: route.id),
                     completedRounds: completedRounds,
                     tab: openingTab, back: { path.removeAll() }
                 )

@@ -35,13 +35,15 @@ struct InstanceDetailPage: View {
     let openIn: OpenInModel
     let logs: InstanceLogsModel
     let metrics: InstanceMetricsModel
+    let configuration: ConfigurationModel
     let completedRounds: Int
     let back: @MainActor () -> Void
 
     init(
         id: UUID, instances: InstanceStore, catalog: CatalogStore?, actions: InstanceActionModel,
         model: InstanceDetailModel, service: InstanceDetailService, openIn: OpenInModel,
-        logs: InstanceLogsModel, metrics: InstanceMetricsModel, completedRounds: Int,
+        logs: InstanceLogsModel, metrics: InstanceMetricsModel, configuration: ConfigurationModel,
+        completedRounds: Int,
         tab: InstanceTab = .summary,
         back: @escaping @MainActor () -> Void
     ) {
@@ -54,6 +56,7 @@ struct InstanceDetailPage: View {
         self.openIn = openIn
         self.logs = logs
         self.metrics = metrics
+        self.configuration = configuration
         self.completedRounds = completedRounds
         _tab = State(initialValue: tab)
         self.back = back
@@ -102,6 +105,16 @@ struct InstanceDetailPage: View {
                                     actions.perform(.stop, for: summary, context: context)
                                 },
                                 forceStop: lifecycle.forceStop))
+                    }
+                    .padding(.horizontal, Spacing.pageHorizontal)
+                    .padding(.vertical, Spacing.s16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            case .configuration:
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                        tabPicker
+                        ConfigurationTab(model: configuration, summary: summary, context: context)
                     }
                     .padding(.horizontal, Spacing.pageHorizontal)
                     .padding(.vertical, Spacing.s16)
