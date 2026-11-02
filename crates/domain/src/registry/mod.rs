@@ -33,6 +33,7 @@ use crate::provider::ProviderRevisionKey;
 use crate::restart::RestartPlan;
 use crate::runtime::{Runtime, RuntimeReferences};
 use crate::secret::SecretRef;
+use crate::session::DaemonSession;
 use crate::text::serde_as_text;
 use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
@@ -396,6 +397,14 @@ pub trait Registry: Send + Sync {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError>;
+
+    /// Returns the newest `limit` session rows, newest first by start time
+    /// and then ID (spec 0031).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError>;
 
     /// Returns a secret reference row with every use of it.
     ///

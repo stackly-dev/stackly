@@ -13,6 +13,7 @@ mod init;
 mod integrity;
 mod launch;
 mod listener;
+mod login;
 mod native;
 mod pid_reuse;
 mod reconcile;

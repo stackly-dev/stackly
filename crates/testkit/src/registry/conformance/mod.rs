@@ -10,6 +10,7 @@ mod races;
 mod reads;
 mod restart;
 mod secrets;
+mod sessions;
 mod supervision;
 mod writes;
 
@@ -107,6 +108,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     secrets::secrets(&suite);
     supervision::supervision(&suite);
     restart::restart_plans(&suite);
+    sessions::sessions(&suite);
     journal::journal(&suite);
     races::races(&suite);
     prune::prune(&suite);

@@ -12,17 +12,18 @@ use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
     ConfigRevisionId, ConfigRevisionRecord, ConfigRevisionStatus, CreatedRecord, CreatedSeq,
-    EndpointRequests, Environment, EnvironmentId, Generation, GuardDecision, GuardView, Guarded,
-    IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
-    InstanceName, InstancePathEntry, JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder,
-    LeaseId, LeaseState, LockKey, NotDeletableReason, Operation, OperationCursor, OperationId,
-    OperationJournal, OperationPage, OperationQuery, OperationResource, OperationState, Ownership,
-    PlatformStoreKey, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
-    ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry,
-    RegistryError, ResourceRef, ResourceRevision, RestartPlan, RestartPlanId, RetentionPolicy,
-    Runtime, RuntimeId, RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter,
-    SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse, SecretUser, Sha256Digest,
-    StepSeq, Versioned, WriteBatch, WriteOp,
+    DaemonSession, EndpointRequests, Environment, EnvironmentId, Generation, GuardDecision,
+    GuardView, Guarded, IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId,
+    InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep, JournalView, Lease,
+    LeaseFilter, LeaseHolder, LeaseId, LeaseState, LockKey, NotDeletableReason, Operation,
+    OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
+    OperationResource, OperationState, Ownership, PlatformStoreKey, ProcessObservation,
+    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind,
+    ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
+    RestartPlan, RestartPlanId, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
+    SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView,
+    SecretStatus, SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq, Versioned, WriteBatch,
+    WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -215,6 +216,18 @@ impl GuardView for StateView<'_> {
 
     fn open_restart_plan(&self) -> Result<Option<RestartPlan>, RegistryError> {
         Ok(self.state.open_restart_plan())
+    }
+
+    fn leases(
+        &self,
+        instance: InstanceId,
+        filter: LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError> {
+        Ok(self.state.leases_of(instance, filter))
+    }
+
+    fn latest_session(&self) -> Result<Option<DaemonSession>, RegistryError> {
+        Ok(self.state.recent_sessions(1).into_iter().next())
     }
 }
 
@@ -419,22 +432,7 @@ impl Registry for FakeRegistry {
         instance: InstanceId,
         filter: LeaseFilter,
     ) -> Result<Versioned<Vec<Lease>>, RegistryError> {
-        self.read(|state| {
-            let mut leases: Vec<Lease> = state
-                .leases
-                .values()
-                .filter(|lease| lease.instance_id() == instance)
-                .filter(|lease| match filter {
-                    LeaseFilter::All => true,
-                    LeaseFilter::Unreleased => {
-                        !matches!(lease.state(), LeaseState::Released { .. })
-                    }
-                })
-                .cloned()
-                .collect();
-            leases.sort_by_key(|lease| (lease.acquired_at(), lease.id()));
-            Ok(leases)
-        })
+        self.read(|state| Ok(state.leases_of(instance, filter)))
     }
 
     fn operation(&self, id: OperationId) -> Result<Versioned<Option<Operation>>, RegistryError> {
@@ -485,6 +483,10 @@ impl Registry for FakeRegistry {
 
     fn open_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
         self.read(|state| Ok(state.open_restart_plan()))
+    }
+
+    fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError> {
+        self.read(|state| Ok(state.recent_sessions(limit)))
     }
 
     fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
@@ -751,6 +753,7 @@ struct State {
     secret_references: BTreeMap<SecretRef, SecretReferenceRecord>,
     secret_uses: BTreeSet<SecretUse>,
     restart_plans: BTreeMap<RestartPlanId, RestartPlan>,
+    sessions: BTreeMap<SessionId, DaemonSession>,
     written: HashMap<ResourceRef, WrittenAt>,
 }
 
@@ -780,6 +783,7 @@ impl State {
             secret_references: BTreeMap::new(),
             secret_uses: BTreeSet::new(),
             restart_plans: BTreeMap::new(),
+            sessions: BTreeMap::new(),
             written: HashMap::new(),
         }
     }
@@ -808,6 +812,15 @@ impl State {
             } => self.write_environment(environment, Some(expected), now),
             WriteOp::InsertLease(lease) => self.write_lease(lease, false),
             WriteOp::UpdateLease(lease) => self.write_lease(lease, true),
+            WriteOp::InsertSession(session) => self.insert_session(session),
+            WriteOp::EndSession { id, at, reason } => {
+                self.change_session(&id, |session| session.end(at, reason))
+            }
+            WriteOp::ReopenSession { id } => self.change_session(&id, DaemonSession::reopen),
+            WriteOp::PruneSessions { keep } => {
+                self.prune_sessions(keep);
+                Ok(())
+            }
             WriteOp::InsertOperation(operation) => self.write_operation(operation, None),
             WriteOp::UpdateOperation {
                 operation,
@@ -1190,6 +1203,80 @@ impl State {
         Ok(())
     }
 
+    /// The leases of an instance that `filter` selects, oldest first.
+    fn leases_of(&self, instance: InstanceId, filter: LeaseFilter) -> Vec<Lease> {
+        let mut leases: Vec<Lease> = self
+            .leases
+            .values()
+            .filter(|lease| lease.instance_id() == instance)
+            .filter(|lease| match filter {
+                LeaseFilter::All => true,
+                LeaseFilter::Unreleased => !matches!(lease.state(), LeaseState::Released { .. }),
+            })
+            .cloned()
+            .collect();
+        leases.sort_by_key(|lease| (lease.acquired_at(), lease.id()));
+        leases
+    }
+
+    /// The newest `limit` sessions, newest first.
+    fn recent_sessions(&self, limit: u32) -> Vec<DaemonSession> {
+        let mut sessions: Vec<DaemonSession> = self.sessions.values().cloned().collect();
+        sessions.sort_by(|a, b| (b.started_at(), b.id()).cmp(&(a.started_at(), a.id())));
+        sessions.truncate(limit as usize);
+        sessions
+    }
+
+    /// `InsertSession`: a new ID, then the unique rule of one open session,
+    /// as the SQLite index ends it.
+    fn insert_session(&mut self, session: DaemonSession) -> Result<(), RegistryError> {
+        if self.sessions.contains_key(session.id()) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::Session(session.id().clone()),
+            });
+        }
+        if session.is_open() && self.sessions.values().any(DaemonSession::is_open) {
+            return Err(unique_failed("daemon_sessions.(1)"));
+        }
+        self.sessions.insert(session.id().clone(), session);
+        Ok(())
+    }
+
+    /// `EndSession` and `ReopenSession`: the row exists, then the change.
+    fn change_session(
+        &mut self,
+        id: &SessionId,
+        change: impl FnOnce(&mut DaemonSession),
+    ) -> Result<(), RegistryError> {
+        let Some(session) = self.sessions.get_mut(id) else {
+            return Err(RegistryError::NotFound {
+                resource: ResourceRef::Session(id.clone()),
+            });
+        };
+        change(session);
+        Ok(())
+    }
+
+    /// `PruneSessions`: the oldest rows beyond `keep`, and the released
+    /// manual and startup leases of sessions that are gone.
+    fn prune_sessions(&mut self, keep: u32) {
+        let kept: BTreeSet<SessionId> = self
+            .recent_sessions(keep)
+            .into_iter()
+            .map(|session| session.id().clone())
+            .collect();
+        self.sessions.retain(|id, _| kept.contains(id));
+        self.leases.retain(|_, lease| {
+            let released = matches!(lease.state(), LeaseState::Released { .. });
+            let session_gone = lease
+                .session()
+                .is_some_and(|session| !self.sessions.contains_key(session));
+            !(released
+                && matches!(lease.holder(), LeaseHolder::Manual | LeaseHolder::Startup)
+                && session_gone)
+        });
+    }
+
     fn write_lease(&mut self, lease: Lease, update: bool) -> Result<(), RegistryError> {
         let id = lease.id();
         let resource = ResourceRef::Lease(id);
@@ -1202,6 +1289,18 @@ impl State {
             return Err(RegistryError::MissingReference {
                 resource: ResourceRef::Instance(lease.instance_id()),
             });
+        }
+        if lease.holder() == LeaseHolder::Startup
+            && !matches!(lease.state(), LeaseState::Released { .. })
+            && self.leases.values().any(|other| {
+                other.id() != id
+                    && other.instance_id() == lease.instance_id()
+                    && other.holder() == LeaseHolder::Startup
+                    && other.session() == lease.session()
+                    && !matches!(other.state(), LeaseState::Released { .. })
+            })
+        {
+            return Err(RegistryError::DuplicateResource { resource });
         }
         if let LeaseHolder::Environment(environment) = lease.holder() {
             if !self.environments.contains_key(&environment) {

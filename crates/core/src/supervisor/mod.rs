@@ -70,6 +70,7 @@ mod http;
 mod init;
 mod integrity;
 mod lock;
+mod login;
 mod pending;
 mod persist;
 mod plan;
@@ -119,6 +120,7 @@ pub use handover::{
 };
 pub use init::InitRequest;
 pub use integrity::{FindingKind, ReconcileFinding};
+pub use login::{LOGIN_ELIGIBLE_FAILURES, StartQueue};
 pub use plan::{PlanRefusal, write_plan_guard};
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};

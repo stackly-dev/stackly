@@ -22,7 +22,8 @@ use crate::registry::secret::{
 use crate::restart::RestartPlan;
 use crate::runtime::{InstallMode, Runtime};
 use crate::secret::{SecretRef, SecretStatus};
-use crate::value::ResourceRevision;
+use crate::session::{DaemonSession, SessionEndReason};
+use crate::value::{ResourceRevision, SessionId};
 
 /// The lowest revision a restored secret reference row carries: a row that
 /// was deleted had at least revision 1, and the restore raises it by 1.
@@ -323,6 +324,34 @@ pub enum WriteOp {
     /// Rewrites a restart plan and the recorded fields of its instance
     /// rows; the instance set never changes. Fails with `NotFound`.
     UpdateRestartPlan(RestartPlan),
+    /// Records a login session row (spec 0031). Fails with
+    /// `DuplicateResource` when its ID exists. A second open session breaks
+    /// the registry's unique rule and ends as `Integrity`; callers close the
+    /// open one first, in the same batch.
+    InsertSession(DaemonSession),
+    /// Closes a session row. Fails with `NotFound` when it does not exist.
+    EndSession {
+        /// The session.
+        id: SessionId,
+        /// When it ended.
+        at: Timestamp,
+        /// Why.
+        reason: SessionEndReason,
+    },
+    /// Opens a closed session row again. Fails with `NotFound` when it does
+    /// not exist; a row that is open stays as it is.
+    ReopenSession {
+        /// The session.
+        id: SessionId,
+    },
+    /// Deletes the oldest session rows beyond the `keep` newest by start
+    /// time, and every `released` manual and startup lease whose session is
+    /// not among the kept rows (spec 0031, AC-14). Deleting nothing is not
+    /// an error.
+    PruneSessions {
+        /// How many of the newest rows stay.
+        keep: u32,
+    },
 }
 
 impl WriteOp {
@@ -382,6 +411,11 @@ impl WriteOp {
             Self::InsertRestartPlan(plan) | Self::UpdateRestartPlan(plan) => {
                 ResourceRef::RestartPlan(plan.id())
             }
+            Self::InsertSession(session) => ResourceRef::Session(session.id().clone()),
+            Self::EndSession { id, .. } | Self::ReopenSession { id } => {
+                ResourceRef::Session(id.clone())
+            }
+            Self::PruneSessions { .. } => ResourceRef::Sessions,
         }
     }
 
@@ -443,7 +477,11 @@ impl WriteOp {
             | Self::PruneConfigRevisions { .. }
             | Self::DeleteInstanceCreatedBy { .. }
             | Self::InsertRestartPlan(_)
-            | Self::UpdateRestartPlan(_) => None,
+            | Self::UpdateRestartPlan(_)
+            | Self::InsertSession(_)
+            | Self::EndSession { .. }
+            | Self::ReopenSession { .. }
+            | Self::PruneSessions { .. } => None,
         }
     }
 

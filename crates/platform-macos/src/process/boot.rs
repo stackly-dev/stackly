@@ -17,7 +17,7 @@ const OP: &str = "sysctl kern.bootsessionuuid";
 ///
 /// Returns [`ProcessError::Io`] when `sysctlbyname` fails or answers
 /// something that is not a hyphenated UUID.
-pub(super) fn boot_id() -> Result<BootId, ProcessError> {
+pub(crate) fn boot_id() -> Result<BootId, ProcessError> {
     let mut buffer = [0_u8; 64];
     let mut len = buffer.len();
     // SAFETY: the name is a static C string, the buffer is writable for

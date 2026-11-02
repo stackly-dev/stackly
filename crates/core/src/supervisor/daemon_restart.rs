@@ -24,7 +24,7 @@ use uuid::Uuid;
 use super::Supervisor;
 use super::error::SupervisorError;
 use super::handover::{PlanEntry, plan_digest, plan_entries};
-use super::pending::{PendingKind, PendingRun, wait_final};
+use super::pending::{self, PendingKind, PendingRun, wait_final};
 use super::persist::{blocking, read_instance};
 use super::plan::{PlanRefusal, write_plan_guard};
 use super::stop::StopJournal;
@@ -576,6 +576,7 @@ fn queue_restore(sup: &Supervisor, plan: &RestartPlan) {
                 id: entry.instance_id,
                 name: entry.name.clone(),
                 kind: PendingKind::Restore,
+                trigger: pending::PLANNED_RESTART_INPUT,
             });
         }
     }

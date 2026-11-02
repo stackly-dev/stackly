@@ -11,6 +11,7 @@ use crate::info::PlatformInfo;
 use crate::layout::DirectoryResolver;
 use crate::process::{ProcessSupervision, UnsupportedProcessSupervision};
 use crate::secret::{SecretStore, UnsupportedSecretStore};
+use crate::session::{LoginSessionInfo, UnsupportedLoginSessionInfo};
 
 /// Every platform port, bundled so a use case takes one argument.
 ///
@@ -34,6 +35,7 @@ pub struct Platform {
     background_agent: Arc<dyn BackgroundAgent>,
     fetcher: Arc<dyn Fetcher>,
     code_signing: Arc<dyn CodeSigning>,
+    login_session: Arc<dyn LoginSessionInfo>,
 }
 
 impl Platform {
@@ -58,6 +60,7 @@ impl Platform {
         let background_agent = Arc::new(UnsupportedBackgroundAgent::new(os));
         let fetcher = Arc::new(UnsupportedFetcher::new(os));
         let code_signing = Arc::new(UnsupportedCodeSigning::new(os));
+        let login_session = Arc::new(UnsupportedLoginSessionInfo::new(os));
         Self {
             directories,
             fs,
@@ -69,6 +72,7 @@ impl Platform {
             background_agent,
             fetcher,
             code_signing,
+            login_session,
         }
     }
 
@@ -107,6 +111,14 @@ impl Platform {
     #[must_use]
     pub fn with_code_signing(mut self, code_signing: Arc<dyn CodeSigning>) -> Self {
         self.code_signing = code_signing;
+        self
+    }
+
+    /// Returns a copy with `login_session` as the login session port (spec
+    /// 0031). A platform without one answers with not supported.
+    #[must_use]
+    pub fn with_login_session(mut self, login_session: Arc<dyn LoginSessionInfo>) -> Self {
+        self.login_session = login_session;
         self
     }
 
@@ -176,6 +188,12 @@ impl Platform {
     #[must_use]
     pub fn code_signing(&self) -> &dyn CodeSigning {
         &*self.code_signing
+    }
+
+    /// Returns the login session port.
+    #[must_use]
+    pub fn login_session(&self) -> &dyn LoginSessionInfo {
+        &*self.login_session
     }
 
     /// Returns the download port.

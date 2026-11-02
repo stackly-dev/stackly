@@ -38,6 +38,7 @@ mod restart;
 mod rule;
 mod runtime;
 mod secret;
+mod session;
 mod supervisor;
 mod target;
 mod text;
@@ -124,6 +125,7 @@ pub use secret::{
     InstanceBlocker, NeedsSecretItem, NeedsSecretReason, SecretOrigin, SecretOwner,
     SecretOwnerKind, SecretPurpose, SecretRef, SecretRefError, SecretStatus,
 };
+pub use session::{DaemonSession, SESSIONS_KEPT, SessionEndReason, StoredSession};
 pub use target::{Arch, Os, Target, native_support};
 pub use value::{
     ClientCode, CompensatorName, CustomItemKey, DetailKey, DisplayName, EndpointName,

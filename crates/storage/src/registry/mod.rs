@@ -11,6 +11,7 @@ mod prune;
 mod read;
 mod restart;
 mod secret;
+mod session;
 mod source;
 mod supervision;
 mod write;
@@ -24,13 +25,13 @@ use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
     ArtifactRecord, AuditPage, AuditQuery, BatchError, CommitGuard, Committed,
-    ConfigRevisionRecord, Environment, EnvironmentId, Guarded, IdempotencyKey, Instance,
-    InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease, LeaseFilter,
-    Operation, OperationId, OperationJournal, OperationPage, OperationQuery, ProcessObservation,
-    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
-    PruneReport, Registry, RegistryError, RestartPlan, RetentionPolicy, Runtime, RuntimeId,
-    RuntimeReferences, SecretRef, SecretReferenceFilter, SecretReferenceView, SecretUse,
-    SecretUser, Sha256Digest, Versioned, WriteBatch,
+    ConfigRevisionRecord, DaemonSession, Environment, EnvironmentId, Guarded, IdempotencyKey,
+    Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease,
+    LeaseFilter, Operation, OperationId, OperationJournal, OperationPage, OperationQuery,
+    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceKind,
+    ProviderSourceRecord, PruneReport, Registry, RegistryError, RestartPlan, RetentionPolicy,
+    Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter, SecretReferenceView,
+    SecretUse, SecretUser, Sha256Digest, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -316,6 +317,10 @@ impl Registry for SqliteRegistry {
 
     fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
         self.read(|tx| restart::latest_plan(tx))
+    }
+
+    fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError> {
+        self.read(move |tx| session::recent(tx, limit))
     }
 
     fn force_stop_history(

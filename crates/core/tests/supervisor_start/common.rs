@@ -412,6 +412,7 @@ impl Registry for FaultyRegistry {
         force_stop_history(instance: InstanceId) -> Result<stackly_domain::Versioned<Vec<(stackly_domain::Operation, stackly_domain::JournalView)>>, stackly_domain::RegistryError>;
         open_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
         latest_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
+        recent_sessions(limit: u32) -> Result<stackly_domain::Versioned<Vec<stackly_domain::DaemonSession>>, stackly_domain::RegistryError>;
         secret_reference(reference: &SecretRef) -> Result<stackly_domain::Versioned<Option<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_references(filter: stackly_domain::SecretReferenceFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;
@@ -572,6 +573,8 @@ pub struct Spec {
     pub settings: serde_json::Value,
     pub token: Option<&'static str>,
     pub marker: &'static str,
+    /// The failure code the instance already carries.
+    pub last_failure: Option<&'static str>,
 }
 
 impl Default for Spec {
@@ -583,6 +586,7 @@ impl Default for Spec {
             settings: serde_json::json!({}),
             token: Some(TOKEN),
             marker: "1.0\n",
+            last_failure: None,
         }
     }
 }
@@ -919,6 +923,10 @@ impl Rig {
             .endpoints(vec![endpoint])
             .lifecycle(spec.lifecycle)
             .desired(spec.desired);
+        let builder = match spec.last_failure {
+            Some(code) => builder.last_failure(code),
+            None => builder,
+        };
         let id = builder.id();
         let instance = builder.build();
         let now = self.fake.clock().now();

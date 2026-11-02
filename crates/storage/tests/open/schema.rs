@@ -415,6 +415,17 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
         ],
     ),
     (
+        "daemon_sessions",
+        &[
+            ("id", "TEXT", true, 1),
+            ("boot_id", "TEXT", true, 0),
+            ("audit_session", "INTEGER", true, 0),
+            ("started_at", "TEXT", true, 0),
+            ("ended_at", "TEXT", false, 0),
+            ("end_reason", "TEXT", false, 0),
+        ],
+    ),
+    (
         "daemon_restart_plan",
         &[
             ("id", "TEXT", true, 1),
@@ -573,7 +584,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 28);
+    assert_eq!(tables.len(), 29);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()

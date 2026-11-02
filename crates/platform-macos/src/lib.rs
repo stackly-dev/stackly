@@ -22,6 +22,9 @@
 //! [`MacosBackgroundAgent`] registers the daemon's LaunchAgent with
 //! `SMAppService` (spec 0015); [`MacosPlatform`] installs it.
 //!
+//! [`MacosLoginSessionInfo`] reads the login session of the daemon: the boot
+//! UUID plus the audit session ID (spec 0031).
+//!
 //! This is the only crate where `unsafe` code may live. Every `unsafe` block
 //! needs a `// SAFETY:` comment, and `cargo xtask check-deps` rejects this
 //! opt out anywhere else.
@@ -37,6 +40,7 @@ mod info;
 mod platform;
 mod process;
 mod secret;
+mod session;
 
 pub use agent::{MacosBackgroundAgent, parent_pid};
 pub use codesign::MacosCodeSigning;
@@ -49,3 +53,4 @@ pub use platform::MacosPlatform;
 pub use process::KinfoFacts;
 pub use process::MacosProcessSupervision;
 pub use secret::{KeychainSetupError, KeychainTarget, MacosSecretStore, map_status};
+pub use session::MacosLoginSessionInfo;

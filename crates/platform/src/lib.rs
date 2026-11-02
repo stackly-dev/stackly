@@ -39,6 +39,7 @@ mod platform;
 mod private_dir;
 mod process;
 mod secret;
+mod session;
 mod tree;
 mod unsupported;
 
@@ -84,6 +85,7 @@ pub use secret::{
     SecretPresence, SecretStore, SecretStoreError, SecretValue, SecretValueError, StoreState,
     UnsupportedSecretStore, WriteMode,
 };
+pub use session::{LoginSession, LoginSessionError, LoginSessionInfo, UnsupportedLoginSessionInfo};
 pub use tree::{
     ENTRY_NAME_MAX_LEN, ENTRY_PATH_MAX_DEPTH, ENTRY_PATH_MAX_LEN, EntryPath, EntryPathError,
     FileMode, TreeFile, TreeWriter,

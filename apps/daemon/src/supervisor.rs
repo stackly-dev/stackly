@@ -168,8 +168,15 @@ impl Supervision {
     /// Reconciles what the last daemon left running (spec 0010,
     /// *Rekonsiliasi*), then opens the supervisor to instance methods.
     /// Returns the report; a failure leaves the supervisor unavailable.
-    pub async fn reconcile(&self, supervisor: &Supervisor) -> Option<ReconcileReport> {
-        match supervisor.reconcile(RegistryMode::Ready).await {
+    pub async fn reconcile(
+        &self,
+        supervisor: &Supervisor,
+        session_changed: bool,
+    ) -> Option<ReconcileReport> {
+        match supervisor
+            .reconcile_in_session(RegistryMode::Ready, session_changed)
+            .await
+        {
             Ok(report) => {
                 self.lock_report().unknown = report.unknown;
                 self.reconciled(supervisor);
@@ -496,7 +503,7 @@ mod tests {
         let (_root, supervisor, registry) = built(&supervision);
         assert!(registry.upgrade().is_some(), "the supervisor holds it");
         // Reconciliation starts the recheck task, which outlives the stop.
-        assert!(supervision.reconcile(&supervisor).await.is_some());
+        assert!(supervision.reconcile(&supervisor, false).await.is_some());
 
         supervision.shutdown();
         supervision.close();

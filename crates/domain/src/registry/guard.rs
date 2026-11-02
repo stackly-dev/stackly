@@ -7,14 +7,16 @@ use std::fmt;
 
 use crate::id::{InstanceId, RuntimeId};
 use crate::instance::Instance;
+use crate::lease::Lease;
 use crate::operation::{JournalView, Operation};
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::{Committed, WriteOp};
 use crate::registry::error::RegistryError;
-use crate::registry::query::InstanceFilter;
+use crate::registry::query::{InstanceFilter, LeaseFilter};
 use crate::registry::record::ProviderRevisionRecord;
 use crate::restart::RestartPlan;
 use crate::runtime::Runtime;
+use crate::session::DaemonSession;
 
 /// What a commit guard may read: the registry inside the guarded commit's
 /// own write transaction. Reads see every batch committed before the
@@ -63,6 +65,26 @@ pub trait GuardView {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn open_restart_plan(&self) -> Result<Option<RestartPlan>, RegistryError>;
+
+    /// Returns the leases of an instance that `filter` selects, read inside
+    /// the guarded commit (spec 0031).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn leases(
+        &self,
+        instance: InstanceId,
+        filter: LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError>;
+
+    /// Returns the newest session row by start time, read inside the
+    /// guarded commit (spec 0031).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn latest_session(&self) -> Result<Option<DaemonSession>, RegistryError>;
 }
 
 /// What a guard decided after reading.

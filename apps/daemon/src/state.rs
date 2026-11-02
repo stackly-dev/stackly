@@ -29,6 +29,7 @@ use crate::ipc::logs::LogService;
 use crate::log_sink::LogSink;
 use crate::operations::Operations;
 use crate::secrets::Secrets;
+use crate::session::SessionStatus;
 use crate::shutdown::Drain;
 use crate::storage::Storage;
 use crate::supervisor::Supervision;
@@ -161,6 +162,7 @@ pub struct DaemonCore {
     metrics: MetricsStore,
     sampler_config: OnceLock<SamplerConfig>,
     create_hooks: OnceLock<CreateHooks>,
+    session: OnceLock<SessionStatus>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
     drain: Drain,
@@ -218,6 +220,7 @@ impl DaemonCore {
             metrics: MetricsStore::new(),
             sampler_config: OnceLock::new(),
             create_hooks: OnceLock::new(),
+            session: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
             drain: Drain::default(),
@@ -496,6 +499,19 @@ impl DaemonCore {
     /// Records the create hooks of this run. The first call wins.
     pub fn set_create_hooks(&self, hooks: CreateHooks) {
         let _ = self.create_hooks.set(hooks);
+    }
+
+    /// Records the login session of this run (spec 0031); the start slot
+    /// calls it once, before reconciliation.
+    pub fn set_session(&self, session: SessionStatus) {
+        let _ = self.session.set(session);
+    }
+
+    /// The login session of this run: skipped for a daemon that launchd did
+    /// not start, until the start slot records it.
+    #[must_use]
+    pub fn session(&self) -> &SessionStatus {
+        self.session.get().unwrap_or(&SessionStatus::Skipped)
     }
 
     /// Records the catalog of this run. The first call wins: the catalog

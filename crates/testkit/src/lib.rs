@@ -82,6 +82,7 @@ mod fake_process;
 mod fake_secret;
 #[cfg(unix)]
 pub mod fake_server;
+mod fake_session;
 #[cfg(unix)]
 mod fifo;
 #[cfg(target_os = "macos")]
@@ -122,6 +123,7 @@ pub use fake_process::{
     FakeProcessState, FakeProcessSupervision, FakeSpawn, ProcessCall, ProcessOp,
 };
 pub use fake_secret::{FakeSecretStore, SecretCall, SecretHold, SecretOp};
+pub use fake_session::FakeLoginSessionInfo;
 #[cfg(unix)]
 pub use fifo::make_fifo;
 #[cfg(target_os = "macos")]

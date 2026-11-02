@@ -30,11 +30,14 @@ pub enum PlatformCapability {
     /// Reading and writing code signatures ([`CodeSigning`](crate::CodeSigning),
     /// feature 18).
     CodeSigning,
+    /// Reading the login session of the process
+    /// ([`LoginSessionInfo`](crate::LoginSessionInfo), feature 31).
+    LoginSession,
 }
 
 impl PlatformCapability {
     /// Every capability, in code order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Directories,
         Self::Filesystem,
         Self::Clock,
@@ -46,6 +49,7 @@ impl PlatformCapability {
         Self::ProcessMetrics,
         Self::NetworkFetch,
         Self::CodeSigning,
+        Self::LoginSession,
     ];
 
     /// Returns the stable snake_case code, for example `user_identity`.
@@ -63,6 +67,7 @@ impl PlatformCapability {
             Self::ProcessMetrics => "process_metrics",
             Self::NetworkFetch => "network_fetch",
             Self::CodeSigning => "code_signing",
+            Self::LoginSession => "login_session",
         }
     }
 
@@ -79,6 +84,7 @@ impl PlatformCapability {
             Self::ProcessMetrics => 8,
             Self::NetworkFetch => 9,
             Self::CodeSigning => 10,
+            Self::LoginSession => 11,
         }
     }
 }
