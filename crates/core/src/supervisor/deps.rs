@@ -183,6 +183,14 @@ pub(crate) struct Shared {
     /// The login session of this daemon run, once the rotation ran (spec
     /// 0031); `None` for a daemon that launchd did not start.
     session: Mutex<Option<stackly_domain::SessionId>>,
+    /// Set once the row of that session was closed (spec 0031, *Akhir
+    /// sesi*), so the stop paths of one run write `EndSession` only once.
+    pub(crate) session_closed: AtomicBool,
+    /// Set while a session end cancels and stops (spec 0031, *Akhir
+    /// sesi*): a start or restart it cancels ends without writing desired
+    /// `stopped`, because the end of a session is not a choice of the
+    /// person.
+    pub(crate) session_ending: AtomicBool,
 }
 
 /// The process supervisor: one actor per instance, and the operations that
@@ -239,6 +247,8 @@ impl Supervisor {
                 recheck_running: AtomicBool::new(false),
                 wake: super::wake::WakeWatch::new(),
                 session: Mutex::new(None),
+                session_closed: AtomicBool::new(false),
+                session_ending: AtomicBool::new(false),
             }),
         }
     }

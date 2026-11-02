@@ -88,6 +88,15 @@ impl StopRequest {
         }
     }
 
+    /// A stop that ends a login session (spec 0031, *Akhir sesi*): like a
+    /// planned restart it checks no lease and writes no desired state, no
+    /// suppression and no `stopped`, so the instance comes back with the
+    /// next start queue.
+    #[must_use]
+    pub(crate) const fn session_end(instance: InstanceId) -> Self {
+        Self::planned_restart(instance)
+    }
+
     /// Returns the request with the override of environment leases set.
     #[must_use]
     pub const fn overriding_leases(mut self) -> Self {

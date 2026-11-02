@@ -5,12 +5,38 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use stackly_core::operation::limits::OPERATION_SHUTDOWN_GRACE;
 use tokio::sync::Notify;
+
+use crate::log_sink::LOG_CONTROL_TIMEOUT;
 
 /// How long the stop waits for running requests.
 pub const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
 /// How long each connection's writer gets to send what it still holds.
 pub const SHUTDOWN_FLUSH: Duration = Duration::from_secs(1);
+
+/// The `ExitTimeOut` of the launchd job: after it launchd sends `SIGKILL`.
+/// The plist of the app (`xtask/src/build_app/plist.rs`) writes the same
+/// number.
+pub const LAUNCHD_EXIT_TIMEOUT: Duration = Duration::from_secs(30);
+/// What the end of a login session keeps free in `ExitTimeOut` for what the
+/// stop order does not count: the runtime's own shutdown and the exit
+/// (spec 0031, *Akhir sesi*).
+pub const SESSION_END_MARGIN: Duration = Duration::from_secs(3);
+
+/// The longest the stop order of spec 0006 takes: step 4 waits for the
+/// longer of the drain and the engine's grace, step 5 flushes the
+/// connections, and step 7 drains the log queue.
+#[must_use]
+pub const fn stop_order_bound() -> Duration {
+    let wait = if SHUTDOWN_DRAIN.as_millis() > OPERATION_SHUTDOWN_GRACE.as_millis() {
+        SHUTDOWN_DRAIN
+    } else {
+        OPERATION_SHUTDOWN_GRACE
+    };
+    wait.saturating_add(SHUTDOWN_FLUSH)
+        .saturating_add(LOG_CONTROL_TIMEOUT)
+}
 
 /// The requests that run right now, daemon wide. Event forwarders are not
 /// requests and are not counted.
@@ -69,18 +95,21 @@ impl Drop for DrainGuard {
     }
 }
 
-/// The two signals that stop the daemon.
+/// The signals that stop the daemon: `SIGTERM`, `SIGINT`, and `SIGHUP`
+/// (spec 0031, *Sinyal per konteks*). Only `SIGTERM` at a launchd daemon
+/// can mean a logout.
 #[cfg(unix)]
 #[derive(Debug)]
 pub struct StopSignals {
     term: tokio::signal::unix::Signal,
     interrupt: tokio::signal::unix::Signal,
+    hangup: tokio::signal::unix::Signal,
 }
 
 #[cfg(unix)]
 impl StopSignals {
     /// Installs the handlers. Call it inside a tokio runtime; from then on
-    /// SIGTERM and SIGINT no longer end the process by themselves.
+    /// SIGTERM, SIGINT, and SIGHUP no longer end the process by themselves.
     ///
     /// # Errors
     ///
@@ -91,23 +120,36 @@ impl StopSignals {
         Ok(Self {
             term: signal(SignalKind::terminate())?,
             interrupt: signal(SignalKind::interrupt())?,
+            hangup: signal(SignalKind::hangup())?,
         })
     }
 
-    /// Waits for the next of the two and returns its name.
+    /// Waits for the next of the three and returns its name.
     pub async fn recv(&mut self) -> &'static str {
         tokio::select! {
             _ = self.term.recv() => "SIGTERM",
             _ = self.interrupt.recv() => "SIGINT",
+            _ = self.hangup.recv() => "SIGHUP",
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use stackly_core::supervisor::SESSION_END_STOP_BUDGET;
     use tokio::time::timeout;
 
     use super::*;
+
+    #[test]
+    fn the_session_end_budget_the_stop_order_and_the_margin_fit_in_the_exit_timeout() {
+        assert_eq!(stop_order_bound(), Duration::from_secs(12));
+        assert!(
+            SESSION_END_STOP_BUDGET + stop_order_bound() + SESSION_END_MARGIN
+                <= LAUNCHD_EXIT_TIMEOUT,
+            "launchd would send SIGKILL before the daemon exits"
+        );
+    }
 
     #[tokio::test]
     async fn idle_resolves_at_once_without_requests_and_after_the_last_one_ends() {

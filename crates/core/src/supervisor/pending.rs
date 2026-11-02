@@ -26,6 +26,9 @@ pub(super) const TRIGGER_INPUT: &str = r#"{"trigger":"reconcile"}"#;
 /// The journal input of the stop of a proven process after a new session
 /// made its desired state `stopped` (spec 0031, AC-6).
 pub(super) const SESSION_ROTATION_INPUT: &str = r#"{"trigger":"session_rotation"}"#;
+/// The journal input of the stop that ends a login session (spec 0031,
+/// *Akhir sesi*, step 3).
+pub(super) const SESSION_END_INPUT: &str = r#"{"trigger":"session_end"}"#;
 /// The journal input of a start after a new login (spec 0031, AC-4).
 pub(super) const LOGIN_INPUT: &str = r#"{"trigger":"login"}"#;
 /// The journal input of the start that restores an instance a planned
@@ -171,7 +174,16 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
         PendingKind::Restore => start_again(sup, id, PLANNED_RESTART_INPUT).await,
         PendingKind::Stop => {
             let make = || sup.stop_work(StopRequest::reconcile(id));
-            match begin(sup, id, OperationKind::StopInstance, run.trigger, &make).await {
+            match begin(
+                sup,
+                id,
+                OperationKind::StopInstance,
+                run.trigger,
+                &make,
+                None,
+            )
+            .await
+            {
                 Some(operation) => wait_final(sup, operation).await,
                 None => None,
             }
@@ -186,6 +198,7 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
                 OperationKind::StopInstance,
                 PLANNED_RESTART_INPUT,
                 &make,
+                None,
             )
             .await
             {
@@ -215,7 +228,7 @@ async fn start_again(sup: &Supervisor, id: InstanceId, trigger: &'static str) ->
         return None;
     }
     let make = || sup.start_work(StartRequest::background(id));
-    let operation = begin(sup, id, OperationKind::StartInstance, trigger, &make).await?;
+    let operation = begin(sup, id, OperationKind::StartInstance, trigger, &make, None).await?;
     wait_final(sup, operation).await
 }
 
@@ -223,12 +236,13 @@ async fn start_again(sup: &Supervisor, id: InstanceId, trigger: &'static str) ->
 /// operation that already holds the instance, and tries again while the
 /// engine is not ready. `make` builds the work again each time the engine
 /// takes the request back.
-async fn begin(
+pub(super) async fn begin(
     sup: &Supervisor,
     id: InstanceId,
     kind: OperationKind,
     trigger: &'static str,
     make: &(dyn Fn() -> Box<dyn crate::operation::OperationWork> + Send + Sync),
+    deadline: Option<tokio::time::Instant>,
 ) -> Option<OperationId> {
     let engine = sup.operations()?;
     let input = JournalPayload::new(trigger, crate::operation::limits::INPUT_MAX).ok()?;
@@ -250,7 +264,11 @@ async fn begin(
         };
         match engine.begin(request).await {
             Ok(outcome) => return outcome.view().map(|view| view.operation.id()),
-            Err(BeginError::NotReady) => tokio::time::sleep(POLL).await,
+            Err(BeginError::NotReady)
+                if deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline) =>
+            {
+                tokio::time::sleep(POLL).await;
+            }
             Err(error) => {
                 tracing::warn!(instance = %id, %error, "an operation of reconciliation could not begin");
                 return None;

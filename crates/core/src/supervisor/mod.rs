@@ -87,6 +87,7 @@ mod restart;
 mod restart_op;
 mod restore;
 mod secrets;
+mod session_end;
 mod sink;
 mod spool;
 mod startup;
@@ -109,8 +110,9 @@ pub use config::{
     HTTP_HEADER_MAX, LOG_LINE_HARD_MAX, LOG_LINE_MAX, READINESS_FAILURE_THRESHOLD,
     READINESS_REFRESH_INTERVAL, RECONCILE_START_CONCURRENCY, REGISTRY_RETRY_INTERVAL,
     RESTART_BASE_DELAY, RESTART_BUDGET, RESTART_HEALTHY_RESET, RESTART_LOCK_POLL,
-    RESTART_LOCK_WAIT, RESTART_MAX_DELAY, RESTART_QUIESCE_WAIT, RESTART_WINDOW, SPOOL_BACKLOG_MAX,
-    SPOOL_DRAIN_INTERVAL, SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
+    RESTART_LOCK_WAIT, RESTART_MAX_DELAY, RESTART_QUIESCE_WAIT, RESTART_WINDOW,
+    SESSION_END_STOP_BUDGET, SPOOL_BACKLOG_MAX, SPOOL_DRAIN_INTERVAL, SPOOL_READ_CHUNK,
+    SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
 };
 pub use daemon_restart::{DaemonRestartRequest, PlanPrepared, RestartHandover};
 pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents, WeakSupervisor};
@@ -130,6 +132,7 @@ pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};
 pub use reload::ReloadRequest;
 pub use restart::{JitterFactor, RestartDecision, RestartHistory, backoff_delay};
 pub use restart_op::RestartRequest;
+pub use session_end::SessionEndReport;
 pub use sink::{LogBatch, LogLine, LogSink, RunEvent, SinkOutcome, SinkSet, SpoolSource, TailSink};
 pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};

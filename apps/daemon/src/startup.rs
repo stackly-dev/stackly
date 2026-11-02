@@ -470,35 +470,73 @@ mod imp {
                 return EXIT_START_FAILED;
             }
         };
-        let (reason, code) = tokio::select! {
+        // What ends the run: the reason of the stop order, the exit code, and
+        // whether the run is a logout (spec 0031, *Sinyal per konteks*).
+        let (reason, code, ending) = tokio::select! {
             signal = signals.recv() => {
-                tracing::info!(signal, "stacklyd stopping");
-                (ShutdownReason::Signal, 0)
+                let t0 = tokio::time::Instant::now();
+                if handle.signal_ends_session(signal) {
+                    tracing::info!(signal, "stacklyd stopping at the end of the login session");
+                    (ShutdownReason::Signal, 0, Ending::Logout(t0))
+                } else {
+                    tracing::info!(signal, "stacklyd stopping");
+                    (ShutdownReason::Signal, 0, Ending::Stop)
+                }
             }
             mode = handle.stop_requested() => match mode {
                 ShutdownMode::Restart => {
                     tracing::info!("stacklyd stopping for a restart that a client asked for");
-                    (ShutdownReason::RestartRequested, EXIT_RESTART)
+                    (ShutdownReason::RestartRequested, EXIT_RESTART, Ending::Stop)
                 }
                 _ => {
                     tracing::info!("stacklyd stopping at a client's request");
-                    (ShutdownReason::Requested, 0)
+                    (ShutdownReason::Requested, 0, Ending::Stop)
                 }
             },
             code = handle.fatal() => {
                 tracing::error!(exit_code = code, "stacklyd stopping after a fatal error");
-                (ShutdownReason::Requested, code)
+                (ShutdownReason::Requested, code, Ending::Fatal)
             }
         };
         let second = async {
             let signal = signals.recv().await;
             tracing::warn!(signal, "second signal");
         };
-        let stopped = handle.shutdown(reason, second).await;
+        tokio::pin!(second);
+        // A second signal cuts the session end short, and then the stop order
+        // skips its drain and flush.
+        let mut cut_short = false;
+        match ending {
+            Ending::Logout(t0) => {
+                tokio::select! {
+                    () = handle.end_session(t0) => {}
+                    () = &mut second => cut_short = true,
+                }
+            }
+            Ending::Stop => handle.close_session_clean().await,
+            Ending::Fatal => {}
+        }
+        let interrupt = async {
+            if !cut_short {
+                second.await;
+            }
+        };
+        let stopped = handle.shutdown(reason, interrupt).await;
         if stopped.forced {
             tracing::warn!("the stop skipped the drain and the flush");
         }
         code
+    }
+
+    /// How the run ends, for the part of the stop that comes before the stop
+    /// order.
+    enum Ending {
+        /// A logout: *Akhir sesi* runs from the instant of the signal.
+        Logout(tokio::time::Instant),
+        /// A stop by request, restart, or a signal that is not a logout.
+        Stop,
+        /// A fatal error; the registry may be gone, so nothing is written.
+        Fatal,
     }
 
     /// Logs why the lock was not taken and returns the exit code.

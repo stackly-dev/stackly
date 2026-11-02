@@ -78,6 +78,52 @@ pub fn is_launchd(core: &DaemonCore) -> bool {
     crate::ipc::restart::launch_context(core) == LaunchContextKind::Launchd
 }
 
+/// Whether `signal` starts *Akhir sesi* (spec 0031, *Sinyal per konteks*):
+/// a `SIGTERM` at a launchd daemon with no `daemon.shutdown` accepted
+/// before it. Every other signal, and every signal at a manual daemon, is
+/// the ordinary stop of spec 0006 and 0010.
+#[must_use]
+pub fn ends_session(core: &DaemonCore, signal: &str) -> bool {
+    signal == "SIGTERM" && is_launchd(core) && !core.shutdown_pending()
+}
+
+/// Steps 1 to 5 of *Akhir sesi*, counted from `t0`, the instant the
+/// `SIGTERM` arrived: new requests are refused from here, the operations
+/// that run are cancelled, every instance with a live process stops, and the
+/// session row is closed `clean` or `interrupted`. The stop order of spec
+/// 0006 (step 6) is the caller's next step.
+pub async fn end(core: &DaemonCore, t0: tokio::time::Instant) {
+    // Step 1: every request from here gets `daemon.shutting_down`.
+    core.mark_stopping();
+    let Ok(supervisor) = core.supervision().supervisor() else {
+        tracing::warn!("the session ends without a supervisor: no instance is stopped");
+        return;
+    };
+    let deadline = t0 + supervisor.session_end_budget();
+    let report = supervisor.end_session(deadline).await;
+    tracing::info!(
+        reason = report.reason.as_code(),
+        stops = report.stops,
+        unfinished = report.unfinished,
+        "the login session ends",
+    );
+    supervisor.close_session(report.reason).await;
+}
+
+/// Closes the session row `clean` when the daemon stops by a request, a
+/// planned restart, or a signal that is not a logout (spec 0031, *Sinyal
+/// per konteks*). Only a launchd daemon that knows its session writes it.
+pub async fn close_clean(core: &DaemonCore) {
+    if !is_launchd(core) {
+        return;
+    }
+    if let Ok(supervisor) = core.supervision().supervisor() {
+        supervisor
+            .close_session(stackly_domain::SessionEndReason::Clean)
+            .await;
+    }
+}
+
 /// Reads the login session and rotates it. Run it after `recover` and
 /// before reconciliation, and only with a ready registry.
 pub async fn rotate(core: &DaemonCore) -> SessionStatus {

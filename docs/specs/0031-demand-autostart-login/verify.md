@@ -1,4 +1,4 @@
-# Verify: Demand, autostart, dan login · spec 0031 · updated 2026-11-02
+# Verify: Demand, autostart, dan login · spec 0031 · updated 2026-11-03
 
 _Langkah diturunkan dari acceptance criteria spec 0031. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah._
 
@@ -87,3 +87,45 @@ Langkah build 8 dan 9. Yang belum: tabel sinyal dan Akhir sesi (langkah 11), `ag
 
 - Langkah `already_stopping` dan `agent_off` dibangun di langkah 12; `select` sudah mengembalikannya dan preview menampilkannya.
 - Restart instance (fitur 26) memakai stop tanpa lease: ia tidak menekan autostart.
+
+## Milestone 3: Logout dan kembali
+
+Langkah build 11. Langkah 1 (spike audit session) dan langkah 10 (spike logout) tidak dijalankan atas pilihan kamu pada 2026-11-03, jadi langkah 11 dibangun dengan asumsi desain spec 0031 (logout mengirim `SIGTERM` ke job launchd, dan `kern.bootsessionuuid` serta audit session stabil di sesi yang sama). Yang belum: `agent_off` dan Turn Off (langkah 12), timer secret (langkah 13), dan semua yang native (AC-21).
+
+### UI / manual
+
+- [ ] Buka `crates/core/src/supervisor/session_end.rs` → `end_session` membatalkan operasi yang belum final selain stop, memulai satu `stop_instance` per instance dengan proses (`starting`, `running`, `stopping`) sekaligus, dan menunggu sampai semua final atau tenggat; `close_session` menulis `EndSession` sekali per run dan kegagalannya hanya di log → AC-11
+- [ ] Buka `crates/core/src/supervisor/stop.rs` `StopRequest::session_end` dan `startup.rs` `cancel_cleanup` → stop akhir sesi tanpa cek lease dan tanpa menulis desired; start yang dibatalkan akhir sesi juga tidak menulis desired `stopped` (`Supervisor::cancel_intent`) → AC-11
+- [ ] Buka `apps/daemon/src/startup.rs` `serve` → `SIGTERM` di daemon launchd tanpa `shutdown_requested` menjalankan `end_session` dari `t0` saat sinyal datang, lalu urutan berhenti spec 0006; `SIGINT`, `SIGHUP`, `daemon.shutdown`, dan restart terencana menutup baris `clean`; sinyal kedua memotong akhir sesi lalu urutan berhenti dipercepat → AC-11, AC-12
+- [ ] Buka `apps/daemon/src/session.rs` `ends_session` → tabel *Sinyal per konteks* satu fungsi: `SIGTERM` + konteks launchd + `!shutdown_pending()`; `shutdown_pending` sudah true untuk `daemon.shutdown` `stop` dan `restart`, dan rencana restart spec 0030 memakai jalur yang sama → AC-12
+- [ ] Buka `apps/daemon/src/shutdown.rs` → `StopSignals` mengikat `SIGHUP`; `LAUNCHD_EXIT_TIMEOUT` 30, `SESSION_END_MARGIN` 3, dan `stop_order_bound()` 12 detik (yang lebih panjang dari `SHUTDOWN_DRAIN` dan `OPERATION_SHUTDOWN_GRACE`, ditambah `SHUTDOWN_FLUSH` dan `LOG_CONTROL_TIMEOUT`) → AC-11
+- [ ] Buka `crates/core/src/session.rs` `plan_session_rotation` cabang `continued` → baris yang tertutup dibuka lagi (`ReopenSession`) dan tidak ada lease yang berubah → AC-13
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --test supervisor_start session_end` → akhir sesi menghentikan setiap instance dengan satu `SIGTERM`, desired dan lease tidak berubah, baris `clean` dan hanya ditulis sekali; stop yang melewati tenggat membiarkan instance `stopping` dan baris `interrupted`; start yang sedang berjalan dibatalkan dan desired tetap `running`; kembali di sesi yang sama membuka lagi baris dan antrean start hanya menyalakan yang dihentikan akhir sesi, bukan yang dihentikan pengguna → AC-11, AC-13
+- [ ] `cargo test -p stacklyd --test supervisor session_end` → logout lewat server nyata: proses berhenti, desired `running`, baris `clean`, lalu daemon baru di sesi yang sama membuka baris dan menyalakan lagi dengan lease `active`; `t0` yang sudah melewati budget menutup baris `interrupted`; `SIGINT`, `SIGHUP`, daemon manual, dan `SIGTERM` sesudah `daemon.shutdown` bukan logout → AC-11, AC-12, AC-13
+- [ ] `cargo test -p stacklyd --lib shutdown` → `SESSION_END_STOP_BUDGET` 15 + `stop_order_bound()` 12 + margin 3 ≤ `LAUNCHD_EXIT_TIMEOUT` 30 → AC-11
+- [ ] `cargo test -p stacklyd --test supervisor` dan `--test restart_plan` → seluruh suite tetap hijau (jalur restart terencana dan `agent_off` tidak berubah) → AC-12
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo xtask codegen --check`, dan cek Windows → bersih
+
+### Langkah yang BLOCKED
+
+- [ ] Langkah 1 · spike audit session lintas sleep dan dua logout → BLOCKED · reason: kamu memilih tidak melakukan sleep dan logout pada 2026-11-03 · owner: @ojiepermana. LaunchAgent `com.stackly.spike.asid` tetap terpasang dan plist nya tidak disentuh.
+- [ ] Langkah 10 · spike logout nyata (`SIGTERM` ke job launchd, urutan waktu terhadap `ExitTimeOut`) → BLOCKED · reason: kamu memilih tidak melakukan logout pada 2026-11-03 · owner: @ojiepermana. Asumsi desain yang dipakai langkah 11: `SIGTERM` datang saat logout dan `SIGKILL` baru menyusul sesudah `ExitTimeOut` 30 detik.
+
+### Acceptance-criteria coverage
+
+- AC-11 · urutan *Akhir sesi* (langkah 1 sampai 5 di core dan daemon, langkah 6 oleh urutan berhenti spec 0006), budget 15 detik dari `t0`, relasi konstanta, baris `clean` atau `interrupted`, tanpa `SIGKILL` (hanya `SIGTERM` lewat strategi provider), tanpa suppression, tanpa mengubah desired
+- AC-12 · tabel *Sinyal per konteks* dengan `shutdown_pending`; daemon manual tidak pernah menjalankan akhir sesi; `SIGHUP` kini ikut menghentikan daemon
+- AC-13 · `ReopenSession` di rotasi `continued` dan antrean start sesudah akhir sesi
+- AC-21 · hanya bagian spike, dan BLOCKED (langkah 1 dan 10 di atas)
+- AC-15, AC-19 (Turn Off), AC-20 · belum
+
+### Catatan
+
+- Spec menyebut idempotency key `session_end:<SessionId>:<InstanceId>` untuk setiap stop. Engine hanya mengikat key pada `Origin::Request`, dan origin itu kena gerbang quiesce restart yang justru harus dibatalkan akhir sesi, jadi stop akhir sesi memakai `Origin::Background` tanpa key. Satu daemon hanya menjalankan akhir sesi sekali (sinyal kedua memotongnya), jadi tidak ada yang perlu di-replay.
+- Instance `recovering` (jeda antar respawn) tidak punya proses, jadi tidak ikut stop; urutan berhenti spec 0006 mematikan respawn nya. Instance `unknown` dan `retained` juga tidak disentuh.
+- Baris ditutup `interrupted` bila ada stop yang belum final saat tenggat atau gagal; selain itu `clean`. Instance yang masih `stopping` dibiarkan dan rekonsiliasi berikutnya membacanya sebagai `exited` (spec 0010).
+- Kalau sinyal datang sebelum slot start selesai merekonsiliasi (supervisor belum siap), akhir sesi hanya menutup pintu dan tidak menghentikan instance, lalu urutan berhenti biasa berjalan.
+- Kode memakai `StopIntent::PlannedRestart` untuk stop akhir sesi karena artinya sama (tanpa cek lease, tanpa menulis desired); `StopRequest::session_end` menamainya.
