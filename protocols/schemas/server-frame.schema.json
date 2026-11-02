@@ -1119,6 +1119,61 @@
         }
       ]
     },
+    "CountMetric": {
+      "description": "A measured whole number such as bytes, or why there is none. Same shape\nas [`NumberMetric`]. Open.",
+      "oneOf": [
+        {
+          "description": "The measured number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "integer",
+              "format": "uint64",
+              "maximum": 9007199254740991,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "No number, and why.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/UnavailableContent"
+            },
+            "type": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A type this build does not know. The daemon never sends it.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unrecognized"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "CountedProgress": {
       "description": "Content of a `counted` progress.",
       "type": "object",
@@ -1852,6 +1907,58 @@
         "bytes",
         "complete",
         "scannedAt"
+      ]
+    },
+    "DataUsageMetric": {
+      "description": "The size of the data folder as the last scan left it, or why there is\nnone. Tagged `type` and `content`. Open.",
+      "oneOf": [
+        {
+          "description": "The result of the last scan.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ScannedUsage"
+            },
+            "type": {
+              "type": "string",
+              "const": "scanned"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "No scan result; `reason` is `not_scanned` before the first scan.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/UnavailableContent"
+            },
+            "type": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A type this build does not know. The daemon never sends it.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unrecognized"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
       ]
     },
     "DataUsageReply": {
@@ -3812,6 +3919,16 @@
           ],
           "default": null
         },
+        "latencyMs": {
+          "description": "How long the probe attempt behind this observation took, in\nmilliseconds, rounded up and capped at the probe timeout; null when\nno probe made it, as for `daemon_restarted` or `waking`. A change of\nthe latency alone sends no event.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
         "observedAt": {
           "description": "When the observation was made.",
           "type": "string",
@@ -4154,6 +4271,16 @@
           ],
           "default": null
         },
+        "latencyMs": {
+          "description": "How long the probe attempt behind this observation took, in\nmilliseconds, rounded up and capped at the probe timeout; null when\nno probe made it, as for `daemon_restarted` or `waking`. A change of\nthe latency alone sends no event.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
         "observedAt": {
           "description": "When the observation was made.",
           "type": "string",
@@ -4398,6 +4525,14 @@
         "restart": {
           "description": "The restart policy.",
           "$ref": "#/$defs/InstanceRestart"
+        },
+        "restartTotal": {
+          "description": "The restarts that followed a crash since the instance was created\n(spec 0028 AC-6). A first start, a restart the person asked for,\nreconciliation, and a reload do not count. Absent in older daemons,\nwhich reads as 0.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0
         },
         "revision": {
           "description": "The revision of the registry row.",
@@ -5156,6 +5291,199 @@
         "subscriptionId"
       ]
     },
+    "MetricsProcess": {
+      "description": "The main process the history belongs to.",
+      "type": "object",
+      "properties": {
+        "pid": {
+          "description": "The process ID.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "startedAt": {
+          "description": "When it started.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "pid",
+        "startedAt"
+      ]
+    },
+    "MetricsReply": {
+      "description": "Reply of `instance.get_metrics`.\n\nWhen `state` is `not_running`, `historyId`, `process`, `samples`, and\n`latestProcesses` are empty and `historyReset` is true: the client drops\nwhat it holds.",
+      "type": "object",
+      "properties": {
+        "capacity": {
+          "description": "The most samples a history keeps.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "dataUsage": {
+          "description": "The size of the data folder from the last scan; this method never\nstarts a scan.",
+          "$ref": "#/$defs/DataUsageMetric"
+        },
+        "health": {
+          "description": "Health as read now.",
+          "$ref": "#/$defs/InstanceHealth"
+        },
+        "historyId": {
+          "description": "Names the history of the live main process; null when not running.\nOpaque text a client sends back in its next request.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "historyReset": {
+          "description": "True when the client must drop the samples it holds before it adds\nthese.",
+          "type": "boolean"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "intervalSeconds": {
+          "description": "The seconds between two samples.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "lastFailure": {
+          "description": "The last failure, if there was one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstanceLastFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "latestProcesses": {
+          "description": "The process list of the newest sample, as a tree: children below\ntheir parent, siblings by PID. Empty when there is no sample yet.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProcessRow"
+          }
+        },
+        "lifecycle": {
+          "description": "The lifecycle of the instance now.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "process": {
+          "description": "The live main process; null when not running.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricsProcess"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "processesTruncated": {
+          "description": "True when the tree had more processes than the list holds.",
+          "type": "boolean",
+          "default": false
+        },
+        "readiness": {
+          "description": "Readiness as read now.",
+          "$ref": "#/$defs/InstanceReadiness"
+        },
+        "restartTotal": {
+          "description": "The restarts that followed a crash since the instance was created.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "samples": {
+          "description": "The samples after the cursor, oldest first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetricsSample"
+          }
+        },
+        "state": {
+          "description": "Whether the instance has live metrics.",
+          "$ref": "#/$defs/MetricsState"
+        }
+      },
+      "required": [
+        "instanceId",
+        "state",
+        "lifecycle",
+        "intervalSeconds",
+        "capacity",
+        "samples",
+        "historyReset",
+        "restartTotal",
+        "readiness",
+        "health",
+        "dataUsage"
+      ]
+    },
+    "MetricsSample": {
+      "description": "One sample of an instance.",
+      "type": "object",
+      "properties": {
+        "main": {
+          "description": "The main process alone.",
+          "$ref": "#/$defs/ResourceUsage"
+        },
+        "sampledAt": {
+          "description": "When the sample was taken, from the daemon clock.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "seq": {
+          "description": "1 for the first sample of a history, then one more per sample.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "tree": {
+          "description": "The main process and its descendants.",
+          "$ref": "#/$defs/ResourceUsage"
+        }
+      },
+      "required": [
+        "seq",
+        "sampledAt",
+        "main",
+        "tree"
+      ]
+    },
+    "MetricsState": {
+      "description": "Whether an instance has live metrics. Open.",
+      "oneOf": [
+        {
+          "description": "The instance is `running` with a verified main process.",
+          "type": "string",
+          "const": "live"
+        },
+        {
+          "description": "Any other case; `lifecycle` says which.",
+          "type": "string",
+          "const": "not_running"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "NeedsSecretBlocker": {
       "description": "The content of the `needsSecret` blocker of an instance (spec 0011,\n*Needs secret*): the instance DTO of feature 10 carries it in its\n`blocker` slot as `{type: needsSecret, content: ...}`.",
       "type": "object",
@@ -5233,6 +5561,59 @@
           "description": "A reason this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
+        }
+      ]
+    },
+    "NumberMetric": {
+      "description": "A measured fractional number such as a CPU percent, or why there is\nnone. Tagged `type` and `content`:\n`{ \"type\": \"value\", \"content\": 12.5 }` or\n`{ \"type\": \"unavailable\", \"content\": { \"reason\": \"warming_up\" } }`.\nOpen: a type this build does not know decodes as `unrecognized`.\n\nThe daemon only sends finite numbers, so `Eq` holds.",
+      "oneOf": [
+        {
+          "description": "The measured number.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "number",
+              "format": "double"
+            },
+            "type": {
+              "type": "string",
+              "const": "value"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "No number, and why.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/UnavailableContent"
+            },
+            "type": {
+              "type": "string",
+              "const": "unavailable"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "A type this build does not know. The daemon never sends it.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unrecognized"
+            }
+          },
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -6506,6 +6887,58 @@
         "scriptPath"
       ]
     },
+    "ProcessRow": {
+      "description": "One process of the tree, in the newest sample.",
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "description": "CPU as a percent of one logical core.",
+          "$ref": "#/$defs/NumberMetric"
+        },
+        "depth": {
+          "description": "Its distance from the main process.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "isMain": {
+          "description": "True for the main process.",
+          "type": "boolean"
+        },
+        "memory": {
+          "description": "Physical footprint in bytes.",
+          "$ref": "#/$defs/CountMetric"
+        },
+        "name": {
+          "description": "The file name of its verified executable, never its arguments.",
+          "type": "string"
+        },
+        "parentPid": {
+          "description": "Its parent; null for the main process.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "pid": {
+          "description": "The process ID.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pid",
+        "depth",
+        "name",
+        "isMain",
+        "cpu",
+        "memory"
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -7774,6 +8207,23 @@
           ]
         },
         {
+          "description": "The samples after the cursor and the facts next to them.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/MetricsReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.get_metrics"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "One page of the log.",
           "type": "object",
           "properties": {
@@ -8015,6 +8465,55 @@
       "required": [
         "kind",
         "id"
+      ]
+    },
+    "ResourceUsage": {
+      "description": "The usage of the main process or of the whole tree in one sample.",
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "description": "CPU as a percent of one logical core, to one decimal; a busy tree\nis over 100.",
+          "$ref": "#/$defs/NumberMetric"
+        },
+        "diskRead": {
+          "description": "Bytes read per second.",
+          "$ref": "#/$defs/CountMetric"
+        },
+        "diskWrite": {
+          "description": "Bytes written per second.",
+          "$ref": "#/$defs/CountMetric"
+        },
+        "measuredCount": {
+          "description": "The processes counted in CPU and Disk I/O.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "memory": {
+          "description": "Physical footprint in bytes, the number Activity Monitor calls\nMemory.",
+          "$ref": "#/$defs/CountMetric"
+        },
+        "processCount": {
+          "description": "The processes found: 1 for the main process.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "scope": {
+          "description": "Which processes it covers.",
+          "$ref": "#/$defs/UsageScope"
+        }
+      },
+      "required": [
+        "scope",
+        "processCount",
+        "measuredCount",
+        "cpu",
+        "memory",
+        "diskRead",
+        "diskWrite"
       ]
     },
     "Response": {
@@ -8594,6 +9093,33 @@
             "content"
           ]
         }
+      ]
+    },
+    "ScannedUsage": {
+      "description": "The content of a scanned size.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "The allocated bytes of every entry counted.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "complete": {
+          "description": "False when the scan stopped at a limit, so `bytes` is a lower bound.",
+          "type": "boolean"
+        },
+        "scannedAt": {
+          "description": "When the scan finished.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "bytes",
+        "complete",
+        "scannedAt"
       ]
     },
     "SecretChangeStatus": {
@@ -9842,6 +10368,74 @@
         },
         {
           "description": "A trust level this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UnavailableContent": {
+      "description": "The content of an unavailable number or size.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why there is no value.",
+          "$ref": "#/$defs/UnavailableReason"
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "UnavailableReason": {
+      "description": "Why a number has no value. Open.",
+      "oneOf": [
+        {
+          "description": "The first sample of a process: there is nothing to take a\ndifference from yet.",
+          "type": "string",
+          "const": "warming_up"
+        },
+        {
+          "description": "The OS refused to read the process.",
+          "type": "string",
+          "const": "not_permitted"
+        },
+        {
+          "description": "The process exited while it was being sampled.",
+          "type": "string",
+          "const": "process_exited"
+        },
+        {
+          "description": "The platform cannot read it.",
+          "type": "string",
+          "const": "not_supported"
+        },
+        {
+          "description": "The data folder was never scanned.",
+          "type": "string",
+          "const": "not_scanned"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UsageScope": {
+      "description": "Which processes a [`ResourceUsage`] covers. Open.",
+      "oneOf": [
+        {
+          "description": "The main process alone.",
+          "type": "string",
+          "const": "main"
+        },
+        {
+          "description": "The main process and every descendant of the same user.",
+          "type": "string",
+          "const": "tree"
+        },
+        {
+          "description": "A scope this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }

@@ -3461,6 +3461,26 @@ public struct GetInstanceParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `instance.get_metrics`.
+/// 
+/// Without `historyId`, or with one the daemon no longer holds, every
+/// sample is sent and `historyReset` is true. With the current one, only
+/// samples with a `seq` above `afterSeq` are sent.
+public struct GetMetricsParams: Codable, Sendable, Equatable {
+	/// The instance to read.
+	public let instanceId: UUID
+	/// The `historyId` of the last reply the client holds. Opaque text.
+	public let historyId: String?
+	/// The `seq` of the newest sample the client holds in that history.
+	public let afterSeq: UInt64?
+
+	public init(instanceId: UUID, historyId: String?, afterSeq: UInt64?) {
+		self.instanceId = instanceId
+		self.historyId = historyId
+		self.afterSeq = afterSeq
+	}
+}
+
 /// Params of `operation.get`.
 public struct GetOperationParams: Codable, Sendable, Equatable {
 	/// The operation to read.
@@ -4023,12 +4043,18 @@ public struct InstanceHealth: Codable, Sendable, Equatable {
 	public let detail: String?
 	/// When the observation was made.
 	public let observedAt: Date
+	/// How long the probe attempt behind this observation took, in
+	/// milliseconds, rounded up and capped at the probe timeout; null when
+	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
+	/// the latency alone sends no event.
+	public let latencyMs: UInt32?
 
-	public init(state: InstanceHealthState, reason: String, detail: String?, observedAt: Date) {
+	public init(state: InstanceHealthState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
 		self.state = state
 		self.reason = reason
 		self.detail = detail
 		self.observedAt = observedAt
+		self.latencyMs = latencyMs
 	}
 }
 
@@ -4053,12 +4079,18 @@ public struct InstanceReadiness: Codable, Sendable, Equatable {
 	public let detail: String?
 	/// When the observation was made.
 	public let observedAt: Date
+	/// How long the probe attempt behind this observation took, in
+	/// milliseconds, rounded up and capped at the probe timeout; null when
+	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
+	/// the latency alone sends no event.
+	public let latencyMs: UInt32?
 
-	public init(state: InstanceReadinessState, reason: String, detail: String?, observedAt: Date) {
+	public init(state: InstanceReadinessState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
 		self.state = state
 		self.reason = reason
 		self.detail = detail
 		self.observedAt = observedAt
+		self.latencyMs = latencyMs
 	}
 }
 
@@ -4336,6 +4368,11 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 	public let lastFailure: InstanceLastFailure?
 	/// The restart policy.
 	public let restart: InstanceRestart
+	/// The restarts that followed a crash since the instance was created
+	/// (spec 0028 AC-6). A first start, a restart the person asked for,
+	/// reconciliation, and a reload do not count. Absent in older daemons,
+	/// which reads as 0.
+	public let restartTotal: UInt64?
 	/// Why the instance is blocked, if it is.
 	public let blocker: InstanceBlocker?
 	/// Every endpoint.
@@ -4360,7 +4397,7 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 	/// row predates the record.
 	public let lastExit: InstanceLastExit?
 
-	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?) {
+	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, restartTotal: UInt64?, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?) {
 		self.id = id
 		self.name = name
 		self.displayName = displayName
@@ -4377,6 +4414,7 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 		self.process = process
 		self.lastFailure = lastFailure
 		self.restart = restart
+		self.restartTotal = restartTotal
 		self.blocker = blocker
 		self.endpoints = endpoints
 		self.leftoverProcesses = leftoverProcesses
@@ -5160,6 +5198,355 @@ public struct LogsUnfollowParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// The main process the history belongs to.
+public struct MetricsProcess: Codable, Sendable, Equatable {
+	/// The process ID.
+	public let pid: UInt32
+	/// When it started.
+	public let startedAt: Date
+
+	public init(pid: UInt32, startedAt: Date) {
+		self.pid = pid
+		self.startedAt = startedAt
+	}
+}
+
+/// Whether an instance has live metrics. Open.
+public enum MetricsState: String, Codable, Sendable, Equatable {
+	/// The instance is `running` with a verified main process.
+	case live
+	/// Any other case; `lifecycle` says which.
+	case notRunning = "not_running"
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Which processes a [`ResourceUsage`] covers. Open.
+public enum UsageScope: String, Codable, Sendable, Equatable {
+	/// The main process alone.
+	case main
+	/// The main process and every descendant of the same user.
+	case tree
+	/// A scope this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// A measured fractional number such as a CPU percent, or why there is
+/// none. Tagged `type` and `content`:
+/// `{ "type": "value", "content": 12.5 }` or
+/// `{ "type": "unavailable", "content": { "reason": "warming_up" } }`.
+/// Open: a type this build does not know decodes as `unrecognized`.
+/// 
+/// The daemon only sends finite numbers, so `Eq` holds.
+public enum NumberMetric: Codable, Sendable, Equatable {
+	/// The measured number.
+	case value(Double)
+	/// No number, and why.
+	case unavailable(UnavailableContent)
+	/// A type this build does not know. The daemon never sends it.
+	case unrecognized
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case value,
+			unavailable,
+			unrecognized
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .value:
+				if let content = try? container.decode(Double.self, forKey: .content) {
+					self = .value(content)
+					return
+				}
+			case .unavailable:
+				if let content = try? container.decode(UnavailableContent.self, forKey: .content) {
+					self = .unavailable(content)
+					return
+				}
+			case .unrecognized:
+				self = .unrecognized
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(NumberMetric.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for NumberMetric"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .value(let content):
+			try container.encode(CodingKeys.value, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unavailable(let content):
+			try container.encode(CodingKeys.unavailable, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unrecognized:
+			try container.encode(CodingKeys.unrecognized, forKey: .type)
+		}
+	}
+}
+
+/// A measured whole number such as bytes, or why there is none. Same shape
+/// as [`NumberMetric`]. Open.
+public enum CountMetric: Codable, Sendable, Equatable {
+	/// The measured number.
+	case value(UInt64)
+	/// No number, and why.
+	case unavailable(UnavailableContent)
+	/// A type this build does not know. The daemon never sends it.
+	case unrecognized
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case value,
+			unavailable,
+			unrecognized
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .value:
+				if let content = try? container.decode(UInt64.self, forKey: .content) {
+					self = .value(content)
+					return
+				}
+			case .unavailable:
+				if let content = try? container.decode(UnavailableContent.self, forKey: .content) {
+					self = .unavailable(content)
+					return
+				}
+			case .unrecognized:
+				self = .unrecognized
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(CountMetric.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for CountMetric"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .value(let content):
+			try container.encode(CodingKeys.value, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unavailable(let content):
+			try container.encode(CodingKeys.unavailable, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unrecognized:
+			try container.encode(CodingKeys.unrecognized, forKey: .type)
+		}
+	}
+}
+
+/// The usage of the main process or of the whole tree in one sample.
+public struct ResourceUsage: Codable, Sendable, Equatable {
+	/// Which processes it covers.
+	public let scope: UsageScope
+	/// The processes found: 1 for the main process.
+	public let processCount: UInt64
+	/// The processes counted in CPU and Disk I/O.
+	public let measuredCount: UInt64
+	/// CPU as a percent of one logical core, to one decimal; a busy tree
+	/// is over 100.
+	public let cpu: NumberMetric
+	/// Physical footprint in bytes, the number Activity Monitor calls
+	/// Memory.
+	public let memory: CountMetric
+	/// Bytes read per second.
+	public let diskRead: CountMetric
+	/// Bytes written per second.
+	public let diskWrite: CountMetric
+
+	public init(scope: UsageScope, processCount: UInt64, measuredCount: UInt64, cpu: NumberMetric, memory: CountMetric, diskRead: CountMetric, diskWrite: CountMetric) {
+		self.scope = scope
+		self.processCount = processCount
+		self.measuredCount = measuredCount
+		self.cpu = cpu
+		self.memory = memory
+		self.diskRead = diskRead
+		self.diskWrite = diskWrite
+	}
+}
+
+/// One sample of an instance.
+public struct MetricsSample: Codable, Sendable, Equatable {
+	/// 1 for the first sample of a history, then one more per sample.
+	public let seq: UInt64
+	/// When the sample was taken, from the daemon clock.
+	public let sampledAt: Date
+	/// The main process alone.
+	public let main: ResourceUsage
+	/// The main process and its descendants.
+	public let tree: ResourceUsage
+
+	public init(seq: UInt64, sampledAt: Date, main: ResourceUsage, tree: ResourceUsage) {
+		self.seq = seq
+		self.sampledAt = sampledAt
+		self.main = main
+		self.tree = tree
+	}
+}
+
+/// One process of the tree, in the newest sample.
+public struct ProcessRow: Codable, Sendable, Equatable {
+	/// The process ID.
+	public let pid: UInt32
+	/// Its parent; null for the main process.
+	public let parentPid: UInt32?
+	/// Its distance from the main process.
+	public let depth: UInt32
+	/// The file name of its verified executable, never its arguments.
+	public let name: String
+	/// True for the main process.
+	public let isMain: Bool
+	/// CPU as a percent of one logical core.
+	public let cpu: NumberMetric
+	/// Physical footprint in bytes.
+	public let memory: CountMetric
+
+	public init(pid: UInt32, parentPid: UInt32?, depth: UInt32, name: String, isMain: Bool, cpu: NumberMetric, memory: CountMetric) {
+		self.pid = pid
+		self.parentPid = parentPid
+		self.depth = depth
+		self.name = name
+		self.isMain = isMain
+		self.cpu = cpu
+		self.memory = memory
+	}
+}
+
+/// The size of the data folder as the last scan left it, or why there is
+/// none. Tagged `type` and `content`. Open.
+public enum DataUsageMetric: Codable, Sendable, Equatable {
+	/// The result of the last scan.
+	case scanned(ScannedUsage)
+	/// No scan result; `reason` is `not_scanned` before the first scan.
+	case unavailable(UnavailableContent)
+	/// A type this build does not know. The daemon never sends it.
+	case unrecognized
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case scanned,
+			unavailable,
+			unrecognized
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .scanned:
+				if let content = try? container.decode(ScannedUsage.self, forKey: .content) {
+					self = .scanned(content)
+					return
+				}
+			case .unavailable:
+				if let content = try? container.decode(UnavailableContent.self, forKey: .content) {
+					self = .unavailable(content)
+					return
+				}
+			case .unrecognized:
+				self = .unrecognized
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(DataUsageMetric.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for DataUsageMetric"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .scanned(let content):
+			try container.encode(CodingKeys.scanned, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unavailable(let content):
+			try container.encode(CodingKeys.unavailable, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .unrecognized:
+			try container.encode(CodingKeys.unrecognized, forKey: .type)
+		}
+	}
+}
+
+/// Reply of `instance.get_metrics`.
+/// 
+/// When `state` is `not_running`, `historyId`, `process`, `samples`, and
+/// `latestProcesses` are empty and `historyReset` is true: the client drops
+/// what it holds.
+public struct MetricsReply: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Whether the instance has live metrics.
+	public let state: MetricsState
+	/// The lifecycle of the instance now.
+	public let lifecycle: InstanceLifecycle
+	/// The seconds between two samples.
+	public let intervalSeconds: UInt32
+	/// The most samples a history keeps.
+	public let capacity: UInt64
+	/// Names the history of the live main process; null when not running.
+	/// Opaque text a client sends back in its next request.
+	public let historyId: String?
+	/// The live main process; null when not running.
+	public let process: MetricsProcess?
+	/// The samples after the cursor, oldest first.
+	public let samples: [MetricsSample]
+	/// The process list of the newest sample, as a tree: children below
+	/// their parent, siblings by PID. Empty when there is no sample yet.
+	public let latestProcesses: [ProcessRow]?
+	/// True when the tree had more processes than the list holds.
+	public let processesTruncated: Bool?
+	/// True when the client must drop the samples it holds before it adds
+	/// these.
+	public let historyReset: Bool
+	/// The restarts that followed a crash since the instance was created.
+	public let restartTotal: UInt64
+	/// The last failure, if there was one.
+	public let lastFailure: InstanceLastFailure?
+	/// Readiness as read now.
+	public let readiness: InstanceReadiness
+	/// Health as read now.
+	public let health: InstanceHealth
+	/// The size of the data folder from the last scan; this method never
+	/// starts a scan.
+	public let dataUsage: DataUsageMetric
+
+	public init(instanceId: UUID, state: MetricsState, lifecycle: InstanceLifecycle, intervalSeconds: UInt32, capacity: UInt64, historyId: String?, process: MetricsProcess?, samples: [MetricsSample], latestProcesses: [ProcessRow]?, processesTruncated: Bool?, historyReset: Bool, restartTotal: UInt64, lastFailure: InstanceLastFailure?, readiness: InstanceReadiness, health: InstanceHealth, dataUsage: DataUsageMetric) {
+		self.instanceId = instanceId
+		self.state = state
+		self.lifecycle = lifecycle
+		self.intervalSeconds = intervalSeconds
+		self.capacity = capacity
+		self.historyId = historyId
+		self.process = process
+		self.samples = samples
+		self.latestProcesses = latestProcesses
+		self.processesTruncated = processesTruncated
+		self.historyReset = historyReset
+		self.restartTotal = restartTotal
+		self.lastFailure = lastFailure
+		self.readiness = readiness
+		self.health = health
+		self.dataUsage = dataUsage
+	}
+}
+
 /// Why a reference needs a value. Open.
 public enum NeedsSecretReason: String, Codable, Sendable, Equatable {
 	/// The store holds no value.
@@ -5495,6 +5882,9 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceGetDetail(GetInstanceDetailParams)
 	/// The size of the data folder of one instance.
 	case instanceGetDataUsage(GetDataUsageParams)
+	/// The metrics samples of one running instance after a cursor (spec
+	/// 0028).
+	case instanceGetMetrics(GetMetricsParams)
 	/// One page of an instance's stored log (spec 0027).
 	case instanceLogsRead(LogsReadParams)
 	/// Starts pushing an instance's new log entries as `log` frames.
@@ -5545,6 +5935,7 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceGetDuplicateForm = "instance.get_duplicate_form",
 			instanceGetDetail = "instance.get_detail",
 			instanceGetDataUsage = "instance.get_data_usage",
+			instanceGetMetrics = "instance.get_metrics",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
@@ -5740,6 +6131,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceGetDataUsage(content)
 					return
 				}
+			case .instanceGetMetrics:
+				if let content = try? container.decode(GetMetricsParams.self, forKey: .content) {
+					self = .instanceGetMetrics(content)
+					return
+				}
 			case .instanceLogsRead:
 				if let content = try? container.decode(LogsReadParams.self, forKey: .content) {
 					self = .instanceLogsRead(content)
@@ -5878,6 +6274,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceGetDataUsage(let content):
 			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceGetMetrics(let content):
+			try container.encode(CodingKeys.instanceGetMetrics, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceLogsRead(let content):
 			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -5994,6 +6393,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceGetDetail(InstanceDetail)
 	/// The size of a data folder, or null when none is cached.
 	case instanceGetDataUsage(DataUsageReply)
+	/// The samples after the cursor and the facts next to them.
+	case instanceGetMetrics(MetricsReply)
 	/// One page of the log.
 	case instanceLogsRead(LogPage)
 	/// The follow started; its `log` frames follow.
@@ -6043,6 +6444,7 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceGetDuplicateForm = "instance.get_duplicate_form",
 			instanceGetDetail = "instance.get_detail",
 			instanceGetDataUsage = "instance.get_data_usage",
+			instanceGetMetrics = "instance.get_metrics",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
@@ -6250,6 +6652,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceGetDataUsage(content)
 					return
 				}
+			case .instanceGetMetrics:
+				if let content = try? container.decode(MetricsReply.self, forKey: .content) {
+					self = .instanceGetMetrics(content)
+					return
+				}
 			case .instanceLogsRead:
 				if let content = try? container.decode(LogPage.self, forKey: .content) {
 					self = .instanceLogsRead(content)
@@ -6391,6 +6798,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceGetDataUsage(let content):
 			try container.encode(CodingKeys.instanceGetDataUsage, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceGetMetrics(let content):
+			try container.encode(CodingKeys.instanceGetMetrics, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .instanceLogsRead(let content):
 			try container.encode(CodingKeys.instanceLogsRead, forKey: .type)
@@ -6575,6 +6985,22 @@ public struct RuntimeListPage: Codable, Sendable, Equatable {
 		self.items = items
 		self.next = next
 		self.installing = installing
+	}
+}
+
+/// The content of a scanned size.
+public struct ScannedUsage: Codable, Sendable, Equatable {
+	/// The allocated bytes of every entry counted.
+	public let bytes: UInt64
+	/// False when the scan stopped at a limit, so `bytes` is a lower bound.
+	public let complete: Bool
+	/// When the scan finished.
+	public let scannedAt: Date
+
+	public init(bytes: UInt64, complete: Bool, scannedAt: Date) {
+		self.bytes = bytes
+		self.complete = complete
+		self.scannedAt = scannedAt
 	}
 }
 
@@ -6878,6 +7304,33 @@ public struct Subscribed: Codable, Sendable, Equatable {
 	public init(subscriptionId: UInt32, head: EventCursor) {
 		self.subscriptionId = subscriptionId
 		self.head = head
+	}
+}
+
+/// Why a number has no value. Open.
+public enum UnavailableReason: String, Codable, Sendable, Equatable {
+	/// The first sample of a process: there is nothing to take a
+	/// difference from yet.
+	case warmingUp = "warming_up"
+	/// The OS refused to read the process.
+	case notPermitted = "not_permitted"
+	/// The process exited while it was being sampled.
+	case processExited = "process_exited"
+	/// The platform cannot read it.
+	case notSupported = "not_supported"
+	/// The data folder was never scanned.
+	case notScanned = "not_scanned"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The content of an unavailable number or size.
+public struct UnavailableContent: Codable, Sendable, Equatable {
+	/// Why there is no value.
+	public let reason: UnavailableReason
+
+	public init(reason: UnavailableReason) {
+		self.reason = reason
 	}
 }
 

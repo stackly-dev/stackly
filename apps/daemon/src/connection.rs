@@ -1183,6 +1183,14 @@ async fn dispatch(
             .map(Reply::InstanceGetDataUsage),
             None,
         ),
+        Call::InstanceGetMetrics(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_metrics(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceGetMetrics),
+            None,
+        ),
         Call::InstanceStart(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.start_instance(c, x, p)

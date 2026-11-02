@@ -128,7 +128,8 @@ struct OperationsUnreadableTests {
             number: 1, name: "adopted", lifecycle: .running, desired: .running,
             readiness: .fixture(.ready, reason: "ready"),
             health: InstanceHealth(
-                state: .healthy, reason: "ok", detail: nil, observedAt: FixtureClock.now))
+                state: .healthy, reason: "ok", detail: nil, observedAt: FixtureClock.now,
+                latencyMs: nil))
         let process = InstanceProcess(
             pid: 4001, startedAt: FixtureClock.minutesAgo(30), adopted: true, adoptable: false)
         let neutralInstance = InstanceSummary(
@@ -137,6 +138,7 @@ struct OperationsUnreadableTests {
             runtimeVersion: adopted.runtimeVersion, lifecycle: adopted.lifecycle,
             desired: adopted.desired, readiness: adopted.readiness, health: adopted.health,
             statusSeq: 1, process: process, lastFailure: nil, restart: adopted.restart,
+            restartTotal: 0,
             blocker: nil, endpoints: adopted.endpoints, leftoverProcesses: nil,
             logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
             lastExit: nil)

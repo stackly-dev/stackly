@@ -27,6 +27,9 @@ pub const DATA_USAGE_DEADLINE: Duration = Duration::from_secs(2);
 pub const DATA_USAGE_CACHE_TTL: Duration = Duration::from_secs(60);
 /// How long an incomplete size is answered from memory.
 pub const DATA_USAGE_PARTIAL_TTL: Duration = Duration::from_secs(10);
+/// How often the daemon scans the data folder of a running instance on its
+/// own (spec 0028 AC-10).
+pub const DATA_USAGE_SCHEDULE_INTERVAL: Duration = Duration::from_secs(15 * 60);
 /// The most scans that walk at the same time, for all instances.
 pub const DATA_USAGE_CONCURRENCY: usize = 2;
 /// The most pinned packages kept in memory.
@@ -50,6 +53,8 @@ pub struct DataUsageConfig {
     pub partial_ttl: Duration,
     /// How many scans may walk at the same time.
     pub concurrency: usize,
+    /// How often a running instance is scanned without a client asking.
+    pub schedule_interval: Duration,
 }
 
 impl Default for DataUsageConfig {
@@ -60,6 +65,7 @@ impl Default for DataUsageConfig {
             cache_ttl: DATA_USAGE_CACHE_TTL,
             partial_ttl: DATA_USAGE_PARTIAL_TTL,
             concurrency: DATA_USAGE_CONCURRENCY,
+            schedule_interval: DATA_USAGE_SCHEDULE_INTERVAL,
         }
     }
 }
@@ -204,6 +210,10 @@ type Outcome = Result<MeasuredUsage, UsageFailure>;
 #[derive(Default)]
 struct UsageState {
     cache: HashMap<InstanceId, MeasuredUsage>,
+    /// The result of the newest scan of each instance, whoever asked for
+    /// it, with no expiry (spec 0028 AC-10). Only `instance.get_metrics`
+    /// reads it, and it never starts a scan.
+    last_scan: HashMap<InstanceId, MeasuredUsage>,
     inflight: HashMap<InstanceId, watch::Receiver<Option<Outcome>>>,
 }
 
@@ -236,6 +246,27 @@ impl DataUsageService {
     fn shared(&self) -> &Arc<UsageShared> {
         self.shared
             .get_or_init(|| Arc::new(UsageShared::new(DataUsageConfig::default())))
+    }
+
+    /// The result of the newest scan of `id`, complete or not, however old.
+    /// It reads the slot only and never starts a scan.
+    #[must_use]
+    pub fn last_scan(&self, id: InstanceId) -> Option<MeasuredUsage> {
+        lock(&self.shared().state).last_scan.get(&id).copied()
+    }
+
+    /// How often a running instance is scanned without a client asking.
+    #[must_use]
+    pub fn schedule_interval(&self) -> Duration {
+        self.shared().config.schedule_interval
+    }
+
+    /// Drops the slots of every instance not in `known`, as when an
+    /// instance was removed.
+    pub fn forget_unknown(&self, known: &std::collections::HashSet<InstanceId>) {
+        lock(&self.shared().state)
+            .last_scan
+            .retain(|id, _| known.contains(id));
     }
 
     /// Answers `instance.get_data_usage` for the data folder at `path`, in
@@ -280,6 +311,7 @@ impl DataUsageService {
                             let mut state = lock(&scanning.state);
                             state.inflight.remove(&id);
                             if let Ok(usage) = outcome {
+                                state.last_scan.insert(id, usage);
                                 scanning.remember(&mut state, id, usage, platform.clock().now());
                             }
                         }

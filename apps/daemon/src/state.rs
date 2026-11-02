@@ -9,6 +9,7 @@ use std::time::Instant;
 use stackly_core::PreparedLayout;
 use stackly_core::catalog::CatalogState;
 use stackly_core::instance::create::CreateHooks;
+use stackly_core::metrics::{MetricsStore, SamplerConfig};
 use stackly_core::secret::Redactor;
 use stackly_platform::Platform;
 use stackly_protocol::Count;
@@ -157,6 +158,8 @@ pub struct DaemonCore {
     catalog_accesses: AtomicU64,
     pinned_packages: PinnedPackages,
     data_usage: DataUsageService,
+    metrics: MetricsStore,
+    sampler_config: OnceLock<SamplerConfig>,
     create_hooks: OnceLock<CreateHooks>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
@@ -212,6 +215,8 @@ impl DaemonCore {
             catalog_accesses: AtomicU64::new(0),
             pinned_packages: PinnedPackages::default(),
             data_usage: DataUsageService::default(),
+            metrics: MetricsStore::new(),
+            sampler_config: OnceLock::new(),
             create_hooks: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
@@ -462,6 +467,24 @@ impl DaemonCore {
     #[must_use]
     pub const fn data_usage(&self) -> &DataUsageService {
         &self.data_usage
+    }
+
+    /// The metrics histories of the running instances (spec 0028).
+    #[must_use]
+    pub const fn metrics(&self) -> &MetricsStore {
+        &self.metrics
+    }
+
+    /// The constants of the metrics sampler of this run: what the start
+    /// slot recorded, else the defaults.
+    #[must_use]
+    pub fn sampler_config(&self) -> SamplerConfig {
+        self.sampler_config.get().copied().unwrap_or_default()
+    }
+
+    /// Records the sampler constants of this run. The first call wins.
+    pub fn set_sampler_config(&self, config: SamplerConfig) {
+        let _ = self.sampler_config.set(config);
     }
 
     /// The hooks a test hung on `instance.create`; none in a normal run.

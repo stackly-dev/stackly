@@ -92,9 +92,10 @@ struct AttentionRulesTests {
             readiness: sick.readiness,
             health: InstanceHealth(
                 state: .unhealthy, reason: "probe_failed", detail: nil,
-                observedAt: sick.health.observedAt),
+                observedAt: sick.health.observedAt, latencyMs: nil),
             statusSeq: sick.statusSeq, process: sick.process, lastFailure: nil,
-            restart: sick.restart, blocker: nil, endpoints: nil, leftoverProcesses: nil,
+            restart: sick.restart, restartTotal: 0, blocker: nil, endpoints: nil,
+            leftoverProcesses: nil,
             logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
             lastExit: nil)
         #expect(try items(instances: [bare]).first?.message == "Its health check is failing.")
@@ -118,6 +119,7 @@ struct AttentionRulesTests {
                 runtimeVersion: base.runtimeVersion, lifecycle: base.lifecycle,
                 desired: base.desired, readiness: base.readiness, health: base.health,
                 statusSeq: base.statusSeq, process: nil, lastFailure: nil, restart: restart,
+                restartTotal: 0,
                 blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
                 ownership: .manual, initialized: true, capabilities: nil, lastExit: nil)
         }
@@ -140,7 +142,8 @@ struct AttentionRulesTests {
             software: base.software, provider: base.provider, runtimeId: base.runtimeId,
             runtimeVersion: base.runtimeVersion, lifecycle: .recovering, desired: base.desired,
             readiness: base.readiness, health: base.health, statusSeq: base.statusSeq,
-            process: nil, lastFailure: nil, restart: restart, blocker: nil, endpoints: nil,
+            process: nil, lastFailure: nil, restart: restart, restartTotal: 0, blocker: nil,
+            endpoints: nil,
             leftoverProcesses: nil, logsUnavailable: false, ownership: .manual, initialized: true,
             capabilities: nil, lastExit: nil)
         let message = try #require(try items(instances: [summary]).first?.message)

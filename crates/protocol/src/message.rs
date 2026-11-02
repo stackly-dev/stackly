@@ -27,10 +27,10 @@ use crate::handshake::{HandshakeAccepted, HandshakeParams};
 use crate::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
-    GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
-    InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
-    PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams, RestartInstanceParams,
-    StartInstanceParams, StopInstanceParams,
+    GetInstanceDetailParams, GetInstanceParams, GetMetricsParams, InstanceActionAccepted,
+    InstanceDetail, InstancePage, InstanceSummary, ListInstancesParams, MetricsReply,
+    PreflightCreateParams, PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams,
+    RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::logs::{
@@ -196,6 +196,10 @@ pub enum Call {
     /// The size of the data folder of one instance.
     #[serde(rename = "instance.get_data_usage")]
     InstanceGetDataUsage(GetDataUsageParams),
+    /// The metrics samples of one running instance after a cursor (spec
+    /// 0028).
+    #[serde(rename = "instance.get_metrics")]
+    InstanceGetMetrics(GetMetricsParams),
     /// One page of an instance's stored log (spec 0027).
     #[serde(rename = "instance.logs_read")]
     InstanceLogsRead(LogsReadParams),
@@ -334,6 +338,9 @@ pub enum Reply {
     /// The size of a data folder, or null when none is cached.
     #[serde(rename = "instance.get_data_usage")]
     InstanceGetDataUsage(DataUsageReply),
+    /// The samples after the cursor and the facts next to them.
+    #[serde(rename = "instance.get_metrics")]
+    InstanceGetMetrics(Box<MetricsReply>),
     /// One page of the log.
     #[serde(rename = "instance.logs_read")]
     InstanceLogsRead(Box<LogPage>),
@@ -455,6 +462,7 @@ methods! {
     "instance.get_duplicate_form" => InstanceGetDuplicateForm(GetDuplicateFormParams), recovery refused;
     "instance.get_detail" => InstanceGetDetail(GetInstanceDetailParams), recovery refused;
     "instance.get_data_usage" => InstanceGetDataUsage(GetDataUsageParams), recovery refused;
+    "instance.get_metrics" => InstanceGetMetrics(GetMetricsParams), recovery refused;
     "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
     "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
     "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
@@ -614,7 +622,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 17
+                == 18
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -630,8 +638,9 @@ mod tests {
         assert_eq!(
             // The 3 before the logs: `instance.restart`, `instance.reload`,
             // and `instance.force_stop` (spec 0026). Then the 3 log methods
-            // (spec 0027) and `instance.prepare_terminal` (spec 0070).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1,
+            // (spec 0027), `instance.prepare_terminal` (spec 0070), and
+            // `instance.get_metrics` (spec 0028).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

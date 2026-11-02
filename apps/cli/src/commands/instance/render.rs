@@ -7,7 +7,7 @@ use stackly_protocol::instance::{
     ConnectionAvailability, ConnectionString, ConnectionUnavailableReason, DataUsage,
     DetailDependent, DetailSecret, EndpointStatus, EndpointTransport, InstanceBlocker,
     InstanceDetail, InstanceHealth, InstanceLastFailure, InstanceLifecycle, InstanceProcess,
-    InstanceReadiness, InstanceRestart, StartupPolicyKind,
+    InstanceReadiness, InstanceSummary, StartupPolicyKind,
 };
 use stackly_protocol::runtime::InstallModeKind;
 
@@ -64,9 +64,9 @@ pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
         ("Desired", Cell::text(&wire_name(&instance.desired))),
         (
             "Readiness",
-            Cell::text(&readiness(out, &instance.readiness)),
+            Cell::text(&readiness_line(out, &instance.readiness)),
         ),
-        ("Health", Cell::text(&health(out, &instance.health))),
+        ("Health", Cell::text(&health_line(out, &instance.health))),
         (
             "Process",
             Cell::text(
@@ -76,14 +76,14 @@ pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
                     .map_or_else(String::new, |p| process(out, p)),
             ),
         ),
-        ("Restarts", Cell::text(&restarts(out, &instance.restart))),
+        ("Restarts", Cell::text(&restarts(out, instance))),
         (
             "Last failure",
             Cell::text(
                 &instance
                     .last_failure
                     .as_ref()
-                    .map_or_else(String::new, |f| last_failure(out, f)),
+                    .map_or_else(String::new, |f| last_failure_line(out, f)),
             ),
         ),
         (
@@ -300,7 +300,7 @@ fn manifest(digest: &str) -> String {
 }
 
 /// `<state> (<reason>): <detail>, checked <age>`.
-fn readiness(out: &HumanWriter, readiness: &InstanceReadiness) -> String {
+pub(super) fn readiness_line(out: &HumanWriter, readiness: &InstanceReadiness) -> String {
     observed(
         out,
         &wire_name(&readiness.state),
@@ -311,7 +311,7 @@ fn readiness(out: &HumanWriter, readiness: &InstanceReadiness) -> String {
 }
 
 /// The same line for health.
-fn health(out: &HumanWriter, health: &InstanceHealth) -> String {
+pub(super) fn health_line(out: &HumanWriter, health: &InstanceHealth) -> String {
     observed(
         out,
         &wire_name(&health.state),
@@ -358,7 +358,8 @@ fn process(out: &HumanWriter, process: &InstanceProcess) -> String {
 
 /// `<attempts> of <budget> in <minutes>m`, then `, next attempt <time>` and
 /// `, exhausted`.
-fn restarts(out: &HumanWriter, restart: &InstanceRestart) -> String {
+fn restarts(out: &HumanWriter, instance: &InstanceSummary) -> String {
+    let restart = &instance.restart;
     let mut text = format!(
         "{} of {} in {}m",
         restart.attempts,
@@ -371,11 +372,12 @@ fn restarts(out: &HumanWriter, restart: &InstanceRestart) -> String {
     if restart.exhausted {
         text.push_str(", exhausted");
     }
+    text.push_str(&format!(", {} since created", instance.restart_total.get()));
     text
 }
 
 /// `<code> at <time>`, then `, exit code <n>` or `, signal <n>`.
-fn last_failure(out: &HumanWriter, failure: &InstanceLastFailure) -> String {
+pub(super) fn last_failure_line(out: &HumanWriter, failure: &InstanceLastFailure) -> String {
     let mut text = failure.code.clone();
     if let Some(at) = failure.at {
         text.push_str(&format!(" at {}", out.time(at)));

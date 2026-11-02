@@ -193,6 +193,7 @@ extension InstanceSummary {
             readiness: readiness ?? self.readiness, health: health ?? self.health,
             statusSeq: statusSeq ?? self.statusSeq, process: process ?? self.process,
             lastFailure: lastFailure, restart: restart ?? self.restart,
+            restartTotal: self.restartTotal,
             blocker: blocker ?? self.blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable ?? self.logsUnavailable, ownership: ownership,
