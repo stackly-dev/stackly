@@ -904,3 +904,91 @@ fn a_planned_restart_with_an_empty_plan_finishes_under_launchd_and_the_next_muta
         "daemon restart --yes ended finished with an empty plan twice, once with no instance and once with only the stopped instance {stopped}, and instance create was accepted after each"
     ));
 }
+
+/// Spec 0030 AC-17: the `daemonGap` of a planned restart with ten running
+/// PostgreSQL instances that all stay (`keep`), recorded as the figure the
+/// CLI prints. The spec sets no bound on it.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn ten_postgresql_instances_all_kept_record_the_daemon_gap_of_a_planned_restart() {
+    let ev = evidence!(
+        covers = ["NFR-007"],
+        kind = Kind::Native,
+        expected = "stackly daemon restart --yes against a launchd daemon with ten running PostgreSQL instances, five of 17 and five of 18, keeps all ten as adopted with their old pid and start time and prints a durations.daemonGap, which the test records as an observed figure without a bound",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let Some(site) = pg::Site::open(&ev, pg::PG17) else {
+        return;
+    };
+    let Some(other) = site.install_other(&ev, pg::PG18) else {
+        return;
+    };
+    let manual = site.binary(&[]);
+    let running = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        pg::ten_running_instances(&site, &api, (other.0.as_uuid(), pg::PG18.major)).await
+    });
+    manual.stop();
+    let seen: Vec<(uuid::Uuid, Seen)> = running
+        .iter()
+        .map(|(made, summary)| {
+            let process = summary.process.as_ref().expect("a running instance");
+            (
+                made.id,
+                Seen {
+                    pid: process.pid,
+                    started_at: process.started_at,
+                },
+            )
+        })
+        .collect();
+
+    let mut rig = Rig::at(site.root.path(), site.root.path(), None);
+    let cli = CliRunner::new(&cargo_bin("stackly-cli", "stackly"), site.root.path());
+    let first = rig.bootstrap();
+    for (id, seen) in &seen {
+        wait_same(&rig, site.runtime_id, *id, seen, "after the first daemon");
+    }
+
+    let (code, restarted) = json(&cli, &["daemon", "restart", "--yes"]);
+    assert_eq!(code, Some(0), "{restarted}");
+    let plan = &restarted["result"]["plan"];
+    assert_eq!(plan["state"], "finished", "{restarted}");
+    let entries = plan["instances"].as_array().expect("plan entries");
+    assert_eq!(entries.len(), 10, "{restarted}");
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["decision"] == "keep" && entry["outcome"] == "adopted"),
+        "{restarted}"
+    );
+    let durations = &restarted["result"]["durations"];
+    let gap = durations["daemonGap"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("a daemonGap in {restarted}"));
+    rig.wait_launchd(RESTART_BOUND, |info| {
+        info.server_instance_id != first.server_instance_id
+    })
+    .expect("the job runs a new daemon after the restart");
+    for (id, seen) in &seen {
+        wait_same(
+            &rig,
+            site.runtime_id,
+            *id,
+            seen,
+            "after the planned restart",
+        );
+    }
+    for (id, seen) in &seen {
+        stop_and_check(&rig, site.runtime_id, *id, seen);
+    }
+    ev.pass_with(&format!(
+        "planned restart with ten kept PostgreSQL instances ({} and {}): daemonGap {gap} ms, stopping {} ms, restoring {} ms; all ten adopted with their old pid and start time",
+        pg::PG17.version,
+        pg::PG18.version,
+        durations["stopping"],
+        durations["restoring"],
+    ));
+}

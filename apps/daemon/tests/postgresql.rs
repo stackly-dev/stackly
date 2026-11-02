@@ -32,6 +32,8 @@ mod format;
 mod harness;
 #[path = "postgresql/install.rs"]
 mod install;
+#[path = "postgresql/inventory.rs"]
+mod inventory;
 #[path = "postgresql/lifecycle.rs"]
 mod lifecycle;
 #[path = "postgresql/lifecycle_ops.rs"]
