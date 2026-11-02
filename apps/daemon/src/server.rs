@@ -465,6 +465,24 @@ impl DaemonHandle {
         self.core.shutdown_requested().await
     }
 
+    /// Whether `signal` is a logout: a `SIGTERM` at a launchd daemon before
+    /// any `daemon.shutdown` was accepted (spec 0031, *Sinyal per konteks*).
+    #[must_use]
+    pub fn signal_ends_session(&self, signal: &str) -> bool {
+        crate::session::ends_session(&self.core, signal)
+    }
+
+    /// Runs steps 1 to 5 of *Akhir sesi* from `t0`, the instant of the
+    /// signal. The stop order ([`shutdown`](Self::shutdown)) follows.
+    pub async fn end_session(&self, t0: tokio::time::Instant) {
+        crate::session::end(&self.core, t0).await;
+    }
+
+    /// Closes the session row `clean` for a stop that is not a logout.
+    pub async fn close_session_clean(&self) {
+        crate::session::close_clean(&self.core).await;
+    }
+
     /// Resolves with the exit code once a fatal error means the daemon
     /// must stop, such as a registry that stopped working.
     pub async fn fatal(&self) -> u8 {

@@ -26,7 +26,7 @@ use uuid::Uuid;
 
 use crate::support::{Site, fast, key};
 
-fn launchd() -> LaunchContext {
+pub(crate) fn launchd() -> LaunchContext {
     LaunchContext::Launchd {
         label: "com.stackly.test.login".to_owned(),
     }
@@ -34,7 +34,11 @@ fn launchd() -> LaunchContext {
 
 /// A daemon with the launch context `launch`, reading its login session
 /// from `session`.
-async fn start(site: &Site, launch: LaunchContext, session: &FakeLoginSessionInfo) -> DaemonHandle {
+pub(crate) async fn start(
+    site: &Site,
+    launch: LaunchContext,
+    session: &FakeLoginSessionInfo,
+) -> DaemonHandle {
     let log =
         LogSink::start(Box::new(io::sink()), LogSinkConfig::DAEMON).expect("the log writer starts");
     let facts = StartFacts::new(
@@ -55,14 +59,14 @@ async fn start(site: &Site, launch: LaunchContext, session: &FakeLoginSessionInf
     handle
 }
 
-async fn stop(handle: DaemonHandle) {
+pub(crate) async fn stop(handle: DaemonHandle) {
     handle
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;
 }
 
 /// Turns the startup policy of `id` to `at_login` with no daemon running.
-fn set_at_login(site: &Site, id: Uuid) {
+pub(crate) fn set_at_login(site: &Site, id: Uuid) {
     let registry = site.open_registry();
     let id = InstanceId::from_uuid(id).expect("an instance id the daemon made");
     let stored = registry

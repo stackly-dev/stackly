@@ -20,6 +20,7 @@ mod pid_reuse;
 mod reconcile;
 mod reload;
 mod restart;
+mod session_end;
 mod spool;
 mod start;
 mod status;

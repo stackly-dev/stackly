@@ -18,8 +18,7 @@ use std::time::Duration;
 use stackly_domain::{
     DesiredState, Endpoint, EndpointName, FailureCode, Instance, InstanceFilter, InstanceId,
     InstanceLifecycle, IpEndpoint, LeaseFilter, LeaseId, LifecycleEvent, Port, PortRequest,
-    ProcessIdentity, ProcessObservation, ResourceRef, StageName, StopIntent, WriteOp,
-    endpoints_conflict,
+    ProcessIdentity, ProcessObservation, ResourceRef, StageName, WriteOp, endpoints_conflict,
 };
 use stackly_platform::{
     ExitNotice, ExitStatus, InstanceLock, OutputTarget, SpawnRequest, StdinSource,
@@ -1513,7 +1512,7 @@ async fn cancel_cleanup(sup: &Supervisor, ctx: &OperationContext, id: InstanceId
         // No process will exit to remove what a render wrote.
         remove_material(sup, &actor).await;
     }
-    sup.journal_stop(id, !has_process, StopIntent::User, Vec::new())
+    sup.journal_stop(id, !has_process, sup.cancel_intent(), Vec::new())
         .await
         .map_err(failed)?;
     if has_process {

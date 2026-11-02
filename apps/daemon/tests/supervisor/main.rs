@@ -29,6 +29,7 @@ mod open_with;
 mod process;
 mod restart;
 mod same_runtime;
+mod session_end;
 mod slow_logs;
 mod stop_all;
 mod stop_restart_reload;
