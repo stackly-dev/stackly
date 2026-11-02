@@ -54,7 +54,8 @@ struct DaemonRestartClientTests {
                 == .daemonShutdown(
                     ShutdownParams(mode: .restart, expectedPlanDigest: "abc123", force: true)))
         #expect(made.key == "key-1")
-        #expect(made.timeout == .seconds(45))
+        #expect(made.timeout == .seconds(190))
+        #expect(made.timeout == SecretsClient.interactiveTimeout)
         #expect(made.timeout > ContractLimits.callTimeout)
         #expect(reply == accepted)
     }
