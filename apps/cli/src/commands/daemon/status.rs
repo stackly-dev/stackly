@@ -9,9 +9,11 @@ use stackly_platform::BackgroundAgentState;
 use stackly_protocol::daemon::{
     DaemonHealth, DaemonInfo, DaemonLaunch, LaunchContextKind, SubsystemStatus,
 };
+use stackly_protocol::restart::RestartPlanView;
 use stackly_protocol::{CONTRACT_DIGEST, Call, ProtocolVersion, Reply};
 
 use super::agent::{AgentReport, recovery_text};
+use super::plan::summary;
 use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
@@ -38,6 +40,9 @@ pub struct DaemonStatus {
     pub health: Option<DaemonHealth>,
     /// This client's side of the contract, null when no daemon answered.
     pub client: Option<ClientContract>,
+    /// The restart plan this daemon run knows (spec 0030): an open one, or
+    /// a final one that ended in the last 10 minutes. Null otherwise.
+    pub last_restart: Option<RestartPlanView>,
     /// The background agent, always read.
     pub agent: AgentReport,
 }
@@ -116,6 +121,7 @@ impl RunCommand for StatusArgs {
             .as_ref()
             .is_ok_and(|health| health.recovery.is_some());
         let status = DaemonStatus {
+            last_restart: info.restart.clone().map(|plan| *plan),
             info: Some(info),
             health: health.as_ref().ok().cloned(),
             client: Some(ClientContract {
@@ -144,6 +150,7 @@ fn no_daemon(agent: AgentReport, failure: CliFailure) -> CommandOutput<DaemonSta
             info: None,
             health: None,
             client: None,
+            last_restart: None,
             agent,
         },
         failure,
@@ -220,6 +227,9 @@ impl Render for DaemonStatus {
                 "no"
             }),
         ));
+        if let Some(plan) = &self.last_restart {
+            rows.push(("Last restart", Cell::text(&summary(plan, out))));
+        }
         rows.extend(render_agent_rows(&self.agent, info.launch.as_ref()));
         out.kv(&rows);
     }

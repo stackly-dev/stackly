@@ -469,11 +469,6 @@ impl CliFailure {
     /// `cli.restart_aborted` (spec 0030): plan `plan_id` closed `aborted`
     /// for `close_reason` (`stop_timeout`), so the old daemon kept running.
     #[must_use]
-    // provisional: F30 milestone 4 uses it; remove the expect then
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "stackly daemon restart arrives in milestone 4")
-    )]
     pub fn restart_aborted(plan_id: Uuid, close_reason: &str) -> Self {
         Self::local(
             ErrorBody::new(
@@ -489,11 +484,6 @@ impl CliFailure {
     /// `cli.restart_restore_failed` (spec 0030): the daemon restarted under
     /// plan `plan_id`, but at least one instance did not end up running.
     #[must_use]
-    // provisional: F30 milestone 4 uses it; remove the expect then
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "stackly daemon restart arrives in milestone 4")
-    )]
     pub fn restart_restore_failed(plan_id: Uuid) -> Self {
         Self::local(
             ErrorBody::new(
@@ -535,7 +525,7 @@ impl CliFailure {
     }
 
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
-    /// (`waiting_for_daemon`, or `agent_call` after a macOS call that
+    /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, or `agent_call` after a macOS call that
     /// Ctrl+C had to wait for), which changes nothing by itself. Exits 130.
     #[must_use]
     pub fn interrupted_at(state: &str) -> Self {

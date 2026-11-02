@@ -8,6 +8,7 @@
 
 pub mod agent;
 pub mod install;
+pub mod plan;
 pub mod restart;
 pub mod start;
 pub mod status;
@@ -18,12 +19,14 @@ use clap::{Args, Subcommand};
 
 use self::agent::AgentEnv;
 use self::install::{InstallResult, install};
-use self::restart::{RestartResult, restart};
+use self::plan::TerminalPrompt;
+use self::restart::{RestartOptions, RestartResult, restart};
 use self::start::{StartResult, start};
 use self::status::StatusArgs;
 use self::stop::{StopResult, stop};
 use self::wait::{DaemonProbe, Interrupt, LiveProbe};
 use super::{RunCommand, execute};
+use crate::confirm::ConfirmArgs;
 use crate::context::Context;
 use crate::output::CommandOutput;
 
@@ -43,8 +46,10 @@ pub enum DaemonCommand {
     /// Stop the daemon; instances keep running
     #[command(after_help = "Examples:\n  stackly daemon stop\n  stackly daemon stop --json")]
     Stop(StopArgs),
-    /// Stop the daemon and wait for a new one; instances keep running
-    #[command(after_help = "Examples:\n  stackly daemon restart\n  stackly daemon restart --json")]
+    /// Restart the daemon: shows the plan, then waits for the new daemon and for the instances it starts again
+    #[command(
+        after_help = "Examples:\n  stackly daemon restart\n  stackly daemon restart --yes --json\n  stackly daemon restart --no-wait-instances"
+    )]
     Restart(RestartArgs),
 }
 
@@ -73,9 +78,19 @@ pub struct StartArgs {}
 #[derive(Debug, Args)]
 pub struct StopArgs {}
 
-/// `stackly daemon restart` takes no arguments of its own.
+/// The arguments of `stackly daemon restart`.
 #[derive(Debug, Args)]
-pub struct RestartArgs {}
+pub struct RestartArgs {
+    #[command(flatten)]
+    confirm: ConfirmArgs,
+    /// Restart although an operation that cannot resume still runs
+    #[arg(long)]
+    force: bool,
+    /// Stop waiting once the new daemon answers, without following the
+    /// instances that stop and start again
+    #[arg(long)]
+    no_wait_instances: bool,
+}
 
 /// What the logic of the verbs runs against.
 pub struct Deps<'a> {
@@ -165,12 +180,17 @@ impl RunCommand for RestartArgs {
         let agent = cx.agent.clone();
         let probe = LiveProbe::new(cx.connector().clone());
         let mut interrupt = live_interrupt();
+        let options = RestartOptions {
+            force: self.force,
+            wait_instances: !self.no_wait_instances,
+        };
+        let mut prompt = TerminalPrompt::new(cx, self.confirm.approval());
         let mut deps = Deps {
             agent: &agent,
             probe: &probe,
             interrupt: &mut *interrupt,
         };
-        restart(&mut deps).await
+        restart(&mut deps, options, &mut prompt).await
     }
 }
 
