@@ -1161,20 +1161,27 @@ async fn run_attempt(
         return Err(stop);
     }
     let mut exit = exit_rx;
-    let end = tokio::select! {
-        biased;
-        seen = exit.wait_for(Option::is_some) => {
-            match seen.ok().and_then(|notice| notice.clone()) {
-                Some(notice) => AttemptEnd::Exited(notice),
-                None => AttemptEnd::Failed(SupervisorError::IdentityCaptureFailed),
+    // The Mac sleeping is not the instance being slow: a wake pushes the
+    // deadline back by the time slept (spec 0028 AC-9).
+    let mut wakes = sup.subscribe_wake();
+    let mut give_up_at = resumed_at + deadline;
+    let end = loop {
+        tokio::select! {
+            biased;
+            seen = exit.wait_for(Option::is_some) => {
+                break match seen.ok().and_then(|notice| notice.clone()) {
+                    Some(notice) => AttemptEnd::Exited(notice),
+                    None => AttemptEnd::Failed(SupervisorError::IdentityCaptureFailed),
+                };
             }
+            _ = ready.wait_for(|ready| *ready) => break AttemptEnd::Ready,
+            () = ctx.stopped() => {
+                actor.release_exit(deps);
+                return Err(ctx.check_cancel().err().unwrap_or(WorkError::Cancelled));
+            }
+            wake = wakes.next() => give_up_at += wake.slept_for,
+            () = tokio::time::sleep_until(give_up_at) => break AttemptEnd::Timeout(deadline),
         }
-        _ = ready.wait_for(|ready| *ready) => AttemptEnd::Ready,
-        () = ctx.stopped() => {
-            actor.release_exit(deps);
-            return Err(ctx.check_cancel().err().unwrap_or(WorkError::Cancelled));
-        }
-        () = tokio::time::sleep_until(resumed_at + deadline) => AttemptEnd::Timeout(deadline),
     };
     if !matches!(end, AttemptEnd::Exited(_)) {
         actor.release_exit(deps);

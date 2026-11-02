@@ -41,6 +41,9 @@
 //! - [`write_plan_guard`] writes a daemon restart plan in one guarded
 //!   commit, refused while another plan is open or when its digest changed
 //!   (spec 0030).
+//! - [`wake::Wake`] says the Mac slept: the probe loops then read readiness
+//!   and health as `waking`, probe at once, and give failures a grace
+//!   (spec 0028 AC-9).
 //! - [`SupervisorConfig`] holds every constant, shrinkable in tests.
 
 mod actor;
@@ -88,6 +91,7 @@ mod startup;
 mod status;
 mod steps;
 mod stop;
+pub mod wake;
 
 use stackly_domain::ObservationDetail;
 

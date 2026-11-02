@@ -52,7 +52,7 @@ pub(super) async fn connect<S>(
     redactor: &Redactor,
 ) -> ProbeOutcome {
     match tokio::time::timeout(limit, connecting).await {
-        Ok(Ok(_stream)) => ProbeOutcome::Ok,
+        Ok(Ok(_stream)) => ProbeOutcome::passed(),
         Ok(Err(error)) => connect_failed(target, &error, redactor),
         Err(_) => connect_timed_out(target, limit, redactor),
     }
@@ -110,7 +110,7 @@ mod tests {
 
         let outcome = run(&ip_target(port), LIMIT, &Redactor::new()).await;
 
-        assert_eq!(outcome, ProbeOutcome::Ok);
+        assert_eq!(outcome, ProbeOutcome::passed());
     }
 
     #[tokio::test]
@@ -165,7 +165,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(ok, ProbeOutcome::Ok);
+        assert_eq!(ok, ProbeOutcome::passed());
         assert_eq!(failed.reason(), &CONNECT_FAILED);
         assert_eq!(
             detail(&failed),
