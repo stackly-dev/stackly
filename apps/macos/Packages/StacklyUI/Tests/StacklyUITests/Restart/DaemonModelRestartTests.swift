@@ -46,6 +46,28 @@ struct DaemonModelRestartTests {
         #expect(model.restart.plan?.state == .handedOver)
     }
 
+    @Test func aNewConnectionInRecoveryModeEndsThePlanTheOldDaemonLeft() throws {
+        let (model, _) = Self.model()
+        model.receive(Self.connected(restart: F.plan(.handedOver, instances: F.mixedInstances)))
+        #expect(model.restart.isRestarting)
+        guard case .connected(var daemon) = Self.connected(restart: nil, at: 20) else {
+            Issue.record("the helper always connects")
+            return
+        }
+        daemon.health = try DaemonModelTests.recoveryHealth()
+        model.receive(.connected(daemon))
+        #expect(model.restart.plan == nil)
+        #expect(model.restart.isRestarting == false)
+        #expect(model.restart.banner(now: FixtureClock.now) == nil)
+    }
+
+    @Test func aNewConnectionOutsideRecoveryModeKeepsTheOpenPlan() {
+        let (model, _) = Self.model()
+        model.receive(Self.connected(restart: F.plan(.handedOver, instances: F.mixedInstances)))
+        model.receive(Self.connected(restart: nil, at: 20))
+        #expect(model.restart.plan?.state == .handedOver)
+    }
+
     @Test func aPlanEventReachesTheRestartModel() {
         let (model, _) = Self.model()
         model.receive(Self.connected(restart: nil))

@@ -307,6 +307,46 @@ struct DaemonRestartModelTests {
         #expect(model.plan?.state == .handedOver)
     }
 
+    @Test func aRestartInRecoveryModeWritesNoPlanSoNothingWaitsForOne() async {
+        let unplanned = RestartOutcome.accepted(
+            ShutdownAccepted(serverInstanceId: UUID(), mode: .restart, planId: nil))
+        let script = Script(previews: [.success(F.preview())], outcomes: [unplanned])
+        let model = script.model()
+        await model.begin()
+        await model.confirm()
+        #expect(model.confirmation == nil)
+        #expect(model.isAwaitingPlan == false)
+        #expect(model.isRestarting == false)
+        #expect(model.banner(now: FixtureClock.now) == nil)
+    }
+
+    @Test func aDaemonInRecoveryModeEndsThePlanAndTheWaitTheOldDaemonLeft() async {
+        let script = Script(previews: [.success(F.preview())], outcomes: [Self.accepted])
+        let model = script.model()
+        await model.begin()
+        await model.confirm()
+        #expect(model.isAwaitingPlan)
+        model.receive(info: Self.info(restart: nil), inRecovery: true)
+        #expect(model.isAwaitingPlan == false)
+        #expect(model.isRestarting == false)
+
+        model.receive(
+            event: Self.event(F.plan(.handedOver, instances: F.mixedInstances), sequence: 1))
+        #expect(model.isRestarting)
+        model.receive(info: Self.info(restart: nil), inRecovery: true)
+        #expect(model.plan == nil)
+        #expect(model.isRestarting == false)
+        #expect(model.banner(now: FixtureClock.now) == nil)
+    }
+
+    @Test func aHandshakeWithoutAPlanOutsideRecoveryModeKeepsTheOpenPlan() {
+        let model = Script(previews: [.success(F.preview())]).model()
+        model.receive(
+            event: Self.event(F.plan(.handedOver, instances: F.mixedInstances), sequence: 1))
+        model.receive(info: Self.info(restart: nil), inRecovery: false)
+        #expect(model.plan?.state == .handedOver)
+    }
+
     @Test func aWarningBannerGivesWayToTheDaemonBannerAndComesBackWithoutIt() {
         let model = Script(previews: [.success(F.preview())]).model()
         let plan = F.plan(.expired, instances: [], closeReason: .bootChanged)
