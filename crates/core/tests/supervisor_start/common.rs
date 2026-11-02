@@ -413,6 +413,9 @@ impl Registry for FaultyRegistry {
         open_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
         latest_restart_plan() -> Result<stackly_domain::Versioned<Option<stackly_domain::RestartPlan>>, stackly_domain::RegistryError>;
         recent_sessions(limit: u32) -> Result<stackly_domain::Versioned<Vec<stackly_domain::DaemonSession>>, stackly_domain::RegistryError>;
+        daemon_settings() -> Result<stackly_domain::Versioned<stackly_domain::DaemonSettings>, stackly_domain::RegistryError>;
+        storage_locations() -> Result<stackly_domain::Versioned<Vec<stackly_domain::StorageLocation>>, stackly_domain::RegistryError>;
+        location_usage() -> Result<stackly_domain::Versioned<Vec<(stackly_domain::StorageLocationId, u64)>>, stackly_domain::RegistryError>;
         secret_reference(reference: &SecretRef) -> Result<stackly_domain::Versioned<Option<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_references(filter: stackly_domain::SecretReferenceFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretReferenceView>>, stackly_domain::RegistryError>;
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;

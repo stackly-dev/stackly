@@ -24,9 +24,10 @@ use jiff::Timestamp;
 use uuid::Uuid;
 
 use crate::environment::Environment;
-use crate::id::{EnvironmentId, InstanceId, InvalidId, OperationId, RuntimeId};
+use crate::id::{EnvironmentId, InstanceId, InvalidId, OperationId, RuntimeId, StorageLocationId};
 use crate::instance::Instance;
 use crate::lease::Lease;
+use crate::location::{DaemonSettings, StorageLocation};
 use crate::operation::{JournalView, Operation, OperationJournal};
 use crate::process::ProcessObservation;
 use crate::provider::ProviderRevisionKey;
@@ -405,6 +406,32 @@ pub trait Registry: Send + Sync {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError>;
+
+    /// Returns the one row of daemon settings (spec 0032).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn daemon_settings(&self) -> Result<Versioned<DaemonSettings>, RegistryError>;
+
+    /// Returns every storage location: the built in ones first, in the
+    /// order data, logs, cache, then the others by creation time and ID
+    /// (spec 0032).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn storage_locations(&self) -> Result<Versioned<Vec<StorageLocation>>, RegistryError>;
+
+    /// Returns how many instances, retained ones included, each location
+    /// holds, for every location that holds at least one, ordered by ID
+    /// (spec 0032). An instance counts for its data location and for its
+    /// log location.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn location_usage(&self) -> Result<Versioned<Vec<(StorageLocationId, u64)>>, RegistryError>;
 
     /// Returns a secret reference row with every use of it.
     ///

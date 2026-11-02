@@ -12,6 +12,7 @@ mod read;
 mod restart;
 mod secret;
 mod session;
+mod settings;
 mod source;
 mod supervision;
 mod write;
@@ -25,13 +26,14 @@ use jiff::Timestamp;
 use rusqlite::{Connection, Transaction};
 use stackly_domain::{
     ArtifactRecord, AuditPage, AuditQuery, BatchError, CommitGuard, Committed,
-    ConfigRevisionRecord, DaemonSession, Environment, EnvironmentId, Guarded, IdempotencyKey,
-    Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry, JournalView, Lease,
-    LeaseFilter, Operation, OperationId, OperationJournal, OperationPage, OperationQuery,
-    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceKind,
-    ProviderSourceRecord, PruneReport, Registry, RegistryError, RestartPlan, RetentionPolicy,
-    Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter, SecretReferenceView,
-    SecretUse, SecretUser, Sha256Digest, Versioned, WriteBatch,
+    ConfigRevisionRecord, DaemonSession, DaemonSettings, Environment, EnvironmentId, Guarded,
+    IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry,
+    JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal, OperationPage,
+    OperationQuery, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
+    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError, RestartPlan,
+    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter,
+    SecretReferenceView, SecretUse, SecretUser, Sha256Digest, StorageLocation, StorageLocationId,
+    Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
@@ -321,6 +323,18 @@ impl Registry for SqliteRegistry {
 
     fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError> {
         self.read(move |tx| session::recent(tx, limit))
+    }
+
+    fn daemon_settings(&self) -> Result<Versioned<DaemonSettings>, RegistryError> {
+        self.read(|tx| settings::settings(tx))
+    }
+
+    fn storage_locations(&self) -> Result<Versioned<Vec<StorageLocation>>, RegistryError> {
+        self.read(|tx| settings::locations(tx))
+    }
+
+    fn location_usage(&self) -> Result<Versioned<Vec<(StorageLocationId, u64)>>, RegistryError> {
+        self.read(|tx| settings::usage(tx))
     }
 
     fn force_stop_history(

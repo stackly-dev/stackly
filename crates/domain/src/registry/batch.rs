@@ -7,9 +7,10 @@ use std::fmt;
 use jiff::Timestamp;
 
 use crate::environment::Environment;
-use crate::id::{InstanceId, OperationId};
+use crate::id::{InstanceId, OperationId, StorageLocationId};
 use crate::instance::Instance;
 use crate::lease::Lease;
+use crate::location::{LocationKind, SettingsPatch, StorageLocation};
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::process::ProcessObservation;
 use crate::registry::ConfigRevisionId;
@@ -352,6 +353,51 @@ pub enum WriteOp {
         /// How many of the newest rows stay.
         keep: u32,
     },
+    /// Records an instance like [`InsertInstance`](Self::InsertInstance),
+    /// but in the data and log locations the caller used when it created
+    /// the folders, not the ones the settings name now. A create uses it,
+    /// because it makes the folders before it commits (spec 0032). Fails
+    /// with `MissingReference` when a location does not exist and with
+    /// `WrongLocationKind` when one holds the other kind.
+    InsertInstanceAt {
+        /// The instance.
+        instance: Instance,
+        /// The location of its data, config, and temp folders.
+        data: StorageLocationId,
+        /// The location of its log folder.
+        logs: StorageLocationId,
+    },
+    /// Changes daemon settings (spec 0032). Fails with `RevisionConflict`
+    /// unless the settings are at `expected`. A patch that changes nothing
+    /// writes nothing and keeps the revision. Otherwise the revision rises
+    /// by 1 and `updated_at` becomes `at`.
+    UpdateDaemonSettings {
+        /// What to change.
+        patch: SettingsPatch,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+        /// When the change happens.
+        at: Timestamp,
+    },
+    /// Records a storage location. Fails with `DuplicateResource` when its
+    /// ID, or its kind and path, exist (spec 0032). Locations are never
+    /// changed or deleted afterwards.
+    InsertStorageLocation(StorageLocation),
+    /// Makes a location the default of its kind (spec 0032). Fails with
+    /// `RevisionConflict` unless the settings are at `expected`,
+    /// `MissingReference` when the location does not exist, and
+    /// `WrongLocationKind` when it holds another kind. A location that is
+    /// the default already writes nothing.
+    SetDefaultLocation {
+        /// The kind to change.
+        kind: LocationKind,
+        /// The new default.
+        id: StorageLocationId,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+        /// When the change happens.
+        at: Timestamp,
+    },
 }
 
 impl WriteOp {
@@ -416,6 +462,11 @@ impl WriteOp {
                 ResourceRef::Session(id.clone())
             }
             Self::PruneSessions { .. } => ResourceRef::Sessions,
+            Self::InsertInstanceAt { instance, .. } => ResourceRef::Instance(instance.id()),
+            Self::UpdateDaemonSettings { .. } | Self::SetDefaultLocation { .. } => {
+                ResourceRef::DaemonSettings
+            }
+            Self::InsertStorageLocation(location) => ResourceRef::StorageLocation(location.id()),
         }
     }
 
@@ -445,6 +496,7 @@ impl WriteOp {
                 Some(runtime.revision())
             }
             Self::InsertInstance(instance)
+            | Self::InsertInstanceAt { instance, .. }
             | Self::UpdateInstance { instance, .. }
             | Self::ActivateConfigRevision { instance, .. } => Some(instance.revision()),
             Self::InsertEnvironment(environment) | Self::UpdateEnvironment { environment, .. } => {
@@ -481,7 +533,10 @@ impl WriteOp {
             | Self::InsertSession(_)
             | Self::EndSession { .. }
             | Self::ReopenSession { .. }
-            | Self::PruneSessions { .. } => None,
+            | Self::PruneSessions { .. }
+            | Self::UpdateDaemonSettings { .. }
+            | Self::InsertStorageLocation(_)
+            | Self::SetDefaultLocation { .. } => None,
         }
     }
 

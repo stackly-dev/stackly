@@ -62,6 +62,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "daemon_sessions",
         sql: include_str!("../migrations/0010_daemon_sessions.sql"),
     },
+    Migration {
+        version: 11,
+        name: "settings_locations",
+        sql: include_str!("../migrations/0011_settings_locations.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -108,6 +113,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         10,
         "60be692e75571387774c265eb804faaf55173b9484371d420778f5bec6c3be7c",
+    ),
+    (
+        11,
+        "c542ea64cbcf0575bcf80f0d77eff1feeeda30accb8ac4853e701668bfcde5dd",
     ),
 ];
 
@@ -334,7 +343,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 10);
+        assert_eq!(set.latest(), 11);
     }
 
     #[test]

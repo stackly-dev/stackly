@@ -8,6 +8,7 @@ use std::fmt;
 use crate::id::{InstanceId, RuntimeId};
 use crate::instance::Instance;
 use crate::lease::Lease;
+use crate::location::{DaemonSettings, StorageLocation};
 use crate::operation::{JournalView, Operation};
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::{Committed, WriteOp};
@@ -85,6 +86,23 @@ pub trait GuardView {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn latest_session(&self) -> Result<Option<DaemonSession>, RegistryError>;
+
+    /// Returns the daemon settings, read inside the guarded commit (spec
+    /// 0032).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn daemon_settings(&self) -> Result<DaemonSettings, RegistryError>;
+
+    /// Returns every storage location, read inside the guarded commit, in
+    /// the order of [`Registry::storage_locations`](crate::Registry::storage_locations)
+    /// (spec 0032).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn storage_locations(&self) -> Result<Vec<StorageLocation>, RegistryError>;
 }
 
 /// What a guard decided after reading.

@@ -176,6 +176,7 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("logical_root", "TEXT", true, 0),
             ("relative_path", "TEXT", true, 0),
             ("managed", "INTEGER", true, 0),
+            ("location_id", "TEXT", false, 0),
         ],
     ),
     (
@@ -415,6 +416,31 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
         ],
     ),
     (
+        "storage_locations",
+        &[
+            ("id", "TEXT", true, 1),
+            ("kind", "TEXT", true, 0),
+            ("path", "TEXT", false, 0),
+            ("built_in", "INTEGER", true, 0),
+            ("created_at", "TEXT", true, 0),
+        ],
+    ),
+    (
+        "daemon_settings",
+        &[
+            ("id", "INTEGER", true, 1),
+            ("default_startup", "TEXT", true, 0),
+            ("update_channel", "TEXT", true, 0),
+            ("telemetry", "INTEGER", true, 0),
+            ("telemetry_copy_version", "INTEGER", true, 0),
+            ("data_location_id", "TEXT", true, 0),
+            ("logs_location_id", "TEXT", true, 0),
+            ("cache_location_id", "TEXT", true, 0),
+            ("revision", "INTEGER", true, 0),
+            ("updated_at", "TEXT", true, 0),
+        ],
+    ),
+    (
         "daemon_sessions",
         &[
             ("id", "TEXT", true, 1),
@@ -584,7 +610,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 29);
+    assert_eq!(tables.len(), 31);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()
