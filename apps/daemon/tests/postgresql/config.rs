@@ -12,205 +12,20 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use stackly_ipc::CallOptions;
 use stackly_protocol::instance::config::{
-    ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
-    ConfigChangeRequest, ConfigImpact, ConfigRevisionOrigin, DriftKind, GetConfigParams,
-    InstanceConfigView, KeepRevisionParams, ValidateConfigParams,
+    ChangeEndpointsReply, ConfigChangeRequest, ConfigImpact, ConfigRevisionOrigin, DriftKind,
 };
-use stackly_protocol::instance::{
-    EndpointRequest, InstanceActionAccepted, InstanceBlocker, InstanceLifecycle, InstanceSummary,
-    PortRequest, SettingsDocument,
-};
+use stackly_protocol::instance::{InstanceBlocker, InstanceLifecycle, PortRequest};
 use stackly_protocol::operation::OperationState;
-use stackly_protocol::{Call, ConfigRevisionNumber, ErrorBody, Reply};
 use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{Kind, evidence};
-use uuid::Uuid;
+
+use crate::config_calls::{Cfg, error_code, pid_of, settings_with};
 
 use crate::format::copy_tree;
 use crate::harness::{
     PG18, Site, create_instance, eventually, free_port, package_dir, stop_and_shutdown,
 };
-use crate::support::{Api, key};
-
-fn number(n: u64) -> ConfigRevisionNumber {
-    ConfigRevisionNumber::new(n).expect("a revision number")
-}
-
-fn pid_of(summary: &InstanceSummary) -> u32 {
-    summary.process.as_ref().expect("a process runs").pid
-}
-
-/// The config methods of the socket, for one test.
-struct Cfg<'a> {
-    api: &'a Api,
-}
-
-impl Cfg<'_> {
-    async fn view(&self, id: Uuid) -> InstanceConfigView {
-        match self
-            .api
-            .client
-            .call(Call::InstanceConfigGet(GetConfigParams { instance_id: id }))
-            .await
-            .expect("the config can be read")
-        {
-            Reply::InstanceConfigGet(view) => *view,
-            other => panic!("not a config reply: {other:?}"),
-        }
-    }
-
-    async fn wait_view(
-        &self,
-        id: Uuid,
-        what: &str,
-        ready: impl Fn(&InstanceConfigView) -> bool,
-    ) -> InstanceConfigView {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
-        loop {
-            let view = self.view(id).await;
-            if ready(&view) {
-                return view;
-            }
-            assert!(
-                tokio::time::Instant::now() < deadline,
-                "the config of {id} did not get {what}: {view:#?}"
-            );
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    }
-
-    async fn impact(&self, id: Uuid, base: u64, change: ConfigChangeRequest) -> ConfigImpact {
-        match self
-            .api
-            .client
-            .call(Call::InstanceConfigValidate(ValidateConfigParams {
-                instance_id: id,
-                base_revision: number(base),
-                change,
-            }))
-            .await
-            .expect("the validation answers")
-        {
-            Reply::InstanceConfigValidate(verdict) => {
-                assert!(verdict.valid, "{verdict:#?}");
-                verdict.impact
-            }
-            other => panic!("not a validate reply: {other:?}"),
-        }
-    }
-
-    async fn apply(
-        &self,
-        id: Uuid,
-        base: u64,
-        change: ConfigChangeRequest,
-    ) -> Result<ConfigApplyAccepted, Box<ErrorBody>> {
-        match self
-            .api
-            .client
-            .call_detailed(
-                Call::InstanceConfigApply(ApplyConfigParams {
-                    instance_id: id,
-                    base_revision: number(base),
-                    change,
-                    expected_revision: None,
-                }),
-                CallOptions::default().with_idempotency_key(key()),
-            )
-            .await?
-        {
-            Reply::InstanceConfigApply(accepted) => Ok(*accepted),
-            other => panic!("not an apply reply: {other:?}"),
-        }
-    }
-
-    /// Applies `change` and returns the operation once it ended, whatever
-    /// its state.
-    async fn apply_final(
-        &self,
-        id: Uuid,
-        base: u64,
-        change: ConfigChangeRequest,
-    ) -> stackly_protocol::operation::OperationDetail {
-        let accepted = self
-            .apply(id, base, change)
-            .await
-            .expect("the apply is accepted")
-            .accepted
-            .expect("a change begins an operation");
-        self.api.wait_final(accepted.operation.id).await
-    }
-
-    async fn apply_done(&self, id: Uuid, base: u64, change: ConfigChangeRequest) {
-        let detail = self.apply_final(id, base, change).await;
-        assert_eq!(
-            detail.operation.state,
-            OperationState::Succeeded,
-            "{detail:?}"
-        );
-    }
-
-    async fn keep(&self, id: Uuid) -> Result<InstanceActionAccepted, Box<ErrorBody>> {
-        match self
-            .api
-            .client
-            .call_detailed(
-                Call::InstanceConfigKeepRevision(KeepRevisionParams { instance_id: id }),
-                CallOptions::default().with_idempotency_key(key()),
-            )
-            .await?
-        {
-            Reply::InstanceConfigKeepRevision(accepted) => Ok(*accepted),
-            other => panic!("not a keep reply: {other:?}"),
-        }
-    }
-
-    async fn change_endpoints(
-        &self,
-        id: Uuid,
-        base: u64,
-        port: PortRequest,
-    ) -> Result<ChangeEndpointsReply, Box<ErrorBody>> {
-        match self
-            .api
-            .client
-            .call_detailed(
-                Call::InstanceChangeEndpoints(ChangeEndpointsParams {
-                    instance_id: id,
-                    base_revision: number(base),
-                    endpoints: vec![EndpointRequest {
-                        name: "client".to_owned(),
-                        port,
-                    }],
-                    dry_run: false,
-                }),
-                CallOptions::default().with_idempotency_key(key()),
-            )
-            .await?
-        {
-            Reply::InstanceChangeEndpoints(reply) => Ok(*reply),
-            other => panic!("not a change endpoints reply: {other:?}"),
-        }
-    }
-}
-
-/// The settings of the active revision with `edits` laid over them.
-fn settings_with(view: &InstanceConfigView, edits: Value) -> ConfigChangeRequest {
-    let mut map = view.revision.values.as_map().clone();
-    for (field, value) in edits.as_object().expect("edits are an object") {
-        map.insert(field.clone(), value.clone());
-    }
-    ConfigChangeRequest::Settings(SettingsDocument::new(map))
-}
-
-fn error_code(result: Result<impl std::fmt::Debug, Box<ErrorBody>>) -> String {
-    result
-        .expect_err("the request is refused")
-        .code()
-        .to_owned()
-}
 
 // covers: AC-4, AC-7
 #[tokio::test(flavor = "multi_thread")]
@@ -423,7 +238,7 @@ async fn postgresql_18_changes_a_fixed_port_with_a_restart_and_refuses_a_port_an
     let outside = TcpListener::bind("127.0.0.1:0").expect("a free port to hold");
     let held = outside.local_addr().expect("its address").port();
     let refused = cfg
-        .change_endpoints(made.id, 1, PortRequest::Fixed(held))
+        .change_endpoints(made.id, 1, "client", PortRequest::Fixed(held))
         .await
         .expect_err("a port an outside process holds is refused");
     assert!(
@@ -436,7 +251,7 @@ async fn postgresql_18_changes_a_fixed_port_with_a_restart_and_refuses_a_port_an
 
     let free = free_port();
     let ChangeEndpointsReply::Applied(applied) = cfg
-        .change_endpoints(made.id, 1, PortRequest::Fixed(free))
+        .change_endpoints(made.id, 1, "client", PortRequest::Fixed(free))
         .await
         .expect("a free port is accepted")
     else {

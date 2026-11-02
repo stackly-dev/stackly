@@ -14,6 +14,8 @@ mod common;
 mod compat;
 #[path = "postgresql/config.rs"]
 mod config;
+#[path = "supervisor/config_calls.rs"]
+mod config_calls;
 #[path = "postgresql/create.rs"]
 mod create;
 #[path = "postgresql/create_cli.rs"]
