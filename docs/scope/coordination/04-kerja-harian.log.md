@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/04-kerja-harian.md` (fitur 28 sampai 32 dan 70, atas permintaan user "mulai dari no 28")
 - **Hash awal:** `36b33e6e` · **Hash awal wave aktif:** `36b33e6e`
 - **Wave aktif:** `1`, mulai `2026-11-02`
-- **Diperbarui:** `2026-11-02 17:50`
+- **Diperbarui:** `2026-11-02 18:10`
 
 ## Sub sesi wave `1`
 
@@ -86,22 +86,26 @@
 | `2026-11-02` | `cargo xtask evidence check` di `main` gagal dengan 3 pelanggaran spec 0002 di `apps/daemon/tests/native_launchd.rs` sejak merge F30 milestone 3 (`30b51402`), karena gerbang lead tidak menjalankan `evidence check`. Kesalahan lead: gerbang yang menyentuh test kini selalu menjalankan `cargo xtask evidence check`. Perbaikan diberikan ke `dev-f30-fix-2`. | `lead` |
 | `2026-11-02` | AC-14 F28 (NFR-003) run kedua dengan client gagal tipis (1,02 sampai 1,07 persen CPU dari batas 1,0) dengan variasi dua kali lipat antar run di Mac yang sibuk. Lead tidak mengubah anggaran (teks AC milik user). Debugger `dbg-f28-nfr003` (opus · xhigh) memprofil saat Mac relatif sepi dan memperbaiki pemborosan bila ada; bila hanya derau, bukti angkanya diajukan ke user. | `lead` |
 | `2026-11-02` | AC-14 F28 (NFR-003) diukur pada `stacklyd` build release, yang memang dikirim; teks AC tidak menyebut profil build, jadi teks AC tidak berubah dan hanya cara ukur di `verify.md` dan doc harness yang menyebut `--release`. Dasar: debugger menemukan run 2 gagal hanya karena harness mengukur build debug tanpa optimasi (1,07 sampai 1,14 persen), sedangkan build release lulus tiga kali (0,516 sampai 0,529 persen); dua record FAIL lama (`01a19b45-…`, `01a19b55-…`) diganti record release. Diputuskan lead atas delegasi user dan disampaikan ke user, yang boleh membatalkannya. Fix `8122ef3f` di-merge (`06d09cc7`); usulan satu daftar registry per tick dan cadence spool pump di build debug dicatat sebagai Follow-up spec 0028 lewat `/sync`. | `lead` |
+| `2026-11-02` | User menyetujui delapan perubahan teks AC (spec 0030 AC-3, AC-4, AC-10, AC-11, AC-15; spec 0031 AC-10; spec 0032 AC-8, AC-25). Branch `claude/dev-f29-m1-6a7d0b` di-merge (`00c23554`), lalu blok scope usulan `arc-f31-update` untuk fitur 31 dan 32 ditempel. | `user` |
+| `2026-11-02` | User memilih melewati semua langkah manual GUI di `04-kerja-harian.manual.md` (F70 milestone 2 dan 3, F30 milestone 4 dan bagian W, F28 milestone 3, F29 milestone 3). Kotak dicentang dengan catatan "manual steps skipped by you", seperti di Scope 02 dan 03. Langkah `[ ]` di `verify.md` tetap terbuka dan ditandai oleh checker verify penuh. | `user` |
+| `2026-11-02` | User memilih mencatat sesi GUI F28 dengan sleep sungguhan sebagai `BLOCKED` (owner user). | `user` |
+| `2026-11-02` | User mengizinkan run jaringan mati F29 langkah 19. Lead tidak menjalankannya: mematikan Wi-Fi dan Ethernet mengubah setelan sistem (di luar wewenang sesi Claude) dan memutus semua sesi Claude, termasuk Remote Control user. Mengikuti preseden fitur 26 dan spec 0021, run itu dipindah ke langkah manual milik user; AC-21 tetap dibuktikan oleh harness offline di dalam proses (milestone 2). Kotak milestone 4 F29 dicentang dengan catatan itu. | `lead` |
+| `2026-11-02` | Disk dibebaskan sebelum wave berikutnya: `target/debug` worktree `dev-f30-m1` (idle) dihapus, `deps` dan `build` yang lebih tua dari 120 menit di checkout utama dan worktree `dev-f28-m2-s4` dihapus; disk 12 GiB ke 50 GiB. | `lead` |
 | `2026-11-02` | Graph dokumen (scope, log, spec) dikumpulkan sekali di batas wave, mengikuti preseden Scope 03; commit merge kode tetap menjalankan `graphify update .` untuk file kodenya. | `lead` |
 | `2026-11-02` | Sesi lead berjalan di effort `medium`; sub sesi baru dimulai setelah user menaikkannya ke `xhigh` (aturan SKILL.md langkah 1). User menaikkannya ke `xhigh`, lalu `dev-f30-m1`, `dev-f29-m1`, `dev-f28-m2-s4`, dan `dev-f70-m2` dimulai; `arc-f31-update` menunggu slot. Delapan sesi peer lama (architect dan develop F26 sampai F33) idle dan di luar koordinasi ini, jadi tidak dihitung. Tiap sesi memakai `target/` sendiri dengan `CARGO_INCREMENTAL=0` dan berhenti bila disk di bawah 20 GiB. | `lead` |
 
 
 ## Blocker terbuka
 
-- F70 milestone 2: 7 langkah UI/manual `verify.md` menunggu user; digabung dengan langkah aplikasi asli milestone 3 dalam satu permintaan ke user.
-- F28 milestone 2: langkah verify `--watch` (AC-12) gagal; perbaikan CLI menunggu sesi bebas (`dev-f28-m2-fix`), lalu verify ulang langkah itu saja.
-- F28 milestone 5: AC-14 kini PASS di build release; satu langkah tersisa, sesi GUI dengan sleep sungguhan (AC-9, AC-13, AC-7, AC-4, AC-15), menunggu user.
-- F29 milestone 4: langkah 19 (run jaringan mati GUI dan CLI, AC-21) menunggu persetujuan user; semua langkah lain PASS.
 - Disk: turun ke 2,7 GiB pada 10:59; lead menghapus `target/` worktree idle F28 dan F29, `target/debug/incremental`, `target/testkit-bin` (12 GiB), dan artefak `deps` lebih tua dari 90 menit; sesi memakai `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only` dan berhenti di 8 GiB.
 
 - F31 langkah 1 dan 10 (spike asid dan logout): sleep dan dua logout oleh user.
-- F32 `Build it`: butuh fitur 31 sampai `instance.stop_all` dan `startup`, plus `arc-f31-update`.
+- F32 `Build it`: butuh fitur 31 sampai langkah 9 spec 0031 (`startup`, `instance.stop_all`, `stop_all::select`, `instance.preview_stop_all`).
+- Langkah manual milik user (tidak memblokir centang): sesi sleep sungguhan F28, run jaringan mati F29 langkah 19, semua langkah di `04-kerja-harian.manual.md`.
 
 ## Dicentang pada wave ini
+
+- F28 · milestone 3 GUI dan milestone 5 Evidence · F29 · milestone 3 GUI dan milestone 4 provider nyata · F30 · milestone 4 CLI and GUI dan milestone 5 Evidence · F70 · milestone 2 GUI dan milestone 3 Evidence · laporan checker milestone dan keputusan user (langkah manual dilewati, sleep `BLOCKED`, jaringan mati ke langkah manual) · centang lead `<commit ini>`
 
 - F29 · milestone 2 Contract, daemon, CLI, and fixture proof · laporan `dev-f29-m2` dan `chk-f29-m2` · merge `35bd56be`, centang `b6143968` · `999f550f`
 
