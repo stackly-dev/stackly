@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use stackly_domain::{
     EnvironmentId, ExactVersion, InstanceId, InstancePathEntry, InstancePathKind, LogicalRoot,
-    ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, Target,
+    ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, StorageLocationId,
+    Target,
 };
 
 use crate::process::OutputStream;
@@ -355,10 +356,18 @@ impl DirectoryLayout {
 /// | `logs` | logs | `instances/<id>` |
 /// | `run` | runtime | `i/<short key>` |
 ///
-/// It needs no roots: [`RootSet::resolve`] of each entry equals the
-/// matching field of [`DirectoryLayout::instance_paths`].
+/// Every entry but `run` names the storage location that holds it: `data`
+/// for the five data kinds and `logs` for the log folder (spec 0032). The
+/// relative paths are the same in every location. For the built in
+/// locations, [`RootSet::resolve`] of each entry equals the matching field
+/// of [`DirectoryLayout::instance_paths`]; a custom location resolves
+/// through the location set (step 3 of spec 0032).
 #[must_use]
-pub fn instance_path_entries(id: InstanceId) -> [InstancePathEntry; 7] {
+pub fn instance_path_entries(
+    id: InstanceId,
+    data: StorageLocationId,
+    logs: StorageLocationId,
+) -> [InstancePathEntry; 7] {
     let instance = format!("{INSTANCES_DIR}/{id}");
     let inside = |dir: &str| format!("{instance}/{dir}");
     InstancePathKind::ALL.map(|kind| {
@@ -378,7 +387,12 @@ pub fn instance_path_entries(id: InstanceId) -> [InstancePathEntry; 7] {
         };
         let path = RelativePath::new(path)
             .expect("an instance path joins fixed folder names, an ID, and a short key");
-        InstancePathEntry::new(kind, root, path)
+        let entry = InstancePathEntry::new(kind, root, path);
+        match root {
+            LogicalRoot::Data => entry.in_location(data),
+            LogicalRoot::Logs => entry.in_location(logs),
+            LogicalRoot::Runtime => entry,
+        }
     })
 }
 
@@ -410,6 +424,8 @@ pub struct InstancePaths {
 
 #[cfg(test)]
 mod tests {
+    use stackly_domain::LocationKind;
+
     use super::*;
 
     const ID: &str = "01928c3e-6f1a-7b2c-8d4e-5f60718293a4";
@@ -426,6 +442,14 @@ mod tests {
                 base.join("r"),
             )
             .unwrap(),
+        )
+    }
+
+    fn built_in_entries(id: InstanceId) -> [InstancePathEntry; 7] {
+        instance_path_entries(
+            id,
+            LocationKind::Data.built_in_id(),
+            LocationKind::Logs.built_in_id(),
         )
     }
 
@@ -472,7 +496,7 @@ mod tests {
         for _ in 0..1000 {
             let id = InstanceId::generate();
             let paths = layout.instance_paths(id);
-            let entries = instance_path_entries(id);
+            let entries = built_in_entries(id);
             let resolved = |kind: InstancePathKind| {
                 let entry = entries.iter().find(|entry| entry.kind() == kind).unwrap();
                 layout.roots().resolve(entry.root(), entry.path())
@@ -494,9 +518,33 @@ mod tests {
     }
 
     #[test]
+    fn data_kinds_name_the_data_location_the_logs_kind_the_log_location_and_run_none() {
+        let id: InstanceId = ID.parse().unwrap();
+        let data = StorageLocationId::generate();
+        let logs = StorageLocationId::generate();
+        let locations: Vec<_> = instance_path_entries(id, data, logs)
+            .iter()
+            .map(|entry| (entry.kind(), entry.location()))
+            .collect();
+
+        assert_eq!(
+            locations,
+            [
+                (InstancePathKind::Root, Some(data)),
+                (InstancePathKind::Data, Some(data)),
+                (InstancePathKind::Config, Some(data)),
+                (InstancePathKind::ConfigHistory, Some(data)),
+                (InstancePathKind::Temp, Some(data)),
+                (InstancePathKind::Logs, Some(logs)),
+                (InstancePathKind::Run, None),
+            ]
+        );
+    }
+
+    #[test]
     fn instance_path_entries_of_one_id_are_the_documented_table() {
         let id: InstanceId = ID.parse().unwrap();
-        let entries: Vec<_> = instance_path_entries(id)
+        let entries: Vec<_> = built_in_entries(id)
             .iter()
             .map(|entry| {
                 format!(

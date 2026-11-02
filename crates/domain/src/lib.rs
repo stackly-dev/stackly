@@ -26,6 +26,7 @@ mod error;
 mod id;
 mod instance;
 mod lease;
+mod location;
 mod manifest;
 mod metrics;
 mod observation;
@@ -58,7 +59,7 @@ pub use error::{
 };
 pub use id::{
     BackupId, EnvironmentId, InstanceId, InvalidId, LeaseId, OperationId, ProviderSourceId,
-    RestartPlanId, RuntimeId, ShortKey,
+    RestartPlanId, RuntimeId, ShortKey, StorageLocationId,
 };
 pub use instance::{
     ApplyGate, DesiredState, ExitKind, Instance, InstanceLifecycle, LifecycleEvent,
@@ -67,6 +68,10 @@ pub use instance::{
 pub use lease::{
     Lease, LeaseHolder, LeaseState, StopDecision, StopRequest, StoredLease, evaluate_stop,
     should_autostart,
+};
+pub use location::{
+    BUILT_IN_LOCATION_IDS, DaemonSettings, LOCATION_PATH_MAX, LocationKind, LocationRule,
+    SettingsPatch, StorageLocation, TELEMETRY_COPY_VERSION, UpdateChannel,
 };
 pub use manifest::{
     INSTANCE_MANIFEST_SCHEMA, InstallKind, InstanceManifest, ManifestData, ManifestRuntime,

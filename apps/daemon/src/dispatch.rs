@@ -52,6 +52,9 @@ use stackly_protocol::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
+use stackly_protocol::settings::{
+    DaemonSettingsView, LocationList, SetLocationParams, StorageLocationView, UpdateSettingsParams,
+};
 use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
@@ -61,6 +64,7 @@ use crate::ipc::operation::TestStartingMethod;
 use crate::ipc::restart;
 use crate::ipc::runtime;
 use crate::ipc::secret;
+use crate::ipc::settings;
 use crate::ipc::stop_all;
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
@@ -563,6 +567,46 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, CapacityReport> {
         let _ = context;
         storage::get_capacity(core)
+    }
+
+    /// `settings.get` (spec 0032).
+    fn get_settings<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, Box<DaemonSettingsView>> {
+        let _ = context;
+        settings::get(core)
+    }
+
+    /// `settings.update` (spec 0032).
+    fn update_settings<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: UpdateSettingsParams,
+    ) -> HandlerFuture<'a, Box<DaemonSettingsView>> {
+        settings::update(core, context, params)
+    }
+
+    /// `storage.list_locations` (spec 0032).
+    fn list_locations<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, LocationList> {
+        let _ = context;
+        settings::list_locations(core)
+    }
+
+    /// `storage.set_location` (spec 0032).
+    fn set_location<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: SetLocationParams,
+    ) -> HandlerFuture<'a, Box<StorageLocationView>> {
+        settings::set_location(core, context, params)
     }
 
     /// `runtime.install`.

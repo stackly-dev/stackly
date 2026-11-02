@@ -818,6 +818,25 @@
       "summary": "the short key of the new instance ID is taken"
     },
     {
+      "code": "instance.stop_all_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the instances Stop All would stop are not the ones the client confirmed, so nothing was stopped (spec 0032)"
+    },
+    {
+      "code": "instance.storage_location_missing",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [
+        "kind",
+        "path"
+      ],
+      "items": null,
+      "summary": "the folder of the data or log location this instance was created in does not exist (spec 0032)"
+    },
+    {
       "code": "instance.storage_unsupported",
       "category": "unsupported",
       "retryable": false,
@@ -2039,6 +2058,17 @@
       ],
       "items": null,
       "summary": "the space left on the volume that holds the data folder cannot be read"
+    },
+    {
+      "code": "storage.location_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "rule",
+        "path"
+      ],
+      "items": null,
+      "summary": "the folder cannot be a storage location; rule names the first rule it broke (spec 0032)"
     },
     {
       "code": "supervisor.auto_port_unavailable",

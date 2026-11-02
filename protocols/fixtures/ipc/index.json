@@ -1847,6 +1847,90 @@
       "file": "frame-response-instance-stop-all-partial.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-settings-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-settings-update.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-storage-list-locations.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-storage-set-location.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-storage-set-location-built-in.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-stop-all-expected.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-settings-get.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-settings-get-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-settings-update.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-storage-list-locations.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-storage-set-location.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-settings-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-storage-location-invalid.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-stop-all-changed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-storage-location-missing.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-settings-update-empty-patch.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
     }
   ]
 }

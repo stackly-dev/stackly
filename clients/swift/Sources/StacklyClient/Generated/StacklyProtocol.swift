@@ -55,6 +55,10 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case setInstanceStartup = "set_instance_startup"
 	/// Stop every instance that is wanted or runs (spec 0031).
 	case stopAllInstances = "stop_all_instances"
+	/// Change daemon settings (spec 0032).
+	case updateDaemonSettings = "update_daemon_settings"
+	/// Point the default location of a kind at another folder (spec 0032).
+	case setStorageLocation = "set_storage_location"
 	/// Write a new config revision and make it take effect (spec 0029).
 	case applyConfig = "apply_config"
 	/// Change the ports of an instance's endpoints (spec 0029).
@@ -2390,6 +2394,16 @@ public struct RuntimeSummary: Codable, Sendable, Equatable {
 	}
 }
 
+/// When an instance starts on its own. Open.
+public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
+	/// Only when the user starts it.
+	case manual
+	/// When the user logs in.
+	case atLogin = "at_login"
+	/// A policy this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
 /// Reply of `instance.get_create_form`.
 public struct CreateForm: Codable, Sendable, Equatable {
 	/// The provider the form was built from.
@@ -2398,9 +2412,18 @@ public struct CreateForm: Codable, Sendable, Equatable {
 	public let runtime: RuntimeSummary
 	/// The name the form starts with; absent when every candidate is taken.
 	public let suggestedName: String?
-	/// Where the data lives, relative to the data root:
+	/// Where the data lives, relative to the data location:
 	/// `instances/<new instance id>/data`.
 	public let dataPath: String
+	/// The startup policy the Start at login toggle begins with: the daemon
+	/// setting `defaultStartup` (spec 0032).
+	public let startupDefault: StartupPolicyKind
+	/// The folder the data of the new instance goes in: the default data
+	/// location, resolved (spec 0032).
+	public let dataLocation: String
+	/// The folder the logs of the new instance go in: the default log
+	/// location, resolved (spec 0032).
+	public let logsLocation: String
 	/// The endpoints of the package: purpose `client`, `admin`,
 	/// `monitoring`, then name.
 	public let endpoints: [CreateEndpoint]
@@ -2409,11 +2432,14 @@ public struct CreateForm: Codable, Sendable, Equatable {
 	/// The capabilities of the package, in the order of spec 0017.
 	public let capabilities: [CapabilityStatus]
 
-	public init(provider: CreateProvider, runtime: RuntimeSummary, suggestedName: String?, dataPath: String, endpoints: [CreateEndpoint], fields: [FormField], capabilities: [CapabilityStatus]) {
+	public init(provider: CreateProvider, runtime: RuntimeSummary, suggestedName: String?, dataPath: String, startupDefault: StartupPolicyKind, dataLocation: String, logsLocation: String, endpoints: [CreateEndpoint], fields: [FormField], capabilities: [CapabilityStatus]) {
 		self.provider = provider
 		self.runtime = runtime
 		self.suggestedName = suggestedName
 		self.dataPath = dataPath
+		self.startupDefault = startupDefault
+		self.dataLocation = dataLocation
+		self.logsLocation = logsLocation
 		self.endpoints = endpoints
 		self.fields = fields
 		self.capabilities = capabilities
@@ -2521,16 +2547,6 @@ public struct SecretFieldInput: Codable, Sendable, Equatable {
 	}
 }
 
-/// When an instance starts on its own. Open.
-public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
-	/// Only when the user starts it.
-	case manual
-	/// When the user logs in.
-	case atLogin = "at_login"
-	/// A policy this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
 /// Params of `instance.create`.
 public struct CreateInstanceParams: Codable, Sendable, Equatable {
 	/// The unique instance name.
@@ -2593,6 +2609,8 @@ public enum PreflightCheckKind: String, Codable, Sendable, Equatable {
 	case settings
 	/// The data folder.
 	case data
+	/// The default data and log locations (spec 0032).
+	case storageLocation = "storage_location"
 	/// The free disk space.
 	case disk
 	/// One secret field.
@@ -3233,6 +3251,118 @@ public struct DaemonReconciling: Codable, Sendable, Equatable {
 	}
 }
 
+/// Which update channel Stackly follows once it can update itself. Open.
+public enum UpdateChannel: String, Codable, Sendable, Equatable {
+	/// Releases that passed every check.
+	case stable
+	/// Earlier builds.
+	case beta
+	/// A channel this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What a storage location holds. Open.
+public enum LocationKind: String, Codable, Sendable, Equatable {
+	/// The data folders of new instances.
+	case data
+	/// The log folders of new instances.
+	case logs
+	/// The downloads of runtimes.
+	case cache
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One storage location as a client shows it.
+public struct StorageLocationView: Codable, Sendable, Equatable {
+	/// The location.
+	public let id: UUID
+	/// What it holds.
+	public let kind: LocationKind
+	/// The resolved path, never empty.
+	public let path: String
+	/// Whether it is the location that comes with Stackly.
+	public let builtIn: Bool
+	/// Whether new instances, or new downloads, use it now.
+	public let isDefault: Bool
+	/// How many instances use it; 0 for the cache.
+	public let instanceCount: UInt64
+	/// Whether the folder exists now.
+	public let reachable: Bool
+
+	public init(id: UUID, kind: LocationKind, path: String, builtIn: Bool, isDefault: Bool, instanceCount: UInt64, reachable: Bool) {
+		self.id = id
+		self.kind = kind
+		self.path = path
+		self.builtIn = builtIn
+		self.isDefault = isDefault
+		self.instanceCount = instanceCount
+		self.reachable = reachable
+	}
+}
+
+/// The default location of each kind.
+public struct DefaultLocations: Codable, Sendable, Equatable {
+	/// Where the data of new instances goes.
+	public let data: StorageLocationView
+	/// Where the logs of new instances go.
+	public let logs: StorageLocationView
+	/// Where new downloads go.
+	public let cache: StorageLocationView
+
+	public init(data: StorageLocationView, logs: StorageLocationView, cache: StorageLocationView) {
+		self.data = data
+		self.logs = logs
+		self.cache = cache
+	}
+}
+
+/// How much a store keeps.
+public struct LogRetention: Codable, Sendable, Equatable {
+	/// The segment files one stream keeps.
+	public let segmentsPerStream: UInt64
+	/// The size at which a segment is closed.
+	public let segmentMaxBytes: UInt64
+
+	public init(segmentsPerStream: UInt64, segmentMaxBytes: UInt64) {
+		self.segmentsPerStream = segmentsPerStream
+		self.segmentMaxBytes = segmentMaxBytes
+	}
+}
+
+/// Reply of `settings.get`, and of `settings.update` once it ended.
+public struct DaemonSettingsView: Codable, Sendable, Equatable {
+	/// Rises with every change; `settings.update` and `storage.set_location`
+	/// take it back as `expectedRevision`.
+	public let revision: UInt64
+	/// The startup policy of an instance created without one.
+	public let defaultStartup: StartupPolicyKind
+	/// The update channel.
+	public let updateChannel: UpdateChannel
+	/// Whether the person agreed to share usage statistics. Nothing is sent
+	/// whatever the value.
+	public let telemetry: Bool
+	/// The version of the text the person agreed to.
+	public let telemetryCopyVersion: UInt64
+	/// The default locations.
+	public let locations: DefaultLocations
+	/// What the instance logs keep, from the daemon's constants.
+	public let logRetention: LogRetention
+	/// When a setting last changed.
+	public let updatedAt: Date
+
+	public init(revision: UInt64, defaultStartup: StartupPolicyKind, updateChannel: UpdateChannel, telemetry: Bool, telemetryCopyVersion: UInt64, locations: DefaultLocations, logRetention: LogRetention, updatedAt: Date) {
+		self.revision = revision
+		self.defaultStartup = defaultStartup
+		self.updateChannel = updateChannel
+		self.telemetry = telemetry
+		self.telemetryCopyVersion = telemetryCopyVersion
+		self.locations = locations
+		self.logRetention = logRetention
+		self.updatedAt = updatedAt
+	}
+}
+
 /// The size of a data folder.
 public struct DataUsage: Codable, Sendable, Equatable {
 	/// The allocated bytes (blocks times 512) of every entry counted.
@@ -3699,6 +3829,10 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// one of its instances (spec 0030). A daemon event: no resource, no
 	/// revision.
 	case daemonRestartPlan(RestartPlanView)
+	/// The daemon settings or a default location changed (spec 0032). A
+	/// daemon event: no resource, no revision; clients read `settings.get`
+	/// again.
+	case settingsChanged(SettingsChanged)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
@@ -3711,7 +3845,8 @@ public enum EventKind: Codable, Sendable, Equatable {
 			instanceRemoved = "instance.removed",
 			daemonReconciling = "daemon.reconciling",
 			runtimeStateChanged = "runtime.state_changed",
-			daemonRestartPlan = "daemon.restart_plan"
+			daemonRestartPlan = "daemon.restart_plan",
+			settingsChanged = "settings.changed"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -3775,6 +3910,11 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .daemonRestartPlan(content)
 					return
 				}
+			case .settingsChanged:
+				if let content = try? container.decode(SettingsChanged.self, forKey: .content) {
+					self = .settingsChanged(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -3814,6 +3954,9 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(CodingKeys.runtimeStateChanged, forKey: .type)
 		case .daemonRestartPlan(let content):
 			try container.encode(CodingKeys.daemonRestartPlan, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .settingsChanged(let content):
+			try container.encode(CodingKeys.settingsChanged, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -5360,6 +5503,17 @@ public struct ListSecretsReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Reply of `storage.list_locations`: every location the registry knows,
+/// built in ones first, then by creation.
+public struct LocationList: Codable, Sendable, Equatable {
+	/// The locations.
+	public let items: [StorageLocationView]
+
+	public init(items: [StorageLocationView]) {
+		self.items = items
+	}
+}
+
 /// A position in one instance's log store.
 public struct LogCursor: Codable, Sendable, Equatable {
 	/// The store the `seq` belongs to.
@@ -5608,19 +5762,6 @@ public struct LogLineEntry: Codable, Sendable, Equatable {
 		self.partial = partial
 		self.continued = continued
 		self.step = step
-	}
-}
-
-/// How much a store keeps.
-public struct LogRetention: Codable, Sendable, Equatable {
-	/// The segment files one stream keeps.
-	public let segmentsPerStream: UInt64
-	/// The size at which a segment is closed.
-	public let segmentMaxBytes: UInt64
-
-	public init(segmentsPerStream: UInt64, segmentMaxBytes: UInt64) {
-		self.segmentsPerStream = segmentsPerStream
-		self.segmentMaxBytes = segmentMaxBytes
 	}
 }
 
@@ -6500,6 +6641,15 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceList(ListInstancesParams)
 	/// The space left on the volume that holds the data root.
 	case storageGetCapacity
+	/// The daemon settings (spec 0032).
+	case settingsGet
+	/// Changes daemon settings (spec 0032).
+	case settingsUpdate(UpdateSettingsParams)
+	/// Every storage location and which one is the default (spec 0032).
+	case storageListLocations
+	/// Points the default location of a kind at a folder, or back at the
+	/// built in one (spec 0032).
+	case storageSetLocation(SetLocationParams)
 	/// Resolves a selector and starts the operation that installs the
 	/// artifact, or answers that it is installed already.
 	case runtimeInstall(InstallRuntimeParams)
@@ -6586,6 +6736,10 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
 			storageGetCapacity = "storage.get_capacity",
+			settingsGet = "settings.get",
+			settingsUpdate = "settings.update",
+			storageListLocations = "storage.list_locations",
+			storageSetLocation = "storage.set_location",
 			runtimeInstall = "runtime.install",
 			runtimeResolve = "runtime.resolve",
 			runtimeList = "runtime.list",
@@ -6755,6 +6909,22 @@ public enum Call: Codable, Sendable, Equatable {
 			case .storageGetCapacity:
 				self = .storageGetCapacity
 				return
+			case .settingsGet:
+				self = .settingsGet
+				return
+			case .settingsUpdate:
+				if let content = try? container.decode(UpdateSettingsParams.self, forKey: .content) {
+					self = .settingsUpdate(content)
+					return
+				}
+			case .storageListLocations:
+				self = .storageListLocations
+				return
+			case .storageSetLocation:
+				if let content = try? container.decode(SetLocationParams.self, forKey: .content) {
+					self = .storageSetLocation(content)
+					return
+				}
 			case .runtimeInstall:
 				if let content = try? container.decode(InstallRuntimeParams.self, forKey: .content) {
 					self = .runtimeInstall(content)
@@ -6959,6 +7129,16 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .storageGetCapacity:
 			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
+		case .settingsGet:
+			try container.encode(CodingKeys.settingsGet, forKey: .type)
+		case .settingsUpdate(let content):
+			try container.encode(CodingKeys.settingsUpdate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .storageListLocations:
+			try container.encode(CodingKeys.storageListLocations, forKey: .type)
+		case .storageSetLocation(let content):
+			try container.encode(CodingKeys.storageSetLocation, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .runtimeInstall(let content):
 			try container.encode(CodingKeys.runtimeInstall, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -7113,6 +7293,14 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceList(InstancePage)
 	/// The space left, read now.
 	case storageGetCapacity(CapacityReport)
+	/// The daemon settings.
+	case settingsGet(DaemonSettingsView)
+	/// The settings after the change, or as they were.
+	case settingsUpdate(DaemonSettingsView)
+	/// The storage locations.
+	case storageListLocations(LocationList)
+	/// The default location of the kind after the change.
+	case storageSetLocation(StorageLocationView)
 	/// The artifact the selector resolved to, and what happened to it.
 	case runtimeInstall(InstallRuntimeReply)
 	/// The artifact the selector resolved to.
@@ -7193,6 +7381,10 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceGet = "instance.get",
 			instanceList = "instance.list",
 			storageGetCapacity = "storage.get_capacity",
+			settingsGet = "settings.get",
+			settingsUpdate = "settings.update",
+			storageListLocations = "storage.list_locations",
+			storageSetLocation = "storage.set_location",
 			runtimeInstall = "runtime.install",
 			runtimeResolve = "runtime.resolve",
 			runtimeList = "runtime.list",
@@ -7372,6 +7564,26 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .storageGetCapacity:
 				if let content = try? container.decode(CapacityReport.self, forKey: .content) {
 					self = .storageGetCapacity(content)
+					return
+				}
+			case .settingsGet:
+				if let content = try? container.decode(DaemonSettingsView.self, forKey: .content) {
+					self = .settingsGet(content)
+					return
+				}
+			case .settingsUpdate:
+				if let content = try? container.decode(DaemonSettingsView.self, forKey: .content) {
+					self = .settingsUpdate(content)
+					return
+				}
+			case .storageListLocations:
+				if let content = try? container.decode(LocationList.self, forKey: .content) {
+					self = .storageListLocations(content)
+					return
+				}
+			case .storageSetLocation:
+				if let content = try? container.decode(StorageLocationView.self, forKey: .content) {
+					self = .storageSetLocation(content)
 					return
 				}
 			case .runtimeInstall:
@@ -7583,6 +7795,18 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .storageGetCapacity(let content):
 			try container.encode(CodingKeys.storageGetCapacity, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .settingsGet(let content):
+			try container.encode(CodingKeys.settingsGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .settingsUpdate(let content):
+			try container.encode(CodingKeys.settingsUpdate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .storageListLocations(let content):
+			try container.encode(CodingKeys.storageListLocations, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .storageSetLocation(let content):
+			try container.encode(CodingKeys.storageSetLocation, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .runtimeInstall(let content):
 			try container.encode(CodingKeys.runtimeInstall, forKey: .type)
@@ -7927,6 +8151,68 @@ public struct SecretStatusReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Where `storage.set_location` points a kind. Tagged `type` and `content`.
+public enum LocationTarget: Codable, Sendable, Equatable {
+	/// A folder; the daemon uses its `Stackly` subfolder.
+	case path(String)
+	/// The location that comes with Stackly.
+	case builtIn
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case path,
+			builtIn
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .path:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .path(content)
+					return
+				}
+			case .builtIn:
+				self = .builtIn
+				return
+			}
+		}
+		throw DecodingError.typeMismatch(LocationTarget.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for LocationTarget"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .path(let content):
+			try container.encode(CodingKeys.path, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .builtIn:
+			try container.encode(CodingKeys.builtIn, forKey: .type)
+		}
+	}
+}
+
+/// Params of `storage.set_location`.
+public struct SetLocationParams: Codable, Sendable, Equatable {
+	/// Which default to change.
+	public let kind: LocationKind
+	/// The new default.
+	public let target: LocationTarget
+	/// Refuse with `resource.revision_mismatch` unless the settings are at
+	/// this revision.
+	public let expectedRevision: UInt64
+
+	public init(kind: LocationKind, target: LocationTarget, expectedRevision: UInt64) {
+		self.kind = kind
+		self.target = target
+		self.expectedRevision = expectedRevision
+	}
+}
+
 /// How `secret.set` treats a value that exists already: `create` fails on
 /// an existing item, `replace` on a missing one, and `upsert` takes either
 /// (spec 0011 AC-5).
@@ -8025,6 +8311,33 @@ public struct SettingItem: Codable, Sendable, Equatable {
 
 	public init(entries: [SettingEntry]) {
 		self.entries = entries
+	}
+}
+
+/// Content of the `settings.changed` event: the settings or a default
+/// location changed, so a client reads them again.
+public struct SettingsChanged: Codable, Sendable, Equatable {
+	/// The revision after the change.
+	public let revision: UInt64
+
+	public init(revision: UInt64) {
+		self.revision = revision
+	}
+}
+
+/// A partial change of the settings. At least one field must be set.
+public struct SettingsPatch: Codable, Sendable, Equatable {
+	/// The startup policy of instances created from now on.
+	public let defaultStartup: StartupPolicyKind?
+	/// The update channel.
+	public let updateChannel: UpdateChannel?
+	/// Whether the person agrees to share usage statistics.
+	public let telemetry: Bool?
+
+	public init(defaultStartup: StartupPolicyKind?, updateChannel: UpdateChannel?, telemetry: Bool?) {
+		self.defaultStartup = defaultStartup
+		self.updateChannel = updateChannel
+		self.telemetry = telemetry
 	}
 }
 
@@ -8162,10 +8475,17 @@ public struct StopAllItem: Codable, Sendable, Equatable {
 	}
 }
 
-/// Params of `instance.stop_all`. None yet; the struct keeps room for
-/// fields without a new major.
+/// Params of `instance.stop_all`.
 public struct StopAllParams: Codable, Sendable, Equatable {
-	public init() {}
+	/// The instances the person saw in the preview. When present, the daemon
+	/// refuses with `instance.stop_all_changed` unless the instances it would
+	/// stop are exactly these, and it only ever stops that set (spec 0032).
+	/// Absent: stop what the rule chooses (`agent_off` does this).
+	public let expectedInstanceIds: [UUID]?
+
+	public init(expectedInstanceIds: [UUID]?) {
+		self.expectedInstanceIds = expectedInstanceIds
+	}
 }
 
 /// An instance Stop All leaves alone, and why.
@@ -8305,6 +8625,20 @@ public struct UnsubscribeParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `settings.update`.
+public struct UpdateSettingsParams: Codable, Sendable, Equatable {
+	/// Refuse with `resource.revision_mismatch` unless the settings are at
+	/// this revision.
+	public let expectedRevision: UInt64
+	/// What to change.
+	public let patch: SettingsPatch
+
+	public init(expectedRevision: UInt64, patch: SettingsPatch) {
+		self.expectedRevision = expectedRevision
+		self.patch = patch
+	}
+}
+
 /// Params of `instance.config.validate`: judges `change` against the
 /// revision the client read, and writes nothing.
 public struct ValidateConfigParams: Codable, Sendable, Equatable {
@@ -8370,6 +8704,37 @@ public enum ChangeEndpointsReply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		}
 	}
+}
+
+/// The rule a folder broke, in the order the daemon checks them (spec 0032,
+/// *Aturan lokasi*). Open.
+public enum LocationRule: String, Codable, Sendable, Equatable {
+	/// The path is relative.
+	case notAbsolute = "not_absolute"
+	/// The folder does not exist.
+	case missing
+	/// The path is not a folder.
+	case notDirectory = "not_directory"
+	/// The path, or a folder above it, is a symlink.
+	case symlink
+	/// Another user owns the folder.
+	case notOwned = "not_owned"
+	/// Group or other can write to the folder.
+	case tooOpen = "too_open"
+	/// The folder is one macOS may block the daemon from.
+	case protectedFolder = "protected_folder"
+	/// The disk is not local.
+	case notLocalVolume = "not_local_volume"
+	/// The disk is not inside this Mac.
+	case notInternalVolume = "not_internal_volume"
+	/// The folder overlaps another Stackly location or root.
+	case overlapsRoot = "overlaps_root"
+	/// A `Stackly` folder is there and is not one of this registry.
+	case foreignMarker = "foreign_marker"
+	/// The daemon cannot create the folders it needs.
+	case notWritable = "not_writable"
+	/// A rule this build does not know. The daemon never sends it.
+	case unrecognized
 }
 
 /// Every frame the daemon sends. Adding a variant a client may receive

@@ -129,6 +129,21 @@ uuid_id! {
     ProviderSourceId
 }
 
+uuid_id! {
+    /// Stable identifier of a storage location, a UUID version 7. The three
+    /// built in locations have the fixed IDs of
+    /// [`BUILT_IN_LOCATION_IDS`](crate::BUILT_IN_LOCATION_IDS) (spec 0032).
+    StorageLocationId
+}
+
+impl StorageLocationId {
+    /// Wraps the fixed value of a built in location. The caller passes a
+    /// version 7 UUID as a number; a test checks the three constants.
+    pub(crate) const fn from_built_in(value: u128) -> Self {
+        Self(Uuid::from_u128(value))
+    }
+}
+
 impl InstanceId {
     /// Returns the short key of this instance: the last 8 hex characters of
     /// its text form, which come from the random part of the UUID.

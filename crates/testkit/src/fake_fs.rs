@@ -159,6 +159,9 @@ pub struct FakeVolume {
     pub fs_type: &'static str,
     /// Whether [`Filesystem::volume_facts`] reports the volume as local.
     pub local: bool,
+    /// Whether [`Filesystem::volume_facts`] reports the volume as inside the
+    /// Mac.
+    pub internal: bool,
 }
 
 impl FakeVolume {
@@ -174,14 +177,25 @@ impl FakeVolume {
             available,
             fs_type: "apfs",
             local: true,
+            internal: true,
         }
     }
 
-    /// This volume with another filesystem type name and locality.
+    /// This volume with another filesystem type name and locality. A local
+    /// volume stays internal; a network share is not.
     #[must_use]
     pub const fn with_kind(mut self, fs_type: &'static str, local: bool) -> Self {
         self.fs_type = fs_type;
         self.local = local;
+        self.internal = local;
+        self
+    }
+
+    /// This volume as an external disk: local, but not inside the Mac.
+    #[must_use]
+    pub const fn external(mut self) -> Self {
+        self.local = true;
+        self.internal = false;
         self
     }
 }
@@ -623,7 +637,7 @@ impl Filesystem for FakeFilesystem {
     fn volume_facts(&self, path: &Path) -> Result<VolumeFacts, PlatformError> {
         self.enter(FsOp::VolumeFacts, path)?;
         let volume = self.volume_of("volume_facts", path)?;
-        Ok(VolumeFacts::new(volume.fs_type, volume.local))
+        Ok(VolumeFacts::new(volume.fs_type, volume.local).with_internal(volume.internal))
     }
 
     fn tree_usage(&self, root: &Path, limits: UsageLimits) -> Result<TreeUsage, PlatformError> {

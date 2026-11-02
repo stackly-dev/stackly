@@ -19,6 +19,7 @@ use crate::json::{FieldCode, Validate};
 use crate::operation::OperationSummary;
 use crate::restart::RestartPlanView;
 use crate::secret::SecretChanged;
+use crate::settings::SettingsChanged;
 use crate::wire::{ResourceRef, Revision, Sequence, Timestamp};
 
 /// Most entries in `SubscribeParams.kinds`.
@@ -105,6 +106,11 @@ pub enum EventKind {
     /// revision.
     #[serde(rename = "daemon.restart_plan")]
     DaemonRestartPlan(Box<RestartPlanView>),
+    /// The daemon settings or a default location changed (spec 0032). A
+    /// daemon event: no resource, no revision; clients read `settings.get`
+    /// again.
+    #[serde(rename = "settings.changed")]
+    SettingsChanged(SettingsChanged),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -139,6 +145,7 @@ event_kinds! {
     "daemon.reconciling" => DaemonReconciling;
     "runtime.state_changed" => RuntimeStateChanged;
     "daemon.restart_plan" => DaemonRestartPlan;
+    "settings.changed" => SettingsChanged;
 }
 
 impl EventKind {

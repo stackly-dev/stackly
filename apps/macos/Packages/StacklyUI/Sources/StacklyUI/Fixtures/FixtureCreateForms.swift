@@ -16,7 +16,9 @@
                 manifestSha256: String(repeating: "ab", count: 32), displayName: "PostgreSQL",
                 category: .database, source: .bundledCatalog),
             runtime: FixtureRuntime.summaries[0], suggestedName: "postgresql-17",
-            dataPath: "instances/<new instance id>/data",
+            dataPath: "instances/<new instance id>/data", startupDefault: .manual,
+            dataLocation: "/Users/dev/Library/Application Support/Stackly",
+            logsLocation: "/Users/dev/Library/Logs/Stackly",
             endpoints: [
                 CreateEndpoint(
                     name: "postgres", transport: .tcp, purpose: .client, host: "127.0.0.1",

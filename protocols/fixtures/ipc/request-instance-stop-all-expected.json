@@ -1,0 +1,13 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000d06",
+  "idempotencyKey": "stop-all-0002",
+  "call": {
+    "type": "instance.stop_all",
+    "content": {
+      "expectedInstanceIds": [
+        "0192f3a5-0000-7000-8000-000000000001",
+        "0192f3a5-0000-7000-8000-000000000002"
+      ]
+    }
+  }
+}

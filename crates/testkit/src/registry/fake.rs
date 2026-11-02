@@ -15,8 +15,8 @@ use stackly_domain::{
     DaemonSession, EndpointRequests, Environment, EnvironmentId, Generation, GuardDecision,
     GuardView, Guarded, IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId,
     InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep, JournalView, Lease,
-    LeaseFilter, LeaseHolder, LeaseId, LeaseState, LockKey, NotDeletableReason, Operation,
-    OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
+    LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind, LockKey, NotDeletableReason,
+    Operation, OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
     OperationResource, OperationState, Ownership, PlatformStoreKey, ProcessObservation,
     ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind,
     ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
@@ -1115,7 +1115,11 @@ impl State {
                 existing: existing.id(),
             });
         }
-        let entries = instance_path_entries(id);
+        let entries = instance_path_entries(
+            id,
+            LocationKind::Data.built_in_id(),
+            LocationKind::Logs.built_in_id(),
+        );
         if expected.is_none() {
             let key = id.short_key();
             if let Some(existing) = self.instances.keys().find(|other| other.short_key() == key) {

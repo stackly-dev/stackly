@@ -17,6 +17,7 @@ public enum ContractNames {
 		"daemon.reconciling",
 		"runtime.state_changed",
 		"daemon.restart_plan",
+		"settings.changed",
 	]
 }
 
@@ -54,6 +55,10 @@ extension Call {
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
 		case .storageGetCapacity: "storage.get_capacity"
+		case .settingsGet: "settings.get"
+		case .settingsUpdate: "settings.update"
+		case .storageListLocations: "storage.list_locations"
+		case .storageSetLocation: "storage.set_location"
 		case .runtimeInstall: "runtime.install"
 		case .runtimeResolve: "runtime.resolve"
 		case .runtimeList: "runtime.list"
@@ -115,6 +120,10 @@ extension Reply {
 		case .instanceGet: "instance.get"
 		case .instanceList: "instance.list"
 		case .storageGetCapacity: "storage.get_capacity"
+		case .settingsGet: "settings.get"
+		case .settingsUpdate: "settings.update"
+		case .storageListLocations: "storage.list_locations"
+		case .storageSetLocation: "storage.set_location"
 		case .runtimeInstall: "runtime.install"
 		case .runtimeResolve: "runtime.resolve"
 		case .runtimeList: "runtime.list"
@@ -157,6 +166,7 @@ extension EventKind {
 		case .daemonReconciling: "daemon.reconciling"
 		case .runtimeStateChanged: "runtime.state_changed"
 		case .daemonRestartPlan: "daemon.restart_plan"
+		case .settingsChanged: "settings.changed"
 		}
 	}
 }

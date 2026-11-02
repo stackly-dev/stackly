@@ -14,9 +14,10 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use stackly_domain::{
     ArtifactFormat, ArtifactRecord, BatchError, CommitGuard, Committed, CompatibilityRecordRow,
     DependencyManifestJson, Endpoint, Environment, Generation, GuardDecision, GuardView, Guarded,
-    InstallMode, Instance, InstanceFilter, Lease, LeaseHolder, LeaseState, Operation, Ownership,
-    PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord, RegistryError, ResourceRef,
-    ResourceRevision, Runtime, RuntimeId, SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
+    InstallMode, Instance, InstanceFilter, Lease, LeaseHolder, LeaseState, LocationKind, Operation,
+    Ownership, PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord, RegistryError,
+    ResourceRef, ResourceRevision, Runtime, RuntimeId, SignatureInfoJson, SoftwareName, WriteBatch,
+    WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
@@ -744,7 +745,11 @@ fn check_instance(
         )? {
             return Err(RegistryError::ShortKeyTaken { key, existing });
         }
-        for entry in instance_path_entries(instance.id()) {
+        for entry in instance_path_entries(
+            instance.id(),
+            LocationKind::Data.built_in_id(),
+            LocationKind::Logs.built_in_id(),
+        ) {
             if let Some(existing) = find_id(
                 conn,
                 "SELECT instance_id FROM instance_paths \
@@ -819,7 +824,11 @@ fn write_instance(
                 values,
             )
             .map_err(sql_error)?;
-            for entry in instance_path_entries(instance.id()) {
+            for entry in instance_path_entries(
+                instance.id(),
+                LocationKind::Data.built_in_id(),
+                LocationKind::Logs.built_in_id(),
+            ) {
                 conn.execute(
                     "INSERT INTO instance_paths (instance_id, kind, logical_root, \
                      relative_path, managed) VALUES (?1, ?2, ?3, ?4, 1)",

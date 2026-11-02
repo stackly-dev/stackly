@@ -68,6 +68,9 @@
       }
     ],
     "dataPath": "instances/<new instance id>/data",
+    "startupDefault": "manual",
+    "dataLocation": "/Users/dev/Library/Application Support/Stackly",
+    "logsLocation": "/Users/dev/Library/Logs/Stackly",
     "endpoints": [
       {
         "defaultPort": 5432,

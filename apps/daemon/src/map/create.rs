@@ -39,6 +39,10 @@ pub fn create_form(
         runtime,
         suggested_name: model.suggested_name.as_ref().map(ToString::to_string),
         data_path: model.data_path.to_owned(),
+        // provisional: F32 step 3, the model carries the default locations.
+        startup_default: dto::StartupPolicyKind::Manual,
+        data_location: String::new(),
+        logs_location: String::new(),
         endpoints: model.endpoints.iter().map(endpoint).collect(),
         fields: model.fields.iter().map(form_field).collect(),
         capabilities,

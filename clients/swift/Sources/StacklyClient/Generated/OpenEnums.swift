@@ -417,6 +417,20 @@ extension ReconcileFindingCode {
 	}
 }
 
+extension UpdateChannel {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension LocationKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension DependentOwnership {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
@@ -635,6 +649,13 @@ extension DemandSourceKind {
 }
 
 extension UnavailableReason {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
+extension LocationRule {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized

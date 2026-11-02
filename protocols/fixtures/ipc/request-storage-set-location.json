@@ -1,0 +1,15 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000d04",
+  "idempotencyKey": "location-0001",
+  "call": {
+    "type": "storage.set_location",
+    "content": {
+      "kind": "data",
+      "target": {
+        "type": "path",
+        "content": "/Volumes/Work"
+      },
+      "expectedRevision": 3
+    }
+  }
+}

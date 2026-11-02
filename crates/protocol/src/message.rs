@@ -55,6 +55,9 @@ use crate::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
+use crate::settings::{
+    DaemonSettingsView, LocationList, SetLocationParams, StorageLocationView, UpdateSettingsParams,
+};
 use crate::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use crate::storage::CapacityReport;
 
@@ -172,6 +175,19 @@ pub enum Call {
     /// The space left on the volume that holds the data root.
     #[serde(rename = "storage.get_capacity")]
     StorageGetCapacity,
+    /// The daemon settings (spec 0032).
+    #[serde(rename = "settings.get")]
+    SettingsGet,
+    /// Changes daemon settings (spec 0032).
+    #[serde(rename = "settings.update")]
+    SettingsUpdate(UpdateSettingsParams),
+    /// Every storage location and which one is the default (spec 0032).
+    #[serde(rename = "storage.list_locations")]
+    StorageListLocations,
+    /// Points the default location of a kind at a folder, or back at the
+    /// built in one (spec 0032).
+    #[serde(rename = "storage.set_location")]
+    StorageSetLocation(SetLocationParams),
     /// Resolves a selector and starts the operation that installs the
     /// artifact, or answers that it is installed already.
     #[serde(rename = "runtime.install")]
@@ -347,6 +363,18 @@ pub enum Reply {
     /// The space left, read now.
     #[serde(rename = "storage.get_capacity")]
     StorageGetCapacity(CapacityReport),
+    /// The daemon settings.
+    #[serde(rename = "settings.get")]
+    SettingsGet(Box<DaemonSettingsView>),
+    /// The settings after the change, or as they were.
+    #[serde(rename = "settings.update")]
+    SettingsUpdate(Box<DaemonSettingsView>),
+    /// The storage locations.
+    #[serde(rename = "storage.list_locations")]
+    StorageListLocations(LocationList),
+    /// The default location of the kind after the change.
+    #[serde(rename = "storage.set_location")]
+    StorageSetLocation(Box<StorageLocationView>),
     /// The artifact the selector resolved to, and what happened to it.
     #[serde(rename = "runtime.install")]
     RuntimeInstall(Box<InstallRuntimeReply>),
@@ -518,6 +546,10 @@ methods! {
     "instance.get" => InstanceGet(GetInstanceParams), recovery refused;
     "instance.list" => InstanceList(ListInstancesParams), recovery refused;
     "storage.get_capacity" => StorageGetCapacity, recovery allowed;
+    "settings.get" => SettingsGet, recovery refused;
+    "settings.update" => SettingsUpdate(UpdateSettingsParams), recovery refused;
+    "storage.list_locations" => StorageListLocations, recovery refused;
+    "storage.set_location" => StorageSetLocation(SetLocationParams), recovery refused;
     "runtime.install" => RuntimeInstall(InstallRuntimeParams), recovery refused;
     "runtime.resolve" => RuntimeResolve(InstallRuntimeParams), recovery allowed;
     "runtime.list" => RuntimeList(ListRuntimesParams), recovery refused;
@@ -720,8 +752,9 @@ mod tests {
             // and `instance.force_stop` (spec 0026). Then the 3 log methods
             // (spec 0027), `instance.prepare_terminal` (spec 0070), and
             // `instance.get_metrics` (spec 0028), and the 6 config methods
-            // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1 + 2,
+            // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031), and
+            // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1 + 2 + 4,
             Call::METHODS.len(),
             "a new method needs a line here"
         );
