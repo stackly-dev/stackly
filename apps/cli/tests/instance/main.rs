@@ -10,6 +10,8 @@ mod common;
 
 mod action;
 mod action_real;
+mod config;
+mod config_parity;
 mod connection;
 mod create;
 mod create_real;

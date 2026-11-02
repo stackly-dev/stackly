@@ -186,7 +186,7 @@
             "sourceNumber": null,
             "readyAt": "2026-11-02T08:05:00.000Z",
             "isActive": false,
-            "isLastKnownGood": true,
+            "isLastKnownGood": false,
             "values": {
               "greeting": "hello",
               "workers": 2,

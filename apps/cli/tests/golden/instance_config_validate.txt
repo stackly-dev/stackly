@@ -1,0 +1,2 @@
+valid, impact restart
+  workers: 2 -> 4
