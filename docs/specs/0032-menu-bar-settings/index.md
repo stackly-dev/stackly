@@ -30,7 +30,7 @@ Spec ini menetapkan ikon Stackly di menu bar macOS dan isi jendela Settings. Pop
 - **AC-5**: Operasi yang sedang berjalan dengan kind di daftar *Operasi di popover* tampil sebagai satu baris dengan judul operasi dan persen, atau bar indeterminate dengan "Working…" kalau operasi tidak punya persen, dan hilang saat operasi selesai. Popover tidak menawarkan Cancel.
 - **AC-6**: **Stop All Services…** membuka preview di dalam popover dari `instance.preview_stop_all` dengan copy tabel *Copy Stop All*: setiap instance yang akan berhenti dengan sumber demand nya, instance yang sudah berhenti sendiri ("already stopping"), instance yang dilewati beserta alasannya, "Data is kept.", dan kalimat login berikutnya. Cancel adalah tombol default. Kalau tidak ada yang akan berhenti, preview menulis "Nothing is running." dan Stop All nonaktif. Saat offline, Stop All Services… nonaktif.
 - **AC-7**: Konfirmasi memanggil `instance.stop_all` spec 0031 (AC-10) dengan `expectedInstanceIds` dari preview. Operasi `stop_all_instances` hanya menghentikan irisan `expectedInstanceIds` dengan pilihan saat ini, jadi tidak pernah menghentikan instance yang tidak tampil di preview. Setiap langkah memakai stop manual spec 0031 (stop normal fitur 26 tanpa `SIGKILL`, plus suppression, jadi reconciler tidak menyalakannya lagi di sesi login yang sama). Popover menampilkan hasil dari `StopAllResult` dengan copy *Copy Stop All*, termasuk sebagian gagal dengan aksi Open Stackly.
-- **AC-8**: Kalau himpunan instance yang akan dihentikan (pilihan spec 0031 dikurangi `skipped`) berbeda dari `expectedInstanceIds`, daemon menolak dengan `instance.stop_all_changed` sebelum operasi dibuat, tanpa menghentikan apa pun. Error tidak membawa payload; popover memanggil `instance.preview_stop_all` lagi dan menggambar ulang preview untuk satu konfirmasi lagi.
+- **AC-8**: Kalau himpunan instance yang akan dihentikan (himpunan `stop` dari `stop_all::select` spec 0031, jadi tanpa `alreadyStopping` dan `skipped`) berbeda dari `expectedInstanceIds`, daemon menolak dengan `instance.stop_all_changed` sebelum operasi dibuat, tanpa menghentikan apa pun. Error tidak membawa payload; popover memanggil `instance.preview_stop_all` lagi dan menggambar ulang preview untuk satu konfirmasi lagi.
 - **AC-9**: `stackly instance stop --all` memanggil preview, mencetaknya, meminta konfirmasi di TTY (`--yes` melewatinya; tanpa TTY dan tanpa `--yes` keluar 2 dengan `cli.confirmation_required`), lalu mengirim `expectedInstanceIds` yang sama. `instance.stop_all_changed` keluar 3. `--json` menulis satu envelope spec 0008 dengan `result` `{ preview: StopAllPreview, outcome: StopAllResult | null }`.
 - **AC-10**: **Quit Stackly** di popover dan ⌘Q di menu app (yang hanya ada selama app `regular`) hanya menutup GUI lewat jalur Quit spec 0013. Daemon, setiap instance, dan setiap operasi yang berjalan tetap hidup, dan tidak ada request yang dikirim ke daemon saat Quit.
 
@@ -56,7 +56,7 @@ Spec ini menetapkan ikon Stackly di menu bar macOS dan isi jendela Settings. Pop
 
 *Data dan tampilan*
 
-- **AC-25**: Migration registry 0007 menambah `daemon_settings` dan `storage_locations`, membangun ulang `instance_paths` dengan `location_id` yang menunjuk lokasi bawaan untuk setiap baris data dan log yang ada, lolos `PRAGMA foreign_key_check` dan cek jumlah baris sebelum commit, dan memakai snapshot `registry/pre-migration` spec 0005. Setelah migration, setiap path instance resolve ke path yang sama persis seperti sebelumnya. Migration yang gagal di tengah tidak mengubah registry. Spec 0005 AC-10 berlaku dalam bentuk *AC-10 per lokasi*.
+- **AC-25**: Migration registry `NNNN_settings_locations.sql` (nomor bebas berikutnya saat build) menambah `daemon_settings` dan `storage_locations`, membangun ulang `instance_paths` dengan `location_id` yang menunjuk lokasi bawaan untuk setiap baris data dan log yang ada, lolos `PRAGMA foreign_key_check` dan cek jumlah baris sebelum commit, dan memakai snapshot `registry/pre-migration` spec 0005. Setelah migration, setiap path instance resolve ke path yang sama persis seperti sebelumnya. Migration yang gagal di tengah tidak mengubah registry. Spec 0005 AC-10 berlaku dalam bentuk *AC-10 per lokasi*.
 - **AC-26**: Popover dan Settings mengikuti mockup UI kecuali *Selisih mockup yang disengaja*, dengan fixture spec 0068 dan snapshot light dan dark untuk setiap scenario di *Fixture*.
 
 ## Decision
@@ -80,7 +80,7 @@ Spec ini menetapkan ikon Stackly di menu bar macOS dan isi jendela Settings. Pop
 
 | Yang dibutuhkan | Dari | Dipakai untuk |
 |---|---|---|
-| `instance.stop_all`, `StopAllResult`, operasi `stop_all_instances`, pilihan instance, stop manual dengan suppression, policy `startup`, `InstanceAutostart`, `agent_off`, *Batas disruption*, copy autostart | spec 0031 (Proposed) | AC-4, AC-6 sampai AC-9, AC-15, AC-18 |
+| `instance.stop_all`, `StopAllResult`, operasi `stop_all_instances`, `stop_all::select`, `instance.preview_stop_all` dengan DTO `StopAllPreview`, stop manual dengan suppression, policy `startup`, `InstanceAutostart`, `agent_off`, *Batas disruption*, copy autostart | spec 0031 (Proposed, langkah 9 dan 12) | AC-4, AC-6 sampai AC-9, AC-15, AC-18 |
 | Stop normal dan serialisasi per instance | fitur 26 | AC-4, AC-7 |
 | Konstanta `LOG_SEGMENTS_PER_STREAM`, `LOG_SEGMENT_MAX_BYTES`, `LogRetention` | spec 0027 | AC-21 |
 | `BackgroundAgentModel`, `SMAppServiceAgent`, copy state agent | spec 0015 (milestone 1 sampai 3) | AC-15 |
@@ -97,6 +97,8 @@ Yang **bukan** bagian spec ini: Restart Daemon (fitur 30), Clean Up cache (55), 
 
 ### Tambahan pada kontrak spec 0031
 
+**Diterapkan di spec 0031 (2026-11-02)**, bagian *Pilihan stop all*, *Operasi `stop_all_instances`*, dan *Tambahan dari spec 0032*. Aturan pilihan yang berlaku ada di spec 0031, yang menajamkannya untuk start dan restart yang terbuka dan untuk operasi `needs_recovery`, dan fitur 31 juga membangun `instance.preview_stop_all` (untuk konfirmasi Turn Off) serta cancel pada `stop_all_instances`.
+
 Spec 0031 masih Proposed, jadi tambahan ini masuk ke kontraknya sebelum dibangun (*Usulan update untuk spec lain*):
 
 - Fungsi murni `stackly_core::instance::stop_all::select(&RegistryView) -> StopAllSelection { stop, already_stopping, skipped }` adalah satu satunya aturan pilihan, dipakai preview, `instance.stop_all`, dan `agent_off`. `stop` berisi instance yang desired nya `running` atau punya proses hidup, kecuali yang lifecycle nya `stopping` (ke `already_stopping`) dan yang `unknown` atau berlease environment `active` (ke `skipped` dengan kode spec 0031).
@@ -112,7 +114,7 @@ Spec 0031 masih Proposed, jadi tambahan ini masuk ke kontraknya sebelum dibangun
 
 ### Model data
 
-Migration `0007_settings_locations.sql`.
+Migration `NNNN_settings_locations.sql` (nomor bebas berikutnya saat build; 0007 sampai 0009 sudah dipakai spec 0028, 0029, dan 0030, dan spec 0031 juga merencanakan migrasi, jadi siapa pun yang build lebih dulu memakai nomor itu).
 
 **`storage_locations`**
 
@@ -208,8 +210,8 @@ Protocol naik satu minor dari versi saat langkah 1 dibangun (tambahan saja); fix
 | `settings.update` | operasi `update_daemon_settings` (`replay_operation`, precheck revision, `start_operation`) | `idempotencyKey`, `expectedRevision: Revision`, `patch: SettingsPatch` | `OperationView`, hasil `DaemonSettingsView`; atau `DaemonSettingsView` tanpa operasi untuk patch tanpa perubahan | `resource.revision_mismatch`, `request.invalid_params` |
 | `storage.list_locations` | baca | none | `LocationList { items: [StorageLocationView] }` | |
 | `storage.set_location` | operasi `set_storage_location` | `idempotencyKey`, `kind: LocationKind`, `target: LocationTarget`, `expectedRevision` | `OperationView`, hasil `StorageLocationView` | `resource.revision_mismatch`, `storage.location_invalid` |
-| `instance.preview_stop_all` | baca | none | `StopAllPreview` | |
-| `instance.stop_all` (spec 0031, diperluas) | operasi `stop_all_instances` | `idempotencyKey`, `expectedInstanceIds` opsional | `OperationView`, hasil `StopAllResult` | `instance.stop_all_changed` |
+| `instance.preview_stop_all` (spec 0031, dibangun fitur 31 langkah 9) | baca | none | `StopAllPreview` | |
+| `instance.stop_all` (spec 0031, diperluas) | operasi `stop_all_instances` | `idempotencyKey`, `expectedInstanceIds` opsional | `StopAllResult`, setelah operasi selesai (spec 0031 *Operasi `stop_all_instances`*); progres lewat event operasi | `instance.stop_all_changed` |
 
 Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah commit yang menaikkan revision.
 
@@ -219,7 +221,7 @@ Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah comm
 - `SettingsPatch { defaultStartup?: StartupPolicyKind, updateChannel?: UpdateChannel, telemetry?: bool }`; `Validate` menolak patch tanpa field dan nilai `Unrecognized`.
 - `StorageLocationView { id: Uuid, kind: LocationKind, path: String, builtIn: bool, isDefault: bool, instanceCount: Count, reachable: bool }`, dengan `path` selalu path yang sudah resolve dan `reachable` dari `file_info` saat dibaca; `instanceCount` 0 untuk cache.
 - `LocationKind`: `data`, `logs`, `cache`, `Unrecognized`. `LocationTarget`: `{ "type": "path", "content": String }` atau `{ "type": "builtIn" }`. `UpdateChannel`: `stable`, `beta`, `Unrecognized`.
-- `StopAllPreview { items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: Count }`, setiap daftar urut nama lalu ID; `atLoginCount` = jumlah `items` dengan policy `at_login`.
+- `StopAllPreview { items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: Count }`, setiap daftar urut nama lalu ID; `atLoginCount` = jumlah `items` dengan policy `at_login`. DTO preview di bawah ini dibangun fitur 31 langkah 9 sesuai definisi di sini.
 - `StopAllItem { instanceId: Uuid, name: String, lifecycle: InstanceLifecycle, demand: [DemandSourceKind], autostart: InstanceAutostart }`, dengan `DemandSourceKind` (`manual`, `startup`, `environment`, `Unrecognized`) dari lease `active` spec 0031.
 - `InstanceRef { instanceId: Uuid, name: String }`. `StopAllSkip { instanceId: Uuid, name: String, code: String }`.
 - Form create dan duplicate (spec 0020, 0024) mendapat `startupDefault: StartupPolicyKind`, `dataLocation: String`, dan `logsLocation: String`; `dataPath` spec 0020 tetap path data instance yang akan dibuat, sekarang dihitung dari `dataLocation`.
@@ -290,7 +292,7 @@ Urutan dari atas: header (AC-2), Services (AC-3, AC-4), baris operasi (AC-5), pr
 | judul preview | | "Stop All Services?" |
 | baris item | | "{name}" dengan teks sekunder sumber demand digabung ", ": `manual` "Started by you", `startup` "Started at login", `environment` "Used by an environment" |
 | baris `alreadyStopping` | | "{name} · already stopping" |
-| baris `skipped` | | "{name} · won’t stop: {kalimat kode}", dengan `supervisor.identity_unproven` "Stackly can’t confirm this process" dan kode lease "used by an environment" |
+| baris `skipped` | | "{name} · won’t stop: {kalimat kode}", dengan `supervisor.identity_unproven` "Stackly can’t confirm this process", `supervisor.stop_requires_override` "used by an environment", dan `operation.recovery_required` "an operation for it needs your attention in Stackly" |
 | kaki | selalu | "Data is kept." |
 | kaki | `atLoginCount` 0 | "None of them start at your next login." |
 | kaki | `atLoginCount` 1 | "1 of them starts again at your next login." |
@@ -301,6 +303,7 @@ Urutan dari atas: header (AC-2), Services (AC-3, AC-4), baris operasi (AC-5), pr
 | hasil | satu gagal | "Stopped {a} of {b}. {name} didn’t stop." dengan Open Stackly |
 | hasil | f > 1 gagal | "Stopped {a} of {b}. {f} didn’t stop: {nama, nama}." dengan Open Stackly |
 | hasil | ada `skipped` | ditambah " {s} skipped." |
+| hasil | ada `skipped` dengan `operation.cancelled` (dibatalkan dari halaman Operations) | "Stop All was cancelled. Stopped {a} of {b}." dengan Open Stackly |
 
 ### Activation policy dan login
 
@@ -387,7 +390,7 @@ Tidak ada variabel environment atau credential baru. `STACKLY_ROOT` tetap mengge
 - Failure case: CLI mengubah setting saat GUI memegang revision lama, update GUI ditolak `resource.revision_mismatch` dan baris menampilkan nilai baru; verifies **AC-17**.
 - Failure case: setiap `rule` lokasi ditolak dengan kode dan urutan yang benar di `FakePlatform`, dan yang bisa dibuat di filesystem asli juga di sana; verifies **AC-19**.
 - Failure case: folder lokasi dihapus, start gagal `instance.storage_location_missing` tanpa proses; verifies **AC-20**.
-- Failure case: migration 0007 gagal setelah salinan baris, registry tidak berubah dan snapshot ada; verifies **AC-25**.
+- Failure case: migration settings dan lokasi gagal setelah salinan baris, registry tidak berubah dan snapshot ada; verifies **AC-25**.
 - Failure case: Quit saat operasi berjalan, operasi selesai di daemon dan `stackly daemon status` tetap sehat; verifies **AC-10**.
 - Privasi: run penuh fixture GUI dan daemon tanpa satu pun koneksi jaringan keluar baru; verifies **AC-23**.
 - Auth/permission: notifikasi dengan izin ditolak tidak pernah memanggil `add(_:)`; verifies **AC-22**.
@@ -401,7 +404,7 @@ Tidak ada variabel environment atau credential baru. `STACKLY_ROOT` tetap mengge
 - **0015**: baris Settings memakai `BackgroundAgentModel`; `SMAppServiceMainApp` masuk folder `Agent/`.
 - **0020** dan **0024**: reply form mendapat `startupDefault`, `dataLocation`, `logsLocation`; preflight mendapat baris `storage_location`; sheet menampilkan lokasi data sebagai baris read only; Duplicate mengisi Start at login dari `startupDefault`, bukan dari instance sumber.
 - **0027**: tidak ada perubahan perilaku; `LogRetention` ikut di `DaemonSettingsView`.
-- **0031**: *Tambahan pada kontrak spec 0031*.
+- **0031**: *Tambahan pada kontrak spec 0031* (diterapkan 2026-11-02).
 - **0069**: tidak ada perintah baru; Settings… dan Quit tetap di menu app.
 - `docs/scope/ui-macos.md`: *Selisih mockup yang disengaja*.
 
@@ -418,12 +421,12 @@ Tidak ada variabel environment atau credential baru. `STACKLY_ROOT` tetap mengge
 
 ## Build plan
 
-Pendekatan Journey: setiap milestone menyelesaikan satu jalur pengguna lengkap (state, error, dan polish) sebelum yang berikutnya. Milestone 1 memberi jalur "ubah setting dari CLI", milestone 2 jalur "ubah setting dari Settings", milestone 3 jalur "kerja harian dari menu bar", milestone 4 notifikasi, milestone 5 bukti visual dan manual. Prasyarat: fitur 26 dan fitur 31 (sampai `instance.stop_all` dan `startup`) selesai, spec 0015 milestone 1 sampai 3, dan tambahan spec 0031 sudah diterapkan di spec itu.
+Pendekatan Journey: setiap milestone menyelesaikan satu jalur pengguna lengkap (state, error, dan polish) sebelum yang berikutnya. Milestone 1 memberi jalur "ubah setting dari CLI", milestone 2 jalur "ubah setting dari Settings", milestone 3 jalur "kerja harian dari menu bar", milestone 4 notifikasi, milestone 5 bukti visual dan manual. Prasyarat: fitur 26 dan fitur 31 (sampai langkah 9 spec 0031: `startup`, `instance.stop_all`, `stop_all::select`, dan `instance.preview_stop_all`) selesai, spec 0015 milestone 1 sampai 3, dan tambahan spec 0031 sudah diterapkan di spec itu (2026-11-02).
 
 **Milestone 1: setting daemon dan lokasi, sampai CLI**
 
-1. Domain dan protocol: tipe settings dan lokasi, `BUILT_IN_LOCATION_IDS`, `instance_path_entries` dengan lokasi, `VolumeFacts.internal`, DTO, method, event, kode error, kenaikan minor `ProtocolVersion`, `cargo xtask codegen`, fixture, dan `cargo xtask fuzz seed`, satisfies **AC-16**, **AC-17**, **AC-19**.
-2. Storage: migration 0007 (bangun ulang `instance_paths` dengan salinan baris, `PRAGMA foreign_key_check`, cek jumlah baris, trigger), WriteOp dan baca baru, `FakeRegistry` setara, test migration dari registry versi 6 berisi instance, test migration yang gagal di tengah, dan test *AC-10 per lokasi*, satisfies **AC-25**, **AC-16**, **AC-19**.
+1. Domain dan protocol: tipe settings dan lokasi, `BUILT_IN_LOCATION_IDS`, `instance_path_entries` dengan lokasi, `VolumeFacts.internal`, DTO, method, event, kode error (termasuk `expectedInstanceIds` dan `instance.stop_all_changed`; DTO preview sudah ada dari spec 0031), kenaikan minor `ProtocolVersion`, `cargo xtask codegen`, fixture, dan `cargo xtask fuzz seed`, satisfies **AC-16**, **AC-17**, **AC-19**.
+2. Storage: migration `NNNN_settings_locations.sql` (bangun ulang `instance_paths` dengan salinan baris, `PRAGMA foreign_key_check`, cek jumlah baris, trigger), WriteOp dan baca baru, `FakeRegistry` setara, test migration dari registry di versi skema tepat sebelum migration ini (versi terakhir di `main` saat build) berisi instance, test migration yang gagal di tengah, dan test *AC-10 per lokasi*, satisfies **AC-25**, **AC-16**, **AC-19**.
 3. Core: `settings::update`, `storage::set_location` dengan `check_location` (table test per `rule` dan urutan di `FakePlatform`), `LocationSet`, `instance_paths_in`, `downloads_dir_in`, pindahkan setiap pemakai path instance di *Perubahan domain dan platform* ke `LocationSet` (grep, daftar di commit), create memakai lokasi dan `default_startup` dari guard, `inventory_instances` per lokasi, precheck start dan baris preflight `storage_location`, satisfies **AC-18**, **AC-19**, **AC-20**.
 4. Daemon: handler `settings.*` dan `storage.*`, event `settings.changed`, form create dan duplicate dengan `startupDefault` dan lokasi, `logRetention` dari konstanta spec 0027, integration test `apps/daemon/tests/settings.rs` dan `storage_locations.rs` di filesystem asli, satisfies **AC-16**, **AC-17**, **AC-18**, **AC-19**, **AC-20**, **AC-21**.
 5. CLI: `stackly settings`, `stackly storage`, `--no-autostart`, test output dan exit code, satisfies **AC-16**, **AC-17**, **AC-18**, **AC-19**.
@@ -436,7 +439,7 @@ Pendekatan Journey: setiap milestone menyelesaikan satu jalur pengguna lengkap (
 
 **Milestone 3: menu bar dan Stop All**
 
-9. Stop All di daemon: `stop_all::select` sebagai satu aturan, `instance.preview_stop_all`, `expectedInstanceIds` dan cancel pada `instance.stop_all`, test core di fake dan integration test `apps/daemon/tests/stop_all.rs` termasuk perubahan di antara preview dan konfirmasi; `stackly instance stop --all`, satisfies **AC-7**, **AC-8**, **AC-9**.
+9. Stop All di daemon dan CLI, di atas `stop_all::select`, `instance.preview_stop_all`, dan cancel yang sudah dibangun fitur 31 langkah 9: precheck `expectedInstanceIds` di `instance.stop_all` (field dan kode `instance.stop_all_changed` sudah masuk kontrak di langkah 1) sesudah `replay_operation`, irisan langkah, dan sidik jari yang mencakup field itu, test core di fake dan integration test `apps/daemon/tests/stop_all.rs` termasuk perubahan di antara preview dan konfirmasi; `stackly instance stop --all`, satisfies **AC-7**, **AC-8**, **AC-9**.
 10. Scene `MenuBarExtra` di `StacklyApp`, aset ikon tiga varian, `MenuBarModel` dan view popover (header, Services dengan tabel *Tombol baris*, operasi, preview dan hasil dengan *Copy Stop All*, aksi), satisfies **AC-1**, **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-6**, **AC-10**.
 11. `ActivationPolicyController`, copy notice baru, deteksi peluncuran login item dengan fallback jendela utama (periksa di macOS 27, catat di `design.md`), satisfies **AC-11**, **AC-12**.
 
@@ -477,7 +480,7 @@ Langkah 1 sampai 5 berurutan. Setelah langkah 4, milestone 2 dan langkah 9 bisa 
 
 ## Follow-up
 
-- [ ] `/architect` update spec 0031 dengan *Tambahan pada kontrak spec 0031* sebelum fitur 31 membangun `instance.stop_all`.
+- [x] `/architect` update spec 0031 dengan *Tambahan pada kontrak spec 0031* sebelum fitur 31 membangun `instance.stop_all`: diterapkan di spec 0031 (2026-11-02).
 - [ ] `/architect` update spec 0005, 0004, 0012, 0013, 0015, 0020, dan 0024 dengan *Usulan update untuk spec lain* saat milestone terkait masuk.
 - [ ] Fitur 47 menambah dampak lease dan override ke preview Stop All.
 - [ ] Fitur untuk memindah data instance antar lokasi, dan untuk mendukung disk external, belum ada di scope; pertimbangkan lewat `/scope`.
