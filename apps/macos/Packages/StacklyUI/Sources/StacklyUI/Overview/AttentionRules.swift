@@ -115,12 +115,13 @@ nonisolated public enum AttentionRules {
     ) -> AttentionItem? {
         let name = instance.name
         func item(
-            _ rule: String, _ tone: Tone, _ title: String, _ message: String
+            _ rule: String, _ tone: Tone, _ title: String, _ message: String,
+            destination: AttentionDestination? = nil
         ) -> AttentionItem {
             AttentionItem(
                 id: "instance:\(instance.id.uuidString.lowercased())", rule: rule, tone: tone,
                 category: .instance, title: title, message: message,
-                destination: .instance(instance.id), sortKey: name)
+                destination: destination ?? .instance(instance.id), sortKey: name)
         }
         let isRunning = instance.lifecycle == .running
         let readiness = instance.readiness
@@ -176,6 +177,14 @@ nonisolated public enum AttentionRules {
                 "I10", .neutral, "\(name) can’t be adopted again",
                 "Its process doesn’t hold the instance lock. If stacklyd restarts, Stackly will mark it Unknown."
             )
+        }
+        if case .configDrift(let drift) = instance.blocker {
+            let more = drift.files.count - 1
+            let file = drift.files.first.map { more > 0 ? "\($0) and \(more) more" : $0 }
+            return item(
+                "I11", .caution, "\(name)’s configuration changed",
+                "\(file ?? "A config file") was changed outside Stackly. Stackly won’t start \(name) until you choose Keep Revision.",
+                destination: .configuration(instance.id))
         }
         return nil
     }

@@ -51,6 +51,13 @@ public struct InstanceRequest: Equatable, Sendable {
     public let id = UUID()
     /// The instance to open.
     public let instance: UUID
+    /// The tab the detail page starts on.
+    public let tab: InstanceTab
+
+    init(instance: UUID, tab: InstanceTab = .summary) {
+        self.instance = instance
+        self.tab = tab
+    }
 }
 
 /// The one way a page sends the person to another page of the window (spec 0022, *Navigasi*).
@@ -105,6 +112,16 @@ public final class ShellNavigator {
     /// - Parameter id: The instance.
     public func openInstance(_ id: UUID) {
         show(.instance(id))
+    }
+
+    /// Opens the detail page of an instance on a tab, such as Configuration from the drift
+    /// item of Needs Attention (spec 0029, AC-19).
+    /// - Parameters:
+    ///   - id: The instance.
+    ///   - tab: The tab the page starts on.
+    public func openInstance(_ id: UUID, tab: InstanceTab) {
+        instanceRequest = InstanceRequest(instance: id, tab: tab)
+        section = .instances
     }
 
     /// Asks the Instances page to go back to its table.

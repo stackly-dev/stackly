@@ -84,6 +84,8 @@ public struct StacklyCommands: Commands {
             OpenInSubmenu(context: context)
             GroupDivider(.instance, before: 4)
             CommandItem(.duplicateInstance, context: context)
+            CommandItem(.renameInstance, context: context)
+            CommandItem(.editPorts, context: context)
         }
         // Replaced so the Stackly Help item that opens nothing goes away; the search field
         // stays. Stackly Help joins with feature 66.

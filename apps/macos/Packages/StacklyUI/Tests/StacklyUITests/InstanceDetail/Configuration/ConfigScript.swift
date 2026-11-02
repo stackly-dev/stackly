@@ -16,6 +16,12 @@ nonisolated final class ConfigScript: Sendable {
         var sent: [(call: Call, key: String)] = []
         var outcome: MutationOutcome
         var final: OperationSummary?
+        var endpointVerdict: Result<EndpointValidation, ClientError> = .success(
+            EndpointValidation(
+                valid: true, problems: [],
+                changes: [EndpointChange(name: "main", old: .fixed(5555), new: .fixed(5600))],
+                impact: .restart))
+        var validatedEndpoints: [[EndpointRequest]] = []
     }
 
     static let instance = UUID(uuidString: "0192f3a5-0000-7000-8000-000000000001") ?? UUID()
@@ -65,6 +71,11 @@ nonisolated final class ConfigScript: Sendable {
 
     var validated: [ConfigChangeRequest] { state.withLock { $0.validated } }
     var sent: [(call: Call, key: String)] { state.withLock { $0.sent } }
+    var validatedEndpoints: [[EndpointRequest]] { state.withLock { $0.validatedEndpoints } }
+
+    func judgeEndpoints(_ verdict: Result<EndpointValidation, ClientError>) {
+        state.withLock { $0.endpointVerdict = verdict }
+    }
 
     func show(_ view: InstanceConfigView) { state.withLock { $0.view = view } }
     func judge(_ verdict: Result<ConfigValidation, ClientError>) {
@@ -86,8 +97,11 @@ nonisolated final class ConfigScript: Sendable {
                     return state.verdict
                 }.get()
             },
-            validateEndpoints: { _, _, _ throws(ClientError) in
-                throw .notSent(ClientErrorCatalog.notConnected())
+            validateEndpoints: { [self] _, _, requests throws(ClientError) in
+                try state.withLock { state in
+                    state.validatedEndpoints.append(requests)
+                    return state.endpointVerdict
+                }.get()
             },
             send: { [self] call, key in
                 state.withLock { state in

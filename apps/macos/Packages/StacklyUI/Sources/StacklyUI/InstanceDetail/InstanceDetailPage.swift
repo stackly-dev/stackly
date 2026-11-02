@@ -19,6 +19,7 @@ struct InstanceDetailPage: View {
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
+    @Environment(\.instanceEditAction) private var editInstance
     @Environment(\.loadingDelay) private var loadingDelay
     @State private var lookup = Lookup.searching
     @State private var hadSummary = false
@@ -214,9 +215,12 @@ struct InstanceDetailPage: View {
 
     /// The items of the More menu of the toolbar.
     private func moreItems(_ summary: InstanceSummary) -> [StacklyAction] {
-        Self.moreItems(
+        let edit = InstanceEditSource(id: summary.id, name: summary.name)
+        return Self.moreItems(
             copyConnection: copyConnection, duplicate: duplicateInstance,
-            source: DuplicateSourceRef(id: summary.id, name: summary.name))
+            source: DuplicateSourceRef(id: summary.id, name: summary.name),
+            rename: editInstance?.renameAction(for: edit),
+            editPorts: editInstance?.editPortsAction(for: edit))
     }
 
     /// The items of the More menu: Copy Connection String, then Duplicate… when the window has the sheet for it (spec 0024 AC-13).
@@ -226,12 +230,13 @@ struct InstanceDetailPage: View {
     ///   - source: The instance of the page.
     static func moreItems(
         copyConnection: StacklyAction, duplicate: DuplicateInstanceAction?,
-        source: DuplicateSourceRef
+        source: DuplicateSourceRef, rename: StacklyAction? = nil, editPorts: StacklyAction? = nil
     ) -> [StacklyAction] {
         var items = [copyConnection]
         if let duplicate {
             items.append(duplicate.stacklyAction(for: source))
         }
+        items.append(contentsOf: [rename, editPorts].compactMap { $0 })
         return items
     }
 

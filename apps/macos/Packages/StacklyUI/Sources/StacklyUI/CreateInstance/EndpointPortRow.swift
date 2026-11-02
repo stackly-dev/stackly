@@ -7,8 +7,33 @@ import SwiftUI
 /// A taken Fixed port says so with a symbol and words and offers the free port the daemon
 /// found; the offer is applied only by the button, never on its own.
 struct EndpointPortRow: View {
-    let model: CreateInstanceModel
     let endpoint: EndpointDraft
+    let check: PreflightCheck?
+    let setMode: (PortMode) -> Void
+    let setPortText: (String) -> Void
+    let usePort: (UInt16) -> Void
+
+    /// The row of an endpoint of the New Instance sheet: the check comes from its preflight.
+    init(model: CreateInstanceModel, endpoint: EndpointDraft) {
+        self.init(
+            endpoint: endpoint, check: model.check(forEndpoint: endpoint.name),
+            setMode: { model.setMode($0, of: endpoint.name) },
+            setPortText: { model.setPortText($0, of: endpoint.name) },
+            usePort: { model.usePort($0, for: endpoint.name) })
+    }
+
+    /// The row of an endpoint with its own source of checks, such as the Ports sheet of an
+    /// instance that exists (spec 0029).
+    init(
+        endpoint: EndpointDraft, check: PreflightCheck?, setMode: @escaping (PortMode) -> Void,
+        setPortText: @escaping (String) -> Void, usePort: @escaping (UInt16) -> Void
+    ) {
+        self.endpoint = endpoint
+        self.check = check
+        self.setMode = setMode
+        self.setPortText = setPortText
+        self.usePort = usePort
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s6) {
@@ -44,13 +69,13 @@ struct EndpointPortRow: View {
     private var mode: Binding<PortMode> {
         Binding(
             get: { endpoint.mode },
-            set: { model.setMode($0, of: endpoint.name) })
+            set: { setMode($0) })
     }
 
     private var portText: Binding<String> {
         Binding(
             get: { endpoint.portText },
-            set: { model.setPortText($0, of: endpoint.name) })
+            set: { setPortText($0) })
     }
 
     @ViewBuilder private var note: some View {
@@ -58,7 +83,7 @@ struct EndpointPortRow: View {
             Label(EndpointDraft.invalidPortMessage, systemImage: Tone.critical.symbol)
                 .font(.callout)
                 .foregroundStyle(Tone.critical.text)
-        } else if let check = model.check(forEndpoint: endpoint.name), endpoint.mode == .fixed {
+        } else if let check, endpoint.mode == .fixed {
             switch check.status {
             case .error:
                 VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -67,7 +92,7 @@ struct EndpointPortRow: View {
                         .foregroundStyle(StacklyColor.textSecondary)
                     if let suggested = check.suggestedPort {
                         Button("Use \(String(suggested))") {
-                            model.usePort(suggested, for: endpoint.name)
+                            usePort(suggested)
                         }
 
                     }

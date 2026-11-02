@@ -184,6 +184,7 @@ public struct OverviewPage: View {
     private func open(_ destination: AttentionDestination) {
         switch destination {
         case .instance(let id): navigator?.openInstance(id)
+        case .configuration(let id): navigator?.openInstance(id, tab: .configuration)
         case .operations: navigator?.show(.operations)
         case .diagnostics: navigator?.show(.diagnostics)
         }
