@@ -29,6 +29,7 @@ Kamu boleh mengerjakannya kapan saja dan tidak harus sekaligus. Setiap bagian be
 | [S. F23 Provider NATS](#s-f23-provider-nats) | F23 milestone 4 di [scope/02-instalasi-pertama.md](scope/02-instalasi-pertama.md) | 20 menit, sesudah O | wajib untuk F23 |
 | [U. Duplicate di aplikasi](#u-duplicate-di-aplikasi-fitur-24) | F24 milestone 3 dan 4, AC-14 di [scope/03-multi-versi-dan-instance.md](scope/03-multi-versi-dan-instance.md) | 35 menit dengan fake provider, ditambah 40 menit dengan PostgreSQL 17 | wajib untuk F24 |
 | [V. Stop, restart, dan reload tanpa jaringan](#v-stop-restart-dan-reload-tanpa-jaringan-fitur-26) | F26 milestone 4, AC-12 dan AC-18 di [scope/04-kerja-harian.md](scope/04-kerja-harian.md) | 30 menit, Wi-Fi kamu matikan sendiri | bukti tambahan untuk F26 (fitur sudah done) |
+| [W. Buka ulang app dan restart daemon dari Settings](#w-buka-ulang-app-dan-restart-daemon-dari-settings-fitur-30) | F30 milestone 5, AC-1 dan AC-16 di [scope/04-kerja-harian.md](scope/04-kerja-harian.md) | 45 menit, sesudah T | wajib untuk F30 |
 
 Urutan yang aku sarankan: E dulu karena paling singkat, lalu A, lalu B. Setelah itu kerjakan C, D, dan F sekali jalan, karena ketiganya memakai root dan jendela app yang sama.
 
@@ -524,6 +525,78 @@ Root dev, cache, dan terminal sama seperti T. Artefak yang dipakai hanya Postgre
 9. Nyalakan lagi Wi-Fi. Bersihkan seperti T langkah 17 (hanya `pg18-dev`).
 
 **Yang dikirim:** versi macOS, keluaran langkah 2, PID sebelum dan sesudah langkah 3 dan 4, keluaran CLI langkah 5, hasil langkah 7 dan 8, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai".
+
+## W. Buka ulang app dan restart daemon dari Settings (fitur 30)
+
+Untuk F30 (spec 0030) milestone 5 langkah 14: AC-1 (tutup lalu buka app dengan tiga PostgreSQL `ready`, record manual `native`) dan AC-16 (tombol Restart Daemon di Settings). Sumber: `docs/specs/0030-reconciliation-restart-daemon-terencana/verify.md`. Belum ada record di `evidence/manual/` untuk bagian ini; Claude yang membuatnya dari hasilmu. Bukti otomatis sudah ada: `closing_every_client_keeps_three_postgresql_instances_unchanged` di `apps/daemon/tests/postgresql/reconcile.rs`, `ShellReopenTests`, `SettingsDaemonTests`, `RestartBannerTests`, dan `RestartSnapshotTests`. Bagian ini menambah apa yang hanya terlihat di aplikasi sungguhan.
+
+Root dev, cache, dan terminal sama seperti T; artefak yang dipakai hanya PostgreSQL 18.6 (`$PG18` di T langkah 2). Bagian 1 memakai daemon `manual`. Bagian 2 memakai root yang sama dengan daemon dari job launchd sementara berlabel `dev.stackly.test.agent.f30`. Jangan pernah memuat atau memanggil agent milikmu (`com.ojiepermana.stackly.daemon`) di bagian ini.
+
+**Bagian 1, buka ulang app** (AC-1).
+
+1. Kerjakan T langkah 1 sampai 6 (hanya `$PG18`), lalu Get PostgreSQL 18.6 di Catalog.
+2. Buat tiga instance lewat New Instance: Runtime `PostgreSQL 18.6`, Name `pg18-a`, `pg18-b`, dan `pg18-c`, port Automatic, password Generate, Start after creating menyala. Tunggu ketiganya Ready.
+3. Catat keadaan sebelum, di Terminal A: `for n in pg18-a pg18-b pg18-c; do $S instance get $n --json; done` dan `$S daemon status --json`. Dari setiap instance simpan `result.instance.id`, `result.instance.process.pid`, dan `result.instance.process.startedAt`; dari daemon simpan `result.info.serverInstanceId` dan `result.info.pid`.
+4. Siapkan psql: `P18=$(ls -d "$R"/data/runtimes/postgresql/18.6/macos-aarch64/*/bin/psql)`. Untuk tiap instance buka detail, tab Summary, klik Copy di baris Connection string, lalu dalam 90 detik `"$P18" "$(pbpaste)" -Atc "select 1"`. Harus mencetak `1`.
+5. Tutup app dengan ⌘Q. Tunggu 10 detik, lalu: `kill -0 <result.info.pid>` berhasil (daemon masih hidup) dan `ps -axww -o pid=,args= | grep "$R" | grep "bin/postgres" | grep -v grep` masih menampilkan tiga postmaster dengan PID dari langkah 3.
+6. Buka app lagi (Terminal C, perintah yang sama seperti T langkah 6). Instances menampilkan tiga baris Ready tanpa berhenti di Starting, tanpa banner, dan tanpa Failed.
+7. Ulangi langkah 3 dan langkah 4 (salin ulang connection string). Semua nilai `id`, `process.pid`, `process.startedAt`, dan `serverInstanceId` harus sama dengan sebelum, dan `select 1` mencetak `1` untuk ketiganya.
+
+**Bagian 2, restart dari tombol Settings** (AC-16). Pakai root dan tiga instance dari bagian 1. App boleh tetap terbuka.
+
+1. Hentikan daemon `manual` di Terminal B dengan Ctrl+C. Ketiga postmaster tetap hidup (cek `ps` seperti bagian 1 langkah 5). Banner daemon di app menunjukkan daemon putus.
+2. Buat plist sementara di Terminal A. Plist ini mengikuti plist produksi, dengan label uji, `ProgramArguments`, dan `STACKLY_ROOT` milik root dev:
+
+   ```bash
+   export LABEL=dev.stackly.test.agent.f30 PLIST="$R.f30.plist"
+   cat > "$PLIST" <<EOF
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0">
+   <dict>
+   	<key>Label</key>
+   	<string>$LABEL</string>
+   	<key>ProgramArguments</key>
+   	<array>
+   		<string>$PWD/target/debug/stacklyd</string>
+   	</array>
+   	<key>EnvironmentVariables</key>
+   	<dict>
+   		<key>STACKLY_ROOT</key>
+   		<string>$R</string>
+   	</dict>
+   	<key>RunAtLoad</key>
+   	<true/>
+   	<key>KeepAlive</key>
+   	<dict>
+   		<key>SuccessfulExit</key>
+   		<false/>
+   	</dict>
+   	<key>ThrottleInterval</key>
+   	<integer>10</integer>
+   	<key>ExitTimeOut</key>
+   	<integer>30</integer>
+   	<key>ProcessType</key>
+   	<string>Standard</string>
+   </dict>
+   </plist>
+   EOF
+   plutil -lint "$PLIST" && launchctl bootstrap "gui/$(id -u)" "$PLIST"
+   ```
+
+   Dalam sekitar 30 detik `$S daemon status --json` harus menampilkan `result.info.launch.context` bernilai `launchd` dan `result.info.launch.label` bernilai `dev.stackly.test.agent.f30`. Catat `result.info.serverInstanceId` sebagai ID sebelum restart. Tiga instance harus kembali Ready di app dengan PID yang sama seperti bagian 1.
+3. Buka Settings (menu Stackly, Settings, atau ⌘,). Hanya ada tab General dengan satu bagian Daemon: baris `stacklyd` bersubtitle "Connected over Unix socket · protocol N" dan tombol Restart Daemon yang aktif. Tidak ada tab atau baris lain.
+4. Tekan Restart Daemon. Sheet menampilkan daftar "Keeps running" dengan `pg18-a`, `pg18-b`, dan `pg18-c`, tanpa daftar "Stops, then starts again" dan tanpa "Operations in flight". Tekan Cancel: sheet menutup tanpa efek dan `result.info.serverInstanceId` tidak berubah.
+5. Tekan Restart Daemon lagi, lalu Restart di sheet. Perhatikan jendela utama: banner "stacklyd is restarting" bisa sangat singkat karena ketiga instance tetap jalan. Tulis apa yang kamu lihat, termasuk "tidak sempat terlihat". Sesudah daemon kembali, toast "Daemon restarted. 3 instances adopted, 0 started again." muncul dan banner hilang.
+6. Cek hasilnya di Terminal A: `$S daemon status` memuat baris `Last restart` berbunyi `finished <umur>: 3 adopted, 0 restored`; `result.info.serverInstanceId` berbeda dari langkah 2; `id`, `process.pid`, dan `process.startedAt` ketiga instance sama dengan bagian 1; dan `select 1` mencetak `1` untuk ketiganya (salin ulang connection string).
+7. Daemon putus: `launchctl bootout "gui/$(id -u)/$LABEL"`. Subtitle baris `stacklyd` berubah menjadi "Disconnected · reconnecting" dan tombol Restart Daemon mati. Lalu jalankan daemon `manual` di Terminal B (`STACKLY_ROOT="<nilai R>" STACKLY_CATALOG_DIR="<nilai CAT>" target/debug/stacklyd`): subtitle menjadi "Runs outside launchd, so it can't restart itself" dan tombol tetap mati.
+8. Bersihkan: stop tiga instance (`$S instance stop <nama> --wait`), ⌘Q, Ctrl+C daemon, `launchctl bootout "gui/$(id -u)/$LABEL"` bila job masih termuat (galat "No such process" tidak apa apa), `launchctl list | grep dev.stackly.test.agent` kosong, `rm -rf "$R" "$CAT" "$PLIST"` dan folder `runtime_root`, lalu cek `ps` seperti T langkah 17; jangan pakai `pkill -f` atau `killall`. Bila run terhenti di tengah, `cargo xtask runtime spike --cleanup` mencabut job `dev.stackly.test.agent.*`.
+
+Instance yang dihentikan lalu dinyalakan lagi (`stop_restore`, sheet daftar kedua, tanda baris "Stopped for daemon restart") tidak muncul dengan PostgreSQL, karena PostgreSQL 18 ada di `HANDOVER_PROVEN`. Bagian itu dicakup test fixture dan langkah manual Milestone 4 di `verify.md`, bukan di sini.
+
+**Tangkapan layar (opsional):** ⇧⌘4 untuk sheet konfirmasi (langkah 4) dan toast (langkah 5); sebutkan path-nya supaya Claude menyalinnya ke `evidence/manual/files/`.
+
+**Yang dikirim:** versi macOS; untuk bagian 1 tiga baris `id`, `process.pid`, `process.startedAt` sebelum dan sesudah, `serverInstanceId` sebelum dan sesudah, dan hasil `select 1` tiap instance; untuk bagian 2 `launch.context` dan `launch.label` langkah 2, isi sheet langkah 4, apa yang terlihat di langkah 5, baris `Last restart` dan kedua `serverInstanceId` langkah 6, subtitle serta status tombol langkah 7, serta nomor dan apa yang terlihat untuk setiap langkah yang tidak sesuai, atau "semua sesuai".
 
 ## Cara mengirim hasil
 
