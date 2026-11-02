@@ -378,6 +378,15 @@ impl SupervisorEvents for BusSupervisorEvents {
         );
     }
 
+    fn startup_lease_changed(
+        &self,
+        instance: InstanceId,
+        state: stackly_core::session::StartupLeaseState,
+    ) {
+        self.autostart
+            .set(instance, crate::session::autostart_of(state));
+    }
+
     fn status_changed(
         &self,
         instance: InstanceId,

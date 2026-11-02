@@ -17,8 +17,9 @@ use std::time::Duration;
 
 use stackly_domain::{
     DesiredState, Endpoint, EndpointName, FailureCode, Instance, InstanceFilter, InstanceId,
-    InstanceLifecycle, IpEndpoint, LifecycleEvent, Port, PortRequest, ProcessIdentity,
-    ProcessObservation, ResourceRef, StageName, StopIntent, WriteOp, endpoints_conflict,
+    InstanceLifecycle, IpEndpoint, LeaseFilter, LeaseId, LifecycleEvent, Port, PortRequest,
+    ProcessIdentity, ProcessObservation, ResourceRef, StageName, StopIntent, WriteOp,
+    endpoints_conflict,
 };
 use stackly_platform::{
     ExitNotice, ExitStatus, InstanceLock, OutputTarget, SpawnRequest, StdinSource,
@@ -53,6 +54,7 @@ use crate::operation::{
 };
 use crate::runtime::launch::{LaunchRefusal, check_launchable, classify_early_exit};
 use crate::secret::{ResolvedSecrets, SecretCaller};
+use crate::session::manual_start_ops;
 use crate::{ensure_instance_run_dir, remove_owned_tree};
 
 /// Who starts the instance, which decides whether the secret store may show
@@ -221,12 +223,13 @@ async fn run_start(
         | InstanceLifecycle::Recovering => {
             // Nothing to do; only a stored desired `stopped` changes.
             if instance.desired() != DesiredState::Running {
+                let leases = manual_lease_ops(sup, request).await.map_err(failed)?;
                 commit_instance(sup, id, None, CommitMode::Operation, |changes| {
                     changes.apply(|instance| {
                         instance.set_desired(DesiredState::Running);
                         Ok::<_, SupervisorError>(())
                     })?;
-                    Ok(Vec::new())
+                    Ok(leases.clone())
                 })
                 .await
                 .map_err(failed)?;
@@ -276,6 +279,7 @@ pub(crate) async fn start_stopped(
         let armed = gate(sup, ctx, first_caller, true).await?;
         ctx.check_cancel()?;
         enter(ctx, StageName::JOURNAL, true, false).await?;
+        let leases = manual_lease_ops(sup, request).await.map_err(failed)?;
         let journaled = commit_instance(
             sup,
             id,
@@ -290,7 +294,7 @@ pub(crate) async fn start_stopped(
                 }
                 let now = deps.platform.clock().now();
                 apply_event(changes, LifecycleEvent::StartBegin, now)?;
-                Ok(Vec::new())
+                Ok(leases.clone())
             },
         )
         .await;
@@ -308,6 +312,31 @@ pub(crate) async fn start_stopped(
         Err(WorkError::Cancelled) => cancel_cleanup(sup, ctx, id).await,
         other => other,
     }
+}
+
+/// The manual lease a start a person asked for writes with desired `running`
+/// (spec 0031, AC-9). A start the daemon makes on its own (reconciliation,
+/// login, the restart policy) writes none.
+async fn manual_lease_ops(
+    sup: &Supervisor,
+    request: &StartRequest,
+) -> Result<Vec<WriteOp>, SupervisorError> {
+    if !matches!(request.trigger, StartTrigger::User(_)) {
+        return Ok(Vec::new());
+    }
+    let id = request.instance;
+    let registry = sup.deps().registry.clone();
+    let leases = blocking(move || registry.leases(id, LeaseFilter::Unreleased))
+        .await?
+        .map_err(SupervisorError::Registry)?
+        .value;
+    Ok(manual_start_ops(
+        id,
+        &leases,
+        sup.session().as_ref(),
+        LeaseId::generate(),
+        sup.deps().platform.clock().now(),
+    ))
 }
 
 /// The respawn of a crashed instance (spec 0010, *Restart policy*): the
@@ -1484,7 +1513,7 @@ async fn cancel_cleanup(sup: &Supervisor, ctx: &OperationContext, id: InstanceId
         // No process will exit to remove what a render wrote.
         remove_material(sup, &actor).await;
     }
-    sup.journal_stop(id, !has_process, StopIntent::User)
+    sup.journal_stop(id, !has_process, StopIntent::User, Vec::new())
         .await
         .map_err(failed)?;
     if has_process {

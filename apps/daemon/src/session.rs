@@ -163,6 +163,16 @@ impl AutostartBook {
     }
 }
 
+/// The wire state of a startup lease state.
+#[must_use]
+pub const fn autostart_of(state: stackly_core::session::StartupLeaseState) -> AutostartSession {
+    match state {
+        stackly_core::session::StartupLeaseState::Active => AutostartSession::Active,
+        stackly_core::session::StartupLeaseState::Suppressed => AutostartSession::Suppressed,
+        _ => AutostartSession::None,
+    }
+}
+
 /// Reads the startup leases of `session` for every instance. A blocking
 /// call.
 fn read_book(

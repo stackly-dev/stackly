@@ -115,10 +115,16 @@ async fn a_new_login_starts_the_at_login_instance_once_and_a_stop_holds_in_the_s
 
     // The user stops it; the same session does not start it again (AC-8).
     api.stop_when_free(id).await;
-    api.wait_instance(id, "stopped", |summary| {
-        summary.lifecycle == InstanceLifecycle::Stopped
-    })
-    .await;
+    let stopped = api
+        .wait_instance(id, "stopped", |summary| {
+            summary.lifecycle == InstanceLifecycle::Stopped
+        })
+        .await;
+    assert_eq!(
+        stopped.autostart.session,
+        AutostartSession::Suppressed,
+        "a stop by the person suppresses the startup lease of this session"
+    );
     drop(api);
     stop(second).await;
     let third = start(&site, launchd(), &session).await;

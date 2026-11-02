@@ -154,7 +154,7 @@ pub(crate) async fn restart_steps(
     ctx.set_stage(StageName::JOURNAL).await?;
     let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
     let journaled = sup
-        .journal_stop(id, no_process, StopIntent::User)
+        .journal_stop(id, no_process, StopIntent::User, Vec::new())
         .await
         .map_err(failed)?;
     // The restart window starts from zero, whatever came before (AC-6).

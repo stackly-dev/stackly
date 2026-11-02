@@ -12,6 +12,7 @@ mod force_restart;
 mod init;
 mod integrity;
 mod launch;
+mod leases;
 mod listener;
 mod login;
 mod native;

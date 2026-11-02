@@ -868,6 +868,7 @@ async fn start_slot(
                     // reconciliation reads the desired state it wrote.
                     let session = session::rotate(&core).await;
                     let session_changed = session.session_changed();
+                    supervisor.set_session(session.login().map(|login| login.id.clone()));
                     // Without a session (it could not be read) the queue holds
                     // only the run again list of reconciliation (spec 0031).
                     let queues = session.login().is_some();

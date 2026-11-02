@@ -230,7 +230,7 @@ impl Supervisor {
                 | InstanceLifecycle::Stopped
                 | InstanceLifecycle::Failed => {
                     return self
-                        .settle_gone_process(id, StopIntent::PlannedRestart)
+                        .settle_gone_process(id, StopIntent::PlannedRestart, Vec::new())
                         .await;
                 }
                 InstanceLifecycle::Recovering => {}
@@ -240,7 +240,7 @@ impl Supervisor {
         actor.cancel_respawn(deps);
         let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
         let journaled = self
-            .journal_stop(id, no_process, StopIntent::PlannedRestart)
+            .journal_stop(id, no_process, StopIntent::PlannedRestart, Vec::new())
             .await?;
         if has_process && journaled == StopJournal::Begun {
             self.stop_process(id, std::future::pending()).await?;
