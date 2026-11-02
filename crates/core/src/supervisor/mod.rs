@@ -45,6 +45,7 @@ mod commit;
 mod config;
 mod deps;
 mod drain;
+pub mod drift;
 mod error;
 mod evidence;
 mod exit;

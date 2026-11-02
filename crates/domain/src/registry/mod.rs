@@ -36,7 +36,10 @@ use crate::text::serde_as_text;
 use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
 
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
-pub use config::{ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson};
+pub use config::{
+    ConfigRevisionNumber, ConfigRevisionOrigin, ConfigRevisionRecord, ConfigRevisionStatus,
+    ConfigValuesJson, EndpointRequests,
+};
 pub use error::{BatchError, NotDeletableReason, RegistryError, ResourceRef};
 pub use guard::{CommitGuard, GuardDecision, GuardView, Guarded};
 pub use install::{
@@ -232,6 +235,32 @@ pub trait Registry: Send + Sync {
     /// Returns `NotFound` for an unknown instance, or `Corrupt`, `Busy`,
     /// `Unavailable`, or `Io`.
     fn active_config_revision(
+        &self,
+        instance: InstanceId,
+    ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError>;
+
+    /// Returns at most `limit` config revisions of an instance, newest
+    /// number first (spec 0029). The order never follows `previous`, which
+    /// prune can leave empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` for an unknown instance, or `Corrupt`, `Busy`,
+    /// `Unavailable`, or `Io`.
+    fn config_revisions(
+        &self,
+        instance: InstanceId,
+        limit: u32,
+    ) -> Result<Versioned<Vec<ConfigRevisionRecord>>, RegistryError>;
+
+    /// Returns the last known good config revision of an instance: the one
+    /// with `ready_at` set and the highest number, or `None` (spec 0029).
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` for an unknown instance, or `Corrupt`, `Busy`,
+    /// `Unavailable`, or `Io`.
+    fn last_known_good(
         &self,
         instance: InstanceId,
     ) -> Result<Versioned<Option<ConfigRevisionRecord>>, RegistryError>;

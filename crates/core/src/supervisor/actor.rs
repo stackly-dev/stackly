@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    Health, HealthState, Instance, InstanceBlocker, InstanceId, Pid, ProcessIdentity, Readiness,
+    ConfigRevisionId, Health, HealthState, Instance, InstanceBlocker, InstanceId, Pid, ProcessIdentity, Readiness,
     ReadinessState, ReasonCode, ResourceRevision,
 };
 use stackly_platform::{ExitListener, ExitNotice, FileIdentity};
@@ -47,6 +47,10 @@ pub(crate) struct ProcessSlot {
     /// so an exit by that signal reads `clean` and any other signal
     /// `crashed` (spec 0026, *Handler exit: `last_exit`*).
     pub(crate) sent_signal: Option<i32>,
+    /// The config revision the process was last rendered for, at its spawn
+    /// or its last reload; empty for an adopted process, which never makes
+    /// a revision a last known good (spec 0029, *Last known good*).
+    pub(crate) applied_revision: Option<ConfigRevisionId>,
 }
 
 /// Hands the exit of one process to the tasks waiting for it.
@@ -148,11 +152,13 @@ impl ActorState {
 
     /// Offers a blocker. It replaces the current one only when its priority
     /// is not lower: `identityUnproven`, then `dataInUse`, then
-    /// `needsSecret` (spec 0010, *Status dan event*).
+    /// `needsSecret` (spec 0010, *Status dan event*), then `configDrift`
+    /// (spec 0029).
     pub(crate) fn offer_blocker(&mut self, blocker: InstanceBlocker) {
         let priority = |blocker: &InstanceBlocker| match blocker {
             InstanceBlocker::IdentityUnproven { .. } => 3,
             InstanceBlocker::DataInUse { .. } => 2,
+            InstanceBlocker::ConfigDrift { .. } => 0,
             _ => 1,
         };
         if self
@@ -161,6 +167,28 @@ impl ActorState {
             .is_none_or(|current| priority(&blocker) >= priority(current))
         {
             self.blocker = Some(blocker);
+        }
+    }
+
+    /// Puts a drift check's result in the blocker slot (spec 0029, *Drift*):
+    /// drift is set only while the slot is empty or already holds drift,
+    /// and a clean check removes a `configDrift` blocker and nothing else.
+    pub(crate) fn observe_drift(&mut self, drift: Option<InstanceBlocker>) {
+        match drift {
+            Some(blocker) => {
+                if self
+                    .blocker
+                    .as_ref()
+                    .is_none_or(|current| matches!(current, InstanceBlocker::ConfigDrift { .. }))
+                {
+                    self.blocker = Some(blocker);
+                }
+            }
+            None => {
+                if matches!(self.blocker, Some(InstanceBlocker::ConfigDrift { .. })) {
+                    self.blocker = None;
+                }
+            }
         }
     }
 

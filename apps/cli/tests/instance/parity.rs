@@ -55,7 +55,7 @@ impl Draft {
             display_name: None,
             provider: ProviderSelector {
                 name: self.provider.to_owned(),
-                revision: Some("0.3.0".to_owned()),
+                revision: Some("0.4.0".to_owned()),
             },
             runtime_id: self.runtime.parse().expect("a runtime id"),
             endpoints: self
@@ -88,7 +88,7 @@ impl Draft {
             "--provider",
             self.provider,
             "--revision",
-            "0.3.0",
+            "0.4.0",
         ]
         .map(str::to_owned)
         .to_vec();

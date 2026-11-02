@@ -25,6 +25,9 @@ impl FailureCode {
     pub const IDENTITY_CAPTURE_FAILED: Self = Self::from_static("identity_capture_failed");
     /// The configuration could not be rendered before the spawn.
     pub const CONFIG_RENDER_FAILED: Self = Self::from_static("config_render_failed");
+    /// A config file was changed outside Stackly, so the render stopped
+    /// before writing a file (spec 0029).
+    pub const CONFIG_DRIFT: Self = Self::from_static("config_drift");
     /// Another process took the endpoint's port.
     pub const ENDPOINT_IN_USE: Self = Self::from_static("endpoint_in_use");
     /// Another process holds the instance lock, or the last observed

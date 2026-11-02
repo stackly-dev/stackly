@@ -51,6 +51,7 @@ pub fn set_config(site: &Site, instance: &Instance, values: &serde_json::Value) 
         ConfigRevisionId::generate(),
         instance.id(),
         ConfigValuesJson::new(values.to_string()).expect("the values are object text"),
+        stackly_domain::EndpointRequests::of(instance),
         None,
         site.fake.clock().now(),
     );

@@ -1,1 +1,1 @@
---label=${settings.label}
+--port=${endpoint.http.port}

@@ -46,7 +46,9 @@
           "eventsPublished": 40,
           "eventsDropped": 1500,
           "logLinesDropped": 0,
-          "socketRebinds": 1
+          "socketRebinds": 1,
+          "instanceLogTruncations": 0,
+          "instanceLogBytesTruncated": 0
         },
         "recovery": {
           "reason": "schema_newer_than_app",

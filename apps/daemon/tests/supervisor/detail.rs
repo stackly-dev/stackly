@@ -104,7 +104,7 @@ async fn the_detail_of_an_instance_comes_from_the_registry_and_the_pinned_packag
     assert_eq!(detail.instance_id, id);
     assert_eq!(detail.revision, summary.revision);
     assert_eq!(detail.provider.name, "testing/fake");
-    assert_eq!(detail.provider.revision, "0.3.0");
+    assert_eq!(detail.provider.revision, "0.4.0");
     assert_eq!(
         detail.provider.manifest_sha256,
         summary.provider.manifest_sha256

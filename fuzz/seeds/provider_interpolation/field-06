@@ -1,1 +1,1 @@
---config=${instance.secrets}/fake.json
+--delay-ms=${settings.initDelayMs}

@@ -10,12 +10,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use stackly_domain::{
-    Endpoint, EndpointName, InstallMode, Instance, InstanceId, InstanceLifecycle, Port, Runtime,
-    RuntimeState, ShortKey,
+    ConfigRevisionId, Endpoint, EndpointName, InstallMode, Instance, InstanceId, InstanceLifecycle,
+    Port, Runtime, RuntimeState, ShortKey,
 };
 use stackly_platform::{InstancePaths, check_private_dir};
 
 use super::Supervisor;
+use super::drift::RenderTarget;
 use super::error::SupervisorError;
 use super::persist::{blocking, read_instance};
 use crate::provider::{
@@ -39,9 +40,16 @@ pub(crate) struct Prepared {
     pub(crate) key: ShortKey,
     /// The validated settings of the active config revision.
     pub(crate) settings: SettingsValues,
+    /// The active config revision the settings come from.
+    pub(crate) revision: ConfigRevisionId,
 }
 
 impl Prepared {
+    /// Where a render of the active revision writes (spec 0029).
+    pub(crate) fn render_target(&self) -> RenderTarget {
+        RenderTarget::new(&self.paths, self.revision)
+    }
+
     /// Returns the context of a plan, with `ports` as the port of each IP
     /// endpoint that needs one decided now; every other IP endpoint keeps
     /// its effective port, and an `Auto` endpoint with neither has none.
@@ -126,8 +134,9 @@ pub(crate) async fn prepare(
             if checks == Checks::Full {
                 check_instance_folder(&platform, &paths)?;
             }
-            let settings = settings(&*registry, &package, instance.id())?;
+            let (revision, settings) = settings(&*registry, &package, instance.id())?;
             Ok(Loaded {
+                revision,
                 runtime,
                 runtime_root,
                 package,
@@ -145,10 +154,12 @@ pub(crate) async fn prepare(
         package: loaded.package,
         paths: loaded.paths,
         settings: loaded.settings,
+        revision: loaded.revision,
     })
 }
 
 struct Loaded {
+    revision: ConfigRevisionId,
     runtime: Runtime,
     runtime_root: PathBuf,
     package: ValidatedPackage,
@@ -261,13 +272,13 @@ pub(crate) fn check_instance_folder(
     check_private_dir(&info, &user).map_err(|violation| unavailable(violation.to_string()))
 }
 
-/// The settings of the active config revision, validated again against the
-/// schema of the pinned package.
+/// The active config revision and its settings, validated again against
+/// the schema of the pinned package.
 fn settings(
     registry: &dyn stackly_domain::Registry,
     package: &ValidatedPackage,
     id: InstanceId,
-) -> Result<SettingsValues, SupervisorError> {
+) -> Result<(ConfigRevisionId, SettingsValues), SupervisorError> {
     let invalid = |reason: String| SupervisorError::ConfigInvalid {
         field: "settings".to_owned(),
         reason,
@@ -282,5 +293,6 @@ fn settings(
     package
         .settings_schema()
         .validate(&document)
+        .map(|settings| (revision.id, settings))
         .map_err(|error| invalid(error.to_string()))
 }

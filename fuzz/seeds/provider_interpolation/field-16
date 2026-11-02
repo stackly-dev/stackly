@@ -1,1 +1,1 @@
-http://stackly:${secret.authToken}@${endpoint.http.address}/
+--log-line-bytes=${settings.logLineBytes}

@@ -109,7 +109,7 @@ struct CreateInstanceDuplicateTests {
         let (rig, duplicate) = try await editing()
         let draft = try #require(rig.service.preflightCalls.first)
         #expect(draft.provider == duplicate.draft.provider)
-        #expect(draft.provider.revision == "0.3.0")
+        #expect(draft.provider.revision == "0.4.0")
         #expect(draft.runtimeId == duplicate.draft.runtimeId)
         #expect(draft.displayName == nil)
         #expect(draft.endpoints == [EndpointRequest(name: "http", port: .auto)])

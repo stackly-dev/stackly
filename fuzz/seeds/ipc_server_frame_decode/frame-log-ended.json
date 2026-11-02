@@ -1,0 +1,12 @@
+{
+  "type": "log",
+  "content": {
+    "subscriptionId": 3,
+    "storeId": null,
+    "entries": [],
+    "gap": null,
+    "ended": {
+      "reason": "instance_removed"
+    }
+  }
+}

@@ -12,6 +12,7 @@ use stackly_platform::{CapturedOutput, ChildRole, ExitStatus, InstanceLock, Outp
 use tokio::time::Instant;
 
 use super::deps::SupervisorDeps;
+use super::drift;
 use super::error::SupervisorError;
 use super::helper::HelperEnd;
 use super::lock::take_lock;
@@ -147,6 +148,7 @@ impl Supervisor {
                 reason: failure.reason,
             }
         })?;
+        drift::gate(self, id, &prepared.render_target()).await?;
 
         if prepared.instance.lifecycle() == InstanceLifecycle::Uninitialized {
             let now = deps.platform.clock().now();
@@ -241,7 +243,8 @@ impl Supervisor {
                     let file = file.clone();
                     let bytes =
                         bytes.ok_or_else(|| failed("the file has no content".to_owned()))?;
-                    blocking(move || write_config(&deps, &file, &bytes))
+                    let target = prepared.render_target();
+                    blocking(move || write_config(&deps, &file, &bytes, &target))
                         .await
                         .map_err(|error| failed(error.to_string()))?
                         .map_err(|error| failed(error.to_string()))?;

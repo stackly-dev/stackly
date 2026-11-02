@@ -1,1 +1,1 @@
---data=${instance.data}
+${runtime.executable}

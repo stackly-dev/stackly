@@ -1,1 +1,1 @@
---configFile=${instance.config}/traefik.yaml
+http://${endpoint.monitoring.address}

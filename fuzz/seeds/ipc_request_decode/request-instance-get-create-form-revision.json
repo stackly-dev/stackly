@@ -6,7 +6,7 @@
     "content": {
       "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
       "provider": "testing/fake",
-      "revision": "0.3.0"
+      "revision": "0.4.0"
     }
   }
 }

@@ -111,8 +111,6 @@ async fn run_restart(
 ) -> WorkResult {
     let deps = sup.deps();
     let id = request.instance;
-    let actor = sup.actor(id);
-    let caller = request.caller.clone().in_operation(ctx.id());
 
     // The engine queued the restart behind any operation that held the
     // instance, a respawn included, so this read is the fresh state.
@@ -123,8 +121,24 @@ async fn run_restart(
 
     ctx.begin_step(StepSpec::new(StageName::LOCK)).await?;
     ctx.set_stage(StageName::LOCK).await?;
+    restart_steps(sup, request, ctx, instance.lifecycle()).await
+}
+
+/// The restart after its checks: from the stop journal to the start, under
+/// the operation `ctx`. `apply_config` and `change_endpoints` run it as
+/// their restart sub step (spec 0029), after their own validate and lock.
+pub(crate) async fn restart_steps(
+    sup: &Supervisor,
+    request: &RestartRequest,
+    mut ctx: OperationContext,
+    lifecycle: InstanceLifecycle,
+) -> WorkResult {
+    let deps = sup.deps();
+    let id = request.instance;
+    let actor = sup.actor(id);
+    let caller = request.caller.clone().in_operation(ctx.id());
     let has_process = actor.read(|state| state.process.is_some());
-    let mut lifecycle = instance.lifecycle();
+    let mut lifecycle = lifecycle;
     if !has_process && lifecycle == InstanceLifecycle::Running {
         // The exit handler records the lifecycle before it clears the
         // slot, so a fresh read tells what became of the process.

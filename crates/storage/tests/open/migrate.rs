@@ -340,3 +340,80 @@ fn ac_5_a_version_5_registry_migrates_to_last_exit_null_and_the_check_refuses_ot
         .unwrap_err();
     assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
 }
+
+#[test]
+fn a_version_6_registry_migrates_to_numbered_revisions_with_the_endpoint_snapshot() {
+    // Spec 0029, step 2: migration 7 numbers the revisions of each
+    // instance with the active one last, supersedes the others, copies the
+    // instance's IP endpoints, and leaves ready_at NULL.
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(6));
+
+    let (registry, summary) = ready(harness.open_with(&OpenOptions::new()));
+    drop(registry);
+
+    assert_eq!(summary.migrated_from, Some(6));
+    let conn = harness.connect();
+    let rows: Vec<(
+        String,
+        i64,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<i64>,
+    )> = conn
+        .prepare(
+            "SELECT id, number, status, origin, endpoints, ready_at, source_number \
+             FROM config_revisions ORDER BY instance_id, number",
+        )
+        .unwrap()
+        .query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ))
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    let snapshot = r#"{"postgres":{"type":"fixed","content":5432}}"#;
+    assert_eq!(
+        rows,
+        [
+            (
+                "0199f000-0000-7000-8000-000000000041".to_owned(),
+                1,
+                "superseded".to_owned(),
+                "created".to_owned(),
+                snapshot.to_owned(),
+                None,
+                None,
+            ),
+            (
+                "0199f000-0000-7000-8000-000000000040".to_owned(),
+                2,
+                "active".to_owned(),
+                "created".to_owned(),
+                snapshot.to_owned(),
+                None,
+                None,
+            ),
+        ]
+    );
+    let err = conn
+        .execute(
+            "UPDATE config_revisions SET number = 1 WHERE id = '0199f000-0000-7000-8000-000000000040'",
+            [],
+        )
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("UNIQUE constraint failed"),
+        "{err}"
+    );
+}

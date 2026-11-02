@@ -58,8 +58,8 @@ pub use id::{
     RuntimeId, ShortKey,
 };
 pub use instance::{
-    DesiredState, ExitKind, Instance, InstanceLifecycle, LifecycleEvent, NewInstance,
-    StartupPolicy, StoredInstance,
+    ApplyGate, DesiredState, ExitKind, Instance, InstanceLifecycle, LifecycleEvent,
+    LifecycleRefusal, NewInstance, StartupPolicy, StoredInstance, apply_allowed, rename_allowed,
 };
 pub use lease::{
     Lease, LeaseHolder, LeaseState, StopDecision, StopRequest, StoredLease, evaluate_stop,
@@ -93,15 +93,15 @@ pub use registry::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX, CommitGuard,
     Committed, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ConfigRevisionId,
-    ConfigRevisionRecord, ConfigRevisionStatus, ConfigValuesJson, DependencyManifestJson,
-    Generation, GuardDecision, GuardView, Guarded, InstallDetails, InstanceFilter,
-    InstancePathEntry, InstancePathKind, LeaseFilter, LogicalRoot, NotDeletableReason,
-    OperationCursor, OperationPage, OperationQuery, PlatformStoreKey, ProviderRevisionRecord,
-    ProviderSourceKind, ProviderSourceRecord, ProviderSourceStatus, PruneReport, Registry,
-    RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
-    SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
-    SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, SignatureInfoJson,
-    Versioned, WriteBatch, WriteOp,
+    ConfigRevisionNumber, ConfigRevisionOrigin, ConfigRevisionRecord, ConfigRevisionStatus,
+    ConfigValuesJson, DependencyManifestJson, EndpointRequests, Generation, GuardDecision,
+    GuardView, Guarded, InstallDetails, InstanceFilter, InstancePathEntry, InstancePathKind,
+    LeaseFilter, LogicalRoot, NotDeletableReason, OperationCursor, OperationPage, OperationQuery,
+    PlatformStoreKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
+    ProviderSourceStatus, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
+    ResourceRef, RetentionPolicy, SafeDetails, SafeDetailsError, SecretFieldName,
+    SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord, SecretReferenceView,
+    SecretUse, SecretUser, SignatureInfoJson, Versioned, WriteBatch, WriteOp,
 };
 pub use rule::Rule;
 pub use runtime::{

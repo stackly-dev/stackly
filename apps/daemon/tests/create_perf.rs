@@ -76,7 +76,7 @@ fn two_endpoint_catalog(scratch: &Path) -> Catalog {
     copy_tree(&source, &dir);
     let manifest = std::fs::read_to_string(dir.join("provider.yaml")).expect("the manifest reads");
     let edited = manifest
-        .replace("revision: \"0.3.0\"", "revision: \"0.3.1\"")
+        .replace("revision: \"0.4.0\"", "revision: \"0.4.1\"")
         .replace(
             "    http: { transport: tcp, purpose: client, defaultHost: \"127.0.0.1\", defaultPort: 18080 }\n",
             "    http: { transport: tcp, purpose: client, defaultHost: \"127.0.0.1\", defaultPort: 18080 }\n    admin: { transport: tcp, purpose: admin, defaultHost: \"127.0.0.1\", defaultPort: 18082 }\n",

@@ -1,1 +1,1 @@
-${instance.config}/peers.yaml
+--configFile=${instance.config}/traefik.yaml

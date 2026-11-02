@@ -53,10 +53,12 @@ async fn a_reload_renders_again_signals_hup_and_keeps_the_pid() {
         ConfigRevisionId::generate(),
         id,
         ConfigValuesJson::new(values.to_string()).unwrap(),
+        active.endpoints.clone(),
         None,
         rig.fake_now(),
     );
     revision.previous = Some(active.id);
+    revision.number = active.number.next();
     rig.registry
         .commit(WriteBatch::new(vec![WriteOp::InsertConfigRevision(
             revision,

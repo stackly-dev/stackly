@@ -1,1 +1,1 @@
-${settings.serverName}
+--leak-token=${settings.leakToken}

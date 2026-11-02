@@ -16,6 +16,7 @@ use std::time::Duration;
 use stackly_platform::{ChildRole, FileKind, InstanceLock, SecretValue};
 
 use super::SupervisorDeps;
+use super::drift::{self, RenderTarget};
 use super::error::SupervisorError;
 use super::helper::{HelperCommand, HelperEnd, run_helper};
 use super::persist::blocking;
@@ -60,18 +61,22 @@ pub(crate) fn ensure_directories(deps: &SupervisorDeps, dirs: &[PathBuf]) -> Res
     Ok(())
 }
 
-/// Writes a rendered config file atomically with mode 0600.
+/// Writes a rendered config file atomically with mode 0600. A file that is
+/// not sensitive first gets its history copy in `target` (spec 0029,
+/// AC-10).
 ///
 /// # Errors
 ///
-/// Returns the [`CoreError`] of the path check or the write, or a
-/// [`SupervisorError::ConfigInvalid`] text when the content cannot be
-/// materialized.
+/// Returns the [`CoreError`] of the path check, the copy, or the write.
 pub(crate) fn write_config(
     deps: &SupervisorDeps,
     file: &FileWrite,
     bytes: &[u8],
+    target: &RenderTarget,
 ) -> Result<(), CoreError> {
+    if !file.sensitive {
+        drift::write_copy(deps, target, &file.path, bytes)?;
+    }
     check_owned_path(&deps.platform, &deps.layout, &file.path)?;
     deps.platform.fs().write_file_atomic(&file.path, bytes)?;
     Ok(())
@@ -103,7 +108,8 @@ pub(crate) fn materialize_all(
 }
 
 /// Runs the `EnsureDirectories` and `WriteFile` steps of a render, as every
-/// spawn and every reload does first.
+/// spawn and every reload does first, with the history copies of `target`.
+/// The caller runs the drift gate first.
 ///
 /// # Errors
 ///
@@ -112,6 +118,7 @@ pub(crate) async fn run_render(
     deps: &SupervisorDeps,
     steps: &[InitStep],
     secrets: &ResolvedSecrets,
+    target: &RenderTarget,
 ) -> Result<(), SupervisorError> {
     let invalid = |failure: StepFailure| SupervisorError::ConfigInvalid {
         field: format!("render step {}", failure.step),
@@ -121,6 +128,7 @@ pub(crate) async fn run_render(
     for (index, (step, bytes)) in steps.iter().zip(contents).enumerate() {
         let deps = deps.clone();
         let step = step.clone();
+        let target = target.clone();
         blocking(move || -> Result<(), StepFailure> {
             let fail = |error: CoreError| StepFailure {
                 step: index,
@@ -131,7 +139,7 @@ pub(crate) async fn run_render(
                     ensure_directories(&deps, dirs).map_err(fail)
                 }
                 (InitStep::WriteFile(file), Some(bytes)) => {
-                    write_config(&deps, file, &bytes).map_err(fail)
+                    write_config(&deps, file, &bytes, &target).map_err(fail)
                 }
                 _ => Err(StepFailure {
                     step: index,

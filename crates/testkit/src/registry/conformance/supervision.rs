@@ -1,15 +1,19 @@
 //! What the process supervisor needs from the registry (spec 0005
 //! "Tambahan fitur 10"): process observations, whose newest is the largest
 //! row ID; config revisions, which the instance points to without a
-//! revision of its own; and several updates of one instance in one batch.
+//! revision of its own; numbered revisions that activate through the
+//! aggregate, become ready once, and prune to the newest (spec 0029); and
+//! several updates of one instance in one batch.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    BatchError, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, DesiredState, Instance,
-    InstanceId, OperationId, Pid, ProcessIdentity, ProcessObservation, ProcessStart, RegistryError,
-    ResourceRef, WriteOp,
+    BatchError, ConfigRevisionId, ConfigRevisionOrigin, ConfigRevisionRecord, ConfigRevisionStatus,
+    ConfigValuesJson, DesiredState, Endpoint, EndpointRequests, Instance, InstanceId, IpEndpoint,
+    OperationId, Pid, Port, PortRequest, ProcessIdentity, ProcessObservation, ProcessStart,
+    RegistryError, ResourceRef, Transport, WriteOp,
 };
 
 use super::{Suite, at, batch, domain, expect, expect_eq, parse, rev, shifted, suffix};
@@ -20,6 +24,8 @@ pub(super) fn supervision(suite: &Suite<'_>) {
     unknown_instances(suite);
     observations(suite);
     config_revisions(suite);
+    activated_revisions(suite);
+    ready_and_pruned_revisions(suite);
     config_survives_instance_updates(suite);
     chained_instance_updates(suite);
 }
@@ -69,6 +75,7 @@ fn first_revision(suite: &Suite<'_>, instance: InstanceId) -> ConfigRevisionReco
         ConfigRevisionId::generate(),
         instance,
         values(r#"{"listen":"127.0.0.1","port":5432}"#),
+        EndpointRequests::default(),
         Some(OperationId::generate()),
         suite.loaded_at,
     )
@@ -78,8 +85,40 @@ fn first_revision(suite: &Suite<'_>, instance: InstanceId) -> ConfigRevisionReco
 fn next_revision(suite: &Suite<'_>, previous: &ConfigRevisionRecord) -> ConfigRevisionRecord {
     let mut record = first_revision(suite, previous.instance);
     record.previous = Some(previous.id);
+    record.number = previous.number.next();
     record.values = values(r#"{"listen":"127.0.0.1","port":5433}"#);
     record
+}
+
+/// The revision that activates after `active` with `endpoints`.
+fn activated(
+    suite: &Suite<'_>,
+    active: &ConfigRevisionRecord,
+    endpoints: EndpointRequests,
+    seconds: i64,
+) -> ConfigRevisionRecord {
+    ConfigRevisionRecord::following(
+        active,
+        ConfigRevisionId::generate(),
+        values(&format!(r#"{{"port":{}}}"#, 5432 + seconds)),
+        endpoints,
+        ConfigRevisionOrigin::Applied,
+        None,
+        Some(OperationId::generate()),
+        shifted(suite.loaded_at, seconds),
+    )
+}
+
+fn port(number: u16) -> Port {
+    domain("make a port", Port::new(number))
+}
+
+fn history(suite: &Suite<'_>, check: &str, instance: InstanceId) -> Vec<u64> {
+    suite
+        .value(check, suite.registry.config_revisions(instance, 100))
+        .iter()
+        .map(|revision| revision.number.get())
+        .collect()
 }
 
 fn latest(suite: &Suite<'_>, check: &str, instance: InstanceId) -> Option<ProcessObservation> {
@@ -428,6 +467,346 @@ fn config_revisions(suite: &Suite<'_>) {
             0,
             RegistryError::DuplicateResource {
                 resource: ResourceRef::ConfigRevision(second.id),
+            },
+        ),
+    );
+}
+
+/// `ActivateConfigRevision` rewrites the instance with its revision check,
+/// records the next number, supersedes the active one, and refuses a
+/// record that does not follow it or whose endpoints differ (spec 0029).
+fn activated_revisions(suite: &Suite<'_>) {
+    let stack = suite.stack("store a runtime for activated revisions");
+    let main = || {
+        Endpoint::Ip(IpEndpoint::new(
+            parse("make an endpoint name", "main"),
+            Transport::Tcp,
+            parse("make an address", "127.0.0.1"),
+            PortRequest::Auto,
+            None,
+        ))
+    };
+    let instance = Suite::instance(&stack).endpoints(vec![main()]).build();
+    let id = instance.id();
+    let first = ConfigRevisionRecord::first(
+        ConfigRevisionId::generate(),
+        id,
+        values("{}"),
+        EndpointRequests::of(&instance),
+        None,
+        suite.loaded_at,
+    );
+    suite.commit(
+        "store an instance with an endpoint and its first revision",
+        vec![
+            WriteOp::InsertInstance(instance.clone()),
+            WriteOp::InsertConfigRevision(first.clone()),
+        ],
+    );
+    expect_eq(
+        "the first revision carries the endpoint snapshot",
+        active(suite, "read the first revision", id).map(|record| record.endpoints),
+        Some(EndpointRequests::of(&instance)),
+    );
+
+    let fixed = EndpointRequests::new(BTreeMap::from([(
+        parse("make an endpoint name", "main"),
+        PortRequest::Fixed(port(5544)),
+    )]));
+    let mut changed = instance.clone();
+    domain("set the port request", changed.set_port_requests(&fixed));
+    let second = activated(suite, &first, fixed.clone(), 1);
+
+    let mut wrong_endpoints = second.clone();
+    wrong_endpoints.endpoints = EndpointRequests::of(&instance);
+    let mut skipped = second.clone();
+    skipped.number = second.number.next();
+    let mut orphan = second.clone();
+    orphan.previous = None;
+    let mut superseded = second.clone();
+    superseded.status = ConfigRevisionStatus::Superseded;
+    for (check, record) in [
+        (
+            "an activated revision whose endpoints differ is refused",
+            wrong_endpoints,
+        ),
+        (
+            "an activated revision that skips a number is refused",
+            skipped,
+        ),
+        ("an activated revision that follows none is refused", orphan),
+        (
+            "an activated revision that is not active is refused",
+            superseded,
+        ),
+    ] {
+        let before = suite.generation();
+        let refused = suite
+            .registry
+            .commit(batch(vec![WriteOp::ActivateConfigRevision {
+                instance: changed.clone(),
+                expected: rev(1),
+                record: Box::new(record),
+            }]));
+        expect(
+            check,
+            matches!(
+                &refused,
+                Err(BatchError {
+                    op_index: Some(0),
+                    error: RegistryError::Integrity { .. },
+                })
+            ),
+            || format!("expected Integrity at op 0, got {refused:?}"),
+        );
+        expect_eq(
+            "a refused activation leaves the generation",
+            suite.generation(),
+            before,
+        );
+    }
+    suite.rejected(
+        "an activation at a stale instance revision conflicts",
+        batch(vec![WriteOp::ActivateConfigRevision {
+            instance: {
+                let mut ahead = changed.clone();
+                domain(
+                    "touch again",
+                    ahead.set_port_requests(&EndpointRequests::of(&changed)),
+                );
+                ahead
+            },
+            expected: rev(2),
+            record: Box::new(second.clone()),
+        }]),
+        at(
+            0,
+            RegistryError::RevisionConflict {
+                resource: ResourceRef::Instance(id),
+                expected: rev(2),
+                actual: rev(1),
+            },
+        ),
+    );
+    expect_eq(
+        "refused activations leave the first revision active",
+        active(suite, "read after refusals", id).map(|record| record.id),
+        Some(first.id),
+    );
+
+    let committed = suite.commit(
+        "activate the second revision with a fixed port",
+        vec![WriteOp::ActivateConfigRevision {
+            instance: changed.clone(),
+            expected: rev(1),
+            record: Box::new(second.clone()),
+        }],
+    );
+    expect_eq(
+        "an activation returns the instance's new revision",
+        committed.revisions,
+        vec![(ResourceRef::Instance(id), rev(2))],
+    );
+    expect_eq(
+        "the activated revision reads back whole as the active one",
+        active(suite, "read the second revision", id),
+        Some(second.clone()),
+    );
+    expect_eq(
+        "the activated port request reads back on the instance",
+        suite
+            .value("read the instance", suite.registry.instance(id))
+            .map(|stored| EndpointRequests::of(&stored)),
+        Some(fixed),
+    );
+    let all = suite.value("read the history", suite.registry.config_revisions(id, 10));
+    expect_eq(
+        "the history is newest number first and the old revision is superseded",
+        all.iter()
+            .map(|record| (record.number.get(), record.status))
+            .collect::<Vec<_>>(),
+        vec![
+            (2, ConfigRevisionStatus::Active),
+            (1, ConfigRevisionStatus::Superseded),
+        ],
+    );
+    suite.rejected(
+        "an activated revision ID is unique",
+        batch(vec![WriteOp::ActivateConfigRevision {
+            instance: {
+                let mut again = changed.clone();
+                domain(
+                    "keep the port request",
+                    again.set_port_requests(&EndpointRequests::of(&changed)),
+                );
+                again
+            },
+            expected: rev(2),
+            record: {
+                let mut taken = activated(suite, &second, EndpointRequests::of(&changed), 2);
+                taken.id = second.id;
+                Box::new(taken)
+            },
+        }]),
+        at(
+            0,
+            RegistryError::DuplicateResource {
+                resource: ResourceRef::ConfigRevision(second.id),
+            },
+        ),
+    );
+    let lonely = stored_instance(suite, "store an instance without revisions");
+    let mut touched = lonely.clone();
+    domain(
+        "touch the instance",
+        touched.set_port_requests(&EndpointRequests::of(&lonely)),
+    );
+    suite.rejected(
+        "an activation on an instance without an active revision is refused",
+        batch(vec![WriteOp::ActivateConfigRevision {
+            instance: touched,
+            expected: rev(1),
+            record: Box::new(activated(
+                suite,
+                &first_revision(suite, lonely.id()),
+                EndpointRequests::of(&lonely),
+                3,
+            )),
+        }]),
+        at(
+            0,
+            RegistryError::MissingReference {
+                resource: ResourceRef::Instance(lonely.id()),
+            },
+        ),
+    );
+}
+
+/// `MarkConfigRevisionReady` sets `ready_at` once; the last known good is
+/// the highest number with it; prune keeps the newest, the active one, and
+/// the last known good, and never reuses a number.
+fn ready_and_pruned_revisions(suite: &Suite<'_>) {
+    let stack = suite.stack("store a runtime for pruned revisions");
+    let instance = Suite::instance(&stack).build();
+    let id = instance.id();
+    let first = first_revision(suite, id);
+    suite.commit(
+        "store an instance with its first revision",
+        vec![
+            WriteOp::InsertInstance(instance.clone()),
+            WriteOp::InsertConfigRevision(first.clone()),
+        ],
+    );
+    expect_eq(
+        "an instance never ready has no last known good",
+        suite.value(
+            "read the last known good",
+            suite.registry.last_known_good(id),
+        ),
+        None,
+    );
+    let ready_at = shifted(suite.loaded_at, 30);
+    suite.commit(
+        "mark the first revision ready",
+        vec![
+            WriteOp::MarkConfigRevisionReady {
+                revision: first.id,
+                at: ready_at,
+            },
+            WriteOp::MarkConfigRevisionReady {
+                revision: first.id,
+                at: shifted(ready_at, 60),
+            },
+        ],
+    );
+    expect_eq(
+        "ready_at is set once and kept",
+        suite
+            .value(
+                "read the last known good",
+                suite.registry.last_known_good(id),
+            )
+            .map(|record| (record.id, record.ready_at)),
+        Some((first.id, Some(ready_at))),
+    );
+    let unknown = ConfigRevisionId::generate();
+    suite.rejected(
+        "marking an unknown revision ready is not found",
+        batch(vec![WriteOp::MarkConfigRevisionReady {
+            revision: unknown,
+            at: ready_at,
+        }]),
+        at(
+            0,
+            RegistryError::NotFound {
+                resource: ResourceRef::ConfigRevision(unknown),
+            },
+        ),
+    );
+
+    let mut current = instance;
+    let mut active_record = first.clone();
+    for step in 1..=5_i64 {
+        let mut next = current.clone();
+        domain(
+            "touch the instance",
+            next.set_port_requests(&EndpointRequests::of(&current)),
+        );
+        let record = activated(suite, &active_record, EndpointRequests::of(&current), step);
+        suite.commit(
+            "activate one more revision and prune to three",
+            vec![
+                WriteOp::ActivateConfigRevision {
+                    instance: next.clone(),
+                    expected: current.revision(),
+                    record: Box::new(record.clone()),
+                },
+                WriteOp::PruneConfigRevisions {
+                    instance: id,
+                    keep: 3,
+                },
+            ],
+        );
+        current = next;
+        active_record = record;
+    }
+    expect_eq(
+        "prune keeps the three newest numbers and the last known good",
+        history(suite, "read the pruned history", id),
+        vec![6, 5, 4, 1],
+    );
+    let survivors = suite.value(
+        "read the pruned rows",
+        suite.registry.config_revisions(id, 2),
+    );
+    expect_eq(
+        "a limit returns the newest numbers only",
+        survivors
+            .iter()
+            .map(|record| record.number.get())
+            .collect::<Vec<_>>(),
+        vec![6, 5],
+    );
+    expect_eq(
+        "the oldest kept revision whose predecessor was pruned follows none",
+        suite
+            .value("read the history", suite.registry.config_revisions(id, 100))
+            .iter()
+            .find(|record| record.number.get() == 4)
+            .map(|record| record.previous),
+        Some(None),
+    );
+    let ghost = InstanceId::generate();
+    suite.rejected(
+        "prune of an unknown instance is refused",
+        batch(vec![WriteOp::PruneConfigRevisions {
+            instance: ghost,
+            keep: 3,
+        }]),
+        at(
+            0,
+            RegistryError::MissingReference {
+                resource: ResourceRef::Instance(ghost),
             },
         ),
     );

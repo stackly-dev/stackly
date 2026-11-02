@@ -181,6 +181,10 @@ pub enum ValueKind {
     ConfigValuesJson,
     /// A [`ConfigRevisionStatus`](crate::ConfigRevisionStatus).
     ConfigRevisionStatus,
+    /// A [`ConfigRevisionOrigin`](crate::ConfigRevisionOrigin).
+    ConfigRevisionOrigin,
+    /// A [`ConfigRevisionNumber`](crate::ConfigRevisionNumber).
+    ConfigRevisionNumber,
     /// A [`ProviderSourceKind`](crate::ProviderSourceKind).
     ProviderSourceKind,
     /// A [`ProviderSourceStatus`](crate::ProviderSourceStatus).
@@ -294,6 +298,8 @@ impl ValueKind {
             Self::SecretUser => "secret user",
             Self::ConfigValuesJson => "config values",
             Self::ConfigRevisionStatus => "config revision status",
+            Self::ConfigRevisionOrigin => "config revision origin",
+            Self::ConfigRevisionNumber => "config revision number",
             Self::ProviderSourceKind => "provider source kind",
             Self::ProviderSourceStatus => "provider source status",
             Self::OsVersion => "os version",

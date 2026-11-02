@@ -66,7 +66,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 26 | Stop, restart & reload | Kerja harian | done |
 | 27 | Log per instance | Kerja harian | in-progress |
 | 28 | Metrics & health | Kerja harian | planned |
-| 29 | Edit config, nama & endpoint | Kerja harian | planned |
+| 29 | Edit config, nama & endpoint | Kerja harian | in-progress |
 | 30 | Reconciliation & restart daemon terencana | Kerja harian | planned |
 | 31 | Demand, autostart & login | Kerja harian | planned |
 | 32 | Menu bar & Settings | Kerja harian | planned |

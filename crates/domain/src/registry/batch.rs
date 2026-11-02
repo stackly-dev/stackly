@@ -12,6 +12,7 @@ use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::process::ProcessObservation;
+use crate::registry::ConfigRevisionId;
 use crate::registry::config::ConfigRevisionRecord;
 use crate::registry::error::{RegistryError, ResourceRef};
 use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord, ProviderSourceRecord};
@@ -261,6 +262,41 @@ pub enum WriteOp {
     /// `DuplicateResource` with the active revision when `previous` is
     /// empty but the instance already has one.
     InsertConfigRevision(ConfigRevisionRecord),
+    /// Activates a later config revision (spec 0029): rewrites the instance
+    /// like [`WriteOp::UpdateInstance`], with the same `expected` check,
+    /// then records `record`, marks the active revision `superseded`, and
+    /// points the instance at `record`. Fails like `UpdateInstance`; with
+    /// `DuplicateResource` when the record's ID exists; with `Integrity`
+    /// when `record` is not `active`, does not follow the active revision
+    /// with its next number, or its endpoints differ from the port
+    /// requests of `instance`; and `MissingReference` when the instance
+    /// has no active revision.
+    ActivateConfigRevision {
+        /// The instance after the change, its revision raised by 1.
+        instance: Instance,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+        /// The new revision, boxed to keep the op small.
+        record: Box<ConfigRevisionRecord>,
+    },
+    /// Sets `ready_at` of a config revision while it is empty; a revision
+    /// that already has one keeps it (spec 0029). Raises no revision. Fails
+    /// with `NotFound` when the revision does not exist.
+    MarkConfigRevisionReady {
+        /// The revision.
+        revision: ConfigRevisionId,
+        /// When the instance first reached ready on it.
+        at: Timestamp,
+    },
+    /// Deletes the oldest config revisions of an instance beyond the `keep`
+    /// newest by number, never the active one or the last known good
+    /// (spec 0029). Raises no revision; deleting nothing is not an error.
+    PruneConfigRevisions {
+        /// The instance.
+        instance: InstanceId,
+        /// How many of the newest revisions stay.
+        keep: u32,
+    },
     /// Records a provider source at revision 1 (feature 20). Fails with
     /// `DuplicateResource` when its ID, or its kind and location, exist.
     InsertProviderSource(ProviderSourceRecord),
@@ -326,6 +362,9 @@ impl WriteOp {
                 ResourceRef::Instance(observation.instance)
             }
             Self::InsertConfigRevision(record) => ResourceRef::ConfigRevision(record.id),
+            Self::ActivateConfigRevision { instance, .. } => ResourceRef::Instance(instance.id()),
+            Self::MarkConfigRevisionReady { revision, .. } => ResourceRef::ConfigRevision(*revision),
+            Self::PruneConfigRevisions { instance, .. } => ResourceRef::Instance(*instance),
             Self::InsertProviderSource(record) => ResourceRef::ProviderSource(record.id),
             Self::DeleteInstanceCreatedBy { id, .. } => ResourceRef::Instance(*id),
         }
@@ -356,9 +395,9 @@ impl WriteOp {
             Self::InsertRuntime(runtime) | Self::UpdateRuntime { runtime, .. } => {
                 Some(runtime.revision())
             }
-            Self::InsertInstance(instance) | Self::UpdateInstance { instance, .. } => {
-                Some(instance.revision())
-            }
+            Self::InsertInstance(instance)
+            | Self::UpdateInstance { instance, .. }
+            | Self::ActivateConfigRevision { instance, .. } => Some(instance.revision()),
             Self::InsertEnvironment(environment) | Self::UpdateEnvironment { environment, .. } => {
                 Some(environment.revision())
             }
@@ -385,6 +424,8 @@ impl WriteOp {
             | Self::InsertAuditEvent(_)
             | Self::RecordProcessObservation(_)
             | Self::InsertConfigRevision(_)
+            | Self::MarkConfigRevisionReady { .. }
+            | Self::PruneConfigRevisions { .. }
             | Self::DeleteInstanceCreatedBy { .. } => None,
         }
     }
@@ -395,6 +436,7 @@ impl WriteOp {
         match self {
             Self::UpdateRuntime { expected, .. }
             | Self::UpdateInstance { expected, .. }
+            | Self::ActivateConfigRevision { expected, .. }
             | Self::UpdateEnvironment { expected, .. }
             | Self::UpdateOperation { expected, .. }
             | Self::UpdateSecretReference { expected, .. } => Some(*expected),

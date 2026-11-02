@@ -28,7 +28,7 @@ async fn the_form_of_an_installed_runtime_lists_the_package_in_declaration_order
         .expect("the form is built");
 
     assert_eq!(form.provider.name, "testing/fake");
-    assert_eq!(form.provider.revision, "0.3.0");
+    assert_eq!(form.provider.revision, "0.4.0");
     assert_eq!(form.data_path, "instances/<new instance id>/data");
     assert_eq!(form.runtime.id, site.runtime_id);
     assert!(

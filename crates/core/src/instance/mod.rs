@@ -4,6 +4,7 @@
 //! connection strings and the detail facts of an instance (spec 0021), and
 //! the fuzz harness of the paths it writes.
 
+pub mod config;
 pub mod connection;
 pub mod create;
 pub mod data_compat;

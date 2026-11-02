@@ -83,7 +83,7 @@ async fn a_start_runs_every_stage_and_ends_ready_with_final_ports() {
     // The argv is exactly the plan's, the env is closed, the lock rides at
     // fd 3, and the output goes to the two spools.
     assert_eq!(spawn.args[0], "serve");
-    assert_eq!(spawn.args[3], format!("--port={port}"));
+    assert_eq!(spawn.args[4], format!("--port={port}"));
     assert!(spawn.args.contains(&"--host=127.0.0.1".to_owned()));
     assert!(spawn.env.iter().any(|(name, _)| name == "PATH"));
     assert!(spawn.lock.is_some());

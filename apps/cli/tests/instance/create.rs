@@ -31,7 +31,7 @@ fn base() -> Vec<&'static str> {
         "--provider",
         "fake",
         "--revision",
-        "0.3.0",
+        "0.4.0",
     ]
 }
 
@@ -113,7 +113,7 @@ fn create_sends_one_call_with_the_params_the_flags_map_to() {
         json!({
             "name": "demo",
             "displayName": "Demo 数据库",
-            "provider": { "name": "fake", "revision": "0.3.0" },
+            "provider": { "name": "fake", "revision": "0.4.0" },
             "runtimeId": RUNTIME,
             "endpoints": [
                 { "name": "http", "port": { "type": "auto" } },
@@ -426,7 +426,7 @@ fn arguments_with_a_wrong_shape_exit_2_without_connecting() {
             "--provider",
             "fake",
             "--revision",
-            "0.3.0",
+            "0.4.0",
         ];
         if !extra.contains(&"--runtime") {
             args.extend(["--runtime", RUNTIME]);
@@ -865,6 +865,6 @@ fn the_form_gets_the_revision_and_a_refused_form_ends_the_command_without_a_crea
     );
     let form = &logged_params(&daemon, "instance.get_create_form")[0];
     assert_eq!(form["provider"], "fake");
-    assert_eq!(form["revision"], "0.3.0");
+    assert_eq!(form["revision"], "0.4.0");
     ev.pass();
 }

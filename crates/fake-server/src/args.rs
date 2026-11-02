@@ -78,6 +78,16 @@ impl Flags {
         }
     }
 
+    /// The path in `--name` when the flag is given, which must not be
+    /// empty.
+    pub(crate) fn optional_path(&self, name: &str) -> Result<Option<PathBuf>, Failure> {
+        match self.values.get(name) {
+            Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
+            Some(_) => Err(usage(format!("--{name} must not be empty"))),
+            None => Ok(None),
+        }
+    }
+
     /// The non negative whole number in `--name`, or `default` when the
     /// flag is absent.
     pub(crate) fn number<T: FromStr>(&self, name: &str, default: T) -> Result<T, Failure> {

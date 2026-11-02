@@ -92,6 +92,13 @@ impl IpEndpoint {
         self.bound = Some(port);
     }
 
+    /// Changes how the endpoint asks for its port and forgets the bound
+    /// port, which belonged to the old request (spec 0029).
+    pub(crate) const fn set_request(&mut self, request: PortRequest) {
+        self.request = request;
+        self.bound = None;
+    }
+
     /// Returns the effective port: the bound port when there is one, else
     /// the fixed port. An `Auto` endpoint that is not bound has none.
     #[must_use]

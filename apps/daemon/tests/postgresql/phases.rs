@@ -88,10 +88,12 @@ pub async fn reload_log_statement(site: &Site, made: &Made, pid: u32, started: &
         ConfigRevisionId::generate(),
         id,
         ConfigValuesJson::new(values.to_string()).expect("the values are valid"),
+        active.endpoints.clone(),
         None,
         site.platform.clock().now(),
     );
     revision.previous = Some(active.id);
+    revision.number = active.number.next();
     registry
         .commit(WriteBatch::new(vec![WriteOp::InsertConfigRevision(
             revision,

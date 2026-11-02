@@ -47,6 +47,72 @@ code_enum! {
     }
 }
 
+/// What applying a config revision does, by the lifecycle the work finds
+/// (spec 0029, *State transitions*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ApplyGate {
+    /// Not running: keep the revision for the next start.
+    Save,
+    /// Running: reload when every changed field reloads and the provider
+    /// can, else restart.
+    Reload,
+    /// Recovering: always restart.
+    Restart,
+}
+
+/// Why a lifecycle refuses a config change or a rename now (spec 0029,
+/// AC-6). Core maps each to the code of spec 0010 or spec 0026.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LifecycleRefusal {
+    /// A start is still running.
+    Starting,
+    /// A stop is still running.
+    Stopping,
+    /// The process's identity is not proven.
+    Unknown,
+    /// The data folder is being initialized.
+    Initializing,
+    /// The instance was removed with its data kept.
+    Retained,
+}
+
+/// Returns what applying a config revision does in `lifecycle`, or why it
+/// is refused (spec 0029, AC-6).
+///
+/// # Errors
+///
+/// Returns the [`LifecycleRefusal`] for `starting`, `stopping`, `unknown`,
+/// `initializing`, and `retained`.
+pub const fn apply_allowed(lifecycle: InstanceLifecycle) -> Result<ApplyGate, LifecycleRefusal> {
+    match lifecycle {
+        InstanceLifecycle::Stopped
+        | InstanceLifecycle::Failed
+        | InstanceLifecycle::Uninitialized => Ok(ApplyGate::Save),
+        InstanceLifecycle::Running => Ok(ApplyGate::Reload),
+        InstanceLifecycle::Recovering => Ok(ApplyGate::Restart),
+        InstanceLifecycle::Starting => Err(LifecycleRefusal::Starting),
+        InstanceLifecycle::Stopping => Err(LifecycleRefusal::Stopping),
+        InstanceLifecycle::Unknown => Err(LifecycleRefusal::Unknown),
+        InstanceLifecycle::Initializing => Err(LifecycleRefusal::Initializing),
+        InstanceLifecycle::Retained => Err(LifecycleRefusal::Retained),
+    }
+}
+
+/// Checks that an instance in `lifecycle` may be renamed: every lifecycle
+/// but `initializing` and `retained` (spec 0029, AC-13).
+///
+/// # Errors
+///
+/// Returns [`LifecycleRefusal::Initializing`] or
+/// [`LifecycleRefusal::Retained`].
+pub const fn rename_allowed(lifecycle: InstanceLifecycle) -> Result<(), LifecycleRefusal> {
+    match lifecycle {
+        InstanceLifecycle::Initializing => Err(LifecycleRefusal::Initializing),
+        InstanceLifecycle::Retained => Err(LifecycleRefusal::Retained),
+        _ => Ok(()),
+    }
+}
+
 /// An event of the lifecycle state machine.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LifecycleEvent {
@@ -850,6 +916,72 @@ impl Instance {
         Ok(())
     }
 
+    /// Activates a config revision on the aggregate (spec 0029): every IP
+    /// endpoint whose request differs from `requests` takes the new
+    /// request and forgets its bound port, and the revision rises by
+    /// exactly 1, also when no request changed. This is the aggregate half
+    /// of [`WriteOp::ActivateConfigRevision`](crate::WriteOp::ActivateConfigRevision),
+    /// the only way a port request changes after create.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] and leaves the instance unchanged when
+    /// `requests` names an endpoint that is not an IP endpoint
+    /// ([`InvariantDetail::NoIpEndpoint`]), leaves an IP endpoint out (the
+    /// same detail, for the first one missing), or makes two endpoints of
+    /// the instance conflict ([`InvariantDetail::EndpointSelfConflict`]).
+    pub fn set_port_requests(
+        &mut self,
+        requests: &crate::registry::EndpointRequests,
+    ) -> Result<(), InvariantError> {
+        let mut endpoints = self.endpoints.clone();
+        let mut matched = 0;
+        for endpoint in &mut endpoints {
+            if let Endpoint::Ip(ip) = endpoint {
+                let request =
+                    requests
+                        .get(ip.name())
+                        .ok_or_else(|| InvariantDetail::NoIpEndpoint {
+                            endpoint: ip.name().clone(),
+                        })?;
+                matched += 1;
+                if request != ip.request() {
+                    ip.set_request(request);
+                }
+            }
+        }
+        if matched != requests.len() {
+            let unknown = requests
+                .iter()
+                .map(|(name, _)| name)
+                .find(|name| {
+                    !endpoints
+                        .iter()
+                        .any(|endpoint| matches!(endpoint, Endpoint::Ip(ip) if ip.name() == *name))
+                })
+                .expect("a request count above the matched count names an unknown endpoint");
+            return Err(InvariantDetail::NoIpEndpoint {
+                endpoint: unknown.clone(),
+            }
+            .into());
+        }
+        for (index, endpoint) in endpoints.iter().enumerate() {
+            if let Some(earlier) = endpoints[..index]
+                .iter()
+                .find(|earlier| endpoints_conflict(earlier, endpoint))
+            {
+                return Err(InvariantDetail::EndpointSelfConflict {
+                    first: earlier.name().clone(),
+                    second: endpoint.name().clone(),
+                }
+                .into());
+            }
+        }
+        self.endpoints = endpoints;
+        self.bump_revision();
+        Ok(())
+    }
+
     /// Moves the instance to another runtime of the same software, the only
     /// way its runtime changes (BR-001).
     ///
@@ -1263,6 +1395,147 @@ mod tests {
             assert_eq!(err.rule(), None);
         }
         assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn set_port_requests_changes_requests_forgets_bound_ports_and_raises_the_revision_once() {
+        use std::collections::BTreeMap;
+
+        use crate::endpoint::{IpEndpoint, Transport, UnixEndpoint};
+        use crate::registry::EndpointRequests;
+
+        let port = |number| Port::new(number).unwrap();
+        let name = |text: &str| text.parse::<EndpointName>().unwrap();
+        let ip = |text: &str, request, bound| {
+            Endpoint::Ip(IpEndpoint::new(
+                name(text),
+                Transport::Tcp,
+                "127.0.0.1".parse().unwrap(),
+                request,
+                bound,
+            ))
+        };
+        let mut instance = instance();
+        instance.endpoints = vec![
+            ip("main", PortRequest::Auto, Some(port(6001))),
+            ip("admin", PortRequest::Fixed(port(5432)), Some(port(5432))),
+            Endpoint::Unix(UnixEndpoint::new(
+                name("socket"),
+                ".s.PGSQL.5432".parse().unwrap(),
+            )),
+        ];
+        let requests = |pairs: &[(&str, PortRequest)]| {
+            EndpointRequests::new(
+                pairs
+                    .iter()
+                    .map(|(text, request)| (name(text), *request))
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        };
+
+        instance
+            .set_port_requests(&requests(&[
+                ("main", PortRequest::Fixed(port(6001))),
+                ("admin", PortRequest::Fixed(port(5432))),
+            ]))
+            .unwrap();
+        assert_eq!(instance.revision().get(), 2);
+        let ports: Vec<_> = instance
+            .endpoints()
+            .iter()
+            .filter_map(|endpoint| match endpoint {
+                Endpoint::Ip(ip) => Some((ip.request(), ip.bound())),
+                Endpoint::Unix(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            ports,
+            [
+                (PortRequest::Fixed(port(6001)), None),
+                (PortRequest::Fixed(port(5432)), Some(port(5432))),
+            ]
+        );
+        assert_eq!(EndpointRequests::of(&instance).len(), 2);
+
+        let same = requests(&[
+            ("main", PortRequest::Fixed(port(6001))),
+            ("admin", PortRequest::Fixed(port(5432))),
+        ]);
+        instance.set_port_requests(&same).unwrap();
+        assert_eq!(
+            instance.revision().get(),
+            3,
+            "the revision rises without a change"
+        );
+
+        let before = instance.clone();
+        for (bad, missing) in [
+            (requests(&[("main", PortRequest::Auto)]), "admin"),
+            (
+                requests(&[
+                    ("main", PortRequest::Auto),
+                    ("admin", PortRequest::Auto),
+                    ("socket", PortRequest::Auto),
+                ]),
+                "socket",
+            ),
+        ] {
+            let err = instance.set_port_requests(&bad).unwrap_err();
+            assert_eq!(
+                err.detail(),
+                &InvariantDetail::NoIpEndpoint {
+                    endpoint: name(missing)
+                }
+            );
+        }
+        let err = instance
+            .set_port_requests(&requests(&[
+                ("main", PortRequest::Fixed(port(5432))),
+                ("admin", PortRequest::Fixed(port(5432))),
+            ]))
+            .unwrap_err();
+        assert!(matches!(
+            err.detail(),
+            InvariantDetail::EndpointSelfConflict { .. }
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn apply_saves_when_stopped_reloads_when_running_and_restarts_when_recovering() {
+        use InstanceLifecycle as L;
+
+        let gates: Vec<_> = L::ALL
+            .iter()
+            .map(|&lifecycle| (lifecycle, apply_allowed(lifecycle)))
+            .collect();
+        assert_eq!(
+            gates,
+            [
+                (L::Uninitialized, Ok(ApplyGate::Save)),
+                (L::Initializing, Err(LifecycleRefusal::Initializing)),
+                (L::Stopped, Ok(ApplyGate::Save)),
+                (L::Starting, Err(LifecycleRefusal::Starting)),
+                (L::Running, Ok(ApplyGate::Reload)),
+                (L::Stopping, Err(LifecycleRefusal::Stopping)),
+                (L::Failed, Ok(ApplyGate::Save)),
+                (L::Recovering, Ok(ApplyGate::Restart)),
+                (L::Unknown, Err(LifecycleRefusal::Unknown)),
+                (L::Retained, Err(LifecycleRefusal::Retained)),
+            ]
+        );
+    }
+
+    #[test]
+    fn rename_is_refused_only_while_initializing_or_retained() {
+        for &lifecycle in InstanceLifecycle::ALL {
+            let expected = match lifecycle {
+                InstanceLifecycle::Initializing => Err(LifecycleRefusal::Initializing),
+                InstanceLifecycle::Retained => Err(LifecycleRefusal::Retained),
+                _ => Ok(()),
+            };
+            assert_eq!(rename_allowed(lifecycle), expected, "{lifecycle}");
+        }
     }
 
     #[test]

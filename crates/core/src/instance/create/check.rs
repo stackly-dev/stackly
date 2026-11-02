@@ -85,6 +85,12 @@ pub enum FieldCode {
     TooMany,
     /// The value is not one of the known values.
     UnknownValue,
+    /// The field is fixed once the instance is initialized, and a config
+    /// change tried to change it (spec 0029).
+    ImmutableAfterInit,
+    /// The field holds a secret reference, which a config change cannot
+    /// change (spec 0029).
+    SecretReadOnly,
 }
 
 /// One problem with one field of the draft.

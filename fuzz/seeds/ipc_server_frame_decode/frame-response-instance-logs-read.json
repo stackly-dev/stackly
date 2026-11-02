@@ -1,0 +1,123 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000001101",
+    "reply": {
+      "type": "instance.logs_read",
+      "content": {
+        "storeId": "0192f3a5-0000-7000-8000-0000000000aa",
+        "entries": [
+          {
+            "seq": 4810,
+            "at": "2026-11-01T07:03:21.904Z",
+            "stream": null,
+            "kind": {
+              "type": "started",
+              "content": {
+                "pid": 4123
+              }
+            }
+          },
+          {
+            "seq": 4811,
+            "at": "2026-11-01T07:03:22.118Z",
+            "stream": "stderr",
+            "kind": {
+              "type": "line",
+              "content": {
+                "text": "2026-11-01 07:03:22.118 UTC [4123] LOG:  database system is ready to accept connections",
+                "level": "normal",
+                "partial": false,
+                "continued": false,
+                "step": null
+              }
+            }
+          },
+          {
+            "seq": 4812,
+            "at": "2026-11-01T07:03:22.118Z",
+            "stream": "stderr",
+            "kind": {
+              "type": "line",
+              "content": {
+                "text": "FATAL:  password authentication failed for user \"app\"",
+                "level": "error",
+                "partial": false,
+                "continued": false,
+                "step": null
+              }
+            }
+          },
+          {
+            "seq": 4813,
+            "at": "2026-11-01T07:03:22.618Z",
+            "stream": "stdout",
+            "kind": {
+              "type": "truncated",
+              "content": {
+                "bytes": 1048576
+              }
+            }
+          },
+          {
+            "seq": 4814,
+            "at": "2026-11-01T07:03:22.118Z",
+            "stream": "stdout",
+            "kind": {
+              "type": "line",
+              "content": {
+                "text": "xxxxxxxxxxxxxxxxxxxx",
+                "level": "normal",
+                "partial": true,
+                "continued": true,
+                "step": "2"
+              }
+            }
+          },
+          {
+            "seq": 4815,
+            "at": "2026-11-01T07:05:00.002Z",
+            "stream": null,
+            "kind": {
+              "type": "exited",
+              "content": {
+                "code": null,
+                "signal": 9
+              }
+            }
+          },
+          {
+            "seq": 4816,
+            "at": "2026-11-01T07:05:01.000Z",
+            "stream": null,
+            "kind": {
+              "type": "unavailable"
+            }
+          }
+        ],
+        "earlier": {
+          "storeId": "0192f3a5-0000-7000-8000-0000000000aa",
+          "seq": 4810
+        },
+        "later": null,
+        "head": {
+          "storeId": "0192f3a5-0000-7000-8000-0000000000aa",
+          "seq": 4816
+        },
+        "gap": {
+          "reason": "rotated"
+        },
+        "scanLimited": false,
+        "retention": {
+          "segmentsPerStream": 5,
+          "segmentMaxBytes": 20971520
+        },
+        "storedBytes": {
+          "stdout": 1048576,
+          "stderr": 20480
+        },
+        "skippedRecords": 1
+      }
+    }
+  }
+}

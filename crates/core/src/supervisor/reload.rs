@@ -9,12 +9,14 @@ use stackly_domain::{InstanceId, InstanceLifecycle, ReadinessState, ResourceRef,
 use stackly_platform::{ChildRole, ExitStatus, ProcessError, ProviderSignal, SignalTarget};
 use tokio::time::Instant;
 
+use super::drift;
 use super::error::SupervisorError;
 use super::helper::HelperEnd;
 use super::init::config_invalid;
 use super::persist::{blocking, read_instance};
 use super::prepare::{Checks, prepare};
 use super::probe::{self, ProbeContext};
+use super::readiness::mark_ready;
 use super::steps::{run_command, run_render};
 use super::{Supervisor, secrets};
 use crate::operation::{
@@ -105,8 +107,10 @@ impl Supervisor {
         let remaining = || budget.saturating_sub(started.elapsed());
         let reload_failed = |reason: String| SupervisorError::ReloadFailed { reason };
 
+        let target = prepared.render_target();
+        drift::gate(self, id, &target).await?;
         let secrets = secrets::resolve(self, id, &request.caller).await?;
-        run_render(deps, &plan.steps, &secrets)
+        run_render(deps, &plan.steps, &secrets, &target)
             .await
             .map_err(|error| reload_failed(error.to_string()))?;
 
@@ -170,6 +174,17 @@ impl Supervisor {
                 "the process changed during the reload".to_owned(),
             ));
         }
+        // The process read the files of this revision (spec 0029, *Last
+        // known good*).
+        actor.update(deps, |state| {
+            if let Some(slot) = state
+                .process
+                .as_mut()
+                .filter(|slot| slot.generation == generation)
+            {
+                slot.applied_revision = Some(prepared.revision);
+            }
+        });
         if !was_ready {
             return Ok(());
         }
@@ -196,6 +211,7 @@ impl Supervisor {
                 tokio::time::sleep(verify.interval.min(remaining().max(Duration::ZERO))).await;
             }
         }
+        mark_ready(self, &actor, generation);
         Ok(())
     }
 }

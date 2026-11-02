@@ -53,7 +53,7 @@ Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU,
 
 - [ ] Design it (spec): `/architect metrics & health`
 
-### 29. Edit config, nama & endpoint · needs a decision
+### 29. Edit config, nama & endpoint · in-progress
 
 Form typed dan advanced view dari schema provider, memakai renderer form yang sama dengan fitur 20, dengan diff, validasi, revision, dampak reload atau restart, histori minimal last known good, dan deteksi drift. Termasuk ganti nama (label saja; ID, runtime, credential reference, dan storage path tetap) dan ganti endpoint atau port dengan validasi yang sama seperti create.
 
@@ -61,7 +61,16 @@ Form typed dan advanced view dari schema provider, memakai renderer form yang sa
 
 **Trace:** REQ-010, REQ-015, REQ-028, PAGE-06, VAL-012, BR-003, BR-017, AC-015, AC-026, AC-045, RISK-07, PRD bagian 7.1
 
-- [ ] Design it (spec): `/architect edit config, nama & endpoint`
+**Pointer:** spec [0029](../specs/0029-edit-config-nama-endpoint/index.md)
+
+- [x] Design it (spec): `/architect edit config, nama & endpoint` · spec 0029, cross check (Fable 5.1) applied, accepted 2026-11-02
+- [ ] Build it: `/develop edit config, nama & endpoint`
+  - [ ] Domain, registry, and core: config revision number, endpoint snapshot, `ready_at`, `origin`, the migration (next free number), `ActivateConfigRevision` through the aggregate, prune to 20, fake provider `0.4.0` with `fake.conf`, the config evaluator with two new `FieldCode` variants, per file history copies and drift checks with the `ConfigDrift` blocker, `applied_revision` and `MarkConfigRevisionReady`, and the `apply_config`, `change_endpoints`, `rename_instance`, and `resolve_config_drift` operations on spec 0026's reload and restart steps (spec 0029 AC-1 to AC-16, AC-20; build steps 1 to 7)
+  - [ ] Contract, daemon, CLI, and fixture proof: six methods, DTOs, codes, protocol minor bump, fixtures, handlers, socket tests with the offline harness, and `stackly instance config get|validate|apply|rollback|keep-revision`, `rename`, `endpoint set` (spec 0029 AC-1 to AC-14, AC-17, AC-20, AC-21; build steps 8 to 11; after milestone 1)
+  - [ ] GUI: `StacklyClient`, the Configuration tab (Form, Effective File, Pending Changes, History, drift and roll back banners), the rename and ports sheets, menu items, the Overview drift item, and view fixtures (spec 0029 AC-15, AC-16, AC-18, AC-19; build steps 12 to 15; after milestone 2; needs features 67 to 69 in `ui-macos.md`)
+  - [ ] PostgreSQL 18, NATS, and Traefik on this Mac, then the network off run after your approval (spec 0029 AC-4, AC-5, AC-7, AC-8, AC-11, AC-14, AC-16, AC-21; build steps 16 to 19; after milestone 2; runtime artifacts in the xtask cache, else `BLOCKED`)
+- [ ] Verify it: `/check verify edit config, nama & endpoint`
+- [ ] Test it: `/test edit config, nama & endpoint`
 
 ### 30. Reconciliation & restart daemon terencana · needs a decision · GA
 

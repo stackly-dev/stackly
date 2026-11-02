@@ -1,1 +1,1 @@
-${endpoint.http.address}
+${instance.secrets}/token
