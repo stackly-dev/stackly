@@ -6,6 +6,7 @@ import SwiftUI
 /// delayed spinner until it arrives, while the rows of the summary are there at once.
 struct DetailsCard: View {
     @Environment(\.fixtureNow) private var fixtureNow
+    @Environment(\.feedbackCenter) private var feedbackCenter
 
     let summary: InstanceSummary
     let model: InstanceDetailModel
@@ -42,19 +43,50 @@ struct DetailsCard: View {
             if let lastExit = DetailFormat.lastExit(summary.lastExit) {
                 LabeledContent("Last exit") { Text(lastExit) }
             }
-            LabeledContent("Autostart") {
-                if let detail {
-                    Text(DetailFormat.autostart(detail.startup))
-                } else {
-                    placeholder
-                }
-            }
+            autostartRow
         }
         .labeledContentStyle(.stackly)
 
     }
 
     // MARK: - Rows
+
+    private var autostartRow: some View {
+        let autostart = summary.startup
+        let context = model.autostartContext
+        let text = AutostartText.note(
+            autostart: autostart, desired: summary.desired, context: context)
+        return LabeledContent("Autostart") {
+            VStack(alignment: .trailing, spacing: Spacing.s2) {
+                Toggle(
+                    "Start at login",
+                    isOn: Binding(
+                        get: { autostart.policy == .atLogin },
+                        set: { enabled in
+                            Task { await changeAutostart(enabled) }
+                        })
+                )
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .disabled(
+                    model.isChangingAutostart || summary.lifecycle == .retained
+                        || autostart.policy == .unrecognized)
+                if let text {
+                    Text(text)
+                        .font(.footnote)
+                        .foregroundStyle(StacklyColor.textSecondary)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+    }
+
+    private func changeAutostart(_ enabled: Bool) async {
+        let outcome = await model.setAutostart(enabled)
+        if let card = Feedback.outcome(outcome, success: nil, showOperations: nil) {
+            feedbackCenter?.show(card)
+        }
+    }
 
     private var idRow: some View {
         let id = summary.id.uuidString.lowercased()
