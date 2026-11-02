@@ -34,12 +34,12 @@ Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp,
 **Pointer:** spec [0027](../specs/0027-log-per-instance/index.md)
 
 - [x] Design it (spec): `/architect log per instance` · spec 0027, cross check (Sonnet) applied, accepted 2026-11-01
-- [ ] Build it: `/develop log per instance`
+- [x] Build it: `/develop log per instance`
   - [x] Store in core: the spec 0010 changes (`LogBatch.source`, `LogLine.end`, `LogSink::run_event`, redaction overlap at the 64 KiB cut), record format, `level_of`, filter, the per instance store with rotation, recovery, exact dedupe, the bounded write queue and writer thread, the page reader with merge and scan budget, the follow source, and the `FileSystem::create_file_private` and `open_append_private` port methods (spec 0027 AC-1 to AC-9, AC-12, AC-13; build steps 1 to 4; steps 1 and 2 can run as two parallel sessions) · code in `crates/core/src/logs/`, tests in `crates/core/tests/logs_store.rs` and `supervisor_spool.rs`
   - [x] Contract and daemon: `stackly-protocol::logs`, `LogSeq`, `instance.logs_read`, `instance.logs_follow`, `instance.logs_unfollow`, `ServerFrame::Log`, `instance.logs_unreadable`, subsystem `instance_logs`, minor bump and codegen, the spec 0009 `captured` rule, then `stacklyd::ipc::logs` with the shared subscription counter, the follow tasks, the `DurableLogSink` in `SinkSet`, and socket tests including crash, rotation, failing writes, and the fixture credential (spec 0027 AC-1 to AC-9, AC-12 to AC-14; build steps 5 and 6; after milestone 1) · protocol 1.18, code in `crates/protocol/src/logs.rs` and `apps/daemon/src/ipc/logs.rs`, tests in `apps/daemon/tests/supervisor/durable_logs.rs`; the crash test with `SpawnedDaemon` and the `ended` frame over the socket are not built yet (no delete method exists; AC-4 is covered by `crates/core/tests/logs_store.rs`)
   - [x] CLI: `stackly instance logs` with tail, follow, stream, grep, cursors, text and JSON output, Ctrl+C exit 0 (spec 0027 AC-9, AC-10; build step 7; after milestone 2) · code in `apps/cli/src/commands/instance/logs.rs`, test in `apps/cli/tests/instance/logs_real.rs`
   - [x] GUI: `StacklyClient` log methods and the `log` frame, then the Logs tab with `InstanceLogsModel`, Copy Shown Lines, every state, and the spec 0068 view fixtures (spec 0027 AC-7, AC-9, AC-11; build steps 8 and 9; after milestone 2; can run in parallel with milestone 3) · client in `clients/swift/Sources/StacklyClient/Link/` (`DaemonLink.followLogs`, `LogFollowSession`), tab in `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Instances/Logs/`, fixtures in `Fixtures/FixtureLogs.swift`, tests in `Tests/StacklyUITests/Instances/Logs/` and `SnapshotTests/InstanceLogsSnapshotTests.swift`
-  - [ ] Evidence on this Mac: the slow client evidence run, the PostgreSQL 17 native test after your approval, and a manual GUI session comparing the Logs tab with `stackly instance logs --follow` (spec 0027 AC-3, AC-6, AC-8, AC-11; build step 10; after milestones 3 and 4; without the PostgreSQL artifact in the xtask runtime cache the native test ends `BLOCKED`) · slow client run PASS on 2026-11-02 against the `stacklyd` binary (get_info p99 1 ms, daemon footprint +15 MiB, fake at 100 percent, silent follower closed by `ipc.write_timeout`), test in `apps/daemon/tests/supervisor/slow_logs.rs` with the fake setting `logLineBytes`; PostgreSQL 17.11 native PASS on 2026-11-02, test in `apps/daemon/tests/postgresql/logs.rs`; the manual GUI session is still open
+  - [x] Evidence on this Mac: the slow client evidence run, the PostgreSQL 17 native test after your approval, and a manual GUI session comparing the Logs tab with `stackly instance logs --follow` (spec 0027 AC-3, AC-6, AC-8, AC-11; build step 10; after milestones 3 and 4; without the PostgreSQL artifact in the xtask runtime cache the native test ends `BLOCKED`) · slow client run PASS on 2026-11-02 against the `stacklyd` binary (get_info p99 1 ms, daemon footprint +15 MiB, fake at 100 percent, silent follower closed by `ipc.write_timeout`), test in `apps/daemon/tests/supervisor/slow_logs.rs` with the fake setting `logLineBytes`; PostgreSQL 17.11 native PASS on 2026-11-02, test in `apps/daemon/tests/postgresql/logs.rs`; manual GUI session PASS on 2026-11-02 against the fake provider (2 lines per second) in a temporary root: the Logs tab and `stackly instance logs --follow` showed the same lines, sources, and local times, and the stream filter, search, Follow, and Load Earlier to the `process started` marker matched, as reported by the user; the daemon offline and reconnect step was not run
 - [ ] Verify it: `/check verify log per instance`
 - [ ] Test it: `/test log per instance`
 
@@ -63,7 +63,7 @@ Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU,
 - [ ] Verify it: `/check verify metrics & health`
 - [ ] Test it: `/test metrics & health`
 
-### 29. Edit config, nama & endpoint · needs a decision
+### 29. Edit config, nama & endpoint · in-progress
 
 Form typed dan advanced view dari schema provider, memakai renderer form yang sama dengan fitur 20, dengan diff, validasi, revision, dampak reload atau restart, histori minimal last known good, dan deteksi drift. Termasuk ganti nama (label saja; ID, runtime, credential reference, dan storage path tetap) dan ganti endpoint atau port dengan validasi yang sama seperti create.
 
@@ -71,9 +71,18 @@ Form typed dan advanced view dari schema provider, memakai renderer form yang sa
 
 **Trace:** REQ-010, REQ-015, REQ-028, PAGE-06, VAL-012, BR-003, BR-017, AC-015, AC-026, AC-045, RISK-07, PRD bagian 7.1
 
-- [ ] Design it (spec): `/architect edit config, nama & endpoint`
+**Pointer:** spec [0029](../specs/0029-edit-config-nama-endpoint/index.md)
 
-### 30. Reconciliation & restart daemon terencana · needs a decision · GA
+- [x] Design it (spec): `/architect edit config, nama & endpoint` · spec 0029, cross check (Fable 5.1) applied, accepted 2026-11-02
+- [ ] Build it: `/develop edit config, nama & endpoint`
+  - [ ] Domain, registry, and core: config revision number, endpoint snapshot, `ready_at`, `origin`, the migration (next free number), `ActivateConfigRevision` through the aggregate, prune to 20, fake provider `0.4.0` with `fake.conf`, the config evaluator with two new `FieldCode` variants, per file history copies and drift checks with the `ConfigDrift` blocker, `applied_revision` and `MarkConfigRevisionReady`, and the `apply_config`, `change_endpoints`, `rename_instance`, and `resolve_config_drift` operations on spec 0026's reload and restart steps (spec 0029 AC-1 to AC-16, AC-20; build steps 1 to 7)
+  - [ ] Contract, daemon, CLI, and fixture proof: six methods, DTOs, codes, protocol minor bump, fixtures, handlers, socket tests with the offline harness, and `stackly instance config get|validate|apply|rollback|keep-revision`, `rename`, `endpoint set` (spec 0029 AC-1 to AC-14, AC-17, AC-20, AC-21; build steps 8 to 11; after milestone 1)
+  - [ ] GUI: `StacklyClient`, the Configuration tab (Form, Effective File, Pending Changes, History, drift and roll back banners), the rename and ports sheets, menu items, the Overview drift item, and view fixtures (spec 0029 AC-15, AC-16, AC-18, AC-19; build steps 12 to 15; after milestone 2; needs features 67 to 69 in `ui-macos.md`)
+  - [ ] PostgreSQL 18, NATS, and Traefik on this Mac, then the network off run after your approval (spec 0029 AC-4, AC-5, AC-7, AC-8, AC-11, AC-14, AC-16, AC-21; build steps 16 to 19; after milestone 2; runtime artifacts in the xtask cache, else `BLOCKED`)
+- [ ] Verify it: `/check verify edit config, nama & endpoint`
+- [ ] Test it: `/test edit config, nama & endpoint`
+
+### 30. Reconciliation & restart daemon terencana · GA · in-progress
 
 Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon restart atau crash, rekonsiliasi proses, runtime, endpoint, storage, operasi, dan desired state, plus restart daemon terencana dengan jendela disruption yang terlihat.
 
@@ -81,7 +90,19 @@ Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon 
 
 **Trace:** REQ-001, REQ-013, AC-001, AC-013, AC-067, NFR-007, OQ-007, RISK-03, PRD bagian 19.4 dan 36
 
-- [ ] Design it (spec): `/architect reconciliation & restart daemon terencana`
+**Pointer:** spec [0030](../specs/0030-reconciliation-restart-daemon-terencana/index.md)
+
+- [x] Design it (spec): `/architect reconciliation & restart daemon terencana` · spec 0030, cross check (Sonnet) applied, aligned with spec 0031 (expiry only on a new boot, `ShutdownAccepted` kept), accepted 2026-11-02
+- [ ] Build it: `/develop reconciliation & restart daemon terencana`
+  - [ ] Contract and data: `RestartPreview`, `RestartPlanView`, the extended `ShutdownParams` and `ShutdownAccepted`, `DaemonInfo.restart`, the `daemon.restart_plan` event, `ReconcileFinding`, a protocol major bump and codegen, the domain `RestartPlan`, `data_missing`, `StopIntent`, `OperationKind::DaemonRestart`, and the restart plan migration (next free number) with retention (spec 0030 AC-18, AC-19; build steps 1 to 3)
+  - [ ] Daemon death without a plan: data and runtime checks in reconciliation and before the run folder is made, `findings`, the new `error_failure_code` mappings, PID reuse and foreign listener tests, then three PostgreSQL clusters on this Mac for closing every client, `SIGKILL`, and missing data (spec 0030 AC-1 to AC-6; build steps 4 to 6; after milestone 1)
+  - [ ] Planned restart in the daemon: `HANDOVER_PROVEN` with line matching, `daemon.restart_preview`, quiesce in `OperationEngine::begin`, the `daemon_restart` operation (digest twice, `PlannedRestart` stops under its lock keys, abort), restore through `PendingKind::Restore` and `Then::PlannedStop`, `RestartHarness`, then the native launchd run for PostgreSQL 17, 18, and NATS after your approval (spec 0030 AC-7 to AC-14; build steps 7 to 10; after milestone 2)
+  - [ ] CLI and GUI: `stackly daemon restart` with preview, prompt, `--yes`, `--force`, `--no-wait-instances`, the interactive timeout, plan following, durations, and exit codes, `daemon status`, then the Settings General Daemon section, confirmation sheet, restarting and summary banners, row marks, and toast (spec 0030 AC-1, AC-15, AC-16; build steps 11 and 12; after milestone 3)
+  - [ ] Evidence on this Mac: ten PostgreSQL instances for NFR-007 and the observed `daemonGap`, plus the manual record in `docs/manual.md` for reopening the app and restarting from Settings (spec 0030 AC-1, AC-16, AC-17; build steps 13 and 14; after milestone 4)
+- [ ] Verify it: `/check verify reconciliation & restart daemon terencana`
+- [ ] Test it: `/test reconciliation & restart daemon terencana`
+- [ ] Review it (fresh model): `/check review reconciliation & restart daemon terencana`
+- [ ] Document it: `/document reconciliation & restart daemon terencana`
 
 ### 31. Demand, autostart & login · in-progress
 
@@ -103,7 +124,7 @@ Autostart daemon dan autostart instance sebagai dua setting berbeda, di atas mod
 - [ ] Verify it: `/check verify demand, autostart & login`
 - [ ] Test it: `/test demand, autostart & login`
 
-### 32. Menu bar & Settings · needs a decision
+### 32. Menu bar & Settings · in-progress
 
 Status ringkas di menu bar dengan aksi buka aplikasi, **Quit App** yang hanya menutup GUI, dan **Stop Services** sebagai aksi terpisah dengan impact preview. Halaman Settings untuk background startup, default autostart, sumber catalog dan daftar trust provider (import lokal hadir di fitur 37), path data, cache, dan log, retention, update channel (disimpan sebagai preferensi sampai fitur 61), dan privasi, plus notifikasi opsional yang mengikuti izin.
 
@@ -111,14 +132,32 @@ Status ringkas di menu bar dengan aksi buka aplikasi, **Quit App** yang hanya me
 
 **Trace:** REQ-027 (menu bar, notifikasi), REQ-046 (privasi), PAGE-14 (bagian yang tersedia di fase 04), NFR-016
 
-- [ ] Design it (spec): `/architect menu bar & Settings`
+**Pointer:** spec [0032](../specs/0032-menu-bar-settings/index.md)
 
-### 70. Buka instance di aplikasi klien · needs a decision
+- [x] Design it (spec): `/architect menu bar & Settings`
+- [ ] Build it: `/develop menu bar & Settings` (needs feature 26 and feature 31 up to `instance.stop_all` and `startup`, with spec 0031 updated by spec 0032 *Tambahan pada kontrak spec 0031*)
+  - [ ] Daemon settings and storage locations through the CLI: migration 0007, `settings.*`, `storage.*`, location rules, create defaults, `stackly settings` and `stackly storage` (spec 0032 AC-16 to AC-21, AC-25; build steps 1 to 5)
+  - [ ] Settings window: five tabs, Appearance, startup rows, storage Change… and Use Default, offline and conflict states, create sheet defaults (spec 0032 AC-12 to AC-21, AC-23, AC-24; build steps 6 to 8)
+  - [ ] Menu bar and Stop All: `instance.preview_stop_all` and `expectedInstanceIds`, `stackly instance stop --all`, `MenuBarExtra` popover, activation policy and close notice (spec 0032 AC-1 to AC-12; build steps 9 to 11; step 9 can run beside the Settings window milestone)
+  - [ ] Notifications (spec 0032 AC-22; build step 12)
+  - [ ] Fixtures, snapshots, and manual evidence, with Open Stackly at login BLOCKED until a signing identity exists (OQ-012) (spec 0032 AC-1, AC-10 to AC-12, AC-22, AC-26; build steps 13 and 14)
+- [ ] Verify it: `/check verify menu bar & Settings`
+- [ ] Test it: `/test menu bar & Settings`
 
-Menu aksi per service di halaman Environments, seperti di mockup UI, untuk membuka instance di aplikasi lain: klien database (mockup mencontohkan TablePlus, Postico, Sequel Ace, Redis Insight), CLI provider di Terminal, monitoring atau dashboard di browser, dan file routes Traefik di Finder. Tambahan dari mockup UI, belum ada di PRD.
+### 70. Buka instance di aplikasi klien · in-progress
 
-**Done when:** daftar aksi berasal dari capability provider, bukan kode SwiftUI per provider; aplikasi yang tidak terpasang tidak ditawarkan; aksi nonaktif saat instance tidak running; password tidak pernah dititipkan lewat URL, argumen command, atau daftar proses, dan kalau sebuah aplikasi hanya menerima secret lewat cara itu, alurnya meminta aksi eksplisit dengan peringatan; CLI di Terminal memakai binary dari runtime instance itu, bukan dari PATH.
+Menu "Open In" untuk membuka instance di aplikasi lain: klien database (mockup mencontohkan TablePlus, Postico, Sequel Ace, Redis Insight), CLI provider di Terminal, monitoring atau dashboard di browser, dan file routes Traefik di Finder. Sebelum halaman Environments ada (fitur 44), menu ini tampil di toolbar detail instance, inspector Instances, dan menu Instance di menu bar; mockup menaruhnya di menu aksi per service halaman Environments, yang nanti memakai komponen yang sama. Tambahan dari mockup UI, belum ada di PRD.
+
+**Done when:** daftar aksi berasal dari capability provider, bukan kode SwiftUI per provider; aplikasi yang tidak terpasang tidak ditawarkan; aksi nonaktif saat instance tidak running; password tidak pernah dititipkan lewat URL, argumen command, atau daftar proses, dan aplikasi yang hanya menerima secret lewat cara itu tidak bisa dideklarasikan karena loader menolak token secret di aksi Open In (password disalin ke clipboard tersembunyi untuk di paste); CLI di Terminal memakai binary dari runtime instance itu, bukan dari PATH; menu tampil di detail instance, inspector Instances, dan menu Instance.
 
 **Trace:** REQ-016, REQ-027, REQ-029, BR-018
 
-- [ ] Design it (spec): `/architect buka instance di aplikasi klien`
+**Pointer:** spec [0070](../specs/0070-buka-instance-aplikasi-klien/index.md)
+
+- [x] Design it (spec): `/architect buka instance di aplikasi klien` · spec 0070, cross check (Sonnet) applied, accepted 2026-11-02
+- [ ] Build it: `/develop buka instance di aplikasi klien`
+  - [ ] Manifest, daemon, and CLI: the `openWith` block with loader rules and sentinel render, `instance::open_with::render`, `OpenAction` in `instance.get_detail`, `instance.prepare_terminal` with the `.command` script, the new error codes, minor bump and codegen, `openWith` entries in the PostgreSQL, NATS, Traefik, and fake packages with goldens, and `stackly instance open <instance> --list` (spec 0070 AC-1 to AC-4, AC-12, AC-13; build steps 1 to 6)
+  - [ ] GUI: `StacklyUI/OpenIn/` with the `AppLocator` and `WorkspaceOpener` ports, `OpenInModel`, `OpenInMenu` in the detail toolbar, the Instances inspector, and the Instance menu, spec 0068 fixtures, and the sentinel suite (spec 0070 AC-5 to AC-11, AC-14; build steps 7 to 9; after milestone 1)
+  - [ ] Evidence on this Mac: psql in Terminal with `SELECT 1` and a `ps -ww` check, TablePlus and Postico (or `BLOCKED`), NATS monitoring in the browser, after your approval (spec 0070 AC-15; build step 10; after milestone 2)
+- [ ] Verify it: `/check verify buka instance di aplikasi klien`
+- [ ] Test it: `/test buka instance di aplikasi klien`
