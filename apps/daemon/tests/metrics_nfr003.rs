@@ -12,8 +12,12 @@
 //! 3. nine fake instances and one PostgreSQL 17 instance (a tree of several
 //!    processes), `BLOCKED` when the artifact is not in the runtime cache.
 //!
-//! Run them with `cargo xtask evidence run --kind native -- cargo test -p
-//! stacklyd --test metrics_nfr003 -- --ignored --test-threads 1`.
+//! Run them with `cargo xtask evidence run --kind native -- cargo test
+//! --release -p stacklyd --test metrics_nfr003 -- --ignored --test-threads 1`.
+//! The budget holds for the release build, the one that ships: this file
+//! measures the `stacklyd` binary of the same cargo invocation, so a run
+//! without `--release` measures an unoptimized daemon, says `profile=debug` on
+//! its record, and does not count as evidence of AC-14.
 //! `STACKLY_BUDGET_SECONDS=<n>` shortens the measurement for a trial run;
 //! a run recorded as evidence uses the five minutes.
 #![cfg(target_os = "macos")]
@@ -157,8 +161,13 @@ async fn stop_all(api: &Api, ids: &[Uuid]) {
 
 /// Checks the two budgets and writes the numbers on the evidence record.
 fn judge(label: &str, found: &Measured, evidence: &Evidence) {
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
     let line = format!(
-        "{label}: instances={INSTANCES} seconds={:.0} samples={} rss_max_kib={} cpu_percent={:.3}",
+        "{label}: profile={profile} instances={INSTANCES} seconds={:.0} samples={} rss_max_kib={} cpu_percent={:.3}",
         found.seconds, found.samples, found.rss_max_kib, found.cpu_percent
     );
     eprintln!("NFR-003 {line}");
@@ -231,7 +240,7 @@ async fn ten_idle_fake_instances_stay_inside_the_budget_with_no_client() {
     let ev = evidence!(
         covers = ["NFR-003", "REQ-018"],
         kind = Kind::Native,
-        expected = "with ten idle fake instances running, probes, health, sampling, and the scheduled data size scan on, and no client, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps",
+        expected = "with ten idle fake instances running, probes, health, sampling, and the scheduled data size scan on, and no client, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps on the release build (a record says profile=debug when it is not)",
     );
     run_fake(ev, false, "no client").await;
 }
@@ -243,7 +252,7 @@ async fn ten_idle_fake_instances_stay_inside_the_budget_with_a_client_reading_me
     let ev = evidence!(
         covers = ["NFR-003", "REQ-018"],
         kind = Kind::Native,
-        expected = "with ten idle fake instances and one client that reads instance.get_metrics of all ten every five seconds with its cursor, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps",
+        expected = "with ten idle fake instances and one client that reads instance.get_metrics of all ten every five seconds with its cursor, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps on the release build (a record says profile=debug when it is not)",
     );
     run_fake(ev, true, "client every 5 s").await;
 }
@@ -255,7 +264,7 @@ async fn nine_fake_instances_and_one_postgresql_17_stay_inside_the_budget() {
     let ev = evidence!(
         covers = ["NFR-003", "REQ-018"],
         kind = Kind::Native,
-        expected = "with nine idle fake instances and one PostgreSQL 17 instance (a tree of several processes) running, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps, and the metrics of the PostgreSQL instance report more than one process",
+        expected = "with nine idle fake instances and one PostgreSQL 17 instance (a tree of several processes) running, the daemon holds at most 150 MiB of resident memory and uses at most 1 percent of one logical core over five minutes, measured from outside by ps on the release build (a record says profile=debug when it is not), and the metrics of the PostgreSQL instance report more than one process",
     );
     let Some(site) = Site::open(&ev, PG17) else {
         return;
