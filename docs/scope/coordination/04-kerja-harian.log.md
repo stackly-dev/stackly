@@ -105,7 +105,7 @@
 
 ## Dicentang pada wave ini
 
-- F28 · milestone 3 GUI dan milestone 5 Evidence · F29 · milestone 3 GUI dan milestone 4 provider nyata · F30 · milestone 4 CLI and GUI dan milestone 5 Evidence · F70 · milestone 2 GUI dan milestone 3 Evidence · laporan checker milestone dan keputusan user (langkah manual dilewati, sleep `BLOCKED`, jaringan mati ke langkah manual) · centang lead `<commit ini>`
+- F28 · milestone 3 GUI dan milestone 5 Evidence · F29 · milestone 3 GUI dan milestone 4 provider nyata · F30 · milestone 4 CLI and GUI dan milestone 5 Evidence · F70 · milestone 2 GUI dan milestone 3 Evidence · laporan checker milestone dan keputusan user (langkah manual dilewati, sleep `BLOCKED`, jaringan mati ke langkah manual) · centang lead `35d91507`
 
 - F29 · milestone 2 Contract, daemon, CLI, and fixture proof · laporan `dev-f29-m2` dan `chk-f29-m2` · merge `35bd56be`, centang `b6143968` · `999f550f`
 
