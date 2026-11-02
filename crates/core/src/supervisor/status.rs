@@ -131,6 +131,22 @@ mod tests {
     }
 
     #[test]
+    fn a_new_latency_alone_is_not_a_visible_change() {
+        let before = status("2026-01-01T00:00:00Z");
+        let mut after = before.clone();
+        after.readiness = before
+            .readiness
+            .clone()
+            .with_latency(std::time::Duration::from_millis(40));
+        after.health = before
+            .health
+            .clone()
+            .with_latency(std::time::Duration::from_millis(7));
+
+        assert!(!before.differs_visibly(&after));
+    }
+
+    #[test]
     fn a_new_state_or_reason_is_a_visible_change() {
         let before = status("2026-01-01T00:00:00Z");
         let mut after = before.clone();

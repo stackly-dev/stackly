@@ -72,6 +72,41 @@ async fn two_failed_probes_turn_ready_into_not_ready_and_never_touch_the_process
 }
 
 #[tokio::test]
+async fn readiness_and_health_carry_the_latency_of_the_attempt_that_made_them() {
+    let rig = Rig::patched(|text| replace(text, "intervalSeconds: 5", "intervalSeconds: 1")).await;
+    let id = rig.instance(&Spec::default());
+    assert_eq!(rig.sup.status(id).readiness.latency(), None);
+    let op = rig.start(id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(op, OperationState::Succeeded).await;
+    wait_for("health is healthy", || {
+        rig.sup.status(id).health.state() == HealthState::Healthy
+    })
+    .await;
+
+    let ready = rig.sup.status(id);
+    assert!(ready.readiness.latency().is_some(), "a success has one");
+    assert!(ready.health.latency().is_some());
+
+    rig.kill_servers();
+    wait_for("readiness falls back", || {
+        rig.sup.status(id).readiness.state() == ReadinessState::NotReady
+    })
+    .await;
+    assert!(
+        rig.sup.status(id).readiness.latency().is_some(),
+        "a failure has one too"
+    );
+
+    // A renewed latency alone is not a status update.
+    let statuses = rig.events.statuses_of(id);
+    for pair in statuses.windows(2) {
+        assert!(pair[0].differs_visibly(&pair[1]), "{:?}", pair);
+    }
+}
+
+#[tokio::test]
 async fn every_visible_change_gets_the_next_status_number() {
     let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
@@ -110,6 +145,9 @@ async fn every_visible_change_gets_the_next_status_number() {
 async fn an_observation_that_goes_stale_is_reported_as_unknown_with_reason_stale() {
     let rig = Rig::with_config(|config| {
         config.readiness_failure_threshold = NonZeroU32::new(1000).unwrap();
+        // The clock jump below is not a sleep here (spec 0028 AC-9 has its
+        // own tests).
+        config.wake_gap_threshold = Duration::MAX;
     })
     .await;
     let id = rig.instance(&Spec::default());
