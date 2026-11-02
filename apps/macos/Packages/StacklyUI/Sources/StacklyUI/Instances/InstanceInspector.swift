@@ -47,9 +47,7 @@ struct InstanceInspector: View {
             LabeledContent("Readiness") { Text(ReadinessText.text(for: summary)) }
             LabeledContent("Health") { Text(Self.healthText(summary.health)) }
             process
-            if let restarts = Self.restartsText(summary.restart) {
-                LabeledContent("Restarts") { Text(restarts) }
-            }
+            restartsRow
             LabeledContent("Desired") { Text(Self.desiredText(summary.desired)) }
             if summary.logsUnavailable {
                 LabeledContent("Logs") { Text("Unavailable") }
@@ -124,6 +122,27 @@ struct InstanceInspector: View {
                 }
             } else {
                 Text("Not running")
+            }
+        }
+    }
+
+    /// The restarts since the instance was created (spec 0028, AC-6), with the recent ones
+    /// under it when the restart policy counts any; without the total, only the recent ones.
+    @ViewBuilder private var restartsRow: some View {
+        let total = DetailFormat.restartsSinceCreated(row.summary)
+        let recent = Self.restartsText(row.summary.restart)
+        if total != nil || recent != nil {
+            LabeledContent("Restarts") {
+                VStack(alignment: .trailing, spacing: Spacing.s2) {
+                    if let total {
+                        Text(total)
+                        if let recent {
+                            Text(recent).font(.footnote)
+                        }
+                    } else if let recent {
+                        Text(recent)
+                    }
+                }
             }
         }
     }

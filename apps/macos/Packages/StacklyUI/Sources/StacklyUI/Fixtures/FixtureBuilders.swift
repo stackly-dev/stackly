@@ -24,6 +24,7 @@
         ///   - health: The health; unknown by default.
         ///   - lastFailure: The last failure.
         ///   - restart: The restart budget; unused by default.
+        ///   - restartTotal: The restarts that followed a crash since the instance was created.
         ///   - blocker: What stops the instance.
         public static func fixture(
             number: UInt8 = 1,
@@ -37,6 +38,7 @@
             health: InstanceHealth? = nil,
             lastFailure: InstanceLastFailure? = nil,
             restart: InstanceRestart? = nil,
+            restartTotal: UInt64 = 0,
             blocker: InstanceBlocker? = nil,
             capabilities: InstanceCapabilities? = nil,
             lastExit: InstanceLastExit? = nil
@@ -74,7 +76,7 @@
                 restart: restart
                     ?? InstanceRestart(
                         attempts: 0, budget: 5, windowSeconds: 60, nextAttemptAt: nil,
-                        exhausted: false), restartTotal: 0,
+                        exhausted: false), restartTotal: restartTotal,
                 blocker: blocker,
                 endpoints: port.map {
                     [
@@ -96,22 +98,24 @@
     nonisolated extension InstanceReadiness {
         /// A readiness observed one minute before ``FixtureClock/now``.
         public static func fixture(
-            _ state: InstanceReadinessState, reason: String, detail: String? = nil
+            _ state: InstanceReadinessState, reason: String, detail: String? = nil,
+            latencyMs: UInt32? = nil
         ) -> InstanceReadiness {
             InstanceReadiness(
                 state: state, reason: reason, detail: detail,
-                observedAt: FixtureClock.minutesAgo(1), latencyMs: nil)
+                observedAt: FixtureClock.minutesAgo(1), latencyMs: latencyMs)
         }
     }
 
     nonisolated extension InstanceHealth {
         /// A health observed one minute before ``FixtureClock/now``.
         public static func fixture(
-            _ state: InstanceHealthState, reason: String, detail: String? = nil
+            _ state: InstanceHealthState, reason: String, detail: String? = nil,
+            latencyMs: UInt32? = nil
         ) -> InstanceHealth {
             InstanceHealth(
                 state: state, reason: reason, detail: detail,
-                observedAt: FixtureClock.minutesAgo(1), latencyMs: nil)
+                observedAt: FixtureClock.minutesAgo(1), latencyMs: latencyMs)
         }
     }
 

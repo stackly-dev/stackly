@@ -3,7 +3,8 @@ import StacklyClient
 /// The readiness of an instance in words (spec 0021, *Format bersama*), for the inspector
 /// of the Instances page and later for the detail page. A pure function of the summary.
 nonisolated public enum ReadinessText {
-    /// The readiness text.
+    /// The readiness text, with the time the probe took when the daemon measured it: "Ready ·
+    /// 3 ms" (spec 0028, AC-7).
     /// Only an instance that is `running` or `recovering` has a readiness worth showing; any
     /// other instance gets "—".
     /// - Parameter instance: The instance.
@@ -16,14 +17,17 @@ nonisolated public enum ReadinessText {
             return "—"
         }
         let readiness = instance.readiness
-        switch readiness.state {
-        case .ready:
-            return "Ready"
-        case .notReady:
-            if readiness.reason == StatusAdapter.awaitingProbeReason { return "Waiting for probe" }
-            return readiness.detail.map { "Not ready: \($0)" } ?? "Not ready"
-        case .unknown:
-            return "Unknown (\(readiness.reason))"
-        }
+        let words: String =
+            switch readiness.state {
+            case .ready:
+                "Ready"
+            case .notReady:
+                readiness.reason == StatusAdapter.awaitingProbeReason
+                    ? "Waiting for probe"
+                    : readiness.detail.map { "Not ready: \($0)" } ?? "Not ready"
+            case .unknown:
+                "Unknown (\(readiness.reason))"
+            }
+        return readiness.latencyMs.map { "\(words) · \($0) ms" } ?? words
     }
 }

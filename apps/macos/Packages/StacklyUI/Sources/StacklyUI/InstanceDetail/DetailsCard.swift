@@ -33,6 +33,9 @@ struct DetailsCard: View {
             dataRow(detail)
             dataSizeRow
             LabeledContent("Uptime") { uptime }
+            if let total = DetailFormat.restartsSinceCreated(summary) {
+                LabeledContent("Restarts") { Text(total) }
+            }
             if let restarts = DetailFormat.restartAttempts(summary.restart) {
                 LabeledContent("Restart attempts") { Text(restarts) }
             }

@@ -279,7 +279,8 @@ public struct AppShell: View {
                     reconnect: reconnect,
                     openDiagnostics: { select(.diagnostics) },
                     detail: daemon.map(InstanceDetailService.live),
-                    logs: daemon.map(InstanceLogsService.live)
+                    logs: daemon.map(InstanceLogsService.live),
+                    metrics: daemon.map(InstanceMetricsService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)
