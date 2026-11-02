@@ -110,6 +110,83 @@ fn a_number_that_was_not_measured_is_written_unavailable_with_its_reason() {
     );
 }
 
+/// The row `name` of the key value table, without its label.
+fn row<'a>(stdout: &'a str, name: &str) -> Option<&'a str> {
+    stdout
+        .lines()
+        .find_map(|line| line.strip_prefix(name))
+        .map(str::trim)
+}
+
+/// Spec 0028 AC-12: the uptime is the time from the start of the process to
+/// the newest sample, so it does not grow with the time of the command, and it
+/// follows the newest sample.
+#[test]
+fn the_uptime_is_measured_at_the_newest_sample_and_not_at_the_time_of_the_command() {
+    let mut value = serde_json::to_value(fixture("live")).expect("encodes");
+    let samples = value["samples"].as_array_mut().expect("samples");
+    let newest = samples.last_mut().expect("a newest sample");
+    assert_eq!(newest["sampledAt"], "2026-10-20T09:00:20.000Z");
+    newest["sampledAt"] = "2026-10-20T09:00:23.000Z".into();
+    let later: MetricsReply = serde_json::from_value(value).expect("decodes");
+    let (live_root, _live) = serving(fixture("live"));
+    let (later_root, _later) = serving(later);
+
+    let live = run(live_root.path(), &["instance", "metrics", ID]);
+    let moved = run(later_root.path(), &["instance", "metrics", ID]);
+
+    // The process started at 09:00:02 and the fixture is years old, so a
+    // value measured up to the command would be far above these.
+    assert_eq!(row(&live.stdout, "Uptime"), Some("18s"), "{live:?}");
+    assert_eq!(row(&moved.stdout, "Uptime"), Some("21s"), "{moved:?}");
+    assert!(
+        row(&live.stdout, "Process").is_some_and(|text| text.contains("started 2026-10-20")),
+        "{live:?}"
+    );
+}
+
+/// Spec 0028 AC-12: before the first sample the CLI has no instant to measure
+/// the uptime at, so it leaves the row out and says it is waiting.
+#[test]
+fn before_the_first_sample_there_is_no_uptime_row_and_the_table_says_it_is_waiting() {
+    let mut reply = fixture("live");
+    reply.samples.clear();
+    reply.latest_processes.clear();
+    let (root, _daemon) = serving(reply);
+
+    let text = run(root.path(), &["instance", "metrics", ID]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    assert_eq!(row(&text.stdout, "Uptime"), None, "{text:?}");
+    assert!(row(&text.stdout, "Process").is_some(), "{text:?}");
+    assert_eq!(
+        row(&text.stdout, "Sampled"),
+        Some("waiting for the first sample"),
+        "{text:?}"
+    );
+    assert!(!text.stdout.contains("main process"), "{text:?}");
+}
+
+/// Spec 0028 AC-12: a name is accepted as well as the whole id, and both ask
+/// for the same instance.
+#[test]
+fn a_name_asks_for_the_same_instance_as_its_id() {
+    let (root, daemon) = serving(fixture("live"));
+
+    let by_name = run(root.path(), &["instance", "metrics", "orders-db"]);
+    let by_id = run(root.path(), &["instance", "metrics", ID]);
+
+    assert_eq!(by_name.code, Some(0), "{by_name:?}");
+    assert_eq!(by_name.stdout, by_id.stdout);
+    let asked: Vec<_> = daemon
+        .log()
+        .iter()
+        .filter(|entry| entry.raw["call"]["type"] == "instance.get_metrics")
+        .map(|entry| entry.raw["call"]["content"]["instanceId"].clone())
+        .collect();
+    assert_eq!(asked, [ID, ID]);
+}
+
 /// Spec 0028 AC-12.
 #[test]
 fn an_instance_that_is_not_running_says_so_and_exits_0() {
