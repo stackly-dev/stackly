@@ -35,6 +35,9 @@
 //!   that holds its process, readiness, health, and
 //!   [`InstanceStatus::status_seq`]; [`SupervisorEvents`] reports what a
 //!   client can see change.
+//! - [`HANDOVER_PROVEN`] lists the provider lines whose processes survive a
+//!   daemon restart, and [`plan_entries`] sorts the instances into the
+//!   `keep` and `stop_restore` of a planned restart (spec 0030).
 //! - [`write_plan_guard`] writes a daemon restart plan in one guarded
 //!   commit, refused while another plan is open or when its digest changed
 //!   (spec 0030).
@@ -48,6 +51,7 @@ mod classify;
 pub mod codes;
 mod commit;
 mod config;
+mod daemon_restart;
 mod deps;
 mod drain;
 pub mod drift;
@@ -57,6 +61,7 @@ mod exit;
 #[cfg(feature = "fixture")]
 pub mod fixture;
 mod force;
+mod handover;
 mod helper;
 mod http;
 mod init;
@@ -75,6 +80,7 @@ mod reload;
 mod respawn;
 mod restart;
 mod restart_op;
+mod restore;
 mod secrets;
 mod sink;
 mod spool;
@@ -96,12 +102,17 @@ pub use config::{
     HTTP_HEADER_MAX, LOG_LINE_HARD_MAX, LOG_LINE_MAX, READINESS_FAILURE_THRESHOLD,
     READINESS_REFRESH_INTERVAL, RECONCILE_START_CONCURRENCY, REGISTRY_RETRY_INTERVAL,
     RESTART_BASE_DELAY, RESTART_BUDGET, RESTART_HEALTHY_RESET, RESTART_LOCK_POLL,
-    RESTART_LOCK_WAIT, RESTART_MAX_DELAY, RESTART_WINDOW, SPOOL_BACKLOG_MAX, SPOOL_DRAIN_INTERVAL,
-    SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
+    RESTART_LOCK_WAIT, RESTART_MAX_DELAY, RESTART_QUIESCE_WAIT, RESTART_WINDOW, SPOOL_BACKLOG_MAX,
+    SPOOL_DRAIN_INTERVAL, SPOOL_READ_CHUNK, SupervisorConfig, TAIL_LINES, UNKNOWN_RECHECK_INTERVAL,
 };
+pub use daemon_restart::{DaemonRestartRequest, PlanPrepared, RestartHandover};
 pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents, WeakSupervisor};
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
 pub use force::ForceStopRequest;
+pub use handover::{
+    HANDOVER_PROVEN, HandoverProof, PlanEntry, is_handover_proven, plan_digest, plan_entries,
+    revision_line,
+};
 pub use init::InitRequest;
 pub use integrity::{FindingKind, ReconcileFinding};
 pub use plan::{PlanRefusal, write_plan_guard};

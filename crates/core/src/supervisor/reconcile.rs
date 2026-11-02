@@ -16,7 +16,7 @@
 
 use stackly_domain::{
     DesiredState, ExitKind, FailureCode, Instance, InstanceBlocker, InstanceFilter, InstanceId,
-    InstanceLifecycle, LifecycleEvent, ProcessObservation,
+    InstanceLifecycle, LifecycleEvent, PlanDecision, ProcessObservation,
 };
 use tokio::time::Instant;
 
@@ -108,6 +108,12 @@ pub(crate) enum Then {
     Start,
     /// A system stop of a proven process.
     Stop,
+    /// A system start of an instance a planned restart stopped (spec
+    /// 0030): trigger `planned_restart`, no dialog.
+    Restore,
+    /// A system stop of a proven process that a planned restart was
+    /// stopping, which writes no desired state, and then the restore.
+    PlannedStop,
 }
 
 /// The blocker an evaluation leaves on the instance.
@@ -322,6 +328,8 @@ impl Supervisor {
         }
         let deps = self.deps();
         deps.events.reconciling(&ReconcilePhase::Started);
+        // Spec 0030: the plan of a restart that was under way.
+        self.take_over_plan().await;
         let registry = deps.registry.clone();
         let mut instances = blocking(move || {
             registry.instances(InstanceFilter {
@@ -340,6 +348,7 @@ impl Supervisor {
         let mut lifecycles = Vec::with_capacity(instances.len());
         let mut adoptions = Vec::new();
         let mut findings = Vec::new();
+        let mut deferred = Vec::new();
         for instance in &instances {
             let settled = settle_instance(self, instance, Source::Reconcile).await;
             let Some((settled, adoption)) = settled else {
@@ -350,8 +359,14 @@ impl Supervisor {
             if settled.lifecycle == InstanceLifecycle::Unknown {
                 report.unknown += 1;
             }
-            if matches!(settled.then, Then::Respawn | Then::Start) {
+            if matches!(
+                settled.then,
+                Then::Respawn | Then::Start | Then::Restore | Then::PlannedStop
+            ) {
                 report.restarting += 1;
+            }
+            if settled.then != Then::Nothing {
+                deferred.push(instance.id());
             }
             self.queue_run(instance, settled.then);
             if let Some(adoption) = adoption {
@@ -386,6 +401,8 @@ impl Supervisor {
             }
         }
         report.findings = findings;
+        self.settle_plan_after_reconcile(&lifecycles, &deferred)
+            .await;
         deps.events
             .reconciling(&ReconcilePhase::Finished(report.clone()));
         recheck::spawn_recheck(self);
@@ -400,6 +417,8 @@ impl Supervisor {
             Then::Respawn => PendingKind::Respawn,
             Then::Start => PendingKind::Start,
             Then::Stop => PendingKind::Stop,
+            Then::Restore => PendingKind::Restore,
+            Then::PlannedStop => PendingKind::PlannedStop,
         };
         self.shared
             .pending
@@ -505,6 +524,28 @@ pub(crate) async fn settle_instance(
                 source,
             )
         });
+    let mut plan = plan;
+    // Spec 0030: what a restart plan under way says about the instance.
+    // The lifecycle it ends with decides whether it starts again.
+    let ends = plan
+        .events
+        .iter()
+        .try_fold(instance.lifecycle(), |lifecycle, event| {
+            lifecycle.apply(event)
+        })
+        .unwrap_or_else(|_| instance.lifecycle());
+    if source == Source::Reconcile
+        && let Some(entry) = sup.planned_entry(id).await
+        && entry.decision == PlanDecision::StopRestore
+        && instance.desired() == DesiredState::Running
+        && !data_gone
+    {
+        if plan.then == Then::Stop && instance.lifecycle() == InstanceLifecycle::Stopping {
+            plan.then = Then::PlannedStop;
+        } else if plan.then == Then::Nothing && ends == InstanceLifecycle::Stopped {
+            plan.then = Then::Restore;
+        }
+    }
     // What is wrong under a process we keep is reported, not repaired.
     let mut findings = Vec::new();
     if plan.adopt && checks_apply {

@@ -21,12 +21,15 @@ use crate::launch::{deps, launchd, stop};
 const QUIET: Duration = Duration::from_millis(300);
 
 async fn shutdown_reply(raw: &mut Raw, id: &str, mode: &str) -> Value {
-    raw.send(&request_payload(
-        id,
-        "daemon.shutdown",
-        Some(json!({ "mode": mode })),
-    ))
-    .await;
+    // A restart starts the `daemon_restart` operation, which needs a key
+    // (spec 0030); a stop ignores it.
+    let payload = serde_json::to_vec(&json!({
+        "requestId": id,
+        "idempotencyKey": format!("key-{id}"),
+        "call": { "type": "daemon.shutdown", "content": { "mode": mode } },
+    }))
+    .expect("JSON serializes");
+    raw.send(&payload).await;
     raw.answer(id).await
 }
 
@@ -57,6 +60,8 @@ async fn restart_under_launchd_is_accepted() {
     let handle = server::start(deps(&site, true, launchd(DAEMON_LABEL), None))
         .await
         .expect("the server starts");
+    // A restart plans the instances, so it needs the supervisor.
+    handle.started().await;
     let mut raw = Raw::ready(&site.socket()).await;
 
     let reply = shutdown_reply(&mut raw, "r1", "restart").await;

@@ -117,6 +117,31 @@ impl Counters {
     }
 }
 
+/// Records a `daemon.shutdown` request from outside a handler.
+#[derive(Debug, Clone)]
+pub struct ShutdownTrigger {
+    shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
+}
+
+impl ShutdownTrigger {
+    /// Records `mode`; only the first request counts, and `false` means one
+    /// was accepted already.
+    pub fn request(&self, mode: ShutdownMode) -> bool {
+        Self::request_on(&self.shutdown, mode)
+    }
+
+    fn request_on(shutdown: &watch::Sender<Option<ShutdownMode>>, mode: ShutdownMode) -> bool {
+        shutdown.send_if_modified(|requested| {
+            if requested.is_none() {
+                *requested = Some(mode);
+                true
+            } else {
+                false
+            }
+        })
+    }
+}
+
 /// The daemon's shared state, one per run.
 pub struct DaemonCore {
     info: DaemonInfo,
@@ -146,7 +171,7 @@ pub struct DaemonCore {
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
-    shutdown: watch::Sender<Option<ShutdownMode>>,
+    shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
 }
 
 impl std::fmt::Debug for DaemonCore {
@@ -201,7 +226,7 @@ impl DaemonCore {
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
-            shutdown: watch::Sender::new(None),
+            shutdown: Arc::new(watch::Sender::new(None)),
         }
     }
 
@@ -215,6 +240,23 @@ impl DaemonCore {
             _ => None,
         };
         info.secret_store = Some(self.secrets.store(&self.platform));
+        info.restart = self
+            .supervision
+            .restart_view()
+            .filter(|view| {
+                view.finished_at.is_none_or(|finished| {
+                    let age = self
+                        .platform
+                        .clock()
+                        .now()
+                        .duration_since(finished.as_jiff());
+                    age.as_secs()
+                        < crate::ipc::restart::RESTART_SUMMARY_TTL
+                            .as_secs()
+                            .cast_signed()
+                })
+            })
+            .map(Box::new);
         info
     }
 
@@ -474,14 +516,23 @@ impl DaemonCore {
     /// request counts; `false` means one was already accepted, so the
     /// daemon is as good as stopping.
     pub fn request_shutdown(&self, mode: ShutdownMode) -> bool {
-        self.shutdown.send_if_modified(|requested| {
-            if requested.is_none() {
-                *requested = Some(mode);
-                true
-            } else {
-                false
-            }
-        })
+        ShutdownTrigger::request_on(&self.shutdown, mode)
+    }
+
+    /// Whether a `daemon.shutdown` request was accepted already.
+    #[must_use]
+    pub fn shutdown_pending(&self) -> bool {
+        self.shutdown.borrow().is_some()
+    }
+
+    /// A handle that records a shutdown request without borrowing the
+    /// core, for work that outlives the request (a planned restart hands
+    /// the daemon over from a task of the operation).
+    #[must_use]
+    pub fn shutdown_trigger(&self) -> ShutdownTrigger {
+        ShutdownTrigger {
+            shutdown: Arc::clone(&self.shutdown),
+        }
     }
 
     /// Resolves with the mode once a `daemon.shutdown` request was
