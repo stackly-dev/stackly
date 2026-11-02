@@ -158,6 +158,11 @@ pub trait Interrupt: Send {
 
     /// Resolves once Ctrl+C arrived.
     fn wait(&mut self) -> BoxFuture<'_, ()>;
+
+    /// Starts catching Ctrl+C, for an interrupt that leaves the default
+    /// behavior (the shell ends the command, exit 130) while the command
+    /// reads an answer it cannot give up. Catching goes on to the end.
+    fn arm(&mut self) {}
 }
 
 /// Whether `failure` only means the daemon is not up yet: no socket, a

@@ -7,13 +7,14 @@ use std::time::Duration;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    InstanceId, NewRestartPlan, OperationId, PlanDecision, PlanInstance, PlanOutcome, PlanReason,
-    PlanState, RegistryError, ResourceRef, RestartPlan, RestartPlanId, RetentionPolicy, WriteOp,
+    InstanceId, NewRestartPlan, OperationId, OperationState, PlanDecision, PlanInstance,
+    PlanOutcome, PlanReason, PlanState, RegistryError, ResourceRef, RestartPlan, RestartPlanId,
+    RetentionPolicy, WriteOp,
 };
 use stackly_platform::Clock;
 use uuid::Uuid;
 
-use super::{Suite, at, batch, domain, expect, expect_eq, parse, shifted};
+use super::{DAY, Suite, at, batch, domain, expect, expect_eq, parse, shifted};
 use crate::registry::OperationBuilder;
 
 /// The boot every plan of the suite was written in.
@@ -30,6 +31,7 @@ pub(super) fn restart_plans(suite: &Suite<'_>) {
     one_open_plan(suite, operation.id());
     refusals(suite, operation.id(), &plan);
     prune(suite, operation.id());
+    prune_keeps_referenced_operations(suite);
 }
 
 /// A plan in `stopping` with one `keep` and one `stop_restore` instance.
@@ -215,4 +217,87 @@ fn prune(suite: &Suite<'_>, operation: OperationId) {
     let mut closed = open_plan;
     domain(CHECK, closed.abort(shifted(suite.loaded_at, 101)));
     suite.commit(CHECK, vec![WriteOp::UpdateRestartPlan(closed)]);
+}
+
+/// The retention of a plan is its own (AC-19): an operation older than the
+/// age limit stays while a plan, open or final, still refers to it, and
+/// goes once the plan is pruned.
+fn prune_keeps_referenced_operations(suite: &Suite<'_>) {
+    const CHECK: &str = "prune_keeps_the_operations_a_restart_plan_refers_to";
+    let old = shifted(suite.clock.now(), -40 * DAY);
+    let finished = || {
+        OperationBuilder::new()
+            .state(OperationState::Succeeded)
+            .created_at(old)
+            .updated_at(old)
+            .build()
+    };
+    let (of_open, of_final, unreferenced) = (finished(), finished(), finished());
+    suite.commit(
+        CHECK,
+        vec![
+            WriteOp::InsertOperation(of_open.clone()),
+            WriteOp::InsertOperation(of_final.clone()),
+            WriteOp::InsertOperation(unreferenced.clone()),
+        ],
+    );
+    let mut final_plan = new_plan(of_final.id(), shifted(suite.loaded_at, 200));
+    domain(CHECK, final_plan.abort(shifted(suite.loaded_at, 201)));
+    let mut open_plan = new_plan(of_open.id(), shifted(suite.loaded_at, 202));
+    suite.commit(
+        CHECK,
+        vec![
+            WriteOp::InsertRestartPlan(final_plan),
+            WriteOp::InsertRestartPlan(open_plan.clone()),
+        ],
+    );
+    let policy = |restart_plans| RetentionPolicy {
+        operation_max_age: Duration::from_secs(30 * DAY as u64),
+        audit_max_age: Duration::MAX,
+        released_lease_max_age: Duration::MAX,
+        operation_max_rows: u32::MAX,
+        audit_max_rows: u32::MAX,
+        observations_per_instance: u32::MAX,
+        restart_plans,
+    };
+    let exists = |operation: &stackly_domain::Operation| {
+        suite
+            .value(CHECK, suite.registry.operation(operation.id()))
+            .is_some()
+    };
+
+    suite
+        .registry
+        .prune(&policy(20), suite.clock.now())
+        .unwrap_or_else(|err| super::fail(CHECK, &err.to_string()));
+
+    expect(CHECK, exists(&of_open), || {
+        "the operation of the open plan stays".to_owned()
+    });
+    expect(CHECK, exists(&of_final), || {
+        "the operation of a final plan stays".to_owned()
+    });
+    expect(CHECK, !exists(&unreferenced), || {
+        "an unreferenced old operation goes".to_owned()
+    });
+    expect_eq(CHECK, open(suite, CHECK), Some(open_plan.clone()));
+    expect_eq(
+        CHECK,
+        latest(suite, CHECK).map(|plan| plan.id()),
+        Some(open_plan.id()),
+    );
+
+    // Once the plans themselves are pruned their operations may go.
+    domain(CHECK, open_plan.abort(shifted(suite.loaded_at, 203)));
+    suite.commit(CHECK, vec![WriteOp::UpdateRestartPlan(open_plan)]);
+    suite
+        .registry
+        .prune(&policy(0), suite.clock.now())
+        .unwrap_or_else(|err| super::fail(CHECK, &err.to_string()));
+    expect(CHECK, !exists(&of_open), || {
+        "the operation of a pruned plan goes".to_owned()
+    });
+    expect(CHECK, !exists(&of_final), || {
+        "the operation of a pruned plan goes".to_owned()
+    });
 }

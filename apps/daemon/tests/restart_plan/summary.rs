@@ -103,7 +103,7 @@ async fn daemon_info_keeps_a_finished_plan_for_the_summary_ttl_and_no_longer() {
 
 /// Runs `sql` on the registry file of `site` through the `sqlite3` command
 /// line tool.
-fn registry_sql(site: &Site, sql: &str) {
+pub fn registry_sql(site: &Site, sql: &str) {
     let status = Command::new("/usr/bin/sqlite3")
         .arg("-cmd")
         .arg(".timeout 10000")
@@ -116,7 +116,7 @@ fn registry_sql(site: &Site, sql: &str) {
 
 /// Refuses every write that turns a restart plan `aborted`, the way a
 /// registry that fails to store the abort would.
-fn refuse_aborted_plans(site: &Site) {
+pub fn refuse_aborted_plans(site: &Site) {
     registry_sql(
         site,
         "CREATE TRIGGER refuse_aborted_plan BEFORE UPDATE OF state ON daemon_restart_plan \

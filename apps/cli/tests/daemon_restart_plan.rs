@@ -485,6 +485,60 @@ fn an_aborted_plan_exits_7_and_the_old_daemon_keeps_answering() {
 }
 
 #[test]
+fn an_aborted_plan_lists_who_starts_again_and_who_still_runs_and_has_no_durations() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Fixture,
+        expected = "an aborted plan prints one list of the instances that stopped and start again and one of those that did not stop and still run, taken from stoppedAt and not from the skipped outcome, and its durations are null in --json",
+    );
+    let root = TestRoot::new().unwrap();
+    let skipped = |name: &str, decision, stopped: bool| {
+        let mut entry = member(
+            name,
+            decision,
+            PlanReason::HandoverUnproven,
+            Some(PlanOutcome::Skipped),
+            None,
+        );
+        entry.stopped_at = stopped.then(|| at(1_000));
+        entry
+    };
+    let mut aborted = plan(
+        PlanState::Aborted,
+        vec![
+            skipped("pg0", PlanDecision::StopRestore, true),
+            skipped("pg1", PlanDecision::StopRestore, false),
+        ],
+    );
+    aborted.close_reason = Some(PlanCloseReason::StopTimeout);
+    let mut scenario = Scenario::new(
+        preview(&[PlanDecision::Keep, PlanDecision::StopRestore]),
+        finished(),
+    );
+    scenario.old_events = vec![plan(PlanState::Stopping, Vec::new()), aborted];
+    scenario.keeps_running = true;
+    let _daemon = scenario.start(&root);
+
+    let text = run(root.path(), &["daemon", "restart", "--yes"]);
+
+    assert_eq!(text.code, Some(7), "{text:?}");
+    let shown = format!("{}{}", text.stdout, text.stderr);
+    assert!(
+        shown.contains("pg0") && shown.contains("stopped, starting again"),
+        "{shown}"
+    );
+    assert!(
+        shown.contains("pg1") && shown.contains("did not stop, still running"),
+        "{shown}"
+    );
+    assert!(!shown.contains("skipped"), "{shown}");
+
+    let (_, value) = json_run(&root, &["--yes"]);
+    assert!(value["result"]["durations"].is_null(), "{value}");
+    ev.pass();
+}
+
+#[test]
 fn an_instance_that_did_not_come_back_exits_7_with_the_whole_plan() {
     let ev = evidence!(
         covers = ["REQ-013", "AC-013"],

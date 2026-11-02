@@ -75,6 +75,28 @@ fn stayed_unknown(instance: &RestartPlanInstance) -> bool {
         && instance.failure_code.as_deref() == Some(IDENTITY_UNPROVEN)
 }
 
+/// The instances of an `aborted` plan by what became of them, from the
+/// `stop_restore` rows and not from `outcome`, which is `skipped` for every
+/// row of an aborted plan: the ones that stopped and start again, and the
+/// ones that did not stop and still run (AC-11, AC-15).
+#[must_use]
+pub fn aborted_split(plan: &RestartPlanView) -> (Vec<String>, Vec<String>) {
+    let mut stopped = Vec::new();
+    let mut running = Vec::new();
+    for instance in plan
+        .instances
+        .iter()
+        .filter(|instance| instance.decision == PlanDecision::StopRestore)
+    {
+        if instance.stopped_at.is_some() {
+            stopped.push(instance.name.clone());
+        } else {
+            running.push(instance.name.clone());
+        }
+    }
+    (stopped, running)
+}
+
 /// Judges a final `plan` (AC-15): `finished` is ok unless an instance
 /// failed (exit 7), where an instance that stayed `unknown` is only a
 /// warning; `aborted` is `cli.restart_aborted`; `expired` means nothing
@@ -100,13 +122,18 @@ pub fn judge(plan: &RestartPlanView) -> Verdict {
         }
     }
     let failure = match plan.state {
-        PlanState::Aborted => Some(CliFailure::restart_aborted(
-            plan.id,
-            &plan.close_reason.map_or_else(
-                || "unknown".to_owned(),
-                |reason: PlanCloseReason| wire_name(&reason),
-            ),
-        )),
+        PlanState::Aborted => {
+            let (stopped, running) = aborted_split(plan);
+            Some(CliFailure::restart_aborted(
+                plan.id,
+                &plan.close_reason.map_or_else(
+                    || "unknown".to_owned(),
+                    |reason: PlanCloseReason| wire_name(&reason),
+                ),
+                &stopped,
+                &running,
+            ))
+        }
         PlanState::Expired => Some(CliFailure::restart_restore_failed(plan.id)),
         _ if failed => Some(CliFailure::restart_restore_failed(plan.id)),
         _ => None,
@@ -271,6 +298,18 @@ pub fn render_plan(
             head.push(("Took", Cell::fixed(text)));
         }
     }
+    if plan.state == PlanState::Aborted {
+        let (stopped, running) = aborted_split(plan);
+        if !stopped.is_empty() {
+            head.push(("Stopped, starting again", Cell::fixed(stopped.join(", "))));
+        }
+        if !running.is_empty() {
+            head.push((
+                "Did not stop, still running",
+                Cell::fixed(running.join(", ")),
+            ));
+        }
+    }
     out.kv(&head);
     if plan.instances.is_empty() {
         return;
@@ -279,21 +318,23 @@ pub fn render_plan(
         .instances
         .iter()
         .map(|instance| {
-            let outcome = instance.outcome.map_or_else(
-                || Cell::fixed("pending"),
-                |outcome| {
-                    let tone = match outcome {
-                        PlanOutcome::Adopted | PlanOutcome::Restored => Tone::Positive,
-                        PlanOutcome::Failed => Tone::Critical,
-                        _ => Tone::Neutral,
-                    };
-                    let mut text = wire_name(&outcome);
-                    if let Some(code) = &instance.failure_code {
-                        text.push_str(&format!(" ({code})"));
-                    }
-                    Cell::toned(&text, tone)
-                },
-            );
+            let outcome = aborted_result(plan, instance).unwrap_or_else(|| {
+                instance.outcome.map_or_else(
+                    || Cell::fixed("pending"),
+                    |outcome| {
+                        let tone = match outcome {
+                            PlanOutcome::Adopted | PlanOutcome::Restored => Tone::Positive,
+                            PlanOutcome::Failed => Tone::Critical,
+                            _ => Tone::Neutral,
+                        };
+                        let mut text = wire_name(&outcome);
+                        if let Some(code) = &instance.failure_code {
+                            text.push_str(&format!(" ({code})"));
+                        }
+                        Cell::toned(&text, tone)
+                    },
+                )
+            });
             vec![
                 Cell::text(&instance.name),
                 Cell::fixed(wire_name(&instance.decision)),
@@ -302,6 +343,23 @@ pub fn render_plan(
         })
         .collect();
     out.table(&["INSTANCE", "DECISION", "RESULT"], &rows);
+}
+
+/// The result column of a row of an `aborted` plan: what the abort did to
+/// the instance, in place of the `skipped` every row carries.
+fn aborted_result(plan: &RestartPlanView, instance: &RestartPlanInstance) -> Option<Cell> {
+    if plan.state != PlanState::Aborted {
+        return None;
+    }
+    Some(match (instance.decision, instance.stopped_at) {
+        (PlanDecision::StopRestore, Some(_)) => {
+            Cell::toned("stopped, starting again", Tone::Caution)
+        }
+        (PlanDecision::StopRestore, None) => {
+            Cell::toned("did not stop, still running", Tone::Critical)
+        }
+        _ => Cell::fixed("kept running"),
+    })
 }
 
 /// One line about `plan` for `daemon status`, such as

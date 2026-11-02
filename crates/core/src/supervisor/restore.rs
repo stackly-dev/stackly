@@ -10,8 +10,8 @@
 //! new session belongs to feature 31).
 
 use stackly_domain::{
-    DesiredState, FailureCode, Instance, InstanceId, InstanceLifecycle, PlanDecision, PlanInstance,
-    PlanOutcome, PlanState,
+    DesiredState, FailureCode, Instance, InstanceId, InstanceLifecycle, OperationState,
+    PlanDecision, PlanInstance, PlanOutcome, PlanState, RegistryError, RestartPlan,
 };
 
 use super::Supervisor;
@@ -58,6 +58,19 @@ impl Supervisor {
             }
         };
         let now = deps.platform.clock().now();
+        if plan.state() == PlanState::Stopping
+            && boot == plan.stored().boot_id
+            && self.plan_operation_ended(&plan).await
+        {
+            // The old daemon ended the operation without handing over and
+            // could not store the abort: it already started again what it
+            // stopped, so this daemon only closes the plan.
+            if plan.abort(now).is_ok() && self.persist_plan(&plan).await.is_ok() {
+                deps.events.restart_plan(&plan);
+                tracing::info!(plan = %plan.id(), "an unfinished restart plan was closed as aborted");
+            }
+            return;
+        }
         let state = match plan.take_over(boot, deps.server_instance_id, now) {
             Ok(state) => state,
             Err(error) => {
@@ -73,6 +86,32 @@ impl Supervisor {
         tracing::info!(plan = %plan.id(), state = %state, "a restart plan was taken over");
         if state == PlanState::Restoring {
             *self.shared.plan.lock().await = Some(plan);
+        }
+    }
+
+    /// Whether the operation of a `stopping` plan is final for a reason
+    /// other than the daemon ending: a cancel, or a failure that is not
+    /// `operation.interrupted` (spec 0030, *Edge cases*, an abort that
+    /// could not be stored). An unreadable operation counts as not ended.
+    async fn plan_operation_ended(&self, plan: &RestartPlan) -> bool {
+        let registry = self.deps().registry.clone();
+        let operation = plan.stored().operation;
+        let Ok(Ok(versioned)) = blocking(move || {
+            let state = registry.operation(operation)?.value.map(|op| op.state());
+            let failure = registry
+                .operation_journal(operation)?
+                .value
+                .and_then(|view| view.journal.failure_error().map(|e| e.code().to_string()));
+            Ok::<_, RegistryError>((state, failure))
+        })
+        .await
+        else {
+            return false;
+        };
+        match versioned {
+            (Some(OperationState::Cancelled), _) => true,
+            (Some(OperationState::Failed), Some(code)) => code != "operation.interrupted",
+            _ => false,
         }
     }
 
@@ -180,7 +219,9 @@ impl Supervisor {
         let id = entry.instance_id;
         let flagged = instance.and_then(Instance::last_failure).cloned();
         if flagged == Some(FailureCode::DATA_MISSING) && lifecycle == InstanceLifecycle::Failed {
-            self.record_plan_outcome(id, PlanOutcome::Skipped, false, flagged)
+            // The registry keeps a failure code only on a `failed` outcome;
+            // the instance itself carries the `data_missing` reason.
+            self.record_plan_outcome(id, PlanOutcome::Skipped, false, None)
                 .await;
             return;
         }
