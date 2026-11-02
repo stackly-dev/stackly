@@ -96,7 +96,7 @@ extension InstanceDetail {
         InstanceDetail(
             instanceId: instanceId, revision: revision, provider: provider, runtime: runtime,
             dataPath: dataPath, startup: startup, secrets: secrets, dependents: dependents,
-            connections: connections)
+            connections: connections, openActions: openActions)
     }
 }
 

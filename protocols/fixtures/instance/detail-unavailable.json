@@ -107,6 +107,49 @@
         "parts": [],
         "portMayChange": false
       }
+    ],
+    "openActions": [
+      {
+        "name": "tableplus",
+        "title": "TablePlus",
+        "kind": "app",
+        "state": "unavailable",
+        "reason": "retained",
+        "appBundleIds": [
+          "com.tinyapp.TablePlus"
+        ],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      {
+        "name": "postico",
+        "title": "Postico",
+        "kind": "app",
+        "state": "unavailable",
+        "reason": "retained",
+        "appBundleIds": [
+          "at.eggerapps.Postico2",
+          "at.eggerapps.Postico"
+        ],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      {
+        "name": "psql",
+        "title": "psql",
+        "kind": "terminal",
+        "state": "unavailable",
+        "reason": "retained",
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      }
     ]
   },
   "dataUsage": {

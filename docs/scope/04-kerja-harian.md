@@ -93,12 +93,20 @@ Status ringkas di menu bar dengan aksi buka aplikasi, **Quit App** yang hanya me
 
 - [ ] Design it (spec): `/architect menu bar & Settings`
 
-### 70. Buka instance di aplikasi klien · needs a decision
+### 70. Buka instance di aplikasi klien · in-progress
 
-Menu aksi per service di halaman Environments, seperti di mockup UI, untuk membuka instance di aplikasi lain: klien database (mockup mencontohkan TablePlus, Postico, Sequel Ace, Redis Insight), CLI provider di Terminal, monitoring atau dashboard di browser, dan file routes Traefik di Finder. Tambahan dari mockup UI, belum ada di PRD.
+Menu "Open In" untuk membuka instance di aplikasi lain: klien database (mockup mencontohkan TablePlus, Postico, Sequel Ace, Redis Insight), CLI provider di Terminal, monitoring atau dashboard di browser, dan file routes Traefik di Finder. Sebelum halaman Environments ada (fitur 44), menu ini tampil di toolbar detail instance, inspector Instances, dan menu Instance di menu bar; mockup menaruhnya di menu aksi per service halaman Environments, yang nanti memakai komponen yang sama. Tambahan dari mockup UI, belum ada di PRD.
 
-**Done when:** daftar aksi berasal dari capability provider, bukan kode SwiftUI per provider; aplikasi yang tidak terpasang tidak ditawarkan; aksi nonaktif saat instance tidak running; password tidak pernah dititipkan lewat URL, argumen command, atau daftar proses, dan kalau sebuah aplikasi hanya menerima secret lewat cara itu, alurnya meminta aksi eksplisit dengan peringatan; CLI di Terminal memakai binary dari runtime instance itu, bukan dari PATH.
+**Done when:** daftar aksi berasal dari capability provider, bukan kode SwiftUI per provider; aplikasi yang tidak terpasang tidak ditawarkan; aksi nonaktif saat instance tidak running; password tidak pernah dititipkan lewat URL, argumen command, atau daftar proses, dan aplikasi yang hanya menerima secret lewat cara itu tidak bisa dideklarasikan karena loader menolak token secret di aksi Open In (password disalin ke clipboard tersembunyi untuk di paste); CLI di Terminal memakai binary dari runtime instance itu, bukan dari PATH; menu tampil di detail instance, inspector Instances, dan menu Instance.
 
 **Trace:** REQ-016, REQ-027, REQ-029, BR-018
 
-- [ ] Design it (spec): `/architect buka instance di aplikasi klien`
+**Pointer:** spec [0070](../specs/0070-buka-instance-aplikasi-klien/index.md)
+
+- [x] Design it (spec): `/architect buka instance di aplikasi klien` · spec 0070, cross check (Sonnet) applied, accepted 2026-11-02
+- [ ] Build it: `/develop buka instance di aplikasi klien`
+  - [x] Manifest, daemon, and CLI: the `openWith` block with loader rules and sentinel render, `instance::open_with::render`, `OpenAction` in `instance.get_detail`, `instance.prepare_terminal` with the `.command` script, the new error codes, minor bump and codegen, `openWith` entries in the PostgreSQL, NATS, Traefik, and fake packages with goldens, and `stackly instance open <instance> --list` (spec 0070 AC-1 to AC-4, AC-12, AC-13; build steps 1 to 6) · built 2026-11-02, code in `crates/core/src/provider/open_with.rs`, `crates/core/src/instance/open_with.rs`, `crates/protocol/src/instance/open_with.rs`, `apps/daemon/src/ipc/instance/open_with.rs`, `apps/cli/src/commands/instance/open.rs`; the new manifest digests drop PostgreSQL and NATS to experimental (`runtime_tested`) until milestone 3 reruns their provider compatibility runs
+  - [ ] GUI: `StacklyUI/OpenIn/` with the `AppLocator` and `WorkspaceOpener` ports, `OpenInModel`, `OpenInMenu` in the detail toolbar, the Instances inspector, and the Instance menu, spec 0068 fixtures, and the sentinel suite (spec 0070 AC-5 to AC-11, AC-14; build steps 7 to 9; after milestone 1)
+  - [ ] Evidence on this Mac: psql in Terminal with `SELECT 1` and a `ps -ww` check, TablePlus and Postico (or `BLOCKED`), NATS monitoring in the browser, and the PostgreSQL and NATS provider compatibility runs again so `versions.json` records match the new manifest digests (approved 2026-11-02), after your approval (spec 0070 AC-15; build step 10; after milestone 2)
+- [ ] Verify it: `/check verify buka instance di aplikasi klien`
+- [ ] Test it: `/test buka instance di aplikasi klien`

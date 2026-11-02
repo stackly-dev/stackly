@@ -92,6 +92,22 @@
           0
         ]
       }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/notes.txt",
+        "content": {
+          "configFile": "fakeNotes",
+          "segments": [
+            {
+              "type": "text",
+              "content": "Notes for a fake instance.\nThis file holds no secret; the Open In menu reveals it in Finder.\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
     }
   ],
   "deadline": "30s",

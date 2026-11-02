@@ -866,7 +866,7 @@ impl<'a> Resolver<'a> {
     }
 
     /// Builds the path of a path expression.
-    fn path(&self, expr: &PathExpr) -> Result<PathBuf, PlanError> {
+    pub(crate) fn path(&self, expr: &PathExpr) -> Result<PathBuf, PlanError> {
         let mut path = self.base(expr.base)?;
         path.extend(&expr.components);
         Ok(path)

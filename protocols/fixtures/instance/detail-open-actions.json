@@ -1,0 +1,174 @@
+{
+  "description": "Open In actions of spec 0070 with the label OpenActionLabel (Swift) and open_action_label (CLI) give, and the row of stackly instance open --list. The kind hologram is one this build does not know.",
+  "cases": [
+    {
+      "action": {
+        "name": "tableplus",
+        "title": "TablePlus",
+        "kind": "app",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [
+          "com.tinyapp.TablePlus"
+        ],
+        "url": "postgresql://postgres@127.0.0.1:5432/postgres",
+        "command": null,
+        "path": null,
+        "copySecret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+        }
+      },
+      "label": "Open in TablePlus",
+      "row": [
+        "tableplus",
+        "Open in TablePlus",
+        "postgresql://postgres@127.0.0.1:5432/postgres",
+        "copies password"
+      ]
+    },
+    {
+      "action": {
+        "name": "psql",
+        "title": "psql",
+        "kind": "terminal",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [],
+        "url": null,
+        "command": {
+          "executable": "/Users/test/Library/Application Support/Stackly/runtimes/postgresql/17.2.0-macos-aarch64-a1b2c3d4/bin/psql",
+          "args": [
+            "--host=/Users/test/Library/Application Support/Stackly/run/ab12cd34",
+            "--port=5432",
+            "--username=postgres",
+            "postgres"
+          ],
+          "env": [
+            {
+              "name": "PGAPPNAME",
+              "value": "stackly-terminal"
+            }
+          ]
+        },
+        "path": null,
+        "copySecret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+        }
+      },
+      "label": "Open psql in Terminal",
+      "row": [
+        "psql",
+        "Open psql in Terminal",
+        "'/Users/test/Library/Application Support/Stackly/runtimes/postgresql/17.2.0-macos-aarch64-a1b2c3d4/bin/psql' '--host=/Users/test/Library/Application Support/Stackly/run/ab12cd34' '--port=5432' '--username=postgres' 'postgres'",
+        "copies password"
+      ]
+    },
+    {
+      "action": {
+        "name": "monitoring",
+        "title": "Monitoring",
+        "kind": "browser",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [],
+        "url": "http://127.0.0.1:8222/",
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      "label": "Open Monitoring in Browser",
+      "row": [
+        "monitoring",
+        "Open Monitoring in Browser",
+        "http://127.0.0.1:8222/",
+        ""
+      ]
+    },
+    {
+      "action": {
+        "name": "routes",
+        "title": "Routes File",
+        "kind": "reveal",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": "/Users/test/Library/Application Support/Stackly/instances/edge/config/dynamic/routes.yaml",
+        "copySecret": null
+      },
+      "label": "Reveal Routes File in Finder",
+      "row": [
+        "routes",
+        "Reveal Routes File in Finder",
+        "/Users/test/Library/Application Support/Stackly/instances/edge/config/dynamic/routes.yaml",
+        ""
+      ]
+    },
+    {
+      "action": {
+        "name": "monitoring",
+        "title": "Monitoring",
+        "kind": "browser",
+        "state": "unavailable",
+        "reason": "port_not_assigned",
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      "label": "Open Monitoring in Browser",
+      "row": [
+        "monitoring",
+        "Open Monitoring in Browser",
+        "—",
+        "Start the instance to assign its port."
+      ]
+    },
+    {
+      "action": {
+        "name": "psql",
+        "title": "psql",
+        "kind": "terminal",
+        "state": "unavailable",
+        "reason": "retained",
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      "label": "Open psql in Terminal",
+      "row": [
+        "psql",
+        "Open psql in Terminal",
+        "—",
+        "This instance was removed."
+      ]
+    },
+    {
+      "action": {
+        "name": "future",
+        "title": "Future Thing",
+        "kind": "hologram",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      },
+      "label": "Future Thing",
+      "row": [
+        "future",
+        "Future Thing",
+        "—",
+        "Update Stackly to use this action."
+      ]
+    }
+  ]
+}

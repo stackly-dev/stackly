@@ -16,6 +16,7 @@ mod issue;
 mod json_schema;
 mod manifest;
 mod names;
+mod open_with;
 mod package;
 mod plan;
 mod preflight;
@@ -39,6 +40,11 @@ pub use json_schema::json_schemas;
 pub use manifest::{Category, EndpointPurpose, EndpointSpec, Manifest, StopSignal};
 pub(crate) use names::{COMPONENT_RULE, is_component};
 pub use names::{InvalidSettingName, SettingName};
+pub use open_with::{
+    OPEN_WITH_ARGS_MAX, OPEN_WITH_BUNDLE_IDS_MAX, OPEN_WITH_ENTRIES_MAX, OPEN_WITH_ENV_MAX,
+    OPEN_WITH_TITLE_MAX, OPEN_WITH_URL_MAX, OPEN_WITH_VALUE_MAX, OpenWithKind, OpenWithSpec,
+};
+pub(crate) use open_with::{RenderedOpenEntry, RenderedOpenValue, render_open_entries};
 pub use package::{
     MANIFEST_MAX_LEN, NameCheck, PACKAGE_MAX_LEN, PackageError, PackageFiles,
     SETTINGS_SCHEMA_MAX_LEN, TEMPLATE_MAX_LEN, TEMPLATES_MAX, VERSIONS_MAX_LEN, read_package,

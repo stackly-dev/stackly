@@ -1,1 +1,1 @@
-nats://${endpoint.client.address}
+http://stackly@${endpoint.http.address}/

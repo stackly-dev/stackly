@@ -24,7 +24,7 @@ impl ProtocolVersion {
     /// in `protocols/contract-versions.json` (spec 0006).
     pub const CURRENT: Self = Self {
         major: 1,
-        minor: 18,
+        minor: 19,
     };
 
     /// Whether a peer speaking `other` can talk to this one: the majors match.
@@ -39,12 +39,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn current_version_is_one_point_eighteen() {
+    fn current_version_is_one_point_nineteen() {
         assert_eq!(
             ProtocolVersion::CURRENT,
             ProtocolVersion {
                 major: 1,
-                minor: 18
+                minor: 19
             }
         );
     }

@@ -55,6 +55,14 @@
     {
       "file": "detail-package-unreadable.json",
       "type": "DetailTriple"
+    },
+    {
+      "file": "detail-open-actions.json",
+      "type": "OpenActionCases"
+    },
+    {
+      "file": "prepare-terminal.json",
+      "type": "PrepareTerminalCases"
     }
   ]
 }

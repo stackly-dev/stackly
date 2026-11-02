@@ -1,1 +1,1 @@
-${settings.jetstream}
+http://stackly:${secret.authToken}@${endpoint.http.address}/

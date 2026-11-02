@@ -13,6 +13,7 @@ use stackly_domain::{
 use super::connection::ConnectionSpec;
 use super::interpolate::{EndpointTransport, ExecRef, InstanceDir, Interp, PathExpr};
 use super::names::SettingName;
+use super::open_with::OpenWithSpec;
 use super::probe::native::NativeProbeKind;
 use super::settings::Pattern;
 use super::template::TemplateFormat;
@@ -324,6 +325,7 @@ pub struct Manifest {
     pub(crate) aliases: BTreeMap<String, Vec<String>>,
     pub(crate) managed_fields: Vec<ManagedField>,
     pub(crate) connections: Vec<ConnectionSpec>,
+    pub(crate) open_with: Vec<OpenWithSpec>,
     pub(crate) version_check: Option<VersionCheck>,
 }
 
@@ -394,6 +396,13 @@ impl Manifest {
     #[must_use]
     pub fn connections(&self) -> &[ConnectionSpec] {
         &self.connections
+    }
+
+    /// Returns the `openWith` entries in manifest order; a package without
+    /// the block has none (spec 0070).
+    #[must_use]
+    pub fn open_with(&self) -> &[OpenWithSpec] {
+        &self.open_with
     }
 
     /// Returns `runtime.versionCheck`, or `None` when the manifest leaves

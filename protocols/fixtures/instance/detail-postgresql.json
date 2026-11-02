@@ -172,6 +172,72 @@
         ],
         "portMayChange": false
       }
+    ],
+    "openActions": [
+      {
+        "name": "tableplus",
+        "title": "TablePlus",
+        "kind": "app",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [
+          "com.tinyapp.TablePlus"
+        ],
+        "url": "postgresql://postgres@127.0.0.1:5432/postgres",
+        "command": null,
+        "path": null,
+        "copySecret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+        }
+      },
+      {
+        "name": "postico",
+        "title": "Postico",
+        "kind": "app",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [
+          "at.eggerapps.Postico2",
+          "at.eggerapps.Postico"
+        ],
+        "url": "postgresql://postgres@127.0.0.1:5432/postgres",
+        "command": null,
+        "path": null,
+        "copySecret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+        }
+      },
+      {
+        "name": "psql",
+        "title": "psql",
+        "kind": "terminal",
+        "state": "available",
+        "reason": null,
+        "appBundleIds": [],
+        "url": null,
+        "command": {
+          "executable": "/Users/test/Library/Application Support/Stackly/runtimes/postgresql/17.2.0-macos-aarch64-a1b2c3d4/bin/psql",
+          "args": [
+            "--host=/Users/test/Library/Application Support/Stackly/run/ab12cd34",
+            "--port=5432",
+            "--username=postgres",
+            "postgres"
+          ],
+          "env": [
+            {
+              "name": "PGAPPNAME",
+              "value": "stackly-terminal"
+            }
+          ]
+        },
+        "path": null,
+        "copySecret": {
+          "field": "superuserPassword",
+          "reference": "local:instance/0192f3a5-0000-7000-8000-000000000001/superuser-password"
+        }
+      }
     ]
   },
   "dataUsage": {

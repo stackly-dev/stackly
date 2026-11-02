@@ -16,6 +16,7 @@ pub mod connection;
 mod create;
 mod detail;
 mod duplicate;
+pub mod open_with;
 
 pub use create::{
     CreateEndpoint, CreateForm, CreatePreflight, CreateProvider, CreateProviderSource,
@@ -30,6 +31,9 @@ pub use detail::{
     DetailSecret, GetDataUsageParams, GetInstanceDetailParams, InstanceDetail, StartupPolicyKind,
 };
 pub use duplicate::{DuplicateForm, DuplicateSecret, DuplicateSource, GetDuplicateFormParams};
+pub use open_with::{
+    EnvPair, OpenAction, OpenActionKind, OpenCommand, PrepareTerminalParams, PrepareTerminalReply,
+};
 
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};

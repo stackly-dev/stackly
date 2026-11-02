@@ -1,0 +1,51 @@
+[
+  {
+    "copySecret": {
+      "field": "authToken",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+    },
+    "kind": "app",
+    "name": "client",
+    "title": "Fake Client",
+    "value": {
+      "bundleIds": [
+        "dev.stackly.fake-client"
+      ],
+      "url": "http://stackly@127.0.0.1:14000/"
+    }
+  },
+  {
+    "copySecret": {
+      "field": "authToken",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/auth-token"
+    },
+    "kind": "terminal",
+    "name": "version",
+    "title": "Fake Server",
+    "value": {
+      "args": [
+        "version"
+      ],
+      "env": [],
+      "executable": "/private/tmp/skt-golden/runtime/stackly-fake-server"
+    }
+  },
+  {
+    "copySecret": null,
+    "kind": "browser",
+    "name": "status",
+    "title": "Status Page",
+    "value": {
+      "url": "http://127.0.0.1:14000/health"
+    }
+  },
+  {
+    "copySecret": null,
+    "kind": "reveal",
+    "name": "notes",
+    "title": "Notes",
+    "value": {
+      "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/notes.txt"
+    }
+  }
+]

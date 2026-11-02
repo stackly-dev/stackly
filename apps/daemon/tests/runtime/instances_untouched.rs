@@ -378,6 +378,7 @@ fn package(archive: &[u8]) -> ValidatedPackage {
         "provider.yaml",
         "schemas/settings.schema.json",
         "templates/fake.json.tmpl",
+        "templates/notes.txt.tmpl",
     ]
     .into_iter()
     .map(|path| {

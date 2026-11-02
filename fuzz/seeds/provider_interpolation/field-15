@@ -1,1 +1,1 @@
-${instance.data}
+--log-line-bytes=${settings.logLineBytes}

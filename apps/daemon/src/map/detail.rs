@@ -1,7 +1,8 @@
 //! Maps the detail data of `stackly-core` to the DTOs of
 //! `instance.get_detail` and `instance.get_data_usage` (spec 0021): the
 //! facts of `detail::build` to `InstanceDetail`, the rendered connections
-//! to `ConnectionString`, and a measured size to `DataUsage`. A value is
+//! to `ConnectionString`, the Open In actions to `OpenAction` (spec 0070),
+//! and a measured size to `DataUsage`. A value is
 //! copied as it is; nothing is computed again here, and no secret value
 //! exists on this side.
 
@@ -10,13 +11,17 @@ use stackly_core::instance::connection::{
     RenderedConnection,
 };
 use stackly_core::instance::detail::InstanceDetailData;
+use stackly_core::instance::open_with::{
+    OpenActionState, OpenCommand as CoreCommand, OpenTarget, RenderedOpenAction,
+};
+use stackly_core::provider::OpenWithKind;
 use stackly_domain::{Ownership, StartupPolicy};
 use stackly_protocol::codes::instance;
-use stackly_protocol::instance::connection::ConnectionPart;
+use stackly_protocol::instance::connection::{ConnectionPart, ConnectionSecretPart};
 use stackly_protocol::instance::{
     ConnectionAvailability, ConnectionString, ConnectionUnavailableReason, DataUsage,
-    DependentOwnership, DetailDependent, DetailProvider, DetailRuntime, DetailSecret,
-    InstanceDetail, StartupPolicyKind,
+    DependentOwnership, DetailDependent, DetailProvider, DetailRuntime, DetailSecret, EnvPair,
+    InstanceDetail, OpenAction, OpenActionKind, OpenCommand, StartupPolicyKind,
 };
 use stackly_protocol::runtime::InstallModeKind;
 use stackly_protocol::secret::SecretStatus;
@@ -86,6 +91,91 @@ pub fn instance_detail(data: &InstanceDetailData) -> InstanceDetail {
             })
             .collect(),
         connections: data.connections.iter().map(connection).collect(),
+        open_actions: data.open_actions.iter().map(open_action).collect(),
+    }
+}
+
+/// The wire reason of a connection or Open In entry that is unavailable.
+fn unavailable_reason(why: ConnectionUnavailable) -> ConnectionUnavailableReason {
+    match why {
+        ConnectionUnavailable::Retained => ConnectionUnavailableReason::Retained,
+        ConnectionUnavailable::PackageUnavailable => {
+            ConnectionUnavailableReason::PackageUnavailable
+        }
+        ConnectionUnavailable::PortNotAssigned => ConnectionUnavailableReason::PortNotAssigned,
+        _ => ConnectionUnavailableReason::Unrecognized,
+    }
+}
+
+/// The wire form of one rendered Open In action (spec 0070, AC-3). The
+/// secret travels as its field and reference only.
+#[must_use]
+pub fn open_action(rendered: &RenderedOpenAction) -> OpenAction {
+    let kind = match rendered.kind {
+        OpenWithKind::App => OpenActionKind::App,
+        OpenWithKind::Terminal => OpenActionKind::Terminal,
+        OpenWithKind::Browser => OpenActionKind::Browser,
+        OpenWithKind::Reveal => OpenActionKind::Reveal,
+        _ => OpenActionKind::Unrecognized,
+    };
+    let mut action = OpenAction {
+        name: rendered.name.clone(),
+        title: rendered.title.clone(),
+        kind,
+        state: ConnectionAvailability::Unrecognized,
+        reason: None,
+        app_bundle_ids: Vec::new(),
+        url: None,
+        command: None,
+        path: None,
+        copy_secret: rendered
+            .copy_secret
+            .as_ref()
+            .map(|(field, reference)| ConnectionSecretPart {
+                field: field.as_str().to_owned(),
+                reference: reference.to_string(),
+            }),
+    };
+    match &rendered.state {
+        OpenActionState::Available(target) => {
+            action.state = ConnectionAvailability::Available;
+            match target {
+                OpenTarget::App { bundle_ids, url } => {
+                    action.app_bundle_ids.clone_from(bundle_ids);
+                    action.url = Some(url.clone());
+                }
+                OpenTarget::Browser { url } => action.url = Some(url.clone()),
+                OpenTarget::Terminal(command) => action.command = Some(open_command(command)),
+                OpenTarget::Reveal { path } => {
+                    action.path = Some(path.to_string_lossy().into_owned());
+                }
+                _ => action.state = ConnectionAvailability::Unrecognized,
+            }
+        }
+        OpenActionState::Unavailable(why) => {
+            action.state = ConnectionAvailability::Unavailable;
+            action.reason = Some(unavailable_reason(*why));
+            action.copy_secret = None;
+        }
+        _ => action.copy_secret = None,
+    }
+    action
+}
+
+/// The wire form of a terminal command.
+#[must_use]
+pub fn open_command(command: &CoreCommand) -> OpenCommand {
+    OpenCommand {
+        executable: command.executable.clone(),
+        args: command.args.clone(),
+        env: command
+            .env
+            .iter()
+            .map(|(name, value)| EnvPair {
+                name: name.clone(),
+                value: value.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -100,16 +190,7 @@ fn connection(rendered: &RenderedConnection) -> ConnectionString {
         ),
         CoreState::Unavailable(why) => (
             ConnectionAvailability::Unavailable,
-            Some(match why {
-                ConnectionUnavailable::Retained => ConnectionUnavailableReason::Retained,
-                ConnectionUnavailable::PackageUnavailable => {
-                    ConnectionUnavailableReason::PackageUnavailable
-                }
-                ConnectionUnavailable::PortNotAssigned => {
-                    ConnectionUnavailableReason::PortNotAssigned
-                }
-                _ => ConnectionUnavailableReason::Unrecognized,
-            }),
+            Some(unavailable_reason(*why)),
             None,
             Vec::new(),
         ),

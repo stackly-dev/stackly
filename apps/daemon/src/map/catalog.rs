@@ -677,11 +677,16 @@ mod tests {
             ("official/zenith", "provider-zenith.json"),
             ("official/postgresql", "provider-postgresql.json"),
         ] {
-            assert_eq!(
-                detail_of(&catalog, id),
-                fixture::<dto::ProviderDetail>(file),
-                "{id}"
-            );
+            let detail = detail_of(&catalog, id);
+            if std::env::var_os("STACKLY_UPDATE_GOLDEN").is_some() {
+                let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../protocols/fixtures/catalog")
+                    .join(file);
+                let text = serde_json::to_string_pretty(&detail).unwrap();
+                std::fs::write(path, format!("{text}\n")).unwrap();
+                continue;
+            }
+            assert_eq!(detail, fixture::<dto::ProviderDetail>(file), "{id}");
         }
     }
 

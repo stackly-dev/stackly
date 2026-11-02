@@ -1,1 +1,1 @@
-${instance.config}/nats.conf
+--leak-token=${settings.leakToken}

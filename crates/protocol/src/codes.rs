@@ -750,6 +750,12 @@ area! {
             details ["reason"], "the data folder size can't be measured";
         LOGS_UNREADABLE = "instance.logs_unreadable", Unavailable, retryable false,
             details ["reason"], "the log store of the instance can't be read (spec 0027)";
+        OPEN_ACTION_NOT_FOUND = "instance.open_action_not_found", NotFound, retryable false,
+            details ["action", "available"], "the instance has no terminal action with that name (spec 0070)";
+        OPEN_ACTION_UNAVAILABLE = "instance.open_action_unavailable", Conflict, retryable true,
+            details ["action", "reason"], "the action can't be opened now: the instance is not running or ready, is retained, or its package or port is missing";
+        OPEN_SCRIPT_UNWRITABLE = "instance.open_script_unwritable", Internal, retryable true,
+            details ["reason"], "the terminal script could not be written to the temp folder of the instance";
 
         @functions
 
@@ -1325,6 +1331,8 @@ mod tests {
                 "operation.queue_full",
                 "supervisor.endpoint_unavailable",
                 "supervisor.auto_port_unavailable",
+                "instance.open_action_unavailable",
+                "instance.open_script_unwritable",
                 "storage.capacity_unavailable",
             ]
         );
@@ -1901,9 +1909,33 @@ mod tests {
                 ErrorCategory::Unavailable,
                 &["reason"],
             ),
+            (
+                "instance.open_action_not_found",
+                ErrorCategory::NotFound,
+                &["action", "available"],
+            ),
+            (
+                "instance.open_action_unavailable",
+                ErrorCategory::Conflict,
+                &["action", "reason"],
+            ),
+            (
+                "instance.open_script_unwritable",
+                ErrorCategory::Internal,
+                &["reason"],
+            ),
         ];
         assert_eq!(table, expected);
-        assert!(instance::ALL.iter().all(|spec| !spec.retryable));
+        // `instance.prepare_terminal` only writes a script it may write
+        // again, so its two refusals that can clear are retryable (spec
+        // 0070); every other instance code is not.
+        assert!(instance::ALL.iter().all(|spec| {
+            spec.retryable
+                == matches!(
+                    spec.code,
+                    "instance.open_action_unavailable" | "instance.open_script_unwritable"
+                )
+        }));
     }
 
     fn supervisor_hint(code: &ErrorSpec, outcome: Option<&str>) -> Option<&'static str> {

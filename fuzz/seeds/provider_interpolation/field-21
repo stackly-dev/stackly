@@ -1,1 +1,1 @@
-http://${endpoint.monitoring.address}
+http://${endpoint.http.address}/health

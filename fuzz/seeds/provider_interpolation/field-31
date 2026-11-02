@@ -1,1 +1,1 @@
---config=${instance.secrets}/conf/server.json
+--configFile=${instance.config}/traefik.yaml

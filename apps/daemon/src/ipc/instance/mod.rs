@@ -2,7 +2,8 @@
 //! build step 9, spec 0026 build step 9): `instance.create`,
 //! `instance.start`, `instance.stop`, `instance.restart`,
 //! `instance.reload`, `instance.force_stop`, `instance.get`,
-//! `instance.list`, `instance.get_create_form`, and `instance.preflight`.
+//! `instance.list`, `instance.get_create_form`, `instance.preflight`, and
+//! `instance.prepare_terminal` (spec 0070).
 //!
 //! Every method that starts an operation goes through
 //! [`start_operation`](crate::ipc::operation::start_operation): the key
@@ -18,6 +19,7 @@ mod draft;
 pub mod dto;
 mod duplicate;
 mod form;
+mod open_with;
 
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
@@ -48,6 +50,7 @@ pub use create::{create, work_deps};
 pub use detail::{get_data_usage, get_instance_detail};
 pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
+pub use open_with::prepare_terminal;
 
 use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::ipc::operation::{StartOutcome, StartRequest as OperationStart, start_operation};

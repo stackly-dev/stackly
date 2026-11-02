@@ -266,7 +266,7 @@ pub(crate) enum RenderFailure {
 }
 
 impl RenderFailure {
-    fn of(err: &PlanError) -> Self {
+    pub(crate) fn of(err: &PlanError) -> Self {
         match err {
             PlanError::EndpointUnresolved { .. } => Self::PortNotAssigned,
             _ => Self::Unresolvable,

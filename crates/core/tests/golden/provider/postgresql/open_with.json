@@ -1,0 +1,57 @@
+[
+  {
+    "copySecret": {
+      "field": "superuserPassword",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+    },
+    "kind": "app",
+    "name": "tableplus",
+    "title": "TablePlus",
+    "value": {
+      "bundleIds": [
+        "com.tinyapp.TablePlus"
+      ],
+      "url": "postgresql://postgres@127.0.0.1:14000/postgres"
+    }
+  },
+  {
+    "copySecret": {
+      "field": "superuserPassword",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+    },
+    "kind": "app",
+    "name": "postico",
+    "title": "Postico",
+    "value": {
+      "bundleIds": [
+        "at.eggerapps.Postico2",
+        "at.eggerapps.Postico"
+      ],
+      "url": "postgresql://postgres@127.0.0.1:14000/postgres"
+    }
+  },
+  {
+    "copySecret": {
+      "field": "superuserPassword",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/superuser-password"
+    },
+    "kind": "terminal",
+    "name": "psql",
+    "title": "psql",
+    "value": {
+      "args": [
+        "--host=/private/tmp/skt-golden/stackly-0000000a/i/0000000a",
+        "--port=14000",
+        "--username=postgres",
+        "postgres"
+      ],
+      "env": [
+        [
+          "PGAPPNAME",
+          "stackly-terminal"
+        ]
+      ],
+      "executable": "/private/tmp/skt-golden/runtime/bin/psql"
+    }
+  }
+]

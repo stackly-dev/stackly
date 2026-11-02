@@ -1,1 +1,1 @@
-${instance.logs}/fake.log
+--config=${instance.secrets}/conf/server.json

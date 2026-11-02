@@ -1,1 +1,1 @@
-${instance.config}/dynamic
+http://${endpoint.monitoring.address}

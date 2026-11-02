@@ -29,6 +29,7 @@ use super::names::{
     COMPONENT_RULE, NAME_RULE, SettingName, env_key_problem, is_component, is_name,
     is_template_name,
 };
+use super::open_with;
 use super::package::{
     MANIFEST_FILE, NameCheck, PackageError, PackageFiles, SETTINGS_SCHEMA_FILE, VERSIONS_FILE,
     check_files,
@@ -445,6 +446,9 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
     if issues.is_empty() {
         connection::check_sentinels(&manifest, &settings, issues);
     }
+    if issues.is_empty() {
+        open_with::check_sentinels(&manifest, &settings, issues);
+    }
     Some((manifest, settings, templates, versions))
 }
 
@@ -667,6 +671,12 @@ impl Checker<'_> {
         let health = self.health(raw, &env, readiness.as_ref());
         let log_files = self.log_files(raw, &env);
         let connections = connection::check(raw.connection.as_deref(), &env, &mut self.yaml());
+        let open_with = open_with::check(
+            raw.open_with.as_deref(),
+            &raw.config_files,
+            &env,
+            &mut self.yaml(),
+        );
         let version_check =
             version_check::check(raw.runtime.version_check.as_ref(), &mut self.yaml());
         let (capabilities, cold_backup_paths) =
@@ -701,6 +711,7 @@ impl Checker<'_> {
             aliases,
             managed_fields,
             connections,
+            open_with,
             version_check,
         })
     }

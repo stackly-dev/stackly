@@ -30,7 +30,8 @@ use stackly_protocol::instance::{
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
     GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
     InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
-    ReloadInstanceParams, RestartInstanceParams, StartInstanceParams, StopInstanceParams,
+    PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams, RestartInstanceParams,
+    StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -337,6 +338,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Box<InstanceDetail>> {
         let _ = context;
         instance::get_instance_detail(core, params)
+    }
+
+    /// `instance.prepare_terminal` (spec 0070).
+    fn prepare_terminal<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: PrepareTerminalParams,
+    ) -> HandlerFuture<'a, PrepareTerminalReply> {
+        let _ = context;
+        instance::prepare_terminal(core, params)
     }
 
     /// `instance.get_data_usage`.

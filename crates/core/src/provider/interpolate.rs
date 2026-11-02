@@ -245,6 +245,26 @@ pub(crate) enum ValuePosition {
     ProbeText,
     /// A boolean param of a `native` probe: exactly one boolean token.
     ProbeBoolean,
+    /// The `url` of an `openWith` entry of kind `app` or `browser` (spec
+    /// 0070).
+    OpenUrl,
+    /// An `args` entry of an `openWith` terminal command.
+    OpenArg,
+    /// An env value of an `openWith` terminal command.
+    OpenEnv,
+    /// The `executable` of an `openWith` terminal command: exactly one
+    /// runtime executable token.
+    OpenExecutable,
+}
+
+impl ValuePosition {
+    /// Whether the position belongs to an `openWith` entry.
+    const fn is_open(self) -> bool {
+        matches!(
+            self,
+            Self::OpenUrl | Self::OpenArg | Self::OpenEnv | Self::OpenExecutable
+        )
+    }
 }
 
 /// What a token may refer to while a package is validated.
@@ -495,6 +515,9 @@ pub(crate) fn check_value(
     issues: &mut FileIssues<'_>,
     path: &str,
 ) -> Option<Interp> {
+    if position.is_open() {
+        return check_open_value(text, position, env, issues, path);
+    }
     let pieces = resolve_all(text, env, issues, path)?;
     let whole_token = pieces.len() == 1;
     let mut ok = true;
@@ -917,6 +940,101 @@ pub(crate) fn check_connection_template(
         }
     }
     ok.then_some(Interp { pieces })
+}
+
+/// The `reason` of an `open_with_invalid` issue for an executable that is
+/// not exactly one runtime executable token (spec 0070).
+pub(crate) const EXECUTABLE_NOT_RUNTIME: &str = "executable_not_runtime";
+
+/// Checks a value of an `openWith` entry (spec 0070, AC-1): the tokens of
+/// a connection template except `secret.<field>`, so a secret can never
+/// reach a URL, an argument, or an env value. `secret.*`, `settings.*`, and
+/// `endpoint.<n>.host` are refused with `token_not_allowed_here`. The
+/// executable position takes exactly one `${runtime.executable}` or
+/// `${runtime.executables.<alias>}` token and nothing else.
+fn check_open_value(
+    text: &str,
+    position: ValuePosition,
+    env: &TypeEnv<'_>,
+    issues: &mut FileIssues<'_>,
+    path: &str,
+) -> Option<Interp> {
+    let raw = match parse(text) {
+        Ok(raw) => raw,
+        Err(message) => {
+            issues.at(path, IssueCode::UnknownToken, message);
+            return None;
+        }
+    };
+    let mut ok = true;
+    let mut pieces = Vec::new();
+    for piece in raw {
+        let segments = match piece {
+            RawPiece::Literal(text) => {
+                pieces.push(Piece::Literal(text));
+                continue;
+            }
+            RawPiece::Token(segments) => segments,
+        };
+        if matches!(
+            segments.first().map(String::as_str),
+            Some("settings" | "secret")
+        ) {
+            issues.at(
+                path,
+                IssueCode::TokenNotAllowedHere,
+                format!("{} cannot be used in an openWith entry", segments.join(".")),
+            );
+            ok = false;
+            continue;
+        }
+        match resolve(&segments, env) {
+            Ok((token, _)) if open_allows(&token, position) => pieces.push(Piece::Token(token)),
+            Ok((token, _)) => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    format!("{token} cannot be used here in an openWith entry"),
+                );
+                ok = false;
+            }
+            Err((code, message)) => {
+                issues.at(path, code, message);
+                ok = false;
+            }
+        }
+    }
+    if ok
+        && position == ValuePosition::OpenExecutable
+        && !matches!(
+            pieces.as_slice(),
+            [Piece::Token(
+                Token::RuntimeExecutable | Token::RuntimeAlias(_)
+            )]
+        )
+    {
+        issues.at_with_reason(
+            path,
+            IssueCode::OpenWithInvalid,
+            EXECUTABLE_NOT_RUNTIME,
+            "executable must be exactly ${runtime.executable} or ${runtime.executables.<alias>}",
+        );
+        ok = false;
+    }
+    ok.then_some(Interp { pieces })
+}
+
+/// Whether an `openWith` position may use the token: the connection
+/// template tokens without secrets, and the runtime executables only in the
+/// executable position.
+const fn open_allows(token: &Token, position: ValuePosition) -> bool {
+    match token {
+        Token::RuntimeExecutable | Token::RuntimeAlias(_) => {
+            matches!(position, ValuePosition::OpenExecutable)
+        }
+        Token::Secret(_) => false,
+        token => connection_allows(token),
+    }
 }
 
 /// Whether a connection template may use the token (the `connection.template`

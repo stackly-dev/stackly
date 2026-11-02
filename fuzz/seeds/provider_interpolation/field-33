@@ -1,1 +1,1 @@
-${endpoint.control.socket}
+fake.${endpoint.http.port}

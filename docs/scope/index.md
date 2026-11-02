@@ -107,7 +107,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 67 | Komponen dasar Stackly | Foundation | done |
 | 68 | Fixture tampilan & cek visual | Foundation | done |
 | 69 | Menu aplikasi, perintah & shortcut keyboard | Foundation | done |
-| 70 | Buka instance di aplikasi klien | Kerja harian | planned |
+| 70 | Buka instance di aplikasi klien | Kerja harian | in-progress |
 
 ## Catatan urutan
 

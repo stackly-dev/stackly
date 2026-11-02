@@ -543,6 +543,7 @@ mod tests {
             "versions.json",
             "schemas/settings.schema.json",
             "templates/fake.json.tmpl",
+            "templates/notes.txt.tmpl",
         ]
         .into_iter()
         .map(|path| {

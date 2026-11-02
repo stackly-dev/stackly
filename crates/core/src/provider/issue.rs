@@ -145,6 +145,11 @@ issue_codes! {
     ConnectionInvalid => "connection_invalid",
     /// Two `connection` entries with the same name (spec 0021).
     ConnectionNameDuplicate => "connection_name_duplicate",
+    /// An `openWith` entry that breaks a rule; [`Issue::reason`] says
+    /// which (spec 0070).
+    OpenWithInvalid => "open_with_invalid",
+    /// Two `openWith` entries with the same name (spec 0070).
+    OpenWithNameDuplicate => "open_with_name_duplicate",
     /// A catalog entry whose `manifestSha256` or `versionsSha256` differs
     /// from its package files (spec 0017 loader).
     CatalogDigestMismatch => "catalog_digest_mismatch",
@@ -380,7 +385,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 56);
+        assert_eq!(IssueCode::ALL.len(), 58);
     }
 
     #[test]

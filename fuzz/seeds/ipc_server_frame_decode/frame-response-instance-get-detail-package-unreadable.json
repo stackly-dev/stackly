@@ -35,7 +35,8 @@
           }
         ],
         "dependents": [],
-        "connections": []
+        "connections": [],
+        "openActions": []
       }
     }
   }

@@ -1,1 +1,1 @@
-${runtime.executables.fakeCli}
+${instance.secrets}/token

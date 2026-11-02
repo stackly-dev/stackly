@@ -605,6 +605,38 @@
       "summary": "another instance has the name"
     },
     {
+      "code": "instance.open_action_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "action",
+        "available"
+      ],
+      "items": null,
+      "summary": "the instance has no terminal action with that name (spec 0070)"
+    },
+    {
+      "code": "instance.open_action_unavailable",
+      "category": "conflict",
+      "retryable": true,
+      "details": [
+        "action",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the action can't be opened now: the instance is not running or ready, is retained, or its package or port is missing"
+    },
+    {
+      "code": "instance.open_script_unwritable",
+      "category": "internal",
+      "retryable": true,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the terminal script could not be written to the temp folder of the instance"
+    },
+    {
       "code": "instance.provider_ambiguous",
       "category": "conflict",
       "retryable": false,

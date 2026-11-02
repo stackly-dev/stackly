@@ -52,3 +52,9 @@ timeouts: { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }
 permissions:
   managedFilesystem: [data, config, logs, temp]
   executeRuntimeBinary: true
+openWith:
+  - name: routes
+    title: Routes File
+    kind: reveal
+    reveal:
+      configFile: routes

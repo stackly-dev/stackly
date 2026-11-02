@@ -1,1 +1,1 @@
---ignore-term=${settings.ignoreTerm}
+--log-lines-per-second=${settings.logLinesPerSecond}

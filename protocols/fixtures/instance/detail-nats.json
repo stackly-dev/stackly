@@ -109,6 +109,20 @@
         "parts": [],
         "portMayChange": true
       }
+    ],
+    "openActions": [
+      {
+        "name": "monitoring",
+        "title": "Monitoring",
+        "kind": "browser",
+        "state": "unavailable",
+        "reason": "port_not_assigned",
+        "appBundleIds": [],
+        "url": null,
+        "command": null,
+        "path": null,
+        "copySecret": null
+      }
     ]
   },
   "dataUsage": null

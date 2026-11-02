@@ -1,1 +1,1 @@
-${secret.authToken}
+${instance.config}/peers.yaml

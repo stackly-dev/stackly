@@ -2906,6 +2906,19 @@ public struct EndpointStatus: Codable, Sendable, Equatable {
 	}
 }
 
+/// One env pair of a terminal command.
+public struct EnvPair: Codable, Sendable, Equatable {
+	/// The env name.
+	public let name: String
+	/// The value.
+	public let value: String
+
+	public init(name: String, value: String) {
+		self.name = name
+		self.value = value
+	}
+}
+
 /// The error for one request.
 public struct ErrorFrame: Codable, Sendable, Equatable {
 	/// The request that failed, or null only when its `requestId` could not
@@ -3667,6 +3680,79 @@ public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
 	case unrecognized
 }
 
+/// The kind of an Open In action. Open.
+public enum OpenActionKind: String, Codable, Sendable, Equatable {
+	/// Opens `url` with the first installed app of `appBundleIds`.
+	case app
+	/// Runs `command` in Terminal through `instance.prepare_terminal`.
+	case terminal
+	/// Opens `url` in the default browser.
+	case browser
+	/// Shows `path` in Finder.
+	case reveal
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The command of a terminal action.
+public struct OpenCommand: Codable, Sendable, Equatable {
+	/// The absolute path of the executable in the instance's runtime.
+	public let executable: String
+	/// The arguments, each one value.
+	public let args: [String]
+	/// The env pairs from the manifest, in name order.
+	public let env: [EnvPair]?
+
+	public init(executable: String, args: [String], env: [EnvPair]?) {
+		self.executable = executable
+		self.args = args
+		self.env = env
+	}
+}
+
+/// One Open In action of an instance, in manifest order.
+/// 
+/// When `state` is `available`, `reason` is null and the field of the kind
+/// is set: `url` for `app` and `browser` (with `appBundleIds` for `app`),
+/// `command` for `terminal`, and `path` for `reveal`. When it is
+/// `unavailable`, `reason` is set and none of them is.
+public struct OpenAction: Codable, Sendable, Equatable {
+	/// The entry name from the manifest, such as `psql`.
+	public let name: String
+	/// The title the label is built from.
+	public let title: String
+	/// The kind of the action.
+	public let kind: OpenActionKind
+	/// Whether the action can be opened, as far as the daemon knows.
+	public let state: ConnectionAvailability
+	/// Set if and only if the action is unavailable.
+	public let reason: ConnectionUnavailableReason?
+	/// The bundle IDs of an `app` action, in priority order.
+	public let appBundleIds: [String]?
+	/// The URL of an available `app` or `browser` action.
+	public let url: String?
+	/// The command of an available `terminal` action.
+	public let command: OpenCommand?
+	/// The absolute path of an available `reveal` action.
+	public let path: String?
+	/// The secret the GUI copies to the hidden clipboard before it opens
+	/// the action: the field and the reference, never the value.
+	public let copySecret: ConnectionSecretPart?
+
+	public init(name: String, title: String, kind: OpenActionKind, state: ConnectionAvailability, reason: ConnectionUnavailableReason?, appBundleIds: [String]?, url: String?, command: OpenCommand?, path: String?, copySecret: ConnectionSecretPart?) {
+		self.name = name
+		self.title = title
+		self.kind = kind
+		self.state = state
+		self.reason = reason
+		self.appBundleIds = appBundleIds
+		self.url = url
+		self.command = command
+		self.path = path
+		self.copySecret = copySecret
+	}
+}
+
 /// Reply of `instance.get_detail`.
 public struct InstanceDetail: Codable, Sendable, Equatable {
 	/// The instance.
@@ -3689,8 +3775,11 @@ public struct InstanceDetail: Codable, Sendable, Equatable {
 	/// The connection strings, in manifest order; none when the pinned
 	/// package cannot be read or declares none.
 	public let connections: [ConnectionString]
+	/// The Open In actions, in manifest order; none when the pinned package
+	/// cannot be read or has no `openWith` block (spec 0070).
+	public let openActions: [OpenAction]?
 
-	public init(instanceId: UUID, revision: UInt64, provider: DetailProvider, runtime: DetailRuntime, dataPath: String, startup: StartupPolicyKind, secrets: [DetailSecret], dependents: [DetailDependent], connections: [ConnectionString]) {
+	public init(instanceId: UUID, revision: UInt64, provider: DetailProvider, runtime: DetailRuntime, dataPath: String, startup: StartupPolicyKind, secrets: [DetailSecret], dependents: [DetailDependent], connections: [ConnectionString], openActions: [OpenAction]?) {
 		self.instanceId = instanceId
 		self.revision = revision
 		self.provider = provider
@@ -3700,6 +3789,7 @@ public struct InstanceDetail: Codable, Sendable, Equatable {
 		self.secrets = secrets
 		self.dependents = dependents
 		self.connections = connections
+		self.openActions = openActions
 	}
 }
 
@@ -5039,6 +5129,30 @@ public struct PlatformNoteDto: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `instance.prepare_terminal`.
+public struct PrepareTerminalParams: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The name of a `terminal` action of the instance.
+	public let action: String
+
+	public init(instanceId: UUID, action: String) {
+		self.instanceId = instanceId
+		self.action = action
+	}
+}
+
+/// Reply of `instance.prepare_terminal`.
+public struct PrepareTerminalReply: Codable, Sendable, Equatable {
+	/// The absolute path of the `.command` script the GUI opens with
+	/// Terminal.
+	public let scriptPath: String
+
+	public init(scriptPath: String) {
+		self.scriptPath = scriptPath
+	}
+}
+
 /// Reply of `catalog.get_provider`: one entry with its versions, its
 /// artifacts, and what is wrong with it.
 public struct ProviderDetail: Codable, Sendable, Equatable {
@@ -5177,6 +5291,9 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceLogsFollow(LogsFollowParams)
 	/// Ends a log follow.
 	case instanceLogsUnfollow(LogsUnfollowParams)
+	/// Writes the Terminal script of a `terminal` Open In action (spec
+	/// 0070).
+	case instancePrepareTerminal(PrepareTerminalParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -5219,7 +5336,8 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceGetDataUsage = "instance.get_data_usage",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
-			instanceLogsUnfollow = "instance.logs_unfollow"
+			instanceLogsUnfollow = "instance.logs_unfollow",
+			instancePrepareTerminal = "instance.prepare_terminal"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -5423,6 +5541,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceLogsUnfollow(content)
 					return
 				}
+			case .instancePrepareTerminal:
+				if let content = try? container.decode(PrepareTerminalParams.self, forKey: .content) {
+					self = .instancePrepareTerminal(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -5548,6 +5671,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceLogsUnfollow(let content):
 			try container.encode(CodingKeys.instanceLogsUnfollow, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instancePrepareTerminal(let content):
+			try container.encode(CodingKeys.instancePrepareTerminal, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -5656,6 +5782,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceLogsFollow(LogsFollowing)
 	/// The follow ended.
 	case instanceLogsUnfollow
+	/// The script is written.
+	case instancePrepareTerminal(PrepareTerminalReply)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -5698,7 +5826,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceGetDataUsage = "instance.get_data_usage",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
-			instanceLogsUnfollow = "instance.logs_unfollow"
+			instanceLogsUnfollow = "instance.logs_unfollow",
+			instancePrepareTerminal = "instance.prepare_terminal"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -5910,6 +6039,11 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .instanceLogsUnfollow:
 				self = .instanceLogsUnfollow
 				return
+			case .instancePrepareTerminal:
+				if let content = try? container.decode(PrepareTerminalReply.self, forKey: .content) {
+					self = .instancePrepareTerminal(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -6039,6 +6173,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceLogsUnfollow:
 			try container.encode(CodingKeys.instanceLogsUnfollow, forKey: .type)
+		case .instancePrepareTerminal(let content):
+			try container.encode(CodingKeys.instancePrepareTerminal, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }

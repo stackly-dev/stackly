@@ -64,6 +64,7 @@ extension Call {
 		case .instanceLogsRead: "instance.logs_read"
 		case .instanceLogsFollow: "instance.logs_follow"
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
+		case .instancePrepareTerminal: "instance.prepare_terminal"
 		}
 	}
 }
@@ -113,6 +114,7 @@ extension Reply {
 		case .instanceLogsRead: "instance.logs_read"
 		case .instanceLogsFollow: "instance.logs_follow"
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
+		case .instancePrepareTerminal: "instance.prepare_terminal"
 		}
 	}
 }

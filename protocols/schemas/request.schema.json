@@ -723,6 +723,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Writes the Terminal script of a `terminal` Open In action (spec\n0070).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/PrepareTerminalParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.prepare_terminal"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1557,6 +1574,25 @@
         "provider",
         "runtimeId",
         "settings"
+      ]
+    },
+    "PrepareTerminalParams": {
+      "description": "Params of `instance.prepare_terminal`.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "The name of a `terminal` action of the instance.",
+          "type": "string"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId",
+        "action"
       ]
     },
     "ProtocolVersion": {

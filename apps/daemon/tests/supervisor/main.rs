@@ -22,6 +22,7 @@ mod lifecycle;
 mod list_performance;
 mod logs;
 mod offline;
+mod open_with;
 mod process;
 mod restart;
 mod same_runtime;
