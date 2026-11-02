@@ -116,12 +116,10 @@ nonisolated public struct RestartBannerContent: Equatable, Sendable {
         case .aborted:
             guard isFresh(plan, now: now), plan.id != dismissedPlanID else { return nil }
             return RestartBannerContent(
-                tone: .caution, title: "Daemon restart cancelled",
+                tone: .caution, title: "Daemon restart aborted",
                 message:
-                    "\(RestartCopy.closeReason(plan.closeReason)) stacklyd is still running, and the instances it stopped started again.",
-                items: (plan.instances ?? []).filter {
-                    $0.decision == .stopRestore && $0.stoppedAt == nil
-                }.map { Item(name: $0.name, reason: "Did not stop in time.") },
+                    "\(RestartCopy.closeReason(plan.closeReason)) stacklyd is still running. The instances it stopped are being started again, so check their state in Instances.",
+                items: abortedItems(of: plan),
                 canDismiss: true)
         case .expired:
             guard isFresh(plan, now: now), plan.id != dismissedPlanID else { return nil }
@@ -133,6 +131,20 @@ nonisolated public struct RestartBannerContent: Equatable, Sendable {
         case .unrecognized:
             return nil
         }
+    }
+
+    /// The two lists of an aborted plan, one after the other, split by the `stoppedAt` of the
+    /// `stop_restore` rows (spec 0030, *Value sourcing*): the instances that were stopped and
+    /// are being started again, then the ones that did not stop and still run.
+    private static func abortedItems(of plan: RestartPlanView) -> [Item] {
+        let stopRows = (plan.instances ?? []).filter { $0.decision == .stopRestore }
+        let stopped = stopRows.filter { $0.stoppedAt != nil }.map {
+            Item(name: $0.name, reason: RestartCopy.stoppedStartingAgain)
+        }
+        let running = stopRows.filter { $0.stoppedAt == nil }.map {
+            Item(name: $0.name, reason: RestartCopy.didNotStopStillRunning)
+        }
+        return stopped + running
     }
 
     private static func isFresh(_ plan: RestartPlanView, now: Date) -> Bool {

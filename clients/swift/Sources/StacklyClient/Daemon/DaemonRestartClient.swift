@@ -11,10 +11,12 @@ public struct DaemonRestartClient: Sendable {
     public typealias Send =
         @Sendable (Call, String?, CallOptions) async throws(ClientError) -> Reply
 
-    /// The limit for `daemon.shutdown { restart }`: the daemon waits up to 30 seconds for the
-    /// operations in flight before it answers (spec 0030, *API surface*), so the standard 10
-    /// seconds would report a slow quiesce as a lost answer.
-    public static let restartTimeout: Duration = .seconds(45)
+    /// The limit for `daemon.shutdown { restart }`, the interactive one of the secret calls
+    /// (190 seconds): the daemon waits up to 30 seconds for the operations in flight and then
+    /// up to 40 more for the plan to be written before it answers, about 70 seconds in all
+    /// (spec 0030, *API surface*), so a shorter limit would report a slow quiesce as a lost
+    /// answer while the daemon goes on to stop the instances.
+    public static let restartTimeout: Duration = SecretsClient.interactiveTimeout
 
     private let send: Send
 

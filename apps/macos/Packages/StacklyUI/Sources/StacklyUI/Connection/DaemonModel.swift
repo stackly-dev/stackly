@@ -502,6 +502,9 @@ public final class DaemonModel {
             if case .connected(let daemon) = link.currentState() {
                 noteRoundStart(for: daemon.connectedAt)
             }
+            // The handshake read the info before the event subscription, so a plan that
+            // changed in between, or events lost to a gap, are only found by reading again.
+            rereadRestartPlan()
         case .event, .lastFrameAt:
             break
         }
@@ -511,6 +514,18 @@ public final class DaemonModel {
             lastKnownAt = date
         }
         update()
+    }
+
+    /// Reads `daemon.get_info` again and hands its restart plan to ``restart``. An answer
+    /// that does not come changes nothing; the events keep the plan current.
+    private func rereadRestartPlan() {
+        Task { [weak self, link] in
+            guard
+                case .daemonGetInfo(let info)? = try? await link.call(
+                    .daemonGetInfo, nil, .standard)
+            else { return }
+            self?.restart.receive(info: info)
+        }
     }
 
     /// Records the rounds completed before the first round of the connection
