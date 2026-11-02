@@ -1437,7 +1437,58 @@ mod tests {
     }
 
     #[test]
-    fn set_port_requests_changes_requests_forgets_bound_ports_and_raises_the_revision_once() {
+    fn a_request_that_turns_automatic_keeps_the_port_the_process_holds() {
+        use std::collections::BTreeMap;
+
+        use crate::endpoint::{IpEndpoint, Transport};
+        use crate::registry::EndpointRequests;
+
+        let port = |number| Port::new(number).unwrap();
+        let name = |text: &str| text.parse::<EndpointName>().unwrap();
+        let ip = |text: &str, request, bound| {
+            Endpoint::Ip(IpEndpoint::new(
+                name(text),
+                Transport::Tcp,
+                "127.0.0.1".parse().unwrap(),
+                request,
+                bound,
+            ))
+        };
+        let mut instance = instance();
+        instance.endpoints = vec![
+            ip("fixed", PortRequest::Fixed(port(5432)), None),
+            ip("bound", PortRequest::Auto, Some(port(6001))),
+            ip("other", PortRequest::Fixed(port(7000)), None),
+        ];
+        let requests = EndpointRequests::new(BTreeMap::from([
+            (name("fixed"), PortRequest::Auto),
+            (name("bound"), PortRequest::Fixed(port(6002))),
+            (name("other"), PortRequest::Fixed(port(7001))),
+        ]));
+
+        instance.set_port_requests(&requests).unwrap();
+
+        let held: Vec<_> = instance
+            .endpoints()
+            .iter()
+            .filter_map(|endpoint| match endpoint {
+                Endpoint::Ip(ip) => Some((ip.name().to_string(), ip.request(), ip.bound())),
+                Endpoint::Unix(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            held,
+            [
+                ("fixed".to_owned(), PortRequest::Auto, Some(port(5432))),
+                ("bound".to_owned(), PortRequest::Fixed(port(6002)), None),
+                ("other".to_owned(), PortRequest::Fixed(port(7001)), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn set_port_requests_forgets_the_bound_port_of_a_request_that_becomes_fixed_and_raises_the_revision_once()
+     {
         use std::collections::BTreeMap;
 
         use crate::endpoint::{IpEndpoint, Transport, UnixEndpoint};

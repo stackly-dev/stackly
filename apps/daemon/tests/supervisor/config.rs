@@ -1053,7 +1053,6 @@ async fn every_config_method_works_with_no_catalog_fetch_or_signature_check() {
 }
 
 // covers: AC-14
-#[ignore = "core defect: the stop step of a restart after Fixed to Automatic on a running instance fails with supervisor.config_invalid, endpoint has no concrete address"]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_running_instance_can_change_a_fixed_port_to_automatic() {
     let ev = evidence!(
