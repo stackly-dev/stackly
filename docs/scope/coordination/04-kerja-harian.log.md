@@ -41,7 +41,7 @@
 | `chk-f29-m2` | checker (verify) | F29 milestone 2 PASS (11 langkah; drift, `keep-revision`, `apply`, `rename` lewat daemon nyata); catatan: `config apply --json` tanpa `impact` atau `revision`, teks `verify.md` usang (12 test 1 ignored, 225 Swift) | `04-kerja-harian.md` | `verify.md` 0029 Milestone 2 | `claude/dev-f70-m2-100be9` | `sonnet-5-5 · high` | dipakai ulang; merged `b6143968` |
 | `dev-f29-m3` | developer | F29 milestone 3, langkah 12 sampai 15 (GUI Configuration, sheet Rename dan Ports) | `04-kerja-harian.md` | `StacklyUI/InstanceDetail/Configuration/`, `SchemaFormModel` additive, sheet, menu | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; aktif |
 | `dev-f29-m4` | developer | F29 milestone 4, langkah 16 sampai 18 · native PASS (run `01a19b1c-1ba4-…`): PostgreSQL 18 reload dan restart, drift, ganti port dengan konflik luar, rollback setelah start gagal (paket salinan dengan `maxConnections` maksimum dinaikkan); NATS restart dan last known good; Traefik 3.7.15 routes reload A, B tetap · langkah 19 BLOCKED (jaringan mati menunggu user) · Pointer code in `apps/daemon/tests/{postgresql,nats}/config.rs`, `apps/daemon/tests/traefik/` | `04-kerja-harian.md` | test native | `claude/dev-f70-m2-100be9` | `sonnet-5-5 · high` | dipakai ulang; merged `8ff02331` |
-| `chk-f29-m4` | checker (verify) | F29 milestone 4 | `04-kerja-harian.md` | `verify.md` 0029 Milestone 4 | `claude/dev-f29-m1-6a7d0b` | `sonnet-5-5 · high` | dipakai ulang; aktif |
+| `chk-f29-m4` | checker (verify) | F29 milestone 4: AC-4, AC-5, AC-7, AC-8, AC-11, AC-14, AC-16 native PASS (run `01a19b25-be53-…`, 6 PASS); AC-21 BLOCKED menunggu persetujuan jaringan mati; catatan AC-8: jalur nilai valid lalu start gagal dibuktikan lewat salinan schema, karena schema asli tidak mengizinkan nilai yang menggagalkan start di Mac 32 GiB | `04-kerja-harian.md` | `verify.md` 0029 Milestone 4 (tanpa centang baru) | `claude/dev-f29-m1-6a7d0b` | `sonnet-5-5 · high` | dipakai ulang; blocked (AC-21) |
 
 ## Keputusan
 
@@ -85,6 +85,7 @@
 
 - F70 milestone 2: 7 langkah UI/manual `verify.md` menunggu user; digabung dengan langkah aplikasi asli milestone 3 dalam satu permintaan ke user.
 - F28 milestone 2: langkah verify `--watch` (AC-12) gagal; perbaikan CLI menunggu sesi bebas (`dev-f28-m2-fix`), lalu verify ulang langkah itu saja.
+- F29 milestone 4: langkah 19 (run jaringan mati GUI dan CLI, AC-21) menunggu persetujuan user; semua langkah lain PASS.
 - Disk: turun ke 2,7 GiB pada 10:59; lead menghapus `target/` worktree idle F28 dan F29, `target/debug/incremental`, `target/testkit-bin` (12 GiB), dan artefak `deps` lebih tua dari 90 menit; sesi memakai `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only` dan berhenti di 8 GiB.
 
 - F31 langkah 1 dan 10 (spike asid dan logout): sleep dan dua logout oleh user.
