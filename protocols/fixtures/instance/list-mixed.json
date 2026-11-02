@@ -64,7 +64,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000002",
@@ -130,7 +134,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000003",
@@ -196,7 +204,11 @@
       "capabilities": {
         "reload": false
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000004",
@@ -257,7 +269,11 @@
       "capabilities": {
         "reload": false
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000005",
@@ -327,7 +343,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000006",
@@ -388,7 +408,11 @@
       "capabilities": {
         "reload": false
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000007",
@@ -490,7 +514,11 @@
       "capabilities": {
         "reload": false
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000008",
@@ -592,7 +620,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000009",
@@ -665,7 +697,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000a",
@@ -731,7 +767,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000b",
@@ -798,7 +838,11 @@
       "capabilities": {
         "reload": false
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000c",
@@ -864,7 +908,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000d",
@@ -930,7 +978,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000e",
@@ -996,7 +1048,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-00000000000f",
@@ -1057,7 +1113,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000010",
@@ -1118,7 +1178,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000011",
@@ -1179,7 +1243,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000012",
@@ -1240,7 +1308,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000013",
@@ -1306,7 +1378,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     },
     {
       "id": "0192f3a5-0000-7000-8000-000000000014",
@@ -1379,7 +1455,11 @@
       "capabilities": {
         "reload": true
       },
-      "lastExit": null
+      "lastExit": null,
+      "autostart": {
+        "policy": "manual",
+        "session": "none"
+      }
     }
   ],
   "next": null

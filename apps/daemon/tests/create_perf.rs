@@ -131,6 +131,7 @@ fn preflight_of(api: &Api, name: &str) -> PreflightCreateParams {
             source: SecretSource::Generate,
         }],
         start: false,
+        startup: None,
     }
 }
 

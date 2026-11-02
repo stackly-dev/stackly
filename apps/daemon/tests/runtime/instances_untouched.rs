@@ -597,6 +597,7 @@ impl Api<'_> {
                 field: "authToken".to_owned(),
                 input: SecretInput::Value(SecretText::new(TOKEN.to_owned())),
             }],
+            startup: None,
         };
         let Reply::InstanceCreate(accepted) = call_with_key(
             self.client,

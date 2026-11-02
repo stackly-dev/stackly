@@ -128,6 +128,8 @@ pub enum OperationKind {
     ForceStopInstance,
     /// Rename an instance.
     RenameInstance,
+    /// Change when an instance starts on its own (spec 0031).
+    SetInstanceStartup,
     /// Write a new config revision and make it take effect (spec 0029).
     ApplyConfig,
     /// Change the ports of an instance's endpoints (spec 0029).

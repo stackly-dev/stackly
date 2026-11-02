@@ -216,6 +216,8 @@ code_enum! {
         ForceStopInstance => "force_stop_instance",
         /// Rename an instance.
         RenameInstance => "rename_instance",
+        /// Change when an instance starts on its own (spec 0031).
+        SetInstanceStartup => "set_instance_startup",
         /// Remove an instance and keep its data.
         RemoveInstance => "remove_instance",
         /// Delete an instance and its data.

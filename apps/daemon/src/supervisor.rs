@@ -31,6 +31,7 @@ use crate::ipc::instance::dto;
 use crate::ipc::operation::dto::revision;
 use crate::ipc::operation::starting;
 use crate::map::socket::SocketPaths;
+use crate::session::AutostartBook;
 
 /// Where the supervisor stands in this daemon run.
 #[derive(Clone)]
@@ -96,6 +97,7 @@ pub struct Supervision {
     report: Arc<Mutex<Report>>,
     events: Mutex<Option<Arc<BusSupervisorEvents>>>,
     sockets: Mutex<Option<Arc<SocketPaths>>>,
+    autostart: Arc<AutostartBook>,
 }
 
 impl std::fmt::Debug for Supervision {
@@ -111,6 +113,7 @@ impl Default for Supervision {
             report: Arc::new(Mutex::new(Report::default())),
             events: Mutex::new(None),
             sockets: Mutex::new(None),
+            autostart: Arc::new(AutostartBook::default()),
         }
     }
 }
@@ -131,6 +134,7 @@ impl Supervision {
             supervisor: Arc::clone(&handle),
             report: Arc::clone(&self.report),
             sockets: Arc::clone(&sockets),
+            autostart: Arc::clone(&self.autostart),
         });
         let mut deps = SupervisorDeps::new(
             input.registry,
@@ -151,6 +155,13 @@ impl Supervision {
         *self.lock_sockets() = Some(sockets);
         *self.lock() = Slot::Reconciling(supervisor.clone());
         supervisor
+    }
+
+    /// The startup lease state of each instance in this session (spec
+    /// 0031).
+    #[must_use]
+    pub fn autostart(&self) -> &Arc<AutostartBook> {
+        &self.autostart
     }
 
     /// The reader of socket paths, once the supervisor is built.
@@ -319,6 +330,7 @@ pub struct BusSupervisorEvents {
     supervisor: Arc<OnceLock<WeakSupervisor>>,
     report: Arc<Mutex<Report>>,
     sockets: Arc<SocketPaths>,
+    autostart: Arc<AutostartBook>,
 }
 
 impl std::fmt::Debug for BusSupervisorEvents {
@@ -352,7 +364,13 @@ impl SupervisorEvents for BusSupervisorEvents {
         } else {
             Vec::new()
         };
-        let summary = dto::summary(instance, &status, excerpt, &self.sockets.of(instance));
+        let summary = dto::summary(
+            instance,
+            &status,
+            excerpt,
+            &self.sockets.of(instance),
+            self.autostart.get(instance.id()),
+        );
         self.bus.publish_resource(
             EventKind::InstanceStateChanged(Box::new(InstanceStateChanged { instance: summary })),
             Self::resource(instance.id()),

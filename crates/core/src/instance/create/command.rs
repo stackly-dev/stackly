@@ -2,7 +2,7 @@
 //! 0020, *Evaluator create*): the data the daemon maps to the wire
 //! `CommandDraft` and the CLI turns into text.
 
-use stackly_domain::Runtime;
+use stackly_domain::{Runtime, StartupPolicy};
 
 use super::draft::{CreateDraft, PortRequestDraft, SecretSourceKind};
 use super::facts::{CreateFacts, ProviderFound};
@@ -32,6 +32,8 @@ pub struct CommandSpec {
     pub secrets: Vec<(String, SecretSourceKind)>,
     /// Whether the command starts the instance after create.
     pub start: bool,
+    /// Whether the command makes the instance start at login (`--autostart`).
+    pub autostart: bool,
 }
 
 /// Builds the command of `draft`.
@@ -50,6 +52,7 @@ pub(super) fn command_spec(draft: &CreateDraft, facts: &CreateFacts) -> CommandS
             .unwrap_or_default(),
         secrets: draft.secrets.clone(),
         start: draft.start,
+        autostart: draft.startup == StartupPolicy::AtLogin,
     }
 }
 

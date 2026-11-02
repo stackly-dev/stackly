@@ -92,6 +92,7 @@ pub fn draft_params(draft: &CreateDraft) -> PreflightCreateParams {
             })
             .collect(),
         start: draft.start,
+        startup: None,
     }
 }
 

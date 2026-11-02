@@ -306,7 +306,8 @@ struct InstanceActionModelTests {
             statusSeq: instance.statusSeq, process: nil, lastFailure: nil,
             restart: instance.restart, restartTotal: 0,
             blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
-            ownership: .manual, initialized: true, capabilities: nil, lastExit: nil)
+            ownership: .manual, initialized: true, capabilities: nil, lastExit: nil,
+            autostart: InstanceAutostart(policy: .manual, session: .none))
         await model.perform(.start, for: newer, context: context)?.value
         script.clock = script.clock.addingTimeInterval(301)
         await model.perform(.start, for: newer, context: context)?.value

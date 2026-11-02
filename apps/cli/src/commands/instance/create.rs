@@ -324,6 +324,7 @@ impl CreateArgs {
             settings: self.settings(form),
             secrets,
             start: self.start,
+            startup: None,
         });
         let preflight = match cx.call(call, CallSpec::control()).await {
             Ok(Reply::InstancePreflight(preflight)) => *preflight,
@@ -452,6 +453,7 @@ impl RunCommand for CreateArgs {
             endpoints: self.endpoints(),
             settings: self.settings(&form),
             secrets,
+            startup: None,
         };
         // `--start` needs the create to end first, whatever `--wait` says.
         let mut run = self.run.clone();
@@ -623,6 +625,7 @@ mod tests {
                 })
                 .collect(),
             start: args.start,
+            autostart: false,
         }
     }
 

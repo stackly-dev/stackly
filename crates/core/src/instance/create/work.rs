@@ -586,7 +586,7 @@ async fn register(
         data_line: resolved.runtime.line().clone(),
         data_version: resolved.runtime.version().clone(),
         endpoints: resolved.endpoints.clone(),
-        startup: StartupPolicy::Manual,
+        startup: resolved.startup,
         created_at: now,
         created_by: ctx.id(),
     })
@@ -837,6 +837,7 @@ pub fn encode_input(
             "settings": settings,
             "secrets": secrets,
             "start": draft.start,
+            "startup": draft.startup.as_code(),
         })
         .to_string()
     };
@@ -960,5 +961,10 @@ fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
             .get("start")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false),
+        startup: value
+            .get("startup")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|code| code.parse().ok())
+            .unwrap_or(StartupPolicy::Manual),
     })
 }

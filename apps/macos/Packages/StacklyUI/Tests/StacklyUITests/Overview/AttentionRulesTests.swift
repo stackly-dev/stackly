@@ -97,7 +97,7 @@ struct AttentionRulesTests {
             restart: sick.restart, restartTotal: 0, blocker: nil, endpoints: nil,
             leftoverProcesses: nil,
             logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
-            lastExit: nil)
+            lastExit: nil, autostart: InstanceAutostart(policy: .manual, session: .none))
         #expect(try items(instances: [bare]).first?.message == "Its health check is failing.")
     }
 
@@ -121,7 +121,8 @@ struct AttentionRulesTests {
                 statusSeq: base.statusSeq, process: nil, lastFailure: nil, restart: restart,
                 restartTotal: 0,
                 blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
-                ownership: .manual, initialized: true, capabilities: nil, lastExit: nil)
+                ownership: .manual, initialized: true, capabilities: nil, lastExit: nil,
+                autostart: InstanceAutostart(policy: .manual, session: .none))
         }
         let plain = "It crashed and Stackly is starting it again."
         let noTime = InstanceRestart(
@@ -145,7 +146,8 @@ struct AttentionRulesTests {
             process: nil, lastFailure: nil, restart: restart, restartTotal: 0, blocker: nil,
             endpoints: nil,
             leftoverProcesses: nil, logsUnavailable: false, ownership: .manual, initialized: true,
-            capabilities: nil, lastExit: nil)
+            capabilities: nil, lastExit: nil,
+            autostart: InstanceAutostart(policy: .manual, session: .none))
         let message = try #require(try items(instances: [summary]).first?.message)
         #expect(Self.plain(message) == "It crashed. Restart 1 of 5 at 10/21/2026, 9:00 AM.")
     }

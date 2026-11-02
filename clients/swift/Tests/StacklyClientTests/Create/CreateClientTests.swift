@@ -108,7 +108,7 @@ struct CreateClientTests {
             name: "orders-db", displayName: nil,
             provider: ProviderSelector(name: "official/example", revision: nil),
             runtimeId: Self.runtime, endpoints: nil, settings: JSONObject(), secrets: nil,
-            start: nil)
+            start: nil, startup: nil)
         let preflight = try await fake.client.preflight(draft)
 
         #expect(fake.made.first?.0 == .instancePreflight(draft))

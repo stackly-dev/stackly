@@ -48,7 +48,7 @@
                     "logStatement": .string("ddl"), "maxConnections": .number(200),
                 ]),
                 secrets: [SecretPlan(field: "superuserPassword", source: .generate)],
-                start: false),
+                start: false, startup: nil),
             secrets: [
                 DuplicateSecret(
                     field: "superuserPassword",

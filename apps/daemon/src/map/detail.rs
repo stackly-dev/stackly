@@ -59,10 +59,7 @@ pub fn instance_detail(data: &InstanceDetailData) -> InstanceDetail {
                 .map(|digest| digest.to_string()),
         },
         data_path: data.data_path.to_string_lossy().into_owned(),
-        startup: match data.startup {
-            StartupPolicy::Manual => StartupPolicyKind::Manual,
-            StartupPolicy::AtLogin => StartupPolicyKind::AtLogin,
-        },
+        startup: startup_kind(data.startup),
         secrets: data
             .secrets
             .iter()
@@ -96,6 +93,15 @@ pub fn instance_detail(data: &InstanceDetailData) -> InstanceDetail {
 }
 
 /// The wire reason of a connection or Open In entry that is unavailable.
+/// The startup policy on the wire.
+#[must_use]
+pub const fn startup_kind(startup: StartupPolicy) -> StartupPolicyKind {
+    match startup {
+        StartupPolicy::Manual => StartupPolicyKind::Manual,
+        StartupPolicy::AtLogin => StartupPolicyKind::AtLogin,
+    }
+}
+
 fn unavailable_reason(why: ConnectionUnavailable) -> ConnectionUnavailableReason {
     match why {
         ConnectionUnavailable::Retained => ConnectionUnavailableReason::Retained,

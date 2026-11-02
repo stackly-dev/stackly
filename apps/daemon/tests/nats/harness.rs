@@ -403,6 +403,7 @@ pub fn create_params(site: &Site, name: &str, settings: Value) -> CreateInstance
             .collect(),
         settings: SettingsDocument::new(map),
         secrets: Vec::new(),
+        startup: None,
     }
 }
 

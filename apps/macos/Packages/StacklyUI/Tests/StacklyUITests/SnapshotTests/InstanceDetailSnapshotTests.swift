@@ -330,6 +330,7 @@ extension InstanceSummary {
             restartTotal: 0,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
-            capabilities: nil, lastExit: nil)
+            capabilities: nil, lastExit: nil,
+            autostart: InstanceAutostart(policy: .manual, session: .none))
     }
 }

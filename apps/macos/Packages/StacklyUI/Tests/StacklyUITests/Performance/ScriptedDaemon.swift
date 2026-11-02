@@ -177,7 +177,7 @@ nonisolated final class ScriptedDaemon: Sendable {
                 data: "\(root)/data", logs: "\(root)/logs", cache: "\(root)/cache",
                 runtime: endpoint.runtimeRoot, rootOverride: true),
             socketPath: endpoint.socketPath, registrySchema: 2, secretStore: nil, launch: nil,
-            restart: nil)
+            restart: nil, session: nil)
     }
 
     private var health: DaemonHealth {

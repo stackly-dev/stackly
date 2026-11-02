@@ -85,6 +85,7 @@ async fn the_secret_value_and_the_text_settings_of_a_create_are_not_in_the_daemo
             field: "authToken".to_owned(),
             input: SecretInput::Value(SecretText::new(SECRET.to_owned())),
         }],
+        startup: None,
     };
 
     let Reply::InstanceCreate(accepted) = client

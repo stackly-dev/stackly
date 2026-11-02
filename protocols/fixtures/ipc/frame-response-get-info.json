@@ -26,7 +26,8 @@
         "registrySchema": 1,
         "secretStore": null,
         "launch": null,
-        "restart": null
+        "restart": null,
+        "session": null
       }
     }
   }

@@ -1,7 +1,7 @@
 //! The create draft and the constants of the create use case (spec 0020,
 //! *Evaluator create* and *Konstanta*).
 
-use stackly_domain::{InstanceId, RuntimeId};
+use stackly_domain::{InstanceId, RuntimeId, StartupPolicy};
 
 pub use crate::secret::SecretValueShape;
 
@@ -85,4 +85,6 @@ pub struct CreateDraft {
     /// Whether the client starts the instance after create; only the
     /// equivalent command shows it.
     pub start: bool,
+    /// When the new instance starts on its own (spec 0031, AC-16).
+    pub startup: StartupPolicy,
 }

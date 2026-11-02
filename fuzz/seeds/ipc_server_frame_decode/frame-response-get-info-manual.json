@@ -30,7 +30,8 @@
           "label": null,
           "bundlePath": null
         },
-        "restart": null
+        "restart": null,
+        "session": null
       }
     }
   }

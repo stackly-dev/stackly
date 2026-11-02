@@ -395,6 +395,7 @@ pub fn create_params(site: &Site, name: &str) -> CreateInstanceParams {
             .collect(),
         settings: SettingsDocument::new(serde_json::Map::new()),
         secrets: Vec::new(),
+        startup: None,
     }
 }
 

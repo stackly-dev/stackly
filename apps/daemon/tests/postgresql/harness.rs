@@ -848,6 +848,7 @@ pub fn create_params_on(
             field: "superuserPassword".to_owned(),
             input: SecretInput::Value(SecretText::new(password.to_owned())),
         }],
+        startup: None,
     }
 }
 

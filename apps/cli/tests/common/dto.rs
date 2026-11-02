@@ -36,6 +36,7 @@ pub fn info(root_override: bool) -> DaemonInfo {
         secret_store: None,
         launch: None,
         restart: None,
+        session: None,
     }
 }
 

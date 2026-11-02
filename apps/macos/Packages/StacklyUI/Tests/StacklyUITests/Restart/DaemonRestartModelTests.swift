@@ -267,6 +267,6 @@ struct DaemonRestartModelTests {
             startedAt: info.startedAt, roots: info.roots, socketPath: info.socketPath,
             registrySchema: info.registrySchema, secretStore: info.secretStore,
             launch: DaemonLaunch(context: context, label: "l", bundlePath: nil),
-            restart: restart)
+            restart: restart, session: nil)
     }
 }

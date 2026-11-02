@@ -91,7 +91,7 @@
                 initialized: true,
                 capabilities: capabilities
                     ?? InstanceCapabilities(reload: provider == "official/postgresql"),
-                lastExit: lastExit)
+                lastExit: lastExit, autostart: InstanceAutostart(policy: .manual, session: .none))
         }
     }
 
@@ -241,7 +241,7 @@
                 rootOverride: false),
             socketPath: FixturePaths.socket,
             registrySchema: 3,
-            secretStore: nil, launch: nil, restart: nil)
+            secretStore: nil, launch: nil, restart: nil, session: nil)
     }
 
     nonisolated extension DaemonHealth {

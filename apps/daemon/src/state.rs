@@ -248,6 +248,7 @@ impl DaemonCore {
             _ => None,
         };
         info.secret_store = Some(self.secrets.store(&self.platform));
+        info.session = crate::session::session_info(self.session());
         info.restart = self
             .supervision
             .restart_view()
@@ -633,7 +634,7 @@ impl DaemonCore {
                 Some("the registry stopped working".to_owned()),
             ),
         };
-        let subsystems = vec![
+        let mut subsystems = vec![
             ipc,
             subsystem_health(subsystem::EVENT_BUS, SubsystemStatus::Ok, None),
             self.log.health(now),
@@ -646,6 +647,13 @@ impl DaemonCore {
             ),
             crate::ipc::logs::health(self.logs().map(|logs| logs.log().health())),
         ];
+        if let SessionStatus::Unavailable(detail) = self.session() {
+            subsystems.push(subsystem_health(
+                subsystem::SESSION,
+                SubsystemStatus::Degraded,
+                Some(format!("platform.session_unavailable: {detail}")),
+            ));
+        }
         let status = match self.phase() {
             Phase::Starting => DaemonHealthStatus::Starting,
             Phase::Stopping => DaemonHealthStatus::Stopping,

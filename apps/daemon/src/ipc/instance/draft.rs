@@ -8,11 +8,11 @@
 use stackly_core::instance::create::{
     CreateDraft, PortRequestDraft, ProviderChoice, SecretSourceKind, placeholder_instance_id,
 };
-use stackly_domain::RuntimeId;
+use stackly_domain::{RuntimeId, StartupPolicy};
 use stackly_platform::SecretValue;
 use stackly_protocol::instance::{
     CreateInstanceParams, EndpointRequest, PortRequest, PreflightCreateParams, ProviderSelector,
-    SecretSource, SettingsDocument,
+    SecretSource, SettingsDocument, StartupPolicyKind,
 };
 use stackly_protocol::secret::SecretInput;
 
@@ -55,6 +55,14 @@ fn settings(document: &SettingsDocument) -> serde_json::Value {
     serde_json::Value::Object(document.as_map().clone())
 }
 
+/// The startup policy a request asks for; `manual` when it asks for none.
+fn startup_of(startup: Option<StartupPolicyKind>) -> StartupPolicy {
+    match startup {
+        Some(StartupPolicyKind::AtLogin) => StartupPolicy::AtLogin,
+        _ => StartupPolicy::Manual,
+    }
+}
+
 /// The draft of a preflight.
 pub(super) fn from_preflight(params: &PreflightCreateParams) -> CreateDraft {
     CreateDraft {
@@ -83,6 +91,7 @@ pub(super) fn from_preflight(params: &PreflightCreateParams) -> CreateDraft {
             .collect(),
         secret_values: Vec::new(),
         start: params.start,
+        startup: startup_of(params.startup),
     }
 }
 
@@ -119,6 +128,7 @@ pub(super) fn from_create(
         secrets,
         secret_values: Vec::new(),
         start: false,
+        startup: startup_of(params.startup),
     };
     draft.secret_values = values
         .iter()

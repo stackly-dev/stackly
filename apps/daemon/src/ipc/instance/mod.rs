@@ -22,6 +22,7 @@ mod duplicate;
 mod form;
 pub mod metrics;
 mod open_with;
+mod startup;
 
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
@@ -57,6 +58,7 @@ pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
 pub use metrics::get_metrics;
 pub use open_with::prepare_terminal;
+pub use startup::set_startup;
 
 use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::ipc::operation::{StartOutcome, StartRequest as OperationStart, start_operation};
@@ -675,7 +677,13 @@ fn summary_of(core: &DaemonCore, supervisor: &Supervisor, instance: &Instance) -
         .sockets()
         .map(|sockets| sockets.of(instance))
         .unwrap_or_default();
-    dto::summary(instance, &status, excerpt, &sockets)
+    dto::summary(
+        instance,
+        &status,
+        excerpt,
+        &sockets,
+        core.supervision().autostart().get(instance.id()),
+    )
 }
 
 /// Checks that the instance `id` exists, retained ones included, and

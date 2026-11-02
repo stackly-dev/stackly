@@ -41,7 +41,8 @@
             "content": "fixture-secret-0001"
           }
         }
-      ]
+      ],
+      "startup": null
     }
   }
 }

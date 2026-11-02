@@ -8,17 +8,23 @@ use std::sync::Arc;
 
 use serde_json::json;
 use stackly_domain::{InstanceId, Registry, StartupPolicy, WriteBatch, WriteOp};
+use stackly_ipc::CallOptions;
 use stackly_platform::{Clock, LaunchContext, SystemClock};
 use stackly_protocol::Timestamp;
 use stackly_protocol::events::ShutdownReason;
-use stackly_protocol::instance::{InstanceDesired, InstanceLifecycle, InstanceReadinessState};
+use stackly_protocol::instance::{
+    AutostartSession, InstanceDesired, InstanceLifecycle, InstanceReadinessState, InstanceSummary,
+    SetStartupParams, StartupPolicyKind,
+};
+use stackly_protocol::operation::OperationState;
+use stackly_protocol::{Call, Reply};
 use stackly_testkit::FakeLoginSessionInfo;
 use stacklyd::log_sink::{LogSink, LogSinkConfig};
 use stacklyd::map::StartFacts;
 use stacklyd::server::{self, DaemonDeps, DaemonHandle};
 use uuid::Uuid;
 
-use crate::support::{Site, fast};
+use crate::support::{Site, fast, key};
 
 fn launchd() -> LaunchContext {
     LaunchContext::Launchd {
@@ -164,4 +170,133 @@ async fn a_daemon_outside_launchd_never_rotates_or_starts_the_at_login_instance(
         0,
         "a manual daemon never reads the session"
     );
+}
+
+/// `instance.set_startup` with a fresh key.
+async fn set_startup(
+    api: &crate::support::Api,
+    id: Uuid,
+    startup: StartupPolicyKind,
+    expected: Option<stackly_protocol::Revision>,
+) -> Result<InstanceSummary, Box<stackly_protocol::ErrorBody>> {
+    match api
+        .client
+        .call_detailed(
+            Call::InstanceSetStartup(SetStartupParams {
+                instance_id: id,
+                startup,
+                expected_revision: expected,
+            }),
+            CallOptions::default().with_idempotency_key(key()),
+        )
+        .await?
+    {
+        Reply::InstanceSetStartup(summary) => Ok(*summary),
+        other => panic!("not a set_startup reply: {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_policy_is_set_apart_from_the_process_and_the_same_value_changes_nothing() {
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let id = api.create_ready("pg", json!({})).await;
+    let created = api.get(id).await.expect("the instance reads");
+    assert_eq!(created.autostart.policy, StartupPolicyKind::Manual);
+    assert_eq!(created.autostart.session, AutostartSession::None);
+
+    let changed = set_startup(&api, id, StartupPolicyKind::AtLogin, None)
+        .await
+        .expect("the policy is set");
+    assert_eq!(changed.autostart.policy, StartupPolicyKind::AtLogin);
+    assert_eq!(
+        changed.autostart.session,
+        AutostartSession::None,
+        "setting the policy creates no lease"
+    );
+    assert_eq!(changed.lifecycle, InstanceLifecycle::Stopped);
+    assert_eq!(changed.desired, InstanceDesired::Stopped);
+    assert!(changed.revision.get() > created.revision.get());
+
+    let again = set_startup(&api, id, StartupPolicyKind::AtLogin, Some(changed.revision))
+        .await
+        .expect("the same value answers");
+    assert_eq!(again.revision, changed.revision, "nothing was written");
+
+    let stale = set_startup(&api, id, StartupPolicyKind::Manual, Some(created.revision))
+        .await
+        .expect_err("a stale revision is refused");
+    assert_eq!(stale.code(), "resource.revision_mismatch");
+    drop(api);
+    stop(daemon).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_instance_created_with_startup_at_login_carries_the_policy() {
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let mut params = api.params("pg", json!({}));
+    params.startup = Some(StartupPolicyKind::AtLogin);
+    let accepted = api
+        .create(params)
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id: Uuid = accepted
+        .operation
+        .resource
+        .as_ref()
+        .expect("the operation names the instance")
+        .id
+        .parse()
+        .expect("an instance id");
+    api.wait_state(accepted.operation.id, OperationState::Succeeded)
+        .await;
+
+    let created = api.get(id).await.expect("the instance reads");
+    assert_eq!(created.autostart.policy, StartupPolicyKind::AtLogin);
+    drop(api);
+    stop(daemon).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn turning_the_policy_off_releases_the_lease_of_this_session() {
+    let site = Site::new();
+    let session = FakeLoginSessionInfo::new();
+    let manual = site.start().await;
+    let id = {
+        let api = site.api().await;
+        api.create_ready("pg", json!({})).await
+    };
+    stop(manual).await;
+    set_at_login(&site, id);
+    let first = start(&site, launchd(), &session).await;
+    stop(first).await;
+    session.set_audit_session(100_002);
+    let second = start(&site, launchd(), &session).await;
+    let api = site.api().await;
+    let running = api
+        .wait_instance(id, "ready after the login", |summary| {
+            summary.readiness.state == InstanceReadinessState::Ready
+        })
+        .await;
+    assert_eq!(running.autostart.session, AutostartSession::Active);
+
+    let off = set_startup(&api, id, StartupPolicyKind::Manual, None)
+        .await
+        .expect("the policy is set");
+    assert_eq!(off.autostart.policy, StartupPolicyKind::Manual);
+    assert_eq!(off.autostart.session, AutostartSession::None);
+    assert_eq!(
+        off.lifecycle,
+        InstanceLifecycle::Running,
+        "it keeps running"
+    );
+
+    api.stop_when_free(id).await;
+    drop(api);
+    stop(second).await;
 }

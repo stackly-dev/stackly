@@ -1782,6 +1782,41 @@
       "file": "dto-instance-blocker-config-drift.json",
       "type": "InstanceBlocker",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-set-startup.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-set-startup.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-autostart-suppressed.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-get-unknown-autostart.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-get-info-session.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-get-info-unknown-session.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "request-instance-create-autostart.json",
+      "type": "Request",
+      "expect": "roundtrip"
     }
   ]
 }
