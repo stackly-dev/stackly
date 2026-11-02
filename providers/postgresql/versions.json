@@ -174,6 +174,32 @@
           "providerRevision": {
             "id": "official/postgresql",
             "revision": "1.0.0",
+            "manifestSha256": "c8287f007b07fb77dd13f3c8a3880abe9a5e7d018ac5b45b8ae0e1e6cd934d5a"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "major_mismatch_refusal",
+            "readiness",
+            "reload",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "PostgreSQL 18.6 passed init, start, readiness, reload, adoption, stop, major_mismatch_refusal",
+          "testedAt": "2026-11-02T04:14:09.165Z",
+          "evidence": "compatibility/01a19a76-50ca-761d-abd1-4d4c61091da3/01a19a76-9abb-731f-b382-a56d064dc019"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/postgresql",
+            "revision": "1.0.0",
             "manifestSha256": "123e3fc6ad565cbc57f8f70a3a06a93ffab62a831b00ca0d1b33f85f88071df1"
           },
           "os": "macos",
@@ -360,6 +386,32 @@
           "summary": "postgresql 17.11 ready in 377 ms, stopped in 185 ms",
           "testedAt": "2026-10-18T11:20:38.613Z",
           "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f6e555c4a9"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/postgresql",
+            "revision": "1.0.0",
+            "manifestSha256": "c8287f007b07fb77dd13f3c8a3880abe9a5e7d018ac5b45b8ae0e1e6cd934d5a"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "major_mismatch_refusal",
+            "readiness",
+            "reload",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "PostgreSQL 17.11 passed init, start, readiness, reload, adoption, stop, major_mismatch_refusal",
+          "testedAt": "2026-11-02T04:14:09.137Z",
+          "evidence": "compatibility/01a19a76-50ca-761d-abd1-4d4c61091da3/01a19a76-9abb-731f-b382-a56e999a700c"
         },
         {
           "scope": "provider",

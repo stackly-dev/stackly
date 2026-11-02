@@ -4,5 +4,6 @@
 pub mod instance;
 pub mod logs;
 pub mod operation;
+pub mod restart;
 pub mod runtime;
 pub mod secret;

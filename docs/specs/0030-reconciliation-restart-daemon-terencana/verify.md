@@ -70,3 +70,41 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 ### Sisa kegagalan di luar milestone ini
 
 `stackly-core catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns` (F70 M3) dan `stacklyd ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` (F29 M2) gagal sama seperti di `main`.
+
+## Milestone 3: Planned restart in the daemon
+
+### UI / manual
+
+- [x] Buka `crates/core/src/supervisor/handover.rs` → `HANDOVER_PROVEN` memuat `testing/fake` line `0.3` dan `0.4` (evidence `spec-0015-ac-16`); `postgresql` dan `nats` line `1` ada karena test native AC-8 lulus (evidence `spec-0030-ac-8`). Pencocokan memakai ID provider penuh (`official/postgresql`), bukan nama pendek → AC-7, AC-8
+- [x] Buka `crates/core/src/operation/scheduler.rs` `begin` → quiesce menolak `Origin::Request` selain `daemon_restart` dengan `BeginError::RestartPending` sebelum precheck; `Origin::Background` tidak tersentuh → AC-10
+- [x] Buka `crates/core/src/supervisor/daemon_restart.rs` → operasi `daemon_restart` menulis rencana lewat `commit_guarded` (`write_plan_guard`, digest dihitung lagi di transaksi), menghentikan instance `stop_restore` dengan `StopIntent::PlannedRestart` (tanpa menulis desired, tanpa cek lease), lalu `hand_over`; stop yang gagal membuat rencana `aborted` dan `Restore` antre untuk instance yang sudah berhenti → AC-9, AC-11, AC-12
+- [x] Buka `crates/core/src/supervisor/restore.rs` dan `reconcile.rs` → daemon baru mengambil alih rencana terbuka (`restoring` di boot sama, `expired` di boot baru), `Then::Restore` untuk `stopped` dengan desired `running`, `Then::PlannedStop` untuk `stopping` yang `Proven`, outcome per instance, `reconciled_at` di akhir rekonsiliasi → AC-6, AC-9, AC-13, AC-14
+- [x] Catatan untuk checker: celah spec: folder data kosong tidak lagi dianggap hilang untuk paket tanpa data marker (NATS kosong sampai server pertama jalan); `prepare.rs::data_missing` berubah, diterima lead; tabel *Data* dan AC-4 disesuaikan lewat architect. Dijaga unit test `prepare.rs` (NATS kosong tidak hilang, PostgreSQL kosong hilang). `daemon.shutdown { mode: restart }` kini method yang memulai operasi, jadi wajib `idempotencyKey` (`operation.idempotency_key_required`). TUGAS MILESTONE 4: `stackly daemon restart` harus mengirim `idempotencyKey`; sampai itu restart lewat CLI ke daemon launchd gagal; test native memakai IPC langsung → AC-9, AC-15
+
+### Commands
+
+- [x] `cargo test -p stackly-core --lib supervisor::handover` → pencocokan line (mayor dari 1, mayor.minor di bawah 1.0, revision bukan semver), tabel keputusan semua lifecycle, mode recovery, digest → AC-7
+- [x] `cargo test -p stacklyd --test restart_plan -- --test-threads=1` → 12 test: preview, restart yang menghentikan `stop_restore` dan membiarkan `keep`, request berulang dengan key sama, quiesce (`restart_pending` dan `restart_busy`), `force`, abort `stop_timeout` dengan start ulang, digest tidak cocok, adopsi dan restore oleh daemon berikutnya, boot baru `expired`, daemon berakhir saat rencana `stopping`, listener luar `endpoint_in_use`, instance yang desired nya sudah `stopped` di-`skipped` → AC-6, AC-7, AC-9 sampai AC-14
+- [x] `cargo test -p stacklyd --test server` → 84 test lulus; test `daemon.shutdown` restart kini mengirim key dan menunggu `handle.started()` → AC-10
+- [x] `cargo test -p stacklyd --test supervisor -- --test-threads=1` dan `cargo test -p stacklyd --test operations` → tidak ada regresi stop, restart, reload, force stop → AC-9
+- [x] `cargo clippy -p stackly-core -p stackly-domain -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 postgresql_17 postgresql_18 nats_survives` → 4 test native PASS (PostgreSQL 17, 18, NATS, dan fake sebagai bukti line `0.4`): PID dan `startedAt` sama melewati `kickstart -k`, `bootout`, dan restart terencana; setelah itu daemon baru mencatat outcome `adopted` → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-7 · unit `handover.rs` (tabel keputusan, pencocokan line) dan `the_preview_sorts_the_running_instances_by_the_handover_list` (digest, launch context, tanpa operasi penghalang)
+- AC-8 · tiga test native di `native_launchd.rs`; entri `postgresql` dan `nats` di `HANDOVER_PROVEN` hanya setelah lulus
+- AC-9 · `a_restart_stops_what_it_cannot_hand_over_and_leaves_the_rest_running` (daemon lama) dan `the_next_daemon_adopts_the_kept_instance_and_starts_the_stopped_one_again` (daemon baru, outcome `adopted` dan `restored`, `readyAt` terisi)
+- AC-10 · `an_operation_that_cannot_resume_refuses_the_restart_and_the_daemon_goes_on`, `a_new_request_is_refused_while_the_restart_waits_for_the_operations_in_flight`, `force_goes_on_although_a_create_is_still_running`. Operasi `daemon_restart` dimulai sesudah quiesce, bukan sebelumnya (tidak ada baris operasi `failed` untuk `restart_busy`)
+- AC-11 · `an_instance_that_does_not_stop_aborts_the_restart_and_the_others_start_again`: rencana `aborted` `stop_timeout`, instance yang sudah berhenti hidup lagi sebagai proses baru lewat operasi sistem `start_instance` sesudah operasi `daemon_restart` berakhir `failed` (bukan di dalam operasi itu, karena langkah jurnal sebuah operasi tidak bisa diulang per instance); proses yang macet tetap diawasi, tanpa `SIGKILL`. Event `daemon.restart_plan` membawa `stoppedAt` kosong untuk instance yang macet; kode exit CLI menunggu milestone 4
+- AC-12 · `a_plan_that_is_not_the_confirmed_one_is_refused_before_anything_stops` (digest di preview) dan test `plan.rs` di core (digest di transaksi, `DigestChanged` dari `write_plan_guard`)
+- AC-13 · `a_new_boot_session_expires_the_plan_and_starts_nothing`
+- AC-14 · `a_daemon_that_ends_while_the_plan_stops_leaves_it_to_the_next_one`: rencana `stopping` diteruskan sebagai `restoring`, instance yang sudah berhenti hidup lagi, instance yang macet dicoba berhenti sekali lagi dengan `PlannedRestart` (gagal `stop_timeout`, outcome `failed`), desired tidak berubah
+- AC-6 · `a_foreign_listener_fails_the_restore_with_endpoint_in_use`: restore dari `stopped` gagal `endpoint_in_use`, `lastFailure` dicatat di instance yang tetap `stopped`, listener luar tidak tersentuh, port tidak berganti
+- AC-3 (bagian rencana restart) · rencana tidak pernah menyinyal proses yang identitasnya tidak terbukti: `stop_for_plan` menolak `unknown` dan `Proven`-nya dijaga `signal_and_wait`; test PID reuse khusus rencana menunggu `/test`
+- AC-5 (`lastFailure` untuk restore) · `settle_restored` menulis `runtime_unavailable` dan `executable_invalid` lewat `record_start_refusal`; dicakup bersama AC-6 oleh test listener, test khusus runtime menunggu `/test`
+- AC-15 sampai AC-19 kecuali yang disebut di atas · belum, milik milestone lain
+
+### Sisa kegagalan di luar milestone ini
+
+`stackly-core catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns` (F70 M3) dan `stacklyd ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` (F29 M2) gagal sama seperti di `main`.

@@ -23,6 +23,7 @@ use stackly_protocol::instance::{
     DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcileFinding,
     ReconcileFindingCode, ReconcilePhase as WirePhase,
 };
+use stackly_protocol::restart::RestartPlanView;
 use stackly_protocol::{Count, ErrorBody, ResourceKind, ResourceRef};
 
 use crate::events::EventBus;
@@ -44,6 +45,17 @@ enum Slot {
     Unavailable(&'static str),
 }
 
+/// Whether the supervisor serves.
+#[derive(Clone)]
+pub enum Availability {
+    /// Reconciled; it serves.
+    Ready(Supervisor),
+    /// Not reconciled yet.
+    Starting,
+    /// None in this run: the registry is in recovery mode or failed.
+    Unavailable,
+}
+
 /// What the `supervisor` subsystem shows besides the slot.
 #[derive(Debug, Default)]
 struct Report {
@@ -51,6 +63,8 @@ struct Report {
     degraded: Option<String>,
     /// Instances that read `unknown` after reconciliation.
     unknown: u32,
+    /// The latest restart plan this run saw, for `daemon.get_info`.
+    restart: Option<RestartPlanView>,
 }
 
 /// What [`Supervision::build`] needs from the start slot.
@@ -130,6 +144,7 @@ impl Supervision {
         deps.sinks = Arc::new(SinkSet::new(sinks));
         deps.events = Arc::clone(&events) as Arc<dyn SupervisorEvents>;
         deps.config = input.config;
+        deps.server_instance_id = input.bus.server_instance_id();
         let supervisor = Supervisor::new(deps);
         let _ = handle.set(supervisor.downgrade());
         *self.lock_events() = Some(events);
@@ -178,6 +193,23 @@ impl Supervision {
     /// There is no supervisor in this run, for the reason in `detail`.
     pub fn unavailable(&self, detail: &'static str) {
         *self.lock() = Slot::Unavailable(detail);
+    }
+
+    /// The latest restart plan of this run, for `daemon.get_info`.
+    #[must_use]
+    pub fn restart_view(&self) -> Option<RestartPlanView> {
+        self.lock_report().restart.clone()
+    }
+
+    /// Where the supervisor stands, for the methods that answer even when
+    /// it does not serve (`daemon.restart_preview`).
+    #[must_use]
+    pub fn availability(&self) -> Availability {
+        match &*self.lock() {
+            Slot::Ready(supervisor) => Availability::Ready(supervisor.clone()),
+            Slot::Waiting | Slot::Reconciling(_) => Availability::Starting,
+            Slot::Unavailable(_) => Availability::Unavailable,
+        }
     }
 
     /// The supervisor for an instance method.
@@ -375,6 +407,16 @@ impl SupervisorEvents for BusSupervisorEvents {
         };
         self.bus
             .publish_daemon(EventKind::DaemonReconciling(content));
+    }
+
+    fn restart_plan(&self, plan: &stackly_domain::RestartPlan) {
+        let view = crate::ipc::restart::plan_view(plan);
+        self.report
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .restart = Some(view.clone());
+        self.bus
+            .publish_daemon(EventKind::DaemonRestartPlan(Box::new(view)));
     }
 }
 

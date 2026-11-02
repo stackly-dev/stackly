@@ -49,6 +49,12 @@ pub trait SupervisorEvents: Send + Sync + 'static {
     fn reconciling(&self, phase: &super::ReconcilePhase) {
         let _ = phase;
     }
+
+    /// A daemon restart plan was written or changed (`daemon.restart_plan`,
+    /// spec 0030).
+    fn restart_plan(&self, plan: &stackly_domain::RestartPlan) {
+        let _ = plan;
+    }
 }
 
 /// An event sink that drops everything.
@@ -97,6 +103,9 @@ pub struct SupervisorDeps {
     pub events: Arc<dyn SupervisorEvents>,
     /// The constants.
     pub config: SupervisorConfig,
+    /// The `serverInstanceId` of this daemon run, which a restart plan
+    /// records as the daemon that restores it (spec 0030).
+    pub server_instance_id: uuid::Uuid,
 }
 
 impl SupervisorDeps {
@@ -125,6 +134,7 @@ impl SupervisorDeps {
             native: Arc::new(TcpConnect),
             events: Arc::new(NoSupervisorEvents),
             config: SupervisorConfig::default(),
+            server_instance_id: uuid::Uuid::nil(),
         }
     }
 }
@@ -149,6 +159,10 @@ pub(crate) struct Shared {
     /// What reconciliation decided to run again, taken once by
     /// [`Supervisor::start_reconciled`].
     pub(crate) pending: Mutex<Vec<super::pending::PendingRun>>,
+    /// The restart plan this daemon restores, while it is `restoring`
+    /// (spec 0030). The lock is held across the write of each outcome, so
+    /// the outcomes of concurrent restores reach the registry in order.
+    pub(crate) plan: tokio::sync::Mutex<Option<stackly_domain::RestartPlan>>,
     /// Whether the recheck task of `unknown` instances runs.
     pub(crate) recheck_running: AtomicBool,
 }
@@ -203,6 +217,7 @@ impl Supervisor {
                 operations: OnceLock::new(),
                 shutdown: AtomicBool::new(false),
                 pending: Mutex::new(Vec::new()),
+                plan: tokio::sync::Mutex::new(None),
                 recheck_running: AtomicBool::new(false),
             }),
         }
