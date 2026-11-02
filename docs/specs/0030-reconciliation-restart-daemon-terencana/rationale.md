@@ -118,6 +118,7 @@ Pemeriksaan data, runtime, dan port diletakkan di jalur yang sudah ada (rekonsil
 | Bukti AC-1 di GUI | test daemon native, test integrasi Swift fake, record manual `docs/manual.md` | XCUITest butuh Automation Mode yang hanya kamu yang bisa nyalakan | XCUITest wajib |
 | Waktu inventory AC-17 | dari handshake pertama ke daemon baru sampai `reconciling finished` plus `instance.list` lengkap | itulah yang dilihat client; tidak bergantung pada log internal | dari exit daemon lama (mengukur launchd, bukan rekonsiliasi) |
 | Provider uji untuk `stop_restore` | fake dengan `SupervisorConfig.handover_proven` kosong di test | tanpa package fixture baru | package fixture terpisah |
+| Folder data kosong (2026-11-02, temuan run native NATS di milestone 3, keputusan lead atas delegasi user) | hilang hanya untuk paket yang mendeklarasikan `compatibility.dataMarker`; folder yang tidak ada dan marker `Missing` tetap hilang untuk semua paket | NATS tidak punya init yang menulis data, jadi foldernya sah kosong sampai server pertama jalan; paket dengan marker selalu punya isi setelah init, jadi folder kosong di sana memang berarti data hilang | folder kosong selalu hilang (menolak NATS yang baru dibuat) |
 
 ## Cross check
 
