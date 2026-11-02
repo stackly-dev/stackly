@@ -387,3 +387,50 @@ Fix temuan 2 membuat dua kalimat spec makin basi, selain yang sudah dicatat di c
 | `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only cargo test -p stackly-domain` | lulus, delapan suite, termasuk `only_a_failed_outcome_carries_a_failure_code` |
 
 Test daemon, CLI, storage conformance, dan suite Swift tidak dijalankan: disk sekitar 9 GiB dan brief meminta hanya test sempit. `check-deps` dan `codegen --check` tidak diulang, karena commit fix tidak mengubah dependency, kontrak, atau aturan source scan.
+
+## Konfirmasi fix kedua (2026-11-02)
+
+**Diperiksa oleh**: sesi ini (Opus 5.5, xhigh), langsung di kode. Commit fix ditulis Sonnet 5.5 (trailer `Co-Authored-By`).
+**Range**: `5144380b..04e91b7c`, dibatasi ke file F30: commit `23102d2c` (merge `33967577`) untuk N1, commit `41ec0e46` (merge `e4e8d9a2`) untuk N2, dan dari merge F31 `8ee9714e` hanya hunk yang menyentuh file F30 (`39f76095`: `apps/daemon/tests/restart_plan/harness.rs`, `restore.rs`, dan baris start queue di `apps/daemon/src/server.rs`). Nomor baris mengacu ke `04e91b7c`.
+**Verdict**: Approved. N1 dan N2 fixed, dan tidak ada Blocker atau Major yang tersisa. `Review it` boleh dicentang; Minor dan Nit di bawah serta di konfirmasi pertama tetap follow up.
+
+### Status N1 dan N2
+
+| # | Temuan | Status | Bukti |
+| --- | --- | --- | --- |
+| N1 | Rencana `stopping` dengan operasi `cancelled` ditutup tanpa restore | fixed | Cabang di `take_over_plan` kini menutup rencana `aborted`, menerbitkan view nya, lalu memanggil `queue_restore` (`crates/core/src/supervisor/restore.rs:72` sampai 84, `crates/core/src/supervisor/daemon_restart.rs:596`). Run `Restore` hanya jalan untuk instance yang masih `stopped` atau `failed` dengan desired `running` (`crates/core/src/supervisor/pending.rs:137` sampai 141), jadi instance yang sudah dinyalakan daemon lama tidak disentuh. `queue_restore` hanya mengantre entri yang `stoppedAt` nya terisi, jadi instance yang tidak berhenti tidak dihentikan dua kali. Kalau start queue F31 juga mengantre instance yang sama, start kedua selesai tanpa efek, karena start work mengembalikan sukses untuk instance yang sudah `starting` atau `running` (`crates/core/src/supervisor/startup.rs:218` sampai 233). Test baru `a_cancelled_stop_that_the_daemon_never_finished_is_restored_by_the_next_one` (`apps/daemon/tests/restart_plan/errors.rs:331`); lihat Minor N11 soal kekuatannya. |
+| N2 | Banner dan tombol macet sesudah restart di recovery mode | fixed | `isAwaitingPlan` hanya diisi bila `ShutdownAccepted.planId` ada (`apps/macos/Packages/StacklyUI/Sources/StacklyUI/Settings/DaemonRestartModel.swift:250`). Handshake dari daemon yang `health.recovery` nya terisi dan `restart` nya null menghapus rencana terbuka dan penantian (`DaemonRestartModel.swift:100` sampai 106, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Connection/DaemonModel.swift:467`). Health sudah dibaca sebelum state `connected` diterbitkan (`clients/swift/Sources/StacklyClient/Link/DaemonLink.swift:371` sampai 377), jadi handshake pertama sudah membawanya. Lima test model baru menutup dua urutan N2 dan memastikan rencana tetap ada di luar recovery mode (`apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Restart/DaemonRestartModelTests.swift:310`, `:323`, `:342`, `DaemonModelRestartTests.swift:49`, `:64`). |
+| N9 | Cabang take over diam saat abort atau persist gagal | fixed | `warn` di `restore.rs:75` dan `:82`. |
+| N10 | Outcome yang ditolak hanya di level `debug` | fixed | `warn` di `restore.rs:165`. |
+
+N3 sampai N8 tidak disentuh range ini dan tetap follow up.
+
+### Temuan baru
+
+#### 🟡 N11. Test N1 tidak bisa merah tanpa fix nya, `apps/daemon/tests/restart_plan/errors.rs:331`
+**Problem**: Harness restart kini membaca sesi login palsu (`39f76095`), jadi `start_slot` membangun start queue F31 (`apps/daemon/src/server.rs:873`, `:881`). Untuk rencana yang sudah `aborted`, aturan pengecualian spec 0031 (instance `stop_restore` di rencana `restoring` tidak masuk antrean) tidak berlaku, jadi antrean itu ikut menyalakan instance `fine`. Jadi test ini lulus dengan atau tanpa `queue_restore`, persis seperti catatan developer. Test tetap membuktikan cabang take over yang benar dijalankan, karena assertion `wait_plan(Aborted)` gagal di jalur `restoring` biasa. Yang tidak terkunci hanya mekanisme N1 sendiri, yang dibutuhkan saat start queue tidak jalan: sesi login tidak terbaca (`session.login()` kosong), atau daemon bukan dari launchd (`apps/daemon/src/session.rs:84`).
+**Why it matters**: Kalau `queue_restore` di cabang itu hilang lagi, tidak ada test yang merah, sedangkan di Mac yang sesinya tidak terbaca instance yang dihentikan rencana tetap mati.
+**Suggested fix**: Tambah satu varian test di mana sesi login gagal dibaca (harness dengan `FakeLoginSessionInfo` yang mengembalikan error), atau test core dengan fake yang memeriksa ada `PendingRun` `Restore` dengan pemicu `planned_restart` sesudah `take_over_plan`. Bukan blocker GA, karena perilakunya benar menurut pembacaan kode dan jalur yang umum (launchd dengan sesi) sudah tertutup dua mekanisme.
+
+### Regresi F31 dan perubahan assertion
+
+`restore::a_new_boot_session_expires_the_plan_and_starts_nothing` kini lulus menurut gerbang lead. Assertion `desired` berubah dari `running` ke `stopped` (`apps/daemon/tests/restart_plan/restore.rs:212`), dan test kini menggeser audit session ke sesi baru (`:197`).
+
+Penilaian: konsisten dengan kedua spec. Spec 0030 AC-13 berkata desired tidak diubah, tetapi itu tentang rencana dan restore, dan AC-13 sendiri menyerahkan apa yang terjadi di sesi baru ke fitur 31. Spec 0031 AC-5 berkata di rotasi `new` setiap instance `manual` tanpa lease environment `active` mendapat desired `stopped`; instance `stays` dibuat dengan policy `manual` (default) dan lease `manual` nya milik sesi lama, jadi desired `stopped` adalah hasil rotasi, bukan rencana. Boot baru memang berarti sesi baru, karena `SessionId` memuat UUID boot, jadi mengganti boot ID tanpa mengganti sesi (versi test sebelumnya) adalah keadaan yang tidak mungkin terjadi di Mac. Bagian AC-13 yang lain tetap terkunci: `expired` dengan `boot_changed`, semua outcome `skipped`, lifecycle `stopped`, tanpa proses.
+
+Satu catatan cakupan, Nit **N12**: test daemon ini tidak lagi bisa membuktikan bahwa rencana sendiri tidak menulis desired, karena rotasi juga menulisnya. Jaminan itu kini hanya dari struktur kode (rencana tidak pernah menyimpan desired) dan test core. Bila ingin terkunci di level daemon, periksa bahwa tidak ada operasi `start_instance` dengan pemicu `planned_restart` dan bahwa perubahan desired datang dari rotasi.
+
+Satu hal lagi saya periksa karena menyentuh perilaku F30: sejak F31, tabel rekonsiliasi tetap tidak menyalakan instance `stopped` (`crates/core/src/supervisor/reconcile.rs:264`), jadi aturan `Then::Restore` spec 0030 (`reconcile.rs:590`) tetap berlaku untuk rencana `restoring`, dan test restore F30 lainnya tetap menguji jalur restore, bukan start F31.
+
+### Gerbang GA sesudah fix kedua
+
+| Temuan | Status untuk GA |
+| --- | --- |
+| Blocker dan 9 Major review awal | tertutup (konfirmasi pertama) |
+| N1, N2 | tertutup |
+| N3 sampai N8, N11 (Minor dan Nit), N12 | follow up, dicatat di log |
+| Teks spec basi (catatan b dan e, bagian *Follow up spec* di konfirmasi pertama) | follow up lewat `/architect` atau `/sync` |
+
+### Perintah dijalankan (konfirmasi kedua)
+
+Tidak ada test yang dijalankan sesi ini. Range ini tidak mengubah crate domain, dan suite `stacklyd` serta StacklyUI butuh build besar dengan disk sekitar 9 GiB. Gerbang lead yang dilaporkan: seluruh `stacklyd` hijau dengan `restart_plan` serial 23 dari 23, StacklyUI 1680 test dengan hanya dua test flaky CreateInstance yang sudah dikenal, dan `cargo xtask build-app` lulus. Angka itu dari lead, tidak diulang di sini.
