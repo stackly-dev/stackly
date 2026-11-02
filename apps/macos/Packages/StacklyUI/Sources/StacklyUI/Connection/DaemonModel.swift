@@ -106,6 +106,9 @@ public final class DaemonModel {
     public let instanceActions: InstanceActionModel
     /// The background agent, or `nil` when the shell has none (spec 0015).
     public let agent: BackgroundAgentModel?
+    /// Restart Daemon: the confirmation sheet, the plan, and the banner, row marks, and toast
+    /// that follow it (spec 0030).
+    public let restart: DaemonRestartModel
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
     /// the model is created; the agent model learned the same value at creation.
     public internal(set) var rootOverrideActive = false
@@ -212,6 +215,25 @@ public final class DaemonModel {
             serverInstance: { serverInstance.id },
             now: now)
         sync.register(runtimes.store)
+        let restartClient = DaemonRestartClient { call, key, options throws(ClientError) in
+            try await link.call(call, key, options)
+        }
+        restart = DaemonRestartModel(
+            preview: { () throws(ClientError) in try await restartClient.preview() },
+            restart: { digest, force, key in
+                do throws(ClientError) {
+                    return .accepted(
+                        try await restartClient.restart(
+                            expectedPlanDigest: digest, force: force, idempotencyKey: key))
+                } catch {
+                    switch error {
+                    case .rejected(let body): return .rejected(body)
+                    case .notSent(let body): return .notSent(body)
+                    case .outcomeUnknown(let body): return .outcomeUnknown(body)
+                    }
+                }
+            },
+            now: now)
         mutationPathBox = mutations
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
@@ -441,6 +463,8 @@ public final class DaemonModel {
                 statusBeforeConnect = presentation.status
                 noteRoundStart(for: daemon.connectedAt)
                 lastConnectedAt = daemon.connectedAt
+                // A restart the new daemon reports may have started while the app was away.
+                restart.receive(info: daemon.info)
             }
             lastDaemon = daemon
             serverInstance.id = daemon.info?.serverInstanceId
@@ -482,6 +506,7 @@ public final class DaemonModel {
             break
         }
         sync.handle(signal)
+        if case .event(let event) = signal { restart.receive(event: event) }
         if case .lastFrameAt(let date) = signal, inputs.refreshed {
             lastKnownAt = date
         }

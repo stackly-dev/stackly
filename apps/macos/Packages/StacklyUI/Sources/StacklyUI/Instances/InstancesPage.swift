@@ -58,6 +58,7 @@ public struct InstancesPage: View {
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let instances: InstanceStore
     private let catalog: CatalogStore?
@@ -269,7 +270,8 @@ public struct InstancesPage: View {
         guard instances.loadedCount != nil else { return nil }
         return InstanceRowModel.rows(
             of: instances.instances, catalog: catalog?.providers,
-            failures: Set(instances.store.itemFailures.keys))
+            failures: Set(instances.store.itemFailures.keys),
+            stoppedForRestart: daemon?.restart.markedInstances ?? [])
     }
 
     /// The rows the filter and the search let through, in the order of the table.

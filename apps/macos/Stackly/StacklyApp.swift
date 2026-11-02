@@ -26,7 +26,7 @@ struct StacklyApp: App {
 
         Settings {
             // provisional: F32
-            SettingsPlaceholder()
+            SettingsRoot(model: appDelegate.runtime.model)
         }
 
         #if DEBUG

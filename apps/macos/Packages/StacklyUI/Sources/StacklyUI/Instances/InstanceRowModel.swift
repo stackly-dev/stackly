@@ -32,7 +32,12 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
     ///   - summary: The instance.
     ///   - provider: The catalog entry of its provider, or `nil` before the catalog loaded.
     ///   - refreshFailed: Whether the last refetch of this instance failed.
-    public init(_ summary: InstanceSummary, provider: ProviderSummary?, refreshFailed: Bool) {
+    ///   - stoppedForRestart: Whether a daemon restart stopped the instance and has not
+    ///     brought it back (spec 0030): the row says so in the detail of its status.
+    public init(
+        _ summary: InstanceSummary, provider: ProviderSummary?, refreshFailed: Bool,
+        stoppedForRestart: Bool = false
+    ) {
         id = summary.id
         self.summary = summary
         providerTitle = provider?.displayName ?? summary.software
@@ -42,12 +47,20 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
             } ?? TileSpec(mark: nil, tile: nil, name: summary.software)
         group = InstanceGroup.of(summary)
         let appearance = StatusAdapter.appearance(of: summary)
+        let detail: StatusDetail? =
+            if stoppedForRestart {
+                StatusDetail(text: RestartCopy.rowMark, tone: .informative)
+            } else if refreshFailed {
+                StatusDetail(text: Self.refreshFailedText, tone: .caution)
+            } else {
+                nil
+            }
         self.appearance =
-            refreshFailed
-            ? StatusAppearance(
-                label: appearance.label, tone: appearance.tone, symbol: appearance.symbol,
-                detail: StatusDetail(text: Self.refreshFailedText, tone: .caution))
-            : appearance
+            detail.map {
+                StatusAppearance(
+                    label: appearance.label, tone: appearance.tone, symbol: appearance.symbol,
+                    detail: $0)
+            } ?? appearance
         ports = InstanceText.ports(summary.endpoints)
         self.refreshFailed = refreshFailed
     }
@@ -57,16 +70,19 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
     ///   - instances: The instances.
     ///   - catalog: The catalog, or `nil` before it loaded.
     ///   - failures: The IDs whose last refetch failed.
+    ///   - stoppedForRestart: The IDs a daemon restart stopped and has not brought back.
     public static func rows(
         of instances: [InstanceSummary],
         catalog: [ProviderSummary]?,
-        failures: Set<UUID> = []
+        failures: Set<UUID> = [],
+        stoppedForRestart: Set<UUID> = []
     ) -> [InstanceRowModel] {
         let providers = Dictionary(
             (catalog ?? []).map { ($0.provider, $0) }, uniquingKeysWith: { first, _ in first })
         return instances.map {
             InstanceRowModel(
-                $0, provider: providers[$0.provider.name], refreshFailed: failures.contains($0.id))
+                $0, provider: providers[$0.provider.name], refreshFailed: failures.contains($0.id),
+                stoppedForRestart: stoppedForRestart.contains($0.id))
         }
     }
 
