@@ -1,0 +1,18 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($WORKSPACE/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($WORKSPACE/apps/daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.25s
+     Running tests/postgresql.rs (target/debug/deps/postgresql-ed418f30a90499f2)
+
+running 2 tests
+kill: 41443: No such process
+kill: 41442: No such process
+test compat::postgresql_17_runs_the_package_and_records_what_it_proved ... ok
+test compat::postgresql_18_runs_the_package_and_records_what_it_proved ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 22.63s
+
