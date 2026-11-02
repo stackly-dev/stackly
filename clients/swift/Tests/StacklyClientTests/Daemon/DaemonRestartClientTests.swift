@@ -1,0 +1,83 @@
+import Foundation
+import StacklyClient
+import Synchronization
+import Testing
+
+/// The two restart methods of `StacklyClient` over a fake `send` (spec 0030 AC-16): the
+/// preview reads without a key, the restart carries the confirmed digest and the key of the
+/// action under the long limit, and a reply of another kind is a broken contract.
+struct DaemonRestartClientTests {
+    /// Records each call with its key and time limit and answers with a fixed result.
+    final class Fake: Sendable {
+        private let calls = Mutex<[(call: Call, key: String?, timeout: Duration)]>([])
+        private let answer: Result<Reply, ClientError>
+
+        init(_ answer: Result<Reply, ClientError>) {
+            self.answer = answer
+        }
+
+        var made: [(call: Call, key: String?, timeout: Duration)] { calls.withLock { $0 } }
+
+        var client: DaemonRestartClient {
+            DaemonRestartClient { [self] call, key, options throws(ClientError) in
+                calls.withLock { $0.append((call, key, options.timeout)) }
+                return try answer.get()
+            }
+        }
+    }
+
+    private static let preview = RestartPreview(
+        digest: "abc123", launchContext: .launchd, supervisorAvailable: true, instances: [],
+        blockingOperations: [])
+
+    @Test func previewSendsNoKeyAndReadsThePlan() async throws {
+        let fake = Fake(.success(.daemonRestartPreview(Self.preview)))
+        let preview = try await fake.client.preview()
+
+        let made = try #require(fake.made.first)
+        #expect(made.call == .daemonRestartPreview)
+        #expect(made.key == nil)
+        #expect(made.timeout == ContractLimits.callTimeout)
+        #expect(preview == Self.preview)
+    }
+
+    @Test func restartSendsTheDigestTheForceFlagAndTheKeyUnderTheLongLimit() async throws {
+        let accepted = ShutdownAccepted(
+            serverInstanceId: UUID(), mode: .restart, planId: UUID())
+        let fake = Fake(.success(.daemonShutdown(accepted)))
+        let reply = try await fake.client.restart(
+            expectedPlanDigest: "abc123", force: true, idempotencyKey: "key-1")
+
+        let made = try #require(fake.made.first)
+        #expect(
+            made.call
+                == .daemonShutdown(
+                    ShutdownParams(mode: .restart, expectedPlanDigest: "abc123", force: true)))
+        #expect(made.key == "key-1")
+        #expect(made.timeout == .seconds(45))
+        #expect(made.timeout > ContractLimits.callTimeout)
+        #expect(reply == accepted)
+    }
+
+    @Test func aReplyOfAnotherKindIsABrokenContract() async {
+        let fake = Fake(.success(.daemonRestartPreview(Self.preview)))
+        await #expect(throws: ClientError.self) {
+            _ = try await fake.client.restart(expectedPlanDigest: "abc123", idempotencyKey: "k")
+        }
+    }
+
+    @Test func aRefusalPassesThroughUnchanged() async throws {
+        let refusal = ClientErrorCatalog.notConnected()
+        let fake = Fake(.failure(.rejected(refusal)))
+        do {
+            _ = try await fake.client.preview()
+            Issue.record("the preview did not throw")
+        } catch {
+            guard case .rejected(let body) = error else {
+                Issue.record("expected a rejection, got \(error)")
+                return
+            }
+            #expect(body == refusal)
+        }
+    }
+}
