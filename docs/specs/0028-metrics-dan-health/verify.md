@@ -108,7 +108,7 @@ _Langkah 7 sudah dibangun: `getMetrics` di `StacklyClient`, tab Metrics (kartu, 
 
 ## Milestone 5: Evidence on this Mac
 
-_Langkah 9: tiga run NFR-003 dan test native PostgreSQL 17 dan NATS sudah dijalankan di Mac ini lewat `cargo xtask evidence run --kind native` dengan artefak dari cache runtime xtask (tanpa unduhan). Satu run NFR-003 (dengan client) melampaui anggaran CPU, dan sesi GUI dengan sleep sungguhan butuh kamu. Tidak ada kode produksi yang diubah._
+_Langkah 9: tiga run NFR-003 dan test native PostgreSQL 17 dan NATS sudah dijalankan di Mac ini lewat `cargo xtask evidence run --kind native` dengan artefak dari cache runtime xtask (tanpa unduhan). Tiga run NFR-003 diulang pada build release (`dev-f28-m5-2`) dan semuanya lulus anggaran. Sesi GUI dengan sleep sungguhan butuh kamu. Tidak ada kode produksi yang diubah._
 
 ### UI / manual
 
@@ -129,10 +129,16 @@ _Langkah 9: tiga run NFR-003 dan test native PostgreSQL 17 dan NATS sudah dijala
 - [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --test nats -- --ignored --test-threads 1 metrics::` → 2 test lulus, 2 record PASS, 0 problem (run `01a19b3e-a5d2-7265-bb79-82fea543604b`; record `01a19b3e-eb02-72ba-944c-07530cc391bc` dan `01a19b3e-ff91-73dc-8a96-029a0077eb88`) → AC-2, AC-4, AC-5, AC-15
   - PostgreSQL 17.11: pohon lebih dari satu proses, `main` satu proses terukur, memori `tree` paling sedikit memori `main`, daftar proses berurut sebagai pohon dengan nama `postgres` (nama file executable, bukan argv), satu sesi psql menambah satu proses di pohon, CPU `tree` naik di atas 0 saat query berjalan dan tidak pernah di bawah CPU `main`
   - NATS 2.15.1: `tree.processCount` 1, `measuredCount` 1, nilai `tree` sama dengan `main` (CPU, memori, Disk I/O), satu baris proses bernama `nats-server`
-- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test metrics_nfr003 -- --ignored --test-threads 1 --nocapture`, run ketiga dan terakhir (`01a19b4f-e0b9-708e-a3ef-09984b260873`, 3 record, 0 problem), diukur dari luar dengan `ps` selama 300 detik, 60 pembacaan, RSS daemon sekitar 68 sampai 70 MiB di semua run (batas 150 MiB) → AC-14
-  - [x] Run 1, sepuluh instance fake tanpa client (record `01a19b5a-5174-77cb-9791-0ab16cbc4192`): PASS, CPU rata rata 0,875 persen satu core (batas 1,0)
-  - [ ] Run 2, sepuluh instance fake dengan satu client yang membaca `instance.get_metrics` sepuluh instance tiap 5 detik memakai kursor (record `01a19b55-4ba9-7178-8235-4a45f8349382`): FAIL, CPU rata rata 1,074 persen (batas 1,0); run sebelumnya (`01a19b45-4b0a-7556-affa-199e6632bfbc`) juga FAIL pada 1,021 persen
-  - [x] Run 3, sembilan instance fake dan satu PostgreSQL 17 (record `01a19b50-0d17-7480-8a41-b859d1137380`): PASS, CPU rata rata 0,842 persen, dan metrik instance PostgreSQL melaporkan lebih dari satu proses
+- [x] `cargo xtask evidence run --kind native -- cargo test --release -p stacklyd --test metrics_nfr003 -- --ignored --test-threads 1 --nocapture` (run `01a19bb7-81c8-7406-8f07-90a34cf7695b`, 3 record PASS, 0 problem), diukur dari luar dengan `ps` selama 300 detik, 60 pembacaan, pada build release (`profile=release` di baris tiap record), RSS daemon sekitar 50 MiB di semua run (batas 150 MiB) → AC-14
+  - Load average 1 menit sebelum runnya 2,88 (build release baru selesai, Mac belum sepi sekali) dan sesudahnya 1,74; tidak ada build lain berjalan selama run
+  - [x] Run 1, sepuluh instance fake tanpa client (record `01a19bc2-a48a-7209-bca5-6dd925c82e31`): PASS, CPU rata rata 0,426 persen satu core (batas 1,0), RSS maksimum 51 472 KiB
+  - [x] Run 2, sepuluh instance fake dengan satu client yang membaca `instance.get_metrics` sepuluh instance tiap 5 detik memakai kursor, tiga record release semuanya PASS:
+    - `01a19bbd-9fb0-7306-8bff-fa243ea31621` (run di atas): CPU 0,532 persen, RSS maksimum 51 952 KiB
+    - `01a19bc7-f62b-71fe-8d3f-0f5a962de81d` (run `01a19bc7-f478-77bf-b7d8-b83f2cb2479c`, load 2,07 sebelum dan 0,74 sesudah): CPU 0,539 persen, RSS maksimum 51 600 KiB
+    - `01a19bcd-01f8-7386-b089-6c142e46178c` (run `01a19bcd-004e-726d-8041-1268a3510677`, load 0,74 sebelum dan 1,11 sesudah): CPU 0,522 persen, RSS maksimum 51 808 KiB
+  - [x] Run 3, sembilan instance fake dan satu PostgreSQL 17 (record `01a19bb8-706f-7244-a0df-936ae489f05e`): PASS, CPU rata rata 0,426 persen, RSS maksimum 51 920 KiB, dan metrik instance PostgreSQL melaporkan lebih dari satu proses
+  - Record debug lama (`01a19b45-4b0a-7556-affa-199e6632bfbc`, `01a19b55-4ba9-7178-8235-4a45f8349382`, run `01a19b4f-e0b9-708e-a3ef-09984b260873`) mengukur `target/debug/stacklyd` tanpa optimasi karena `cargo test` tanpa `--release` memakai binary debug; angkanya (1,021 dan 1,074 persen untuk run 2) digantikan oleh record release di atas dan tidak berlaku sebagai bukti AC-14
+  - Keputusan lead (log Keputusan di `docs/scope/`): AC-14 diukur pada build release, yang memang dikirim. Teks AC tidak berubah. Harness sekarang menulis `profile=debug|release` di baris hasil dan di catatan record, dan doc kepala file menyebut `--release`
 - [x] `cargo xtask evidence check` → lulus untuk file milestone ini; tiga pelanggaran lama tersisa hanya di `apps/daemon/tests/native_launchd.rs` (milik `dev-f30-fix-2`)
 - [x] `cargo clippy -p stacklyd --all-targets --locked -- -D warnings` dan `cargo fmt --all --check` → bersih
 
@@ -141,6 +147,6 @@ _Langkah 9: tiga run NFR-003 dan test native PostgreSQL 17 dan NATS sudah dijala
 - AC-2 · pada proses asli PostgreSQL 17 dan NATS: footprint di atas 0, CPU `tree` bergerak mengikuti query, nilai `tree` NATS sama dengan `main`; hitungan selisih sudah di test fixture milestone 2
 - AC-4 · label cakupan dan hitungan: PostgreSQL 17 `tree.processCount` lebih dari 1 dengan memori `tree` paling sedikit memori `main`, NATS `processCount` 1 dan sama dengan `main`; subjudul kartu di GUI menunggu sesi manual
 - AC-5 · pohon dan daftar proses pada proses asli (urutan pohon, nama executable, sesi baru muncul sebagai proses baru)
-- AC-14 · TIDAK terpenuhi penuh: RSS terpenuhi di ketiga run (sekitar 70 MiB dari 150 MiB), CPU terpenuhi tanpa client (0,43 sampai 0,88 persen) dan dengan PostgreSQL (0,45 sampai 0,84), tetapi run kedua (dengan client) 0,52 persen pada run pertama, lalu 1,021 dan 1,074 persen pada dua run berikutnya, di atas batas 1,0 persen. Run pertama itu valid tetapi record dua run fake ditolak (`a native PASS needs at least one subject`); subjek `macos` ditambahkan sesudahnya. Angka berubah dua kali lipat antar run pada Mac yang sama, jadi sebaiknya lead meminta perbaikan atau pembahasan anggaran sebelum `Verify it`
+- AC-14 · terpenuhi pada build release: RSS sekitar 50 MiB dari 150 MiB di ketiga run, CPU rata rata 0,426 persen tanpa client, 0,522 sampai 0,539 persen dengan client (tiga record, load Mac 0,7 sampai 2,9), dan 0,426 persen dengan satu PostgreSQL 17. Run debug lama (1,02 sampai 1,07 persen) mengukur build tanpa optimasi dan digantikan. Satu catatan: anggaran diukur pada build release atas keputusan lead, karena teks AC tidak menyebut profil build
 - AC-15 · test native PostgreSQL 17 dan NATS lulus; test wake dengan clock palsu milik milestone 4; cek manual GUI dengan sleep sungguhan NOT_RUN menunggu user
 - AC-9, AC-13, AC-7 (bagian Mac yang sleep) · hanya lewat sesi manual di atas
