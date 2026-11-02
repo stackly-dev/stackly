@@ -200,7 +200,10 @@ async fn watch(
         match last.state {
             MetricsState::Live => {
                 running = true;
-                if last.history_reset && !first_reply && !last.samples.is_empty() {
+                // A process that has no sample yet answers the cursor of the
+                // old one with a reset and no samples; the cursor moves on
+                // below, so this reply is the only one that says so.
+                if last.history_reset && !first_reply {
                     let bytes = watcher.reset();
                     watcher.write(&mut cx.output.stdout, bytes);
                 }
