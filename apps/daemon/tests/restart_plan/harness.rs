@@ -5,17 +5,26 @@
 //! read the registry in between.
 #![allow(dead_code, reason = "each scenario uses a part of these helpers")]
 
+use std::io;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use stackly_core::supervisor::HandoverProof;
 use stackly_ipc::CallOptions;
-use stackly_platform::LaunchContext;
+use stackly_platform::{Clock, FixedRoots, LaunchContext, Platform, SystemClock};
+use stackly_platform_macos::{
+    MacosBackgroundAgent, MacosCodeSigning, MacosFetcher, MacosFilesystem, MacosIdentity,
+    MacosPlatformInfo, MacosProcessSupervision,
+};
 use stackly_protocol::daemon::{ShutdownAccepted, ShutdownMode, ShutdownParams};
 use stackly_protocol::events::ShutdownReason;
 use stackly_protocol::restart::{PlanState, RestartPlanView, RestartPreview};
-use stackly_protocol::{Call, ErrorBody, Reply};
-use stacklyd::server::{self, DaemonConfig, DaemonHandle};
+use stackly_protocol::{Call, ErrorBody, Reply, Timestamp};
+use stacklyd::log_sink::{LogSink, LogSinkConfig};
+use stacklyd::map::StartFacts;
+use stacklyd::server::{self, DaemonConfig, DaemonDeps, DaemonHandle};
+use uuid::Uuid;
 
 use crate::support::{Api, Site, fast, key};
 
@@ -27,6 +36,7 @@ pub struct RestartHarness {
     /// The root, with the fake runtime and package.
     pub site: Site,
     config: DaemonConfig,
+    clock: Option<Arc<dyn Clock>>,
     handle: Option<DaemonHandle>,
 }
 
@@ -44,8 +54,45 @@ impl RestartHarness {
         Self {
             site,
             config,
+            clock: None,
             handle: None,
         }
+    }
+
+    /// Makes the daemons this harness starts read `clock` in place of the
+    /// system clock, so a test can move the time between two checks.
+    pub fn use_clock(&mut self, clock: Arc<dyn Clock>) {
+        self.clock = Some(clock);
+    }
+
+    /// The deps of a daemon: the site's platform, or the same platform
+    /// with the clock of [`use_clock`](Self::use_clock).
+    fn deps(&self) -> DaemonDeps {
+        let Some(clock) = self.clock.clone() else {
+            return self.site.deps(self.config.clone());
+        };
+        let platform = Platform::new(
+            Arc::new(FixedRoots::new(self.site.root.roots())),
+            Arc::new(MacosFilesystem),
+            clock,
+            Arc::new(MacosIdentity),
+            Arc::new(MacosPlatformInfo::read().expect("this Mac reports its OS version")),
+        )
+        .with_secrets(Arc::clone(&self.site.secrets) as Arc<dyn stackly_platform::SecretStore>)
+        .with_processes(Arc::new(MacosProcessSupervision::new()))
+        .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
+        .with_fetcher(Arc::new(MacosFetcher::new()))
+        .with_code_signing(Arc::new(MacosCodeSigning::new()));
+        let log = LogSink::start(Box::new(io::sink()), LogSinkConfig::DAEMON)
+            .expect("the log writer starts");
+        let facts = StartFacts::new(
+            Uuid::now_v7(),
+            Timestamp::from_jiff(SystemClock.now()),
+            true,
+            std::process::id(),
+        );
+        DaemonDeps::new(platform, self.site.prepared.clone(), facts, Arc::new(log))
+            .with_config(self.config.clone())
     }
 
     /// Changes the constants of the daemons this harness starts.
@@ -56,7 +103,7 @@ impl RestartHarness {
     /// Starts a daemon the `launchd` context and returns a client of it.
     pub async fn start(&mut self) -> Api {
         assert!(self.handle.is_none(), "a daemon already runs");
-        let deps = self.site.deps(self.config.clone()).with_launch(
+        let deps = self.deps().with_launch(
             LaunchContext::Launchd {
                 label: LABEL.to_owned(),
             },

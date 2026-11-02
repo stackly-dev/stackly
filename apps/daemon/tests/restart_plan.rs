@@ -14,5 +14,7 @@ mod harness;
 mod plan;
 #[path = "restart_plan/restore.rs"]
 mod restore;
+#[path = "restart_plan/summary.rs"]
+mod summary;
 #[path = "supervisor/support.rs"]
 mod support;
