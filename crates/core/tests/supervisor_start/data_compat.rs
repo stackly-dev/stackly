@@ -150,6 +150,12 @@ async fn a_start_refuses_data_its_runtime_may_not_run_before_any_spawn() {
         let detail = rig.wait_state(op, OperationState::Failed).await;
         let (code, details) = stored_refusal(&detail);
 
+        if matches!(case, Case::MarkerMissing) {
+            // Spec 0030: a marker that is gone means the data is gone.
+            assert_eq!(code, codes::DATA_UNAVAILABLE.to_string(), "{case:?}");
+            assert!(rig.processes().spawns().is_empty(), "{case:?}");
+            continue;
+        }
         assert_eq!(code, codes::DATA_INCOMPATIBLE.to_string(), "{case:?}");
         assert!(
             details.contains(&("outcome".to_owned(), case.outcome().as_code().to_owned())),
@@ -203,25 +209,29 @@ async fn data_compatibility_is_the_same_for_start_and_rebind() {
             .expect("the registry reads")
             .value
             .expect("the runtime row exists");
-        let refused = check_data_compatibility(
-            rig.platform.fs(),
-            &rig.package,
-            &rig.paths(id),
-            instance.data_line(),
-            runtime.line(),
-        )
-        .expect_err("the shared check refuses the same data");
-        let error = SupervisorError::from(refused);
-        let direct = (
-            error.code().to_string(),
-            error
-                .details()
-                .iter()
-                .map(|(key, value)| (key.to_string(), value.clone()))
-                .collect::<Vec<_>>(),
-        );
+        // A missing marker is judged earlier, by the folder check both
+        // paths share (spec 0030); the preflight never sees it.
+        if !matches!(case, Case::MarkerMissing) {
+            let refused = check_data_compatibility(
+                rig.platform.fs(),
+                &rig.package,
+                &rig.paths(id),
+                instance.data_line(),
+                runtime.line(),
+            )
+            .expect_err("the shared check refuses the same data");
+            let error = SupervisorError::from(refused);
+            let direct = (
+                error.code().to_string(),
+                error
+                    .details()
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.clone()))
+                    .collect::<Vec<_>>(),
+            );
 
-        assert_eq!(started, direct, "{case:?}");
+            assert_eq!(started, direct, "{case:?}");
+        }
 
         // The rebind check asks the same question of the same data: the
         // target has the line the start refused.

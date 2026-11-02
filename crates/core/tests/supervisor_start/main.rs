@@ -10,6 +10,7 @@ mod config;
 mod data_compat;
 mod force_restart;
 mod init;
+mod integrity;
 mod launch;
 mod native;
 mod reconcile;

@@ -85,7 +85,7 @@ async fn a_killed_daemon_leaves_the_process_and_the_next_daemon_adopts_it_withou
     .await;
     let phases = rig.events.reconciling.lock().unwrap().clone();
     assert!(matches!(phases[0], ReconcilePhase::Started));
-    assert!(matches!(phases[1], ReconcilePhase::Finished(counts) if counts.adopted == 1));
+    assert!(matches!(phases[1], ReconcilePhase::Finished(ref counts) if counts.adopted == 1));
 }
 
 #[tokio::test]
