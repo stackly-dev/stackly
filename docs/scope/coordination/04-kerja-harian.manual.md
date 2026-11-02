@@ -41,3 +41,15 @@ Root sementara memakai keychain file, jadi login Keychain tidak disentuh. Siapka
 5. Postico tidak terpasang di Mac ini: `BLOCKED` (reason: aplikasi tidak terpasang; owner: user). Pasang Postico 2 bila ingin membuktikan bundle ID-nya.
 6. NATS, "Open Monitoring in Browser": browser default membuka `http://127.0.0.1:<port>/` dengan halaman awal monitoring NATS.
 7. Traefik: `BLOCKED` (paket Traefik masih `[[planned]]` di `providers/catalog.toml`; owner: fitur provider Traefik).
+
+## F30 · Restart daemon dari Settings (spec 0030 milestone 4)
+
+Disusun oleh `chk-f30-m4` (2026-11-02). Rig-nya (daemon launchd di test root sendiri dengan label `dev.stackly.test.agent.*`, plus satu instance fake `demo` dengan keputusan `stop_restore`) disiapkan oleh sub sesi atas permintaan lead saat kamu siap. Rig ini tidak menyentuh `com.ojiepermana.stackly.daemon`.
+
+1. Buka app dengan baris `STACKLY_ROOT=... Stackly` yang dicetak rig. Buka Stackly > Settings: ada tab General dengan bagian Daemon dan baris `stacklyd` bersubjudul "Connected over Unix socket · protocol N". Tombol Restart Daemon aktif, tanpa tab atau baris lain (AC-16).
+2. Klik Restart Daemon: sheet "Stops, then starts again" berisi `demo` dengan alasannya, dan "Keeps running" kosong. Cancel menutup sheet tanpa efek apa pun.
+3. Klik Restart Daemon lagi lalu Restart: banner "stacklyd is restarting" tampil (0 tetap jalan, 1 berhenti), dan baris `demo` di halaman Instances bertanda "Stopped for daemon restart". Lalu banner ringkasan dan toast "Daemon restarted. 0 instances adopted, 1 started again." muncul, dan banner hilang.
+4. Putus daemon (`launchctl bootout` label test dari rig): subjudul berubah "Disconnected · reconnecting" dan tombol nonaktif. Lalu jalankan daemon manual `STACKLY_ROOT=<root> target/debug/stacklyd`: tampil "Runs outside launchd, so it can't restart itself" dan tombol tetap nonaktif.
+5. Bersihkan lewat skrip `down` dari rig.
+
+Langkah `restart_busy` (create yang berjalan lebih dari 30 detik) tidak bisa dibuat dengan provider fake tanpa mengubah kode. Lead menerimanya sebagai tercakup oleh test `a_create_that_outlasts_the_quiesce_wait...` dan `DaemonRestartModelTests`.
