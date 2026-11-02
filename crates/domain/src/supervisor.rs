@@ -102,6 +102,12 @@ impl StageName {
     pub const LOCK_WAIT: Self = Self::from_static("lock_wait");
     /// The start half of a restart, before its startup stages.
     pub const START: Self = Self::from_static("start");
+    /// Commits a new config revision, or a new name, in one guarded
+    /// registry transaction (spec 0029).
+    pub const COMMIT: Self = Self::from_static("commit");
+    /// Makes a committed config revision take effect: a reload, a restart,
+    /// or nothing for an instance that does not run (spec 0029).
+    pub const APPLY: Self = Self::from_static("apply");
 }
 
 #[cfg(test)]
