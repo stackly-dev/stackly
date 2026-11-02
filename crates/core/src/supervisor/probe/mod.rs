@@ -47,17 +47,32 @@ pub const CHECK_FAILED: ReasonCode = ReasonCode::from_static("check_failed");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProbeOutcome {
     /// The probe succeeded (reason [`PROBE_OK`]).
-    Ok,
+    Ok {
+        /// The time from the start of the attempt to its result, on the
+        /// monotonic clock and at most the attempt timeout. A runner
+        /// leaves it zero; [`run`] sets it.
+        latency: Duration,
+    },
     /// The probe failed.
     Failed {
         /// Why, such as [`CONNECT_FAILED`].
         reason: ReasonCode,
         /// What the runner saw, redacted and at most 256 characters.
         detail: Option<ObservationDetail>,
+        /// As in [`ProbeOutcome::Ok`].
+        latency: Duration,
     },
 }
 
 impl ProbeOutcome {
+    /// Builds a success with no latency yet.
+    #[must_use]
+    pub const fn passed() -> Self {
+        Self::Ok {
+            latency: Duration::ZERO,
+        }
+    }
+
     /// Builds a failure from the raw text a runner saw, in the one order
     /// every runner follows: redact `raw` with `redactor`, cut it to 256
     /// characters, then make the [`ObservationDetail`]. An empty text has
@@ -67,7 +82,25 @@ impl ProbeOutcome {
         Self::Failed {
             reason,
             detail: observation_detail(&redactor.redact(raw)),
+            latency: Duration::ZERO,
         }
+    }
+
+    /// Returns the time the attempt took.
+    #[must_use]
+    pub const fn latency(&self) -> Duration {
+        match self {
+            Self::Ok { latency } | Self::Failed { latency, .. } => *latency,
+        }
+    }
+
+    /// Returns the outcome with its latency set to `elapsed`, cut to
+    /// `limit`: an attempt never reports more than its own timeout.
+    #[must_use]
+    pub fn timed(mut self, elapsed: Duration, limit: Duration) -> Self {
+        let (Self::Ok { latency } | Self::Failed { latency, .. }) = &mut self;
+        *latency = elapsed.min(limit);
+        self
     }
 
     /// Returns the reason an observation records: [`PROBE_OK`] for a
@@ -75,7 +108,7 @@ impl ProbeOutcome {
     #[must_use]
     pub fn reason(&self) -> &ReasonCode {
         match self {
-            Self::Ok => &PROBE_OK_REASON,
+            Self::Ok { .. } => &PROBE_OK_REASON,
             Self::Failed { reason, .. } => reason,
         }
     }
@@ -84,7 +117,7 @@ impl ProbeOutcome {
     #[must_use]
     pub const fn detail(&self) -> Option<&ObservationDetail> {
         match self {
-            Self::Ok => None,
+            Self::Ok { .. } => None,
             Self::Failed { detail, .. } => detail.as_ref(),
         }
     }
@@ -92,7 +125,7 @@ impl ProbeOutcome {
     /// Returns true for a success.
     #[must_use]
     pub const fn is_ok(&self) -> bool {
-        matches!(self, Self::Ok)
+        matches!(self, Self::Ok { .. })
     }
 }
 
@@ -110,7 +143,9 @@ pub struct ProbeContext<'a> {
     pub native: &'a dyn NativeConnect,
 }
 
-/// Runs one attempt of `probe` within `attempt_timeout`.
+/// Runs one attempt of `probe` within `attempt_timeout`. The outcome
+/// carries the time the attempt took, measured on the monotonic clock and
+/// cut to `attempt_timeout` (spec 0028 AC-7).
 ///
 /// `tcp` and `http` share one deadline for connect, request, and status
 /// line. An `exec` probe runs as a [`ChildRole::Probe`] helper with the
@@ -120,6 +155,16 @@ pub struct ProbeContext<'a> {
 ///
 /// [`ChildRole::Probe`]: stackly_platform::ChildRole::Probe
 pub async fn run(
+    probe: &ProbeSpec,
+    attempt_timeout: Duration,
+    context: ProbeContext<'_>,
+) -> ProbeOutcome {
+    let started = tokio::time::Instant::now();
+    let outcome = attempt(probe, attempt_timeout, context).await;
+    outcome.timed(started.elapsed(), attempt_timeout)
+}
+
+async fn attempt(
     probe: &ProbeSpec,
     attempt_timeout: Duration,
     context: ProbeContext<'_>,
@@ -181,9 +226,9 @@ mod tests {
 
     #[test]
     fn a_success_reports_probe_ok_and_no_detail() {
-        assert_eq!(ProbeOutcome::Ok.reason(), &PROBE_OK);
-        assert_eq!(ProbeOutcome::Ok.detail(), None);
-        assert!(ProbeOutcome::Ok.is_ok());
+        assert_eq!(ProbeOutcome::passed().reason(), &PROBE_OK);
+        assert_eq!(ProbeOutcome::passed().detail(), None);
+        assert!(ProbeOutcome::passed().is_ok());
     }
 
     #[test]
@@ -219,8 +264,21 @@ mod tests {
             outcome,
             ProbeOutcome::Failed {
                 reason: TIMEOUT,
-                detail: None
+                detail: None,
+                latency: Duration::ZERO,
             }
         );
+    }
+
+    #[test]
+    fn an_outcome_never_reports_more_latency_than_the_attempt_timeout() {
+        let limit = Duration::from_secs(5);
+
+        let slow = ProbeOutcome::passed().timed(Duration::from_secs(9), limit);
+        let quick = ProbeOutcome::failure(TIMEOUT, "", &Redactor::new())
+            .timed(Duration::from_millis(40), limit);
+
+        assert_eq!(slow.latency(), limit);
+        assert_eq!(quick.latency(), Duration::from_millis(40));
     }
 }

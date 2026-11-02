@@ -165,6 +165,9 @@ pub(crate) struct Shared {
     pub(crate) plan: tokio::sync::Mutex<Option<stackly_domain::RestartPlan>>,
     /// Whether the recheck task of `unknown` instances runs.
     pub(crate) recheck_running: AtomicBool,
+    /// Announces wakes from sleep to the probe loops and the start
+    /// deadlines (spec 0028 AC-9).
+    pub(crate) wake: super::wake::WakeWatch,
 }
 
 /// The process supervisor: one actor per instance, and the operations that
@@ -219,6 +222,7 @@ impl Supervisor {
                 pending: Mutex::new(Vec::new()),
                 plan: tokio::sync::Mutex::new(None),
                 recheck_running: AtomicBool::new(false),
+                wake: super::wake::WakeWatch::new(),
             }),
         }
     }

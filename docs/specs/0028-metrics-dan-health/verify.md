@@ -9,7 +9,7 @@ _Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) s
 ### UI / manual
 
 - [x] Mulai daemon dengan root uji (`STACKLY_ROOT=$(mktemp -d) cargo run -q -p stacklyd`), buat dan jalankan satu instance fake lewat `cargo run -q -p stacklyd --example skeleton_seed -- --root <R>` (perintah `stackly instance create` yang dicetaknya), lalu `stackly instance metrics <nama>` → baris Process, Uptime, Restarts "0 since created", Readiness, Health, Data size, dan dua blok "main process (pid ...)" serta "process tree (...)" dengan daftar proses; hitungan pertama menampilkan `unavailable (warming_up)` untuk CPU dan Disk I/O, bukan 0 → AC-1, AC-3, AC-12
-- [ ] `stackly instance metrics <nama> --watch` → satu baris per sampel baru kira kira tiap 5 detik; stop instance lalu jalankan lagi, muncul "not running (stopped)" dan sesudah running lagi "history reset"; Ctrl+C keluar 0 → AC-12
+- [x] `stackly instance metrics <nama> --watch` → satu baris per sampel baru kira kira tiap 5 detik; stop instance lalu jalankan lagi, muncul "not running (stopped)" dan sesudah running lagi "history reset"; Ctrl+C keluar 0 → AC-12
 - [x] `stackly instance metrics <nama> --json` → satu amplop dengan `result` sama dengan balasan `instance.get_metrics` → AC-11, AC-12
 - [ ] Pembuktian di Mac asli (PostgreSQL 17 dan NATS native, pohon proses nyata) ikut langkah 9.
 
@@ -40,3 +40,31 @@ _Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) s
 - AC-12 · CLI `stackly instance metrics` dengan `--json` dan `--watch`
 - AC-7 · `latencyMs` ada di DTO tetapi selalu null sampai langkah 8 mengisinya dari probe
 - AC-8, AC-9, AC-13 sampai AC-15 · milik langkah lain (7, 8, 9)
+
+## Milestone 4: Probe latency and wake
+
+_Langkah 8 sudah dibangun: latensi di `ProbeOutcome` dan observasi domain, `latencyMs` di DTO daemon, `WakeWatch` dengan masa tenggang, perpanjangan deadline start, dan penanda `// provisional: F28` sudah dihapus. Tampilan latensi di app (langkah 7) dan evidence native di Mac yang benar benar sleep (langkah 9) belum._
+
+### UI / manual
+
+- [ ] Di Mac asli: jalankan instance PostgreSQL 17 sampai `ready`, tutup layar sampai Mac sleep beberapa menit, lalu bangunkan → readiness dan health sebentar `unknown` reason `waking` (satu `instance.health_changed`), lalu kembali `ready` dan `healthy` dengan `probe_ok` dalam beberapa detik, `restartTotal` tidak naik, port tidak berubah. Dicatat sebagai evidence manual `native`, `BLOCKED` kalau tidak dijalankan (langkah 9) → AC-9, AC-15
+- [ ] Dengan daemon jalan dan satu instance fake `ready`: `stackly instance get <nama> --json` → `readiness.latencyMs` dan `health.latencyMs` terisi bilangan bulat (bukan null) dan tidak lebih dari timeout probe dalam milidetik → AC-7
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test supervisor_start wake:: -- --test-threads=1` → 4 test lulus pada fake clock yang melompat satu jam sementara jam tokio tidak: wake pada instance `running` membuat readiness dan health `unknown` reason `waking` detail `rechecking after sleep` dengan `observed_at` waktu wake dan tanpa latensi, probe langsung jalan (pause rutin 60 detik, kembali `probe_ok` dalam hitungan detik), tidak ada sinyal, spawn kedua, atau perubahan port; kegagalan dalam grace tidak mengubah observasi dan tidak naik hitungannya (readiness dan health tetap `waking` sampai grace habis, lalu readiness `not_ready` reason `connect_failed` dengan latensi); sukses pertama mengakhiri grace sehingga kegagalan berikutnya langsung dihitung; wake saat start dengan `readinessSeconds: 1` menggeser deadline sehingga start tetap `succeeded` dan tidak ada observasi `waking` → AC-9
+- [x] `cargo test -p stackly-core --test supervisor_start status:: -- --test-threads=1` → termasuk `readiness_and_health_carry_the_latency_of_the_attempt_that_made_them` (sukses dan gagal membawa latensi, perubahan latensi saja tidak menjadi event) dan `an_observation_that_goes_stale_...` yang kini mematikan deteksi wake lewat `wake_gap_threshold` → AC-7, AC-8
+- [x] `cargo test -p stackly-core --lib wake` → unit test `slept` (selisih sama, tepat di ambang, lebih besar, jam dinding mundur diabaikan), `Track` (kegagalan dalam grace tidak dihitung, setelah grace dihitung, sukses mengakhiri grace), observasi `waking`, dan nilai konstanta (2 detik, 5 detik, 30 detik) → AC-9
+- [x] `cargo test -p stackly-core --lib supervisor::status supervisor::probe observation` dan `cargo test -p stackly-domain --lib observation` → `differs_visibly` mengabaikan latensi, `timed` memotong latensi pada timeout probe, `with_latency` bertahan lewat `effective` sampai stale → AC-7, AC-8
+- [x] `cargo test -p stackly-core` (semua, `--test-threads=1`) → hijau
+- [x] `cargo test -p stacklyd --lib latency_tests` → `latencyMs` dibulatkan ke atas ke milidetik penuh, null tanpa probe, menjenuh di `u32::MAX` → AC-7
+- [x] `cargo test -p stacklyd --test supervisor -- --test-threads=1` → 104 test lulus (261 detik) → AC-9
+- [x] `grep -rn "provisional: F28" crates apps clients` → tanpa hasil → AC-8
+- [x] `cargo clippy -p stackly-domain -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-7 · latensi satu percobaan probe (sukses maupun gagal, dibulatkan ke atas, dipotong pada timeout probe) di `ProbeOutcome`, observasi domain, dan `latencyMs` DTO; null untuk observasi tanpa probe (`waking`, `not_running`, `daemon_restarted`); tidak ikut `differs_visibly`. Baris Readiness di Summary dan header Metrics di app menunggu langkah 7
+- AC-8 · `READINESS_REFRESH_INTERVAL` 10 detik dan `READINESS_MAX_AGE` 30 detik tetap, penanda provisional dihapus; sampler tidak mengirim probe (milestone 2)
+- AC-9 · `WakeWatch` (`crates/core/src/supervisor/wake.rs`), grace terpisah untuk readiness dan health, perpanjangan deadline start; test pakai fake clock tanpa sleep sungguhan. Evidence Mac yang benar benar sleep menunggu langkah 9
+- AC-13 sampai AC-15 · milik langkah lain (7, 9)

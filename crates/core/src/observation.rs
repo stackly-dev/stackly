@@ -5,7 +5,6 @@ use std::time::Duration;
 /// How old a readiness or health observation may be before
 /// `effective(now, max_age)` reads it as `unknown` with reason `stale`:
 /// three probe intervals of 10 seconds (PRD section 19.5).
-// provisional: F28
 pub const READINESS_MAX_AGE: Duration = Duration::from_secs(30);
 
 #[cfg(test)]

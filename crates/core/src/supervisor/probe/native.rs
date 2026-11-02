@@ -77,7 +77,7 @@ pub(super) async fn run(
 /// redacted, cut to 256 characters, then made into an `ObservationDetail`.
 fn outcome(result: Result<(), NativeProbeFailure>, redactor: &Redactor) -> ProbeOutcome {
     match result {
-        Ok(()) => ProbeOutcome::Ok,
+        Ok(()) => ProbeOutcome::passed(),
         Err(failure) => ProbeOutcome::failure(failure.reason, &failure.detail, redactor),
     }
 }

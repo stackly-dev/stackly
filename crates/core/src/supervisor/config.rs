@@ -8,10 +8,10 @@ use std::time::Duration;
 use stackly_platform::HELPER_CAPTURE_MAX;
 
 use super::handover::{HANDOVER_PROVEN, HandoverProof};
+use super::wake::{WAKE_CHECK_INTERVAL, WAKE_GAP_THRESHOLD, WAKE_GRACE};
 use crate::READINESS_MAX_AGE;
 
 /// Pause between two routine readiness probes once the instance is ready.
-// provisional: F28
 pub const READINESS_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 /// Consecutive failed routine probes that turn `ready` into `not_ready`.
 pub const READINESS_FAILURE_THRESHOLD: NonZeroU32 = NonZeroU32::MIN.saturating_add(1);
@@ -157,6 +157,12 @@ pub struct SupervisorConfig {
     pub restart_lock_poll: Duration,
     /// [`RESTART_QUIESCE_WAIT`].
     pub restart_quiesce_wait: Duration,
+    /// [`WAKE_CHECK_INTERVAL`].
+    pub wake_check_interval: Duration,
+    /// [`WAKE_GAP_THRESHOLD`].
+    pub wake_gap_threshold: Duration,
+    /// [`WAKE_GRACE`].
+    pub wake_grace: Duration,
     /// The provider lines whose processes survive a daemon restart
     /// ([`HANDOVER_PROVEN`] by default; the daemon never plans with
     /// another list).
@@ -196,6 +202,9 @@ impl Default for SupervisorConfig {
             restart_lock_wait: RESTART_LOCK_WAIT,
             restart_lock_poll: RESTART_LOCK_POLL,
             restart_quiesce_wait: RESTART_QUIESCE_WAIT,
+            wake_check_interval: WAKE_CHECK_INTERVAL,
+            wake_gap_threshold: WAKE_GAP_THRESHOLD,
+            wake_grace: WAKE_GRACE,
             handover_proven: HANDOVER_PROVEN.to_vec(),
         }
     }
@@ -240,5 +249,8 @@ mod tests {
         assert_eq!(config.restart_lock_poll, Duration::from_millis(200));
         assert_eq!(config.restart_quiesce_wait, Duration::from_secs(30));
         assert_eq!(config.handover_proven, HANDOVER_PROVEN);
+        assert_eq!(config.wake_check_interval, Duration::from_secs(2));
+        assert_eq!(config.wake_gap_threshold, Duration::from_secs(5));
+        assert_eq!(config.wake_grace, Duration::from_secs(30));
     }
 }

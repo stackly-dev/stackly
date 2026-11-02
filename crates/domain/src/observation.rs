@@ -56,14 +56,15 @@ impl ObservedState for HealthState {
     const UNKNOWN: Self = Self::Unknown;
 }
 
-/// One observation: the state, when it was observed, why, and an optional
-/// detail.
+/// One observation: the state, when it was observed, why, an optional
+/// detail, and how long the probe attempt that made it took.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Observation<S> {
     state: S,
     observed_at: Timestamp,
     reason: ReasonCode,
     detail: Option<ObservationDetail>,
+    latency: Option<Duration>,
 }
 
 /// The readiness of an instance.
@@ -86,7 +87,16 @@ impl<S: ObservedState> Observation<S> {
             observed_at,
             reason,
             detail,
+            latency: None,
         }
+    }
+
+    /// Returns the observation with the time the probe attempt behind it
+    /// took, from its start to its result (spec 0028 AC-7).
+    #[must_use]
+    pub const fn with_latency(mut self, latency: Duration) -> Self {
+        self.latency = Some(latency);
+        self
     }
 
     /// Creates an `unknown` observation with no detail.
@@ -116,6 +126,14 @@ impl<S: ObservedState> Observation<S> {
     #[must_use]
     pub const fn detail(&self) -> Option<&ObservationDetail> {
         self.detail.as_ref()
+    }
+
+    /// Returns how long the probe attempt that made this observation took,
+    /// for a success or a failure alike; `None` for an observation without
+    /// a probe, such as `daemon_restarted`, `not_running`, or `waking`.
+    #[must_use]
+    pub const fn latency(&self) -> Option<Duration> {
+        self.latency
     }
 
     /// Returns the observation as read at `now`: a state other than
@@ -179,6 +197,36 @@ mod tests {
         assert_eq!(stale.state(), ReadinessState::Unknown);
         assert_eq!(stale.reason(), &ReasonCode::STALE);
         assert_eq!(stale.observed_at(), ready.observed_at());
+    }
+
+    #[test]
+    fn an_observation_made_without_a_probe_has_no_latency() {
+        let ready = Readiness::new(
+            ReadinessState::Ready,
+            at("2026-01-01T00:00:00Z"),
+            "probe_ok".parse().unwrap(),
+            None,
+        );
+
+        assert_eq!(ready.latency(), None);
+    }
+
+    #[test]
+    fn with_latency_keeps_the_probe_time_through_effective_until_it_goes_stale() {
+        let ready = Readiness::new(
+            ReadinessState::Ready,
+            at("2026-01-01T00:00:00Z"),
+            "probe_ok".parse().unwrap(),
+            None,
+        )
+        .with_latency(Duration::from_millis(12));
+        let max_age = Duration::from_secs(30);
+
+        let fresh = ready.effective(at("2026-01-01T00:00:30Z"), max_age);
+        let stale = ready.effective(at("2026-01-01T00:00:31Z"), max_age);
+
+        assert_eq!(fresh.latency(), Some(Duration::from_millis(12)));
+        assert_eq!(stale.latency(), None);
     }
 
     #[test]

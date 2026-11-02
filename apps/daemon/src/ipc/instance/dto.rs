@@ -140,6 +140,15 @@ const fn desired(desired: DesiredState) -> InstanceDesired {
     }
 }
 
+/// The probe latency in whole milliseconds, rounded up so a quick probe
+/// never reads as zero. The supervisor already cut it to the probe timeout.
+fn latency_ms(latency: Option<std::time::Duration>) -> Option<u32> {
+    latency.map(|latency| {
+        let millis = latency.as_millis() + u128::from(latency.subsec_nanos() % 1_000_000 != 0);
+        u32::try_from(millis).unwrap_or(u32::MAX)
+    })
+}
+
 fn readiness(readiness: &stackly_domain::Readiness) -> InstanceReadiness {
     InstanceReadiness {
         state: match readiness.state() {
@@ -150,8 +159,7 @@ fn readiness(readiness: &stackly_domain::Readiness) -> InstanceReadiness {
         reason: readiness.reason().as_str().to_owned(),
         detail: readiness.detail().map(|detail| detail.as_str().to_owned()),
         observed_at: Timestamp::from_jiff(readiness.observed_at()),
-        // provisional: F28 step 8 carries the probe latency in the domain
-        latency_ms: None,
+        latency_ms: latency_ms(readiness.latency()),
     }
 }
 
@@ -166,8 +174,7 @@ fn health(health: &stackly_domain::Health) -> InstanceHealth {
         reason: health.reason().as_str().to_owned(),
         detail: health.detail().map(|detail| detail.as_str().to_owned()),
         observed_at: Timestamp::from_jiff(health.observed_at()),
-        // provisional: F28 step 8 carries the probe latency in the domain
-        latency_ms: None,
+        latency_ms: latency_ms(health.latency()),
     }
 }
 
@@ -303,5 +310,33 @@ fn endpoint_status(
             // null while one of them is not known (spec 0020 AC-12).
             socket_path: sockets.get(unix.name().as_str()).cloned(),
         },
+    }
+}
+
+#[cfg(test)]
+mod latency_tests {
+    use std::time::Duration;
+
+    use super::latency_ms;
+
+    #[test]
+    fn no_probe_means_no_latency() {
+        assert_eq!(latency_ms(None), None);
+    }
+
+    #[test]
+    fn a_latency_rounds_up_to_whole_milliseconds() {
+        assert_eq!(latency_ms(Some(Duration::from_micros(1))), Some(1));
+        assert_eq!(latency_ms(Some(Duration::from_micros(1500))), Some(2));
+        assert_eq!(latency_ms(Some(Duration::from_millis(7))), Some(7));
+        assert_eq!(latency_ms(Some(Duration::ZERO)), Some(0));
+    }
+
+    #[test]
+    fn a_latency_too_large_for_the_wire_saturates() {
+        assert_eq!(
+            latency_ms(Some(Duration::from_secs(u64::MAX / 2))),
+            Some(u32::MAX)
+        );
     }
 }
