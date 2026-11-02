@@ -219,6 +219,102 @@ async fn a_stopped_or_not_ready_instance_is_unavailable_with_its_reason() {
     );
 }
 
+/// Puts a folder back to a mode that can be written when dropped, so a failed
+/// assertion never leaves a test root the harness cannot clean.
+struct RestoreMode<'a>(&'a Path);
+
+impl Drop for RestoreMode<'_> {
+    fn drop(&mut self) {
+        let _ = std::fs::set_permissions(self.0, std::fs::Permissions::from_mode(0o700));
+    }
+}
+
+/// The names in `dir`, sorted.
+fn names(dir: &Path) -> Vec<String> {
+    let mut found: Vec<String> = std::fs::read_dir(dir)
+        .expect("the folder reads")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    found
+}
+
+// covers: AC-4
+#[tokio::test(flavor = "multi_thread")]
+async fn a_temp_folder_that_cannot_be_written_is_unwritable_and_leaves_no_half_written_file() {
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let api = site.api().await;
+    let id = create(&api, "orders", json!({})).await;
+    api.start_ready(id).await;
+    let temp = site.instance_paths(id).temp;
+    let before = names(&temp);
+    let _restore = RestoreMode(&temp);
+    std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o500))
+        .expect("the temp folder becomes read only");
+
+    let error = api
+        .prepare_terminal(id, "version")
+        .await
+        .expect_err("a folder that cannot be written has no script");
+
+    assert_eq!(error.code(), "instance.open_script_unwritable");
+    assert_eq!(detail(&error, "reason"), Some("permission_denied"));
+    assert_eq!(names(&temp), before, "no script and no .tmp file is left");
+    assert!(!temp.join("open-version.command").exists());
+}
+
+// covers: AC-4
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_write_keeps_the_script_an_earlier_call_wrote() {
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let api = site.api().await;
+    let id = create(&api, "orders", json!({})).await;
+    api.start_ready(id).await;
+    let path = api
+        .prepare_terminal(id, "version")
+        .await
+        .expect("the first call writes the script");
+    let temp = site.instance_paths(id).temp;
+    let written = std::fs::read(&path).expect("the script reads");
+    let before = names(&temp);
+    let _restore = RestoreMode(&temp);
+    std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o500))
+        .expect("the temp folder becomes read only");
+
+    let error = api
+        .prepare_terminal(id, "version")
+        .await
+        .expect_err("the second write fails");
+
+    assert_eq!(error.code(), "instance.open_script_unwritable");
+    assert_eq!(std::fs::read(&path).expect("the script is kept"), written);
+    assert_eq!(names(&temp), before);
+}
+
+// covers: AC-4
+#[tokio::test(flavor = "multi_thread")]
+async fn a_missing_temp_folder_is_unwritable_with_its_own_reason() {
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let api = site.api().await;
+    let id = create(&api, "orders", json!({})).await;
+    api.start_ready(id).await;
+    let temp = site.instance_paths(id).temp;
+    std::fs::remove_dir_all(&temp).expect("the temp folder goes away");
+
+    let error = api
+        .prepare_terminal(id, "version")
+        .await
+        .expect_err("no folder, no script");
+
+    assert_eq!(error.code(), "instance.open_script_unwritable");
+    assert_eq!(detail(&error, "reason"), Some("temp_folder_missing"));
+    assert!(!temp.exists(), "the daemon does not recreate the folder");
+}
+
 // covers: AC-3
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stopped_instance_keeps_its_actions_available_in_the_detail() {
