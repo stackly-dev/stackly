@@ -46,6 +46,8 @@ mod metrics;
 mod metrics_calls;
 #[path = "postgresql/mismatch.rs"]
 mod mismatch;
+#[path = "postgresql/open_with.rs"]
+mod open_with;
 #[path = "postgresql/phases.rs"]
 mod phases;
 #[path = "postgresql/readiness.rs"]
