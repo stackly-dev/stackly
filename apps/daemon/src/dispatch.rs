@@ -28,10 +28,10 @@ use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
-    GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
-    InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
-    PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams, RestartInstanceParams,
-    StartInstanceParams, StopInstanceParams,
+    GetInstanceDetailParams, GetInstanceParams, GetMetricsParams, InstanceActionAccepted,
+    InstanceDetail, InstancePage, InstanceSummary, ListInstancesParams, MetricsReply,
+    PreflightCreateParams, PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams,
+    RestartInstanceParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -371,6 +371,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, DataUsageReply> {
         let _ = context;
         instance::get_data_usage(core, params)
+    }
+
+    /// `instance.get_metrics`.
+    fn get_metrics<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetMetricsParams,
+    ) -> HandlerFuture<'a, Box<MetricsReply>> {
+        let _ = context;
+        instance::get_metrics(core, params)
     }
 
     /// `instance.start`.

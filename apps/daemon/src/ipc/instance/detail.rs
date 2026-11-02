@@ -167,7 +167,7 @@ fn read_facts(registry: &SqliteRegistry, id: InstanceId) -> Result<Facts, Unread
 }
 
 /// The absolute data folder of an instance from its stored paths.
-fn data_folder(
+pub(super) fn data_folder(
     layout: &stackly_platform::DirectoryLayout,
     paths: &[InstancePathEntry],
 ) -> Option<std::path::PathBuf> {

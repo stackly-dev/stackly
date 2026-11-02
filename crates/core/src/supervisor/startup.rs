@@ -763,6 +763,8 @@ fn error_failure_code(error: &SupervisorError) -> FailureCode {
         SupervisorError::SpawnFailed { .. } => FailureCode::SPAWN_FAILED,
         SupervisorError::DataInUse { .. } => FailureCode::DATA_IN_USE,
         SupervisorError::EndpointInUse(_) => FailureCode::ENDPOINT_IN_USE,
+        SupervisorError::DataUnavailable { .. } => FailureCode::DATA_MISSING,
+        SupervisorError::RuntimeUnavailable { .. } => FailureCode::RUNTIME_UNAVAILABLE,
         SupervisorError::IdentityCaptureFailed => FailureCode::IDENTITY_CAPTURE_FAILED,
         _ => FailureCode::CONFIG_RENDER_FAILED,
     }

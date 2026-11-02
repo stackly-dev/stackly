@@ -34,3 +34,39 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 ### Sisa kegagalan di luar milestone ini
 
 `stackly-core catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns` dan `stackly-cli --test provider inspect::inspect_writes_the_identity_capabilities_matrix_and_artifacts` (F70 M3), `stacklyd ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` (F29 M2).
+
+## Milestone 2: Daemon death without a plan
+
+### UI / manual
+
+- [x] Buka `crates/core/src/supervisor/prepare.rs` → `check_instance_folder` menerima paket yang di pin dan memanggil `data_missing` (folder data tidak ada, folder kosong, atau marker yang dideklarasikan paket hilang); `prepare` memanggilnya untuk `Checks::Full` sebelum `ensure_instance_run_dir` → AC-4
+- [x] Buka `crates/core/src/supervisor/startup.rs` `error_failure_code` → `DataUnavailable` ke `data_missing` dan `RuntimeUnavailable` ke `runtime_unavailable` → AC-5
+- [x] Buka `crates/core/src/supervisor/integrity.rs` → pemeriksaan data dan runtime hanya membaca (tanpa tulis, tanpa spawn), memakai `verify_executable` yang sama dengan startup → AC-4, AC-5
+- [x] Catatan untuk checker: `rebind::check` memanggil `check_instance_folder` dengan paket yang sama, jadi marker yang hilang kini `supervisor.data_unavailable` untuk start dan rebind sekaligus (spec 0030 Neutral; spec 0025 AC-6 dan AC-8 berubah untuk kasus `marker_missing`) → AC-4
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test supervisor_start integrity` → 8 test: data hilang dalam tiga bentuk dan tiga lifecycle menjadi `failed` `data_missing` tanpa spawn, tanpa folder baru, start ditolak `supervisor.data_unavailable`; proses `Proven` diadopsi dengan finding; executable runtime hilang memberi finding `runtime_missing`; respawn gagal `executable_invalid` atau `runtime_unavailable` → AC-4, AC-5
+- [x] `cargo test -p stackly-core --test supervisor_start pid_reuse` → PID milik executable lain (`/usr/bin/sleep`) tidak pernah disinyal oleh rekonsiliasi, recheck, stop, force stop, dan start; lock dipegang pihak lain menjadi `unknown` dengan evidence `executable` gagal → AC-3
+- [x] `cargo test -p stackly-core --test supervisor_start listener` → listener luar di port fixed: respawn gagal `endpoint_in_use` dengan `lastFailure` `endpoint_in_use`, start dari `stopped` gagal `endpoint_in_use`, tanpa spawn, tanpa sinyal, port tidak berubah → AC-6
+- [x] `cargo test -p stackly-core --test supervisor_start data_compat` dan `cargo test -p stackly-core --test instance_rebind` → marker hilang kini `data_unavailable` untuk start dan rebind; `marker_mismatch`, `marker_unreadable`, dan `incompatible` tidak berubah → AC-4
+- [x] `cargo test -p stackly-core --lib supervisor::reconcile` → tabel `plan_for_missing_data` untuk semua lifecycle tanpa proses → AC-4
+- [x] `cargo test -p stackly-core --test supervisor_start` → 162 test lulus → AC-3 sampai AC-6
+- [x] `cargo test -p stacklyd --test postgresql -- --ignored reconcile:: --test-threads=1` → native PostgreSQL 17 dan 18 dari cache runtime (tanpa unduhan): tiga test lulus dalam sekitar 2 menit → AC-1, AC-2, AC-4
+- [x] `cargo test -p stacklyd --test postgresql -- --ignored mismatch:: --test-threads=1` → dua test native lulus dengan harapan baru `supervisor.data_unavailable` untuk `PG_VERSION` yang hilang → AC-4
+- [x] `cargo test -p stacklyd --test supervisor` → 96 test lulus → AC-4
+- [x] `cargo clippy -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-1 · bagian native: `closing_every_client_keeps_three_postgresql_instances_unchanged` (id, pid, `startedAt`, `serverInstanceId`, `SELECT 1`, sentinel). Test integrasi Swift dengan fake dan record manual menunggu Milestone 5 dan 6
+- AC-2 · `sigkill_leaves_one_postmaster_per_data_folder_and_every_sentinel_intact`: tiga cluster diadopsi dengan pid dan `startedAt` yang sama, satu postmaster per `instance.lock`, sentinel utuh, instance `stopped` tetap `stopped` dengan folder datanya identik byte per byte; pada cluster yang berjalan hanya file `pg_wal`, `pg_stat_tmp`, `pg_logical`, dan `pg_notify` milik server yang boleh berganti
+- AC-3 · bagian rekonsiliasi, recheck, stop, force stop, dan start. Bagian rencana restart menunggu Milestone 3 (belum ada jalur stop rencana). Perilaku mengikuti tabel spec 0010: lock bebas menjadi `gone` (`stopped`), lock dipegang pihak lain menjadi `unknown` dengan blocker `dataInUse` dan evidence `executable` gagal, bukan `identityUnproven` seperti kalimat AC-3
+- AC-4 · bagian rekonsiliasi dan start, fixture dan native. Bagian restore (tidak masuk daftar restore) menunggu Milestone 3
+- AC-5 · finding `runtime_missing` untuk proses `Proven`, respawn gagal `executable_invalid` dan `runtime_unavailable`, tidak ada blocker baru. Start dari `stopped` gagal dengan kode itu tetapi tidak menulis `lastFailure` karena gerbangnya terjadi sebelum `start_begin` (jalur start yang ada); pencatatan untuk restore menunggu Milestone 3
+- AC-6 · bagian respawn dan start. Restore dengan lifecycle `stopped` dan `lastFailure` menunggu Milestone 3
+- AC-7 sampai AC-19 kecuali yang disebut di atas · belum, milik milestone lain
+
+### Sisa kegagalan di luar milestone ini
+
+`stackly-core catalog::status::tests::an_available_host_artifact_takes_its_support_from_its_records_and_notes_fill_empty_columns` (F70 M3) dan `stacklyd ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` (F29 M2) gagal sama seperti di `main`.

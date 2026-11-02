@@ -116,7 +116,7 @@ impl SupervisorEvents for Recorded {
         self.reconciling
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .push(*phase);
+            .push(phase.clone());
     }
 }
 

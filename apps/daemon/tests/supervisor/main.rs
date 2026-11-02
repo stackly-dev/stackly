@@ -21,6 +21,7 @@ mod durable_logs;
 mod lifecycle;
 mod list_performance;
 mod logs;
+mod metrics;
 mod offline;
 mod open_with;
 mod process;

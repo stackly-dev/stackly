@@ -114,7 +114,12 @@ impl Sampler {
     /// new history. A tick whose process list cannot be read records
     /// nothing.
     pub async fn sample_once(&mut self) {
-        let mains = self.source.running();
+        let source = Arc::clone(&self.source);
+        // The source may read the registry, which blocks.
+        let Ok(mains) = tokio::task::spawn_blocking(move || source.running()).await else {
+            tracing::warn!("the metrics sampler could not list the running instances");
+            return;
+        };
         if mains.is_empty() {
             self.cache = FactsCache::default();
             self.store.clear();

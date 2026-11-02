@@ -322,6 +322,11 @@ fn a_missing_changed_or_unreadable_marker_is_refused_with_its_outcome() {
         let instance = instance_on(&site, &seventeen, &name, InstanceLifecycle::Stopped, marker);
 
         let error = checked(&site, instance.id(), later.id()).expect_err(outcome);
+        if outcome == "marker_missing" {
+            // Spec 0030: a marker that is gone means the data is gone.
+            assert_eq!(error.code().to_string(), "supervisor.data_unavailable");
+            continue;
+        }
         assert_eq!(error.code().to_string(), "supervisor.data_incompatible");
         assert_eq!(detail(&error, "outcome").as_deref(), Some(outcome));
         assert_eq!(detail(&error, "data"), None, "{outcome}");

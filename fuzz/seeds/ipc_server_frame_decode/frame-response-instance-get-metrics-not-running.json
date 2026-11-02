@@ -1,0 +1,46 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000a03",
+    "reply": {
+      "type": "instance.get_metrics",
+      "content": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+        "state": "not_running",
+        "lifecycle": "stopped",
+        "intervalSeconds": 5,
+        "capacity": 60,
+        "historyId": null,
+        "process": null,
+        "samples": [],
+        "latestProcesses": [],
+        "processesTruncated": false,
+        "historyReset": true,
+        "restartTotal": 0,
+        "lastFailure": null,
+        "readiness": {
+          "state": "unknown",
+          "reason": "not_running",
+          "detail": null,
+          "observedAt": "2026-10-20T09:00:35.000Z",
+          "latencyMs": null
+        },
+        "health": {
+          "state": "unknown",
+          "reason": "not_running",
+          "detail": null,
+          "observedAt": "2026-10-20T09:00:35.000Z",
+          "latencyMs": null
+        },
+        "dataUsage": {
+          "type": "scanned",
+          "content": {
+            "bytes": 52428800,
+            "complete": true,
+            "scannedAt": "2026-10-20T08:45:00.000Z"
+          }
+        }
+      }
+    }
+  }
+}

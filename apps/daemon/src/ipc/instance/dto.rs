@@ -19,7 +19,7 @@ use stackly_protocol::instance::{
     InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
 };
 use stackly_protocol::instance::{InstanceCapabilities, InstanceLastExit};
-use stackly_protocol::{Sequence, Timestamp};
+use stackly_protocol::{Count, Sequence, Timestamp};
 
 use crate::ipc::operation::dto::revision;
 use crate::ipc::secret::needs_secret_blocker;
@@ -77,6 +77,7 @@ pub fn summary(
             excerpt,
         }),
         restart: restart(status),
+        restart_total: Count::saturating(instance.restart_total()),
         blocker: status.blocker.as_ref().and_then(blocker),
         endpoints: instance
             .endpoints()
@@ -149,6 +150,8 @@ fn readiness(readiness: &stackly_domain::Readiness) -> InstanceReadiness {
         reason: readiness.reason().as_str().to_owned(),
         detail: readiness.detail().map(|detail| detail.as_str().to_owned()),
         observed_at: Timestamp::from_jiff(readiness.observed_at()),
+        // provisional: F28 step 8 carries the probe latency in the domain
+        latency_ms: None,
     }
 }
 
@@ -163,6 +166,8 @@ fn health(health: &stackly_domain::Health) -> InstanceHealth {
         reason: health.reason().as_str().to_owned(),
         detail: health.detail().map(|detail| detail.as_str().to_owned()),
         observed_at: Timestamp::from_jiff(health.observed_at()),
+        // provisional: F28 step 8 carries the probe latency in the domain
+        latency_ms: None,
     }
 }
 

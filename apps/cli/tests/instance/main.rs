@@ -21,6 +21,7 @@ mod get;
 mod inspect;
 mod list;
 mod logs_real;
+mod metrics;
 mod open;
 mod parity;
 #[path = "../operation/play.rs"]

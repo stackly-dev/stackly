@@ -89,7 +89,7 @@ struct StatusAdapterTests {
     {
         InstanceReadiness(
             state: state, reason: reason, detail: detail,
-            observedAt: Date(timeIntervalSince1970: 0))
+            observedAt: Date(timeIntervalSince1970: 0), latencyMs: nil)
     }
 
     @Test func readyAndUnknownReadinessMapDirectly() {
@@ -121,7 +121,8 @@ struct StatusAdapterTests {
     @Test(arguments: healths)
     func everyHealthMapsToItsUIStatus(state: InstanceHealthState, status: HealthStatus) {
         let health = InstanceHealth(
-            state: state, reason: "r", detail: nil, observedAt: Date(timeIntervalSince1970: 0))
+            state: state, reason: "r", detail: nil, observedAt: Date(timeIntervalSince1970: 0),
+            latencyMs: nil)
         #expect(StatusAdapter.health(health) == status)
     }
 

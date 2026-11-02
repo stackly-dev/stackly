@@ -17,7 +17,8 @@ struct InstanceDetailJourneyTests {
         let base = try DetailFixture.triple("postgresql").instance
         return base.testing(
             readiness: InstanceReadiness(
-                state: state, reason: reason, detail: nil, observedAt: base.readiness.observedAt))
+                state: state, reason: reason, detail: nil, observedAt: base.readiness.observedAt,
+                latencyMs: nil))
     }
 
     @Test(
@@ -46,7 +47,7 @@ struct InstanceDetailJourneyTests {
         let failing = try DetailFixture.triple("postgresql").instance.testing(
             readiness: InstanceReadiness(
                 state: .notReady, reason: "probe_failed", detail: "connection refused",
-                observedAt: Date(timeIntervalSince1970: 0)))
+                observedAt: Date(timeIntervalSince1970: 0), latencyMs: nil))
         #expect(ReadinessText.text(for: failing) == "Not ready: connection refused")
         #expect(StatusAdapter.appearance(of: failing).label == "Not Ready")
         #expect(ConnectionCard.isNotAcceptingConnections(failing))

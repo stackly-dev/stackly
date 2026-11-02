@@ -141,7 +141,7 @@ extension InstanceSummary {
             lifecycle: lifecycle ?? self.lifecycle, desired: desired,
             readiness: readiness ?? self.readiness, health: health ?? self.health,
             statusSeq: statusSeq ?? self.statusSeq, process: process, lastFailure: lastFailure,
-            restart: restart, blocker: blocker, endpoints: endpoints,
+            restart: restart, restartTotal: 0, blocker: blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
             ownership: ownership, initialized: initialized, capabilities: capabilities,
             lastExit: lastExit ?? self.lastExit)
@@ -154,7 +154,8 @@ extension InstanceSummary {
         InstanceHealthChanged(
             instanceId: id, statusSeq: statusSeq, readiness: readiness,
             health: InstanceHealth(
-                state: state, reason: "test", detail: nil, observedAt: health.observedAt),
+                state: state, reason: "test", detail: nil, observedAt: health.observedAt,
+                latencyMs: nil),
             blocker: blocker, restart: restart, process: process,
             logsUnavailable: logsUnavailable)
     }

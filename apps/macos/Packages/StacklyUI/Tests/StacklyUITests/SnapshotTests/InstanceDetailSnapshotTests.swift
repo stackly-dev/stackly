@@ -327,6 +327,7 @@ extension InstanceSummary {
             provider: provider, runtimeId: runtimeId, runtimeVersion: runtimeVersion,
             lifecycle: lifecycle, desired: desired, readiness: readiness, health: health,
             statusSeq: statusSeq, process: process, lastFailure: lastFailure, restart: restart,
+            restartTotal: 0,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
             capabilities: nil, lastExit: nil)
