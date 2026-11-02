@@ -54,6 +54,13 @@ use crate::map;
 use crate::state::DaemonCore;
 use crate::supervisor::supervisor_error;
 
+/// The method names the idempotency record keeps for the two config methods
+/// that start an operation. A `MethodName` is one code, a dot, and one
+/// code, so `instance.config.apply` becomes `instance.config_apply` here;
+/// the wire name is unchanged.
+const APPLY_KEY_METHOD: &str = "instance.config_apply";
+const KEEP_KEY_METHOD: &str = "instance.config_keep_revision";
+
 /// The error body of a config refusal, with the hint of its code.
 fn config_error_body(error: &ConfigError) -> Box<ErrorBody> {
     Box::new(map::create::with_create_hint(operation_error_body(error)))
@@ -161,6 +168,26 @@ async fn current_files(
             Some(map::config::RUNTIME_MISSING_NOTE.to_owned()),
         ),
     })
+}
+
+/// The files of the drift the supervisor holds for `id`, or `None` when
+/// there is none. The blocker is set by `instance.config.get`, by every
+/// render, and once per instance when the daemon starts; `start`,
+/// `restart`, and `reload` refuse with `config.drift_detected` before any
+/// operation while it stands (spec 0029, AC-11). A file edited since the
+/// last check is caught by the drift gate of the render, which fails the
+/// operation before it writes a file. This reads memory only, so a start
+/// never waits for the disk before it begins.
+pub(super) fn drifted_files(
+    supervisor: &stackly_core::supervisor::Supervisor,
+    id: InstanceId,
+) -> Option<Vec<String>> {
+    match supervisor.status(id).blocker {
+        Some(stackly_domain::InstanceBlocker::ConfigDrift { files, .. }) => {
+            Some(files.iter().map(ToString::to_string).collect())
+        }
+        _ => None,
+    }
 }
 
 /// The real `instance.config.get`.
@@ -369,7 +396,7 @@ pub fn apply_config<'a>(
         let base = params.base_revision;
         let fingerprint = request_fingerprint(&Call::InstanceConfigApply(params));
         let start = OperationStart::new(
-            "instance.config.apply",
+            APPLY_KEY_METHOD,
             context.idempotency_key.as_deref(),
             fingerprint,
         );
@@ -425,7 +452,7 @@ pub fn keep_revision<'a>(
         let id = instance_id(params.instance_id)?;
         let fingerprint = request_fingerprint(&Call::InstanceConfigKeepRevision(params));
         let start = OperationStart::new(
-            "instance.config.keep_revision",
+            KEEP_KEY_METHOD,
             context.idempotency_key.as_deref(),
             fingerprint,
         );

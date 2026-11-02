@@ -139,7 +139,11 @@ pub fn start<'a>(
         let expected = expected_revision(params.expected_revision)?;
         let fingerprint = request_fingerprint(&Call::InstanceStart(params));
         let work = supervisor.start_work(StartRequest::user(id, caller(&context)));
-        let precheck: Box<dyn Precheck> = Box::new(move || start_precheck(&registry, id, expected));
+        let drift = config::drifted_files(&supervisor, id);
+        let precheck: Box<dyn Precheck> = Box::new(move || {
+            drift_refusal(drift.as_deref())
+                .unwrap_or_else(|| start_precheck(&registry, id, expected))
+        });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::StartInstance,
             resource: OperationResource::Instance(id),
@@ -236,8 +240,11 @@ pub fn restart<'a>(
         let expected = expected_revision(params.expected_revision)?;
         let fingerprint = request_fingerprint(&Call::InstanceRestart(params));
         let work = supervisor.restart_work(RestartRequest::new(id, caller(&context)));
-        let precheck: Box<dyn Precheck> =
-            Box::new(move || restart_precheck(&registry, id, expected));
+        let drift = config::drifted_files(&supervisor, id);
+        let precheck: Box<dyn Precheck> = Box::new(move || {
+            drift_refusal(drift.as_deref())
+                .unwrap_or_else(|| restart_precheck(&registry, id, expected))
+        });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::RestartInstance,
             resource: OperationResource::Instance(id),
@@ -282,8 +289,11 @@ pub fn reload<'a>(
         let expected = expected_revision(params.expected_revision)?;
         let fingerprint = request_fingerprint(&Call::InstanceReload(params));
         let work = supervisor.reload_work(ReloadRequest::new(id, caller(&context)));
-        let precheck: Box<dyn Precheck> =
-            Box::new(move || reload_precheck(&registry, id, expected));
+        let drift = config::drifted_files(&supervisor, id);
+        let precheck: Box<dyn Precheck> = Box::new(move || {
+            drift_refusal(drift.as_deref())
+                .unwrap_or_else(|| reload_precheck(&registry, id, expected))
+        });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::ReloadInstance,
             resource: OperationResource::Instance(id),
@@ -366,6 +376,17 @@ fn restart_input() -> JournalPayload {
         stackly_domain::OperationJournal::INPUT_MAX,
     )
     .unwrap_or_else(|_| JournalPayload::empty())
+}
+
+/// The refusal of a start, restart, or reload while config files differ
+/// from the copies of the active revision (spec 0029, AC-11): no operation
+/// and no file written.
+fn drift_refusal(files: Option<&[String]>) -> Option<PrecheckOutcome> {
+    files.map(|files| {
+        reject(SupervisorError::ConfigDrift {
+            files: files.to_vec(),
+        })
+    })
 }
 
 /// Refuses a restart the state decides (spec 0026, AC-7): only `running`
