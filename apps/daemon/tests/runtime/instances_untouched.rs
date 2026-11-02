@@ -159,6 +159,18 @@ impl ProcessSupervision for CheckFaking {
         }
     }
 
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError> {
+        self.real().list_pids()
+    }
+
+    fn counters(
+        &self,
+        pid: Pid,
+        expected: stackly_domain::ProcessStart,
+    ) -> Result<stackly_domain::ProcessCounters, ProcessError> {
+        self.real().counters(pid, expected)
+    }
+
     fn boot_id(&self) -> Result<stackly_domain::BootId, ProcessError> {
         self.real().boot_id()
     }

@@ -30,6 +30,21 @@ pub(crate) const PROC_PGRP_ONLY: u32 = 2;
 /// the pipe closed, just `EPIPE`.
 pub(crate) const F_SETNOSIGPIPE: c_int = 73;
 
+/// `mach/mach_time.h`: `struct mach_timebase_info`, the ratio that turns
+/// mach time units into nanoseconds. libc declares it only as deprecated.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(crate) struct mach_timebase_info {
+    pub(crate) numer: u32,
+    pub(crate) denom: u32,
+}
+
+unsafe extern "C" {
+    /// `mach/mach_time.h`: fills the timebase ratio; answers 0
+    /// (`KERN_SUCCESS`) on success.
+    pub(crate) fn mach_timebase_info(info: *mut mach_timebase_info) -> c_int;
+}
+
 /// `sys/proc_info.h`: `struct proc_fileinfo`.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -172,6 +187,13 @@ pub(crate) struct kinfo_proc {
 // lokal*). A mismatch fails the build instead of reading the wrong bytes.
 const _: () = {
     assert!(size_of::<proc_fileinfo>() == 24);
+    assert!(size_of::<mach_timebase_info>() == 8);
+    assert!(size_of::<libc::rusage_info_v4>() == 296);
+    assert!(offset_of!(libc::rusage_info_v4, ri_user_time) == 16);
+    assert!(offset_of!(libc::rusage_info_v4, ri_system_time) == 24);
+    assert!(offset_of!(libc::rusage_info_v4, ri_phys_footprint) == 72);
+    assert!(offset_of!(libc::rusage_info_v4, ri_diskio_bytesread) == 144);
+    assert!(offset_of!(libc::rusage_info_v4, ri_diskio_byteswritten) == 152);
     assert!(size_of::<vnode_fdinfowithpath>() == 1200);
     assert!(offset_of!(vnode_fdinfowithpath, pvip) == 24);
     assert!(size_of::<libc::vnode_info_path>() == 1176);

@@ -75,7 +75,9 @@ pub struct StartRequest {
     /// Who asks.
     pub trigger: StartTrigger,
     /// A respawn the actor's timer began after a crash: the instance is
-    /// `recovering`, so there is no `journal` and no `start_begin`.
+    /// `recovering`, so there is no `journal` and no `start_begin`. It is
+    /// also the crash mark of spec 0028 AC-6: the first spawn it commits
+    /// raises `restart_total`.
     pub(crate) respawn: bool,
 }
 
@@ -634,14 +636,19 @@ async fn after_journal(
     let id = request.instance;
     let mut attempt: u32 = 1;
     let mut armed = first;
+    // True while the next spawn follows a crash (spec 0028 AC-6): from the
+    // start for a respawn, and after an attempt that exited before ready.
+    let mut after_crash = request.respawn;
     loop {
         let end = match armed.take() {
-            Some(ready) => run_attempt(sup, ctx, ready, attempt, recovery).await?,
+            Some(ready) => run_attempt(sup, ctx, ready, attempt, recovery, after_crash).await?,
             None => {
                 // A respawn repeats the checks, and never shows a dialog.
                 let background = SecretCaller::background().in_operation(ctx.id());
                 match gate(sup, ctx, &background, attempt == 1).await {
-                    Ok(ready) => run_attempt(sup, ctx, ready, attempt, recovery).await?,
+                    Ok(ready) => {
+                        run_attempt(sup, ctx, ready, attempt, recovery, after_crash).await?
+                    }
                     Err(Gate::Work(error)) => return Err(error),
                     // A lock still held counts as a failed attempt.
                     Err(Gate::Error(SupervisorError::DataInUse { .. })) => {
@@ -669,6 +676,7 @@ async fn after_journal(
                 }
             }
         };
+        after_crash = matches!(end, AttemptEnd::Exited(_));
         match end {
             AttemptEnd::Ready => {
                 enter(ctx, StageName::PUBLISH, attempt == 1, true).await?;
@@ -909,7 +917,9 @@ fn drain_old_spools(deps: &SupervisorDeps, id: InstanceId, paths: &[&std::path::
     deps.tail.forget(id);
 }
 
-/// One attempt: `render`, `spawn`, `identity`, and `readiness`.
+/// One attempt: `render`, `spawn`, `identity`, and `readiness`. With
+/// `after_crash`, the commit of a successful spawn also counts one restart
+/// (spec 0028 AC-6).
 #[allow(clippy::too_many_lines)]
 async fn run_attempt(
     sup: &Supervisor,
@@ -917,6 +927,7 @@ async fn run_attempt(
     armed: Armed,
     attempt: u32,
     recovery: bool,
+    after_crash: bool,
 ) -> Result<AttemptEnd, WorkError> {
     let deps = sup.deps();
     let id = ctx_instance(ctx);
@@ -1036,7 +1047,16 @@ async fn run_attempt(
         })
         .collect();
     let recorded = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
-        apply_event(changes, LifecycleEvent::Spawned, now)?;
+        // One change, so the restart rides on the revision `spawned` raises.
+        changes.apply(|instance| {
+            instance
+                .apply_lifecycle(LifecycleEvent::Spawned, now)
+                .map_err(|error| SupervisorError::internal(error.to_string()))?;
+            if after_crash {
+                instance.count_restart();
+            }
+            Ok::<_, SupervisorError>(())
+        })?;
         for (name, port) in &auto {
             changes.apply(|instance| {
                 instance

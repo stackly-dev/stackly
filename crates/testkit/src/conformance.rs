@@ -8,8 +8,11 @@ use stackly_platform::{
 
 use crate::TestRoot;
 
+mod process_metrics;
 mod runtime_files;
 mod tree_usage;
+
+pub use process_metrics::{MetricsTree, process_metrics_conformance};
 
 /// Runs the same behavior checks against any [`Filesystem`], so the fake in
 /// this crate and each OS adapter cannot drift apart unnoticed.

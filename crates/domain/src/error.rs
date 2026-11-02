@@ -72,6 +72,10 @@ pub enum ValueKind {
     IdentityCheck,
     /// An [`IdentityCheckName`](crate::IdentityCheckName).
     IdentityCheckName,
+    /// An [`UnavailableReason`](crate::UnavailableReason).
+    UnavailableReason,
+    /// A [`UsageScope`](crate::UsageScope).
+    UsageScope,
     /// A [`ReasonCode`](crate::ReasonCode).
     ReasonCode,
     /// A [`FailureCode`](crate::FailureCode).
@@ -240,6 +244,8 @@ impl ValueKind {
             Self::LockState => "lock state",
             Self::IdentityCheck => "identity check",
             Self::IdentityCheckName => "identity check name",
+            Self::UnavailableReason => "unavailable reason",
+            Self::UsageScope => "usage scope",
             Self::ReasonCode => "reason code",
             Self::FailureCode => "failure code",
             Self::StageName => "stage name",

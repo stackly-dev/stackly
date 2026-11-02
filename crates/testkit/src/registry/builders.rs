@@ -427,6 +427,7 @@ impl InstanceBuilder {
                 lifecycle: InstanceLifecycle::Uninitialized,
                 last_failure: None,
                 last_exit: None,
+                restart_total: 0,
                 revision: ResourceRevision::INITIAL,
                 created_at: FIXTURE_TIME,
                 created_by: OperationId::generate(),

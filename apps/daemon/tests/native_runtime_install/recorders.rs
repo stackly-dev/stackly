@@ -116,6 +116,18 @@ impl ProcessSupervision for RecordingProcesses {
         self.inner.group_members(group)
     }
 
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError> {
+        self.inner.list_pids()
+    }
+
+    fn counters(
+        &self,
+        pid: Pid,
+        expected: stackly_domain::ProcessStart,
+    ) -> Result<stackly_domain::ProcessCounters, ProcessError> {
+        self.inner.counters(pid, expected)
+    }
+
     fn boot_id(&self) -> Result<BootId, ProcessError> {
         self.inner.boot_id()
     }

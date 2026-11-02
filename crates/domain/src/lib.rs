@@ -27,6 +27,7 @@ mod id;
 mod instance;
 mod lease;
 mod manifest;
+mod metrics;
 mod observation;
 mod operation;
 mod os_version;
@@ -68,6 +69,11 @@ pub use lease::{
 pub use manifest::{
     INSTANCE_MANIFEST_SCHEMA, InstallKind, InstanceManifest, ManifestData, ManifestRuntime,
     NewInstanceManifest, RetainedMarker,
+};
+pub use metrics::{
+    CounterReading, HistoryId, MemberRead, Metric, MetricsHistory, MetricsSample, ProcessCounters,
+    ProcessMeasure, ProcessRead, ProcessUsage, Rates, ResourceUsage, SamplesPage, TreeNode,
+    UnavailableReason, UsageScope, measure, process_name, process_tree, rates,
 };
 pub use observation::{
     Health, HealthState, Ignored, Observation, ObservationOutcome, ObservedState, Readiness,

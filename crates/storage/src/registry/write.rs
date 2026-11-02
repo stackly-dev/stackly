@@ -767,6 +767,7 @@ fn write_instance(
         instance.created_by().to_string(),
         ts(instance.created_at()),
         instance.last_exit().map(|exit| exit.as_code()),
+        int(instance.restart_total(), "restart_total")?,
     ];
     match write {
         Write::Insert => {
@@ -774,9 +775,9 @@ fn write_instance(
                 "INSERT INTO instances (id, name, display_name, provider_revision_pk, software, \
                  runtime_id, data_line, data_version, data_initialized_at, desired, startup, \
                  lifecycle, last_failure, retained_at, retained_by_operation, revision, \
-                 updated_at, created_by_operation, created_at, last_exit, ownership) \
+                 updated_at, created_by_operation, created_at, last_exit, restart_total, ownership) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, \
-                 ?17, ?18, ?19, ?20, 'created')",
+                 ?17, ?18, ?19, ?20, ?21, 'created')",
                 values,
             )
             .map_err(sql_error)?;
@@ -803,7 +804,7 @@ fn write_instance(
                  data_initialized_at = ?9, desired = ?10, startup = ?11, lifecycle = ?12, \
                  last_failure = ?13, retained_at = ?14, retained_by_operation = ?15, \
                  revision = ?16, updated_at = ?17, created_by_operation = ?18, \
-                 created_at = ?19, last_exit = ?20 WHERE id = ?1",
+                 created_at = ?19, last_exit = ?20, restart_total = ?21 WHERE id = ?1",
                 values,
             )
             .map_err(sql_error)?;

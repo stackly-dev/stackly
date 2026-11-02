@@ -106,6 +106,8 @@ pub use cli_runner::{CLI_TIMEOUT, CliOutput, CliRunner};
 pub use conformance::fs_conformance;
 #[cfg(target_os = "macos")]
 pub use conformance::{CrossDevice, fs_cross_device_conformance};
+#[cfg(unix)]
+pub use conformance::{MetricsTree, process_metrics_conformance};
 #[cfg(target_os = "macos")]
 pub use disk_image::DiskImage;
 pub use fake_agent::{FAKE_AGENT_BUNDLE, FakeBackgroundAgent};

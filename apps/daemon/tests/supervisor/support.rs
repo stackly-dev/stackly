@@ -290,6 +290,7 @@ impl Site {
                 lifecycle: instance.lifecycle(),
                 last_failure: instance.last_failure().cloned(),
                 last_exit: instance.last_exit(),
+                restart_total: instance.restart_total(),
                 revision: ResourceRevision::new(expected.get() + 1)
                     .expect("the next revision is valid"),
                 created_at: instance.created_at(),

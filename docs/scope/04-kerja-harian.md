@@ -43,7 +43,7 @@ Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp,
 - [ ] Verify it: `/check verify log per instance`
 - [ ] Test it: `/test log per instance`
 
-### 28. Metrics & health · needs a decision
+### 28. Metrics & health · in-progress
 
 Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU, memori, dan pemakaian disk terjadwal, dengan label cakupan yang jelas antara proses utama dan agregat child.
 
@@ -51,7 +51,17 @@ Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU,
 
 **Trace:** REQ-018, REQ-028, PAGE-07, NFR-003, AC-018, PRD bagian 19.5 dan 35.2
 
-- [ ] Design it (spec): `/architect metrics & health`
+**Pointer:** spec [0028](../specs/0028-metrics-dan-health/index.md)
+
+- [x] Design it (spec): `/architect metrics & health` · spec 0028, cross check (Sonnet) applied, accepted 2026-11-02
+- [ ] Build it: `/develop metrics & health`
+  - [x] Spike, domain, registry, and platform: the step 0 spike on PostgreSQL 17 and NATS (footprint per child, CPU time units, clocks across sleep), the metric types and tree math in domain, migration `0007_instance_restart_total.sql` with the crash flag on `StartRequest`, and the `list_pids` and `counters` ports with the macOS adapter, fake, and conformance (spec 0028 AC-1 to AC-6; build steps 0 to 3; step 3 can run in parallel with steps 1 and 2) · spike on 2026-11-02 in `rationale.md` *Hasil spike* (CPU times are mach units, 125/3; shared buffers are not in any child's footprint, so the memory decision stands; the clocks across a real sleep wait for the step 9 manual check); code in `crates/domain/src/metrics.rs`, `crates/storage/migrations/0007_instance_restart_total.sql`, the count in `crates/core/src/supervisor/startup.rs`, the adapter in `crates/platform-macos/src/process/usage.rs`, conformance in `crates/testkit/src/conformance/process_metrics.rs`; tests in `crates/storage/tests/open/migrate.rs`, `crates/core/tests/supervisor_start/{start,restart}.rs`, `crates/testkit/tests/fake_process.rs`, and `crates/platform-macos/tests/process_metrics.rs`; `stacklyd` supervisor and operations tests pass
+  - [ ] Sampler, contract, daemon, and CLI: `stackly_core::metrics::Sampler`, `instance.get_metrics` with `historyId` cursor, `restartTotal`, `latencyMs`, minor bump and codegen, the `last_scan` slot and scheduled scan, then `stackly instance metrics` with `--json` and `--watch` (spec 0028 AC-1, AC-3, AC-5, AC-6, AC-10 to AC-12; build steps 4 to 6; after milestone 1)
+  - [ ] GUI: `getMetrics` in `StacklyClient`, the Metrics tab with cards, Swift Charts graph, process list, unavailable texts, and not running state, Restarts and latency in Summary and the inspector, spec 0068 fixtures (spec 0028 AC-6, AC-7, AC-13; build step 7; after milestone 2)
+  - [ ] Probe latency and wake: latency on `ProbeOutcome`, `WakeWatch`, the 30 s grace, the start deadline extension, and removal of the `provisional: F28` markers (spec 0028 AC-7 to AC-9; build step 8; after the DTO in milestone 2, can run in parallel with milestone 3)
+  - [ ] Evidence on this Mac: three NFR-003 runs, PostgreSQL 17 and NATS native tests, and a manual GUI session with a real sleep and wake (spec 0028 AC-4, AC-14, AC-15; build step 9; runtime artifacts in the xtask cache, else `BLOCKED`)
+- [ ] Verify it: `/check verify metrics & health`
+- [ ] Test it: `/test metrics & health`
 
 ### 29. Edit config, nama & endpoint · needs a decision
 

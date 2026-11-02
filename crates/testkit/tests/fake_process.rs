@@ -9,7 +9,7 @@ use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use stackly_domain::{BootId, LockState, Pid, ProcessIdentity, ProcessStart};
+use stackly_domain::{BootId, LockState, Pid, ProcessCounters, ProcessIdentity, ProcessStart};
 use stackly_platform::{
     CapturedOutput, ChildRole, ExitListener, ExitNotice, ExitStatus, HoldsFile, InstanceLock,
     LockOutcome, OutputStream, OutputTarget, ProcessError, ProcessFacts, ProcessSupervision,
@@ -17,7 +17,8 @@ use stackly_platform::{
     SuspendedChild, UserId,
 };
 use stackly_testkit::{
-    FakePlatform, FakeProcessState, FakeProcessSupervision, ProcessOp, TestRoot,
+    FakePlatform, FakeProcessState, FakeProcessSupervision, MetricsTree, ProcessOp, TestRoot,
+    process_metrics_conformance,
 };
 
 /// Collects every exit notice it hears.
@@ -683,4 +684,66 @@ fn fake_platform_installs_the_fake_process_port_and_shares_it() {
     drop(lock);
     assert_eq!(fake.processes().count(ProcessOp::LockInstance), 1);
     assert_eq!(fake.processes().count(ProcessOp::ProbeLock), 1);
+}
+
+fn tree_member(setup: &Setup, number: u32, parent: Option<u32>, uid: UserId) -> Pid {
+    let pid = pid(number);
+    setup.fake.insert(ProcessFacts {
+        pid,
+        parent: parent.map(self::pid),
+        group: pid,
+        session: pid,
+        uid,
+        start: ProcessStart::new(1_700_000_000, number).expect("micros below one second"),
+        executable: PathBuf::from("/bin/sh"),
+        stopped: false,
+    });
+    setup.fake.set_counters(
+        pid,
+        ProcessCounters {
+            footprint: 4096,
+            ..ProcessCounters::default()
+        },
+    );
+    pid
+}
+
+#[test]
+fn the_fake_passes_the_process_metrics_conformance() {
+    let setup = Setup::new();
+    let user = setup.fake.user();
+    let main = tree_member(&setup, 100, Some(1), user.clone());
+    let child = tree_member(&setup, 101, Some(100), user.clone());
+    let grandchild = tree_member(&setup, 102, Some(101), user);
+    let foreign = tree_member(&setup, 1, None, UserId::Unix(0));
+    let gone = tree_member(&setup, 103, Some(100), setup.fake.user());
+    setup.fake.exit(gone, Some(ExitStatus::Exited(0)));
+
+    process_metrics_conformance(
+        &setup.fake,
+        MetricsTree::new(
+            main,
+            child,
+            grandchild,
+            (gone, ProcessStart::new(1_700_000_000, 103).unwrap()),
+            foreign,
+        ),
+    );
+}
+
+#[test]
+fn counters_answer_what_the_test_set_and_a_denied_pid_is_refused() {
+    let setup = Setup::new();
+    let main = tree_member(&setup, 200, None, setup.fake.user());
+    let start = ProcessStart::new(1_700_000_000, 200).unwrap();
+    setup.fake.update_counters(main, |counters| {
+        counters.disk_write = 7;
+    });
+    assert_eq!(setup.fake.counters(main, start).unwrap().disk_write, 7);
+    setup.fake.deny_counters(main);
+    assert_eq!(
+        setup.fake.counters(main, start).unwrap_err(),
+        ProcessError::PermissionDenied { pid: main }
+    );
+    assert_eq!(setup.fake.count(ProcessOp::Counters), 2);
 }

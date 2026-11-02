@@ -392,6 +392,7 @@ pub(super) fn instances(
              i.data_version AS data_version, i.data_initialized_at AS data_initialized_at, \
              i.desired AS desired, i.startup AS startup, i.lifecycle AS lifecycle, \
              i.last_failure AS last_failure, i.last_exit AS last_exit, \
+             i.restart_total AS restart_total, \
              i.revision AS revision, \
              i.created_at AS created_at, i.created_by_operation AS created_by_operation, \
              i.retained_at AS retained_at, i.retained_by_operation AS retained_by_operation, \
@@ -425,6 +426,9 @@ pub(super) fn instances(
                 lifecycle: cells.parse::<InstanceLifecycle>("lifecycle")?,
                 last_failure: cells.opt_parse("last_failure")?,
                 last_exit: cells.opt_parse("last_exit")?,
+                restart_total: cells
+                    .opt_u64("restart_total")?
+                    .ok_or_else(|| cells.corrupt("restart_total", "is null"))?,
                 revision: cells.revision()?,
                 created_at: cells.ts("created_at")?,
                 created_by: cells.parse("created_by_operation")?,

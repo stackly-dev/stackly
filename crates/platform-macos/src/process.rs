@@ -10,6 +10,7 @@
 //! | `watch` | the kqueue watcher, reaping, and the mutex per PID |
 //! | `lock` | the instance lock |
 //! | `spool` | log spools and their reader |
+//! | `usage` | the PID list and the counters of the metrics sampler |
 //! | `boot` | the boot ID |
 //! | `sys` | declarations libc lacks, with layout asserts |
 
@@ -21,6 +22,7 @@ pub(crate) mod spawn;
 mod spool;
 mod stdin;
 mod sys;
+mod usage;
 mod watch;
 
 use std::fmt;
@@ -28,7 +30,7 @@ use std::os::fd::AsFd;
 use std::path::Path;
 use std::sync::Arc;
 
-use stackly_domain::{BootId, Pid};
+use stackly_domain::{BootId, Pid, ProcessCounters, ProcessStart};
 use stackly_platform::{
     ExitListener, ExitStatus, FileIdentity, HelperHandle, HoldsFile, LockOutcome, LockState,
     MainHandle, OutputTarget, ProcessError, ProcessFacts, ProcessSupervision, ProviderSignal,
@@ -288,6 +290,14 @@ impl ProcessSupervision for MacosProcessSupervision {
 
     fn group_members(&self, group: Pid) -> Result<Vec<Pid>, ProcessError> {
         inspect::group_members(group)
+    }
+
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError> {
+        usage::list_pids()
+    }
+
+    fn counters(&self, pid: Pid, expected: ProcessStart) -> Result<ProcessCounters, ProcessError> {
+        usage::counters(pid, expected)
     }
 
     fn boot_id(&self) -> Result<BootId, ProcessError> {

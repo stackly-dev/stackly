@@ -364,7 +364,7 @@ impl Base {
 }
 
 /// The answer of `PROC_PIDTBSDINFO`.
-enum BsdInfo {
+pub(super) enum BsdInfo {
     Info(libc::proc_bsdinfo),
     /// `ESRCH`: no process, or a zombie.
     Gone,
@@ -372,7 +372,7 @@ enum BsdInfo {
     Denied,
 }
 
-fn bsd_info(pid: Pid) -> Result<BsdInfo, ProcessError> {
+pub(super) fn bsd_info(pid: Pid) -> Result<BsdInfo, ProcessError> {
     // SAFETY: proc_bsdinfo is plain integers, for which all zero bytes are
     // a valid value.
     let mut info: libc::proc_bsdinfo = unsafe { mem::zeroed() };
@@ -559,7 +559,7 @@ fn vnode_identity(pid: Pid, fd: i32) -> Result<Option<FileIdentity>, Listing> {
     }
 }
 
-fn start_time(seconds: u64, micros: u64) -> Result<ProcessStart, ProcessError> {
+pub(super) fn start_time(seconds: u64, micros: u64) -> Result<ProcessStart, ProcessError> {
     let micros = u32::try_from(micros).map_err(|_| bad_start())?;
     ProcessStart::new(seconds, micros).map_err(|_| bad_start())
 }

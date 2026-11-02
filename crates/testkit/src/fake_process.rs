@@ -7,7 +7,7 @@ use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use stackly_domain::{BootId, LockState, Pid, ProcessStart};
+use stackly_domain::{BootId, LockState, Pid, ProcessCounters, ProcessStart};
 use stackly_platform::{
     CapturedOutput, ChildRole, ExitListener, ExitNotice, ExitStatus, FileIdentity, HelperHandle,
     HoldsFile, InstanceLock, LockOutcome, MainHandle, OutputStream, OutputTarget, ProcessError,
@@ -55,6 +55,10 @@ pub enum ProcessOp {
     TerminateHelperGroup,
     /// [`ProcessSupervision::group_members`].
     GroupMembers,
+    /// [`ProcessSupervision::list_pids`].
+    ListPids,
+    /// [`ProcessSupervision::counters`].
+    Counters,
     /// [`ProcessSupervision::boot_id`].
     BootId,
     /// [`ProcessSupervision::watch_exit`].
@@ -242,6 +246,11 @@ struct FakeProcess {
     /// resumed or discarded, which [`ProcessSupervision::discard`] answers
     /// once.
     died_suspended: Option<ExitStatus>,
+    /// What [`ProcessSupervision::counters`] answers, all zero until a
+    /// test sets them.
+    counters: ProcessCounters,
+    /// True when [`ProcessSupervision::counters`] answers `EPERM`.
+    counters_denied: bool,
 }
 
 impl FakeProcess {
@@ -331,6 +340,8 @@ impl FakeProcessSupervision {
             holds_override: None,
             signals: Vec::new(),
             died_suspended: None,
+            counters: ProcessCounters::default(),
+            counters_denied: false,
         };
         let mut guard = self.lock_state();
         guard.pending.remove(&process.facts.pid);
@@ -381,6 +392,31 @@ impl FakeProcessSupervision {
     pub fn set_holds(&self, pid: Pid, answer: HoldsFile) {
         if let Some(process) = self.lock_state().processes.get_mut(&pid) {
             process.holds_override = Some(answer);
+        }
+    }
+
+    /// Sets what [`counters`](ProcessSupervision::counters) answers for
+    /// `pid` from now on.
+    pub fn set_counters(&self, pid: Pid, counters: ProcessCounters) {
+        if let Some(process) = self.lock_state().processes.get_mut(&pid) {
+            process.counters = counters;
+        }
+    }
+
+    /// Changes what [`counters`](ProcessSupervision::counters) answers for
+    /// `pid`, for example to add CPU time between two samples.
+    pub fn update_counters(&self, pid: Pid, change: impl FnOnce(&mut ProcessCounters)) {
+        if let Some(process) = self.lock_state().processes.get_mut(&pid) {
+            change(&mut process.counters);
+        }
+    }
+
+    /// Makes [`counters`](ProcessSupervision::counters) refuse `pid` with
+    /// [`ProcessError::PermissionDenied`], as macOS does with `EPERM`. A
+    /// process of another user is always refused.
+    pub fn deny_counters(&self, pid: Pid) {
+        if let Some(process) = self.lock_state().processes.get_mut(&pid) {
+            process.counters_denied = true;
         }
     }
 
@@ -698,6 +734,8 @@ impl State {
             holds_override: None,
             signals: Vec::new(),
             died_suspended: None,
+            counters: ProcessCounters::default(),
+            counters_denied: false,
         };
         let lock = match request.lock {
             Some(lock) => {
@@ -1016,6 +1054,36 @@ impl ProcessSupervision for FakeProcessSupervision {
                 .filter(|process| process.is_alive() && process.facts.group == group)
                 .map(|process| process.facts.pid)
                 .collect())
+        })
+    }
+
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError> {
+        self.call(ProcessCall::new(ProcessOp::ListPids), |state| {
+            Ok(state
+                .processes
+                .values()
+                .filter(|process| process.is_alive())
+                .map(|process| process.facts.pid)
+                .collect())
+        })
+    }
+
+    fn counters(&self, pid: Pid, expected: ProcessStart) -> Result<ProcessCounters, ProcessError> {
+        let call = ProcessCall {
+            pid: Some(pid),
+            ..ProcessCall::new(ProcessOp::Counters)
+        };
+        self.call(call, |state| {
+            let user = state.user.clone();
+            let process = state.live_mut(pid)?;
+            if process.facts.start != expected {
+                return Err(ProcessError::IdentityMismatch { pid });
+            }
+            // Like macOS, which answers `EPERM` for another user's process.
+            if process.counters_denied || process.facts.uid != user {
+                return Err(ProcessError::PermissionDenied { pid });
+            }
+            Ok(process.counters)
         })
     }
 

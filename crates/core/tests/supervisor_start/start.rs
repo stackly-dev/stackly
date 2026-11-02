@@ -56,6 +56,7 @@ async fn a_start_runs_every_stage_and_ends_ready_with_final_ports() {
     let instance = rig.instance_row(id);
     assert_eq!(instance.lifecycle(), InstanceLifecycle::Running);
     assert_eq!(instance.desired(), DesiredState::Running);
+    assert_eq!(instance.restart_total(), 0, "a user start is no restart");
     let status = rig.sup.status(id);
     assert_eq!(status.readiness.state(), ReadinessState::Ready);
     assert!(status.ports_final, "the port shows as final after ready");
@@ -495,6 +496,11 @@ async fn a_crash_loop_spawns_six_times_then_fails_with_the_budget_spent() {
         .filter(|spawn| spawn.role == ChildRole::Main)
         .count();
     assert_eq!(mains, 6, "six spawns for one crash loop");
+    assert_eq!(
+        instance.restart_total(),
+        5,
+        "every spawn after a crash inside the start counts, the first does not"
+    );
     let restart = rig.sup.status(id).restart;
     assert!(restart.exhausted);
     assert_eq!(restart.attempts, 6);
@@ -680,6 +686,7 @@ async fn a_spawn_the_os_refuses_fails_the_start_with_the_spawn_code() {
         instance.last_failure().map(|code| code.as_str()),
         Some("spawn_failed")
     );
+    assert_eq!(instance.restart_total(), 0);
 }
 
 #[tokio::test]

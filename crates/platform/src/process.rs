@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use stackly_domain::{BootId, Os, Pid, ProcessIdentity, ProcessStart};
+use stackly_domain::{BootId, Os, Pid, ProcessCounters, ProcessIdentity, ProcessStart};
 
 use crate::capability::PlatformCapability;
 use crate::fs::FileIdentity;
@@ -944,6 +944,30 @@ pub trait ProcessSupervision: Send + Sync {
     /// Returns [`ProcessError::Io`] when the list cannot be read.
     fn group_members(&self, group: Pid) -> Result<Vec<Pid>, ProcessError>;
 
+    /// Lists the ID of every process on the system, of every user, in no
+    /// particular order, for the metrics sampler to build process trees
+    /// from (spec 0028, *Port platform*).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::Io`] when the list cannot be read, and
+    /// [`ProcessError::NotSupported`] on an OS without an adapter.
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError>;
+
+    /// Reads the resource counters of a live process that still started
+    /// at `expected`: CPU time as real durations, physical footprint, and
+    /// disk bytes (spec 0028, *Port platform*). It never signals.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProcessError::NotFound`] when no live process has the ID,
+    /// [`ProcessError::IdentityMismatch`] when the process started at
+    /// another time (a reused PID), [`ProcessError::PermissionDenied`]
+    /// when the OS refuses (`EPERM`), [`ProcessError::Io`] for any other
+    /// failure, and [`ProcessError::NotSupported`] on an OS without an
+    /// adapter.
+    fn counters(&self, pid: Pid, expected: ProcessStart) -> Result<ProcessCounters, ProcessError>;
+
     /// Returns the ID of the current boot.
     ///
     /// # Errors
@@ -1066,6 +1090,18 @@ impl ProcessSupervision for UnsupportedProcessSupervision {
     }
 
     fn group_members(&self, _group: Pid) -> Result<Vec<Pid>, ProcessError> {
+        Err(self.not_supported())
+    }
+
+    fn list_pids(&self) -> Result<Vec<Pid>, ProcessError> {
+        Err(self.not_supported())
+    }
+
+    fn counters(
+        &self,
+        _pid: Pid,
+        _expected: ProcessStart,
+    ) -> Result<ProcessCounters, ProcessError> {
         Err(self.not_supported())
     }
 

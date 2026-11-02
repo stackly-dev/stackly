@@ -254,6 +254,7 @@ pub struct Instance {
     lifecycle: InstanceLifecycle,
     last_failure: Option<FailureCode>,
     last_exit: Option<ExitKind>,
+    restart_total: u64,
     readiness: Readiness,
     health: Health,
     revision: ResourceRevision,
@@ -364,6 +365,8 @@ pub struct StoredInstance {
     pub last_failure: Option<FailureCode>,
     /// How the main process last ended, `None` before it first did.
     pub last_exit: Option<ExitKind>,
+    /// Spawns that followed a crash since the instance was created.
+    pub restart_total: u64,
     /// The revision.
     pub revision: ResourceRevision,
     /// When the instance was created.
@@ -408,6 +411,7 @@ impl Instance {
             lifecycle: InstanceLifecycle::Uninitialized,
             last_failure: None,
             last_exit: None,
+            restart_total: 0,
             readiness: Readiness::unknown(new.created_at, ReasonCode::NEVER_OBSERVED),
             health: Health::unknown(new.created_at, ReasonCode::NEVER_OBSERVED),
             revision: ResourceRevision::INITIAL,
@@ -473,6 +477,7 @@ impl Instance {
             lifecycle: stored.lifecycle,
             last_failure: stored.last_failure,
             last_exit: stored.last_exit,
+            restart_total: stored.restart_total,
             readiness: Readiness::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
             health: Health::unknown(loaded_at, ReasonCode::DAEMON_RESTARTED),
             revision: stored.revision,
@@ -578,6 +583,23 @@ impl Instance {
     #[must_use]
     pub const fn last_exit(&self) -> Option<ExitKind> {
         self.last_exit
+    }
+
+    /// Returns how many spawns followed a crash since the instance was
+    /// created (spec 0028 AC-6): a respawn of the restart policy, or a
+    /// spawn again inside a start after the attempt before crashed. A
+    /// start, restart, or reload a user asked for does not count, and
+    /// neither does a spawn that failed.
+    #[must_use]
+    pub const fn restart_total(&self) -> u64 {
+        self.restart_total
+    }
+
+    /// Counts one spawn that followed a crash. The supervisor calls it in
+    /// the same commit as the `spawned` event, which already raises the
+    /// revision, so it does not raise it again.
+    pub const fn count_restart(&mut self) {
+        self.restart_total = self.restart_total.saturating_add(1);
     }
 
     /// Returns the stored readiness. Read it through

@@ -340,3 +340,39 @@ fn ac_5_a_version_5_registry_migrates_to_last_exit_null_and_the_check_refuses_ot
         .unwrap_err();
     assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
 }
+
+#[test]
+fn ac_6_a_version_6_registry_migrates_to_restart_total_0_and_the_check_refuses_a_negative() {
+    // Spec 0028, step 2: migration 7 adds instances.restart_total and reads
+    // 0 for every row that existed before it.
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(6));
+
+    let (registry, summary) = ready(harness.open_with(&OpenOptions::new()));
+    drop(registry);
+
+    assert_eq!(summary.migrated_from, Some(6));
+    let conn = harness.connect();
+    let stored: Vec<i64> = conn
+        .prepare("SELECT restart_total FROM instances ORDER BY id")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    assert!(!stored.is_empty());
+    assert!(stored.iter().all(|total| *total == 0), "{stored:?}");
+    conn.execute("UPDATE instances SET restart_total = 3", [])
+        .unwrap();
+    let err = conn
+        .execute("UPDATE instances SET restart_total = -1", [])
+        .unwrap_err();
+    assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
+    let err = conn
+        .execute("UPDATE instances SET restart_total = NULL", [])
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("NOT NULL constraint failed"),
+        "{err}"
+    );
+}

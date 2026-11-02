@@ -84,6 +84,10 @@ async fn a_crash_outside_any_operation_respawns_after_the_pause_without_start_be
         .map(|step| step.name().as_str().to_owned())
         .collect();
     assert!(!stages.contains(&"journal".to_owned()), "{stages:?}");
+    wait_for("the respawn counts one restart", || {
+        rig.instance_row(id).restart_total() == 1
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -184,6 +188,11 @@ async fn a_crash_loop_after_a_ready_run_spawns_six_times_in_all_then_fails_crash
         Some("crash_loop")
     );
     assert_eq!(main_spawns(&rig), 6, "six spawns for one crash loop");
+    assert_eq!(
+        instance.restart_total(),
+        5,
+        "five spawns followed a crash; the failed sixth crash spawns nothing"
+    );
     let restart = rig.sup.status(id).restart;
     assert!(restart.exhausted);
     assert_eq!(restart.attempts, 6);
