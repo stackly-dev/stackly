@@ -19,6 +19,7 @@ mod draft;
 pub mod dto;
 mod duplicate;
 mod form;
+pub mod metrics;
 mod open_with;
 
 use stackly_core::operation::{
@@ -50,6 +51,7 @@ pub use create::{create, work_deps};
 pub use detail::{get_data_usage, get_instance_detail};
 pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
+pub use metrics::get_metrics;
 pub use open_with::prepare_terminal;
 
 use crate::dispatch::{HandlerFuture, RequestContext};
