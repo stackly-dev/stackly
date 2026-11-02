@@ -593,7 +593,7 @@ async fn stop_instances(sup: &Supervisor, plan: &mut RestartPlan) -> Option<Supe
 
 /// Queues the start again of every instance a plan stopped, for
 /// [`Supervisor::start_reconciled`].
-fn queue_restore(sup: &Supervisor, plan: &RestartPlan) {
+pub(super) fn queue_restore(sup: &Supervisor, plan: &RestartPlan) {
     let mut pending = sup
         .shared
         .pending

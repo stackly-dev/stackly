@@ -15,6 +15,7 @@ use stackly_domain::{
 };
 
 use super::Supervisor;
+use super::daemon_restart::queue_restore;
 use super::persist::{CommitMode, blocking, commit_instance, read_instance};
 
 /// What a restore or a respawn of a plan ended with, for [`Supervisor::settle_restored`].
@@ -62,12 +63,24 @@ impl Supervisor {
             && boot == plan.stored().boot_id
             && self.plan_operation_ended(&plan).await
         {
-            // The old daemon ended the operation without handing over and
-            // could not store the abort: it already started again what it
-            // stopped, so this daemon only closes the plan.
-            if plan.abort(now).is_ok() && self.persist_plan(&plan).await.is_ok() {
-                deps.events.restart_plan(&plan);
-                tracing::info!(plan = %plan.id(), "an unfinished restart plan was closed as aborted");
+            // The old daemon's operation ended without handing over. It may
+            // have been abandoned by its shutdown before the abort ran, so
+            // what the plan stopped may still be stopped: close the plan and
+            // start those instances again. A restore run only touches an
+            // instance that is still stopped with desired `running`, so one
+            // the old daemon already started is left alone.
+            match plan.abort(now) {
+                Ok(()) => {
+                    if let Err(error) = self.persist_plan(&plan).await {
+                        tracing::warn!(%error, "the aborted restart plan could not be stored");
+                    }
+                    deps.events.restart_plan(&plan);
+                    queue_restore(self, &plan);
+                    tracing::info!(plan = %plan.id(), "an unfinished restart plan was closed as aborted");
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "the unfinished restart plan could not be aborted");
+                }
             }
             return;
         }
@@ -149,7 +162,7 @@ impl Supervisor {
                 }
             }
             Err(error) => {
-                tracing::debug!(instance = %id, %error, "a restart outcome was not recorded");
+                tracing::warn!(instance = %id, %error, "a restart outcome was not recorded");
             }
         }
     }
