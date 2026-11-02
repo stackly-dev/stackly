@@ -750,6 +750,56 @@ async fn a_rename_changes_only_the_name_and_a_taken_name_is_refused() {
     ev.pass();
 }
 
+/// Whether an answer to a create or a rename ended in a change: a refusal
+/// must be `instance.name_taken`, or `resource.busy` while the other holds the
+/// name, and an accepted operation must end.
+async fn took_the_name(api: &Api, answer: Result<InstanceActionAccepted, Box<ErrorBody>>) -> bool {
+    match answer {
+        Err(error) => {
+            assert!(
+                ["instance.name_taken", "resource.busy"].contains(&error.code()),
+                "{error:?}"
+            );
+            false
+        }
+        Ok(accepted) => {
+            let operation = accepted.accepted.expect("a change begins an operation");
+            let detail = api.wait_final(operation.operation.id).await;
+            detail.operation.state == OperationState::Succeeded
+        }
+    }
+}
+
+// covers: AC-13
+#[tokio::test(flavor = "multi_thread")]
+async fn a_create_and_a_rename_to_the_same_name_at_once_leave_one_winner() {
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let api = site.api().await;
+    let other = api.create_ready("cfg-race-a", json!({})).await;
+
+    let (created, renamed) = tokio::join!(
+        api.create(api.params("cfg-race", json!({}))),
+        api.rename(other, "cfg-race"),
+    );
+    let created_won = took_the_name(&api, created).await;
+    let renamed_won = took_the_name(&api, renamed).await;
+
+    assert!(
+        created_won != renamed_won,
+        "created: {created_won}, renamed: {renamed_won}"
+    );
+    let name = api.get(other).await.expect("instance").name;
+    assert_eq!(
+        name,
+        if renamed_won {
+            "cfg-race"
+        } else {
+            "cfg-race-a"
+        }
+    );
+}
+
 // covers: AC-14
 #[tokio::test(flavor = "multi_thread")]
 async fn changing_a_port_checks_like_create_suggests_a_free_one_and_restarts_a_running_instance() {
