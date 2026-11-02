@@ -14,7 +14,7 @@ use stackly_core::operation::{
 use stackly_core::secret::Redactor;
 use stackly_domain::{
     ClientCode, IdempotencyKey, JournalPayload, MethodName, OperationCursor, OperationId,
-    OperationQuery, OperationResource, ResourceRevision, Sha256Digest,
+    OperationQuery, OperationResource, OperationState, ResourceRevision, Sha256Digest,
 };
 use stackly_protocol::codes::{daemon, internal, operation, request, resource};
 use stackly_protocol::daemon::subsystem;
@@ -370,16 +370,28 @@ pub struct Replay {
     /// request for a recorded answer without an operation: what the
     /// handler needs to build its own reply without doing the work again.
     pub input: JournalPayload,
+    /// The state of that operation when the request came again.
+    pub state: OperationState,
+    /// The error that operation stored, as the wire carries it, when it
+    /// `failed`: the reply a method that answers with the first reply of a
+    /// failed operation gives (spec 0007).
+    pub failure: Option<ErrorBody>,
 }
 
 impl Replay {
     fn new(view: &OperationView) -> Self {
+        let id = view.operation.id();
         Self {
             accepted: OperationAccepted {
                 operation: dto::summary(view),
                 replayed: true,
             },
             input: view.journal.input().clone(),
+            state: view.operation.state(),
+            failure: view
+                .journal
+                .failure_error()
+                .map(|error| dto::failure_body(error, id)),
         }
     }
 

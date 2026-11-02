@@ -492,15 +492,21 @@ impl RestartPlan {
         Ok(self.stored.state)
     }
 
-    /// Records that the new daemon finished reconciling at `at`.
+    /// Records that the new daemon finished reconciling at `at`. A plan
+    /// with no instance left to wait for (an empty plan) moves to
+    /// `finished` at once, because no outcome will ever follow.
     ///
     /// # Errors
     ///
     /// Returns a transition error outside `restoring`.
-    pub fn record_reconciled(&mut self, at: Timestamp) -> Result<(), RestartPlanError> {
+    pub fn record_reconciled(&mut self, at: Timestamp) -> Result<PlanState, RestartPlanError> {
         self.require(self.stored.state == PlanState::Restoring, "reconciled")?;
         self.stored.reconciled_at = Some(at);
-        Ok(())
+        if self.stored.instances.iter().all(|e| e.outcome.is_some()) {
+            self.stored.state = PlanState::Finished;
+            self.stored.finished_at = Some(at);
+        }
+        Ok(self.stored.state)
     }
 
     /// Records what became of `instance`; the plan moves to `finished` at
@@ -665,6 +671,30 @@ mod tests {
         assert_eq!(state, PlanState::Finished);
         assert_eq!(plan.stored().finished_at, Some(at(6)));
         assert_eq!(plan.stored().close_reason, None);
+    }
+
+    #[test]
+    fn a_plan_without_instances_finishes_when_the_new_daemon_reconciled() {
+        let mut plan = plan(Vec::new());
+        plan.hand_over(at(1)).unwrap();
+        plan.take_over(boot(1), Uuid::from_u128(11), at(2)).unwrap();
+
+        let state = plan.record_reconciled(at(3)).unwrap();
+
+        assert_eq!(state, PlanState::Finished);
+        assert_eq!(plan.stored().reconciled_at, Some(at(3)));
+        assert_eq!(plan.stored().finished_at, Some(at(3)));
+        assert_eq!(plan.stored().close_reason, None);
+    }
+
+    #[test]
+    fn a_plan_with_an_instance_left_stays_restoring_after_reconciliation() {
+        let keep = entry(PlanDecision::Keep);
+        let mut plan = plan(vec![keep]);
+        plan.hand_over(at(1)).unwrap();
+        plan.take_over(boot(1), Uuid::from_u128(11), at(2)).unwrap();
+
+        assert_eq!(plan.record_reconciled(at(3)).unwrap(), PlanState::Restoring);
     }
 
     #[test]

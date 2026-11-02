@@ -460,10 +460,15 @@ async fn restart_steps(
         plan.abort(now).map_err(|error| {
             WorkError::Failed(Box::new(SupervisorError::internal(error.to_string())))
         })?;
-        sup.persist_plan(&plan)
-            .await
-            .map_err(|error| WorkError::Failed(Box::new(error)))?;
-        sup.deps().events.restart_plan(&plan);
+        // A plan that cannot be written as aborted stays `stopping` in the
+        // registry, which the next daemon of this boot takes over; the
+        // instances it stopped start again here all the same.
+        match sup.persist_plan(&plan).await {
+            Ok(()) => sup.deps().events.restart_plan(&plan),
+            Err(persist) => {
+                tracing::warn!(%persist, "the aborted restart plan could not be written");
+            }
+        }
         queue_restore(sup, &plan);
         let sup = sup.clone();
         tokio::spawn(async move {

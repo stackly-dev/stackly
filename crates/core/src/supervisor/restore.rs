@@ -129,14 +129,22 @@ impl Supervisor {
             let mut guard = self.shared.plan.lock().await;
             let Some(plan) = guard.as_mut() else { return };
             let now = self.deps().platform.clock().now();
-            if let Err(error) = plan.record_reconciled(now) {
-                tracing::warn!(%error, "reconciliation of the restart plan could not be recorded");
-                return;
-            }
+            let state = match plan.record_reconciled(now) {
+                Ok(state) => state,
+                Err(error) => {
+                    tracing::warn!(%error, "reconciliation of the restart plan could not be recorded");
+                    return;
+                }
+            };
             if let Err(error) = self.persist_plan(plan).await {
                 tracing::warn!(%error, "the restart plan could not be stored");
             }
             self.deps().events.restart_plan(plan);
+            if state != PlanState::Restoring {
+                // An empty plan has no outcome to wait for.
+                *guard = None;
+                return;
+            }
             plan.instances()
                 .iter()
                 .filter(|entry| entry.outcome.is_none())

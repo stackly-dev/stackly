@@ -158,3 +158,19 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 - Tanda baris "Stopped for daemon restart" dipasang pada instance `stop_restore` yang sudah berhenti (`stoppedAt` terisi) dan belum punya outcome, hanya di halaman Instances; baris Overview belum memakai tanda itu.
 - Tombol Restart di sheet tidak menawarkan `force`; operasi yang menghalangi ditampilkan lalu orang menunggu atau membatalkan. `DaemonModel`, `MutationPath` tidak berubah selain properti `restart`; `daemon.shutdown { restart }` memakai batas 45 detik lewat `DaemonRestartClient`, bukan `MutationPath` (batas standar 10 detik terlalu pendek untuk quiesce 30 detik).
 - Scene Settings di `StacklyApp.swift` kini memakai `SettingsRoot(model:)`; `SettingsPlaceholder` dihapus.
+
+### Perbaikan setelah cross check (dev-f30-fix)
+
+Tiga celah kode dari cross check spec 0030 dan satu bug dari run native, diperbaiki di daemon, core, dan domain. Tidak ada perubahan kontrak.
+
+- **Restart di recovery mode** · `daemon.shutdown { restart }` dengan supervisor `Unavailable` (registry dalam recovery mode) kini diterima tanpa rencana (`planId` kosong) dan daemon keluar 75 tanpa menghentikan instance, seperti restart spec 0015; sebelumnya gagal `registry.unavailable` di `replay_operation`. `Starting` tetap `daemon.starting`. Test: `a_restart_in_recovery_mode_exits_75_without_a_plan` di `restart_plan.rs` (gagal tanpa perbaikan: `registry.unavailable`)
+- **Replay** · request ulang dengan key yang sama untuk operasi `daemon_restart` yang `failed` mengembalikan error tersimpan (`Replay.failure`), yang `cancelled` mengembalikan `daemon.restart_busy`; sebelumnya selalu `ShutdownAccepted`. Test unit di `apps/daemon/src/ipc/restart.rs` (`a_replayed_restart_that_...`); belum ada test daemon end to end karena operasi `failed` atau `cancelled` butuh lock instance yang tertahan lebih dari 10 detik (`PREPARE_GRACE`)
+- **Pemicu restore** · `PendingKind::Restore` dan stop `PlannedStop` menulis input jurnal `{"trigger":"planned_restart"}` (AC-9, *Alur* langkah 10); `Start`, `Stop`, dan `Respawn` tetap `reconcile`. Test: `the_next_daemon_adopts_the_kept_instance_and_starts_the_stopped_one_again` kini membaca jurnal start restore
+- **Abort lalu `persist_plan` gagal** · sebelumnya `?` keluar sebelum `queue_restore`, sehingga instance yang sudah dihentikan tetap mati di daemon yang masih hidup sampai restart berikutnya. Kini kegagalan menulis rencana `aborted` dicatat (`warn`), instance tetap dinyalakan lagi, dan error asli stop dikembalikan; barisnya tetap `stopping` untuk diambil daemon berikutnya. Belum ada test (butuh kegagalan commit terarah pada `commit` ketiga di `daemon_restart_work`, yang tidak tersedia di test daemon)
+- **Rencana kosong tidak selesai** (ditemukan `chk-f30-m4`, run native) · `RestartPlan::record_reconciled` kini memindah rencana ke `finished` bila tidak ada entri tersisa tanpa outcome (rencana kosong), dan `settle_plan_after_reconcile` melepas rencana, menyimpan, dan memancarkan event final; sebelumnya hanya `record_outcome` yang menyelesaikan rencana, sehingga rencana tanpa entri tetap `restoring`. Test: `a_plan_without_instances_finishes_when_the_new_daemon_reconciled` dan `a_plan_with_an_instance_left_stays_restoring_after_reconciliation` (domain), `a_restart_with_no_instance_in_the_plan_still_finishes` di `restart_plan.rs` (restart dengan nol instance selesai dan `instance.create` sesudahnya diterima; test gagal tanpa perbaikan)
+
+```bash
+cargo test -p stacklyd --lib restart::
+cargo test -p stacklyd --test restart_plan -- --test-threads=1
+cargo test -p stackly-domain --lib restart
+```

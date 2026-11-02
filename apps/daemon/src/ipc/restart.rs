@@ -19,7 +19,7 @@ use stackly_core::supervisor::{
 };
 use stackly_domain::{
     InstanceFilter, JournalPayload, LockKey, OperationId, OperationKind, OperationResource,
-    PlanDecision, RestartPlan, RestartPlanId, Sha256Digest,
+    OperationState, PlanDecision, RestartPlan, RestartPlanId, Sha256Digest,
 };
 use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{LaunchContextKind, ShutdownAccepted, ShutdownMode, ShutdownParams};
@@ -291,6 +291,28 @@ fn plan_of_input(input: &str) -> Option<Uuid> {
         .ok()
 }
 
+/// The plan a request that came again with the key of a restart answers
+/// with: the first reply (spec 0007), which for an operation that failed or
+/// was cancelled was an error, not `ShutdownAccepted`.
+fn replayed_plan(
+    state: OperationState,
+    failure: Option<ErrorBody>,
+    input: &str,
+) -> Result<Option<Uuid>, Box<ErrorBody>> {
+    match state {
+        OperationState::Failed => Err(boxed(failure.unwrap_or_else(|| {
+            ErrorBody::new(
+                &stackly_protocol::codes::internal::UNEXPECTED,
+                "the restart failed without a recorded error",
+            )
+        }))),
+        // The handler cancels the operation when the plan was not written
+        // in time, and answers `restart_busy` then.
+        OperationState::Cancelled => Err(restart_busy(&[])),
+        _ => Ok(plan_of_input(input)),
+    }
+}
+
 /// The real `daemon.shutdown` with `mode: restart` (spec 0030, *Alur
 /// restart terencana*, steps 2 to 5).
 pub fn restart<'a>(
@@ -319,8 +341,20 @@ pub fn restart<'a>(
                 "the daemon is already stopping",
             ))
         };
+        // No supervisor serves in this run (recovery mode): no instance is
+        // kept or stopped by a plan, so the restart is the one of spec 0015,
+        // which exits 75 without a plan and stops nothing.
+        if matches!(core.supervision().availability(), Availability::Unavailable) {
+            if core.shutdown_pending() || !core.request_shutdown(ShutdownMode::Restart) {
+                return Err(shutting_down());
+            }
+            return Ok(accepted(None));
+        }
         match replay_operation(core, &context, start).await {
-            Ok(Some(replay)) => return Ok(accepted(plan_of_input(replay.input.as_str()))),
+            Ok(Some(replay)) => {
+                return replayed_plan(replay.state, replay.failure, replay.input.as_str())
+                    .map(accepted);
+            }
             Ok(None) => {}
             Err(_) if core.shutdown_pending() => return Err(shutting_down()),
             Err(error) => return Err(error),
@@ -438,4 +472,37 @@ pub fn restart<'a>(
             Err(_) => Err(restart_busy(&blocking)),
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INPUT: &str = r#"{"planId":"0192b4c0-6a1e-7000-8000-000000000001"}"#;
+
+    #[test]
+    fn a_replayed_restart_that_succeeded_answers_with_its_plan() {
+        let plan = replayed_plan(OperationState::Succeeded, None, INPUT).expect("accepted");
+
+        assert_eq!(
+            plan,
+            Some("0192b4c0-6a1e-7000-8000-000000000001".parse().unwrap())
+        );
+    }
+
+    #[test]
+    fn a_replayed_restart_that_failed_answers_with_the_stored_error() {
+        let stored = ErrorBody::new(&daemon::RESTART_PENDING, "a restart plan is open");
+
+        let error = replayed_plan(OperationState::Failed, Some(stored), INPUT).unwrap_err();
+
+        assert_eq!(error.code(), "daemon.restart_pending");
+    }
+
+    #[test]
+    fn a_replayed_restart_that_was_cancelled_answers_restart_busy() {
+        let error = replayed_plan(OperationState::Cancelled, None, INPUT).unwrap_err();
+
+        assert_eq!(error.code(), "daemon.restart_busy");
+    }
 }
