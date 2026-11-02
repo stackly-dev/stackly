@@ -469,7 +469,20 @@ impl CliFailure {
     /// `cli.restart_aborted` (spec 0030): plan `plan_id` closed `aborted`
     /// for `close_reason` (`stop_timeout`), so the old daemon kept running.
     #[must_use]
-    pub fn restart_aborted(plan_id: Uuid, close_reason: &str) -> Self {
+    pub fn restart_aborted(
+        plan_id: Uuid,
+        close_reason: &str,
+        stopped: &[String],
+        running: &[String],
+    ) -> Self {
+        let list = |names: &[String]| {
+            if names.is_empty() {
+                "none".to_owned()
+            } else {
+                names.join(", ")
+            }
+        };
+        let (stopped, running) = (list(stopped), list(running));
         Self::local(
             ErrorBody::new(
                 &cli::RESTART_ABORTED,
@@ -477,7 +490,9 @@ impl CliFailure {
             )
             .with_detail("planId", plan_id.to_string())
             .with_detail("closeReason", close_reason)
-            .with_hint("the plan names the instance that did not stop; run stackly daemon status"),
+            .with_hint(format!(
+                "stopped, starting again: {stopped}; did not stop, still running: {running}"
+            )),
         )
     }
 
@@ -525,7 +540,8 @@ impl CliFailure {
     }
 
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
-    /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, or `agent_call` after a macOS call that
+    /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
+    /// restart is sent or while it is sent, or `agent_call` after a macOS call that
     /// Ctrl+C had to wait for), which changes nothing by itself. Exits 130.
     #[must_use]
     pub fn interrupted_at(state: &str) -> Self {
@@ -645,7 +661,7 @@ mod tests {
             CliFailure::agent_call_timeout(AgentOp::Relaunch, Duration::from_secs(10)),
             CliFailure::daemon_wait_timeout("start", Duration::from_secs(30)),
             CliFailure::connection_not_found(Some("nope"), &["uri", "socket"]),
-            CliFailure::restart_aborted(OPERATION, "stop_timeout"),
+            CliFailure::restart_aborted(OPERATION, "stop_timeout", &[], &[]),
             CliFailure::restart_restore_failed(OPERATION),
             CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
         ]

@@ -82,6 +82,7 @@ pub struct ScriptedProbe {
     requests: Mutex<Vec<RestartRequest>>,
     watch: Mutex<Option<Result<PlanWatch, CliFailure>>>,
     watch_hangs: bool,
+    restart_hangs: bool,
     infos: Mutex<Option<DaemonInfo>>,
 }
 
@@ -113,6 +114,7 @@ impl ScriptedProbe {
             requests: Mutex::new(Vec::new()),
             watch: Mutex::new(None),
             watch_hangs: false,
+            restart_hangs: false,
             infos: Mutex::new(None),
         }
     }
@@ -149,6 +151,13 @@ impl ScriptedProbe {
     #[must_use]
     pub fn hang_on_watch(mut self) -> Self {
         self.watch_hangs = true;
+        self
+    }
+
+    /// The restart request never gets an answer, so only Ctrl+C ends it.
+    #[must_use]
+    pub fn hang_on_restart(mut self) -> Self {
+        self.restart_hangs = true;
         self
     }
 
@@ -286,6 +295,9 @@ impl DaemonProbe for ScriptedProbe {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .push(request);
+            if self.restart_hangs {
+                std::future::pending::<()>().await;
+            }
             if let Some(result) = self
                 .restarts
                 .lock()

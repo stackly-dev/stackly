@@ -125,6 +125,33 @@ fn live_interrupt() -> Box<dyn Interrupt> {
     }
 }
 
+/// Ctrl+C that is caught only once [`Interrupt::arm`] ran. A blocking read
+/// of an answer cannot be given up when a handler swallows the signal, so
+/// the prompt of `daemon restart` runs before the handler is installed.
+#[derive(Default)]
+struct LazyInterrupt {
+    caught: Option<Box<dyn Interrupt>>,
+}
+
+impl Interrupt for LazyInterrupt {
+    fn pending(&mut self) -> bool {
+        self.caught.as_mut().is_some_and(|caught| caught.pending())
+    }
+
+    fn wait(&mut self) -> wait::BoxFuture<'_, ()> {
+        match self.caught.as_mut() {
+            Some(caught) => caught.wait(),
+            None => Box::pin(std::future::pending()),
+        }
+    }
+
+    fn arm(&mut self) {
+        if self.caught.is_none() {
+            self.caught = Some(live_interrupt());
+        }
+    }
+}
+
 impl RunCommand for InstallArgs {
     type Output = InstallResult;
 
@@ -179,7 +206,7 @@ impl RunCommand for RestartArgs {
     async fn run(self, cx: &mut Context) -> CommandOutput<RestartResult> {
         let agent = cx.agent.clone();
         let probe = LiveProbe::new(cx.connector().clone());
-        let mut interrupt = live_interrupt();
+        let mut interrupt = LazyInterrupt::default();
         let options = RestartOptions {
             force: self.force,
             wait_instances: !self.no_wait_instances,
@@ -188,7 +215,7 @@ impl RunCommand for RestartArgs {
         let mut deps = Deps {
             agent: &agent,
             probe: &probe,
-            interrupt: &mut *interrupt,
+            interrupt: &mut interrupt,
         };
         restart(&mut deps, options, &mut prompt).await
     }
