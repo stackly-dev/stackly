@@ -353,3 +353,98 @@ fn settings(
         .map(|settings| (revision.id, settings))
         .map_err(|error| invalid(error.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use stackly_domain::InstanceId;
+    use stackly_platform::DirectoryLayout;
+    use stackly_testkit::{FakeFilesystem, TestRoot};
+
+    use super::*;
+    use crate::provider::read_package;
+
+    fn copy_dir(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).expect("the target folder is made");
+        for entry in std::fs::read_dir(from).expect("the source folder reads") {
+            let entry = entry.expect("an entry reads");
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("the type reads").is_dir() {
+                copy_dir(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).expect("a file copies");
+            }
+        }
+    }
+
+    /// The package `name` of the repository, copied into the test root,
+    /// because the fake filesystem reads only there.
+    fn package(name: &str, root: &TestRoot, fs: &FakeFilesystem) -> ValidatedPackage {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../providers")
+            .join(name);
+        let dir = root.path().join("packages").join(name);
+        copy_dir(&source, &dir);
+        let files = read_package(fs, &dir).expect("the package reads");
+        ValidatedPackage::from_files(files, NameCheck::Skip).expect("the package validates")
+    }
+
+    /// The instance folders of a fresh test root, the data folder made and
+    /// empty.
+    fn empty_data(root: &TestRoot) -> InstancePaths {
+        let paths = DirectoryLayout::new(root.roots()).instance_paths(InstanceId::generate());
+        std::fs::create_dir_all(&paths.data).expect("the data folder is made");
+        paths
+    }
+
+    #[test]
+    fn an_empty_data_folder_is_lost_only_for_a_package_with_a_data_marker() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+
+        // PostgreSQL declares `PG_VERSION`, so an empty folder is a loss.
+        let postgresql = package("postgresql", &root, &fs);
+        assert_eq!(
+            data_missing(&fs, &postgresql, &paths).as_deref(),
+            Some("the data folder is empty")
+        );
+        // NATS writes nothing at init: an empty folder is how it starts.
+        let nats = package("nats", &root, &fs);
+        assert_eq!(data_missing(&fs, &nats, &paths), None);
+    }
+
+    #[test]
+    fn a_folder_that_is_gone_is_lost_for_every_package() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+        std::fs::remove_dir(&paths.data).expect("the data folder goes");
+
+        for name in ["postgresql", "nats"] {
+            assert_eq!(
+                data_missing(&fs, &package(name, &root, &fs), &paths).as_deref(),
+                Some("the data folder is missing"),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declared_marker_that_is_missing_is_lost_in_a_folder_with_other_files() {
+        let root = TestRoot::new().expect("a test root");
+        let fs = FakeFilesystem::new(&root);
+        let paths = empty_data(&root);
+        std::fs::write(paths.data.join("other"), "x").expect("a file is written");
+
+        assert_eq!(
+            data_missing(&fs, &package("postgresql", &root, &fs), &paths).as_deref(),
+            Some("the data marker is missing")
+        );
+        assert_eq!(
+            data_missing(&fs, &package("nats", &root, &fs), &paths),
+            None
+        );
+    }
+}
