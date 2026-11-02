@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/04-kerja-harian.md` (fitur 28 sampai 32 dan 70, atas permintaan user "mulai dari no 28")
 - **Hash awal:** `36b33e6e` · **Hash awal wave aktif:** `36b33e6e`
 - **Wave aktif:** `1`, mulai `2026-11-02`
-- **Diperbarui:** `2026-11-02 10:20`
+- **Diperbarui:** `2026-11-02 10:45`
 
 ## Sub sesi wave `1`
 
@@ -11,9 +11,9 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `dev-f30-m1` | developer | F30 milestone 1, langkah 1 sampai 3 di atas WIP `9a6bf944`, plus perbaikan fixture kontrak (digest manifest F70); pemilik kontrak wave 1 | `04-kerja-harian.md` | `crates/protocol/`, `protocols/`, `schemas/`, `typeshare.toml`, hasil codegen, `crates/domain/src/restart.rs`, `crates/domain/src/registry/{guard,retention}.rs`, `crates/storage/src/registry/{restart,prune}.rs`, `crates/storage/tests/`, `crates/testkit/src/registry/conformance/restart.rs`, `apps/cli/src/commands/daemon/`, `apps/cli/tests/common/`, `apps/daemon/tests/{server*,shutdown_exit,root_override}.rs`, `clients/swift/Tests/` | `claude/dev-f30-m1-*` (sesi `local_167967ad`) | `sonnet-5-5 · high` | aktif |
 | `dev-f29-m1` | developer | F29 milestone 1, langkah 1 sampai 7 di atas WIP `71ba7592` | `04-kerja-harian.md` | `crates/domain/` selain milik `dev-f30-m1`, `crates/core/src/instance/config/`, `crates/core/src/supervisor/`, `crates/core/src/instance/create/`, `crates/storage/src/` selain milik `dev-f30-m1`, `crates/storage/migrations/0008_*`, `crates/testkit/src/registry/` selain milik `dev-f30-m1`, `providers/fake/`, `crates/core/tests/` | `claude/dev-f29-m1-*` (sesi `local_581eb039`) | `sonnet-5-5 · high` | aktif |
-| `dev-f28-m2-s4` | developer | F28 milestone 2 langkah 4 (`Sampler` di core); dipakai ulang untuk langkah 5 dan 6 setelah `dev-f30-m1` di-merge | `04-kerja-harian.md` | `crates/core/src/metrics/`, `crates/core/tests/metrics*`, satu baris `mod` di `crates/core/src/lib.rs` | `claude/dev-f28-m2-s4-*` (sesi `local_387469b1`) | `sonnet-5-5 · high` | aktif |
+| `dev-f28-m2-s4` | developer | F28 milestone 2 langkah 4 (`Sampler` di core) · Langkah Build plan selesai: 4 · Pointer code in `crates/core/src/metrics/` · API untuk langkah 5: `Sampler::new(..).start()`, trait `MainProcesses` (adapter dari registry dan `Supervisor::status` dibuat di langkah 5), `MetricsStore::with_history`, `MetricsHistory::page(historyId, afterSeq)` | `04-kerja-harian.md` | `crates/core/src/metrics/`, `crates/core/tests/metrics_sampler.rs` | `claude/dev-f28-m2-s4-a40135` (sesi `local_387469b1`) | `sonnet-5-5 · high` | merged `2485242e`; menunggu dipakai ulang untuk langkah 5 dan 6 |
 | `dev-f70-m2` | developer | F70 milestone 2, langkah 7 sampai 9 di atas WIP `2f26d789` | `04-kerja-harian.md` | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/OpenIn/`, toolbar detail dan inspector Instances, menu Instance, `Fixtures/`, `apps/macos/Packages/StacklyUI/Tests/`, test sentinel di `apps/daemon/tests/supervisor/open_with.rs` dan `apps/cli/tests/instance/open.rs` | `claude/dev-f70-m2-*` (sesi `local_c6d827bc`) | `sonnet-5-5 · high` | aktif |
-| `arc-f31-update` | architect (update) | spec 0031 menerima *Tambahan pada kontrak spec 0031* dari spec 0032 (Follow-up spec 0032 baris 1) | `04-kerja-harian.md` | `docs/specs/0031-demand-autostart-login/` | belum dimulai | `opus-5-5 · xhigh` | antri |
+| `arc-f31-update` | architect (update) | spec 0031 menerima *Tambahan pada kontrak spec 0031* dari spec 0032 (Follow-up spec 0032 baris 1) | `04-kerja-harian.md` | `docs/specs/0031-demand-autostart-login/` | kartu `task_502e14b2` | `opus-5-5 · xhigh` | diajukan |
 
 ## Keputusan
 
@@ -32,12 +32,14 @@
 
 ## Blocker terbuka
 
+- `arc-f31-update`: aplikasi menolak `start_session` `user_asked` pada giliran yang dipicu pesan sesi lain; diajukan sebagai kartu `task_502e14b2`, dimulai user atau pada giliran user berikutnya.
+
 - F31 langkah 1 dan 10 (spike asid dan logout): sleep dan dua logout oleh user.
 - F32 `Build it`: butuh fitur 31 sampai `instance.stop_all` dan `startup`, plus `arc-f31-update`.
 
 ## Dicentang pada wave ini
 
-- belum ada
+- belum ada kotak; merge `claude/dev-f28-m2-s4-a40135` → `2485242e` (pecahan milestone 2 F28, kotak menunggu langkah 5 dan 6) · gerbang: fmt, `check-deps`, clippy workspace dan `cargo test -p stackly-core` hanya menyisakan baseline (`crates/storage/tests/open/migrate.rs:393`, `catalog::status`)
 
 ## Riwayat wave
 
