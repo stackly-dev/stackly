@@ -64,7 +64,7 @@ import SwiftUI
 
     /// Runs `action` the way its button does, after checking again that the window is still
     /// key and the action is still enabled: the menu may not be recomputed yet.
-    private static func run(_ action: StacklyAction, in publisher: PublishedCommands) {
+    static func run(_ action: StacklyAction, in publisher: PublishedCommands) {
         guard publisher.windowKey?.isKeyNow == true,
             action.availability(gate: publisher.host.gate) == .enabled
         else { return }

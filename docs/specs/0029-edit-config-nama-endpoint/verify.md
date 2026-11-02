@@ -6,21 +6,21 @@ _Langkah diturunkan dari acceptance criteria spec 0029. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Buka `crates/storage/migrations/0008_config_revision_history.sql` → kolom `number`, `endpoints`, `ready_at`, `origin`, `source_number` di `config_revisions` dengan backfill (`number` 1, `endpoints` dari `instance_endpoints`, `origin` `created`, `ready_at` null) → AC-7, AC-12
-- [ ] Buka `crates/core/src/supervisor/change.rs` → `apply_config` dan `change_endpoints` punya langkah `validate`, `lock`, `commit`, `apply`; `rename_instance` punya `validate`, `lock`, `commit`; guard commit ada di `change_guard.rs` dan membaca instance serta instance lain di dalam transaksi yang sama → AC-9, AC-13, AC-14
-- [ ] Buka `providers/fake/templates/fake.conf.tmpl` dan `provider.yaml` → revision `0.4.0`, `fakeConf` ke `${instance.config}/fake.conf` (tidak sensitif) dan ada di `lifecycle.reload.render`; `fake.json` tetap sensitif → AC-10
+- [x] Buka `crates/storage/migrations/0008_config_revision_history.sql` → kolom `number`, `endpoints`, `ready_at`, `origin`, `source_number` di `config_revisions` dengan backfill (`number` 1, `endpoints` dari `instance_endpoints`, `origin` `created`, `ready_at` null) → AC-7, AC-12
+- [x] Buka `crates/core/src/supervisor/change.rs` → `apply_config` dan `change_endpoints` punya langkah `validate`, `lock`, `commit`, `apply`; `rename_instance` punya `validate`, `lock`, `commit`; guard commit ada di `change_guard.rs` dan membaca instance serta instance lain di dalam transaksi yang sama → AC-9, AC-13, AC-14
+- [x] Buka `providers/fake/templates/fake.conf.tmpl` dan `provider.yaml` → revision `0.4.0`, `fakeConf` ke `${instance.config}/fake.conf` (tidak sensitif) dan ada di `lifecycle.reload.render`; `fake.json` tetap sensitif → AC-10
 
 ### Commands
 
-- [ ] `cargo test -p stackly-domain` → semua lulus, termasuk `apply_allowed`, `rename_allowed`, `Instance::set_port_requests`, `ConfigRevisionRecord::following`, dan himpunan kind `CloseInterrupted` yang memuat `apply_config` dan `change_endpoints` (bukan `rename_instance` dan `resolve_config_drift`) → AC-6, AC-7, AC-12, AC-13
-- [ ] `cargo test -p stackly-testkit` → `registry_conformance` lulus untuk `FakeRegistry`: `ActivateConfigRevision` (nomor naik, revision lama `superseded`, `Integrity` untuk endpoint yang tidak sama), `MarkConfigRevisionReady` idempoten, `PruneConfigRevisions` tidak pernah menghapus revision aktif atau last known good → AC-7, AC-12
-- [ ] `cargo test -p stackly-storage --lib` → adapter SQLite lulus conformance yang sama; `cargo test -p stackly-storage --test open` memeriksa migrasi dari registry versi sebelumnya (test milik `dev-f30-m1`) → AC-7, AC-12
-- [ ] `cargo test -p stackly-core --test config_evaluate` → evaluator pada fake, PostgreSQL, NATS, dan Traefik: `reload` lawan `restart`, `secretReadOnly`, `immutableAfterInit`, `managed`, daftar `routes` dibandingkan lewat `name`, dampak menurut lifecycle, capability, dan port, pratinjau hanya file tidak sensitif dengan baris berubah → AC-1, AC-2, AC-15, AC-16
-- [ ] `cargo test -p stackly-core --test supervisor_start -- config::` → 32 test lulus pada fake dan engine operasi (lihat daftar di bawah) → AC-3 sampai AC-14, AC-20
-- [ ] `cargo test -p stackly-core --test provider_packages` → golden `plan` dan `reload` fake 0.4.0 cocok; `STACKLY_UPDATE_GOLDEN=1` tidak mengubah apa pun → AC-10
-- [ ] `cargo clippy -p stackly-domain -p stackly-core -p stackly-testkit -p stackly-storage --all-targets --locked -- -D warnings` → bersih (tes integrasi `crates/storage/tests/open/migrate.rs` punya satu peringatan `type_complexity` milik `dev-f30-m1`)
-- [ ] `cargo xtask check-deps` → lulus
-- [ ] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
+- [x] `cargo test -p stackly-domain` → semua lulus, termasuk `apply_allowed`, `rename_allowed`, `Instance::set_port_requests`, `ConfigRevisionRecord::following`, dan himpunan kind `CloseInterrupted` yang memuat `apply_config` dan `change_endpoints` (bukan `rename_instance` dan `resolve_config_drift`) → AC-6, AC-7, AC-12, AC-13
+- [x] `cargo test -p stackly-testkit` → `registry_conformance` lulus untuk `FakeRegistry`: `ActivateConfigRevision` (nomor naik, revision lama `superseded`, `Integrity` untuk endpoint yang tidak sama), `MarkConfigRevisionReady` idempoten, `PruneConfigRevisions` tidak pernah menghapus revision aktif atau last known good → AC-7, AC-12
+- [x] `cargo test -p stackly-storage --lib` → adapter SQLite lulus conformance yang sama; `cargo test -p stackly-storage --test open` memeriksa migrasi dari registry versi sebelumnya (test milik `dev-f30-m1`) → AC-7, AC-12
+- [x] `cargo test -p stackly-core --test config_evaluate` → evaluator pada fake, PostgreSQL, NATS, dan Traefik: `reload` lawan `restart`, `secretReadOnly`, `immutableAfterInit`, `managed`, daftar `routes` dibandingkan lewat `name`, dampak menurut lifecycle, capability, dan port, pratinjau hanya file tidak sensitif dengan baris berubah → AC-1, AC-2, AC-15, AC-16
+- [x] `cargo test -p stackly-core --test supervisor_start -- config::` → 32 test lulus pada fake dan engine operasi (lihat daftar di bawah) → AC-3 sampai AC-14, AC-20
+- [x] `cargo test -p stackly-core --test provider_packages` → golden `plan` dan `reload` fake 0.4.0 cocok; `STACKLY_UPDATE_GOLDEN=1` tidak mengubah apa pun → AC-10
+- [x] `cargo clippy -p stackly-domain -p stackly-core -p stackly-testkit -p stackly-storage --all-targets --locked -- -D warnings` → bersih (tes integrasi `crates/storage/tests/open/migrate.rs` punya satu peringatan `type_complexity` milik `dev-f30-m1`)
+- [x] `cargo xtask check-deps` → lulus
+- [x] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
 
 Rincian `config::` di `crates/core/tests/supervisor_start/config.rs`:
 

@@ -87,16 +87,17 @@ public final class OpenInModel {
 
     // MARK: - Menu
 
-    /// What the menu shows for `summary` and its `detail`.
+    /// What the menu shows for `summary` and its `detail`. Every action is marked as one that
+    /// needs the daemon, so the mutation gate of the window turns them all off while it cannot
+    /// be reached (spec 0070, AC-6).
     /// - Parameters:
     ///   - summary: The instance, or `nil` when none is selected.
     ///   - detail: Its detail, or `nil` while it loads.
-    ///   - offlineReason: Why the daemon cannot be reached, which turns every action off.
     ///   - report: Shows the result of an action.
     ///   - enterSecret: Opens the secret entry sheet for a password that is not available.
     ///   - reload: Loads the detail again after the daemon refused a terminal action.
     public func content(
-        summary: InstanceSummary?, detail: InstanceDetail?, offlineReason: String? = nil,
+        summary: InstanceSummary?, detail: InstanceDetail?,
         report: @escaping @MainActor (Feedback) -> Void,
         enterSecret: @escaping @MainActor (SecretNeed) -> Void = { _ in },
         reload: @escaping @MainActor () -> Void = {}
@@ -110,8 +111,7 @@ public final class OpenInModel {
         for action in shown {
             let item = StacklyAction(
                 id: "openIn.\(action.name)", title: OpenActionLabel.text(for: action),
-                mutates: false,
-                disabledReason: offlineReason ?? disabledReason(action, summary: summary),
+                mutates: true, disabledReason: disabledReason(action, summary: summary),
                 perform: { [weak self] in
                     guard let self else { return }
                     Task {

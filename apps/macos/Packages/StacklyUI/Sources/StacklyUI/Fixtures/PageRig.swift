@@ -29,6 +29,18 @@
             var usageFailure: ClientError?
             /// Whether `instance.get_detail` never answers, so the page stays loading.
             var detailHangs = false
+            /// The failure `instance.prepare_terminal` answers, or `nil`.
+            var prepareFailure: ClientError?
+            /// The `(instance, action)` pairs `instance.prepare_terminal` was asked for.
+            var prepared: [(instance: UUID, action: String)] = []
+
+            /// The script path `instance.prepare_terminal` answers for `action`.
+            func prepareTerminal(_ id: UUID, _ action: String) throws(ClientError) -> String {
+                prepared.append((id, action))
+                if let prepareFailure { throw prepareFailure }
+                return
+                    "\(FixtureDetail.home)/Library/Application Support/Stackly/instances/temp/open-\(action).command"
+            }
 
             func detail(of id: UUID) async throws(ClientError) -> InstanceDetail {
                 while detailHangs, Task.isCancelled == false {
@@ -89,6 +101,8 @@
         /// What the detail page and the inspector read: the fixture detail of each instance,
         /// or what the script says.
         let detail: InstanceDetailService
+        /// The applications and the opener of the Open In menus.
+        let openIn: FixtureOpenIn
         /// What the actions sent, in order.
         private(set) var sent: [Call] = []
 
@@ -98,8 +112,10 @@
             operations ops: [OperationSummary] = FixtureScenario.operationCases,
             providers: [ProviderSummary] = PageRig.providers,
             capacity report: CapacityReport? = nil,
-            runtimes runtimePage: RuntimeListPage? = nil
+            runtimes runtimePage: RuntimeListPage? = nil,
+            openIn: FixtureOpenIn = FixtureOpenIn()
         ) {
+            self.openIn = openIn
             let script = Script(
                 instances: items, operations: ops, providers: providers,
                 runtimePage: runtimePage ?? RuntimeListPage(items: [], next: nil, installing: []))
@@ -161,6 +177,9 @@
                 secretEvents: { AsyncStream { $0.finish() } },
                 secrets: SecretsClient { _, _ throws(ClientError) in
                     throw .notSent(ClientErrorCatalog.notConnected())
+                },
+                prepareTerminal: { id, action throws(ClientError) in
+                    try await script.prepareTerminal(id, action)
                 })
             actions = InstanceActionModel(
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
@@ -208,7 +227,8 @@
             InstancesPage(
                 instances: instances, catalog: catalog, actions: actions, operations: operations,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
-                detail: detail, logs: FixtureLogs.service(logs), opening: opening,
+                detail: detail, logs: FixtureLogs.service(logs), openIn: openIn.ports,
+                opening: opening,
                 openingTab: openingTab, selection: selection,
                 showsInspector: showsInspector, filter: filter, query: query,
                 sortOrder: sortOrder

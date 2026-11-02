@@ -23,6 +23,34 @@ public protocol WorkspaceOpener {
     func reveal(_ file: URL)
 }
 
+/// What the Open In menu needs from the system, in one value (spec 0070, *Value sourcing*): the
+/// app uses ``system``; a snapshot or a test gives fakes.
+public struct OpenInPorts {
+    /// Finds installed applications.
+    public var locator: any AppLocator
+    /// Opens URLs and files.
+    public var opener: any WorkspaceOpener
+    /// Whether a path exists, for `reveal`.
+    public var fileExists: (String) -> Bool
+
+    /// Creates the ports.
+    public init(
+        locator: any AppLocator, opener: any WorkspaceOpener,
+        fileExists: @escaping (String) -> Bool
+    ) {
+        self.locator = locator
+        self.opener = opener
+        self.fileExists = fileExists
+    }
+
+    /// The ports of the running app: NSWorkspace and the file manager.
+    public static var system: OpenInPorts {
+        OpenInPorts(
+            locator: WorkspaceAppLocator(), opener: SystemWorkspaceOpener(),
+            fileExists: { FileManager.default.fileExists(atPath: $0) })
+    }
+}
+
 /// Why the workspace did not open something.
 public enum OpenInFailure: LocalizedError, Equatable {
     /// No application took the URL.

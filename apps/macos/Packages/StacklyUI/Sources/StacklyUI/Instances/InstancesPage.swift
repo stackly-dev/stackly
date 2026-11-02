@@ -53,6 +53,7 @@ public struct InstancesPage: View {
     @State private var columns = ColumnSet.full
     @State private var path: [InstanceRoute] = []
     @State private var models: InstanceDetailModels
+    @State private var openInNeeds: [SecretNeed]?
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
@@ -88,6 +89,8 @@ public struct InstancesPage: View {
     ///     a window with no daemon, where they show their failed state.
     ///   - logs: What the Logs tab of the detail page reads and follows, or `nil` for a window
     ///     with no daemon.
+    ///   - openIn: What the Open In menus ask of the system; NSWorkspace in the app, fakes in
+    ///     previews and snapshots.
     ///   - opening: The instance whose detail page the page starts on, or `nil` for the table.
     ///     Previews and snapshots set it.
     ///   - openingTab: The tab that detail page starts on. Previews and snapshots set it.
@@ -110,6 +113,7 @@ public struct InstancesPage: View {
         openDiagnostics: @escaping @MainActor () -> Void,
         detail: InstanceDetailService? = nil,
         logs: InstanceLogsService? = nil,
+        openIn: OpenInPorts = .system,
         opening: UUID? = nil,
         openingTab: InstanceTab = .summary,
         selection: String = "",
@@ -125,7 +129,7 @@ public struct InstancesPage: View {
         _sortOrder = State(initialValue: [sortOrder])
         _models = State(
             initialValue: InstanceDetailModels(
-                service: detail ?? .disconnected, logs: logs ?? .disconnected))
+                service: detail ?? .disconnected, logs: logs ?? .disconnected, openIn: openIn))
         self.openingTab = openingTab
         _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
@@ -152,6 +156,7 @@ public struct InstancesPage: View {
         let selected = selectedRow(in: visible)
         let inView = detailRow(in: all) ?? selected
         let commands = published(selected: selected, inView: inView)
+        let openInMenu = openInContent(for: inView)
         return NavigationStack(path: $path) {
             GeometryReader { proxy in
                 pageContent(all: all, visible: visible, selected: selected)
@@ -165,13 +170,16 @@ public struct InstancesPage: View {
                 InstanceDetailPage(
                     id: route.id, instances: instances, catalog: catalog, actions: actions,
                     model: models.model(for: route.id), service: models.detailService,
-                    logs: models.logsModel(for: route.id), completedRounds: completedRounds,
+                    openIn: models.openIn, logs: models.logsModel(for: route.id),
+                    completedRounds: completedRounds,
                     tab: openingTab, back: { path.removeAll() }
                 )
                 // On macOS 27 a pushed page does not see the value published around the
                 // stack, so the menu would turn every page command off on the detail page.
                 // The same commands are published again from inside it.
-                .publishesCommands(.page(.instances), commands.actions, checked: commands.checked)
+                .publishesCommands(
+                    .page(.instances), commands.actions, checked: commands.checked,
+                    openIn: openInMenu)
             }
         }
         .stacklyInspector(
@@ -182,7 +190,13 @@ public struct InstancesPage: View {
         ) {
             inspector(selected: selected)
         }
-        .publishesCommands(.page(.instances), commands.actions, checked: commands.checked)
+        .publishesCommands(
+            .page(.instances), commands.actions, checked: commands.checked, openIn: openInMenu
+        )
+        .openInSecretSheet(
+            needs: $openInNeeds, secrets: models.detailService.secrets,
+            reload: { reloadDetail(of: inView) }
+        )
         // The navigator keeps a request while Instances shows, so a page that SwiftUI builds
         // again after the first one applied it applies it too.
         .onChange(of: navigator?.instancesRequest, initial: true) { _, request in
@@ -426,6 +440,7 @@ public struct InstancesPage: View {
                 action: actions.stacklyAction(for: selected.summary, context: context),
                 isPrimary: Self.isPrimary(actions.primaryAction(for: selected.summary)),
                 open: openAction(for: selected),
+                openIn: openInContent(for: selected),
                 model: models.model(for: selected.id),
                 secrets: models.detailService.secrets)
         } else {
@@ -433,6 +448,22 @@ public struct InstancesPage: View {
                 title: "No Selection",
                 message: "Select an instance to see its details. Double-click a row to open it.")
         }
+    }
+
+    /// What the Open In button of the inspector and the submenu of the Instance menu show for
+    /// `row` (spec 0070, AC-5): the actions in the detail the inspector already loaded.
+    private func openInContent(for row: InstanceRowModel?) -> OpenInContent {
+        models.openIn.content(
+            summary: row?.summary, detail: row.flatMap { models.model(for: $0.id).detail },
+            report: { feedbackCenter?.show($0) },
+            enterSecret: { openInNeeds = [$0] },
+            reload: { reloadDetail(of: row) })
+    }
+
+    private func reloadDetail(of row: InstanceRowModel?) {
+        guard let id = row?.id else { return }
+        let model = models.model(for: id)
+        Task { await model.reload() }
     }
 
     /// Open: the detail page of the instance (spec 0021, AC-15).
