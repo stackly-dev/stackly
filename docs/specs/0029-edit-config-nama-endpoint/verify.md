@@ -43,20 +43,20 @@ _Bukti lewat socket memakai fake (`providers/fake` 0.4.0) dan dummy server; Post
 
 ### UI / manual
 
-- [ ] Buka `crates/protocol/src/instance/config.rs` → enam params, `InstanceConfigView`, `ConfigValidation`, `ConfigApplyAccepted`, `ChangeEndpointsReply` (`applied` atau `dryRun`), `EndpointValidation`; `ConfigRevisionNumber` di `wire.rs` dipetakan ke `UInt64` di `typeshare.toml` → AC-1, AC-2, AC-14, AC-17
-- [ ] Buka `protocols/error-codes.json` → area `config` dengan `config.revision_conflict` (detail `baseRevision`, `activeRevision`), `config.drift_detected` (`files`), `config.no_last_known_good`; kode port `supervisor.endpoint_*` punya detail `suggestedPort` → AC-9, AC-11, AC-14
-- [ ] Jalankan `stackly instance config get <nama>` pada instance fake → tabel setting dengan kolom Applies (`reload`, `restart`, `set once`, `secret, read only`) dan tabel histori dengan tanda `active` dan `last known good` → AC-1, AC-17
-- [ ] Ubah `fake.conf` di folder `config/` instance lalu `stackly instance config get <nama>` → baris "changed outside Stackly"; `stackly instance start <nama>` ditolak `config.drift_detected`; `stackly instance config keep-revision <nama> --yes` menulis ulang file → AC-10, AC-11, AC-17
+- [x] Buka `crates/protocol/src/instance/config.rs` → enam params, `InstanceConfigView`, `ConfigValidation`, `ConfigApplyAccepted`, `ChangeEndpointsReply` (`applied` atau `dryRun`), `EndpointValidation`; `ConfigRevisionNumber` di `wire.rs` dipetakan ke `UInt64` di `typeshare.toml` → AC-1, AC-2, AC-14, AC-17
+- [x] Buka `protocols/error-codes.json` → area `config` dengan `config.revision_conflict` (detail `baseRevision`, `activeRevision`), `config.drift_detected` (`files`), `config.no_last_known_good`; kode port `supervisor.endpoint_*` punya detail `suggestedPort` → AC-9, AC-11, AC-14
+- [x] Jalankan `stackly instance config get <nama>` pada instance fake → tabel setting dengan kolom Applies (`reload`, `restart`, `set once`, `secret, read only`) dan tabel histori dengan tanda `active` dan `last known good` → AC-1, AC-17
+- [x] Ubah `fake.conf` di folder `config/` instance lalu `stackly instance config get <nama>` → baris "changed outside Stackly"; `stackly instance start <nama>` ditolak `config.drift_detected`; `stackly instance config keep-revision <nama> --yes` menulis ulang file → AC-10, AC-11, AC-17
 
 ### Commands
 
-- [ ] `cargo test -p stackly-protocol` → semua lulus, termasuk `message::tests` (enam method baru, 24 method `instance.*`), `ipc_fixtures` (30 fixture config di `protocols/fixtures/ipc/index.json`, tiga reject berlabel `rust`), dan `config_fixtures` → AC-1, AC-2, AC-9, AC-10, AC-14, AC-17
-- [ ] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → bersih; digest 2.3 tercatat di `protocols/contract-versions.json` → kontrak
-- [ ] `swift test --package-path clients/swift` → lulus (225 test; `everyCallVariantHasARoundTripFixture` menghitung 50 method)
-- [ ] `cargo test -p stacklyd --lib` → lulus, termasuk `ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` untuk `apply_config`, `change_endpoints`, `rename_instance`, `resolve_config_drift`, dan `map::config::tests` → AC-20
-- [ ] `cargo test -p stacklyd --test supervisor -- config::` → 12 test (1 ignored, lihat catatan) lulus, `--test-threads=1` → AC-3, AC-6, AC-8 sampai AC-14, AC-20, AC-21
-- [ ] `cargo test -p stackly-cli --test instance -- config` → 9 test lulus (scripted daemon, goldens, dan matriks parity lawan `stacklyd` nyata) → AC-17
-- [ ] `cargo clippy -p stackly-protocol -p stackly-core -p stacklyd -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+- [x] `cargo test -p stackly-protocol` → semua lulus, termasuk `message::tests` (enam method baru, 24 method `instance.*`), `ipc_fixtures` (30 fixture config di `protocols/fixtures/ipc/index.json`, tiga reject berlabel `rust`), dan `config_fixtures` → AC-1, AC-2, AC-9, AC-10, AC-14, AC-17
+- [x] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → bersih; digest 2.3 tercatat di `protocols/contract-versions.json` → kontrak
+- [x] `swift test --package-path clients/swift` → lulus (225 test; `everyCallVariantHasARoundTripFixture` menghitung 50 method)
+- [x] `cargo test -p stacklyd --lib` → lulus, termasuk `ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` untuk `apply_config`, `change_endpoints`, `rename_instance`, `resolve_config_drift`, dan `map::config::tests` → AC-20
+- [x] `cargo test -p stacklyd --test supervisor -- config::` → 12 test (1 ignored, lihat catatan) lulus, `--test-threads=1` → AC-3, AC-6, AC-8 sampai AC-14, AC-20, AC-21
+- [x] `cargo test -p stackly-cli --test instance -- config` → 9 test lulus (scripted daemon, goldens, dan matriks parity lawan `stacklyd` nyata) → AC-17
+- [x] `cargo clippy -p stackly-protocol -p stackly-core -p stacklyd -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
 
 Rincian `config::` di `apps/daemon/tests/supervisor/config.rs`:
 
