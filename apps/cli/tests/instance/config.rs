@@ -86,6 +86,12 @@ fn daemon(root: &TestRoot, validate: &'static str) -> ScriptedDaemon {
             "not_found",
             "no instance has this id",
         ))],
+        Call::InstanceList(_) => vec![Step::Reply(Reply::InstanceList(Box::new(
+            stackly_protocol::instance::InstancePage {
+                items: data::list_mixed().items,
+                next: None,
+            },
+        )))],
         _ => Vec::new(),
     })
 }
@@ -533,4 +539,102 @@ fn the_text_of_every_config_verb_is_golden() {
     );
     golden::check("instance_config_apply.txt", &apply.stdout);
     golden::check("instance_endpoint_set_dry_run.txt", &dry.stdout);
+}
+
+/// Every verb of this feature with the daemon method it ends in, and the
+/// arguments that follow the target.
+fn verbs() -> Vec<(&'static str, Vec<&'static str>, Vec<&'static str>)> {
+    vec![
+        (
+            "instance.config.get",
+            vec!["instance", "config", "get"],
+            vec![],
+        ),
+        (
+            "instance.config.validate",
+            vec!["instance", "config", "validate"],
+            vec!["--set", "workers=4"],
+        ),
+        (
+            "instance.config.apply",
+            vec!["instance", "config", "apply"],
+            vec!["--set", "workers=4"],
+        ),
+        (
+            "instance.config.apply",
+            vec!["instance", "config", "rollback"],
+            vec!["--yes"],
+        ),
+        (
+            "instance.config.keep_revision",
+            vec!["instance", "config", "keep-revision"],
+            vec!["--yes"],
+        ),
+        (
+            "instance.rename",
+            vec!["instance", "rename"],
+            vec!["orders-primary"],
+        ),
+        (
+            "instance.change_endpoints",
+            vec!["instance", "endpoint", "set"],
+            vec!["--port", "main=5556"],
+        ),
+    ]
+}
+
+// covers: AC-17
+#[test]
+fn every_verb_takes_a_name_as_well_as_an_id() {
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = daemon(
+        &root,
+        "frame-response-instance-config-validate-restart.json",
+    );
+
+    for (method, head, tail) in verbs() {
+        let mut by_name: Vec<&str> = head.clone();
+        by_name.push("orders-db");
+        by_name.extend(&tail);
+        by_name.push("--json");
+
+        let named = run(root.path(), &by_name);
+
+        assert_eq!(named.code, Some(0), "{head:?}: {named:?}");
+        let asked = sent(&daemon, method);
+        let last = asked
+            .last()
+            .unwrap_or_else(|| panic!("{head:?} sent no {method}"));
+        assert_eq!(content(last)["instanceId"], ID, "{head:?}");
+    }
+}
+
+// covers: AC-17
+#[test]
+fn an_unknown_name_exits_10_for_every_verb_before_anything_is_changed() {
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = daemon(
+        &root,
+        "frame-response-instance-config-validate-restart.json",
+    );
+
+    for (method, head, tail) in verbs() {
+        let mut args: Vec<&str> = head.clone();
+        args.push("Cache");
+        args.extend(&tail);
+        args.push("--json");
+
+        let missing = run(root.path(), &args);
+
+        assert_eq!(missing.code, Some(10), "{head:?}: {missing:?}");
+        assert!(
+            missing.stderr.contains("cli.instance_not_found")
+                || envelope(&missing)["error"]["code"] == "cli.instance_not_found",
+            "{head:?}: {missing:?}"
+        );
+        assert!(
+            sent(&daemon, method).is_empty(),
+            "{head:?} sent {method} for a name nobody has"
+        );
+    }
 }
