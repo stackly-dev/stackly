@@ -109,12 +109,10 @@ struct SchemaFieldRow: View {
                     .font(.body.monospaced())
                     .textSelection(.enabled)
             }
-        case .secret(let reference):
+        case .secret:
             LabeledContent(title) {
-                Text(reference)
-                    .font(.body.monospaced())
+                Label("Read only", systemImage: "lock.fill")
                     .foregroundStyle(StacklyColor.textSecondary)
-                    .textSelection(.enabled)
             }
         }
     }

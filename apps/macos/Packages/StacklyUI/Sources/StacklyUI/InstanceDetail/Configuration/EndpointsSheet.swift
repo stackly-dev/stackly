@@ -41,6 +41,7 @@ public final class EndpointsModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var verdictRequests = 0
     @ObservationIgnored private var unknown: String?
+    @ObservationIgnored private var didOpen = false
 
     /// Creates a model that has read nothing.
     /// - Parameters:
@@ -58,8 +59,17 @@ public final class EndpointsModel {
         self.sleep = sleep
     }
 
-    /// Reads the endpoints of the instance.
+    /// Reads the endpoints once, when the sheet appears; a sheet that already read them keeps
+    /// what the person typed.
+    public func open() async {
+        guard didOpen == false else { return }
+        didOpen = true
+        await load()
+    }
+
+    /// Reads the endpoints of the instance again, dropping what was typed.
     public func load() async {
+        didOpen = true
         phase = .loading
         do throws(ClientError) {
             let view = try await service.get(source.id)
@@ -304,7 +314,7 @@ struct EndpointsSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task { await model.load() }
+        .task { await model.open() }
     }
 
     @ViewBuilder private var rows: some View {

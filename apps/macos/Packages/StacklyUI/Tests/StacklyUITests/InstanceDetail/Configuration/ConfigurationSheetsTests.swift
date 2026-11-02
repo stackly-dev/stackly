@@ -53,7 +53,7 @@ struct ConfigurationSheetsTests {
                 == "Use 1 to 63 lowercase letters, digits, or hyphens, starting with a letter.")
         model.name = "billing"
         #expect(model.problem == "An instance named billing already exists.")
-        #expect(model.disabledReason == "An instance named billing already exists.")
+        #expect(model.disabledReason == "Choose another name.")
         model.name = "orders-2"
         #expect(model.problem == nil)
         #expect(model.disabledReason == nil)

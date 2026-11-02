@@ -50,6 +50,7 @@ struct ConfigurationTab: View {
 
     @ViewBuilder private func loaded(_ view: InstanceConfigView) -> some View {
         header(view)
+        applyReason(view)
         banners(view)
         switch model.mode {
         case .form:
@@ -76,9 +77,20 @@ struct ConfigurationTab: View {
                 .font(.headline)
             ToneBadge(
                 StatusAppearance.tag(model.impactTag, tone(model.impact)))
-            ActionButton(model.revertAction)
+            ActionButton(model.revertAction, showsReason: false)
             ActionButton(
-                model.applyAction(name: summary.name, context: context), prominence: .primary)
+                model.applyAction(name: summary.name, context: context), prominence: .primary,
+                showsReason: false)
+        }
+    }
+
+    /// Why Apply is off, under the header, while a change waits or a banner blocks it.
+    @ViewBuilder private func applyReason(_ view: InstanceConfigView) -> some View {
+        if model.busy == nil, model.hasPending || view.drift != nil || model.conflict != nil,
+            let reason = model.applyDisabledReason
+        {
+            DisabledReasonText(reason)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -275,6 +287,7 @@ struct ConfigurationForm: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .scrollDisabled(true)
     }
 

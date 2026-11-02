@@ -53,7 +53,7 @@ public final class RenameModel {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { return "Enter a name." }
         if trimmed == source.name { return "Enter a new name." }
-        return problem
+        return problem == nil ? nil : "Choose another name."
     }
 
     /// The rule of VAL-001: 1 to 63 lowercase letters, digits, or hyphens, starting with a
