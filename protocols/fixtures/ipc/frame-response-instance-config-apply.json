@@ -1,0 +1,44 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b15",
+    "reply": {
+      "type": "instance.config.apply",
+      "content": {
+        "accepted": {
+          "operation": {
+            "id": "0192f3a4-0000-7000-8000-0000000000d0",
+            "kind": "apply_config",
+            "resource": {
+              "kind": "instance",
+              "id": "0192f3a5-0000-7000-8000-000000000001"
+            },
+            "state": "queued",
+            "stage": null,
+            "progress": {
+              "type": "indeterminate"
+            },
+            "waitingOn": null,
+            "cancelRequestedAt": null,
+            "pointOfNoReturnAt": null,
+            "failure": null,
+            "recovery": null,
+            "result": null,
+            "trigger": {
+              "origin": "user",
+              "client": "cli"
+            },
+            "createdAt": "2026-11-02T09:00:00.000Z",
+            "startedAt": null,
+            "updatedAt": "2026-11-02T09:00:00.000Z",
+            "revision": 1
+          },
+          "replayed": false
+        },
+        "unchanged": false,
+        "revision": 3,
+        "impact": "restart"
+      }
+    }
+  }
+}

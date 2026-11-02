@@ -10,6 +10,7 @@ mod common;
 
 mod actions;
 mod budget;
+mod config;
 mod create;
 mod create_flow;
 mod create_form;

@@ -405,6 +405,12 @@ fn blocker(blocker: &InstanceBlocker) -> String {
                 .collect();
             format!("needs secret: {}", references.join(", "))
         }
+        InstanceBlocker::ConfigDrift(content) => {
+            format!(
+                "config changed outside Stackly: {}",
+                content.files.join(", ")
+            )
+        }
     }
 }
 

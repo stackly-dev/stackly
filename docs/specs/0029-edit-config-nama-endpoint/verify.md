@@ -36,3 +36,53 @@ Rincian `config::` di `crates/core/tests/supervisor_start/config.rs`:
 - AC-10, AC-11 · salinan histori, drift, blocker, `resolve_config_drift` pada fake; `postgresql.conf` nyata menunggu Milestone 4
 - AC-20 · `ChangePlan::audit` dan input journal dibangun di core; pengisian journal oleh handler menunggu Milestone 2 langkah 9
 - AC-17 sampai AC-19, AC-21 · belum, milik Milestone 2 sampai 4
+
+## Milestone 2: Contract, daemon, CLI, and fixture proof
+
+_Bukti lewat socket memakai fake (`providers/fake` 0.4.0) dan dummy server; PostgreSQL, NATS, dan Traefik nyata menunggu Milestone 4. Nomor method dan protokol: minor 2.3._
+
+### UI / manual
+
+- [ ] Buka `crates/protocol/src/instance/config.rs` → enam params, `InstanceConfigView`, `ConfigValidation`, `ConfigApplyAccepted`, `ChangeEndpointsReply` (`applied` atau `dryRun`), `EndpointValidation`; `ConfigRevisionNumber` di `wire.rs` dipetakan ke `UInt64` di `typeshare.toml` → AC-1, AC-2, AC-14, AC-17
+- [ ] Buka `protocols/error-codes.json` → area `config` dengan `config.revision_conflict` (detail `baseRevision`, `activeRevision`), `config.drift_detected` (`files`), `config.no_last_known_good`; kode port `supervisor.endpoint_*` punya detail `suggestedPort` → AC-9, AC-11, AC-14
+- [ ] Jalankan `stackly instance config get <nama>` pada instance fake → tabel setting dengan kolom Applies (`reload`, `restart`, `set once`, `secret, read only`) dan tabel histori dengan tanda `active` dan `last known good` → AC-1, AC-17
+- [ ] Ubah `fake.conf` di folder `config/` instance lalu `stackly instance config get <nama>` → baris "changed outside Stackly"; `stackly instance start <nama>` ditolak `config.drift_detected`; `stackly instance config keep-revision <nama> --yes` menulis ulang file → AC-10, AC-11, AC-17
+
+### Commands
+
+- [ ] `cargo test -p stackly-protocol` → semua lulus, termasuk `message::tests` (enam method baru, 24 method `instance.*`), `ipc_fixtures` (30 fixture config di `protocols/fixtures/ipc/index.json`, tiga reject berlabel `rust`), dan `config_fixtures` → AC-1, AC-2, AC-9, AC-10, AC-14, AC-17
+- [ ] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → bersih; digest 2.3 tercatat di `protocols/contract-versions.json` → kontrak
+- [ ] `swift test --package-path clients/swift` → lulus (225 test; `everyCallVariantHasARoundTripFixture` menghitung 50 method)
+- [ ] `cargo test -p stacklyd --lib` → lulus, termasuk `ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` untuk `apply_config`, `change_endpoints`, `rename_instance`, `resolve_config_drift`, dan `map::config::tests` → AC-20
+- [ ] `cargo test -p stacklyd --test supervisor -- config::` → 12 test (1 ignored, lihat catatan) lulus, `--test-threads=1` → AC-3, AC-6, AC-8 sampai AC-14, AC-20, AC-21
+- [ ] `cargo test -p stackly-cli --test instance -- config` → 9 test lulus (scripted daemon, goldens, dan matriks parity lawan `stacklyd` nyata) → AC-17
+- [ ] `cargo clippy -p stackly-protocol -p stackly-core -p stacklyd -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+
+Rincian `config::` di `apps/daemon/tests/supervisor/config.rs`:
+
+- Get: revision 1 `created`, field terkunci (`failInit`, `initDelayMs`, `authToken`), kelas apply per field, secret hanya sebagai reference, last known good setelah ready pertama, salinan `fake.conf` → AC-1, AC-7, AC-15
+- Validate dan apply tidak valid: diff dan dampak (`reload`, `restart`), `secret_read_only`, `immutable_after_init`, nilai di luar rentang; apply tidak valid, base usang (`config.revision_conflict` dengan `activeRevision`), dan perubahan yang sama (`unchanged`) tidak menambah operasi dan tidak mengubah PID → AC-2, AC-3, AC-9
+- Reload (PID sama, revision 2 jadi last known good), restart (PID baru), instance berhenti hanya menyimpan (`next_start`), roll back (`rollback` tanpa last known good lain `config.no_last_known_good`) dan restore → AC-4 sampai AC-6, AC-8
+- Drift: file diubah memasang blocker `configDrift` dan diff di `get`; start, apply, dan change endpoints ditolak `config.drift_detected` tanpa operasi dan tanpa mengubah file; `keep_revision` menulis ulang, file hilang terdeteksi `missing`, `keep_revision` tanpa drift `alreadyInState`; daemon yang start di atas file yang diubah memasang blocker → AC-10, AC-11
+- Histori: 25 apply menyisakan 20 baris, revision aktif 26, last known good tetap, nomor berikutnya 27 → AC-12
+- Rename: PID, ID, dan revision config sama; `instance.name_taken`, `instance.name_invalid`, nama yang sama tanpa operasi → AC-13
+- Endpoint: port milik instance lain `supervisor.endpoint_conflict` dengan `suggestedPort`, dry run, endpoint yang tidak dikenal, port bebas me-restart instance running pada port baru dengan origin `endpoints`, `Auto` pada instance berhenti → AC-14
+- Audit: input journal `apply_config` dan `change_endpoints` memuat revision lama dan baru, nama setting, dan port, tanpa nilai setting dan tanpa token → AC-20
+- Offline: get, validate, apply, keep revision, rename, dan change endpoints tanpa akses katalog, tanpa panggilan `Fetcher`, tanpa `CodeSigning::assess` → AC-21
+
+### Acceptance-criteria coverage
+
+- AC-1, AC-2 · `get` dan `validate` lewat socket pada fake; PostgreSQL, NATS, dan Traefik nyata (fixture `config-view-postgresql` dan `config-view-traefik` dari paket pinned) menunggu Milestone 3 dan 4
+- AC-3, AC-6, AC-8 sampai AC-14 · lewat socket pada fake; bukti pada provider nyata menunggu Milestone 4. `starting`, `stopping`, `unknown` ditolak di tingkat core (Milestone 1) dan tidak diulang lewat socket
+- AC-4, AC-5 · reload dan restart pada fake; PostgreSQL 18 dan NATS nyata menunggu Milestone 4
+- AC-7 · last known good lewat socket (ready pertama, reload, start berikutnya); kasus adopsi di Milestone 1
+- AC-17 · seluruh verb CLI ada dan diuji (flag ke params, `--dry-run`, konfirmasi, matriks parity); completion dan man page dibuat dari definisi clap, tidak ada berkas terpisah
+- AC-20 · input journal dari handler; hasil dan correlation ID dari journal operasi yang sama
+- AC-21 · bagian fixture lewat harness offline; run dengan jaringan mati sungguhan milik Milestone 4
+- AC-15, AC-16, AC-18, AC-19 · menunggu Milestone 3 (GUI)
+
+### Catatan
+
+- `a_running_instance_can_change_a_fixed_port_to_automatic` di-`#[ignore]`: mengubah port Fixed menjadi Auto pada instance yang sedang jalan gagal di langkah `stop` restart dengan `supervisor.config_invalid` ("endpoint http has no concrete address"), karena `Instance::set_port_requests` mengosongkan `bound_port` dan rencana stop memerlukan alamat konkret. Perbaikannya di `crates/core/src/supervisor/` (milik `dev-f30-m3`); hilangkan `#[ignore]` setelah diperbaiki → AC-14
+- Method `instance.config.apply` dan `instance.config.keep_revision` memakai nama `instance.config_apply` dan `instance.config_keep_revision` di rekaman idempotency, karena `MethodName` domain hanya menerima satu titik; nama di kawat tidak berubah
+- `start`, `restart`, dan `reload` menolak `config.drift_detected` dari blocker yang tersimpan di memori (diisi `instance.config.get`, setiap render, dan pemeriksaan saat daemon start); file yang diubah sesudah pemeriksaan terakhir ditangkap gerbang drift pada render, yang menggagalkan operasi sebelum menulis file

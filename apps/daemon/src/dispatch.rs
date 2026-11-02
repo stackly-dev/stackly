@@ -25,6 +25,11 @@ use stackly_protocol::daemon::{
     ShutdownParams,
 };
 use stackly_protocol::handshake::ClientInfo;
+use stackly_protocol::instance::config::{
+    ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
+    ConfigValidation, GetConfigParams, InstanceConfigView, KeepRevisionParams,
+    RenameInstanceParams, ValidateConfigParams,
+};
 use stackly_protocol::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, DataUsageReply, DuplicateForm,
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
@@ -382,6 +387,68 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Box<MetricsReply>> {
         let _ = context;
         instance::get_metrics(core, params)
+    }
+
+    /// `instance.config.get` (spec 0029).
+    fn get_config<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: GetConfigParams,
+    ) -> HandlerFuture<'a, Box<InstanceConfigView>> {
+        let _ = context;
+        instance::get_config(core, params)
+    }
+
+    /// `instance.config.validate` (spec 0029).
+    fn validate_config<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ValidateConfigParams,
+    ) -> HandlerFuture<'a, Box<ConfigValidation>> {
+        let _ = context;
+        instance::validate_config(core, params)
+    }
+
+    /// `instance.config.apply` (spec 0029).
+    fn apply_config<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ApplyConfigParams,
+    ) -> HandlerFuture<'a, Box<ConfigApplyAccepted>> {
+        instance::apply_config(core, context, params)
+    }
+
+    /// `instance.config.keep_revision` (spec 0029).
+    fn keep_revision<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: KeepRevisionParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::keep_revision(core, context, params)
+    }
+
+    /// `instance.rename` (spec 0029).
+    fn rename_instance<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: RenameInstanceParams,
+    ) -> HandlerFuture<'a, InstanceActionAccepted> {
+        instance::rename(core, context, params)
+    }
+
+    /// `instance.change_endpoints` (spec 0029).
+    fn change_endpoints<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ChangeEndpointsParams,
+    ) -> HandlerFuture<'a, Box<ChangeEndpointsReply>> {
+        instance::change_endpoints(core, context, params)
     }
 
     /// `instance.start`.

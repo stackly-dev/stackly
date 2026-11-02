@@ -786,6 +786,45 @@
         "install"
       ]
     },
+    "ChangeEndpointsReply": {
+      "description": "Reply of `instance.change_endpoints`: the operation that changes the\nports, or the verdict of a dry run. Tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "The change was accepted or equals the active revision.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ConfigApplyAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "applied"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The verdict of `dryRun: true`; nothing was written.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EndpointValidation"
+            },
+            "type": {
+              "type": "string",
+              "const": "dryRun"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
     "ClientKind": {
       "description": "The kinds of client. Open: a newer client may send a value an older\ndaemon reads as `unrecognized`.",
       "oneOf": [
@@ -945,6 +984,346 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "ConfigApplyAccepted": {
+      "description": "Reply of `instance.config.apply`.\n\nA change that starts an operation returns it in `accepted`. A change\nequal to the active revision answers `unchanged` with no operation, no\nrevision, and no bound idempotency key.",
+      "type": "object",
+      "properties": {
+        "accepted": {
+          "description": "The operation, as created or as it stands now; absent when nothing\nran.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationAccepted"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "impact": {
+          "description": "What the operation does to the instance.",
+          "$ref": "#/$defs/ConfigImpact"
+        },
+        "revision": {
+          "description": "The revision the operation writes (the active one plus one), or\nthe active revision when `unchanged`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "unchanged": {
+          "description": "True when the change equals the active revision.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unchanged",
+        "revision",
+        "impact"
+      ]
+    },
+    "ConfigDrift": {
+      "description": "The drift of the active revision (spec 0029, AC-10).",
+      "type": "object",
+      "properties": {
+        "files": {
+          "description": "The drifted files, ordered by path.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DriftFile"
+          }
+        },
+        "observedAt": {
+          "description": "When the check found it.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "observedAt",
+        "files"
+      ]
+    },
+    "ConfigDriftBlocker": {
+      "description": "The content of the `configDrift` blocker (spec 0029): the config files\nthat differ from the copy of the last render, or are gone.",
+      "type": "object",
+      "properties": {
+        "files": {
+          "description": "The drifted files, relative to the `config/` folder, ordered by path.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observedAt": {
+          "description": "When the check found the drift.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "files",
+        "observedAt"
+      ]
+    },
+    "ConfigEndpoint": {
+      "description": "One endpoint of the instance on the Configuration page.",
+      "type": "object",
+      "properties": {
+        "boundPort": {
+          "description": "The port the process has now, once one was bound.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "changeable": {
+          "description": "Whether `instance.change_endpoints` can change it: an IP endpoint.",
+          "type": "boolean"
+        },
+        "host": {
+          "description": "The host of an IP endpoint.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "request": {
+          "description": "The port request of the active revision, for an IP endpoint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transport": {
+          "description": "The transport.",
+          "$ref": "#/$defs/EndpointTransport"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "changeable"
+      ]
+    },
+    "ConfigField": {
+      "description": "One settings field of the Configuration page.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The field as the create form shows it, including its `apply` class\nand `secret` and `managed` flags.",
+          "$ref": "#/$defs/FormField"
+        },
+        "locked": {
+          "description": "True when no change can edit it: a managed field, a field that is\nset once, and a secret.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "field",
+        "locked"
+      ]
+    },
+    "ConfigImpact": {
+      "description": "What applying a change does to the instance. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "Nothing changes.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "The instance does not run: the revision applies at its next start.",
+          "type": "string",
+          "const": "next_start"
+        },
+        {
+          "description": "A reload applies it and the process stays.",
+          "type": "string",
+          "const": "reload"
+        },
+        {
+          "description": "A restart applies it.",
+          "type": "string",
+          "const": "restart"
+        },
+        {
+          "description": "An impact this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConfigRevisionOrigin": {
+      "description": "How a config revision came to be. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "Written by `instance.create`, from the provider defaults.",
+          "type": "string",
+          "const": "created"
+        },
+        {
+          "description": "A settings change.",
+          "type": "string",
+          "const": "applied"
+        },
+        {
+          "description": "A port change.",
+          "type": "string",
+          "const": "endpoints"
+        },
+        {
+          "description": "A roll back to the last known good revision.",
+          "type": "string",
+          "const": "rollback"
+        },
+        {
+          "description": "A restore of an older revision.",
+          "type": "string",
+          "const": "restored"
+        },
+        {
+          "description": "An origin this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ConfigRevisionSummary": {
+      "description": "One config revision of the history.",
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "description": "When it was written.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "endpoints": {
+          "description": "Its port requests, one per IP endpoint.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EndpointRequest"
+          }
+        },
+        "isActive": {
+          "description": "Whether it is the active revision.",
+          "type": "boolean"
+        },
+        "isLastKnownGood": {
+          "description": "Whether it is the last known good revision.",
+          "type": "boolean"
+        },
+        "number": {
+          "description": "The number, rising by one per revision and never reused.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "origin": {
+          "description": "How it came to be.",
+          "$ref": "#/$defs/ConfigRevisionOrigin"
+        },
+        "readyAt": {
+          "description": "When the instance first reached ready on this revision; absent\nwhile it never did.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "sourceNumber": {
+          "description": "The revision a `rollback` or `restored` revision copies; it may\nhave left the history since.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "values": {
+          "description": "Its settings, secrets as their reference text. Restore loads them\ninto the form.",
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "number",
+        "createdAt",
+        "origin",
+        "isActive",
+        "isLastKnownGood",
+        "values",
+        "endpoints"
+      ]
+    },
+    "ConfigValidation": {
+      "description": "Reply of `instance.config.validate`.",
+      "type": "object",
+      "properties": {
+        "changes": {
+          "description": "The settings that change, in schema order; empty while invalid.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingChange"
+          }
+        },
+        "endpointChanges": {
+          "description": "The ports that change, for a restore or a roll back.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EndpointChange"
+          }
+        },
+        "fieldErrors": {
+          "description": "Every field with a problem: `settings.<key>` or an item path such\nas `settings.routes[2].rule`, with the codes of create plus\n`immutable_after_init` and `secret_read_only`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldError"
+          }
+        },
+        "impact": {
+          "description": "What applying it now does.",
+          "$ref": "#/$defs/ConfigImpact"
+        },
+        "preview": {
+          "description": "The non sensitive config files the change would render, with the\nchanged lines marked. Empty while invalid or when the runtime is\nmissing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EffectiveFile"
+          }
+        },
+        "valid": {
+          "description": "True exactly when `fieldErrors` is empty.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "valid",
+        "fieldErrors",
+        "changes",
+        "endpointChanges",
+        "impact",
+        "preview"
       ]
     },
     "ConnectionAvailability": {
@@ -2214,6 +2593,95 @@
         "status"
       ]
     },
+    "DiffLine": {
+      "description": "One line of a drift diff.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What the line is.",
+          "$ref": "#/$defs/DiffLineKind"
+        },
+        "text": {
+          "description": "The text, without the line end.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ]
+    },
+    "DiffLineKind": {
+      "description": "What one line of a drift diff is. Open.",
+      "oneOf": [
+        {
+          "description": "In both texts.",
+          "type": "string",
+          "const": "context"
+        },
+        {
+          "description": "Only on disk.",
+          "type": "string",
+          "const": "added"
+        },
+        {
+          "description": "Only in the copy Stackly wrote.",
+          "type": "string",
+          "const": "removed"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "DriftFile": {
+      "description": "One config file that drifted.",
+      "type": "object",
+      "properties": {
+        "diff": {
+          "description": "The copy Stackly wrote against what is on disk.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiffLine"
+          }
+        },
+        "kind": {
+          "description": "How it drifted.",
+          "$ref": "#/$defs/DriftKind"
+        },
+        "path": {
+          "description": "The path relative to the `config/` folder.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "diff"
+      ]
+    },
+    "DriftKind": {
+      "description": "How a config file drifted. Open.",
+      "oneOf": [
+        {
+          "description": "The file differs from the copy.",
+          "type": "string",
+          "const": "modified"
+        },
+        {
+          "description": "The file is gone.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "DuplicateForm": {
       "description": "Reply of `instance.get_duplicate_form`.",
       "type": "object",
@@ -2285,6 +2753,70 @@
         "name"
       ]
     },
+    "EffectiveFile": {
+      "description": "One non sensitive config file as the Configuration page shows it.",
+      "type": "object",
+      "properties": {
+        "changedLines": {
+          "description": "The 1 based lines of `content` a proposal changes; empty outside a\npreview of a change.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "content": {
+          "description": "The text.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The path relative to the `config/` folder.",
+          "type": "string"
+        },
+        "portNote": {
+          "description": "A note for an Automatic port shown with its default port.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "preview": {
+          "description": "True when the text is rendered from the values now, rather than the\ncopy of the active revision's last render.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "content",
+        "changedLines",
+        "preview"
+      ]
+    },
+    "EndpointChange": {
+      "description": "The port request of one endpoint, before and after a change.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The endpoint name from the manifest.",
+          "type": "string"
+        },
+        "new": {
+          "description": "The proposed request.",
+          "$ref": "#/$defs/PortRequest"
+        },
+        "old": {
+          "description": "The request in the active revision.",
+          "$ref": "#/$defs/PortRequest"
+        }
+      },
+      "required": [
+        "name",
+        "old",
+        "new"
+      ]
+    },
     "EndpointPortMode": {
       "description": "How an IP endpoint asked for its port. Open.",
       "oneOf": [
@@ -2303,6 +2835,35 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "EndpointProblem": {
+      "description": "One port request that cannot be applied.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The error code, such as `supervisor.endpoint_conflict`.",
+          "type": "string"
+        },
+        "endpoint": {
+          "description": "The endpoint the request names.",
+          "type": "string"
+        },
+        "suggestedPort": {
+          "description": "The first free port after the requested one, for a fixed port that\nis taken.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "endpoint",
+        "code"
       ]
     },
     "EndpointPurpose": {
@@ -2426,6 +2987,40 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "EndpointValidation": {
+      "description": "Reply of a dry run of `instance.change_endpoints`.",
+      "type": "object",
+      "properties": {
+        "changes": {
+          "description": "The ports that change; empty while invalid or when nothing moves.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EndpointChange"
+          }
+        },
+        "impact": {
+          "description": "What applying it now does.",
+          "$ref": "#/$defs/ConfigImpact"
+        },
+        "problems": {
+          "description": "Every request that cannot be applied, in the order asked.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EndpointProblem"
+          }
+        },
+        "valid": {
+          "description": "True exactly when `problems` is empty.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "valid",
+        "problems",
+        "changes",
+        "impact"
       ]
     },
     "EnvPair": {
@@ -3752,7 +4347,7 @@
       ]
     },
     "InstanceBlocker": {
-      "description": "Why an instance cannot start or be trusted, one value with the priority\n`identityUnproven`, then `dataInUse`, then `needsSecret`. A blocker this\nbuild does not know makes the snapshot fail to decode, so a new blocker\nis a protocol major.",
+      "description": "Why an instance cannot start or be trusted, one value with the priority\n`identityUnproven`, then `dataInUse`, then `needsSecret`, then\n`configDrift`. A blocker this\nbuild does not know makes the snapshot fail to decode, so a new blocker\nis a protocol major.",
       "oneOf": [
         {
           "description": "A process matches the recorded identity but does not hold the\ninstance lock, or gathering the evidence failed.",
@@ -3804,6 +4399,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "A config file was changed outside Stackly, so nothing renders until\nthe user keeps the active revision (spec 0029).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ConfigDriftBlocker"
+            },
+            "type": {
+              "type": "string",
+              "const": "configDrift"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -3817,6 +4429,87 @@
           "default": false
         }
       }
+    },
+    "InstanceConfigView": {
+      "description": "Reply of `instance.config.get`.",
+      "type": "object",
+      "properties": {
+        "drift": {
+          "description": "The drift of the active revision, absent when there is none.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigDrift"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "effectiveFiles": {
+          "description": "The non sensitive config files.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EffectiveFile"
+          }
+        },
+        "effectiveFilesNote": {
+          "description": "Why `effectiveFiles` is empty although the provider renders files:\n`Runtime missing, preview unavailable` when the active revision has\nno copy and the runtime folder is gone.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpoints": {
+          "description": "The endpoints of the instance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigEndpoint"
+          }
+        },
+        "fields": {
+          "description": "The settings fields, in the order the schema declares them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigField"
+          }
+        },
+        "history": {
+          "description": "The newest revisions, newest first, 20 at most; the active one and\nthe last known good are always in it.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigRevisionSummary"
+          }
+        },
+        "lastKnownGood": {
+          "description": "The last known good revision: the highest number that reached\nready. Absent when none did.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "reloadSupported": {
+          "description": "Whether the pinned provider revision can reload.",
+          "type": "boolean"
+        },
+        "revision": {
+          "description": "The active revision, with its settings and port requests.",
+          "$ref": "#/$defs/ConfigRevisionSummary"
+        }
+      },
+      "required": [
+        "revision",
+        "fields",
+        "endpoints",
+        "history",
+        "effectiveFiles",
+        "reloadSupported"
+      ]
     },
     "InstanceDesired": {
       "description": "Whether the person wants an instance running. Closed.",
@@ -5886,6 +6579,21 @@
           "description": "Rename an instance.",
           "type": "string",
           "const": "rename_instance"
+        },
+        {
+          "description": "Write a new config revision and make it take effect (spec 0029).",
+          "type": "string",
+          "const": "apply_config"
+        },
+        {
+          "description": "Change the ports of an instance's endpoints (spec 0029).",
+          "type": "string",
+          "const": "change_endpoints"
+        },
+        {
+          "description": "Write the config files of the active revision back over a drift\n(spec 0029).",
+          "type": "string",
+          "const": "resolve_config_drift"
         },
         {
           "description": "Remove an instance and keep its data.",
@@ -8224,6 +8932,108 @@
           ]
         },
         {
+          "description": "The config of the instance.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceConfigView"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The verdict on a config change.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ConfigValidation"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.validate"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that applies the change, or that nothing changed.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ConfigApplyAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.apply"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that keeps the active revision, or that nothing\ndrifted.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.config.keep_revision"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that renames the instance, or that the name is the\nsame.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceActionAccepted"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.rename"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The operation that changes the ports, or the verdict of a dry run.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ChangeEndpointsReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.change_endpoints"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "One page of the log.",
           "type": "object",
           "properties": {
@@ -9656,6 +10466,35 @@
       },
       "required": [
         "summary"
+      ]
+    },
+    "SettingChange": {
+      "description": "One setting a change touches. A value is its compact JSON text, except\nthat a string is its text without quotes; a secret shows its reference.\nA key is a field name, `routes[name=api]` for an item of a list with a\nkey, `routes[name=api].rule` for one of its fields, or `items[2].x` for\nan item of a list without one. `old` is absent for an added item and\n`new` for a removed one.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "What changes.",
+          "type": "string"
+        },
+        "new": {
+          "description": "The proposed value.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "old": {
+          "description": "The value in the active revision.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key"
       ]
     },
     "SettingEntry": {

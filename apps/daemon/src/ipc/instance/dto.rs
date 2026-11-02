@@ -12,11 +12,11 @@ use stackly_domain::{
     PortRequest as DomainPortRequest, ProcessStart, ReadinessState, Transport,
 };
 use stackly_protocol::instance::{
-    EndpointPortMode, EndpointStatus, EndpointTransport, IdentityBlocker, IdentityCheckEntry,
-    IdentityCheckName, IdentityCheckResult, IdentityEvidence, InstanceBlocker, InstanceDesired,
-    InstanceHealth, InstanceHealthChanged, InstanceHealthState, InstanceLastFailure,
-    InstanceLifecycle, InstanceLockState, InstanceOwnership, InstanceProcess, InstanceReadiness,
-    InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
+    ConfigDriftBlocker, EndpointPortMode, EndpointStatus, EndpointTransport, IdentityBlocker,
+    IdentityCheckEntry, IdentityCheckName, IdentityCheckResult, IdentityEvidence, InstanceBlocker,
+    InstanceDesired, InstanceHealth, InstanceHealthChanged, InstanceHealthState,
+    InstanceLastFailure, InstanceLifecycle, InstanceLockState, InstanceOwnership, InstanceProcess,
+    InstanceReadiness, InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
 };
 use stackly_protocol::instance::{InstanceCapabilities, InstanceLastExit};
 use stackly_protocol::{Count, Sequence, Timestamp};
@@ -208,7 +208,7 @@ fn restart(status: &InstanceStatus) -> InstanceRestart {
 }
 
 /// The blocker on the wire: `identityUnproven` before `dataInUse` before
-/// `needsSecret`, the one value the supervisor keeps.
+/// `needsSecret` before `configDrift`, the one value the supervisor keeps.
 fn blocker(blocker: &DomainBlocker) -> Option<InstanceBlocker> {
     match blocker {
         DomainBlocker::IdentityUnproven {
@@ -225,6 +225,12 @@ fn blocker(blocker: &DomainBlocker) -> Option<InstanceBlocker> {
             evidence: evidence_dto(evidence),
             observed_at: Timestamp::from_jiff(*observed_at),
         })),
+        DomainBlocker::ConfigDrift { files, observed_at } => {
+            Some(InstanceBlocker::ConfigDrift(ConfigDriftBlocker {
+                files: files.iter().map(ToString::to_string).collect(),
+                observed_at: Timestamp::from_jiff(*observed_at),
+            }))
+        }
         other => needs_secret_blocker(other).map(InstanceBlocker::NeedsSecret),
     }
 }

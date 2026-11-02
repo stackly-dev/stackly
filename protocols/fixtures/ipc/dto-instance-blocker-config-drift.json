@@ -1,0 +1,10 @@
+{
+  "type": "configDrift",
+  "content": {
+    "files": [
+      "fake.conf",
+      "extra/override.conf"
+    ],
+    "observedAt": "2026-11-02T09:10:00.000Z"
+  }
+}

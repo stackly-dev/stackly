@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b21",
+    "error": {
+      "code": "config.drift_detected",
+      "category": "conflict",
+      "message": "a config file was changed outside Stackly, so nothing renders until the active revision is kept",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "files",
+          "value": "fake.conf,extra/override.conf"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000b23",
+    "error": {
+      "code": "instance.settings_invalid",
+      "category": "invalid_input",
+      "message": "the settings break the schema of the package",
+      "retryable": false,
+      "resource": null,
+      "fields": [
+        {
+          "path": "settings.adminToken",
+          "code": "secret_read_only",
+          "message": "secret value cannot be changed here"
+        },
+        {
+          "path": "settings.dataSeed",
+          "code": "immutable_after_init",
+          "message": "value cannot be changed after the instance is created"
+        }
+      ],
+      "hint": null,
+      "details": [
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}
