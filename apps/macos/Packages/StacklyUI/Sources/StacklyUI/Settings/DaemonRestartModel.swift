@@ -90,10 +90,20 @@ public final class DaemonRestartModel {
     /// socket before it takes the plan over, so the first answer is empty while the restart
     /// goes on. A plan nobody takes over ends with the reconciliation (see
     /// ``receive(event:)``).
-    /// - Parameter info: The reply of `daemon.get_info`, or `nil` when it did not answer.
-    public func receive(info: DaemonInfo?) {
-        guard let view = info?.restart else { return }
-        accept(view)
+    ///
+    /// A handshake of a daemon in recovery mode is the exception: that daemon runs no
+    /// supervisor, so it takes no plan over and sends no plan event, and a plan or a wait the
+    /// window holds would never end (spec 0030 AC-16).
+    /// - Parameters:
+    ///   - info: The reply of `daemon.get_info`, or `nil` when it did not answer.
+    ///   - inRecovery: Whether the daemon reports its registry in recovery mode.
+    public func receive(info: DaemonInfo?, inRecovery: Bool = false) {
+        if let view = info?.restart {
+            accept(view)
+        } else if inRecovery {
+            plan = nil
+            isAwaitingPlan = false
+        }
     }
 
     /// Takes one event: a `daemon.restart_plan`, or the end of a reconciliation, which closes
@@ -234,9 +244,10 @@ public final class DaemonRestartModel {
         current.planChanged = false
         confirmation = current
         switch await restart(digest, force, key) {
-        case .accepted:
+        case .accepted(let accepted):
             retryKey = nil
-            isAwaitingPlan = plan?.state.isOpen != true
+            // A restart in recovery mode writes no plan, so there is none to wait for.
+            isAwaitingPlan = accepted.planId != nil && plan?.state.isOpen != true
             dismissedPlanID = nil
             confirmation = nil
         case .rejected(let body):

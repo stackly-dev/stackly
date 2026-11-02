@@ -464,7 +464,7 @@ public final class DaemonModel {
                 noteRoundStart(for: daemon.connectedAt)
                 lastConnectedAt = daemon.connectedAt
                 // A restart the new daemon reports may have started while the app was away.
-                restart.receive(info: daemon.info)
+                restart.receive(info: daemon.info, inRecovery: daemon.health?.recovery != nil)
             }
             lastDaemon = daemon
             serverInstance.id = daemon.info?.serverInstanceId
