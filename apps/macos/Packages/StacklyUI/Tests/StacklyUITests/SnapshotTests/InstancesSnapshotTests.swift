@@ -105,6 +105,32 @@ extension SnapshotTests {
                 size: Self.withInspector)
         }
 
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The inspector of an instance whose provider has no Open In action shows no Open In button in every variant"
+            ))
+        func instancesWithAnInstanceThatHasNoOpenInChosen() async throws {
+            let rig = await rig()
+            try await assertSnapshot(
+                framed(rig.instancesPage(selection: Self.id(4))), named: "instances-no-open-in",
+                size: Self.withInspector)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The inspector shows the Open In button while the detail loads, in every variant"
+            ))
+        func instancesWithTheDetailStillLoading() async throws {
+            let rig = await rig(prepare: { $0.script.detailHangs = true })
+            try await assertSnapshot(
+                framed(rig.instancesPage(selection: Self.id(1))),
+                named: "instances-open-in-loading", size: Self.withInspector)
+        }
+
         // MARK: - Inspector closed
 
         @Test(

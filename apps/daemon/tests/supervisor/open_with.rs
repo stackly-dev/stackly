@@ -10,13 +10,15 @@ use std::path::Path;
 use serde_json::json;
 use stackly_platform::CodeSigning;
 use stackly_platform_macos::MacosCodeSigning;
+use stackly_protocol::instance::SecretFieldInput;
 use stackly_protocol::instance::open_with::terminal_script;
 use stackly_protocol::instance::{
     ConnectionAvailability, ConnectionUnavailableReason, InstanceLifecycle, InstanceReadinessState,
     OpenActionKind,
 };
+use stackly_protocol::secret::{SecretInput, SecretText};
 use stackly_testkit::allocate_port;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 use uuid::Uuid;
 
 use crate::support::{Api, Site, TOKEN};
@@ -238,4 +240,80 @@ async fn a_stopped_instance_keeps_its_actions_available_in_the_detail() {
         detail.open_actions
     );
     let _ = ConnectionUnavailableReason::Retained;
+}
+
+// covers: AC-14
+#[tokio::test(flavor = "multi_thread")]
+async fn the_fixture_credential_is_in_no_detail_reply_script_or_log_of_an_open_in() {
+    let ev = evidence!(
+        covers = ["AC-016", "REQ-016"],
+        kind = Kind::Fixture,
+        expected = "the prefix of the fixture credential of an instance is absent from instance.get_detail, instance.prepare_terminal, the script of the Terminal action with its argv and env, and the daemon log",
+    );
+    crate::support::install_logs();
+    let site = Site::new();
+    let _daemon = site.start().await;
+    let api = site.api().await;
+    let credential = FixtureCredential::new();
+    let port = allocate_port().expect("a free port");
+    let mut params = api.params("orders", json!({}));
+    params.endpoints = vec![Api::http_port(port)];
+    params.secrets = vec![SecretFieldInput {
+        field: "authToken".to_owned(),
+        input: SecretInput::Value(SecretText::new(credential.value().to_owned())),
+    }];
+    let accepted = api
+        .create(params)
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    api.wait_state(
+        accepted.operation.id,
+        stackly_protocol::operation::OperationState::Succeeded,
+    )
+    .await;
+    api.start_ready(id).await;
+
+    let detail = api.detail(id).await.expect("the detail");
+    let path = api
+        .prepare_terminal(id, "version")
+        .await
+        .expect("the script is written");
+
+    let terminal = detail
+        .open_actions
+        .iter()
+        .find(|action| action.kind == OpenActionKind::Terminal)
+        .expect("a terminal action");
+    let copy = terminal.copy_secret.as_ref().expect("the token is copied");
+    assert!(
+        copy.reference.starts_with("local:"),
+        "only a reference travels: {}",
+        copy.reference
+    );
+    let reply = serde_json::to_string(&detail).expect("the detail encodes");
+    credential.assert_absent(&reply, "the instance.get_detail reply");
+    credential.assert_absent(&path, "the instance.prepare_terminal reply");
+    let script = std::fs::read_to_string(&path).expect("the script reads");
+    credential.assert_absent(&script, "the script of the Terminal action");
+    let command = terminal.command.as_ref().expect("a command");
+    credential.assert_absent(&command.executable, "the executable");
+    credential.assert_absent(&command.args.join(" "), "the argv");
+    credential.assert_absent(
+        &command
+            .env
+            .iter()
+            .map(|pair| format!("{}={}", pair.name, pair.value))
+            .collect::<String>(),
+        "the environment",
+    );
+    credential.assert_absent(&crate::support::log_text(), "the daemon log");
+    ev.pass();
 }

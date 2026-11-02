@@ -5,8 +5,10 @@
 //! opens something.
 
 use stackly_protocol::instance::{InstancePage, InstanceSummary};
+use stackly_protocol::secret::{RevealSecretReply, SecretText};
 use stackly_protocol::{Call, Reply};
 use stackly_testkit::TestRoot;
+use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 
 use crate::common::scripted::{ScriptedDaemon, Step};
 use crate::common::{golden, run};
@@ -143,4 +145,57 @@ fn list_is_required() {
     assert_eq!(bare.code, Some(2), "{bare:?}");
     assert!(bare.stderr.contains("--list"), "{}", bare.stderr);
     assert!(calls(&daemon).is_empty());
+}
+
+// covers: AC-14
+#[test]
+fn a_daemon_that_would_reveal_the_password_never_gets_asked_and_no_output_holds_it() {
+    let ev = evidence!(
+        covers = ["AC-016", "REQ-016"],
+        kind = Kind::Fixture,
+        expected = "the default and --json output of stackly instance open --list hold no prefix of the fixture credential, and the CLI never calls secret.reveal even when the daemon would answer it",
+    );
+    let credential = FixtureCredential::new();
+    let triple = data::triple("postgresql");
+    let instance: InstanceSummary = triple.instance.clone();
+    let detail = triple.detail.clone();
+    let value = credential.value().to_owned();
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+        Call::InstanceList(_) => vec![Step::Reply(Reply::InstanceList(Box::new(InstancePage {
+            items: vec![instance.clone()],
+            next: None,
+        })))],
+        Call::InstanceGet(_) => vec![Step::Reply(Reply::InstanceGet(Box::new(instance.clone())))],
+        Call::InstanceGetDetail(_) => {
+            vec![Step::Reply(Reply::InstanceGetDetail(Box::new(
+                detail.clone(),
+            )))]
+        }
+        Call::SecretReveal(params) => vec![Step::Reply(Reply::SecretReveal(RevealSecretReply {
+            reference: params.reference.clone(),
+            value: SecretText::new(value.clone()),
+        }))],
+        _ => Vec::new(),
+    });
+
+    let text = run(root.path(), &["instance", "open", "orders-db", "--list"]);
+    let json = run(
+        root.path(),
+        &["instance", "open", "orders-db", "--list", "--json"],
+    );
+
+    for (what, output) in [("the text output", &text), ("the JSON output", &json)] {
+        assert_eq!(output.code, Some(0), "{output:?}");
+        credential.assert_absent(&output.stdout, what);
+        credential.assert_absent(&output.stderr, what);
+    }
+    assert!(
+        !calls(&daemon)
+            .iter()
+            .any(|method| method == "secret.reveal" || method == "instance.prepare_terminal"),
+        "{:?}",
+        calls(&daemon)
+    );
+    ev.pass();
 }

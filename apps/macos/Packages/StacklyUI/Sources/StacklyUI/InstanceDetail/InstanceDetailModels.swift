@@ -14,6 +14,11 @@ public final class InstanceDetailModels {
     private let sleep: @Sendable (Duration) async throws -> Void
     private var models: [UUID: InstanceDetailModel] = [:]
 
+    /// The Open In model of the page: the menus of the toolbar, the inspector, and the menu
+    /// bar share it (spec 0070). It is held here so the work of a chosen action outlives the
+    /// menu that started it.
+    public let openIn: OpenInModel
+
     /// The service the models read from and the Show Password and Copy buttons reveal with.
     public var detailService: InstanceDetailService { service }
 
@@ -21,11 +26,13 @@ public final class InstanceDetailModels {
     /// - Parameters:
     ///   - service: The reads, the event stream, and the secret methods.
     ///   - logs: The log reads and follows of the Logs tab (spec 0027).
+    ///   - openIn: What Open In asks of the system; NSWorkspace in the app.
     ///   - reload: The pause before a reload after a revision change.
     ///   - sleep: Waits for a duration and throws when cancelled.
     public init(
         service: InstanceDetailService,
         logs: InstanceLogsService = .disconnected,
+        openIn: OpenInPorts = .system,
         reload: Duration = InstanceDetailModel.reloadDebounce,
 
         sleep: @escaping @Sendable (Duration) async throws -> Void = {
@@ -34,6 +41,9 @@ public final class InstanceDetailModels {
     ) {
         self.service = service
         self.logsService = logs
+        self.openIn = OpenInModel(
+            locator: openIn.locator, opener: openIn.opener, fileExists: openIn.fileExists,
+            prepareTerminal: service.prepareTerminal, secrets: service.secrets)
         self.reload = reload
         self.sleep = sleep
     }

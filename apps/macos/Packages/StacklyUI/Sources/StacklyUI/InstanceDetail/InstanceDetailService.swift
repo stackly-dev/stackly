@@ -17,6 +17,9 @@ nonisolated public struct InstanceDetailService: Sendable {
     public var instance: @Sendable (UUID) async throws(ClientError) -> InstanceSummary?
     /// The secret methods, for `secret.reveal`.
     public var secrets: SecretsClient
+    /// `instance.prepare_terminal`: the path of the `.command` script of a `terminal` Open In
+    /// action (spec 0070, AC-4).
+    public var prepareTerminal: @Sendable (UUID, String) async throws(ClientError) -> String
 
     /// Creates a service.
     /// - Parameters:
@@ -25,18 +28,22 @@ nonisolated public struct InstanceDetailService: Sendable {
     ///   - instance: Reads one instance summary, or `nil` when it is gone.
     ///   - secretEvents: Opens the stream of `secret.` events.
     ///   - secrets: The secret methods.
+    ///   - prepareTerminal: Writes the script of a `terminal` action and returns its path.
     public init(
         detail: @escaping @Sendable (UUID) async throws(ClientError) -> InstanceDetail,
         usage: @escaping @Sendable (UUID, Bool, Bool) async throws(ClientError) -> DataUsage?,
         instance: @escaping @Sendable (UUID) async throws(ClientError) -> InstanceSummary?,
         secretEvents: @escaping @MainActor @Sendable () -> AsyncStream<Event>,
-        secrets: SecretsClient
+        secrets: SecretsClient,
+        prepareTerminal: @escaping @Sendable (UUID, String) async throws(ClientError) -> String =
+            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) }
     ) {
         self.detail = detail
         self.usage = usage
         self.instance = instance
         self.secretEvents = secretEvents
         self.secrets = secrets
+        self.prepareTerminal = prepareTerminal
     }
 
     /// A service over the detail methods of a client.
@@ -101,6 +108,14 @@ extension InstanceDetailService {
                 }
             },
             secretEvents: { model.sync.events(kindPrefix: "secret.") },
-            secrets: model.secrets)
+            secrets: model.secrets,
+            prepareTerminal: { id, action throws(ClientError) in
+                let params = PrepareTerminalParams(instanceId: id, action: action)
+                let reply = try await model.read(.instancePrepareTerminal(params)).get()
+                guard case .instancePrepareTerminal(let prepared) = reply else {
+                    throw .rejected(ClientErrorCatalog.protocolViolation())
+                }
+                return prepared.scriptPath
+            })
     }
 }
