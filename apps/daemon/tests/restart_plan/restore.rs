@@ -385,3 +385,48 @@ async fn an_instance_nobody_wants_any_more_is_skipped_and_the_plan_still_finishe
     harness.stop().await;
     ev.pass();
 }
+
+// covers: AC-4
+#[tokio::test(flavor = "multi_thread")]
+async fn an_instance_whose_data_went_missing_is_skipped_and_the_stored_plan_finishes() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Fixture,
+        expected = "a stop_restore instance whose data folder is gone when the next daemon restores it gets the outcome skipped without a failure code, and the registry, whose CHECK rules accept a failure code only on a failed outcome, stores the plan finished",
+    );
+    let mut harness = RestartHarness::new(Vec::new());
+    let api = harness.start().await;
+    let stays = create_at(&api, "stays", "0.4.0", json!({})).await;
+    api.start_ready(stays).await;
+    api.confirmed_restart()
+        .await
+        .expect("the restart is accepted");
+    drop(api);
+    assert_eq!(
+        harness.exit().await,
+        stackly_protocol::daemon::ShutdownMode::Restart
+    );
+    std::fs::remove_dir_all(harness.site.instance_paths(stays).data).expect("the data folder goes");
+
+    let api = harness.start().await;
+
+    let plan = api.wait_plan(PlanState::Finished).await;
+    assert_eq!(plan.instances[0].outcome, Some(PlanOutcome::Skipped));
+    assert_eq!(plan.instances[0].failure_code, None);
+    assert!(api.get(stays).await.unwrap().process.is_none());
+    harness.stop().await;
+    let stored = harness
+        .site
+        .open_registry()
+        .latest_restart_plan()
+        .expect("the plan reads")
+        .value
+        .expect("the plan is stored");
+    assert_eq!(stored.state(), stackly_domain::PlanState::Finished);
+    assert_eq!(
+        stored.instances()[0].outcome,
+        Some(stackly_domain::PlanOutcome::Skipped)
+    );
+    assert_eq!(stored.instances()[0].failure_code, None);
+    ev.pass();
+}

@@ -293,6 +293,9 @@ pub enum RestartPlanError {
     /// A `stop_restore` instance has not stopped yet.
     #[error("instance {0} has not stopped yet, so the plan cannot hand over")]
     NotStopped(InstanceId),
+    /// Only a `failed` outcome carries a failure code.
+    #[error("instance {0} has an outcome other than failed, which carries no failure code")]
+    FailureCodeWithoutFailure(InstanceId),
     /// A stored plan breaks a rule a new plan keeps.
     #[error("the stored restart plan is inconsistent: {0}")]
     Inconsistent(&'static str),
@@ -518,7 +521,9 @@ impl RestartPlan {
     ///
     /// Returns a transition error outside `restoring`, or
     /// [`RestartPlanError::UnknownInstance`] or
-    /// [`RestartPlanError::OutcomeRecorded`].
+    /// [`RestartPlanError::OutcomeRecorded`], or
+    /// [`RestartPlanError::FailureCodeWithoutFailure`] for a failure code on
+    /// an outcome other than `failed`.
     pub fn record_outcome(
         &mut self,
         instance: InstanceId,
@@ -531,6 +536,9 @@ impl RestartPlan {
         let entry = self.entry_mut(instance)?;
         if entry.outcome.is_some() {
             return Err(RestartPlanError::OutcomeRecorded(instance));
+        }
+        if failure_code.is_some() && outcome != PlanOutcome::Failed {
+            return Err(RestartPlanError::FailureCodeWithoutFailure(instance));
         }
         entry.outcome = Some(outcome);
         entry.ready_at = ready_at;
@@ -671,6 +679,39 @@ mod tests {
         assert_eq!(state, PlanState::Finished);
         assert_eq!(plan.stored().finished_at, Some(at(6)));
         assert_eq!(plan.stored().close_reason, None);
+    }
+
+    #[test]
+    fn only_a_failed_outcome_carries_a_failure_code() {
+        let stop = entry(PlanDecision::StopRestore);
+        let stop_id = stop.instance_id;
+        let mut plan = plan(vec![stop]);
+        plan.record_stopped(stop_id, at(1)).unwrap();
+        plan.hand_over(at(2)).unwrap();
+        plan.take_over(boot(1), Uuid::from_u128(11), at(3)).unwrap();
+        plan.record_reconciled(at(4)).unwrap();
+
+        assert_eq!(
+            plan.record_outcome(
+                stop_id,
+                PlanOutcome::Skipped,
+                None,
+                Some(FailureCode::DATA_MISSING),
+                at(5)
+            ),
+            Err(RestartPlanError::FailureCodeWithoutFailure(stop_id)),
+            "the registry rejects a failure code on a skipped outcome, so the domain does too"
+        );
+        let state = plan
+            .record_outcome(
+                stop_id,
+                PlanOutcome::Failed,
+                None,
+                Some(FailureCode::DATA_MISSING),
+                at(6),
+            )
+            .unwrap();
+        assert_eq!(state, PlanState::Finished);
     }
 
     #[test]

@@ -8,6 +8,8 @@
 
 #[path = "common/mod.rs"]
 mod common;
+#[path = "restart_plan/errors.rs"]
+mod errors;
 #[path = "restart_plan/harness.rs"]
 mod harness;
 #[path = "restart_plan/plan.rs"]

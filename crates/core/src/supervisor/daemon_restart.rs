@@ -14,8 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use stackly_domain::{
     DetailKey, ErrorCodeName, GuardView, Guarded, Instance, InstanceFilter, InstanceId,
-    InstanceLifecycle, NewRestartPlan, PlanDecision, PlanInstance, RegistryError, RestartPlan,
-    RestartPlanId, Sha256Digest, StageName, StopIntent, WriteBatch, WriteOp,
+    InstanceLifecycle, NewRestartPlan, OperationId, PlanDecision, PlanInstance, RegistryError,
+    RestartPlan, RestartPlanId, Sha256Digest, StageName, StopIntent, WriteBatch, WriteOp,
 };
 use tokio::sync::{Semaphore, oneshot};
 use tokio::task::JoinSet;
@@ -446,45 +446,57 @@ async fn restart_steps(
     let mut plan = write_plan(sup, spec, prepared, &mut ctx).await?;
     sup.deps().events.restart_plan(&plan);
 
+    // From here on the plan is stored, so a step that ends early, whether
+    // by a cancel or an error, closes it as aborted and starts again what
+    // it stopped (AC-11). Only a shutdown leaves the plan to the next
+    // daemon (AC-14).
+    match stop_and_hand_over(sup, &mut plan, &mut ctx, handover).await {
+        Err(WorkError::Abandoned) => Err(WorkError::Abandoned),
+        Err(error) => {
+            abort_plan(sup, &mut plan, ctx.id()).await;
+            Err(error)
+        }
+        Ok(()) => Ok(WorkOutcome {
+            result: OperationOutcome {
+                resources: Vec::new(),
+                partial: Vec::new(),
+            },
+            finalize: None,
+        }),
+    }
+}
+
+/// The steps after the plan is written: the stops, then the handover.
+/// Leaves `plan` in `stopping` when it returns an error.
+async fn stop_and_hand_over(
+    sup: &Supervisor,
+    plan: &mut RestartPlan,
+    ctx: &mut OperationContext,
+    handover: Arc<dyn RestartHandover>,
+) -> Result<(), WorkError> {
     ctx.begin_step(StepSpec::new(StageName::STOP).irreversible())
         .await?;
     ctx.set_stage(StageName::STOP).await?;
-    let failure = stop_instances(sup, &mut plan).await;
+    let failure = stop_instances(sup, plan).await;
 
     ctx.begin_step(StepSpec::new(StageName::COMPLETE).irreversible())
         .await?;
     ctx.set_stage(StageName::COMPLETE).await?;
-    let now = sup.deps().platform.clock().now();
-    let operation = ctx.id();
     if let Some(error) = failure {
-        plan.abort(now).map_err(|error| {
-            WorkError::Failed(Box::new(SupervisorError::internal(error.to_string())))
-        })?;
-        // A plan that cannot be written as aborted stays `stopping` in the
-        // registry, which the next daemon of this boot takes over; the
-        // instances it stopped start again here all the same.
-        match sup.persist_plan(&plan).await {
-            Ok(()) => sup.deps().events.restart_plan(&plan),
-            Err(persist) => {
-                tracing::warn!(%persist, "the aborted restart plan could not be written");
-            }
-        }
-        queue_restore(sup, &plan);
-        let sup = sup.clone();
-        tokio::spawn(async move {
-            wait_final(&sup, operation).await;
-            sup.start_reconciled();
-        });
         return Err(WorkError::Failed(Box::new(error)));
     }
-    plan.hand_over(now).map_err(|error| {
+    let now = sup.deps().platform.clock().now();
+    let mut handed = plan.clone();
+    handed.hand_over(now).map_err(|error| {
         WorkError::Failed(Box::new(SupervisorError::internal(error.to_string())))
     })?;
-    sup.persist_plan(&plan)
+    ctx.finish_step(None).await?;
+    sup.persist_plan(&handed)
         .await
         .map_err(|error| WorkError::Failed(Box::new(error)))?;
-    sup.deps().events.restart_plan(&plan);
-    ctx.finish_step(None).await?;
+    *plan = handed;
+    sup.deps().events.restart_plan(plan);
+    let operation = ctx.id();
     let waiting = sup.clone();
     tokio::spawn(async move {
         wait_final(&waiting, operation).await;
@@ -492,13 +504,30 @@ async fn restart_steps(
             handover.handed_over();
         }
     });
-    Ok(WorkOutcome {
-        result: OperationOutcome {
-            resources: Vec::new(),
-            partial: Vec::new(),
-        },
-        finalize: None,
-    })
+    Ok(())
+}
+
+/// Closes the stored plan as `aborted` and starts again the instances it
+/// stopped, once the operation is final. A plan that cannot be written as
+/// aborted stays `stopping` in the registry, which the next daemon of this
+/// boot closes; the view of the aborted plan is published from memory and
+/// the instances start again all the same.
+async fn abort_plan(sup: &Supervisor, plan: &mut RestartPlan, operation: OperationId) {
+    let now = sup.deps().platform.clock().now();
+    if let Err(error) = plan.abort(now) {
+        tracing::warn!(%error, "the restart plan could not be aborted");
+        return;
+    }
+    if let Err(persist) = sup.persist_plan(plan).await {
+        tracing::warn!(%persist, "the aborted restart plan could not be written");
+    }
+    sup.deps().events.restart_plan(plan);
+    queue_restore(sup, plan);
+    let sup = sup.clone();
+    tokio::spawn(async move {
+        wait_final(&sup, operation).await;
+        sup.start_reconciled();
+    });
 }
 
 /// Stops every instance the plan stops, at most

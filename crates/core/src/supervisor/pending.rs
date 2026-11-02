@@ -109,9 +109,14 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
     // A failed read decides nothing (AC-22): it waits and reads again.
     let instance = match read_instance_actor(sup, id).await {
         Ok(instance) => instance,
-        Err(SupervisorError::NotFound(_)) => return,
+        Err(SupervisorError::NotFound(_)) => {
+            // A removed instance has nothing left for a plan to wait for.
+            sup.settle_restored(id, None).await;
+            return;
+        }
         Err(error) => {
             tracing::warn!(instance = %id, %error, "a pending run is dropped: the instance cannot be read");
+            sup.settle_restored(id, None).await;
             return;
         }
     };

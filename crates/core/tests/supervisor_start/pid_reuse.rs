@@ -3,15 +3,21 @@
 //! and start never signal that process and never take it for the
 //! instance's.
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use stackly_core::supervisor::{RegistryMode, codes};
+use stackly_core::operation::{BeginOutcome, BeginRequest, BusyPolicy, Origin};
+use stackly_core::supervisor::{
+    DaemonRestartRequest, RegistryMode, RestartHandover, codes, plan_digest,
+};
 use stackly_domain::{
     DesiredState, IdentityCheck, IdentityCheckName, InstanceBlocker, InstanceId, InstanceLifecycle,
-    OperationState,
+    JournalPayload, LockKey, OperationKind, OperationResource, OperationState, PlanState, Registry,
+    RestartPlanId,
 };
 use stackly_platform::ChildRole;
 use stackly_testkit::{FakeProcessState, ProcessOp};
+use uuid::Uuid;
 
 use crate::common::{Plant, Rig, Spec};
 
@@ -162,4 +168,87 @@ async fn the_recheck_never_signals_a_pid_that_another_executable_took_after_the_
 
     nothing_was_signalled(&rig, identity.pid);
     assert!(rig.processes().spawns().is_empty(), "no start of its own");
+}
+
+/// Ignores the call that tells the daemon it may exit.
+struct HandedOver;
+
+impl RestartHandover for HandedOver {
+    fn handed_over(&self) {}
+}
+
+#[tokio::test]
+async fn a_restart_plan_never_signals_a_pid_that_another_executable_took_after_the_adoption() {
+    // covers: spec 0030 AC-3 (restart plan)
+    let rig = Rig::with_config(|config| config.handover_proven.clear()).await;
+    let id = rig.instance(&spec(DesiredState::Running));
+    let identity = rig.plant(
+        id,
+        Plant {
+            stopped: false,
+            holds_lock: true,
+        },
+    );
+    let report = rig.sup.reconcile(RegistryMode::Ready).await.unwrap();
+    assert_eq!(report.adopted, 1);
+    // The server ended and a `sleep` took its PID before the plan stops it:
+    // another executable, started later.
+    rig.processes().update_facts(identity.pid, |facts| {
+        facts.executable = "/usr/bin/sleep".into();
+        facts.start = stackly_domain::ProcessStart::new(1_760_000_999, 1)
+            .expect("a start time of the reused PID");
+    });
+    let entries = rig.sup.restart_plan_entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    let (prepared, _written) = tokio::sync::oneshot::channel();
+    let handover = Arc::new(HandedOver);
+    let work = rig.sup.daemon_restart_work(DaemonRestartRequest::new(
+        RestartPlanId::generate(),
+        plan_digest(&entries),
+        Uuid::now_v7(),
+        prepared,
+        handover,
+    ));
+    let outcome = rig
+        .engine
+        .begin(BeginRequest {
+            kind: OperationKind::DaemonRestart,
+            resource: OperationResource::Manager,
+            creates_resource: false,
+            extra_locks: vec![LockKey::for_resource(OperationResource::Instance(id))],
+            busy: BusyPolicy::Queue,
+            expected_revision: None,
+            origin: Origin::Background,
+            input: JournalPayload::empty(),
+            work,
+            precheck: None,
+        })
+        .await
+        .expect("the engine accepts the restart");
+    let BeginOutcome::Created(view) = outcome else {
+        panic!("expected a created operation, got {outcome:?}");
+    };
+
+    let detail = rig.wait_final(view.operation.id()).await;
+
+    // The plan cannot prove the process is the server, so its stop does
+    // not finish, and the plan aborts; the process that owns the PID now
+    // is never signalled.
+    assert_eq!(detail.view.operation.state(), OperationState::Failed);
+    // The platform refuses a signal to a process with another start time,
+    // so the other process received nothing and still runs.
+    assert_eq!(rig.processes().signals(identity.pid), []);
+    assert_eq!(rig.processes().count(ProcessOp::ForceKill), 0);
+    assert_eq!(
+        rig.processes().process_state(identity.pid),
+        Some(FakeProcessState::Running)
+    );
+    let plan = rig
+        .registry
+        .latest_restart_plan()
+        .unwrap()
+        .value
+        .expect("the plan was written");
+    assert_eq!(plan.state(), PlanState::Aborted);
+    assert!(plan.instance(id).expect("in the plan").stopped_at.is_none());
 }
