@@ -168,7 +168,7 @@ async fn a_new_boot_session_expires_the_plan_and_starts_nothing() {
     let ev = evidence!(
         covers = ["AC-067"],
         kind = Kind::Fixture,
-        expected = "a plan that the next daemon finds in another boot session expires with boot_changed, every outcome is skipped, the stopped instance stays stopped with its desired state untouched, and nothing starts",
+        expected = "a plan that the next daemon finds in another boot session expires with boot_changed, every outcome is skipped, the stopped instance stays stopped, and nothing starts",
     );
     let mut harness = RestartHarness::new(Vec::new());
     let api = harness.start().await;
@@ -189,6 +189,12 @@ async fn a_new_boot_session_expires_the_plan_and_starts_nothing() {
         .status()
         .expect("sqlite3 runs");
     assert!(status.success());
+    // A new boot is a new login session too: the session ID holds the boot ID
+    // (spec 0031), so the next daemon rotates into a new session, which turns
+    // the desired state of a manual instance off (spec 0031, AC-5) and starts
+    // nothing, instead of reading the same session as a daemon that came back
+    // and starts what it still wants (AC-13).
+    harness.session.set_audit_session(100_002);
 
     let api = harness.start().await;
     let plan = api.wait_plan(PlanState::Expired).await;
@@ -201,7 +207,11 @@ async fn a_new_boot_session_expires_the_plan_and_starts_nothing() {
     tokio::time::sleep(Duration::from_millis(500)).await;
     let summary = api.get(stays).await.unwrap();
     assert_eq!(summary.lifecycle, InstanceLifecycle::Stopped);
-    assert_eq!(summary.desired, InstanceDesired::Running);
+    assert_eq!(
+        summary.desired,
+        InstanceDesired::Stopped,
+        "the plan leaves the desired state alone; the new session turns off a manual instance"
+    );
     assert!(summary.process.is_none());
     harness.stop().await;
     ev.pass();

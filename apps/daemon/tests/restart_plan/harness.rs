@@ -21,6 +21,7 @@ use stackly_protocol::daemon::{ShutdownAccepted, ShutdownMode, ShutdownParams};
 use stackly_protocol::events::ShutdownReason;
 use stackly_protocol::restart::{PlanState, RestartPlanView, RestartPreview};
 use stackly_protocol::{Call, ErrorBody, Reply, Timestamp};
+use stackly_testkit::FakeLoginSessionInfo;
 use stacklyd::log_sink::{LogSink, LogSinkConfig};
 use stacklyd::map::StartFacts;
 use stacklyd::server::{self, DaemonConfig, DaemonDeps, DaemonHandle};
@@ -38,6 +39,10 @@ pub struct RestartHarness {
     config: DaemonConfig,
     clock: Option<Arc<dyn Clock>>,
     handle: Option<DaemonHandle>,
+    /// The login session the daemons read (spec 0031). The same session
+    /// for every daemon, as after a restart in one login; a test that
+    /// stands for a new boot changes it between two daemons.
+    pub session: FakeLoginSessionInfo,
 }
 
 impl RestartHarness {
@@ -56,6 +61,7 @@ impl RestartHarness {
             config,
             clock: None,
             handle: None,
+            session: FakeLoginSessionInfo::new(),
         }
     }
 
@@ -68,21 +74,22 @@ impl RestartHarness {
     /// The deps of a daemon: the site's platform, or the same platform
     /// with the clock of [`use_clock`](Self::use_clock).
     fn deps(&self) -> DaemonDeps {
-        let Some(clock) = self.clock.clone() else {
-            return self.site.deps(self.config.clone());
-        };
-        let platform = Platform::new(
-            Arc::new(FixedRoots::new(self.site.root.roots())),
-            Arc::new(MacosFilesystem),
-            clock,
-            Arc::new(MacosIdentity),
-            Arc::new(MacosPlatformInfo::read().expect("this Mac reports its OS version")),
-        )
-        .with_secrets(Arc::clone(&self.site.secrets) as Arc<dyn stackly_platform::SecretStore>)
-        .with_processes(Arc::new(MacosProcessSupervision::new()))
-        .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
-        .with_fetcher(Arc::new(MacosFetcher::new()))
-        .with_code_signing(Arc::new(MacosCodeSigning::new()));
+        let platform = match self.clock.clone() {
+            None => self.site.platform.clone(),
+            Some(clock) => Platform::new(
+                Arc::new(FixedRoots::new(self.site.root.roots())),
+                Arc::new(MacosFilesystem),
+                clock,
+                Arc::new(MacosIdentity),
+                Arc::new(MacosPlatformInfo::read().expect("this Mac reports its OS version")),
+            )
+            .with_secrets(Arc::clone(&self.site.secrets) as Arc<dyn stackly_platform::SecretStore>)
+            .with_processes(Arc::new(MacosProcessSupervision::new()))
+            .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
+            .with_fetcher(Arc::new(MacosFetcher::new()))
+            .with_code_signing(Arc::new(MacosCodeSigning::new())),
+        }
+        .with_login_session(Arc::new(self.session.clone()));
         let log = LogSink::start(Box::new(io::sink()), LogSinkConfig::DAEMON)
             .expect("the log writer starts");
         let facts = StartFacts::new(

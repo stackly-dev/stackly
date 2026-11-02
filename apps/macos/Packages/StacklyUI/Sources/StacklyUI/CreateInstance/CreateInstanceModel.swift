@@ -72,6 +72,8 @@ public final class CreateInstanceModel {
     public private(set) var endpoints: [EndpointDraft] = []
     /// Whether the instance starts after it is created.
     public private(set) var startAfterCreating = true
+    /// Whether the new instance starts at every login (spec 0031, AC-19). Off by default.
+    public private(set) var startAtLogin = false
     /// The draft generation: raised by every change.
     public private(set) var generation = 0
     /// The newest preflight reply received, of any generation.
@@ -545,6 +547,13 @@ public final class CreateInstanceModel {
         draftDidChange()
     }
 
+    /// Sets "Start at login".
+    public func setStartAtLogin(_ value: Bool) {
+        guard value != startAtLogin else { return }
+        startAtLogin = value
+        draftDidChange()
+    }
+
     /// The draft the preflight takes, or `nil` before the form is read. A Fixed port that is
     /// not a number is left out; the row says so and Create stays off.
     public func draft() -> PreflightCreateParams? {
@@ -554,7 +563,7 @@ public final class CreateInstanceModel {
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: schema.secretPlans(), start: startAfterCreating,
-            startup: nil)
+            startup: startAtLogin ? .atLogin : nil)
     }
 
     private func draftDidChange(immediately: Bool = false, fromPerson: Bool = true) {
@@ -731,7 +740,8 @@ public final class CreateInstanceModel {
             name: name, displayName: nil,
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
-            settings: schema.settings(), secrets: secrets, startup: nil)
+            settings: schema.settings(), secrets: secrets,
+            startup: startAtLogin ? .atLogin : nil)
         let outcome = await send(.instanceCreate(params), key)
         switch outcome {
         case .completed(let reply):

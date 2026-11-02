@@ -20,6 +20,10 @@ nonisolated public struct InstanceDetailService: Sendable {
     /// `instance.prepare_terminal`: the path of the `.command` script of a `terminal` Open In
     /// action (spec 0070, AC-4).
     public var prepareTerminal: @Sendable (UUID, String) async throws(ClientError) -> String
+    /// `instance.set_startup`: sends the policy with a new idempotency key (spec 0031).
+    public var setStartup: @MainActor @Sendable (UUID, StartupPolicyKind) async -> MutationOutcome
+    /// The session and the agent the Autostart row words its text with (spec 0031).
+    public var autostartContext: @MainActor @Sendable () -> AutostartContext
 
     /// Creates a service.
     /// - Parameters:
@@ -29,6 +33,8 @@ nonisolated public struct InstanceDetailService: Sendable {
     ///   - secretEvents: Opens the stream of `secret.` events.
     ///   - secrets: The secret methods.
     ///   - prepareTerminal: Writes the script of a `terminal` action and returns its path.
+    ///   - setStartup: Sends `instance.set_startup`.
+    ///   - autostartContext: Reads the session and the agent for the Autostart text.
     public init(
         detail: @escaping @Sendable (UUID) async throws(ClientError) -> InstanceDetail,
         usage: @escaping @Sendable (UUID, Bool, Bool) async throws(ClientError) -> DataUsage?,
@@ -36,7 +42,11 @@ nonisolated public struct InstanceDetailService: Sendable {
         secretEvents: @escaping @MainActor @Sendable () -> AsyncStream<Event>,
         secrets: SecretsClient,
         prepareTerminal: @escaping @Sendable (UUID, String) async throws(ClientError) -> String =
-            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) }
+            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) },
+        setStartup:
+            @escaping @MainActor @Sendable (UUID, StartupPolicyKind) async -> MutationOutcome =
+            { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
+        autostartContext: @escaping @MainActor @Sendable () -> AutostartContext = { .unknown }
     ) {
         self.detail = detail
         self.usage = usage
@@ -44,6 +54,8 @@ nonisolated public struct InstanceDetailService: Sendable {
         self.secretEvents = secretEvents
         self.secrets = secrets
         self.prepareTerminal = prepareTerminal
+        self.setStartup = setStartup
+        self.autostartContext = autostartContext
     }
 
     /// A service over the detail methods of a client.
@@ -116,6 +128,16 @@ extension InstanceDetailService {
                     throw .rejected(ClientErrorCatalog.protocolViolation())
                 }
                 return prepared.scriptPath
+            },
+            setStartup: { id, startup in
+                let call = Call.instanceSetStartup(
+                    SetStartupParams(instanceId: id, startup: startup, expectedRevision: nil))
+                return await MutationPath(model: model).perform(call)
+            },
+            autostartContext: {
+                AutostartContext(
+                    rotation: model.lastDaemon?.info?.session?.rotation,
+                    agent: model.agent?.assessment?.state, rootOverride: model.rootOverrideActive)
             })
     }
 }

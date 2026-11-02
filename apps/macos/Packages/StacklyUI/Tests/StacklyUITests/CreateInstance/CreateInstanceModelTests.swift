@@ -119,6 +119,26 @@ struct CreateInstanceModelTests {
         #expect(rig.service.preflightCalls.map(\.name) == ["postgresql-17", "orders-db"])
     }
 
+    @Test func startAtLoginIsOffUntilChosenAndGoesToThePreflightAndTheCreate() async throws {
+        let rig = await editing()
+        #expect(rig.model.startAtLogin == false)
+        #expect(rig.model.draft()?.startup == nil)
+        let before = rig.service.preflightCalls.count
+
+        rig.model.setStartAtLogin(true)
+        await settle("a preflight") { rig.service.preflightCalls.count == before + 1 }
+        #expect(rig.service.preflightCalls.last?.startup == .atLogin)
+
+        await creating(
+            rig, secrets: [SecretFieldInput(field: "superuserPassword", input: .generate)])
+        let first = try #require(rig.sent.first)
+        guard case .instanceCreate(let params) = first.call else {
+            Issue.record("the first mutation is not instance.create")
+            return
+        }
+        #expect(params.startup == .atLogin)
+    }
+
     @Test func everyChangeOfTheDraftAsksAgain() async {
         let rig = await editing()
         let before = rig.service.preflightCalls.count

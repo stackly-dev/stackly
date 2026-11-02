@@ -48,6 +48,20 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["AC-014"],
+                expected:
+                    "The Autostart row of an instance that starts at login shows the toggle on and its note"
+            ))
+        func detailOfAnInstanceThatStartsAtLogin() async throws {
+            var instances = FixtureScenario.instanceCases
+            instances[0] = instances[0].startingAtLogin(.none)
+            let rig = await rig(instances: instances)
+            try await assertSnapshot(
+                detail(rig, 1), named: "instance-detail-autostart", size: Self.canvas)
+        }
+
+        @Test(
+            .evidence(
                 covers: ["NFR-012", "AC-012"],
                 expected: "The detail of a running, ready instance renders in every variant"))
         func detailOfAReadyInstance() async throws {
@@ -330,7 +344,19 @@ extension InstanceSummary {
             restartTotal: 0,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
-            capabilities: nil, lastExit: nil,
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            capabilities: nil, lastExit: nil, autostart: autostart)
+    }
+
+    /// A copy that starts at login, with `session` as its lease; every other field stays.
+    fileprivate func startingAtLogin(_ session: AutostartSession) -> InstanceSummary {
+        InstanceSummary(
+            id: id, name: name, displayName: displayName, revision: revision, software: software,
+            provider: provider, runtimeId: runtimeId, runtimeVersion: runtimeVersion,
+            lifecycle: lifecycle, desired: desired, readiness: readiness, health: health,
+            statusSeq: statusSeq, process: process, lastFailure: lastFailure, restart: restart,
+            restartTotal: restartTotal, blocker: blocker, endpoints: endpoints,
+            leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
+            ownership: ownership, initialized: initialized, capabilities: capabilities,
+            lastExit: lastExit, autostart: InstanceAutostart(policy: .atLogin, session: session))
     }
 }
