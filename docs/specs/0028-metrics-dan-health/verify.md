@@ -48,7 +48,7 @@ _Langkah 8 sudah dibangun: latensi di `ProbeOutcome` dan observasi domain, `late
 ### UI / manual
 
 - [ ] Di Mac asli: jalankan instance PostgreSQL 17 sampai `ready`, tutup layar sampai Mac sleep beberapa menit, lalu bangunkan → readiness dan health sebentar `unknown` reason `waking` (satu `instance.health_changed`), lalu kembali `ready` dan `healthy` dengan `probe_ok` dalam beberapa detik, `restartTotal` tidak naik, port tidak berubah. Dicatat sebagai evidence manual `native`, `BLOCKED` kalau tidak dijalankan (langkah 9) → AC-9, AC-15
-- [ ] Dengan daemon jalan dan satu instance fake `ready`: `stackly instance get <nama> --json` → `readiness.latencyMs` dan `health.latencyMs` terisi bilangan bulat (bukan null) dan tidak lebih dari timeout probe dalam milidetik → AC-7
+- [x] Dengan daemon jalan dan satu instance fake `ready`: `stackly instance get <nama> --json` → `readiness.latencyMs` dan `health.latencyMs` terisi bilangan bulat (bukan null) dan tidak lebih dari timeout probe dalam milidetik → AC-7
 
 ### Commands
 
