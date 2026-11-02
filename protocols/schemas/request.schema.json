@@ -844,6 +844,36 @@
           ]
         },
         {
+          "description": "Reads what Stop All would stop (spec 0031).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "instance.preview_stop_all"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Stops every instance that is wanted or runs (spec 0031).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StopAllParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.stop_all"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "Changes the ports of an instance's IP endpoints (spec 0029).",
           "type": "object",
           "properties": {
@@ -2630,6 +2660,10 @@
           "const": "unrecognized"
         }
       ]
+    },
+    "StopAllParams": {
+      "description": "Params of `instance.stop_all`. None yet; the struct keeps room for\nfields without a new major.",
+      "type": "object"
     },
     "StopInstanceParams": {
       "description": "Params of `instance.stop`.",

@@ -1223,6 +1223,20 @@ async fn dispatch(
             .map(|reply| Reply::InstanceRename(Box::new(reply))),
             None,
         ),
+        Call::InstancePreviewStopAll => (
+            guarded(core, handlers, context, |h, c, x| h.preview_stop_all(c, x))
+                .await
+                .map(Reply::InstancePreviewStopAll),
+            None,
+        ),
+        Call::InstanceStopAll(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.stop_all(c, x, p)
+            })
+            .await
+            .map(Reply::InstanceStopAll),
+            None,
+        ),
         Call::InstanceSetStartup(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.set_startup(c, x, p)

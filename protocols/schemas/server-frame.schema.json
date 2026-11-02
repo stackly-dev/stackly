@@ -2444,6 +2444,31 @@
         "reference"
       ]
     },
+    "DemandSourceKind": {
+      "description": "Why an instance is wanted running, from its active lease. Open.",
+      "oneOf": [
+        {
+          "description": "A person started it.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "It starts at login and this session holds the lease.",
+          "type": "string",
+          "const": "startup"
+        },
+        {
+          "description": "An environment holds it.",
+          "type": "string",
+          "const": "environment"
+        },
+        {
+          "description": "A source this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "DependencyInfo": {
       "description": "One library an artifact links.",
       "type": "object",
@@ -5105,6 +5130,25 @@
         }
       ]
     },
+    "InstanceRef": {
+      "description": "An instance named without its state.",
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name"
+      ]
+    },
     "InstanceRemoved": {
       "description": "Content of `instance.removed`: the instance row was deleted. The event's\nrevision is the last revision plus one, and a client drops the instance\nfrom its list. No daemon sends it before feature 20.",
       "type": "object",
@@ -6683,6 +6727,11 @@
           "description": "Change when an instance starts on its own (spec 0031).",
           "type": "string",
           "const": "set_instance_startup"
+        },
+        {
+          "description": "Stop every instance that is wanted or runs (spec 0031).",
+          "type": "string",
+          "const": "stop_all_instances"
         },
         {
           "description": "Write a new config revision and make it take effect (spec 0029).",
@@ -9150,6 +9199,40 @@
           ]
         },
         {
+          "description": "What Stop All would stop.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StopAllPreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.preview_stop_all"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "How Stop All ended.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StopAllResult"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.stop_all"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "The operation that changes the ports, or the verdict of a dry run.",
           "type": "object",
           "properties": {
@@ -11016,6 +11099,159 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "StopAllEntry": {
+      "description": "One instance that did not stop, with the error code that says why.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The error code, such as `supervisor.stop_timeout`.",
+          "type": "string"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "instanceId",
+        "code"
+      ]
+    },
+    "StopAllItem": {
+      "description": "One instance Stop All would stop.",
+      "type": "object",
+      "properties": {
+        "autostart": {
+          "description": "Its startup policy and the lease of this session.",
+          "$ref": "#/$defs/InstanceAutostart"
+        },
+        "demand": {
+          "description": "The sources of its active leases.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemandSourceKind"
+          }
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "lifecycle": {
+          "description": "Its lifecycle now.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "lifecycle",
+        "demand",
+        "autostart"
+      ]
+    },
+    "StopAllPreview": {
+      "description": "Reply of `instance.preview_stop_all`. Every list is ordered by name and\nthen ID.",
+      "type": "object",
+      "properties": {
+        "alreadyStopping": {
+          "description": "The instances that are stopping already, on their own.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InstanceRef"
+          }
+        },
+        "atLoginCount": {
+          "description": "How many of `items` start at login.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "items": {
+          "description": "The instances `instance.stop_all` would stop.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StopAllItem"
+          }
+        },
+        "skipped": {
+          "description": "The instances left alone.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StopAllSkip"
+          }
+        }
+      },
+      "required": [
+        "items",
+        "alreadyStopping",
+        "skipped",
+        "atLoginCount"
+      ]
+    },
+    "StopAllResult": {
+      "description": "Reply of `instance.stop_all`, once the operation ended.",
+      "type": "object",
+      "properties": {
+        "failed": {
+          "description": "The instances whose stop failed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StopAllEntry"
+          }
+        },
+        "skipped": {
+          "description": "The instances left alone, including the ones a cancel reached.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StopAllEntry"
+          }
+        },
+        "stopped": {
+          "description": "The instances that stopped.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "stopped",
+        "failed",
+        "skipped"
+      ]
+    },
+    "StopAllSkip": {
+      "description": "An instance Stop All leaves alone, and why.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The error code that says why, such as `supervisor.identity_unproven`.",
+          "type": "string"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "code"
       ]
     },
     "Subscribed": {

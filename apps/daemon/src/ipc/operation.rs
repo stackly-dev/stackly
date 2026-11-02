@@ -666,7 +666,7 @@ fn shutting_down() -> ErrorBody {
     ErrorBody::new(&daemon::SHUTTING_DOWN, "the daemon is stopping")
 }
 
-fn payload_too_large(field: &str, max: usize) -> ErrorBody {
+pub(crate) fn payload_too_large(field: &str, max: usize) -> ErrorBody {
     ErrorBody::new(
         &operation::PAYLOAD_TOO_LARGE,
         "a journal payload is above its limit",

@@ -5,6 +5,8 @@
 
 use stackly_domain::ErrorCodeName;
 
+/// The reason a step of an operation was skipped because a cancel came first.
+pub const CANCELLED: ErrorCodeName = ErrorCodeName::from_static("operation.cancelled");
 /// The final error of an operation closed after the daemon stopped.
 pub const INTERRUPTED: ErrorCodeName = ErrorCodeName::from_static("operation.interrupted");
 /// The final error of an operation that shutdown stopped.
@@ -33,6 +35,7 @@ pub const INTERNAL_UNEXPECTED: ErrorCodeName = ErrorCodeName::from_static("inter
 
 /// Every code above, for the catalog test of `stackly-protocol`.
 pub const ALL: &[ErrorCodeName] = &[
+    CANCELLED,
     INTERRUPTED,
     DAEMON_STOPPING,
     ABANDONED,

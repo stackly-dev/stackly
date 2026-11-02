@@ -1,0 +1,52 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000c04",
+    "reply": {
+      "type": "instance.preview_stop_all",
+      "content": {
+        "items": [
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+            "name": "orders-db",
+            "lifecycle": "running",
+            "demand": [
+              "manual",
+              "wish"
+            ],
+            "autostart": {
+              "policy": "on_wake",
+              "session": "paused"
+            }
+          },
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000002",
+            "name": "queue",
+            "lifecycle": "starting",
+            "demand": [
+              "manual"
+            ],
+            "autostart": {
+              "policy": "manual",
+              "session": "none"
+            }
+          }
+        ],
+        "alreadyStopping": [
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000003",
+            "name": "cache"
+          }
+        ],
+        "skipped": [
+          {
+            "instanceId": "0192f3a5-0000-7000-8000-000000000004",
+            "name": "lost",
+            "code": "supervisor.identity_unproven"
+          }
+        ],
+        "atLoginCount": 1
+      }
+    }
+  }
+}

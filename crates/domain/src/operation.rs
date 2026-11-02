@@ -218,6 +218,9 @@ code_enum! {
         RenameInstance => "rename_instance",
         /// Change when an instance starts on its own (spec 0031).
         SetInstanceStartup => "set_instance_startup",
+        /// Stop every instance that is wanted or runs, one step each (spec
+        /// 0031); its resource is the manager.
+        StopAllInstances => "stop_all_instances",
         /// Remove an instance and keep its data.
         RemoveInstance => "remove_instance",
         /// Delete an instance and its data.
@@ -294,7 +297,8 @@ impl OperationKind {
             | Self::ForceStopInstance
             | Self::ApplyConfig
             | Self::ChangeEndpoints
-            | Self::DaemonRestart => InterruptPolicy::CloseInterrupted,
+            | Self::DaemonRestart
+            | Self::StopAllInstances => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
@@ -852,7 +856,8 @@ mod tests {
     }
 
     #[test]
-    fn the_instance_process_kinds_config_commits_and_the_daemon_restart_close_as_interrupted() {
+    fn the_instance_process_kinds_config_commits_the_daemon_restart_and_stop_all_close_as_interrupted()
+     {
         let closing: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
@@ -867,6 +872,7 @@ mod tests {
                 "restart_instance",
                 "reload_instance",
                 "force_stop_instance",
+                "stop_all_instances",
                 "apply_config",
                 "change_endpoints",
                 "daemon_restart",

@@ -1817,6 +1817,36 @@
       "file": "request-instance-create-autostart.json",
       "type": "Request",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-preview-stop-all.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-stop-all.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-preview-stop-all.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-preview-stop-all-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-stop-all.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-stop-all-partial.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

@@ -24,4 +24,5 @@ mod spool;
 mod start;
 mod status;
 mod stop;
+mod stop_all;
 mod wake;

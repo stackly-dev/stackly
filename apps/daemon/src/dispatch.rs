@@ -52,6 +52,7 @@ use stackly_protocol::secret::{
     DeleteSecretParams, DeleteSecretReply, ListSecretsParams, ListSecretsReply, RevealSecretParams,
     RevealSecretReply, SecretStatusParams, SecretStatusReply, SetSecretParams, SetSecretReply,
 };
+use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::instance;
@@ -60,6 +61,7 @@ use crate::ipc::operation::TestStartingMethod;
 use crate::ipc::restart;
 use crate::ipc::runtime;
 use crate::ipc::secret;
+use crate::ipc::stop_all;
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -439,6 +441,26 @@ pub trait Handlers: Send + Sync + 'static {
         params: RenameInstanceParams,
     ) -> HandlerFuture<'a, InstanceActionAccepted> {
         instance::rename(core, context, params)
+    }
+
+    /// `instance.preview_stop_all` (spec 0031).
+    fn preview_stop_all<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, Box<StopAllPreview>> {
+        let _ = context;
+        stop_all::preview(core)
+    }
+
+    /// `instance.stop_all` (spec 0031).
+    fn stop_all<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: StopAllParams,
+    ) -> HandlerFuture<'a, Box<StopAllResult>> {
+        stop_all::stop_all(core, context, params)
     }
 
     /// `instance.set_startup` (spec 0031).

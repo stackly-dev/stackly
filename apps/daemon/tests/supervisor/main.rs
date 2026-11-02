@@ -30,5 +30,6 @@ mod process;
 mod restart;
 mod same_runtime;
 mod slow_logs;
+mod stop_all;
 mod stop_restart_reload;
 mod support;

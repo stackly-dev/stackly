@@ -14,3 +14,4 @@ pub mod duplicate;
 pub mod fuzzing;
 pub mod open_with;
 pub mod rebind;
+pub mod stop_all;

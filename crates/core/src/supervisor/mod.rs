@@ -93,6 +93,7 @@ mod startup;
 mod status;
 mod steps;
 mod stop;
+mod stop_all;
 pub mod wake;
 
 use stackly_domain::ObservationDetail;
@@ -134,6 +135,7 @@ pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};
 pub use status::{InstanceStatus, ProcessStatus, RestartStatus};
 pub use stop::StopRequest;
+pub use stop_all::StopAllRequest;
 
 /// Longest [`ObservationDetail`], in characters.
 const DETAIL_MAX_CHARS: usize = 256;
