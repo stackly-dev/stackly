@@ -82,7 +82,8 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceLogsRead = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceLogsFollow = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceLogsUnfollow = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 42)
+        #expect(methods.contains(.daemonRestartPreview))
+        #expect(Set(methods.map(\.methodName)).count == 43)
     }
 
     private func check<Value: Codable & Equatable>(

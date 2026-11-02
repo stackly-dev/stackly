@@ -466,6 +466,45 @@ impl CliFailure {
         )
     }
 
+    /// `cli.restart_aborted` (spec 0030): plan `plan_id` closed `aborted`
+    /// for `close_reason` (`stop_timeout`), so the old daemon kept running.
+    #[must_use]
+    // provisional: F30 milestone 4 uses it; remove the expect then
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "stackly daemon restart arrives in milestone 4")
+    )]
+    pub fn restart_aborted(plan_id: Uuid, close_reason: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::RESTART_ABORTED,
+                "the daemon restart was aborted, so the old daemon kept running",
+            )
+            .with_detail("planId", plan_id.to_string())
+            .with_detail("closeReason", close_reason)
+            .with_hint("the plan names the instance that did not stop; run stackly daemon status"),
+        )
+    }
+
+    /// `cli.restart_restore_failed` (spec 0030): the daemon restarted under
+    /// plan `plan_id`, but at least one instance did not end up running.
+    #[must_use]
+    // provisional: F30 milestone 4 uses it; remove the expect then
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "stackly daemon restart arrives in milestone 4")
+    )]
+    pub fn restart_restore_failed(plan_id: Uuid) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::RESTART_RESTORE_FAILED,
+                "the daemon restarted, but an instance did not come back",
+            )
+            .with_detail("planId", plan_id.to_string())
+            .with_hint("run stackly instance list to see which one failed"),
+        )
+    }
+
     /// `cli.connection_unavailable` (spec 0021): the connection string
     /// `format` cannot be built now, for `reason` (`port_not_assigned`,
     /// `package_unavailable`, `retained`, or `unrecognized`). `format` is
@@ -616,6 +655,8 @@ mod tests {
             CliFailure::agent_call_timeout(AgentOp::Relaunch, Duration::from_secs(10)),
             CliFailure::daemon_wait_timeout("start", Duration::from_secs(30)),
             CliFailure::connection_not_found(Some("nope"), &["uri", "socket"]),
+            CliFailure::restart_aborted(OPERATION, "stop_timeout"),
+            CliFailure::restart_restore_failed(OPERATION),
             CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
         ]
     }
