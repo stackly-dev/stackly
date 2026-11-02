@@ -12,17 +12,20 @@ use stackly_domain::{
     PortRequest as DomainPortRequest, ProcessStart, ReadinessState, Transport,
 };
 use stackly_protocol::instance::{
+    AutostartSession, InstanceAutostart, InstanceCapabilities, InstanceLastExit,
+};
+use stackly_protocol::instance::{
     ConfigDriftBlocker, EndpointPortMode, EndpointStatus, EndpointTransport, IdentityBlocker,
     IdentityCheckEntry, IdentityCheckName, IdentityCheckResult, IdentityEvidence, InstanceBlocker,
     InstanceDesired, InstanceHealth, InstanceHealthChanged, InstanceHealthState,
     InstanceLastFailure, InstanceLifecycle, InstanceLockState, InstanceOwnership, InstanceProcess,
     InstanceReadiness, InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
 };
-use stackly_protocol::instance::{InstanceCapabilities, InstanceLastExit};
 use stackly_protocol::{Count, Sequence, Timestamp};
 
 use crate::ipc::operation::dto::revision;
 use crate::ipc::secret::needs_secret_blocker;
+use crate::map::detail::startup_kind;
 
 /// The wire value of how the process last ended.
 const fn last_exit(exit: ExitKind) -> InstanceLastExit {
@@ -46,6 +49,7 @@ pub fn summary(
     status: &InstanceStatus,
     excerpt: Vec<String>,
     sockets: &BTreeMap<String, String>,
+    autostart: AutostartSession,
 ) -> InstanceSummary {
     let key = instance.provider_revision();
     InstanceSummary {
@@ -92,6 +96,10 @@ pub fn summary(
             instance.capabilities().contains(Capability::Reload),
         ),
         last_exit: instance.last_exit().map(last_exit),
+        autostart: InstanceAutostart {
+            policy: startup_kind(instance.startup()),
+            session: autostart,
+        },
     }
 }
 

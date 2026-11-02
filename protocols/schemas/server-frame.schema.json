@@ -288,6 +288,31 @@
         }
       ]
     },
+    "AutostartSession": {
+      "description": "Whether this login session still lets an instance that starts at login\nstart (spec 0031). Open.",
+      "oneOf": [
+        {
+          "description": "The startup lease of this session is active.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "A stop in this session suppressed the lease: the instance starts at\nthe next login.",
+          "type": "string",
+          "const": "suppressed"
+        },
+        {
+          "description": "This session holds no startup lease for the instance, also in a\ndaemon that launchd did not start.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "BlockingOperation": {
       "description": "An operation that may hold up a restart.",
       "type": "object",
@@ -2111,6 +2136,18 @@
           "type": "string",
           "format": "uuid"
         },
+        "session": {
+          "description": "The login session of this daemon run; null for a daemon that launchd\ndid not start, when the session could not be read, and from an older\ndaemon (spec 0031).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonSessionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "socketPath": {
           "description": "The resolved path of the daemon socket.",
           "type": "string"
@@ -2259,6 +2296,42 @@
         "cache",
         "runtime",
         "rootOverride"
+      ]
+    },
+    "DaemonSessionInfo": {
+      "description": "The login session of a daemon that launchd started (spec 0031).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The session ID: the boot UUID and the audit session.",
+          "type": "string"
+        },
+        "previousEnd": {
+          "description": "How the session before this one ended, or null when there is none.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionEndKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "description": "What this run's rotation was.",
+          "$ref": "#/$defs/SessionRotationKind"
+        },
+        "startedAt": {
+          "description": "When the session began, which is not when this daemon run began.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "startedAt",
+        "rotation"
       ]
     },
     "DataUsage": {
@@ -4346,6 +4419,24 @@
         "alreadyInState"
       ]
     },
+    "InstanceAutostart": {
+      "description": "When an instance starts on its own and how this session stands (spec\n0031).",
+      "type": "object",
+      "properties": {
+        "policy": {
+          "description": "The startup policy of the instance.",
+          "$ref": "#/$defs/StartupPolicyKind"
+        },
+        "session": {
+          "description": "The startup lease of the session the daemon runs in.",
+          "$ref": "#/$defs/AutostartSession"
+        }
+      },
+      "required": [
+        "policy",
+        "session"
+      ]
+    },
     "InstanceBlocker": {
       "description": "Why an instance cannot start or be trusted, one value with the priority\n`identityUnproven`, then `dataInUse`, then `needsSecret`, then\n`configDrift`. A blocker this\nbuild does not know makes the snapshot fail to decode, so a new blocker\nis a protocol major.",
       "oneOf": [
@@ -5088,6 +5179,14 @@
       "description": "One instance, as `instance.get`, `instance.list`, and\n`instance.state_changed` show it.",
       "type": "object",
       "properties": {
+        "autostart": {
+          "description": "When the instance starts on its own and how this session stands.\nAbsent in older daemons, which reads as `manual` and `none` (spec\n0031).",
+          "$ref": "#/$defs/InstanceAutostart",
+          "default": {
+            "policy": "manual",
+            "session": "none"
+          }
+        },
         "blocker": {
           "description": "Why the instance is blocked, if it is.",
           "anyOf": [
@@ -6581,6 +6680,11 @@
           "const": "rename_instance"
         },
         {
+          "description": "Change when an instance starts on its own (spec 0031).",
+          "type": "string",
+          "const": "set_instance_startup"
+        },
+        {
           "description": "Write a new config revision and make it take effect (spec 0029).",
           "type": "string",
           "const": "apply_config"
@@ -7548,6 +7652,18 @@
           "description": "Whether the equivalent command ends with `--start`.",
           "type": "boolean",
           "default": false
+        },
+        "startup": {
+          "description": "When the instance starts on its own; the equivalent command adds\n`--autostart` for `at_login` (spec 0031).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupPolicyKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -9017,6 +9133,23 @@
           ]
         },
         {
+          "description": "The instance after its startup policy changed, or as it was.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/InstanceSummary"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.set_startup"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "The operation that changes the ports, or the verdict of a dry run.",
           "type": "object",
           "properties": {
@@ -10434,6 +10567,56 @@
         },
         {
           "description": "A warning this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SessionEndKind": {
+      "description": "How a login session ended. Open.",
+      "oneOf": [
+        {
+          "description": "Every instance stopped cleanly before the daemon exited.",
+          "type": "string",
+          "const": "clean"
+        },
+        {
+          "description": "The daemon exited while an instance was still stopping.",
+          "type": "string",
+          "const": "interrupted"
+        },
+        {
+          "description": "The next session found the row still open.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "SessionRotationKind": {
+      "description": "How this daemon run relates to the stored login sessions. Open.",
+      "oneOf": [
+        {
+          "description": "No session row existed; only the row was written.",
+          "type": "string",
+          "const": "first"
+        },
+        {
+          "description": "A new login: the startup policy of every instance became desired\nstate.",
+          "type": "string",
+          "const": "new"
+        },
+        {
+          "description": "The daemon came back in the same session.",
+          "type": "string",
+          "const": "continued"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }

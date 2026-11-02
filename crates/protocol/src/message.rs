@@ -35,7 +35,7 @@ use crate::instance::{
     GetInstanceDetailParams, GetInstanceParams, GetMetricsParams, InstanceActionAccepted,
     InstanceDetail, InstancePage, InstanceSummary, ListInstancesParams, MetricsReply,
     PreflightCreateParams, PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams,
-    RestartInstanceParams, StartInstanceParams, StopInstanceParams,
+    RestartInstanceParams, SetStartupParams, StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::logs::{
@@ -223,6 +223,9 @@ pub enum Call {
     /// Renames an instance (spec 0029).
     #[serde(rename = "instance.rename")]
     InstanceRename(RenameInstanceParams),
+    /// Sets when an instance starts on its own (spec 0031).
+    #[serde(rename = "instance.set_startup")]
+    InstanceSetStartup(SetStartupParams),
     /// Changes the ports of an instance's IP endpoints (spec 0029).
     #[serde(rename = "instance.change_endpoints")]
     InstanceChangeEndpoints(ChangeEndpointsParams),
@@ -384,6 +387,9 @@ pub enum Reply {
     /// same.
     #[serde(rename = "instance.rename")]
     InstanceRename(Box<InstanceActionAccepted>),
+    /// The instance after its startup policy changed, or as it was.
+    #[serde(rename = "instance.set_startup")]
+    InstanceSetStartup(Box<InstanceSummary>),
     /// The operation that changes the ports, or the verdict of a dry run.
     #[serde(rename = "instance.change_endpoints")]
     InstanceChangeEndpoints(Box<ChangeEndpointsReply>),
@@ -514,6 +520,7 @@ methods! {
     "instance.config.apply" => InstanceConfigApply(ApplyConfigParams), recovery refused;
     "instance.config.keep_revision" => InstanceConfigKeepRevision(KeepRevisionParams), recovery refused;
     "instance.rename" => InstanceRename(RenameInstanceParams), recovery refused;
+    "instance.set_startup" => InstanceSetStartup(SetStartupParams), recovery refused;
     "instance.change_endpoints" => InstanceChangeEndpoints(ChangeEndpointsParams), recovery refused;
     "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
     "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
@@ -680,7 +687,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 24
+                == 25
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -698,8 +705,8 @@ mod tests {
             // and `instance.force_stop` (spec 0026). Then the 3 log methods
             // (spec 0027), `instance.prepare_terminal` (spec 0070), and
             // `instance.get_metrics` (spec 0028), and the 6 config methods
-            // (spec 0029).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6,
+            // (spec 0029), and `instance.set_startup` (spec 0031).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

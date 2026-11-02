@@ -50,6 +50,7 @@ pub fn preflight_draft(site: &Site, name: &str, port: PortRequest) -> PreflightC
             source: SecretSource::Generate,
         }],
         start: false,
+        startup: None,
     }
 }
 

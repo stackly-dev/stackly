@@ -49,6 +49,7 @@ use crate::launch::{self, writes_launch_record};
 use crate::log_sink::LogSink;
 use crate::map::{self, StartFacts};
 use crate::secrets;
+use crate::session;
 use crate::shutdown::{SHUTDOWN_DRAIN, SHUTDOWN_FLUSH};
 use crate::startup::EXIT_START_FAILED;
 use crate::state::{DaemonCore, Phase, RegistryState};
@@ -862,7 +863,32 @@ async fn start_slot(
                 // and `ready`; what it decided to run again starts once
                 // the engine does.
                 if recovered.is_some() {
-                    core.supervision().reconcile(&supervisor).await;
+                    // Spec 0031, *Urutan daemon start*: the session rotates
+                    // after `recover` and before reconciliation, so
+                    // reconciliation reads the desired state it wrote.
+                    let session = session::rotate(&core).await;
+                    let session_changed = session.session_changed();
+                    let launchd = session::is_launchd(&core);
+                    core.set_session(session);
+                    let report = core
+                        .supervision()
+                        .reconcile(&supervisor, session_changed)
+                        .await;
+                    // A launchd daemon starts everything that is wanted and
+                    // can run, not only what reconciliation queued.
+                    if launchd && report.is_some() {
+                        match supervisor.queue_login_starts(session_changed).await {
+                            Ok(queue) => tracing::info!(
+                                added = queue.added,
+                                upgraded = queue.upgraded,
+                                new_session = session_changed,
+                                "the start queue is built",
+                            ),
+                            Err(error) => {
+                                tracing::warn!(%error, "the start queue could not be built");
+                            }
+                        }
+                    }
                     reconciled = Some(supervisor);
                 } else {
                     core.supervision().unavailable(OPERATIONS_UNAVAILABLE);

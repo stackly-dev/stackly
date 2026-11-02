@@ -9,7 +9,7 @@ Version       2.15.1
 Digest        External runtime
 Data          /Users/test/Library/Application Support/Stackly/instances/queue/data
 Data size     -
-Autostart     Off
+Autostart     off
 Ownership     manual
 Initialized   yes
 Lifecycle     stopped

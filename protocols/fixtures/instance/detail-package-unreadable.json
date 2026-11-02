@@ -58,7 +58,11 @@
     "capabilities": {
       "reload": true
     },
-    "lastExit": null
+    "lastExit": null,
+    "autostart": {
+      "policy": "manual",
+      "session": "none"
+    }
   },
   "detail": {
     "instanceId": "0192f3a5-0000-7000-8000-000000000009",

@@ -16,7 +16,8 @@ use uuid::Uuid;
 use super::{
     CREATE_ENDPOINTS_MAX, CREATE_SECRETS_MAX, EndpointRequest, EndpointTransport,
     INSTANCE_DISPLAY_NAME_MAX, INSTANCE_KEY_MAX, INSTANCE_NAME_MAX, PROVIDER_REVISION_MAX,
-    ProviderSelector, SettingsDocument, length_code, settings_has_unsafe_integer,
+    ProviderSelector, SettingsDocument, StartupPolicyKind, length_code,
+    settings_has_unsafe_integer,
 };
 use crate::catalog::{CapabilityStatus, ProviderCategory, provider_id_code};
 use crate::error::{ErrorBody, FieldError};
@@ -492,6 +493,10 @@ pub struct PreflightCreateParams {
     /// Whether the equivalent command ends with `--start`.
     #[serde(default)]
     pub start: bool,
+    /// When the instance starts on its own; the equivalent command adds
+    /// `--autostart` for `at_login` (spec 0031).
+    #[serde(default)]
+    pub startup: Option<StartupPolicyKind>,
 }
 
 impl Validate for PreflightCreateParams {

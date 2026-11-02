@@ -117,7 +117,8 @@ const CAPABILITIES: PlatformCapabilities = PlatformCapabilities::none("")
         not_built("not built yet (feature 28)"),
     )
     .with(PlatformCapability::NetworkFetch, CapabilityStatus::Supported)
-    .with(PlatformCapability::CodeSigning, CapabilityStatus::Supported);
+    .with(PlatformCapability::CodeSigning, CapabilityStatus::Supported)
+    .with(PlatformCapability::LoginSession, CapabilityStatus::Supported);
 
 const fn not_built(reason: &'static str) -> CapabilityStatus {
     CapabilityStatus::NotSupported { reason }

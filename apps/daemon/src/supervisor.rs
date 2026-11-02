@@ -31,6 +31,7 @@ use crate::ipc::instance::dto;
 use crate::ipc::operation::dto::revision;
 use crate::ipc::operation::starting;
 use crate::map::socket::SocketPaths;
+use crate::session::AutostartBook;
 
 /// Where the supervisor stands in this daemon run.
 #[derive(Clone)]
@@ -96,6 +97,7 @@ pub struct Supervision {
     report: Arc<Mutex<Report>>,
     events: Mutex<Option<Arc<BusSupervisorEvents>>>,
     sockets: Mutex<Option<Arc<SocketPaths>>>,
+    autostart: Arc<AutostartBook>,
 }
 
 impl std::fmt::Debug for Supervision {
@@ -111,6 +113,7 @@ impl Default for Supervision {
             report: Arc::new(Mutex::new(Report::default())),
             events: Mutex::new(None),
             sockets: Mutex::new(None),
+            autostart: Arc::new(AutostartBook::default()),
         }
     }
 }
@@ -131,6 +134,7 @@ impl Supervision {
             supervisor: Arc::clone(&handle),
             report: Arc::clone(&self.report),
             sockets: Arc::clone(&sockets),
+            autostart: Arc::clone(&self.autostart),
         });
         let mut deps = SupervisorDeps::new(
             input.registry,
@@ -153,6 +157,13 @@ impl Supervision {
         supervisor
     }
 
+    /// The startup lease state of each instance in this session (spec
+    /// 0031).
+    #[must_use]
+    pub fn autostart(&self) -> &Arc<AutostartBook> {
+        &self.autostart
+    }
+
     /// The reader of socket paths, once the supervisor is built.
     #[must_use]
     pub fn sockets(&self) -> Option<Arc<SocketPaths>> {
@@ -168,8 +179,15 @@ impl Supervision {
     /// Reconciles what the last daemon left running (spec 0010,
     /// *Rekonsiliasi*), then opens the supervisor to instance methods.
     /// Returns the report; a failure leaves the supervisor unavailable.
-    pub async fn reconcile(&self, supervisor: &Supervisor) -> Option<ReconcileReport> {
-        match supervisor.reconcile(RegistryMode::Ready).await {
+    pub async fn reconcile(
+        &self,
+        supervisor: &Supervisor,
+        session_changed: bool,
+    ) -> Option<ReconcileReport> {
+        match supervisor
+            .reconcile_in_session(RegistryMode::Ready, session_changed)
+            .await
+        {
             Ok(report) => {
                 self.lock_report().unknown = report.unknown;
                 self.reconciled(supervisor);
@@ -312,6 +330,7 @@ pub struct BusSupervisorEvents {
     supervisor: Arc<OnceLock<WeakSupervisor>>,
     report: Arc<Mutex<Report>>,
     sockets: Arc<SocketPaths>,
+    autostart: Arc<AutostartBook>,
 }
 
 impl std::fmt::Debug for BusSupervisorEvents {
@@ -345,7 +364,13 @@ impl SupervisorEvents for BusSupervisorEvents {
         } else {
             Vec::new()
         };
-        let summary = dto::summary(instance, &status, excerpt, &self.sockets.of(instance));
+        let summary = dto::summary(
+            instance,
+            &status,
+            excerpt,
+            &self.sockets.of(instance),
+            self.autostart.get(instance.id()),
+        );
         self.bus.publish_resource(
             EventKind::InstanceStateChanged(Box::new(InstanceStateChanged { instance: summary })),
             Self::resource(instance.id()),
@@ -496,7 +521,7 @@ mod tests {
         let (_root, supervisor, registry) = built(&supervision);
         assert!(registry.upgrade().is_some(), "the supervisor holds it");
         // Reconciliation starts the recheck task, which outlives the stop.
-        assert!(supervision.reconcile(&supervisor).await.is_some());
+        assert!(supervision.reconcile(&supervisor, false).await.is_some());
 
         supervision.shutdown();
         supervision.close();

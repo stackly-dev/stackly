@@ -54,6 +54,60 @@ pub struct DaemonInfo {
     /// than ten minutes ago, else null (spec 0030).
     #[serde(default)]
     pub restart: Option<Box<RestartPlanView>>,
+    /// The login session of this daemon run; null for a daemon that launchd
+    /// did not start, when the session could not be read, and from an older
+    /// daemon (spec 0031).
+    #[serde(default)]
+    pub session: Option<DaemonSessionInfo>,
+}
+
+/// How this daemon run relates to the stored login sessions. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRotationKind {
+    /// No session row existed; only the row was written.
+    First,
+    /// A new login: the startup policy of every instance became desired
+    /// state.
+    New,
+    /// The daemon came back in the same session.
+    Continued,
+    /// A value this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// How a login session ended. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEndKind {
+    /// Every instance stopped cleanly before the daemon exited.
+    Clean,
+    /// The daemon exited while an instance was still stopping.
+    Interrupted,
+    /// The next session found the row still open.
+    Unknown,
+    /// A value this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// The login session of a daemon that launchd started (spec 0031).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DaemonSessionInfo {
+    /// The session ID: the boot UUID and the audit session.
+    pub id: String,
+    /// When the session began, which is not when this daemon run began.
+    pub started_at: Timestamp,
+    /// What this run's rotation was.
+    pub rotation: SessionRotationKind,
+    /// How the session before this one ended, or null when there is none.
+    #[serde(default)]
+    pub previous_end: Option<SessionEndKind>,
 }
 
 /// Who started the daemon and from which app bundle (spec 0015).
@@ -302,7 +356,12 @@ pub mod subsystem {
     /// The durable log store of the instances (feature 27); `degraded`
     /// while a write fails and for 60 seconds after the last failure.
     pub const INSTANCE_LOGS: &str = "instance_logs";
-    /// Every name, in the order `get_health` lists them.
+    /// The login session (feature 31). It is listed only while it is
+    /// `degraded`, when the session of a launchd daemon cannot be read
+    /// (`platform.session_unavailable`), so it is not in [`ALL`].
+    pub const SESSION: &str = "session";
+    /// Every name that is always listed, in the order `get_health` lists
+    /// them.
     pub const ALL: [&str; 8] = [
         IPC,
         EVENT_BUS,

@@ -22,10 +22,15 @@ use super::stop::StopRequest;
 use crate::operation::{BeginError, BeginRequest, BusyPolicy, Origin};
 
 /// The journal input of an operation reconciliation begins.
-const TRIGGER_INPUT: &str = r#"{"trigger":"reconcile"}"#;
+pub(super) const TRIGGER_INPUT: &str = r#"{"trigger":"reconcile"}"#;
+/// The journal input of the stop of a proven process after a new session
+/// made its desired state `stopped` (spec 0031, AC-6).
+pub(super) const SESSION_ROTATION_INPUT: &str = r#"{"trigger":"session_rotation"}"#;
+/// The journal input of a start after a new login (spec 0031, AC-4).
+pub(super) const LOGIN_INPUT: &str = r#"{"trigger":"login"}"#;
 /// The journal input of the start that restores an instance a planned
 /// daemon restart stopped (spec 0030, *Alur*, step 10).
-const PLANNED_RESTART_INPUT: &str = r#"{"trigger":"planned_restart"}"#;
+pub(super) const PLANNED_RESTART_INPUT: &str = r#"{"trigger":"planned_restart"}"#;
 /// How often the runner looks at an operation it waits for.
 const POLL: Duration = Duration::from_millis(50);
 
@@ -56,6 +61,8 @@ pub(crate) struct PendingRun {
     pub(crate) id: InstanceId,
     pub(crate) name: InstanceName,
     pub(crate) kind: PendingKind,
+    /// The journal input that names the trigger of the operation.
+    pub(crate) trigger: &'static str,
 }
 
 impl Supervisor {
@@ -155,11 +162,11 @@ async fn run_one(sup: &Supervisor, run: &PendingRun) {
                 None => None,
             }
         }
-        PendingKind::Start => start_again(sup, id, TRIGGER_INPUT).await,
+        PendingKind::Start => start_again(sup, id, run.trigger).await,
         PendingKind::Restore => start_again(sup, id, PLANNED_RESTART_INPUT).await,
         PendingKind::Stop => {
             let make = || sup.stop_work(StopRequest::reconcile(id));
-            match begin(sup, id, OperationKind::StopInstance, TRIGGER_INPUT, &make).await {
+            match begin(sup, id, OperationKind::StopInstance, run.trigger, &make).await {
                 Some(operation) => wait_final(sup, operation).await,
                 None => None,
             }

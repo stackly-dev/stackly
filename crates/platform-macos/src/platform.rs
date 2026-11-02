@@ -15,6 +15,7 @@ use crate::fs::MacosFilesystem;
 use crate::identity::MacosIdentity;
 use crate::info::MacosPlatformInfo;
 use crate::process::MacosProcessSupervision;
+use crate::session::MacosLoginSessionInfo;
 
 /// Assembles the macOS [`Platform`].
 ///
@@ -77,7 +78,8 @@ impl MacosPlatform {
     /// Assembles the platform with roots the caller chose, without the
     /// default resolver, with [`MacosProcessSupervision`] as its process
     /// port, with [`MacosFetcher`] as its download port, and with
-    /// [`MacosCodeSigning`] as its code signing port. Integration tests use
+    /// [`MacosCodeSigning`] as its code signing port, and with
+    /// [`MacosLoginSessionInfo`] as its login session port. Integration tests use
     /// it with a test root, so no folder is left in the real user temporary
     /// directory.
     ///
@@ -96,6 +98,7 @@ impl MacosPlatform {
         .with_processes(Arc::new(MacosProcessSupervision::new()))
         .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
         .with_fetcher(Arc::new(MacosFetcher::new()))
-        .with_code_signing(Arc::new(MacosCodeSigning::new())))
+        .with_code_signing(Arc::new(MacosCodeSigning::new()))
+        .with_login_session(Arc::new(MacosLoginSessionInfo::new())))
     }
 }

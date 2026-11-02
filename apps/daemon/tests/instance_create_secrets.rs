@@ -77,6 +77,7 @@ fn params(
         endpoints: Vec::new(),
         settings: SettingsDocument::new(serde_json::Map::new()),
         secrets,
+        startup: None,
     }
 }
 

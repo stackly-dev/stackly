@@ -1223,6 +1223,14 @@ async fn dispatch(
             .map(|reply| Reply::InstanceRename(Box::new(reply))),
             None,
         ),
+        Call::InstanceSetStartup(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.set_startup(c, x, p)
+            })
+            .await
+            .map(|reply| Reply::InstanceSetStartup(Box::new(reply))),
+            None,
+        ),
         Call::InstanceChangeEndpoints(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.change_endpoints(c, x, p)

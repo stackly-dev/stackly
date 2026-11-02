@@ -215,6 +215,8 @@ pub enum ValueKind {
     RuntimeSelector,
     /// A [`PlanState`](crate::PlanState).
     PlanState,
+    /// A [`SessionEndReason`](crate::SessionEndReason).
+    SessionEndReason,
     /// A [`PlanDecision`](crate::PlanDecision).
     PlanDecision,
     /// A [`PlanReason`](crate::PlanReason).
@@ -329,6 +331,7 @@ impl ValueKind {
             Self::TeamId => "team ID",
             Self::RuntimeSelector => "runtime selector",
             Self::PlanState => "restart plan state",
+            Self::SessionEndReason => "session end reason",
             Self::PlanDecision => "restart plan decision",
             Self::PlanReason => "restart plan reason",
             Self::PlanOutcome => "restart plan outcome",

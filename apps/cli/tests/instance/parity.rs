@@ -75,6 +75,7 @@ impl Draft {
                     input: SecretInput::Generate,
                 })
                 .collect(),
+            startup: None,
         }
     }
 

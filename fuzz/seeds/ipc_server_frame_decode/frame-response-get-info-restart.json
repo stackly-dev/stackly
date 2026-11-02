@@ -70,7 +70,8 @@
               "failureCode": "identity_unproven"
             }
           ]
-        }
+        },
+        "session": null
       }
     }
   }

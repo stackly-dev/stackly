@@ -907,6 +907,13 @@ impl Instance {
         self.bump_revision();
     }
 
+    /// Sets the startup policy (spec 0031, AC-16). It raises the revision
+    /// by exactly 1, also when the policy is the same.
+    pub fn set_startup(&mut self, startup: StartupPolicy) {
+        self.startup = startup;
+        self.bump_revision();
+    }
+
     /// Sets the desired state.
     pub fn set_desired(&mut self, desired: DesiredState) {
         self.desired = desired;

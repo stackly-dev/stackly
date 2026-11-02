@@ -14,7 +14,7 @@
 //! | `boot` | the boot ID |
 //! | `sys` | declarations libc lacks, with layout asserts |
 
-mod boot;
+pub(crate) mod boot;
 mod inspect;
 pub(crate) mod kill;
 mod lock;

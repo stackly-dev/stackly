@@ -425,5 +425,6 @@ pub fn command_draft(spec: &CommandSpec) -> CommandDraft {
             })
             .collect(),
         start: spec.start,
+        autostart: spec.autostart,
     }
 }

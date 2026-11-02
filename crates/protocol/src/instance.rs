@@ -166,6 +166,47 @@ pub enum InstanceOwnership {
     Unrecognized,
 }
 
+/// Whether this login session still lets an instance that starts at login
+/// start (spec 0031). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AutostartSession {
+    /// The startup lease of this session is active.
+    Active,
+    /// A stop in this session suppressed the lease: the instance starts at
+    /// the next login.
+    Suppressed,
+    /// This session holds no startup lease for the instance, also in a
+    /// daemon that launchd did not start.
+    #[default]
+    None,
+    /// A value this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// When an instance starts on its own and how this session stands (spec
+/// 0031).
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceAutostart {
+    /// The startup policy of the instance.
+    pub policy: StartupPolicyKind,
+    /// The startup lease of the session the daemon runs in.
+    pub session: AutostartSession,
+}
+
+impl Default for InstanceAutostart {
+    fn default() -> Self {
+        Self {
+            policy: StartupPolicyKind::Manual,
+            session: AutostartSession::None,
+        }
+    }
+}
+
 /// How the main process of an instance last ended (spec 0026). Open.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -587,6 +628,11 @@ pub struct InstanceSummary {
     /// row predates the record.
     #[serde(default)]
     pub last_exit: Option<InstanceLastExit>,
+    /// When the instance starts on its own and how this session stands.
+    /// Absent in older daemons, which reads as `manual` and `none` (spec
+    /// 0031).
+    #[serde(default)]
+    pub autostart: InstanceAutostart,
 }
 
 impl InstanceSummary {
@@ -714,6 +760,10 @@ pub struct CreateInstanceParams {
     /// The secret fields and where their values come from.
     #[serde(default)]
     pub secrets: Vec<SecretFieldInput>,
+    /// When the instance starts on its own; `manual` when absent (spec
+    /// 0031).
+    #[serde(default)]
+    pub startup: Option<StartupPolicyKind>,
 }
 
 /// The field code of a text that must be 1 to `max` bytes, or `None`.
@@ -753,6 +803,9 @@ impl Validate for CreateInstanceParams {
         }
         if settings_has_unsafe_integer(self.settings.as_map()) {
             fields.push(FieldError::new("settings", FieldCode::OutOfRange));
+        }
+        if self.startup == Some(StartupPolicyKind::Unrecognized) {
+            fields.push(FieldError::new("startup", FieldCode::InvalidValue));
         }
         if self.endpoints.len() > CREATE_ENDPOINTS_MAX {
             fields.push(FieldError::new("endpoints", FieldCode::TooMany));
@@ -837,6 +890,32 @@ pub struct StopInstanceParams {
 }
 
 impl Validate for StopInstanceParams {}
+
+/// Params of `instance.set_startup` (spec 0031).
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SetStartupParams {
+    /// The instance to change.
+    pub instance_id: Uuid,
+    /// The policy to set: `manual` or `at_login`.
+    pub startup: StartupPolicyKind,
+    /// Refuse with `resource.revision_mismatch` unless the instance is at
+    /// this revision.
+    #[serde(default)]
+    pub expected_revision: Option<Revision>,
+}
+
+impl Validate for SetStartupParams {
+    /// The policy must be one this build knows.
+    fn validate(&self) -> Vec<FieldError> {
+        if self.startup == StartupPolicyKind::Unrecognized {
+            vec![FieldError::new("startup", FieldCode::InvalidValue)]
+        } else {
+            Vec::new()
+        }
+    }
+}
 
 /// Params of `instance.restart` (spec 0026).
 #[typeshare]
@@ -1117,6 +1196,7 @@ mod tests {
                 field: "password".to_owned(),
                 input: SecretInput::Generate,
             }],
+            startup: None,
         }
     }
 

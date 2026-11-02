@@ -21,6 +21,7 @@ mod detail;
 mod durable_logs;
 mod lifecycle;
 mod list_performance;
+mod login;
 mod logs;
 mod metrics;
 mod offline;

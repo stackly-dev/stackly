@@ -886,6 +886,14 @@ area! {
 }
 
 area! {
+    /// Codes about what the host platform cannot tell (spec 0031).
+    pub mod platform = "platform", owner "spec 0031" {
+        SESSION_UNAVAILABLE = "platform.session_unavailable", Unavailable, retryable false,
+            details [], "the login session of the daemon cannot be read, so no session rule runs";
+    }
+}
+
+area! {
     /// Codes for bugs and broken invariants.
     pub mod internal = "internal", owner "spec 0006" {
         UNEXPECTED = "internal.unexpected", Internal, retryable false,
@@ -988,6 +996,7 @@ pub const AREAS: &[Area] = &[
     process::AREA,
     instance::AREA,
     storage::AREA,
+    platform::AREA,
     internal::AREA,
     cli::AREA,
 ];
@@ -1400,6 +1409,7 @@ mod tests {
                 ("process", "spec 0010"),
                 ("instance", "spec 0010"),
                 ("storage", "spec 0022"),
+                ("platform", "spec 0031"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),
             ]

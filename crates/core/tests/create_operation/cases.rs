@@ -919,6 +919,7 @@ fn the_input_of_a_huge_settings_document_keeps_only_its_digest() {
         secrets: vec![("authToken".to_owned(), SecretSourceKind::Value)],
         secret_values: Vec::new(),
         start: false,
+        startup: stackly_domain::StartupPolicy::Manual,
     };
 
     let payload = encode_input(InstanceId::generate(), &draft).expect("it fits once shortened");

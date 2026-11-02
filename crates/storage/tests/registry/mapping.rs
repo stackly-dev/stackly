@@ -330,6 +330,7 @@ fn every_lease_holder_and_state_round_trips() {
     ]);
     let at = |nanos| Timestamp::constant(1_767_225_600, nanos);
     let session = || Some("login-1".parse().unwrap());
+    let other_session = || Some("login-2".parse().unwrap());
     let cases = [
         (
             LeaseHolder::Environment(environment.id()),
@@ -350,7 +351,7 @@ fn every_lease_holder_and_state_round_trips() {
         (LeaseHolder::Startup, session(), LeaseState::Active),
         (
             LeaseHolder::Startup,
-            session(),
+            other_session(),
             LeaseState::Suppressed { at: at(9) },
         ),
     ];

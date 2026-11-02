@@ -88,6 +88,7 @@ fn client_error(
                     input: SecretInput::Generate,
                 })
                 .collect(),
+            startup: None,
         };
         edit(&mut params);
         client

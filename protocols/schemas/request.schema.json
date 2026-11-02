@@ -827,6 +827,23 @@
           ]
         },
         {
+          "description": "Sets when an instance starts on its own (spec 0031).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SetStartupParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.set_startup"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "Changes the ports of an instance's IP endpoints (spec 0029).",
           "type": "object",
           "properties": {
@@ -1119,6 +1136,18 @@
           "description": "The settings, without secret values.",
           "type": "object",
           "additionalProperties": true
+        },
+        "startup": {
+          "description": "When the instance starts on its own; `manual` when absent (spec\n0031).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupPolicyKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1889,6 +1918,18 @@
           "description": "Whether the equivalent command ends with `--start`.",
           "type": "boolean",
           "default": false
+        },
+        "startup": {
+          "description": "When the instance starts on its own; the equivalent command adds\n`--autostart` for `at_login` (spec 0031).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupPolicyKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2469,6 +2510,36 @@
         "mode"
       ]
     },
+    "SetStartupParams": {
+      "description": "Params of `instance.set_startup` (spec 0031).",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the instance is at\nthis revision.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "instanceId": {
+          "description": "The instance to change.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "startup": {
+          "description": "The policy to set: `manual` or `at_login`.",
+          "$ref": "#/$defs/StartupPolicyKind"
+        }
+      },
+      "required": [
+        "instanceId",
+        "startup"
+      ]
+    },
     "ShutdownMode": {
       "description": "What `daemon.shutdown` asks for. Open: newer daemons may add values.",
       "oneOf": [
@@ -2538,6 +2609,26 @@
       },
       "required": [
         "instanceId"
+      ]
+    },
+    "StartupPolicyKind": {
+      "description": "When an instance starts on its own. Open.",
+      "oneOf": [
+        {
+          "description": "Only when the user starts it.",
+          "type": "string",
+          "const": "manual"
+        },
+        {
+          "description": "When the user logs in.",
+          "type": "string",
+          "const": "at_login"
+        },
+        {
+          "description": "A policy this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "StopInstanceParams": {

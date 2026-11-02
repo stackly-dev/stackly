@@ -116,7 +116,7 @@ final class SkeletonRig {
             provider: ProviderSelector(name: seed.provider.name, revision: seed.provider.revision),
             runtimeId: seed.runtimeId,
             endpoints: [EndpointRequest(name: "http", port: .auto)],
-            settings: JSONObject(settings), secrets: nil)
+            settings: JSONObject(settings), secrets: nil, startup: nil)
         let reply = try await send(.instanceCreate(params), key: Self.newKey())
         guard case .instanceCreate(let action) = reply, let accepted = action.accepted else {
             throw RigFailure(description: "instance.create gave no operation for \(name)")

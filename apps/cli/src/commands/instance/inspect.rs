@@ -5,7 +5,9 @@
 
 use clap::Args;
 use serde::Serialize;
-use stackly_protocol::instance::{DataUsage, InstanceDetail, InstanceSummary};
+use stackly_platform::BackgroundAgentState;
+use stackly_protocol::instance::{DataUsage, InstanceDetail, InstanceSummary, StartupPolicyKind};
+use stackly_protocol::{Call, Reply};
 
 use super::render::render_inspect;
 use super::resolve::TargetArg;
@@ -15,6 +17,7 @@ use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
 use crate::output::human::{HumanWriter, Render};
+use crate::session::CallSpec;
 
 /// `stackly instance inspect`.
 #[derive(Debug, Args)]
@@ -51,9 +54,19 @@ pub struct InstanceInspect {
     pub data_usage: Option<DataUsage>,
     #[serde(skip)]
     usage_note: UsageNote,
+    #[serde(skip)]
+    agent_off: Option<&'static str>,
 }
 
 impl InstanceInspect {
+    /// The state of the background agent when it keeps an `at_login`
+    /// instance from starting at login: only for the default root, while
+    /// the daemon reports a login session, and not `enabled` (spec 0031).
+    #[must_use]
+    pub const fn agent_off(&self) -> Option<&'static str> {
+        self.agent_off
+    }
+
     /// What the `Data size` line says when `data_usage` is null.
     #[must_use]
     pub const fn usage_note(&self) -> UsageNote {
@@ -105,12 +118,35 @@ async fn read_all(
         Ok(None) => (None, UsageNote::NotMeasured),
         Err(_) => (None, UsageNote::Unavailable),
     };
+    let agent_off = if detail.startup == StartupPolicyKind::AtLogin {
+        agent_blocking_login(cx).await
+    } else {
+        None
+    };
     Ok(InstanceInspect {
         instance,
         detail,
         data_usage,
         usage_note,
+        agent_off,
     })
+}
+
+/// The state of the background agent when it is not `enabled` although the
+/// daemon runs in a login session, on the default root; `None` for any
+/// other case, and when the daemon cannot say.
+async fn agent_blocking_login(cx: &mut Context) -> Option<&'static str> {
+    if cx.agent.root_override() {
+        return None;
+    }
+    let Ok(Reply::DaemonGetInfo(info)) = cx.call(Call::DaemonGetInfo, CallSpec::control()).await
+    else {
+        return None;
+    };
+    info.session.as_ref()?;
+    let agent = cx.agent.clone();
+    let (_, assessment) = agent.status().await;
+    (assessment.state != BackgroundAgentState::Enabled).then_some(assessment.state.as_code())
 }
 
 impl Render for InstanceInspect {

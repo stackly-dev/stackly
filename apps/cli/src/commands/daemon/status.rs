@@ -7,7 +7,7 @@ use clap::Args;
 use serde::Serialize;
 use stackly_platform::BackgroundAgentState;
 use stackly_protocol::daemon::{
-    DaemonHealth, DaemonInfo, DaemonLaunch, LaunchContextKind, SubsystemStatus,
+    DaemonHealth, DaemonInfo, DaemonLaunch, DaemonSessionInfo, LaunchContextKind, SubsystemStatus,
 };
 use stackly_protocol::restart::RestartPlanView;
 use stackly_protocol::{CONTRACT_DIGEST, Call, ProtocolVersion, Reply};
@@ -227,12 +227,29 @@ impl Render for DaemonStatus {
                 "no"
             }),
         ));
+        if let Some(session) = &info.session {
+            rows.push(("Session", Cell::text(&session_line(session, out))));
+        }
         if let Some(plan) = &self.last_restart {
             rows.push(("Last restart", Cell::text(&summary(plan, out))));
         }
         rows.extend(render_agent_rows(&self.agent, info.launch.as_ref()));
         out.kv(&rows);
     }
+}
+
+/// The `Session` row (spec 0031, AC-18): the session ID, when it began, how
+/// this daemon run rotated into it, and how the session before it ended.
+fn session_line(session: &DaemonSessionInfo, out: &HumanWriter) -> String {
+    let previous = session
+        .previous_end
+        .map_or_else(|| "none".to_owned(), |end| wire_name(&end));
+    format!(
+        "{}, started {}, rotation {}, previous ended {previous}",
+        session.id,
+        out.time_and_age(session.started_at),
+        wire_name(&session.rotation),
+    )
 }
 
 /// The tone of an agent state: `enabled` positive; `requires_approval`,

@@ -29,7 +29,8 @@
       "maxConnections": 200,
       "sharedBuffersMb": 128
     },
-    "start": false
+    "start": false,
+    "startup": null
   },
   "form": {
     "capabilities": [

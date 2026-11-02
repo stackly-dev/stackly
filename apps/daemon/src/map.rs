@@ -114,6 +114,7 @@ pub fn daemon_info(
         secret_store: None,
         launch: None,
         restart: None,
+        session: None,
     }
 }
 

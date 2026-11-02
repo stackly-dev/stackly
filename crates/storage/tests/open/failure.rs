@@ -51,6 +51,7 @@ fn migrating_v3_gives_old_rows_no_items_and_no_rule_and_keeps_the_data() {
         table != "schema_migrations"
             && table != "compatibility_records"
             && !table.starts_with("daemon_restart_plan")
+            && table != "daemon_sessions"
     };
     let mut before = row_counts(&harness.connect());
     before.retain(|(table, _)| kept(table));

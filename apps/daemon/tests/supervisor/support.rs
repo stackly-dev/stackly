@@ -464,6 +464,7 @@ impl Api {
                 field: "authToken".to_owned(),
                 input: SecretInput::Value(SecretText::new(TOKEN.to_owned())),
             }],
+            startup: None,
         }
     }
 
@@ -483,6 +484,7 @@ impl Api {
                 source: SecretSource::Value,
             }],
             start: false,
+            startup: None,
         }
     }
 
@@ -546,6 +548,7 @@ impl Api {
             endpoints: draft.endpoints,
             settings: draft.settings,
             secrets,
+            startup: None,
         })
         .await
     }

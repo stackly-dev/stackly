@@ -40,6 +40,9 @@ pub struct CommandDraft {
     pub secrets: Vec<CommandSecret>,
     /// `--start`.
     pub start: bool,
+    /// `--autostart` (spec 0031).
+    #[serde(default)]
+    pub autostart: bool,
 }
 
 /// One `--port <endpoint>=<port|auto>`.
@@ -129,6 +132,9 @@ pub fn equivalent_command(draft: &CommandDraft) -> String {
         };
         flag("--secret", &format!("{}={source}", secret.field));
     }
+    if draft.autostart {
+        words.push("--autostart".to_owned());
+    }
     if draft.start {
         words.push("--start".to_owned());
     }
@@ -170,7 +176,20 @@ mod tests {
             settings: Vec::new(),
             secrets: Vec::new(),
             start: false,
+            autostart: false,
         }
+    }
+
+    #[test]
+    fn the_autostart_flag_comes_before_start() {
+        let mut draft = base();
+        draft.autostart = true;
+        draft.start = true;
+
+        assert_eq!(
+            equivalent_command(&draft),
+            "stackly instance create orders-db --runtime postgresql@18.1 --autostart --start"
+        );
     }
 
     #[test]

@@ -9,6 +9,7 @@
 //! nothing is left to wait for (AC-6).
 
 mod action;
+mod autostart;
 mod config;
 mod connection;
 mod create;
@@ -36,6 +37,7 @@ use stackly_protocol::{Call, Reply, ResourceKind};
 use uuid::Uuid;
 
 use self::action::{ReloadArgs, RestartArgs, StartArgs, StopArgs};
+use self::autostart::AutostartArgs;
 use self::config::ConfigCommand;
 use self::connection::ConnectionArgs;
 use self::create::CreateArgs;
@@ -131,6 +133,11 @@ pub enum InstanceCommand {
     /// Change the ports of an instance's endpoints
     #[command(subcommand)]
     Endpoint(EndpointCommand),
+    /// Start an instance at every login, or only when asked; a running instance keeps running
+    #[command(
+        after_help = "Examples:\n  stackly instance autostart orders-db on\n  stackly instance autostart orders-db off --json"
+    )]
+    Autostart(AutostartArgs),
     /// Show one instance; the same as inspect
     #[command(
         after_help = "Examples:\n  stackly instance get orders-db\n  stackly instance get 0192f3a5-0000-7000-8000-000000000001 --json"
@@ -157,6 +164,7 @@ impl InstanceCommand {
             Self::Config(command) => command.run(cx).await,
             Self::Rename(args) => execute(args, cx).await,
             Self::Endpoint(command) => command.run(cx).await,
+            Self::Autostart(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }
     }

@@ -26,7 +26,7 @@ use super::drift;
 use super::error::SupervisorError;
 use super::evidence::{Gathered, gather_evidence, unproven_by};
 use super::integrity::{self, FindingKind, ReconcileFinding};
-use super::pending::{PendingKind, PendingRun};
+use super::pending::{self, PendingKind, PendingRun};
 use super::persist::{CommitMode, apply_event, blocking, commit_exit};
 use super::restart::JitterFactor;
 use super::{Supervisor, recheck};
@@ -80,9 +80,21 @@ pub enum ReconcilePhase {
 pub(crate) enum Source {
     /// The reconciliation of the daemon's start slot.
     Reconcile,
+    /// The reconciliation of a start slot whose session rotation was `new`
+    /// (spec 0031, AC-6): a process that is gone is read as after a new
+    /// boot, because logout ended it, not a crash.
+    NewSession,
     /// The periodic recheck of an `unknown` instance: a vanished process
     /// is confirmed stopped but never started again on its own.
     Recheck,
+}
+
+impl Source {
+    /// Whether the table runs for the daemon's start slot, in a new
+    /// session or not.
+    const fn is_start_slot(self) -> bool {
+        matches!(self, Self::Reconcile | Self::NewSession)
+    }
 }
 
 /// What a classification means for an instance (a row of the table).
@@ -199,7 +211,7 @@ pub(crate) fn plan_for(
         Then::Stop
     };
     let start_if_wanted = match (wants_running, source) {
-        (true, Source::Reconcile) => Then::Start,
+        (true, Source::Reconcile | Source::NewSession) => Then::Start,
         _ => Then::Nothing,
     };
     let (proven, gone) = match classification {
@@ -207,7 +219,10 @@ pub(crate) fn plan_for(
         Classification::Gone { reason, .. } => (false, Some(*reason)),
         Classification::Unproven { .. } => (false, None),
     };
-    let boot_changed = gone == Some(GoneReason::BootChanged);
+    // A new session in the same boot reads a process that is gone as a new
+    // boot does (spec 0031, AC-6): no respawn and no crash count.
+    let boot_changed =
+        gone == Some(GoneReason::BootChanged) || (source == Source::NewSession && gone.is_some());
     let unproven = matches!(classification, Classification::Unproven { .. });
     let plan = match lifecycle {
         L::Initializing => Plan::new(vec![E::InitFailed {
@@ -320,6 +335,25 @@ impl Supervisor {
     /// read. A failure on one instance is logged and reconciliation goes on
     /// with the others.
     pub async fn reconcile(&self, mode: RegistryMode) -> Result<ReconcileReport, SupervisorError> {
+        self.reconcile_in_session(mode, false).await
+    }
+
+    /// [`reconcile`](Self::reconcile) for a start slot whose session
+    /// rotation was `new` when `session_changed` is true (spec 0031, AC-6):
+    /// a process that is gone is read as after a new boot, so it neither
+    /// respawns nor counts as a crash, and a proven process of an instance
+    /// whose desired state is now `stopped` stops with the trigger
+    /// `session_rotation`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SupervisorError::Registry`] when the instances cannot be
+    /// read.
+    pub async fn reconcile_in_session(
+        &self,
+        mode: RegistryMode,
+        session_changed: bool,
+    ) -> Result<ReconcileReport, SupervisorError> {
         if mode == RegistryMode::Recovery {
             return Ok(ReconcileReport {
                 skipped: true,
@@ -350,7 +384,12 @@ impl Supervisor {
         let mut findings = Vec::new();
         let mut deferred = Vec::new();
         for instance in &instances {
-            let settled = settle_instance(self, instance, Source::Reconcile).await;
+            let source = if session_changed {
+                Source::NewSession
+            } else {
+                Source::Reconcile
+            };
+            let settled = settle_instance(self, instance, source).await;
             let Some((settled, adoption)) = settled else {
                 lifecycles.push((instance.id(), instance.lifecycle()));
                 continue;
@@ -368,7 +407,7 @@ impl Supervisor {
             if settled.then != Then::Nothing {
                 deferred.push(instance.id());
             }
-            self.queue_run(instance, settled.then);
+            self.queue_run(instance, settled.then, session_changed);
             if let Some(adoption) = adoption {
                 adoptions.push(adoption);
                 findings.extend(settled.findings.into_iter().map(|kind| ReconcileFinding {
@@ -411,7 +450,7 @@ impl Supervisor {
 
     /// Puts what reconciliation decided to run again on the list
     /// [`start_reconciled`](Self::start_reconciled) works through.
-    fn queue_run(&self, instance: &Instance, then: Then) {
+    fn queue_run(&self, instance: &Instance, then: Then, session_changed: bool) {
         let kind = match then {
             Then::Nothing => return,
             Then::Respawn => PendingKind::Respawn,
@@ -428,6 +467,11 @@ impl Supervisor {
                 id: instance.id(),
                 name: instance.name().clone(),
                 kind,
+                trigger: if session_changed && kind == PendingKind::Stop {
+                    pending::SESSION_ROTATION_INPUT
+                } else {
+                    pending::TRIGGER_INPUT
+                },
             });
     }
 
@@ -509,7 +553,7 @@ pub(crate) async fn settle_instance(
         .map(|ProcessObservation { identity, .. }| identity);
 
     // Spec 0030: the data of an initialized instance must still be there.
-    let checks_apply = source == Source::Reconcile && integrity::applies(instance);
+    let checks_apply = source.is_start_slot() && integrity::applies(instance);
     let data_gone = checks_apply && integrity::data_is_missing(sup, instance).await;
     let flagged = instance.lifecycle() == InstanceLifecycle::Failed
         && instance.last_failure() == Some(&FailureCode::DATA_MISSING);
@@ -534,7 +578,7 @@ pub(crate) async fn settle_instance(
             lifecycle.apply(event)
         })
         .unwrap_or_else(|_| instance.lifecycle());
-    if source == Source::Reconcile
+    if source.is_start_slot()
         && let Some(entry) = sup.planned_entry(id).await
         && entry.decision == PlanDecision::StopRestore
         && instance.desired() == DesiredState::Running

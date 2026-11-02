@@ -40,6 +40,8 @@ pub mod secrets;
 #[cfg(unix)]
 pub mod server;
 #[cfg(unix)]
+pub mod session;
+#[cfg(unix)]
 pub mod shutdown;
 pub mod startup;
 #[cfg(unix)]

@@ -38,7 +38,8 @@
           }
         }
       ],
-      "start": true
+      "start": true,
+      "startup": null
     }
   }
 }

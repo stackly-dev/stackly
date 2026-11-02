@@ -553,7 +553,8 @@ public final class CreateInstanceModel {
             name: name, displayName: nil,
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
-            settings: schema.settings(), secrets: schema.secretPlans(), start: startAfterCreating)
+            settings: schema.settings(), secrets: schema.secretPlans(), start: startAfterCreating,
+            startup: nil)
     }
 
     private func draftDidChange(immediately: Bool = false, fromPerson: Bool = true) {
@@ -730,7 +731,7 @@ public final class CreateInstanceModel {
             name: name, displayName: nil,
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
-            settings: schema.settings(), secrets: secrets)
+            settings: schema.settings(), secrets: secrets, startup: nil)
         let outcome = await send(.instanceCreate(params), key)
         switch outcome {
         case .completed(let reply):

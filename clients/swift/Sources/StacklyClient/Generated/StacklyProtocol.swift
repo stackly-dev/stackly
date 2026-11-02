@@ -51,6 +51,8 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	case forceStopInstance = "force_stop_instance"
 	/// Rename an instance.
 	case renameInstance = "rename_instance"
+	/// Change when an instance starts on its own (spec 0031).
+	case setInstanceStartup = "set_instance_startup"
 	/// Write a new config revision and make it take effect (spec 0029).
 	case applyConfig = "apply_config"
 	/// Change the ports of an instance's endpoints (spec 0029).
@@ -2517,6 +2519,16 @@ public struct SecretFieldInput: Codable, Sendable, Equatable {
 	}
 }
 
+/// When an instance starts on its own. Open.
+public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
+	/// Only when the user starts it.
+	case manual
+	/// When the user logs in.
+	case atLogin = "at_login"
+	/// A policy this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
 /// Params of `instance.create`.
 public struct CreateInstanceParams: Codable, Sendable, Equatable {
 	/// The unique instance name.
@@ -2533,8 +2545,11 @@ public struct CreateInstanceParams: Codable, Sendable, Equatable {
 	public let settings: JSONObject
 	/// The secret fields and where their values come from.
 	public let secrets: [SecretFieldInput]?
+	/// When the instance starts on its own; `manual` when absent (spec
+	/// 0031).
+	public let startup: StartupPolicyKind?
 
-	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretFieldInput]?) {
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretFieldInput]?, startup: StartupPolicyKind?) {
 		self.name = name
 		self.displayName = displayName
 		self.provider = provider
@@ -2542,6 +2557,7 @@ public struct CreateInstanceParams: Codable, Sendable, Equatable {
 		self.endpoints = endpoints
 		self.settings = settings
 		self.secrets = secrets
+		self.startup = startup
 	}
 }
 
@@ -3050,6 +3066,50 @@ public struct RestartPlanView: Codable, Sendable, Equatable {
 	}
 }
 
+/// How this daemon run relates to the stored login sessions. Open.
+public enum SessionRotationKind: String, Codable, Sendable, Equatable {
+	/// No session row existed; only the row was written.
+	case first
+	/// A new login: the startup policy of every instance became desired
+	/// state.
+	case new
+	/// The daemon came back in the same session.
+	case continued
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How a login session ended. Open.
+public enum SessionEndKind: String, Codable, Sendable, Equatable {
+	/// Every instance stopped cleanly before the daemon exited.
+	case clean
+	/// The daemon exited while an instance was still stopping.
+	case interrupted
+	/// The next session found the row still open.
+	case unknown
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The login session of a daemon that launchd started (spec 0031).
+public struct DaemonSessionInfo: Codable, Sendable, Equatable {
+	/// The session ID: the boot UUID and the audit session.
+	public let id: String
+	/// When the session began, which is not when this daemon run began.
+	public let startedAt: Date
+	/// What this run's rotation was.
+	public let rotation: SessionRotationKind
+	/// How the session before this one ended, or null when there is none.
+	public let previousEnd: SessionEndKind?
+
+	public init(id: String, startedAt: Date, rotation: SessionRotationKind, previousEnd: SessionEndKind?) {
+		self.id = id
+		self.startedAt = startedAt
+		self.rotation = rotation
+		self.previousEnd = previousEnd
+	}
+}
+
 /// Reply of `daemon.get_info`: who the daemon is and where it keeps things.
 public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The daemon's version.
@@ -3083,8 +3143,12 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 	/// The open restart plan, or the last plan when it became final less
 	/// than ten minutes ago, else null (spec 0030).
 	public let restart: RestartPlanView?
+	/// The login session of this daemon run; null for a daemon that launchd
+	/// did not start, when the session could not be read, and from an older
+	/// daemon (spec 0031).
+	public let session: DaemonSessionInfo?
 
-	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?, launch: DaemonLaunch?, restart: RestartPlanView?) {
+	public init(version: String, protocol: ProtocolVersion, contractDigest: String, serverInstanceId: UUID, pid: UInt32, uid: UInt32?, startedAt: Date, roots: DaemonRoots, socketPath: String, registrySchema: UInt32?, secretStore: SecretStoreStatus?, launch: DaemonLaunch?, restart: RestartPlanView?, session: DaemonSessionInfo?) {
 		self.version = version
 		self.protocol = `protocol`
 		self.contractDigest = contractDigest
@@ -3098,6 +3162,7 @@ public struct DaemonInfo: Codable, Sendable, Equatable {
 		self.secretStore = secretStore
 		self.launch = launch
 		self.restart = restart
+		self.session = session
 	}
 }
 
@@ -3434,8 +3499,11 @@ public struct PreflightCreateParams: Codable, Sendable, Equatable {
 	public let secrets: [SecretPlan]?
 	/// Whether the equivalent command ends with `--start`.
 	public let start: Bool?
+	/// When the instance starts on its own; the equivalent command adds
+	/// `--autostart` for `at_login` (spec 0031).
+	public let startup: StartupPolicyKind?
 
-	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?) {
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretPlan]?, start: Bool?, startup: StartupPolicyKind?) {
 		self.name = name
 		self.displayName = displayName
 		self.provider = provider
@@ -3444,6 +3512,7 @@ public struct PreflightCreateParams: Codable, Sendable, Equatable {
 		self.settings = settings
 		self.secrets = secrets
 		self.start = start
+		self.startup = startup
 	}
 }
 
@@ -4338,6 +4407,35 @@ public struct InstanceActionAccepted: Codable, Sendable, Equatable {
 	}
 }
 
+/// Whether this login session still lets an instance that starts at login
+/// start (spec 0031). Open.
+public enum AutostartSession: String, Codable, Sendable, Equatable {
+	/// The startup lease of this session is active.
+	case active
+	/// A stop in this session suppressed the lease: the instance starts at
+	/// the next login.
+	case suppressed
+	/// This session holds no startup lease for the instance, also in a
+	/// daemon that launchd did not start.
+	case none
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// When an instance starts on its own and how this session stands (spec
+/// 0031).
+public struct InstanceAutostart: Codable, Sendable, Equatable {
+	/// The startup policy of the instance.
+	public let policy: StartupPolicyKind
+	/// The startup lease of the session the daemon runs in.
+	public let session: AutostartSession
+
+	public init(policy: StartupPolicyKind, session: AutostartSession) {
+		self.policy = policy
+		self.session = session
+	}
+}
+
 /// What the provider revision an instance pins can do (spec 0026,
 /// AC-11), read from the pinned revision, never from the catalog. More
 /// capabilities join later; an absent one reads as false.
@@ -4386,16 +4484,6 @@ public struct InstanceConfigView: Codable, Sendable, Equatable {
 		self.drift = drift
 		self.reloadSupported = reloadSupported
 	}
-}
-
-/// When an instance starts on its own. Open.
-public enum StartupPolicyKind: String, Codable, Sendable, Equatable {
-	/// Only when the user starts it.
-	case manual
-	/// When the user logs in.
-	case atLogin = "at_login"
-	/// A policy this build does not know. The daemon never sends it.
-	case unrecognized
 }
 
 /// The kind of an Open In action. Open.
@@ -4899,8 +4987,12 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 	/// How the main process last ended; null when it never did, or the
 	/// row predates the record.
 	public let lastExit: InstanceLastExit?
+	/// When the instance starts on its own and how this session stands.
+	/// Absent in older daemons, which reads as `manual` and `none` (spec
+	/// 0031).
+	public let autostart: InstanceAutostart?
 
-	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, restartTotal: UInt64?, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?) {
+	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, restartTotal: UInt64?, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?, autostart: InstanceAutostart?) {
 		self.id = id
 		self.name = name
 		self.displayName = displayName
@@ -4926,6 +5018,7 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 		self.initialized = initialized
 		self.capabilities = capabilities
 		self.lastExit = lastExit
+		self.autostart = autostart
 	}
 }
 
@@ -6429,6 +6522,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceConfigKeepRevision(KeepRevisionParams)
 	/// Renames an instance (spec 0029).
 	case instanceRename(RenameInstanceParams)
+	/// Sets when an instance starts on its own (spec 0031).
+	case instanceSetStartup(SetStartupParams)
 	/// Changes the ports of an instance's IP endpoints (spec 0029).
 	case instanceChangeEndpoints(ChangeEndpointsParams)
 	/// One page of an instance's stored log (spec 0027).
@@ -6487,6 +6582,7 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceConfigApply = "instance.config.apply",
 			instanceConfigKeepRevision = "instance.config.keep_revision",
 			instanceRename = "instance.rename",
+			instanceSetStartup = "instance.set_startup",
 			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
@@ -6713,6 +6809,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instanceRename(content)
 					return
 				}
+			case .instanceSetStartup:
+				if let content = try? container.decode(SetStartupParams.self, forKey: .content) {
+					self = .instanceSetStartup(content)
+					return
+				}
 			case .instanceChangeEndpoints:
 				if let content = try? container.decode(ChangeEndpointsParams.self, forKey: .content) {
 					self = .instanceChangeEndpoints(content)
@@ -6874,6 +6975,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceRename(let content):
 			try container.encode(CodingKeys.instanceRename, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .instanceSetStartup(let content):
+			try container.encode(CodingKeys.instanceSetStartup, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceChangeEndpoints(let content):
 			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -7007,6 +7111,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	/// The operation that renames the instance, or that the name is the
 	/// same.
 	case instanceRename(InstanceActionAccepted)
+	/// The instance after its startup policy changed, or as it was.
+	case instanceSetStartup(InstanceSummary)
 	/// The operation that changes the ports, or the verdict of a dry run.
 	case instanceChangeEndpoints(ChangeEndpointsReply)
 	/// One page of the log.
@@ -7064,6 +7170,7 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceConfigApply = "instance.config.apply",
 			instanceConfigKeepRevision = "instance.config.keep_revision",
 			instanceRename = "instance.rename",
+			instanceSetStartup = "instance.set_startup",
 			instanceChangeEndpoints = "instance.change_endpoints",
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
@@ -7302,6 +7409,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instanceRename(content)
 					return
 				}
+			case .instanceSetStartup:
+				if let content = try? container.decode(InstanceSummary.self, forKey: .content) {
+					self = .instanceSetStartup(content)
+					return
+				}
 			case .instanceChangeEndpoints:
 				if let content = try? container.decode(ChangeEndpointsReply.self, forKey: .content) {
 					self = .instanceChangeEndpoints(content)
@@ -7466,6 +7578,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .instanceRename(let content):
 			try container.encode(CodingKeys.instanceRename, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .instanceSetStartup(let content):
+			try container.encode(CodingKeys.instanceSetStartup, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .instanceChangeEndpoints(let content):
 			try container.encode(CodingKeys.instanceChangeEndpoints, forKey: .type)
@@ -7814,6 +7929,23 @@ public struct SetSecretReply: Codable, Sendable, Equatable {
 		self.summary = summary
 		self.warnings = warnings
 		self.effects = effects
+	}
+}
+
+/// Params of `instance.set_startup` (spec 0031).
+public struct SetStartupParams: Codable, Sendable, Equatable {
+	/// The instance to change.
+	public let instanceId: UUID
+	/// The policy to set: `manual` or `at_login`.
+	public let startup: StartupPolicyKind
+	/// Refuse with `resource.revision_mismatch` unless the instance is at
+	/// this revision.
+	public let expectedRevision: UInt64?
+
+	public init(instanceId: UUID, startup: StartupPolicyKind, expectedRevision: UInt64?) {
+		self.instanceId = instanceId
+		self.startup = startup
+		self.expectedRevision = expectedRevision
 	}
 }
 

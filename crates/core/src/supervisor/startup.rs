@@ -206,6 +206,15 @@ async fn run_start(
     if request.respawn {
         return run_respawn(sup, request, ctx, &instance).await;
     }
+    // Spec 0031, *Antrean start*: a start the daemon makes on its own never
+    // changes the desired state. It reads it under the operation's lock and
+    // ends without a start when a stop (a Stop All, a Turn Off, a rotation)
+    // came first.
+    if matches!(request.trigger, StartTrigger::Background)
+        && instance.desired() != DesiredState::Running
+    {
+        return Ok(success(id));
+    }
     match instance.lifecycle() {
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running

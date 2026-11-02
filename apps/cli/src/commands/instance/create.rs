@@ -14,7 +14,7 @@ use stackly_protocol::instance::{
     CreateForm, CreateInstanceParams, CreatePreflight, EndpointRequest, FieldKind,
     GetCreateFormParams, PreflightCheck, PreflightCreateParams, PreflightStatus, ProviderSelector,
     SecretFieldInput, SecretPlan, SecretSource as PlanSource, SettingsDocument,
-    StartInstanceParams,
+    StartInstanceParams, StartupPolicyKind,
 };
 use stackly_protocol::runtime::RuntimeState;
 use stackly_protocol::{Call, Reply};
@@ -75,6 +75,9 @@ pub struct CreateArgs {
     /// Start the instance when the create has succeeded; waits for the create, and with --wait for the start too
     #[arg(long)]
     pub start: bool,
+    /// Start the instance at every login, without opening the app
+    #[arg(long)]
+    pub autostart: bool,
     /// Only judge the draft: print the preflight and exit 0 when it is ready, without creating anything
     #[arg(long)]
     pub dry_run: bool,
@@ -203,6 +206,12 @@ pub(super) fn plan_source(source: &SecretSource) -> PlanSource {
 }
 
 impl CreateArgs {
+    /// The startup policy these flags ask for: `at_login` with `--autostart`,
+    /// else none is sent and the daemon keeps `manual`.
+    fn startup(&self) -> Option<StartupPolicyKind> {
+        self.autostart.then_some(StartupPolicyKind::AtLogin)
+    }
+
     /// The secret sources these flags name, the last one for a field
     /// winning, in the order the fields first appeared.
     fn sources(&self) -> Vec<(&str, &SecretSource)> {
@@ -324,6 +333,7 @@ impl CreateArgs {
             settings: self.settings(form),
             secrets,
             start: self.start,
+            startup: self.startup(),
         });
         let preflight = match cx.call(call, CallSpec::control()).await {
             Ok(Reply::InstancePreflight(preflight)) => *preflight,
@@ -452,6 +462,7 @@ impl RunCommand for CreateArgs {
             endpoints: self.endpoints(),
             settings: self.settings(&form),
             secrets,
+            startup: self.startup(),
         };
         // `--start` needs the create to end first, whatever `--wait` says.
         let mut run = self.run.clone();
@@ -623,6 +634,7 @@ mod tests {
                 })
                 .collect(),
             start: args.start,
+            autostart: args.autostart,
         }
     }
 

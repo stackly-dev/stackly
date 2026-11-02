@@ -86,7 +86,11 @@
         "capabilities": {
           "reload": true
         },
-        "lastExit": null
+        "lastExit": null,
+        "autostart": {
+          "policy": "manual",
+          "session": "none"
+        }
       }
     }
   }

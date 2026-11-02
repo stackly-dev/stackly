@@ -36,7 +36,7 @@ use stackly_protocol::instance::{
     GetInstanceDetailParams, GetInstanceParams, GetMetricsParams, InstanceActionAccepted,
     InstanceDetail, InstancePage, InstanceSummary, ListInstancesParams, MetricsReply,
     PreflightCreateParams, PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams,
-    RestartInstanceParams, StartInstanceParams, StopInstanceParams,
+    RestartInstanceParams, SetStartupParams, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelOperationParams, CancelReply, GetOperationParams,
@@ -439,6 +439,16 @@ pub trait Handlers: Send + Sync + 'static {
         params: RenameInstanceParams,
     ) -> HandlerFuture<'a, InstanceActionAccepted> {
         instance::rename(core, context, params)
+    }
+
+    /// `instance.set_startup` (spec 0031).
+    fn set_startup<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: SetStartupParams,
+    ) -> HandlerFuture<'a, InstanceSummary> {
+        instance::set_startup(core, context, params)
     }
 
     /// `instance.change_endpoints` (spec 0029).

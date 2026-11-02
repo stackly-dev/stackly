@@ -14,7 +14,9 @@ use crate::registry::path::{LogicalRoot, RelativePath};
 use crate::registry::secret::SecretUse;
 use crate::registry::{AuditEventId, ConfigRevisionId};
 use crate::secret::SecretRef;
-use crate::value::{IdempotencyKey, InstanceName, ResourceRevision, Sha256Digest, SoftwareName};
+use crate::value::{
+    IdempotencyKey, InstanceName, ResourceRevision, SessionId, Sha256Digest, SoftwareName,
+};
 
 /// One resource the registry holds, as errors and commit results name it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -50,6 +52,11 @@ pub enum ResourceRef {
     /// A daemon restart plan (spec 0030). It has no resource kind on the
     /// wire.
     RestartPlan(RestartPlanId),
+    /// A daemon login session (spec 0031). It has no resource kind on the
+    /// wire.
+    Session(SessionId),
+    /// The session table as a whole, which a prune writes (spec 0031).
+    Sessions,
 }
 
 /// Why a resource cannot be deleted by the op that tried.
@@ -103,6 +110,8 @@ impl fmt::Display for ResourceRef {
             Self::ConfigRevision(id) => write!(f, "config revision {id}"),
             Self::ProviderSource(id) => write!(f, "provider source {id}"),
             Self::RestartPlan(id) => write!(f, "restart plan {id}"),
+            Self::Session(id) => write!(f, "session {id}"),
+            Self::Sessions => f.write_str("the session table"),
         }
     }
 }

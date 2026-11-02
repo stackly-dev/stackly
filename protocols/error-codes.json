@@ -73,6 +73,10 @@
       "owner": "spec 0022"
     },
     {
+      "name": "platform",
+      "owner": "spec 0031"
+    },
+    {
       "name": "internal",
       "owner": "spec 0006"
     },
@@ -1138,6 +1142,14 @@
       ],
       "items": null,
       "summary": "an operation that needs recovery holds a lock the request needs"
+    },
+    {
+      "code": "platform.session_unavailable",
+      "category": "unavailable",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the login session of the daemon cannot be read, so no session rule runs"
     },
     {
       "code": "process.identity_capture_failed",

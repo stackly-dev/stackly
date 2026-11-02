@@ -103,6 +103,18 @@ impl GuardView for TransactionView<'_> {
     fn open_restart_plan(&self) -> Result<Option<stackly_domain::RestartPlan>, RegistryError> {
         super::restart::open_plan(self.tx)
     }
+
+    fn leases(
+        &self,
+        instance: stackly_domain::InstanceId,
+        filter: stackly_domain::LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError> {
+        read::leases(self.tx, instance, filter)
+    }
+
+    fn latest_session(&self) -> Result<Option<stackly_domain::DaemonSession>, RegistryError> {
+        super::session::latest(self.tx)
+    }
 }
 
 fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {
@@ -292,6 +304,10 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         } => source::delete_instance_created_by(conn, *id, *expected, *operation),
         WriteOp::InsertRestartPlan(plan) => super::restart::insert_plan(conn, plan, op),
         WriteOp::UpdateRestartPlan(plan) => super::restart::update_plan(conn, plan),
+        WriteOp::InsertSession(session) => super::session::insert(conn, session, op),
+        WriteOp::EndSession { id, at, reason } => super::session::end(conn, id, *at, *reason),
+        WriteOp::ReopenSession { id } => super::session::reopen(conn, id),
+        WriteOp::PruneSessions { keep } => super::session::prune(conn, *keep),
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),
@@ -988,6 +1004,24 @@ fn check_lease(conn: &Connection, lease: &Lease) -> Result<(), RegistryError> {
     )? {
         return Err(RegistryError::MissingReference {
             resource: ResourceRef::Instance(lease.instance_id()),
+        });
+    }
+    if lease.holder() == LeaseHolder::Startup
+        && !matches!(lease.state(), LeaseState::Released { .. })
+        && let Some(session) = lease.session()
+        && exists(
+            conn,
+            "SELECT 1 FROM instance_demands WHERE instance_id = ?1 AND session_id = ?2 \
+             AND source_kind = 'startup' AND state IN ('active', 'suppressed') AND id <> ?3",
+            (
+                lease.instance_id().to_string(),
+                session.as_str(),
+                lease.id().to_string(),
+            ),
+        )?
+    {
+        return Err(RegistryError::DuplicateResource {
+            resource: ResourceRef::Lease(lease.id()),
         });
     }
     let LeaseHolder::Environment(environment) = lease.holder() else {

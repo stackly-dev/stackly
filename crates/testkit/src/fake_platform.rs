@@ -9,8 +9,8 @@ use stackly_platform::{
 };
 
 use crate::{
-    FakeBackgroundAgent, FakeCodeSigning, FakeFetcher, FakeFilesystem, FakeProcessSupervision,
-    FakeSecretStore, TestRoot,
+    FakeBackgroundAgent, FakeCodeSigning, FakeFetcher, FakeFilesystem, FakeLoginSessionInfo,
+    FakeProcessSupervision, FakeSecretStore, TestRoot,
 };
 
 /// Where [`FakeClock`] starts: 2026-01-01T00:00:00Z.
@@ -149,7 +149,11 @@ impl FakePlatformInfo {
                     PlatformCapability::NetworkFetch,
                     CapabilityStatus::Supported,
                 )
-                .with(PlatformCapability::CodeSigning, CapabilityStatus::Supported),
+                .with(PlatformCapability::CodeSigning, CapabilityStatus::Supported)
+                .with(
+                    PlatformCapability::LoginSession,
+                    CapabilityStatus::Supported,
+                ),
         }
     }
 
@@ -241,6 +245,7 @@ pub struct FakePlatform {
     background_agent: FakeBackgroundAgent,
     fetcher: FakeFetcher,
     code_signing: FakeCodeSigning,
+    login_session: FakeLoginSessionInfo,
 }
 
 impl FakePlatform {
@@ -258,6 +263,7 @@ impl FakePlatform {
             background_agent: FakeBackgroundAgent::new(),
             fetcher: FakeFetcher::new(),
             code_signing: FakeCodeSigning::new(),
+            login_session: FakeLoginSessionInfo::new(),
         }
     }
 
@@ -292,6 +298,7 @@ impl FakePlatform {
         .with_background_agent(Arc::new(self.background_agent.clone()))
         .with_fetcher(Arc::new(self.fetcher.clone()))
         .with_code_signing(Arc::new(self.code_signing.clone()))
+        .with_login_session(Arc::new(self.login_session.clone()))
     }
 
     /// Returns the fake filesystem, to inject faults or read its logs.
@@ -342,6 +349,14 @@ impl FakePlatform {
     #[must_use]
     pub fn code_signing(&self) -> &FakeCodeSigning {
         &self.code_signing
+    }
+
+    /// Returns the fake login session port, to script the session the
+    /// daemon sees (spec 0031). Every platform this fake hands out shares
+    /// it.
+    #[must_use]
+    pub fn login_session(&self) -> &FakeLoginSessionInfo {
+        &self.login_session
     }
 
     /// Returns the fake fetcher, to serve bytes, script failures, and read

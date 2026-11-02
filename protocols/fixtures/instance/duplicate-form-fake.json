@@ -34,7 +34,8 @@
       "logLinesPerSecond": 0,
       "readyDelayMs": 0
     },
-    "start": false
+    "start": false,
+    "startup": null
   },
   "form": {
     "capabilities": [

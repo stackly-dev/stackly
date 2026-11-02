@@ -64,6 +64,7 @@ pub fn info(id: Uuid) -> DaemonInfo {
         secret_store: None,
         launch: None,
         restart: None,
+        session: None,
     }
 }
 

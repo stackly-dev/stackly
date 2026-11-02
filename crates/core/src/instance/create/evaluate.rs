@@ -111,6 +111,8 @@ pub struct ResolvedCreate {
     pub settings: SettingsValues,
     /// One plan per secret field, in schema order.
     pub secrets: Vec<SecretPlan>,
+    /// When the new instance starts on its own.
+    pub startup: stackly_domain::StartupPolicy,
 }
 
 /// Evaluates `draft` over `facts`, with the ID dry run plans use.
@@ -1230,6 +1232,7 @@ impl Judge<'_> {
             endpoints,
             settings: settings.values,
             secrets: settings.secrets,
+            startup: self.draft.startup,
         })
     }
 
