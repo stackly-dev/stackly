@@ -175,7 +175,7 @@ impl Raw {
         let mut raw = Self::connect(socket).await;
         raw.send(&handshake(
             "h",
-            1,
+            ProtocolVersion::CURRENT.major,
             ProtocolVersion::CURRENT.minor,
             CONTRACT_DIGEST,
         ))

@@ -390,7 +390,7 @@ fn a_version_7_registry_migrates_to_numbered_revisions_with_the_endpoint_snapsho
 
     assert_eq!(summary.migrated_from, Some(7));
     let conn = harness.connect();
-    let rows: Vec<(
+    type RevisionRow = (
         String,
         i64,
         String,
@@ -398,7 +398,8 @@ fn a_version_7_registry_migrates_to_numbered_revisions_with_the_endpoint_snapsho
         String,
         Option<String>,
         Option<i64>,
-    )> = conn
+    );
+    let rows: Vec<RevisionRow> = conn
         .prepare(
             "SELECT id, number, status, origin, endpoints, ready_at, source_number \
              FROM config_revisions ORDER BY instance_id, number",
@@ -452,4 +453,104 @@ fn a_version_7_registry_migrates_to_numbered_revisions_with_the_endpoint_snapsho
         err.to_string().contains("UNIQUE constraint failed"),
         "{err}"
     );
+}
+
+#[test]
+fn a_version_8_registry_migrates_to_empty_restart_plan_tables_that_hold_one_open_plan() {
+    // Spec 0030, step 3: migration 9 adds the plan tables, empty, with a
+    // partial unique index that lets only one plan stay open, and no
+    // foreign key from a plan instance to the instances table.
+    const AT: &str = "2026-11-02T08:00:00.000000000Z";
+    const BOOT: &str = "6f9619ff-8b86-4011-b42d-00c04fc964ff";
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(8));
+
+    let (registry, summary) = ready(harness.open_with(&OpenOptions::new()));
+    drop(registry);
+
+    assert_eq!(summary.migrated_from, Some(8));
+    let conn = harness.connect();
+    for table in ["daemon_restart_plan", "daemon_restart_plan_instance"] {
+        let rows: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 0, "{table}");
+    }
+    let operation: String = conn
+        .query_row("SELECT id FROM operations ORDER BY id LIMIT 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let insert = |id: &str, state: &str, finished: Option<&str>, reason: Option<&str>| {
+        conn.execute(
+            "INSERT INTO daemon_restart_plan (id, operation_id, state, digest, boot_id, \
+             server_instance_id_before, created_at, finished_at, close_reason) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8)",
+            (
+                id,
+                &operation,
+                state,
+                "ab".repeat(32),
+                BOOT,
+                AT,
+                finished,
+                reason,
+            ),
+        )
+    };
+    insert(
+        "0199f000-0000-7000-8000-0000000000a1",
+        "stopping",
+        None,
+        None,
+    )
+    .unwrap();
+    let err = insert(
+        "0199f000-0000-7000-8000-0000000000a2",
+        "restoring",
+        None,
+        None,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("UNIQUE constraint failed"),
+        "{err}"
+    );
+    insert(
+        "0199f000-0000-7000-8000-0000000000a3",
+        "finished",
+        Some(AT),
+        None,
+    )
+    .unwrap();
+    let err = insert(
+        "0199f000-0000-7000-8000-0000000000a4",
+        "aborted",
+        Some(AT),
+        None,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("CHECK constraint failed"), "{err}");
+    conn.execute(
+        "INSERT INTO daemon_restart_plan_instance (plan_id, instance_id, name, decision, reason) \
+         VALUES ('0199f000-0000-7000-8000-0000000000a3', '0199f000-0000-7000-8000-0000000000ff', \
+         'gone', 'keep', 'handover_proven')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "DELETE FROM daemon_restart_plan WHERE id = '0199f000-0000-7000-8000-0000000000a3'",
+        [],
+    )
+    .unwrap();
+    let left: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM daemon_restart_plan_instance",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(left, 0, "the instance rows go with their plan");
 }

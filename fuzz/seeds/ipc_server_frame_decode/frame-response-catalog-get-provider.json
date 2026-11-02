@@ -29,7 +29,7 @@
           "tile": "green"
         },
         "software": "nats",
-        "manifestSha256": "fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd",
+        "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe",
         "capabilities": [
           {
             "capability": "multi_instance",
@@ -74,8 +74,8 @@
                 "arches": [
                   "aarch64"
                 ],
-                "status": "supported",
-                "reason": "provider_tested",
+                "status": "experimental",
+                "reason": "runtime_tested",
                 "note": null
               },
               {

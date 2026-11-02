@@ -11,12 +11,17 @@ use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{PATIENCE, Raw, Site, error_of, handshake, request};
 
+/// The major the daemon speaks.
+const CURRENT_MAJOR: u32 = ProtocolVersion::CURRENT.major;
+/// A major the daemon refuses.
+const OTHER_MAJOR: u32 = CURRENT_MAJOR + 1;
+
 #[tokio::test]
-async fn a_client_of_major_1_is_accepted_whatever_its_minor() {
+async fn a_client_of_the_current_major_is_accepted_whatever_its_minor() {
     let ev = evidence!(
         covers = ["REQ-047", "AC-047", "AC-071"],
         kind = Kind::Fixture,
-        expected = "handshakes of protocol 1.0 and 1.99 are both accepted with the daemon's version, server instance, digest, limits, and head",
+        expected = "handshakes of the current major with minor 0 and 99 are both accepted with the daemon's version, server instance, digest, limits, and head",
     );
     let site = Site::new();
     let daemon = site.start().await;
@@ -25,14 +30,15 @@ async fn a_client_of_major_1_is_accepted_whatever_its_minor() {
 
     for minor in [0, 99] {
         let mut raw = Raw::connect(&site.socket()).await;
-        raw.send(&handshake("h1", 1, minor, CONTRACT_DIGEST)).await;
+        raw.send(&handshake("h1", CURRENT_MAJOR, minor, CONTRACT_DIGEST))
+            .await;
         let frame = raw.recv().await.expect("the handshake is answered");
 
         assert_eq!(frame["type"], "response", "{frame}");
         assert_eq!(frame["content"]["requestId"], "h1");
         let accepted = &frame["content"]["reply"]["content"];
         assert_eq!(frame["content"]["reply"]["type"], "daemon.handshake");
-        assert_eq!(accepted["protocol"]["major"], 1);
+        assert_eq!(accepted["protocol"]["major"], CURRENT_MAJOR);
         assert_eq!(
             accepted["protocol"]["minor"],
             ProtocolVersion::CURRENT.minor
@@ -55,7 +61,7 @@ async fn another_major_with_broken_params_gets_major_mismatch_and_nothing_behind
     let ev = evidence!(
         covers = ["REQ-047", "AC-047", "AC-071"],
         kind = Kind::Fixture,
-        expected = "a major 2 handshake with broken params gets protocol.major_mismatch with the daemon version and the connection closes; a request sent behind it is never answered",
+        expected = "a handshake of another major with broken params gets protocol.major_mismatch with the daemon version and the connection closes; a request sent behind it is never answered",
     );
     let site = Site::new();
     let _daemon = site.start().await;
@@ -64,7 +70,7 @@ async fn another_major_with_broken_params_gets_major_mismatch_and_nothing_behind
         "requestId": "h2",
         "call": {
             "type": "daemon.handshake",
-            "content": { "protocol": { "major": 2, "minor": 0 }, "client": 7 }
+            "content": { "protocol": { "major": OTHER_MAJOR, "minor": 0 }, "client": 7 }
         }
     }))
     .unwrap();
@@ -76,7 +82,10 @@ async fn another_major_with_broken_params_gets_major_mismatch_and_nothing_behind
     let error = error_of(&frame);
     assert!(error.is(&protocol::MAJOR_MISMATCH));
     assert_eq!(frame["content"]["requestId"], "h2");
-    assert_eq!(error.detail("serverMajor"), Some("1"));
+    assert_eq!(
+        error.detail("serverMajor"),
+        Some(CURRENT_MAJOR.to_string().as_str())
+    );
     assert_eq!(
         error.detail("serverMinor"),
         Some(ProtocolVersion::CURRENT.minor.to_string().as_str())
@@ -126,7 +135,8 @@ async fn broken_json_or_bad_handshake_params_as_the_first_frame_get_their_reques
     raw.expect_end().await;
 
     let mut raw = Raw::connect(&site.socket()).await;
-    raw.send(&handshake("h", 1, 0, "not-a-digest")).await;
+    raw.send(&handshake("h", CURRENT_MAJOR, 0, "not-a-digest"))
+        .await;
     let frame = raw.recv().await.expect("the refusal arrives");
     let error = error_of(&frame);
     assert!(error.is(&request::INVALID_PARAMS));
@@ -194,7 +204,8 @@ async fn a_second_handshake_is_refused_and_the_connection_stays_up() {
     let _daemon = site.start().await;
     let mut raw = Raw::ready(&site.socket()).await;
 
-    raw.send(&handshake("again", 1, 0, CONTRACT_DIGEST)).await;
+    raw.send(&handshake("again", CURRENT_MAJOR, 0, CONTRACT_DIGEST))
+        .await;
     let error = error_of(&raw.answer("again").await);
     assert!(error.is(&protocol::HANDSHAKE_REPEATED));
 
@@ -236,7 +247,8 @@ async fn every_refused_handshake_counts_once_in_connections_rejected() {
     settles_at(1).await;
 
     let mut raw = Raw::connect(&site.socket()).await;
-    raw.send(&handshake("h2", 2, 0, CONTRACT_DIGEST)).await;
+    raw.send(&handshake("h2", OTHER_MAJOR, 0, CONTRACT_DIGEST))
+        .await;
     let frame = raw.recv().await.expect("the refusal arrives");
     assert!(error_of(&frame).is(&protocol::MAJOR_MISMATCH), "{frame}");
     raw.expect_end().await;
@@ -252,7 +264,7 @@ async fn a_major_given_in_another_json_shape_is_still_refused() {
     let ev = evidence!(
         covers = ["REQ-047", "AC-047"],
         kind = Kind::Fixture,
-        expected = "a handshake whose protocol is the array [2, 0], which the early major reader skips, still gets protocol.major_mismatch once decoded",
+        expected = "a handshake whose protocol is the array [other major, 0], which the early major reader skips, still gets protocol.major_mismatch once decoded",
     );
     let site = Site::new();
     let _daemon = site.start().await;
@@ -262,7 +274,7 @@ async fn a_major_given_in_another_json_shape_is_still_refused() {
         "h-array",
         "daemon.handshake",
         Some(json!({
-            "protocol": [2, 0],
+            "protocol": [OTHER_MAJOR, 0],
             "client": { "kind": "cli", "version": "0.1.0", "pid": std::process::id() },
             "contractDigest": CONTRACT_DIGEST,
         })),
