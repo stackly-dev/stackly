@@ -60,3 +60,9 @@ connection:
   - name: monitoring
     title: Monitoring URL
     template: "http://${endpoint.monitoring.address}"
+openWith:
+  - name: monitoring
+    title: Monitoring
+    kind: browser
+    browser:
+      url: "http://${endpoint.monitoring.address}/"

@@ -17,6 +17,7 @@ pub mod group;
 mod inspect;
 mod list;
 mod logs;
+mod open;
 pub mod render;
 pub mod resolve;
 
@@ -38,6 +39,7 @@ use self::get::GetArgs;
 use self::inspect::InspectArgs;
 use self::list::ListArgs;
 use self::logs::LogsArgs;
+use self::open::OpenArgs;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -95,6 +97,11 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance connection orders-db\n  stackly instance connection orders-db --format socket\n  stackly instance connection orders-db --all\n  stackly instance connection orders-db --show-password --json"
     )]
     Connection(ConnectionArgs),
+    /// List the actions that open an instance in another app, without opening one
+    #[command(
+        after_help = "Examples:\n  stackly instance open orders-db --list\n  stackly instance open orders-db --list --json"
+    )]
+    Open(OpenArgs),
     /// Show the stored output of an instance, and follow it with -f
     #[command(
         after_help = "Examples:\n  stackly instance logs orders-db\n  stackly instance logs orders-db --tail 500 --stream stderr --grep fatal\n  stackly instance logs orders-db -f\n  stackly instance logs orders-db --follow --json"
@@ -120,6 +127,7 @@ impl InstanceCommand {
             Self::List(args) => execute(args, cx).await,
             Self::Inspect(args) => execute(args, cx).await,
             Self::Connection(args) => execute(args, cx).await,
+            Self::Open(args) => execute(args, cx).await,
             Self::Logs(args) => execute(args, cx).await,
             Self::Get(args) => execute(args, cx).await,
         }

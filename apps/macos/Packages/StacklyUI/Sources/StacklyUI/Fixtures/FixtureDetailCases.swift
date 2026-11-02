@@ -38,7 +38,8 @@
                 startup: .manual,
                 secrets: secrets(of: summary),
                 dependents: dependents(of: summary),
-                connections: packageReadable ? connections(of: summary) : [])
+                connections: packageReadable ? connections(of: summary) : [],
+                openActions: packageReadable ? openActions(of: summary) : [])
         }
 
         /// The data size of `summary`: complete and measured five minutes before
@@ -128,6 +129,60 @@
                                 kind: .text, text: "nats://127.0.0.1:\(port)", secret: nil)
                         ],
                         portMayChange: false)
+                ]
+            default:
+                return []
+            }
+        }
+
+        /// The Open In actions of `summary` as the daemon renders them (spec 0070): TablePlus,
+        /// Postico, and psql for PostgreSQL, the monitoring page for NATS, none for the rest.
+        private static func openActions(of summary: InstanceSummary) -> [OpenAction] {
+            let port = summary.endpoints?.first?.port
+            func action(
+                _ name: String, _ title: String, _ kind: OpenActionKind,
+                bundleIds: [String] = [], url: String? = nil, command: OpenCommand? = nil,
+                copySecret: ConnectionSecretPart? = nil
+            ) -> OpenAction {
+                guard port != nil else {
+                    return OpenAction(
+                        name: name, title: title, kind: kind, state: .unavailable,
+                        reason: .portNotAssigned, appBundleIds: bundleIds, url: nil, command: nil,
+                        path: nil, copySecret: nil)
+                }
+                return OpenAction(
+                    name: name, title: title, kind: kind, state: .available, reason: nil,
+                    appBundleIds: bundleIds, url: url, command: command, path: nil,
+                    copySecret: copySecret)
+            }
+            switch summary.provider.name {
+            case "official/postgresql":
+                let reference = secrets(of: summary).first?.reference ?? ""
+                let secret = ConnectionSecretPart(field: "superuserPassword", reference: reference)
+                let url = "postgresql://postgres@127.0.0.1:\(port ?? 0)/postgres"
+                let psql = OpenCommand(
+                    executable:
+                        "\(home)/Library/Application Support/Stackly/runtimes/postgresql/\(summary.runtimeVersion)/bin/psql",
+                    args: [
+                        "--host=\(home)/Library/Application Support/Stackly/run/ab12cd34",
+                        "--port=\(port ?? 0)", "--username=postgres", "postgres",
+                    ],
+                    env: [EnvPair(name: "PGAPPNAME", value: "stackly-terminal")])
+                return [
+                    action(
+                        "tableplus", "TablePlus", .app, bundleIds: ["com.tinyapp.TablePlus"],
+                        url: url, copySecret: secret),
+                    action(
+                        "postico", "Postico", .app,
+                        bundleIds: ["at.eggerapps.Postico2", "at.eggerapps.Postico"], url: url,
+                        copySecret: secret),
+                    action("psql", "psql", .terminal, command: psql, copySecret: secret),
+                ]
+            case "official/nats":
+                return [
+                    action(
+                        "monitoring", "Monitoring", .browser,
+                        url: "http://127.0.0.1:\((port ?? 0) + 4000)/")
                 ]
             default:
                 return []

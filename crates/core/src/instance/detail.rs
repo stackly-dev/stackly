@@ -16,6 +16,7 @@ use stackly_domain::{
 use stackly_platform::DirectoryLayout;
 
 use crate::instance::connection::{RenderedConnection, render};
+use crate::instance::open_with::{self, RenderedOpenAction};
 use crate::provider::{
     PlanContext, ResolvedEndpoint, RuntimeContext, SettingsValues, ValidatedPackage,
 };
@@ -101,6 +102,9 @@ pub struct InstanceDetailData {
     /// The connection strings, in manifest order; none when the pinned
     /// package cannot be read.
     pub connections: Vec<RenderedConnection>,
+    /// The Open In actions, in manifest order; none when the pinned package
+    /// cannot be read or has no `openWith` block (spec 0070).
+    pub open_actions: Vec<RenderedOpenAction>,
 }
 
 /// The pinned provider revision of an instance.
@@ -191,14 +195,20 @@ pub fn build(snapshot: &DetailSnapshot<'_>) -> Result<InstanceDetailData, Detail
         .package
         .filter(|package| package.key() == instance.provider_revision());
     let secrets = secrets(snapshot, package);
-    let connections = package.map_or_else(Vec::new, |package| {
-        let context = plan_context(snapshot);
-        let refs: Vec<(SecretFieldName, SecretRef)> = secrets
-            .iter()
-            .map(|secret| (secret.field.clone(), secret.reference.clone()))
-            .collect();
-        render(package, &context, instance, &refs)
-    });
+    let (connections, open_actions) = package.map_or_else(
+        || (Vec::new(), Vec::new()),
+        |package| {
+            let context = plan_context(snapshot);
+            let refs: Vec<(SecretFieldName, SecretRef)> = secrets
+                .iter()
+                .map(|secret| (secret.field.clone(), secret.reference.clone()))
+                .collect();
+            (
+                render(package, &context, instance, &refs),
+                open_with::render(package, &context, instance, &refs),
+            )
+        },
+    );
     Ok(InstanceDetailData {
         instance_id: instance.id(),
         revision: instance.revision(),
@@ -222,6 +232,7 @@ pub fn build(snapshot: &DetailSnapshot<'_>) -> Result<InstanceDetailData, Detail
         secrets,
         dependents: dependents(snapshot),
         connections,
+        open_actions,
     })
 }
 

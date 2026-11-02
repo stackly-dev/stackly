@@ -1,1 +1,1 @@
---leak-token=${settings.leakToken}
+--ignore-term=${settings.ignoreTerm}

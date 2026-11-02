@@ -384,7 +384,7 @@
     "provider": {
       "category": "testing",
       "displayName": "Fake Provider",
-      "manifestSha256": "e2fb34cc625facdf6c90f31ac006a54c3d672508f30c913195e44c1b0335117a",
+      "manifestSha256": "7150ee0b39a3e5ffe504c04480138c2f7abd4cc72ae5e627f0da79296559e805",
       "name": "testing/fake",
       "revision": "0.4.0",
       "source": "pinned"

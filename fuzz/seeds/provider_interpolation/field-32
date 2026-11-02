@@ -1,1 +1,1 @@
-${instance.secrets}/conf/server.json
+${instance.config}/dynamic/routes.yaml

@@ -1,1 +1,1 @@
---log-line-bytes=${settings.logLineBytes}
+--log-lines-per-second=${settings.logLinesPerSecond}

@@ -38,6 +38,10 @@ configFiles:
     template: templates/fake.conf.tmpl
     format: json
     destination: "${instance.config}/fake.conf"
+  fakeNotes:
+    template: templates/notes.txt.tmpl
+    format: plain
+    destination: "${instance.config}/notes.txt"
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
@@ -51,6 +55,7 @@ lifecycle:
         - "--fail=${settings.failInit}"
         - "--delay-ms=${settings.initDelayMs}"
       stdin: { secret: authToken }
+    - { primitive: renderConfig, file: fakeNotes }
   start:
     executable: "${runtime.executable}"
     args:
@@ -96,3 +101,28 @@ connection:
   - name: uri
     title: Connection string
     template: "http://stackly:${secret.authToken}@${endpoint.http.address}/"
+openWith:
+  - name: client
+    title: Fake Client
+    kind: app
+    app:
+      bundleIds: ["dev.stackly.fake-client"]
+      url: "http://stackly@${endpoint.http.address}/"
+    copySecret: authToken
+  - name: version
+    title: Fake Server
+    kind: terminal
+    terminal:
+      executable: "${runtime.executable}"
+      args: ["version"]
+    copySecret: authToken
+  - name: status
+    title: Status Page
+    kind: browser
+    browser:
+      url: "http://${endpoint.http.address}/health"
+  - name: notes
+    title: Notes
+    kind: reveal
+    reveal:
+      configFile: fakeNotes

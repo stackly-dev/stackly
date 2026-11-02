@@ -1089,6 +1089,7 @@ mod tests {
             package_file!("fake", "schemas/settings.schema.json"),
             package_file!("fake", "templates/fake.json.tmpl"),
             package_file!("fake", "templates/fake.conf.tmpl"),
+            package_file!("fake", "templates/notes.txt.tmpl"),
         ]);
         ValidatedPackage::from_files(PackageFiles::new("fake", files), NameCheck::FolderName)
             .unwrap()

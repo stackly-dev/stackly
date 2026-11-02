@@ -1,0 +1,11 @@
+[
+  {
+    "copySecret": null,
+    "kind": "browser",
+    "name": "monitoring",
+    "title": "Monitoring",
+    "value": {
+      "url": "http://127.0.0.1:14001/"
+    }
+  }
+]

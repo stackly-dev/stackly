@@ -151,7 +151,7 @@ struct DetailFormatTests {
         let bare = InstanceDetail(
             instanceId: detail.instanceId, revision: detail.revision, provider: detail.provider,
             runtime: detail.runtime, dataPath: detail.dataPath, startup: detail.startup,
-            secrets: [], dependents: [], connections: [])
+            secrets: [], dependents: [], connections: [], openActions: [])
         #expect(DetailFormat.copyConnectionReason(bare) == "No connection string available.")
         #expect(DetailFormat.connectionUnavailableText(bare) == nil)
     }

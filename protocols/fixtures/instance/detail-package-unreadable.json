@@ -88,7 +88,8 @@
       }
     ],
     "dependents": [],
-    "connections": []
+    "connections": [],
+    "openActions": []
   },
   "dataUsage": null
 }

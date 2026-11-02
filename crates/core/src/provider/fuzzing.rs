@@ -36,7 +36,7 @@ use super::validate::{ValidatedPackage, sample_context};
 use crate::secret::ResolvedSecrets;
 
 /// `providers/fake`, embedded.
-const FAKE: [(&str, &str); 5] = [
+const FAKE: [(&str, &str); 6] = [
     (
         "provider.yaml",
         include_str!("../../../../providers/fake/provider.yaml"),
@@ -56,6 +56,10 @@ const FAKE: [(&str, &str); 5] = [
     (
         "templates/fake.conf.tmpl",
         include_str!("../../../../providers/fake/templates/fake.conf.tmpl"),
+    ),
+    (
+        "templates/notes.txt.tmpl",
+        include_str!("../../../../providers/fake/templates/notes.txt.tmpl"),
     ),
 ];
 

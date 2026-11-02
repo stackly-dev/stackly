@@ -6,7 +6,7 @@
 //! the layout, and the size from the data folder of the instance, so both
 //! work offline (REQ-046).
 
-use stackly_core::instance::detail::{DetailError, DetailSnapshot, build};
+use stackly_core::instance::detail::{DetailError, DetailSnapshot, InstanceDetailData, build};
 use stackly_domain::{
     Environment, InstanceId, InstancePathEntry, InstancePathKind, Lease, LeaseFilter, Registry,
     Runtime, SecretRef, SecretStatus, SecretUse, SecretUser,
@@ -58,33 +58,44 @@ pub fn get_instance_detail(
 ) -> HandlerFuture<'_, Box<InstanceDetail>> {
     Box::pin(async move {
         core.supervision().supervisor()?;
-        let registry = registry_of(core)?;
-        let id = instance_id(params.instance_id)?;
-        let platform = core.platform().clone();
-        let packages = core.pinned_packages().clone();
-        let layout = core.prepared().layout().clone();
-        let built = tokio::task::spawn_blocking(move || {
-            let facts = read_facts(&registry, id)?;
-            let package = packages.get(&platform, &layout, facts.instance.provider_revision());
-            let snapshot = DetailSnapshot::new(
-                &facts.instance,
-                &facts.runtime,
-                &facts.paths,
-                &facts.uses,
-                &facts.statuses,
-                &facts.environments,
-                &facts.leases,
-                package.as_deref(),
-                &layout,
-            );
-            Ok::<_, Unreadable>(build(&snapshot))
-        })
-        .await
-        .map_err(|_| unexpected("the instance detail task failed"))?
-        .map_err(|why| unreadable(why, params.instance_id))?
-        .map_err(|error| detail_error(&error))?;
+        let (built, _) = build_detail(core, params.instance_id).await?;
         Ok(Box::new(map::detail::instance_detail(&built)))
     })
+}
+
+/// Builds the detail of one instance from one read of the registry and
+/// the pinned package, and returns it with the instance it was built from.
+/// `instance.prepare_terminal` renders its action through this too, so the
+/// script always comes from the daemon's own render (spec 0070, AC-4).
+pub(super) async fn build_detail(
+    core: &DaemonCore,
+    instance: uuid::Uuid,
+) -> Result<(InstanceDetailData, stackly_domain::Instance), Box<ErrorBody>> {
+    let registry = registry_of(core)?;
+    let id = instance_id(instance)?;
+    let platform = core.platform().clone();
+    let packages = core.pinned_packages().clone();
+    let layout = core.prepared().layout().clone();
+    let (built, instance_row) = tokio::task::spawn_blocking(move || {
+        let facts = read_facts(&registry, id)?;
+        let package = packages.get(&platform, &layout, facts.instance.provider_revision());
+        let snapshot = DetailSnapshot::new(
+            &facts.instance,
+            &facts.runtime,
+            &facts.paths,
+            &facts.uses,
+            &facts.statuses,
+            &facts.environments,
+            &facts.leases,
+            package.as_deref(),
+            &layout,
+        );
+        Ok::<_, Unreadable>((build(&snapshot), facts.instance))
+    })
+    .await
+    .map_err(|_| unexpected("the instance detail task failed"))?
+    .map_err(|why| unreadable(why, instance))?;
+    Ok((built.map_err(|error| detail_error(&error))?, instance_row))
 }
 
 /// `instance.get_data_usage`.

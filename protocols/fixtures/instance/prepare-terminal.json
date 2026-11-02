@@ -1,0 +1,48 @@
+{
+  "description": "instance.prepare_terminal of spec 0070: one request, its reply, and the errors a client handles.",
+  "request": {
+    "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+    "action": "psql"
+  },
+  "reply": {
+    "scriptPath": "/Users/test/Library/Application Support/Stackly/instances/0192f3a5-0000-7000-8000-000000000001/temp/open-psql.command"
+  },
+  "invalidRequests": [
+    {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+      "action": "Psql"
+    },
+    {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+      "action": ""
+    }
+  ],
+  "errors": [
+    {
+      "code": "instance.open_action_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": {
+        "action": "tableplus",
+        "available": "psql"
+      }
+    },
+    {
+      "code": "instance.open_action_unavailable",
+      "category": "conflict",
+      "retryable": true,
+      "details": {
+        "action": "psql",
+        "reason": "not_ready"
+      }
+    },
+    {
+      "code": "instance.open_script_unwritable",
+      "category": "internal",
+      "retryable": true,
+      "details": {
+        "reason": "permission_denied"
+      }
+    }
+  ]
+}

@@ -926,14 +926,14 @@ fn the_secrets_folder_token_is_accepted_only_in_its_positions() {
         .position(|step| matches!(step, InitStep::WriteFile(write) if write.path == file))
         .expect("init writes the sensitive config into the secrets folder");
     assert!(
-        matches!(&init.steps[write_at - 1], InitStep::EnsureDirectories(dirs) if dirs == std::slice::from_ref(&secrets)),
+        matches!(&init.steps[write_at - 1], InitStep::EnsureDirectories(dirs) if dirs.first() == Some(&secrets)),
         "{:#?}",
         init.steps
     );
     assert!(
         matches!(
             run.render.as_slice(),
-            [InitStep::EnsureDirectories(dirs), InitStep::WriteFile(plain), InitStep::WriteFile(write)]
+            [InitStep::EnsureDirectories(dirs), InitStep::WriteFile(plain), InitStep::WriteFile(write), ..]
                 if dirs == &[context.paths.config.clone(), secrets.clone()]
                     && plain.path == conf
                     && !plain.sensitive
@@ -2047,8 +2047,20 @@ fn a_package_without_config_files_renders_nothing_before_the_spawn() {
         )
         .replace(yaml, "    - { primitive: renderConfig, file: fakeConfig }\n", "")
         .replace(yaml, "render: [fakeConfig, fakeConf]", "render: []")
+        .replace(
+            yaml,
+            "  fakeNotes:\n    template: templates/notes.txt.tmpl\n    format: plain\n    destination: \"${instance.config}/notes.txt\"\n",
+            "",
+        )
+        .replace(yaml, "    - { primitive: renderConfig, file: fakeNotes }\n", "")
+        .replace(
+            yaml,
+            "  - name: notes\n    title: Notes\n    kind: reveal\n    reveal:\n      configFile: fakeNotes\n",
+            "",
+        )
         .remove("templates/fake.json.tmpl")
         .remove("templates/fake.conf.tmpl")
+        .remove("templates/notes.txt.tmpl")
         .validate()
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
     let context = context_for(

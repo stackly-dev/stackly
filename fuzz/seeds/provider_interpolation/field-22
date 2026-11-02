@@ -1,1 +1,1 @@
-${settings.serverName}
+http://stackly@${endpoint.http.address}/

@@ -1,1 +1,1 @@
---conf=${instance.config}/fake.conf
+--config=${instance.secrets}/fake.json

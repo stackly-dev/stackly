@@ -13,6 +13,7 @@ use typeshare::typeshare;
 use uuid::Uuid;
 
 use super::connection::ConnectionPart;
+use super::open_with::OpenAction;
 use crate::catalog::HostTarget;
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
@@ -233,6 +234,10 @@ pub struct InstanceDetail {
     /// The connection strings, in manifest order; none when the pinned
     /// package cannot be read or declares none.
     pub connections: Vec<ConnectionString>,
+    /// The Open In actions, in manifest order; none when the pinned package
+    /// cannot be read or has no `openWith` block (spec 0070).
+    #[serde(default)]
+    pub open_actions: Vec<OpenAction>,
 }
 
 /// Params of `instance.get_data_usage`.

@@ -1,7 +1,7 @@
 # 0070. Buka instance di aplikasi klien
 
 **Date**: 2026-11-02
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

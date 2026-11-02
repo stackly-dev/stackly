@@ -29,8 +29,8 @@ use stackly_protocol::instance::{
     GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams, GetInstanceDetailParams,
     GetInstanceParams, InstanceActionAccepted, InstanceDetail, InstancePage,
     InstanceReadinessState, InstanceSummary, ListInstancesParams, PortRequest,
-    PreflightCreateParams, ProviderSelector, SecretFieldInput, SecretPlan, SecretSource,
-    SettingsDocument, StartInstanceParams, StopInstanceParams,
+    PreflightCreateParams, PrepareTerminalParams, ProviderSelector, SecretFieldInput, SecretPlan,
+    SecretSource, SettingsDocument, StartInstanceParams, StopInstanceParams,
 };
 use stackly_protocol::operation::{GetOperationParams, OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretMode, SecretText, SetSecretParams};
@@ -762,6 +762,21 @@ impl Api {
         {
             Reply::InstanceGetDetail(detail) => Ok(*detail),
             other => panic!("not a detail reply: {other:?}"),
+        }
+    }
+
+    /// `instance.prepare_terminal` (spec 0070): the path of the script.
+    pub async fn prepare_terminal(&self, id: Uuid, action: &str) -> Result<String, Box<ErrorBody>> {
+        match self
+            .client
+            .call(Call::InstancePrepareTerminal(PrepareTerminalParams {
+                instance_id: id,
+                action: action.to_owned(),
+            }))
+            .await?
+        {
+            Reply::InstancePrepareTerminal(reply) => Ok(reply.script_path),
+            other => panic!("not a prepare_terminal reply: {other:?}"),
         }
     }
 

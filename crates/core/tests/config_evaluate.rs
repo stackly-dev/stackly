@@ -399,14 +399,23 @@ fn the_preview_shows_only_the_plain_config_and_marks_changed_lines() {
         &values(&package, &base),
     )
     .expect("the fixture is valid");
-    assert_eq!(before.len(), 1, "the sensitive fake.json never shows");
-    assert_eq!(before[0].path, "fake.conf");
-    assert!(before[0].preview);
+    assert!(
+        before.iter().all(|file| file.path != "fake.json"),
+        "the sensitive fake.json never shows"
+    );
+    let conf = before
+        .iter()
+        .position(|file| file.path == "fake.conf")
+        .expect("the plain fake.conf shows");
+    assert!(before[conf].preview);
     assert_eq!(
-        before[0].port_note.as_deref(),
+        before[conf].port_note.as_deref(),
         Some("Automatic ports shown as 18080")
     );
-    assert!(!before[0].content.contains("local:"), "no secret reference");
+    assert!(
+        !before[conf].content.contains("local:"),
+        "no secret reference"
+    );
 
     let after = preview(
         &package,
@@ -416,12 +425,15 @@ fn the_preview_shows_only_the_plain_config_and_marks_changed_lines() {
         &values(&package, &with(&base, "greeting", "hi".into())),
     )
     .expect("the fixture is valid");
-    assert_eq!(changed_lines(&before[0].content, &after[0].content), [2]);
+    assert_eq!(
+        changed_lines(&before[conf].content, &after[conf].content),
+        [2]
+    );
 
     let fixed = fake_instance(PortRequest::Fixed(
         stackly_domain::Port::new(18181).expect("the fixture is valid"),
     ));
     let fixed_files = preview(&package, &fixed, &paths, &runtime, &values(&package, &base))
         .expect("the fixture is valid");
-    assert_eq!(fixed_files[0].port_note, None);
+    assert_eq!(fixed_files[conf].port_note, None);
 }

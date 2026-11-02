@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000a01",
+    "error": {
+      "code": "instance.open_action_not_found",
+      "category": "not_found",
+      "message": "the instance has no terminal action with that name",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "action",
+          "value": "tableplus"
+        },
+        {
+          "key": "available",
+          "value": "psql"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

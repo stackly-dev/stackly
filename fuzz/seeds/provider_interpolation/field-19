@@ -1,1 +1,1 @@
-${instance.data}
+--leak-token=${settings.leakToken}

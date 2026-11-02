@@ -1167,6 +1167,14 @@ async fn dispatch(
             .map(Reply::InstanceGetDetail),
             None,
         ),
+        Call::InstancePrepareTerminal(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.prepare_terminal(c, x, p)
+            })
+            .await
+            .map(Reply::InstancePrepareTerminal),
+            None,
+        ),
         Call::InstanceGetDataUsage(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_data_usage(c, x, p)

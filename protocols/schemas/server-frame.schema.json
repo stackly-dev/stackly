@@ -2321,6 +2321,24 @@
         }
       ]
     },
+    "EnvPair": {
+      "description": "One env pair of a terminal command.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The env name.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ]
+    },
     "ErrorBody": {
       "description": "The error envelope every daemon error and every client side IPC error\nuses (VAL-020).\n\n`code`, `category`, `message`, `retryable`, and `details` are frozen\nacross majors, so peers of any major can always exchange\n`protocol.major_mismatch`.",
       "type": "object",
@@ -3734,6 +3752,14 @@
           "description": "The instance.",
           "type": "string",
           "format": "uuid"
+        },
+        "openActions": {
+          "description": "The Open In actions, in manifest order; none when the pinned package\ncannot be read or has no `openWith` block (spec 0070).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/OpenAction"
+          }
         },
         "provider": {
           "description": "The pinned provider revision.",
@@ -5210,6 +5236,153 @@
         }
       ]
     },
+    "OpenAction": {
+      "description": "One Open In action of an instance, in manifest order.\n\nWhen `state` is `available`, `reason` is null and the field of the kind\nis set: `url` for `app` and `browser` (with `appBundleIds` for `app`),\n`command` for `terminal`, and `path` for `reveal`. When it is\n`unavailable`, `reason` is set and none of them is.",
+      "type": "object",
+      "properties": {
+        "appBundleIds": {
+          "description": "The bundle IDs of an `app` action, in priority order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "command": {
+          "description": "The command of an available `terminal` action.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenCommand"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "copySecret": {
+          "description": "The secret the GUI copies to the hidden clipboard before it opens\nthe action: the field and the reference, never the value.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionSecretPart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "description": "The kind of the action.",
+          "$ref": "#/$defs/OpenActionKind"
+        },
+        "name": {
+          "description": "The entry name from the manifest, such as `psql`.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The absolute path of an available `reveal` action.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "reason": {
+          "description": "Set if and only if the action is unavailable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionUnavailableReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state": {
+          "description": "Whether the action can be opened, as far as the daemon knows.",
+          "$ref": "#/$defs/ConnectionAvailability"
+        },
+        "title": {
+          "description": "The title the label is built from.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The URL of an available `app` or `browser` action.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "kind",
+        "state"
+      ]
+    },
+    "OpenActionKind": {
+      "description": "The kind of an Open In action. Open.",
+      "oneOf": [
+        {
+          "description": "Opens `url` with the first installed app of `appBundleIds`.",
+          "type": "string",
+          "const": "app"
+        },
+        {
+          "description": "Runs `command` in Terminal through `instance.prepare_terminal`.",
+          "type": "string",
+          "const": "terminal"
+        },
+        {
+          "description": "Opens `url` in the default browser.",
+          "type": "string",
+          "const": "browser"
+        },
+        {
+          "description": "Shows `path` in Finder.",
+          "type": "string",
+          "const": "reveal"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "OpenCommand": {
+      "description": "The command of a terminal action.",
+      "type": "object",
+      "properties": {
+        "args": {
+          "description": "The arguments, each one value.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "description": "The env pairs from the manifest, in name order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvPair"
+          }
+        },
+        "executable": {
+          "description": "The absolute path of the executable in the instance's runtime.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executable",
+        "args"
+      ]
+    },
     "OperationAccepted": {
       "description": "The reply, or the part of the reply, of every method that starts an\noperation (spec 0007, *Idempotency*). The method's own reply may wrap\nit.",
       "type": "object",
@@ -6318,6 +6491,19 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PrepareTerminalReply": {
+      "description": "Reply of `instance.prepare_terminal`.",
+      "type": "object",
+      "properties": {
+        "scriptPath": {
+          "description": "The absolute path of the `.command` script the GUI opens with\nTerminal.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scriptPath"
       ]
     },
     "ProtocolVersion": {
@@ -7632,6 +7818,23 @@
           },
           "required": [
             "type"
+          ]
+        },
+        {
+          "description": "The script is written.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/PrepareTerminalReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "instance.prepare_terminal"
+            }
+          },
+          "required": [
+            "type",
+            "content"
           ]
         }
       ]

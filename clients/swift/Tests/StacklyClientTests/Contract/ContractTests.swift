@@ -134,7 +134,7 @@ struct ContractTests {
         #expect(Reply.eventsUnsubscribe.methodName == "events.unsubscribe")
     }
 
-    @Test func protocolIsTwoPointZero() {
-        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 2, minor: 0))
+    @Test func protocolIsTwoPointOne() {
+        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 2, minor: 1))
     }
 }

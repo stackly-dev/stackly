@@ -62,6 +62,8 @@ pub(crate) struct RawManifest {
     pub(crate) permissions: RawPermissions,
     #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 8)))]
     pub(crate) connection: Option<Vec<RawConnection>>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 8)))]
+    pub(crate) open_with: Option<Vec<RawOpenWith>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -488,6 +490,80 @@ pub(crate) struct RawConnection {
     pub(crate) title: String,
     #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 512)))]
     pub(crate) template: String,
+}
+
+/// One `openWith` entry: an action that opens an instance in another
+/// application (spec 0070). Exactly one of the kind tables is set, the one
+/// named by `kind`.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "OpenWith"))]
+pub(crate) struct RawOpenWith {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::CONNECTION_NAME))
+    )]
+    pub(crate) name: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 48)))]
+    pub(crate) title: String,
+    #[cfg_attr(feature = "json-schema", schemars(extend("enum" = ["app", "terminal", "browser", "reveal"])))]
+    pub(crate) kind: String,
+    pub(crate) app: Option<RawOpenApp>,
+    pub(crate) terminal: Option<RawOpenTerminal>,
+    pub(crate) browser: Option<RawOpenBrowser>,
+    pub(crate) reveal: Option<RawOpenReveal>,
+    pub(crate) copy_secret: Option<String>,
+}
+
+/// The `app` table of an `openWith` entry.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "OpenApp"))]
+pub(crate) struct RawOpenApp {
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 4)))]
+    pub(crate) bundle_ids: Vec<String>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 512)))]
+    pub(crate) url: String,
+}
+
+/// The `terminal` table of an `openWith` entry.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "OpenTerminal"))]
+pub(crate) struct RawOpenTerminal {
+    pub(crate) executable: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "json-schema", schemars(length(max = 32)))]
+    pub(crate) args: Vec<String>,
+    #[cfg_attr(feature = "json-schema", schemars(extend("propertyNames" = { "pattern": super::json_schema::ENV_KEY }, "maxProperties" = 16)))]
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+/// The `browser` table of an `openWith` entry.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "OpenBrowser"))]
+pub(crate) struct RawOpenBrowser {
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 512)))]
+    pub(crate) url: String,
+}
+
+/// The `reveal` table of an `openWith` entry.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "OpenReveal"))]
+pub(crate) struct RawOpenReveal {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::MANIFEST_NAME))
+    )]
+    pub(crate) config_file: String,
 }
 
 /// `schemas/settings.schema.json`.

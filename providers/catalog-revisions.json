@@ -34,6 +34,11 @@
       "revision": 7,
       "publishedAt": "2026-10-22T06:25:00Z",
       "contentSha256": "ef635beab5b799edfd2ce0046fae6981b25c1da026061d4148fe696aa016cdca"
+    },
+    {
+      "revision": 8,
+      "publishedAt": "2026-11-02T00:00:00Z",
+      "contentSha256": "2e9259509f5cc844191e07fa507259161f0285b7e43a4722a5498048fa266dae"
     }
   ]
 }

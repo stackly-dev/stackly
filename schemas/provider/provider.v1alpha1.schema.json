@@ -75,6 +75,17 @@
     "metadata": {
       "$ref": "#/$defs/Metadata"
     },
+    "openWith": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/OpenWith"
+      },
+      "maxItems": 8,
+      "minItems": 1
+    },
     "permissions": {
       "$ref": "#/$defs/Permissions"
     },
@@ -472,6 +483,167 @@
         "displayName",
         "revision",
         "category"
+      ]
+    },
+    "OpenApp": {
+      "description": "The `app` table of an `openWith` entry.",
+      "type": "object",
+      "properties": {
+        "bundleIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "bundleIds",
+        "url"
+      ]
+    },
+    "OpenBrowser": {
+      "description": "The `browser` table of an `openWith` entry.",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 512,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ]
+    },
+    "OpenReveal": {
+      "description": "The `reveal` table of an `openWith` entry.",
+      "type": "object",
+      "properties": {
+        "configFile": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "configFile"
+      ]
+    },
+    "OpenTerminal": {
+      "description": "The `terminal` table of an `openWith` entry.",
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "executable": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "executable"
+      ]
+    },
+    "OpenWith": {
+      "description": "One `openWith` entry: an action that opens an instance in another\napplication (spec 0070). Exactly one of the kind tables is set, the one\nnamed by `kind`.",
+      "type": "object",
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenApp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "browser": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenBrowser"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "copySecret": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "app",
+            "terminal",
+            "browser",
+            "reveal"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "reveal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenReveal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenTerminal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 48,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "title",
+        "kind"
       ]
     },
     "Permissions": {

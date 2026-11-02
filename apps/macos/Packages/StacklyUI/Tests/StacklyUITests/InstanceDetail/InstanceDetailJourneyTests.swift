@@ -79,7 +79,7 @@ struct InstanceDetailJourneyTests {
             provider: started.detail.provider, runtime: started.detail.runtime,
             dataPath: started.detail.dataPath, startup: started.detail.startup,
             secrets: started.detail.secrets, dependents: [],
-            connections: started.detail.connections)
+            connections: started.detail.connections, openActions: started.detail.openActions)
         script.answer(detail: .success(ready))
         model.observe(stopped.instance.testing(revision: revision, lifecycle: .running))
         await sleeper.waitUntilSleeping()

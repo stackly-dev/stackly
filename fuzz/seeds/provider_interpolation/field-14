@@ -1,1 +1,1 @@
---crash-exit-code=${settings.crashExitCode}
+--crash-after-ms=${settings.crashAfterMs}

@@ -1,1 +1,1 @@
-${endpoint.http.port}
+${endpoint.http.address}

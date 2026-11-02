@@ -1,1 +1,1 @@
---label=${settings.label}
+--host=${endpoint.http.host}

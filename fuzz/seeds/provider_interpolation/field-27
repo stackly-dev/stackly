@@ -1,1 +1,1 @@
-${instance.config}/traefik.yaml
+nats://${endpoint.client.address}

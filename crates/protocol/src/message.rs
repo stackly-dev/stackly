@@ -29,7 +29,8 @@ use crate::instance::{
     ForceStopInstanceParams, GetCreateFormParams, GetDataUsageParams, GetDuplicateFormParams,
     GetInstanceDetailParams, GetInstanceParams, InstanceActionAccepted, InstanceDetail,
     InstancePage, InstanceSummary, ListInstancesParams, PreflightCreateParams,
-    ReloadInstanceParams, RestartInstanceParams, StartInstanceParams, StopInstanceParams,
+    PrepareTerminalParams, PrepareTerminalReply, ReloadInstanceParams, RestartInstanceParams,
+    StartInstanceParams, StopInstanceParams,
 };
 use crate::json;
 use crate::logs::{
@@ -204,6 +205,10 @@ pub enum Call {
     /// Ends a log follow.
     #[serde(rename = "instance.logs_unfollow")]
     InstanceLogsUnfollow(LogsUnfollowParams),
+    /// Writes the Terminal script of a `terminal` Open In action (spec
+    /// 0070).
+    #[serde(rename = "instance.prepare_terminal")]
+    InstancePrepareTerminal(PrepareTerminalParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -338,6 +343,9 @@ pub enum Reply {
     /// The follow ended.
     #[serde(rename = "instance.logs_unfollow")]
     InstanceLogsUnfollow,
+    /// The script is written.
+    #[serde(rename = "instance.prepare_terminal")]
+    InstancePrepareTerminal(PrepareTerminalReply),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -450,6 +458,7 @@ methods! {
     "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
     "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
     "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
+    "instance.prepare_terminal" => InstancePrepareTerminal(PrepareTerminalParams), recovery refused;
 }
 
 impl Reply {
@@ -605,7 +614,7 @@ mod tests {
                 .iter()
                 .filter(|method| method.starts_with("instance."))
                 .count()
-                == 16
+                == 17
                 && Call::METHODS
                     .iter()
                     .filter(|method| method.starts_with("instance."))
@@ -619,10 +628,10 @@ mod tests {
             "installing, listing, and reading runtimes need the registry"
         );
         assert_eq!(
-            // The 3 before last: `instance.restart`, `instance.reload`,
-            // and `instance.force_stop` (spec 0026). The last 3: the log
-            // methods (spec 0027).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3,
+            // The 3 before the logs: `instance.restart`, `instance.reload`,
+            // and `instance.force_stop` (spec 0026). Then the 3 log methods
+            // (spec 0027) and `instance.prepare_terminal` (spec 0070).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

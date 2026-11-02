@@ -1381,6 +1381,26 @@
       "expect": "roundtrip"
     },
     {
+      "file": "request-instance-prepare-terminal.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-prepare-terminal.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-open-action-unavailable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-instance-open-action-not-found.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "request-instance-logs-read.json",
       "type": "Request",
       "expect": "roundtrip"

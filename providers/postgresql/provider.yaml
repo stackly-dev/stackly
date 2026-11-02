@@ -134,3 +134,26 @@ connection:
   - name: socket
     title: Unix socket
     template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"
+openWith:
+  - name: tableplus
+    title: TablePlus
+    kind: app
+    app:
+      bundleIds: ["com.tinyapp.TablePlus"]
+      url: "postgresql://postgres@${endpoint.client.address}/postgres"
+    copySecret: superuserPassword
+  - name: postico
+    title: Postico
+    kind: app
+    app:
+      bundleIds: ["at.eggerapps.Postico2", "at.eggerapps.Postico"]
+      url: "postgresql://postgres@${endpoint.client.address}/postgres"
+    copySecret: superuserPassword
+  - name: psql
+    title: psql
+    kind: terminal
+    terminal:
+      executable: "${runtime.executables.psql}"
+      args: ["--host=${endpoint.socket.socketDir}", "--port=${endpoint.client.port}", "--username=postgres", "postgres"]
+      env: { PGAPPNAME: stackly-terminal }
+    copySecret: superuserPassword
