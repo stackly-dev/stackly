@@ -105,3 +105,42 @@ _Langkah 7 sudah dibangun: `getMetrics` di `StacklyClient`, tab Metrics (kartu, 
 - Header health: pesan `MetricsReply` tidak membawa tanda "provider tidak punya health plan", jadi tab memakai health, dan memakai readiness hanya selama health `unknown` sementara readiness sudah punya nilai.
 - Batas typeshare: `NumberMetric`, `CountMetric`, dan `DataUsageMetric` dengan `type` asing melempar `typeMismatch` saat didecode, bukan `.unrecognized`. Pada daemon yang lebih baru dari app, balasan `instance.get_metrics` seperti itu tidak terbaca dan tab menampilkan "Couldn’t Load Metrics" (atau menahan data lama dengan banner "Couldn’t refresh metrics"), tidak pernah angka nol.
 - Jumlah "{n} more processes not shown" dihitung dari `tree.processCount` sampel terbaru dikurangi baris yang tampil, karena balasan hanya membawa `processesTruncated`.
+
+## Milestone 5: Evidence on this Mac
+
+_Langkah 9: tiga run NFR-003 dan test native PostgreSQL 17 dan NATS sudah dijalankan di Mac ini lewat `cargo xtask evidence run --kind native` dengan artefak dari cache runtime xtask (tanpa unduhan). Satu run NFR-003 (dengan client) melampaui anggaran CPU, dan sesi GUI dengan sleep sungguhan butuh kamu. Tidak ada kode produksi yang diubah._
+
+### UI / manual
+
+- [ ] NOT_RUN, menunggu user: sesi GUI dengan Mac yang benar benar sleep lalu bangun, instance PostgreSQL 17 ready sebelum sleep → AC-9, AC-13, AC-7, AC-4, AC-15. Siapkan: `cargo xtask build-app`, buka `target/app/Debug/Stackly.app`, dan jalankan daemon dari app (root asli, bukan test root).
+  1. Buat instance PostgreSQL 17 bernama `pg-sleep` dengan port Fixed 5439 (Catalog, PostgreSQL, New Instance), lalu Start. Tunggu status Running dan header Metrics menulis Healthy. Catat PID dari tab Summary (baris Process), port 5439, dan angka Restarts ("0 since created").
+  2. Buka tab Metrics. Cek lima kartu (CPU, Memory, Disk, Disk I/O, Restarts), grafik "CPU · last 60 samples" dengan "sampled every 5 s", daftar Processes dengan lebih dari satu baris (postmaster dan proses latar belakangnya), dan pada Process Tree subjudul "Process tree · {n} processes" dengan n lebih dari 1. Biarkan terbuka sekitar satu menit dan lihat grafik terisi. → AC-4, AC-13
+  3. Di Terminal: `stackly instance get pg-sleep --json` dan catat `readiness.observedAt`, `readiness.latencyMs`, dan `process.pid`.
+  4. Tidurkan Mac (menu Apple, Sleep) paling sedikit 2 menit, lalu bangunkan dan buka kunci layar. Jangan tutup app.
+  5. Dalam beberapa detik sesudah bangun: tab Summary dan header Metrics sebentar menulis Unknown dengan alasan `waking` (detail "rechecking after sleep"), lalu kembali Ready dan Healthy dengan latensi ("Ready · {n} ms") dalam paling lama 30 detik (masa tenggang). Ambil `stackly instance get pg-sleep --json` lagi sesudah itu. → AC-7, AC-9
+  6. Cek: PID sama dengan langkah 1 (instance tidak di restart), port tetap 5439 (Fixed, tidak pindah), Restarts masih "0 since created", dan `lifecycle` tetap `running`. → AC-9
+  7. Tab Metrics sesudah bangun: sampel terus bertambah (grafik bergeser), tidak ada batang CPU yang tidak masuk akal tepat sesudah bangun (main process jauh di atas 100 persen), dan "Process tree · {n} processes" tetap sama. → AC-2, AC-13
+  8. Cari baris wake di log daemon: `grep -i wake "$HOME/Library/Logs/Stackly/daemon/stacklyd.log" | tail -3` (lokasi log bisa dilihat di `stackly daemon status`), harus ada satu baris info dengan lama sleep. → AC-9
+  9. Catat hasilnya sebagai evidence manual: `cargo xtask evidence new --covers REQ-018 --covers AC-018 --kind native --title "Metrics tab and wake after a real sleep" --expected "after a real sleep and wake a ready PostgreSQL 17 instance shows waking, returns to ready and healthy within 30 seconds on the same pid and the same fixed port, and the Metrics tab keeps sampling" --subject postgresql@17.11`, lalu isi status PASS atau FAIL dan catatannya di file `evidence/manual/` yang dibuat, dan jalankan `cargo xtask evidence check`.
+  Bila tidak dijalankan, catat BLOCKED dengan reason `needs a real sleep by the user` dan owner `@ojiepermana`.
+
+### Commands
+
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql --test nats -- --ignored --test-threads 1 metrics::` → 2 test lulus, 2 record PASS, 0 problem (run `01a19b3e-a5d2-7265-bb79-82fea543604b`; record `01a19b3e-eb02-72ba-944c-07530cc391bc` dan `01a19b3e-ff91-73dc-8a96-029a0077eb88`) → AC-2, AC-4, AC-5, AC-15
+  - PostgreSQL 17.11: pohon lebih dari satu proses, `main` satu proses terukur, memori `tree` paling sedikit memori `main`, daftar proses berurut sebagai pohon dengan nama `postgres` (nama file executable, bukan argv), satu sesi psql menambah satu proses di pohon, CPU `tree` naik di atas 0 saat query berjalan dan tidak pernah di bawah CPU `main`
+  - NATS 2.15.1: `tree.processCount` 1, `measuredCount` 1, nilai `tree` sama dengan `main` (CPU, memori, Disk I/O), satu baris proses bernama `nats-server`
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test metrics_nfr003 -- --ignored --test-threads 1 --nocapture`, run ketiga dan terakhir (`01a19b4f-e0b9-708e-a3ef-09984b260873`, 3 record, 0 problem), diukur dari luar dengan `ps` selama 300 detik, 60 pembacaan, RSS daemon sekitar 68 sampai 70 MiB di semua run (batas 150 MiB) → AC-14
+  - [x] Run 1, sepuluh instance fake tanpa client (record `01a19b5a-5174-77cb-9791-0ab16cbc4192`): PASS, CPU rata rata 0,875 persen satu core (batas 1,0)
+  - [ ] Run 2, sepuluh instance fake dengan satu client yang membaca `instance.get_metrics` sepuluh instance tiap 5 detik memakai kursor (record `01a19b55-4ba9-7178-8235-4a45f8349382`): FAIL, CPU rata rata 1,074 persen (batas 1,0); run sebelumnya (`01a19b45-4b0a-7556-affa-199e6632bfbc`) juga FAIL pada 1,021 persen
+  - [x] Run 3, sembilan instance fake dan satu PostgreSQL 17 (record `01a19b50-0d17-7480-8a41-b859d1137380`): PASS, CPU rata rata 0,842 persen, dan metrik instance PostgreSQL melaporkan lebih dari satu proses
+- [x] `cargo xtask evidence check` → lulus untuk file milestone ini; tiga pelanggaran lama tersisa hanya di `apps/daemon/tests/native_launchd.rs` (milik `dev-f30-fix-2`)
+- [x] `cargo clippy -p stacklyd --all-targets --locked -- -D warnings` dan `cargo fmt --all --check` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-2 · pada proses asli PostgreSQL 17 dan NATS: footprint di atas 0, CPU `tree` bergerak mengikuti query, nilai `tree` NATS sama dengan `main`; hitungan selisih sudah di test fixture milestone 2
+- AC-4 · label cakupan dan hitungan: PostgreSQL 17 `tree.processCount` lebih dari 1 dengan memori `tree` paling sedikit memori `main`, NATS `processCount` 1 dan sama dengan `main`; subjudul kartu di GUI menunggu sesi manual
+- AC-5 · pohon dan daftar proses pada proses asli (urutan pohon, nama executable, sesi baru muncul sebagai proses baru)
+- AC-14 · TIDAK terpenuhi penuh: RSS terpenuhi di ketiga run (sekitar 70 MiB dari 150 MiB), CPU terpenuhi tanpa client (0,43 sampai 0,88 persen) dan dengan PostgreSQL (0,45 sampai 0,84), tetapi run kedua (dengan client) 0,52 persen pada run pertama, lalu 1,021 dan 1,074 persen pada dua run berikutnya, di atas batas 1,0 persen. Run pertama itu valid tetapi record dua run fake ditolak (`a native PASS needs at least one subject`); subjek `macos` ditambahkan sesudahnya. Angka berubah dua kali lipat antar run pada Mac yang sama, jadi sebaiknya lead meminta perbaikan atau pembahasan anggaran sebelum `Verify it`
+- AC-15 · test native PostgreSQL 17 dan NATS lulus; test wake dengan clock palsu milik milestone 4; cek manual GUI dengan sleep sungguhan NOT_RUN menunggu user
+- AC-9, AC-13, AC-7 (bagian Mac yang sleep) · hanya lewat sesi manual di atas
