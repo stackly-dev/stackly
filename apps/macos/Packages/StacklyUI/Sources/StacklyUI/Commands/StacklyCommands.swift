@@ -81,6 +81,7 @@ public struct StacklyCommands: Commands {
             CommandItem(.forceStopInstance, context: context)
             GroupDivider(.instance, before: 3)
             CommandItem(.copyConnectionString, context: context)
+            OpenInSubmenu(context: context)
             GroupDivider(.instance, before: 4)
             CommandItem(.duplicateInstance, context: context)
         }

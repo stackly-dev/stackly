@@ -18,6 +18,9 @@ public enum CommandLevel: Hashable, Sendable {
     public let actions: [CommandID: StacklyAction]
     /// The toggle items that show a checkmark.
     public let checked: Set<CommandID>
+    /// What the Open In submenu of the Instance menu shows (spec 0070, AC-5), or `nil` when
+    /// the publisher has none.
+    let openIn: OpenInContent?
     /// The host of the publisher's window; it holds the gate and shows confirmations.
     let host: ActionHost
     /// Whether the publisher's window is the key window.
@@ -30,6 +33,7 @@ public enum CommandLevel: Hashable, Sendable {
         level: CommandLevel,
         actions: [CommandID: StacklyAction],
         checked: Set<CommandID> = [],
+        openIn: OpenInContent? = nil,
         host: ActionHost,
         isWindowKey: Bool,
         windowKey: MainWindowKey? = nil
@@ -37,6 +41,7 @@ public enum CommandLevel: Hashable, Sendable {
         self.level = level
         self.actions = actions
         self.checked = checked
+        self.openIn = openIn
         self.host = host
         self.isWindowKey = isWindowKey
         self.windowKey = windowKey
@@ -60,12 +65,16 @@ extension View {
     ///   - level: Who publishes.
     ///   - actions: The actions by command.
     ///   - checked: The toggle items that show a checkmark.
+    ///   - openIn: What the Open In submenu shows, or `nil` for a page that has none.
     public func publishesCommands(
         _ level: CommandLevel,
         _ actions: [CommandID: StacklyAction],
-        checked: Set<CommandID> = []
+        checked: Set<CommandID> = [],
+        openIn: OpenInContent? = nil
     ) -> some View {
-        modifier(PublishCommandsModifier(level: level, actions: actions, checked: checked))
+        modifier(
+            PublishCommandsModifier(
+                level: level, actions: actions, checked: checked, openIn: openIn))
     }
 }
 
@@ -78,6 +87,7 @@ struct PublishCommandsModifier: ViewModifier {
     let level: CommandLevel
     let actions: [CommandID: StacklyAction]
     let checked: Set<CommandID>
+    var openIn: OpenInContent?
     /// Called with what is published; a test reads the host and the gate through it.
     var onPublish: (@MainActor (PublishedCommands) -> Void)?
 
@@ -95,7 +105,7 @@ struct PublishCommandsModifier: ViewModifier {
             return nil
         }
         return PublishedCommands(
-            level: level, actions: actions, checked: checked, host: host,
+            level: level, actions: actions, checked: checked, openIn: openIn, host: host,
             isWindowKey: windowKey?.isKey ?? false, windowKey: windowKey)
     }
 }

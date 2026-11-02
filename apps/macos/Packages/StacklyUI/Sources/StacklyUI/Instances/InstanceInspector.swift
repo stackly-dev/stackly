@@ -14,6 +14,7 @@ struct InstanceInspector: View {
     let action: StacklyAction
     let isPrimary: Bool
     let open: StacklyAction
+    let openIn: OpenInContent
     let model: InstanceDetailModel
     let secrets: SecretsClient
 
@@ -35,6 +36,7 @@ struct InstanceInspector: View {
                     for: InstanceDetailPage.command(of: action), title: action.title))
             ActionButton(open, prominence: .secondary, showsReason: false)
                 .help(CommandMap.helpText(for: .openInstance, title: open.title))
+            OpenInMenu(content: openIn)
         }
         banner
         CardSection {

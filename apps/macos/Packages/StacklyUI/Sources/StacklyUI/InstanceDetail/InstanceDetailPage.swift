@@ -24,6 +24,7 @@ struct InstanceDetailPage: View {
     @State private var hadSummary = false
     @State private var tab: InstanceTab
     @State private var secretNeeds: [SecretNeed]?
+    @State private var openInNeeds: [SecretNeed]?
 
     let id: UUID
     let instances: InstanceStore
@@ -31,14 +32,16 @@ struct InstanceDetailPage: View {
     let actions: InstanceActionModel
     let model: InstanceDetailModel
     let service: InstanceDetailService
+    let openIn: OpenInModel
     let logs: InstanceLogsModel
     let completedRounds: Int
     let back: @MainActor () -> Void
 
     init(
         id: UUID, instances: InstanceStore, catalog: CatalogStore?, actions: InstanceActionModel,
-        model: InstanceDetailModel, service: InstanceDetailService, logs: InstanceLogsModel,
-        completedRounds: Int, tab: InstanceTab = .summary, back: @escaping @MainActor () -> Void
+        model: InstanceDetailModel, service: InstanceDetailService, openIn: OpenInModel,
+        logs: InstanceLogsModel, completedRounds: Int, tab: InstanceTab = .summary,
+        back: @escaping @MainActor () -> Void
     ) {
         self.id = id
         self.instances = instances
@@ -46,6 +49,7 @@ struct InstanceDetailPage: View {
         self.actions = actions
         self.model = model
         self.service = service
+        self.openIn = openIn
         self.logs = logs
         self.completedRounds = completedRounds
         _tab = State(initialValue: tab)
@@ -116,6 +120,11 @@ struct InstanceDetailPage: View {
                 ActionButton(action, showsReason: false)
                     .help(CommandMap.helpText(for: Self.command(of: action), title: action.title))
             }
+            if openInContent.showsButton {
+                ToolbarItem(placement: .primaryAction) {
+                    OpenInMenu(content: openInContent)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 lifecycleButton(lifecycle.restart)
             }
@@ -133,6 +142,10 @@ struct InstanceDetailPage: View {
             model.observe(new)
         }
         .onDisappear { model.close() }
+        .openInSecretSheet(
+            needs: $openInNeeds, secrets: service.secrets,
+            reload: { Task { await model.reload() } }
+        )
         .sheet(
             isPresented: Binding(
                 get: { secretNeeds != nil }, set: { if $0 == false { secretNeeds = nil } })
@@ -145,6 +158,16 @@ struct InstanceDetailPage: View {
                 },
                 onCancel: { secretNeeds = nil })
         }
+    }
+
+    /// What the Open In button of the toolbar shows: the actions of the detail this page
+    /// reads (spec 0070, AC-5).
+    private var openInContent: OpenInContent {
+        openIn.content(
+            summary: instances.store.items[id], detail: model.detail,
+            report: { feedbackCenter?.show($0) },
+            enterSecret: { openInNeeds = [$0] },
+            reload: { Task { await model.reload() } })
     }
 
     @ViewBuilder private var tabPicker: some View {
