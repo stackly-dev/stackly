@@ -34,7 +34,8 @@ pub(super) enum History {
     /// Process observations.
     ProcessObservations,
     /// Final daemon restart plans, whose instance rows go with them by
-    /// cascade (spec 0030). A plan also goes when its operation is pruned.
+    /// cascade (spec 0030). An operation a plan refers to is never pruned,
+    /// so it goes only after its plan.
     RestartPlans,
 }
 
@@ -117,7 +118,8 @@ pub(super) fn delete_batch(
                  SELECT id FROM (SELECT id, updated_at, \
                  row_number() OVER (ORDER BY updated_at DESC, id DESC) AS rank \
                  FROM operations WHERE state IN {FINAL_OPERATION_STATES}) \
-                 WHERE updated_at < ?1 OR rank > ?2 LIMIT ?3)"
+                 WHERE (updated_at < ?1 OR rank > ?2) \
+                 AND id NOT IN (SELECT operation_id FROM daemon_restart_plan) LIMIT ?3)"
             ),
             (&limits.operation_cutoff, limits.operation_max_rows, batch),
         ),

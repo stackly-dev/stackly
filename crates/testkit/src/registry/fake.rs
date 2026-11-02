@@ -1811,18 +1811,25 @@ impl State {
             .filter(|operation| operation.state().is_final())
             .map(|operation| (operation.updated_at(), operation.id()))
             .collect();
-        let doomed = beyond_retention(
+        // An operation a restart plan still refers to stays until the plan
+        // is pruned (spec 0030 AC-19), so the plan's retention is its own.
+        let doomed: Vec<_> = beyond_retention(
             finished,
             cutoff(now, policy.operation_max_age),
             policy.operation_max_rows,
-        );
+        )
+        .into_iter()
+        .filter(|id| {
+            !self
+                .restart_plans
+                .values()
+                .any(|plan| plan.stored().operation == *id)
+        })
+        .collect();
         for id in &doomed {
             self.operations.remove(id);
             self.journals.remove(id);
         }
-        // A restart plan goes with its operation, as the cascade does.
-        self.restart_plans
-            .retain(|_, plan| !doomed.contains(&plan.stored().operation));
         // The journal rows go with their operation, as the cascade does.
         self.steps.retain(|(owner, _), _| !doomed.contains(owner));
         self.created.retain(|(owner, _), _| !doomed.contains(owner));
