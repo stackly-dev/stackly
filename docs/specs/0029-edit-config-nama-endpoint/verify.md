@@ -87,6 +87,46 @@ Rincian `config::` di `apps/daemon/tests/supervisor/config.rs`:
 - Method `instance.config.apply` dan `instance.config.keep_revision` memakai nama `instance.config_apply` dan `instance.config_keep_revision` di rekaman idempotency, karena `MethodName` domain hanya menerima satu titik; nama di kawat tidak berubah
 - `start`, `restart`, dan `reload` menolak `config.drift_detected` dari blocker yang tersimpan di memori (diisi `instance.config.get`, setiap render, dan pemeriksaan saat daemon start); file yang diubah sesudah pemeriksaan terakhir ditangkap gerbang drift pada render, yang menggagalkan operasi sebelum menulis file
 
+## Milestone 3: GUI
+
+_Bukti memakai fixture tampilan (`FixtureConfiguration`) dan service yang dijawab dari data, tanpa daemon dan tanpa jaringan; PostgreSQL, NATS, dan Traefik di sini memakai key dan kelas apply paket aslinya, bukan runtime yang berjalan. Langkah di daemon asli dan jaringan mati milik Milestone 4. Aplikasi memakai komponen asli (`SchemaFormSections`, `EndpointPortRow`, `DiffView`, `StateBanner`, `StacklySheet`) tanpa cabang per provider._
+
+### UI / manual
+
+- [x] Buka `apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/__Snapshots__/ConfigurationSnapshotTests/config-postgresql.light.png` → "Revision 3" dengan tag "In sync", field secret dan set once terkunci ("Read only", badge "Set once", "Stored in Keychain as …"), field restart dan reload dengan catatan "Applies on reload · default none", baris port terkunci "Managed by Stackly · change in Endpoints", History dengan badge Active dan Last known good → AC-15, AC-18
+- [x] Buka `config-postgresql-pending-restart.light.png` → Pending Changes `key = lama` dan `key = baru`, tag "Requires restart", tombol "Apply and Restart…"; `config-postgresql-pending-reload.light.png` → "Applies on reload" dan "Apply and Reload"; `config-postgresql-invalid.light.png` → error di bawah field dan Apply nonaktif dengan alasannya → AC-15, AC-18
+- [x] Buka `config-nats.light.png` → NATS tanpa capability reload: setiap field yang bisa diedit berkata "Requires restart", field managed terkunci; `config-traefik.light.png` dan `config-traefik-route-added.light.png` → `routes` sebagai daftar dengan Add dan Remove dari schema saja, route baru muncul sebagai `routes[name=docs]` → AC-16
+- [x] Buka `config-drift.light.png` → banner "postgresql.conf was changed outside Stackly" dengan Keep Revision 3… dan Show Diff, Apply nonaktif dengan alasan; `config-roll-back.light.png` → banner "Revision 4 hasn’t reached ready" dengan "Roll Back to Revision 3…"; `config-offline.light.png` → perubahan tertunda tetap, Apply nonaktif → AC-18
+- [x] Buka `config-effective-file.light.png` → Effective File read only dengan baris yang berubah ditandai → AC-18
+- [x] Buka `rename-sheet-taken.light.png`, `rename-sheet.light.png`, `ports-sheet-conflict.light.png`, dan `ports-sheet.light.png` → pemeriksaan nama langsung, saran port bebas dengan tombol "Use 5435" (tidak pernah dipakai otomatis), "Fixed ports are never changed silently." → AC-14, AC-19
+- [x] Buka `instance-detail-configuration.light.png` → picker Summary, Configuration, Logs, Metrics di halaman detail; `overview-config-drift.light.png` → item Needs Attention "orders-db’s configuration changed" → AC-18, AC-19
+- [ ] Dengan daemon fake (`cargo build -p stacklyd -p stackly-fake-server` lalu `cargo run -q -p stacklyd --example skeleton_seed -- --root <R>`), buka aplikasi, pilih instance, tab Configuration, ubah satu field, tunggu 300 ms, Apply → kartu "Revision N applied to <nama>." dan History bertambah (tidak dijalankan di sesi ini; native milik Milestone 4)
+- [ ] Menu Instance → Rename… dan Edit Ports… (tanpa shortcut), menu More di halaman detail, menu konteks baris, dan tombol Edit di kartu Endpoints membuka sheet yang sama (cek tangan di aplikasi nyata)
+
+### Commands
+
+- [x] `swift test --package-path clients/swift` → lulus (247 test); `InstanceConfigClientTests` memeriksa params dan balasan `get`, `validate`, dan dry run `change_endpoints`, balasan jenis lain sebagai `protocolViolation`, dan `config.revision_conflict` → AC-1, AC-17
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ConfigurationModelTests` → 18 test: baris terkunci dari schema, debounce 300 ms, label Apply menurut dampak, konfirmasi restart, Restore, banner roll back dan drift, konflik revision, dan refresh → AC-12, AC-15, AC-16, AC-18
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ConfigurationSheetsTests` → 14 test: nama dicek langsung, Rename dan Change Ports mengirim panggilan yang benar, saran port tidak diambil sendiri, `renameInstance` dan `editPorts` built tanpa shortcut, item drift Overview, dan tab di navigator → AC-13, AC-14, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ConfigurationSnapshotTests` → 17 test snapshot (terang, gelap, sempit) lulus; baca PNG dengan `cargo xtask snapshot review` → AC-15, AC-16, AC-18, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → suite penuh sekali: 1652 test, semua lulus kecuali `CreateInstanceModelTests.aRefusedCreateLeavesAnEnterSecretOffUntilTheTextIsTypedAgain` (flaky yang sudah ada sebelum milestone ini); snapshot halaman detail (`InstanceDetailSnapshotTests`, `InstanceMetricsSnapshotTests`, `InstanceLogsSnapshotTests`) direkam ulang karena picker kini punya segmen Configuration dan kartu Endpoints punya tombol Edit, lalu lulus
+- [x] `cargo xtask build-app` → bersih, `Stackly.app` terbangun dan bertanda tangan ad hoc
+- [x] `xcrun swift-format lint --strict` per file yang berubah → bersih
+
+### Acceptance-criteria coverage
+
+- AC-1, AC-17 (sisi client Swift) · `InstanceConfigClient` dan test fixture; verb CLI sudah milik Milestone 2
+- AC-15, AC-16, AC-18 · tab Configuration pada PostgreSQL, NATS, dan Traefik dari fixture; bukti pada PostgreSQL 18, NATS, dan Traefik nyata menunggu Milestone 4
+- AC-19 · Rename, Edit Ports, menu, item Overview, dan label sibuk ("Applying…", "Renaming…", "Changing Ports…"); kartu umpan balik lewat `InstanceActionContext`
+- AC-12 (sisi GUI) · Restore memuat settings sebuah revision lama sebagai perubahan tertunda dan Apply mengirim `restore(N)` selama form belum diedit lagi
+- AC-21 · tidak berubah; jaringan mati sungguhan milik Milestone 4
+
+### Catatan
+
+- Tombol yang meminta konfirmasi berjudul diakhiri "…" ("Apply and Restart…", "Roll Back to Revision N…", "Keep Revision N…") karena `StacklyAction` menolak aksi berkonfirmasi tanpa tanda itu; spec menulis judul tanpa tanda itu
+- Sheet Rename dan Ports dihosting `InstancesPage`; wiring di luar folder fitur: `AppShell` (satu argumen `config:`), `InstancesPage`, `ShellNavigator` (`openInstance(_:tab:)`), `CommandMap` dan `StacklyCommands` (dua baris built), `InstancesCommandActions`, `AttentionRules` (aturan I11), `InstanceFailureCopy`, `EndpointPortRow` (init tanpa `CreateInstanceModel`), `SchemaFormModel` dan `SchemaFormView` (kunci baris dan catatan, additif)
+- `RenameModel.submit` memakai nama itu karena aturan sumber spec 0015 AC-14 melarang pemanggilan `rename(`
+
 ## Milestone 4: Provider nyata di Mac ini
 
 _Langkah 16, 17, dan 18 sudah dibangun: test native PostgreSQL 18, NATS, dan Traefik lewat daemon in process dan proses asli dari cache runtime xtask (tanpa unduhan). Langkah 19 (jaringan mati) tetap `BLOCKED` sampai kamu menyetujuinya lewat lead. Tidak ada kode produksi yang diubah; semua perubahan ada di `apps/daemon/tests/`._

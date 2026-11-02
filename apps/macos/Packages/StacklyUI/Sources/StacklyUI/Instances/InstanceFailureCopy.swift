@@ -28,6 +28,8 @@ nonisolated public enum InstanceFailureCopy {
             return "Its runtime executable failed verification."
         case "identity_capture_failed":
             return "Stackly couldn’t record its process."
+        case "config.drift_detected":
+            return "A configuration file was changed outside Stackly."
         case "config_render_failed":
             return "Its configuration couldn’t be written."
         case "init_step_failed":

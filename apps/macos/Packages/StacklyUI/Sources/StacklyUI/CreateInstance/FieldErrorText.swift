@@ -29,6 +29,10 @@ nonisolated enum FieldErrorText {
             return field.maxItems.map { "Use at most \($0) items." } ?? fallback
         case "out_of_range":
             return range(minimum: field.minimum, maximum: field.maximum)
+        case "immutable_after_init":
+            return "Can’t be changed after the instance is created."
+        case "secret_read_only":
+            return "Stored in Keychain. It can’t be changed here."
         case "invalid_value":
             if field.managed { return "Set by Stackly; leave it out." }
             if let itemKey = field.itemKey, error.path.hasSuffix(".\(itemKey)") {

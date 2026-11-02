@@ -101,6 +101,17 @@ nonisolated public struct SchemaRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Why a row of an instance that already exists cannot be edited (spec 0029, AC-15). The
+/// Configuration tab passes one per locked field; the New Instance sheet passes none.
+nonisolated public enum RowLock: Equatable, Sendable {
+    /// Stackly fills the field: "Set by Stackly".
+    case managed
+    /// The field is set once: its current value, a "Set once" badge, and why it is final.
+    case setOnce
+    /// A secret: only the reference to its Keychain entry shows.
+    case secret(reference: String)
+}
+
 /// What the person typed or chose for a field, apart from a secret.
 nonisolated public enum FieldValue: Equatable, Sendable {
     /// Text, a number as typed, or the chosen value.
@@ -171,6 +182,12 @@ public final class SchemaFormModel {
     public var copyFromLabels: [String: String] = [:]
     /// The field issues of the last preflight for the current draft.
     public private(set) var issues: [FieldError] = []
+    /// The rows that cannot be edited, by field key, with the reason; empty in the New Instance
+    /// sheet. A locked row is read only and never part of ``settings()``.
+    public private(set) var locks: [String: RowLock] = [:]
+    /// A line under a row, by field key, such as "Applies on reload · default 100"; empty in
+    /// the New Instance sheet.
+    public private(set) var notes: [String: String] = [:]
 
     /// Called after every change the person makes.
     @ObservationIgnored public var onChange: (() -> Void)?
@@ -344,6 +361,17 @@ public final class SchemaFormModel {
         copyFromOptionsByField[key] ?? copyFromOptions
     }
 
+    // MARK: - Locks and notes
+
+    /// Locks and annotates rows. It tells nobody: nothing the person edits changes.
+    /// - Parameters:
+    ///   - locks: The reason each locked field cannot be edited, by key.
+    ///   - notes: The line under each row that has one, by key.
+    public func annotate(locks: [String: RowLock], notes: [String: String]) {
+        self.locks = locks
+        self.notes = notes
+    }
+
     // MARK: - Starting from a draft
 
     /// Fills the fields from a settings document, as a duplicate starts from the settings of
@@ -436,7 +464,7 @@ public final class SchemaFormModel {
     /// managed fields, and fields of a kind this build does not know.
     public func settings() -> JSONObject {
         var members: [String: JSONValue] = [:]
-        for row in rows {
+        for row in rows where locks[row.id] == nil {
             switch row.control {
             case .secret, .managed, .unrecognized:
                 continue

@@ -36,6 +36,9 @@ enum InstancesCommandActions {
     ///     `nil` when there is none.
     ///   - duplicate: Opens the New Instance sheet on the settings of the instance in view,
     ///     or `nil` when there is none or the window has no sheet (spec 0024 AC-13).
+    ///   - rename: Opens the Rename sheet of the instance in view, or `nil` when there is none
+    ///     (spec 0029 AC-19).
+    ///   - editPorts: Opens the Ports sheet of the instance in view, or `nil` when there is none.
     ///   - lifecycle: Restart, Reload, and Force Stop… of the instance in view (spec 0026), or
     ///     `nil` when there is none.
     static func publish(
@@ -49,6 +52,8 @@ enum InstancesCommandActions {
         back: (@MainActor () -> Void)? = nil,
         copyConnection: StacklyAction? = nil,
         duplicate: StacklyAction? = nil,
+        rename: StacklyAction? = nil,
+        editPorts: StacklyAction? = nil,
         lifecycle: (restart: StacklyAction, reload: StacklyAction, forceStop: StacklyAction)? =
             nil
     ) -> (actions: [CommandID: StacklyAction], checked: Set<CommandID>) {
@@ -114,6 +119,16 @@ enum InstancesCommandActions {
             var action = duplicate
             action.id = CommandID.duplicateInstance.rawValue
             actions[.duplicateInstance] = action
+        }
+        if let rename {
+            var action = rename
+            action.id = CommandID.renameInstance.rawValue
+            actions[.renameInstance] = action
+        }
+        if let editPorts {
+            var action = editPorts
+            action.id = CommandID.editPorts.rawValue
+            actions[.editPorts] = action
         }
         let checked: Set<CommandID> = [
             command(for: sort.key),

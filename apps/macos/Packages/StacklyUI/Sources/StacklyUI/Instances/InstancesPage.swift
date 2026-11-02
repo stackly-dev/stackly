@@ -57,6 +57,8 @@ public struct InstancesPage: View {
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
+    @State private var edit: InstanceEdit?
+    @State private var requestedTab: InstanceTab?
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
@@ -115,6 +117,7 @@ public struct InstancesPage: View {
         detail: InstanceDetailService? = nil,
         logs: InstanceLogsService? = nil,
         metrics: InstanceMetricsService? = nil,
+        config: InstanceConfigService? = nil,
         openIn: OpenInPorts = .system,
         opening: UUID? = nil,
         openingTab: InstanceTab = .summary,
@@ -132,7 +135,8 @@ public struct InstancesPage: View {
         _models = State(
             initialValue: InstanceDetailModels(
                 service: detail ?? .disconnected, logs: logs ?? .disconnected,
-                metrics: metrics ?? .disconnected, openIn: openIn))
+                metrics: metrics ?? .disconnected, config: config ?? .disconnected,
+                openIn: openIn))
         self.openingTab = openingTab
         _path = State(initialValue: opening.map { [InstanceRoute($0)] } ?? [])
         self.instances = instances
@@ -175,9 +179,11 @@ public struct InstancesPage: View {
                     model: models.model(for: route.id), service: models.detailService,
                     openIn: models.openIn, logs: models.logsModel(for: route.id),
                     metrics: models.metricsModel(for: route.id),
+                    configuration: models.configurationModel(for: route.id),
                     completedRounds: completedRounds,
-                    tab: openingTab, back: { path.removeAll() }
+                    tab: requestedTab ?? openingTab, back: { path.removeAll() }
                 )
+                .environment(\.instanceEditAction, editAction)
                 // On macOS 27 a pushed page does not see the value published around the
                 // stack, so the menu would turn every page command off on the detail page.
                 // The same commands are published again from inside it.
@@ -186,6 +192,8 @@ public struct InstancesPage: View {
                     openIn: openInMenu)
             }
         }
+        .environment(\.instanceEditAction, editAction)
+        .sheet(item: $edit) { editSheet($0) }
         .stacklyInspector(
             isPresented: $showsInspector,
             help: CommandMap.helpText(
@@ -413,14 +421,37 @@ public struct InstancesPage: View {
     @ViewBuilder
     private func contextMenu(for ids: Set<UUID>, in visible: [InstanceRowModel]) -> some View {
         if let id = ids.first, let row = visible.first(where: { $0.id == id }) {
+            let source = InstanceEditSource(id: row.id, name: row.name)
             ActionMenuItems([
                 [actions.stacklyAction(for: row.summary, context: context)],
+                [
+                    editAction.renameAction(for: source),
+                    editAction.editPortsAction(for: source),
+                ],
                 [
                     copyAction("copyName", "Copy Name", row.name, what: "Name"),
                     copyAction(
                         "copyID", "Copy ID", row.summary.id.uuidString.lowercased(), what: "ID"),
                 ],
             ])
+        }
+    }
+
+    /// Opens the Rename and Ports sheets of this page (spec 0029, AC-19).
+    private var editAction: InstanceEditAction {
+        InstanceEditAction { edit = $0 }
+    }
+
+    @ViewBuilder private func editSheet(_ edit: InstanceEdit) -> some View {
+        switch edit {
+        case .renaming(let source):
+            RenameSheet(
+                source: source, service: models.configuration,
+                others: {
+                    Set(instances.store.items.values.filter { $0.id != source.id }.map(\.name))
+                }, context: context)
+        case .editPorts(let source):
+            EndpointsSheet(source: source, service: models.configuration, context: context)
         }
     }
 
@@ -528,6 +559,13 @@ public struct InstancesPage: View {
             duplicate = duplicateInstance.stacklyAction(
                 for: DuplicateSourceRef(id: inView.id, name: inView.name))
         }
+        var rename: StacklyAction?
+        var editPorts: StacklyAction?
+        if let inView {
+            let source = InstanceEditSource(id: inView.id, name: inView.name)
+            rename = editAction.renameAction(for: source)
+            editPorts = editAction.editPortsAction(for: source)
+        }
         return InstancesCommandActions.publish(
             showsInspector: showsInspector,
             toggleInspector: { showsInspector.toggle() },
@@ -535,7 +573,7 @@ public struct InstancesPage: View {
             setSort: { sortOrder = [$0] },
 
             target: target, open: open, back: back, copyConnection: copyConnection,
-            duplicate: duplicate, lifecycle: lifecycle)
+            duplicate: duplicate, rename: rename, editPorts: editPorts, lifecycle: lifecycle)
     }
 
     private func apply(_ request: InstancesRequest?) {
@@ -553,6 +591,7 @@ public struct InstancesPage: View {
     private func open(_ request: InstanceRequest?) {
         guard let request else { return }
         storedSelection = request.instance.uuidString.lowercased()
+        requestedTab = request.tab
         // A request comes from another page, so the detail page is there at once, not pushed
         // with the animation of a tap.
         var transaction = Transaction()

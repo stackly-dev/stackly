@@ -4,6 +4,9 @@ import Foundation
 nonisolated public enum AttentionDestination: Hashable, Sendable {
     /// The instance, through ``ShellNavigator/openInstance(_:)``.
     case instance(UUID)
+    /// The Configuration tab of the instance, through
+    /// ``ShellNavigator/openInstance(_:tab:)`` (spec 0029, AC-19).
+    case configuration(UUID)
     /// The Operations page.
     case operations
     /// The Diagnostics page.

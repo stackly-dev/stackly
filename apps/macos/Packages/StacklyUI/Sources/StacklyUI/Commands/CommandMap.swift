@@ -67,6 +67,10 @@ nonisolated public enum CommandID: String, CaseIterable, Hashable, Sendable {
     /// Instance > Force Stop… (spec 0026), declared last so earlier raw values keep their
     /// place.
     case forceStopInstance
+    /// Instance > Rename… (spec 0029), declared last so earlier raw values keep their place.
+    case renameInstance
+    /// Instance > Edit Ports… (spec 0029).
+    case editPorts
 }
 
 /// A menu of the menu bar, in the order SwiftUI places them.
@@ -299,6 +303,16 @@ nonisolated public enum CommandMap {
                 id, menu: .instance, group: 4, title: "Duplicate…",
                 needsInput: true,
                 scope: instancesPage, requirements: [.selection, .daemon], owner: 24,
+                status: .built)
+        case .renameInstance:
+            CommandEntry(
+                id, menu: .instance, group: 4, title: "Rename…", needsInput: true,
+                scope: instancesPage, requirements: [.selection, .daemon], owner: 29,
+                status: .built)
+        case .editPorts:
+            CommandEntry(
+                id, menu: .instance, group: 4, title: "Edit Ports…", needsInput: true,
+                scope: instancesPage, requirements: [.selection, .daemon], owner: 29,
                 status: .built)
         case .removeInstance:
             CommandEntry(

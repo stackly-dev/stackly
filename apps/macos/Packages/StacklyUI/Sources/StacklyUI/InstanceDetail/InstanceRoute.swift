@@ -18,6 +18,8 @@ nonisolated public struct InstanceRoute: Hashable, Sendable {
 nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiable, Sendable {
     /// Endpoints, connection, dependents, and details.
     case summary
+    /// The settings form, the files Stackly writes, and the revision history (spec 0029).
+    case configuration
     /// The captured stdout and stderr of the instance.
     case logs
     /// CPU, memory, disk, restarts, and the processes of the running instance (spec 0028).
@@ -30,6 +32,7 @@ nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiabl
     public var title: String {
         switch self {
         case .summary: "Summary"
+        case .configuration: "Configuration"
         case .logs: "Logs"
         case .metrics: "Metrics"
         }

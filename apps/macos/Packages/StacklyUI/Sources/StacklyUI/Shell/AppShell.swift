@@ -309,7 +309,8 @@ public struct AppShell: View {
                     openDiagnostics: { select(.diagnostics) },
                     detail: daemon.map(InstanceDetailService.live),
                     logs: daemon.map(InstanceLogsService.live),
-                    metrics: daemon.map(InstanceMetricsService.live)
+                    metrics: daemon.map(InstanceMetricsService.live),
+                    config: daemon.map(InstanceConfigService.live)
                 )
             } else {
                 UnbuiltScrollPage(section: .instances)

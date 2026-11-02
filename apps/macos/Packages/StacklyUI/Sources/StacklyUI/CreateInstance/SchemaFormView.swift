@@ -88,6 +88,45 @@ struct SchemaFieldRow: View {
     private var title: String { row.field.title }
 
     @ViewBuilder private var control: some View {
+        if let lock = schema.locks[row.id] {
+            lockedControl(lock)
+        } else {
+            editableControl
+        }
+    }
+
+    /// The read only row of a field an existing instance cannot change (spec 0029, AC-15).
+    @ViewBuilder private func lockedControl(_ lock: RowLock) -> some View {
+        switch lock {
+        case .managed:
+            LabeledContent(title) {
+                Label("Set by Stackly", systemImage: "lock.fill")
+                    .foregroundStyle(StacklyColor.textSecondary)
+            }
+        case .setOnce:
+            LabeledContent(title) {
+                Text(lockedValue)
+                    .font(.body.monospaced())
+                    .textSelection(.enabled)
+            }
+        case .secret:
+            LabeledContent(title) {
+                Label("Read only", systemImage: "lock.fill")
+                    .foregroundStyle(StacklyColor.textSecondary)
+            }
+        }
+    }
+
+    /// The value a set once row shows.
+    private var lockedValue: String {
+        switch row.control {
+        case .toggle: schema.isOn(row.id) ? "On" : "Off"
+        case .list: "\(schema.items(row.id).count) items"
+        default: schema.text(row.id)
+        }
+    }
+
+    @ViewBuilder private var editableControl: some View {
         switch row.control {
         case .managed:
             LabeledContent(title) {
@@ -150,8 +189,12 @@ struct SchemaFieldRow: View {
         var lines: [String] = []
         if let description = row.field.description { lines.append(description) }
         if let bounds = row.boundsHint { lines.append(bounds) }
-        if row.showsRequired { lines.append("Required") }
+        if row.showsRequired, schema.locks[row.id] == nil { lines.append("Required") }
         if row.isSetOnce { lines.append("Can’t be changed after the instance is created.") }
+        if case .secret(let reference)? = schema.locks[row.id] {
+            lines.append("Stored in Keychain as \(reference).")
+        }
+        if let note = schema.notes[row.id] { lines.append(note) }
         return lines
     }
 
