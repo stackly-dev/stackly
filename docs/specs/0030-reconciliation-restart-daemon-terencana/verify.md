@@ -39,23 +39,23 @@ _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalan
 
 ### UI / manual
 
-- [ ] Buka `crates/core/src/supervisor/prepare.rs` → `check_instance_folder` menerima paket yang di pin dan memanggil `data_missing` (folder data tidak ada, folder kosong, atau marker yang dideklarasikan paket hilang); `prepare` memanggilnya untuk `Checks::Full` sebelum `ensure_instance_run_dir` → AC-4
-- [ ] Buka `crates/core/src/supervisor/startup.rs` `error_failure_code` → `DataUnavailable` ke `data_missing` dan `RuntimeUnavailable` ke `runtime_unavailable` → AC-5
-- [ ] Buka `crates/core/src/supervisor/integrity.rs` → pemeriksaan data dan runtime hanya membaca (tanpa tulis, tanpa spawn), memakai `verify_executable` yang sama dengan startup → AC-4, AC-5
-- [ ] Catatan untuk checker: `rebind::check` memanggil `check_instance_folder` dengan paket yang sama, jadi marker yang hilang kini `supervisor.data_unavailable` untuk start dan rebind sekaligus (spec 0030 Neutral; spec 0025 AC-6 dan AC-8 berubah untuk kasus `marker_missing`) → AC-4
+- [x] Buka `crates/core/src/supervisor/prepare.rs` → `check_instance_folder` menerima paket yang di pin dan memanggil `data_missing` (folder data tidak ada, folder kosong, atau marker yang dideklarasikan paket hilang); `prepare` memanggilnya untuk `Checks::Full` sebelum `ensure_instance_run_dir` → AC-4
+- [x] Buka `crates/core/src/supervisor/startup.rs` `error_failure_code` → `DataUnavailable` ke `data_missing` dan `RuntimeUnavailable` ke `runtime_unavailable` → AC-5
+- [x] Buka `crates/core/src/supervisor/integrity.rs` → pemeriksaan data dan runtime hanya membaca (tanpa tulis, tanpa spawn), memakai `verify_executable` yang sama dengan startup → AC-4, AC-5
+- [x] Catatan untuk checker: `rebind::check` memanggil `check_instance_folder` dengan paket yang sama, jadi marker yang hilang kini `supervisor.data_unavailable` untuk start dan rebind sekaligus (spec 0030 Neutral; spec 0025 AC-6 dan AC-8 berubah untuk kasus `marker_missing`) → AC-4
 
 ### Commands
 
-- [ ] `cargo test -p stackly-core --test supervisor_start integrity` → 8 test: data hilang dalam tiga bentuk dan tiga lifecycle menjadi `failed` `data_missing` tanpa spawn, tanpa folder baru, start ditolak `supervisor.data_unavailable`; proses `Proven` diadopsi dengan finding; executable runtime hilang memberi finding `runtime_missing`; respawn gagal `executable_invalid` atau `runtime_unavailable` → AC-4, AC-5
-- [ ] `cargo test -p stackly-core --test supervisor_start pid_reuse` → PID milik executable lain (`/usr/bin/sleep`) tidak pernah disinyal oleh rekonsiliasi, recheck, stop, force stop, dan start; lock dipegang pihak lain menjadi `unknown` dengan evidence `executable` gagal → AC-3
-- [ ] `cargo test -p stackly-core --test supervisor_start listener` → listener luar di port fixed: respawn gagal `endpoint_in_use` dengan `lastFailure` `endpoint_in_use`, start dari `stopped` gagal `endpoint_in_use`, tanpa spawn, tanpa sinyal, port tidak berubah → AC-6
-- [ ] `cargo test -p stackly-core --test supervisor_start data_compat` dan `cargo test -p stackly-core --test instance_rebind` → marker hilang kini `data_unavailable` untuk start dan rebind; `marker_mismatch`, `marker_unreadable`, dan `incompatible` tidak berubah → AC-4
-- [ ] `cargo test -p stackly-core --lib supervisor::reconcile` → tabel `plan_for_missing_data` untuk semua lifecycle tanpa proses → AC-4
-- [ ] `cargo test -p stackly-core --test supervisor_start` → 162 test lulus → AC-3 sampai AC-6
-- [ ] `cargo test -p stacklyd --test postgresql -- --ignored reconcile:: --test-threads=1` → native PostgreSQL 17 dan 18 dari cache runtime (tanpa unduhan): tiga test lulus dalam sekitar 2 menit → AC-1, AC-2, AC-4
-- [ ] `cargo test -p stacklyd --test postgresql -- --ignored mismatch:: --test-threads=1` → dua test native lulus dengan harapan baru `supervisor.data_unavailable` untuk `PG_VERSION` yang hilang → AC-4
-- [ ] `cargo test -p stacklyd --test supervisor` → 96 test lulus → AC-4
-- [ ] `cargo clippy -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+- [x] `cargo test -p stackly-core --test supervisor_start integrity` → 8 test: data hilang dalam tiga bentuk dan tiga lifecycle menjadi `failed` `data_missing` tanpa spawn, tanpa folder baru, start ditolak `supervisor.data_unavailable`; proses `Proven` diadopsi dengan finding; executable runtime hilang memberi finding `runtime_missing`; respawn gagal `executable_invalid` atau `runtime_unavailable` → AC-4, AC-5
+- [x] `cargo test -p stackly-core --test supervisor_start pid_reuse` → PID milik executable lain (`/usr/bin/sleep`) tidak pernah disinyal oleh rekonsiliasi, recheck, stop, force stop, dan start; lock dipegang pihak lain menjadi `unknown` dengan evidence `executable` gagal → AC-3
+- [x] `cargo test -p stackly-core --test supervisor_start listener` → listener luar di port fixed: respawn gagal `endpoint_in_use` dengan `lastFailure` `endpoint_in_use`, start dari `stopped` gagal `endpoint_in_use`, tanpa spawn, tanpa sinyal, port tidak berubah → AC-6
+- [x] `cargo test -p stackly-core --test supervisor_start data_compat` dan `cargo test -p stackly-core --test instance_rebind` → marker hilang kini `data_unavailable` untuk start dan rebind; `marker_mismatch`, `marker_unreadable`, dan `incompatible` tidak berubah → AC-4
+- [x] `cargo test -p stackly-core --lib supervisor::reconcile` → tabel `plan_for_missing_data` untuk semua lifecycle tanpa proses → AC-4
+- [x] `cargo test -p stackly-core --test supervisor_start` → 162 test lulus → AC-3 sampai AC-6
+- [x] `cargo test -p stacklyd --test postgresql -- --ignored reconcile:: --test-threads=1` → native PostgreSQL 17 dan 18 dari cache runtime (tanpa unduhan): tiga test lulus dalam sekitar 2 menit → AC-1, AC-2, AC-4
+- [x] `cargo test -p stacklyd --test postgresql -- --ignored mismatch:: --test-threads=1` → dua test native lulus dengan harapan baru `supervisor.data_unavailable` untuk `PG_VERSION` yang hilang → AC-4
+- [x] `cargo test -p stacklyd --test supervisor` → 96 test lulus → AC-4
+- [x] `cargo clippy -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
 
 ### Acceptance-criteria coverage
 
