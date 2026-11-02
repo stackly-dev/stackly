@@ -4,7 +4,7 @@ _Langkah diturunkan dari acceptance criteria spec 0031. `/check verify` menjalan
 
 ## Milestone 1: Login menyalakan instance terpilih
 
-Langkah build 2 sampai 6. Langkah 7 (GUI, AC-19) dan semua yang native (AC-21) belum.
+Langkah build 2 sampai 7. Bagian AC-19 yang belum: Turn Off… di Diagnostics (langkah 12). Semua yang native (AC-21) belum.
 
 ### UI / manual
 
@@ -15,6 +15,8 @@ Langkah build 2 sampai 6. Langkah 7 (GUI, AC-19) dan semua yang native (AC-21) b
 - [ ] Buka `crates/core/src/supervisor/startup.rs` `run_start` → start dengan `StartTrigger::Background` membaca desired lagi dan selesai `succeeded` tanpa menulis desired kalau bukan `running` → AC-7
 - [ ] Buka `protocols/contract-versions.json` → versi 2.4 tercatat; `ProtocolVersion::CURRENT` 2.4 → AC-17
 - [ ] Jalankan `target/debug/stackly instance autostart --help` → argumen `<target>` dan `on|off` → AC-18
+- [ ] Buka sheet New Instance → toggle "Start at login" (default mati, teks "Separate from the daemon’s own login item.") di bagian yang sama dengan "Start after creating"; menyalakannya membuat perintah setara memuat `--autostart` dan `instance.create` membawa `startup: at_login` → AC-19
+- [ ] Buka tab Summary sebuah instance → baris Autostart di kartu Details adalah toggle; teks kecil di bawahnya sesuai tabel *Copy* ("Stopped for this session. Starts at your next login.", "Starts at your next login.", "Won’t start at login: the background agent is off." atau "…needs approval in Login Items.") → AC-19
 
 ### Commands
 
@@ -28,6 +30,8 @@ Langkah build 2 sampai 6. Langkah 7 (GUI, AC-19) dan semua yang native (AC-21) b
 - [ ] `cargo test -p stackly-protocol` → fixture round trip untuk `instance.set_startup`, `autostart`, `session`, dan nilai tidak dikenal → AC-17
 - [ ] `swift test --package-path clients/swift` → semua lulus, termasuk fixture baru → AC-17
 - [ ] `cargo test -p stackly-cli` → `--autostart` mengirim `startup: at_login`, `instance autostart`, baris `Autostart` di `inspect`, baris `Session` di `daemon status` → AC-18
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter AutostartTests` → tabel teks Autostart, `setAutostart` mengirim `at_login` dan `manual`, tanpa daemon `notSent`; `CreateInstanceModelTests` → `startAtLogin` ikut ke preflight dan create; snapshot `instance-detail-autostart` dan sheet New Instance → AC-19
+- [ ] `xcrun swift-format lint --strict` dan `cargo xtask build-app` → bersih → AC-19
 - [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
 
 ### Acceptance-criteria coverage
@@ -38,9 +42,10 @@ Langkah build 2 sampai 6. Langkah 7 (GUI, AC-19) dan semua yang native (AC-21) b
 - AC-6, AC-7 · `session_changed` di tabel rekonsiliasi, antrean level triggered, desired dibaca di bawah lock
 - AC-12 · hanya bagian rotasi (konteks manual tidak merotasi); tabel sinyal menunggu langkah 11
 - AC-16 · `instance.set_startup` dan `startup` di `instance.create`
+- AC-19 · toggle di sheet New Instance dan di Summary beserta teksnya; teks "Won’t start at login" dari state agent dan sesi daemon; Turn Off… menunggu langkah 12
 - AC-17 · bagian `startup`, `InstanceAutostart`, `DaemonSessionInfo`, kode `platform.session_unavailable`, 2.4; `agent_off` dan `instance.stop_all` menunggu langkah 9 dan 12
 - AC-18 · `--autostart`, `instance autostart`, baris `inspect` dan `daemon status`; `daemon uninstall` menunggu langkah 12
-- AC-8, AC-9, AC-10, AC-11, AC-13, AC-15, AC-19, AC-20, AC-21 · belum, milik langkah lain
+- AC-8, AC-9, AC-10, AC-11, AC-13, AC-15, AC-20, AC-21 · belum, milik langkah lain
 
 ### Catatan
 

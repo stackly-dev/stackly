@@ -868,7 +868,9 @@ async fn start_slot(
                     // reconciliation reads the desired state it wrote.
                     let session = session::rotate(&core).await;
                     let session_changed = session.session_changed();
-                    let launchd = session::is_launchd(&core);
+                    // Without a session (it could not be read) the queue holds
+                    // only the run again list of reconciliation (spec 0031).
+                    let queues = session.login().is_some();
                     core.set_session(session);
                     let report = core
                         .supervision()
@@ -876,7 +878,7 @@ async fn start_slot(
                         .await;
                     // A launchd daemon starts everything that is wanted and
                     // can run, not only what reconciliation queued.
-                    if launchd && report.is_some() {
+                    if queues && report.is_some() {
                         match supervisor.queue_login_starts(session_changed).await {
                             Ok(queue) => tracing::info!(
                                 added = queue.added,

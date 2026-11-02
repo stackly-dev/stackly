@@ -300,3 +300,58 @@ async fn turning_the_policy_off_releases_the_lease_of_this_session() {
     drop(api);
     stop(second).await;
 }
+
+/// Writes desired `running` on `id` with no daemon running.
+fn set_desired_running(site: &Site, id: Uuid) {
+    let registry = site.open_registry();
+    let id = InstanceId::from_uuid(id).expect("an instance id the daemon made");
+    let stored = registry
+        .instance(id)
+        .expect("the registry reads")
+        .value
+        .expect("the instance exists");
+    let expected = stored.revision();
+    let mut changed = stored.clone();
+    changed.set_desired(stackly_domain::DesiredState::Running);
+    registry
+        .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+            instance: changed,
+            expected,
+        }]))
+        .expect("the desired state is written");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_that_cannot_be_read_leaves_the_start_queue_to_the_run_again_list() {
+    let site = Site::new();
+    let session = FakeLoginSessionInfo::new();
+    let manual = site.start().await;
+    let id = {
+        let api = site.api().await;
+        api.create_ready("pg", json!({})).await
+    };
+    stop(manual).await;
+    set_desired_running(&site, id);
+
+    session.fail_with(stackly_platform::LoginSessionError::Unavailable {
+        reason: "no session",
+    });
+    let blind = start(&site, launchd(), &session).await;
+    let api = site.api().await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let summary = api.get(id).await.expect("the instance reads");
+    assert_eq!(summary.lifecycle, InstanceLifecycle::Stopped);
+    drop(api);
+    stop(blind).await;
+
+    session.recover();
+    let sighted = start(&site, launchd(), &session).await;
+    let api = site.api().await;
+    api.wait_instance(id, "ready once the session reads", |summary| {
+        summary.readiness.state == InstanceReadinessState::Ready
+    })
+    .await;
+    api.stop_when_free(id).await;
+    drop(api);
+    stop(sighted).await;
+}

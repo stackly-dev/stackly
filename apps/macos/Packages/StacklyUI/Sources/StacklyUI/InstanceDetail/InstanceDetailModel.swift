@@ -31,6 +31,8 @@ public final class InstanceDetailModel {
     public private(set) var isLoadingUsage = false
     /// Whether the last read of the data size failed.
     public private(set) var usageFailed = false
+    /// Whether a change of the startup policy is on its way (spec 0031).
+    public private(set) var isChangingAutostart = false
 
     @ObservationIgnored private let service: InstanceDetailService
     @ObservationIgnored private let debounce: Duration
@@ -74,6 +76,25 @@ public final class InstanceDetailModel {
     /// the detail show a delayed spinner.
     public var isDetailPending: Bool {
         detail == nil && detailError == nil && isNotFound == false
+    }
+
+    // MARK: - Autostart
+
+    /// The session and the agent the Autostart text depends on.
+    public var autostartContext: AutostartContext { service.autostartContext() }
+
+    /// Turns "Start at login" on or off with `instance.set_startup` (spec 0031, AC-16). The
+    /// summary follows with the daemon's `instance.state_changed`.
+    /// - Parameter enabled: Whether the instance starts at login.
+    /// - Returns: How the mutation ended.
+    @MainActor
+    public func setAutostart(_ enabled: Bool) async -> MutationOutcome {
+        guard isChangingAutostart == false else {
+            return .notSent(ClientErrorCatalog.notConnected())
+        }
+        isChangingAutostart = true
+        defer { isChangingAutostart = false }
+        return await service.setStartup(instanceId, enabled ? .atLogin : .manual)
     }
 
     // MARK: - Loading

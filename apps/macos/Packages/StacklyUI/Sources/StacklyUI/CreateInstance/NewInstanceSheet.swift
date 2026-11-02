@@ -144,6 +144,14 @@ public struct NewInstanceSheet: View {
                         }
                     }
 
+                    Toggle(isOn: startAtLogin) {
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            Text("Start at login")
+                            Text("Separate from the daemon’s own login item.")
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
+                    }
                 }
             }
         }
@@ -200,6 +208,10 @@ public struct NewInstanceSheet: View {
 
     private var name: Binding<String> {
         Binding(get: { model.name }, set: { model.setName($0) })
+    }
+
+    private var startAtLogin: Binding<Bool> {
+        Binding(get: { model.startAtLogin }, set: { model.setStartAtLogin($0) })
     }
 
     private var startAfterCreating: Binding<Bool> {
