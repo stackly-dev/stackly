@@ -9,7 +9,7 @@ use serde_json::json;
 use stackly_domain::{PlanState as StoredState, Registry};
 use stackly_ipc::CallOptions;
 use stackly_protocol::daemon::{ShutdownMode, ShutdownParams};
-use stackly_protocol::instance::InstanceReadinessState;
+use stackly_protocol::instance::{InstanceLifecycle, InstanceReadinessState};
 use stackly_protocol::operation::{
     CancelOperationParams, ListOperationsParams, OperationKind, OperationState,
 };
@@ -323,5 +323,63 @@ async fn a_stopping_plan_whose_operation_ended_is_closed_aborted_by_the_next_dae
         .expect("the plan is stored");
     assert_eq!(again.state(), StoredState::Aborted);
     harness.stop().await;
+    ev.pass();
+}
+
+// covers: AC-11, AC-14
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cancelled_stop_that_the_daemon_never_finished_is_restored_by_the_next_one() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Fixture,
+        expected = "a cancel asked while a stop of the plan is still running, followed by the end of the daemon before the plan could abort, leaves the operation cancelled after recovery; the next daemon closes the plan aborted and starts the instance the plan had stopped again, and never kills the stuck one",
+    );
+    let mut harness = RestartHarness::new(Vec::new());
+    let api = harness.start().await;
+    let stuck = create_at(&api, "stuck", "0.4.0", json!({ "ignoreTerm": true })).await;
+    let fine = create_at(&api, "fine", "0.4.0", json!({})).await;
+    let stuck_pid = pid_of(&api.start_ready(stuck).await);
+    let fine_pid = pid_of(&api.start_ready(fine).await);
+    api.confirmed_restart()
+        .await
+        .expect("the restart is accepted");
+    let operation = restart_operation(&api).await;
+    api.wait_instance(fine, "stopped", |summary| {
+        summary.lifecycle == InstanceLifecycle::Stopped
+    })
+    .await;
+    api.client
+        .call(Call::OperationCancel(CancelOperationParams {
+            operation_id: operation,
+        }))
+        .await
+        .expect("the cancel is accepted");
+    // The daemon ends while the stuck stop still runs, so the abandon wins
+    // over the cancel at the next step boundary.
+    drop(api);
+    harness.stop().await;
+
+    let api = harness.start().await;
+
+    let plan = api.wait_plan(PlanState::Aborted).await;
+    assert!(plan.close_reason.is_some());
+    api.wait_instance(fine, "a new ready process", |summary| {
+        summary
+            .process
+            .as_ref()
+            .is_some_and(|process| process.pid != fine_pid)
+            && summary.readiness.state == InstanceReadinessState::Ready
+    })
+    .await;
+    assert!(alive(stuck_pid), "the stuck process is never killed");
+    harness.stop().await;
+    let stored = harness
+        .site
+        .open_registry()
+        .latest_restart_plan()
+        .unwrap()
+        .value
+        .expect("the plan is stored");
+    assert_eq!(stored.state(), StoredState::Aborted);
     ev.pass();
 }
