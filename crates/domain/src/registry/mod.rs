@@ -30,6 +30,7 @@ use crate::lease::Lease;
 use crate::operation::{JournalView, Operation, OperationJournal};
 use crate::process::ProcessObservation;
 use crate::provider::ProviderRevisionKey;
+use crate::restart::RestartPlan;
 use crate::runtime::{Runtime, RuntimeReferences};
 use crate::secret::SecretRef;
 use crate::text::serde_as_text;
@@ -350,6 +351,22 @@ pub trait Registry: Send + Sync {
         &self,
         instance: InstanceId,
     ) -> Result<Versioned<Vec<(Operation, JournalView)>>, RegistryError>;
+
+    /// Returns the open daemon restart plan (`stopping`, `handed_over`, or
+    /// `restoring`), of which there is at most one (spec 0030).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn open_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError>;
+
+    /// Returns the newest daemon restart plan by `created_at` and then ID,
+    /// open or final (spec 0030).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError>;
 
     /// Returns a secret reference row with every use of it.
     ///

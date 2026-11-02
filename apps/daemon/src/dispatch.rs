@@ -19,7 +19,7 @@ use std::time::Instant;
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
-use stackly_protocol::codes::daemon;
+use stackly_protocol::codes::{daemon, request};
 use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
@@ -37,6 +37,7 @@ use stackly_protocol::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use stackly_protocol::restart::RestartPreview;
 use stackly_protocol::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
     ResolvedArtifact, RuntimeDetail, RuntimeListPage,
@@ -145,6 +146,16 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, ShutdownAccepted> {
         let _ = context;
         shutdown(core, params)
+    }
+
+    /// `daemon.restart_preview` (spec 0030).
+    fn restart_preview<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, RestartPreview> {
+        let _ = context;
+        restart_preview(core)
     }
 
     /// `catalog.list_providers`.
@@ -535,7 +546,21 @@ pub fn shutdown(core: &DaemonCore, params: ShutdownParams) -> HandlerFuture<'_, 
         Ok(ShutdownAccepted {
             server_instance_id: core.start_info().server_instance_id,
             mode,
+            plan_id: None,
         })
+    })
+}
+
+/// `daemon.restart_preview` before milestone 3 of spec 0030 builds the
+/// plan: answered as a method this daemon does not serve yet.
+// provisional: F30
+pub fn restart_preview(core: &DaemonCore) -> HandlerFuture<'_, RestartPreview> {
+    let _ = core;
+    Box::pin(async move {
+        Err(Box::new(ErrorBody::new(
+            &request::UNKNOWN_METHOD,
+            "daemon.restart_preview is not built yet",
+        )))
     })
 }
 

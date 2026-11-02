@@ -1,1 +1,1 @@
-${instance.data}
+--ignore-term=${settings.ignoreTerm}

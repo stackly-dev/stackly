@@ -84,6 +84,8 @@ const LIFECYCLE_TABLE: &[Row] = &[
     ("uninitialized", "retain", None, "retained"),
     ("stopped", "retain", None, "retained"),
     ("failed", "retain", None, "retained"),
+    ("stopped", "data_missing", None, "failed"),
+    ("failed", "data_missing", None, "failed"),
 ];
 
 /// The operation table. The payload is `resumable` of `interrupted` or the
@@ -198,6 +200,7 @@ fn lifecycle_events() -> Vec<(LifecycleEvent, Option<&'static str>)> {
             },
             None,
         ),
+        (LifecycleEvent::DataMissing, None),
     ]
 }
 

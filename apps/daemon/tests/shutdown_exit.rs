@@ -23,9 +23,9 @@ fn a_stop_request_ends_the_process_with_exit_0() {
     let reply = runtime().block_on(async {
         let (client, _) = client(&socket).await;
         client
-            .call(Call::DaemonShutdown(ShutdownParams {
-                mode: ShutdownMode::Stop,
-            }))
+            .call(Call::DaemonShutdown(ShutdownParams::new(
+                ShutdownMode::Stop,
+            )))
             .await
     });
 
@@ -46,9 +46,9 @@ fn a_restart_request_to_a_manual_daemon_is_refused_and_the_process_keeps_running
     let reply = runtime().block_on(async {
         let (client, _) = client(&socket).await;
         client
-            .call(Call::DaemonShutdown(ShutdownParams {
-                mode: ShutdownMode::Restart,
-            }))
+            .call(Call::DaemonShutdown(ShutdownParams::new(
+                ShutdownMode::Restart,
+            )))
             .await
     });
 

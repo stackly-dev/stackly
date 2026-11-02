@@ -45,6 +45,7 @@ struct IpcFixtureTests {
         #expect(methods.contains(.daemonGetHealth))
         #expect(methods.contains(.daemonGetCapabilities))
         #expect(methods.contains { if case .daemonShutdown = $0 { true } else { false } })
+        #expect(methods.contains { if case .daemonRestartPreview = $0 { true } else { false } })
         #expect(methods.contains { if case .eventsSubscribe = $0 { true } else { false } })
         #expect(methods.contains { if case .eventsUnsubscribe = $0 { true } else { false } })
         #expect(methods.contains { if case .operationGet = $0 { true } else { false } })
@@ -81,7 +82,7 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceLogsRead = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceLogsFollow = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceLogsUnfollow = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 41)
+        #expect(Set(methods.map(\.methodName)).count == 42)
     }
 
     private func check<Value: Codable & Equatable>(

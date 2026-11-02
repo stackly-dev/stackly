@@ -148,6 +148,9 @@ pub enum OperationKind {
     UpdateManager,
     /// Migrate an instance's data to another line.
     MigrateData,
+    /// Restart the daemon with a plan (spec 0030); its resource is the
+    /// manager.
+    DaemonRestart,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

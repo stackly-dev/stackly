@@ -236,6 +236,9 @@ code_enum! {
         UpdateManager => "update_manager",
         /// Migrate an instance's data to another line.
         MigrateData => "migrate_data",
+        /// Restart the daemon with a plan (spec 0030); its resource is the
+        /// manager.
+        DaemonRestart => "daemon_restart",
     }
 }
 
@@ -267,8 +270,9 @@ impl OperationKind {
     /// the daemon interrupted (spec 0007, "Tabel resume per jenis
     /// operasi"): start, stop, restart, reload, and force stop of an
     /// instance close as interrupted, because their process outlives the
-    /// daemon and the supervisor adopts it; every other kind is compensated
-    /// before its point of no return.
+    /// daemon and the supervisor adopts it, and so does a daemon restart,
+    /// whose plan the next daemon carries on (spec 0030); every other kind
+    /// is compensated before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
         match self {
@@ -276,7 +280,8 @@ impl OperationKind {
             | Self::StopInstance
             | Self::RestartInstance
             | Self::ReloadInstance
-            | Self::ForceStopInstance => InterruptPolicy::CloseInterrupted,
+            | Self::ForceStopInstance
+            | Self::DaemonRestart => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
@@ -834,7 +839,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_five_instance_process_kinds_close_as_interrupted() {
+    fn the_five_instance_process_kinds_and_the_daemon_restart_close_as_interrupted() {
         let closing: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.interrupt_policy() == InterruptPolicy::CloseInterrupted)
@@ -849,6 +854,7 @@ mod tests {
                 "restart_instance",
                 "reload_instance",
                 "force_stop_instance",
+                "daemon_restart",
             ]
         );
         assert!(

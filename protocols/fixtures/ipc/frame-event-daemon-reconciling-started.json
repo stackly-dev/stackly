@@ -13,7 +13,8 @@
         "instances": 0,
         "adopted": 0,
         "unknown": 0,
-        "restarting": 0
+        "restarting": 0,
+        "findings": []
       }
     }
   }

@@ -288,6 +288,30 @@
         }
       ]
     },
+    "BlockingOperation": {
+      "description": "An operation that may hold up a restart.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "What it does.",
+          "$ref": "#/$defs/OperationKind"
+        },
+        "operationId": {
+          "description": "The operation.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "resumable": {
+          "description": "Whether the next daemon resumes it; a resumable operation never\nrefuses a restart.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "resumable"
+      ]
+    },
     "CancelDisposition": {
       "description": "What a cancel did. Open.",
       "oneOf": [
@@ -1620,6 +1644,18 @@
           "default": null,
           "minimum": 0
         },
+        "restart": {
+          "description": "The open restart plan, or the last plan when it became final less\nthan ten minutes ago, else null (spec 0030).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartPlanView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "roots": {
           "description": "The four resolved roots.",
           "$ref": "#/$defs/DaemonRoots"
@@ -1715,6 +1751,14 @@
           "format": "uint64",
           "maximum": 9007199254740991,
           "minimum": 0
+        },
+        "findings": {
+          "description": "One entry per instance per problem the reconciliation found and\nleft in place; empty for `started` (spec 0030).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ReconcileFinding"
+          }
         },
         "instances": {
           "description": "Instances looked at.",
@@ -2561,7 +2605,7 @@
       ]
     },
     "EventKind": {
-      "description": "What happened. Each kind is `<area>.<name>`; the owner of an area adds\nits kinds here. Clients skip kinds they do not know through\n[`EventProbe`], so a new kind is a minor bump.",
+      "description": "What happened. Each kind is `<area>.<name>`; the owner of an area adds\nits kinds here. Clients skip kinds they do not know through\n[`EventProbe`], yet a client that decodes `EventKind` whole fails on a\nkind it does not know, so a new kind is a major bump (spec 0030).",
       "oneOf": [
         {
           "description": "The subscriber missed events; take a new snapshot.",
@@ -2727,6 +2771,23 @@
           },
           "required": [
             "type"
+          ]
+        },
+        {
+          "description": "A restart plan was written or changed: its state, or the outcome of\none of its instances (spec 0030). A daemon event: no resource, no\nrevision.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RestartPlanView"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.restart_plan"
+            }
+          },
+          "required": [
+            "type",
+            "content"
           ]
         }
       ]
@@ -5323,6 +5384,11 @@
           "const": "migrate_data"
         },
         {
+          "description": "Restart the daemon with a plan (spec 0030); its resource is the\nmanager.",
+          "type": "string",
+          "const": "daemon_restart"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
@@ -5819,6 +5885,151 @@
         },
         {
           "description": "An outcome this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanCloseReason": {
+      "description": "Why a plan closed without finishing. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "A `stop_restore` instance did not stop within its provider's stop\ntimeout.",
+          "type": "string",
+          "const": "stop_timeout"
+        },
+        {
+          "description": "The new daemon runs in another boot session.",
+          "type": "string",
+          "const": "boot_changed"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanDecision": {
+      "description": "What a planned restart does with one instance. Open: newer daemons may\nadd values.",
+      "oneOf": [
+        {
+          "description": "Left alone; the new daemon adopts it.",
+          "type": "string",
+          "const": "keep"
+        },
+        {
+          "description": "Stopped before the old daemon exits, started again by the new one.",
+          "type": "string",
+          "const": "stop_restore"
+        },
+        {
+          "description": "A decision this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanOutcome": {
+      "description": "What became of one instance of a plan. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "The new daemon adopted its process.",
+          "type": "string",
+          "const": "adopted"
+        },
+        {
+          "description": "It stopped and reached `ready` again.",
+          "type": "string",
+          "const": "restored"
+        },
+        {
+          "description": "It did not end up running; see `failureCode`.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "It was removed, lost its data, or the plan closed first.",
+          "type": "string",
+          "const": "skipped"
+        },
+        {
+          "description": "An outcome this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanReason": {
+      "description": "Why an instance got its [`PlanDecision`]. Open: newer daemons may add\nvalues.",
+      "oneOf": [
+        {
+          "description": "Its provider line has native evidence that its process survives a\ndaemon restart.",
+          "type": "string",
+          "const": "handover_proven"
+        },
+        {
+          "description": "Its provider line has no such evidence.",
+          "type": "string",
+          "const": "handover_unproven"
+        },
+        {
+          "description": "It waits for a respawn and has no process.",
+          "type": "string",
+          "const": "respawn_pending"
+        },
+        {
+          "description": "It is `unknown`, so it is never signalled.",
+          "type": "string",
+          "const": "identity_unproven"
+        },
+        {
+          "description": "The registry is in recovery mode, so nothing is stopped.",
+          "type": "string",
+          "const": "supervisor_unavailable"
+        },
+        {
+          "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanState": {
+      "description": "The state of a restart plan. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The old daemon stops the `stop_restore` instances.",
+          "type": "string",
+          "const": "stopping"
+        },
+        {
+          "description": "Every `stop_restore` instance stopped; the old daemon exits.",
+          "type": "string",
+          "const": "handed_over"
+        },
+        {
+          "description": "The new daemon adopts and starts the instances again.",
+          "type": "string",
+          "const": "restoring"
+        },
+        {
+          "description": "Every instance has an outcome; final.",
+          "type": "string",
+          "const": "finished"
+        },
+        {
+          "description": "A stop timed out, so the old daemon kept running; final.",
+          "type": "string",
+          "const": "aborted"
+        },
+        {
+          "description": "The Mac booted again before the plan finished; final.",
+          "type": "string",
+          "const": "expired"
+        },
+        {
+          "description": "A state this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -6491,6 +6702,50 @@
         "tile"
       ]
     },
+    "ReconcileFinding": {
+      "description": "A problem the reconciliation found on one instance (spec 0030).",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "What is wrong.",
+          "$ref": "#/$defs/ReconcileFindingCode"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "The instance name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "code"
+      ]
+    },
+    "ReconcileFindingCode": {
+      "description": "What a [`ReconcileFinding`] found. Open: newer daemons may add values.",
+      "oneOf": [
+        {
+          "description": "The data folder is gone, empty, or has no data marker, while an\nadopted process still runs.",
+          "type": "string",
+          "const": "data_missing"
+        },
+        {
+          "description": "The runtime executable is gone from the runtime's install folder,\nwhile an adopted process still runs.",
+          "type": "string",
+          "const": "runtime_missing"
+        },
+        {
+          "description": "A code this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ReconcilePhase": {
       "description": "The phase of the reconciliation. Open.",
       "oneOf": [
@@ -6751,6 +7006,23 @@
             "type": {
               "type": "string",
               "const": "daemon.shutdown"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The plan a restart would write and what would refuse it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RestartPreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon.restart_preview"
             }
           },
           "required": [
@@ -7558,6 +7830,223 @@
       "required": [
         "requestId",
         "reply"
+      ]
+    },
+    "RestartPlanInstance": {
+      "description": "One instance of a [`RestartPlanView`].",
+      "type": "object",
+      "properties": {
+        "decision": {
+          "description": "What the restart does with it.",
+          "$ref": "#/$defs/PlanDecision"
+        },
+        "failureCode": {
+          "description": "The failure or blocker code of a `failed` outcome, such as\n`data_missing` or `identity_unproven`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceId": {
+          "description": "The instance; it may be gone since.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "The instance name when the plan was written.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "What became of it, or null while the plan is open.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "readyAt": {
+          "description": "When it was `ready` again, or adopted.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "reason": {
+          "description": "Why.",
+          "$ref": "#/$defs/PlanReason"
+        },
+        "stoppedAt": {
+          "description": "When the old daemon stopped it, for `stop_restore`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "decision",
+        "reason"
+      ]
+    },
+    "RestartPlanView": {
+      "description": "A restart plan as clients see it: in `DaemonInfo.restart`, in the\n`daemon.restart_plan` event, and in `stackly daemon restart --json`.",
+      "type": "object",
+      "properties": {
+        "closeReason": {
+          "description": "Why an `aborted` or `expired` plan closed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanCloseReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "createdAt": {
+          "description": "When the plan was written.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "description": "When the plan became final.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "handedOverAt": {
+          "description": "When every `stop_restore` instance had stopped.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "id": {
+          "description": "The plan ID, a lowercase UUID v7.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "instances": {
+          "description": "Every instance of the plan, sorted by instance ID.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RestartPlanInstance"
+          }
+        },
+        "reconciledAt": {
+          "description": "When the new daemon finished reconciling.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "state": {
+          "description": "Where the plan is.",
+          "$ref": "#/$defs/PlanState"
+        }
+      },
+      "required": [
+        "id",
+        "state",
+        "createdAt"
+      ]
+    },
+    "RestartPreview": {
+      "description": "Reply of `daemon.restart_preview`: the plan a restart asked for now\nwould write, and what would refuse it.",
+      "type": "object",
+      "properties": {
+        "blockingOperations": {
+          "description": "Queued and running operations; those with `resumable` false that\nstill run after the quiesce wait refuse the restart.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BlockingOperation"
+          }
+        },
+        "digest": {
+          "description": "The sha256 hex digest of the plan's `instanceId:decision:reason`\nlines, sorted by instance ID; `daemon.shutdown` takes it back as\n`expectedPlanDigest`.",
+          "type": "string"
+        },
+        "instances": {
+          "description": "Every instance in the plan, sorted by instance ID.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RestartPreviewInstance"
+          }
+        },
+        "launchContext": {
+          "description": "Who started the daemon; only `launchd` can restart.",
+          "$ref": "#/$defs/LaunchContextKind"
+        },
+        "supervisorAvailable": {
+          "description": "False while the registry is in recovery mode, so every instance is\n`keep` with `supervisor_unavailable`.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "digest",
+        "launchContext",
+        "supervisorAvailable"
+      ]
+    },
+    "RestartPreviewInstance": {
+      "description": "One instance of a [`RestartPreview`].",
+      "type": "object",
+      "properties": {
+        "decision": {
+          "description": "What the restart does with the instance.",
+          "$ref": "#/$defs/PlanDecision"
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "lifecycle": {
+          "description": "The lifecycle the decision was made from.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "name": {
+          "description": "The instance name now.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The provider name the instance is pinned to, such as `postgresql`.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why.",
+          "$ref": "#/$defs/PlanReason"
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "provider",
+        "lifecycle",
+        "decision",
+        "reason"
       ]
     },
     "RevealSecretReply": {
@@ -8560,6 +9049,15 @@
         "mode": {
           "description": "The mode it accepted.",
           "$ref": "#/$defs/ShutdownMode"
+        },
+        "planId": {
+          "description": "The restart plan it wrote, for `restart`; its progress follows in\n`daemon.restart_plan` events (spec 0030).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
         },
         "serverInstanceId": {
           "description": "The daemon run that accepted the request.",

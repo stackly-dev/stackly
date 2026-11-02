@@ -1,1 +1,1 @@
-${instance.secrets}/token
+${instance.secrets}/conf/server.json

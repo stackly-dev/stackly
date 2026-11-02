@@ -1,1 +1,1 @@
-${settings.serverName}
+http://stackly:${secret.authToken}@${endpoint.http.address}/

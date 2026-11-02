@@ -1313,3 +1313,62 @@ fn supervisor_errors_list_their_checks_environments_and_port_fields() {
     let override_required = error_body("frame-error-supervisor-stop-requires-override.json");
     assert_eq!(override_required.items()[0].kind(), "environment");
 }
+
+#[test]
+fn restart_plan_events_decode_values_this_build_does_not_know_as_unrecognized() {
+    use stackly_protocol::restart::{PlanCloseReason, PlanDecision, PlanOutcome, PlanState};
+
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-daemon-restart-plan-unknown-values.json"))
+            .unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    assert_eq!((event.resource, event.revision), (None, None));
+    let EventKind::DaemonRestartPlan(plan) = event.kind else {
+        panic!("expected daemon.restart_plan");
+    };
+    assert_eq!(plan.state, PlanState::Unrecognized);
+    assert_eq!(plan.close_reason, Some(PlanCloseReason::Unrecognized));
+    let instance = &plan.instances[0];
+    assert_eq!(instance.decision, PlanDecision::Unrecognized);
+    assert_eq!(instance.outcome, Some(PlanOutcome::Unrecognized));
+    assert_eq!(
+        (instance.stopped_at, instance.failure_code.as_deref()),
+        (None, None)
+    );
+}
+
+#[test]
+fn reconciliation_findings_name_each_instance_and_problem() {
+    use stackly_protocol::instance::ReconcileFindingCode;
+
+    let frame: ServerFrame =
+        serde_json::from_slice(&read("frame-event-daemon-reconciling-findings.json")).unwrap();
+    let ServerFrame::Event(event) = frame else {
+        panic!("expected an event");
+    };
+    let EventKind::DaemonReconciling(reconciling) = event.kind else {
+        panic!("expected daemon.reconciling");
+    };
+    let codes: Vec<_> = reconciling.findings.iter().map(|f| f.code).collect();
+    assert_eq!(
+        codes,
+        [
+            ReconcileFindingCode::DataMissing,
+            ReconcileFindingCode::RuntimeMissing
+        ]
+    );
+    let older: ServerFrame =
+        serde_json::from_slice(&read("frame-event-daemon-reconciling-unknown-phase.json")).unwrap();
+    let ServerFrame::Event(older) = older else {
+        panic!("expected an event");
+    };
+    let EventKind::DaemonReconciling(older) = older.kind else {
+        panic!("expected daemon.reconciling");
+    };
+    assert!(
+        older.findings.is_empty(),
+        "an older daemon sends no findings"
+    );
+}

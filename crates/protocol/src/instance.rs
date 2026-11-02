@@ -999,7 +999,7 @@ pub enum ReconcilePhase {
 /// Content of `daemon.reconciling`, a daemon event published at the start
 /// and at the end of the reconciliation.
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DaemonReconciling {
     /// Started or finished.
@@ -1012,6 +1012,39 @@ pub struct DaemonReconciling {
     pub unknown: Count,
     /// Instances that restart.
     pub restarting: Count,
+    /// One entry per instance per problem the reconciliation found and
+    /// left in place; empty for `started` (spec 0030).
+    #[serde(default)]
+    pub findings: Vec<ReconcileFinding>,
+}
+
+/// A problem the reconciliation found on one instance (spec 0030).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconcileFinding {
+    /// The instance.
+    pub instance_id: Uuid,
+    /// The instance name.
+    pub name: String,
+    /// What is wrong.
+    pub code: ReconcileFindingCode,
+}
+
+/// What a [`ReconcileFinding`] found. Open: newer daemons may add values.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReconcileFindingCode {
+    /// The data folder is gone, empty, or has no data marker, while an
+    /// adopted process still runs.
+    DataMissing,
+    /// The runtime executable is gone from the runtime's install folder,
+    /// while an adopted process still runs.
+    RuntimeMissing,
+    /// A code this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
 }
 
 #[cfg(test)]

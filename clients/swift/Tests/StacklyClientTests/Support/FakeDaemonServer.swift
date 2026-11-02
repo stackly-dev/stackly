@@ -288,7 +288,8 @@ enum Samples {
         roots: DaemonRoots(
             data: "/d/data", logs: "/d/logs", cache: "/d/cache", runtime: "/t/stackly",
             rootOverride: true),
-        socketPath: "/t/stackly/stacklyd.sock", registrySchema: 2, secretStore: nil, launch: nil)
+        socketPath: "/t/stackly/stacklyd.sock", registrySchema: 2, secretStore: nil, launch: nil,
+        restart: nil)
 
     /// A `daemon.get_health` reply with `status`.
     static func health(_ status: DaemonHealthStatus) -> DaemonHealth {

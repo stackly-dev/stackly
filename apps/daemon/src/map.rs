@@ -111,6 +111,7 @@ pub fn daemon_info(
         registry_schema: None,
         secret_store: None,
         launch: None,
+        restart: None,
     }
 }
 

@@ -36,6 +36,7 @@ pub(super) fn prune(suite: &Suite<'_>) {
         operation_max_rows: 0,
         audit_max_rows: 0,
         observations_per_instance: 0,
+        restart_plans: 0,
     };
     run(
         suite,
@@ -118,6 +119,7 @@ pub(super) fn prune(suite: &Suite<'_>) {
         operation_max_rows: 3,
         audit_max_rows: 4,
         observations_per_instance: 2,
+        restart_plans: 20,
     };
     let report = run(suite, CHECK, &policy, now);
     expect_eq(

@@ -150,7 +150,7 @@ fn shutdown(socket: &Path, mode: ShutdownMode) {
         runtime().block_on(async {
             let (client, _) = common::client(&socket).await;
             client
-                .call(Call::DaemonShutdown(ShutdownParams { mode }))
+                .call(Call::DaemonShutdown(ShutdownParams::new(mode)))
                 .await
         })
     })

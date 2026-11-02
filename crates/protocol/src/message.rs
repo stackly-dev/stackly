@@ -40,6 +40,7 @@ use crate::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use crate::restart::RestartPreview;
 use crate::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
     ResolvedArtifact, RuntimeDetail, RuntimeListPage,
@@ -88,6 +89,9 @@ pub enum Call {
     /// Stops the daemon, or stops it so launchd starts it again.
     #[serde(rename = "daemon.shutdown")]
     DaemonShutdown(ShutdownParams),
+    /// The plan a restart asked for now would write (spec 0030).
+    #[serde(rename = "daemon.restart_preview")]
+    DaemonRestartPreview,
     /// Starts an event subscription.
     #[serde(rename = "events.subscribe")]
     EventsSubscribe(SubscribeParams),
@@ -222,6 +226,9 @@ pub enum Reply {
     /// The daemon accepted the request and now runs the stop order.
     #[serde(rename = "daemon.shutdown")]
     DaemonShutdown(ShutdownAccepted),
+    /// The plan a restart would write and what would refuse it.
+    #[serde(rename = "daemon.restart_preview")]
+    DaemonRestartPreview(RestartPreview),
     /// The subscription started; its events follow.
     #[serde(rename = "events.subscribe")]
     EventsSubscribe(Subscribed),
@@ -406,6 +413,7 @@ methods! {
     "daemon.get_health" => DaemonGetHealth, recovery allowed;
     "daemon.get_capabilities" => DaemonGetCapabilities, recovery allowed;
     "daemon.shutdown" => DaemonShutdown(ShutdownParams), recovery allowed;
+    "daemon.restart_preview" => DaemonRestartPreview, recovery allowed;
     "events.subscribe" => EventsSubscribe(SubscribeParams), recovery allowed;
     "events.unsubscribe" => EventsUnsubscribe(UnsubscribeParams), recovery allowed;
     "operation.get" => OperationGet(GetOperationParams), recovery refused;
@@ -552,9 +560,8 @@ mod tests {
             Call::DaemonGetInfo,
             Call::DaemonGetHealth,
             Call::DaemonGetCapabilities,
-            Call::DaemonShutdown(ShutdownParams {
-                mode: ShutdownMode::Stop,
-            }),
+            Call::DaemonShutdown(ShutdownParams::new(ShutdownMode::Stop)),
+            Call::DaemonRestartPreview,
             Call::EventsSubscribe(SubscribeParams::default()),
             Call::EventsUnsubscribe(UnsubscribeParams { subscription_id: 1 }),
             Call::CatalogListProviders,

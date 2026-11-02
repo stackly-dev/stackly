@@ -1,1 +1,1 @@
-${secret.authToken}
+${endpoint.control.socket}

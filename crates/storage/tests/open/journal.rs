@@ -63,6 +63,7 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
     let kept = |table: &str| {
         table != "schema_migrations"
             && table != "compatibility_records"
+            && !table.starts_with("daemon_restart_plan")
             && !table.starts_with("secret_")
     };
     let mut before = row_counts(&harness.connect());

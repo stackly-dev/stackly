@@ -29,7 +29,8 @@
           "context": "launchd",
           "label": "com.ojiepermana.stackly.daemon",
           "bundlePath": "/Applications/Stackly.app"
-        }
+        },
+        "restart": null
       }
     }
   }

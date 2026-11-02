@@ -1,1 +1,1 @@
-${settings.jetstream}
+${instance.config}/nats.conf

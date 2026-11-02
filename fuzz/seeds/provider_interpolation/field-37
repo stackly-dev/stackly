@@ -1,1 +1,1 @@
-${instance.logs}/fake.log
+${secret.authToken}

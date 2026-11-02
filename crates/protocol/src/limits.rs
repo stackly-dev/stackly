@@ -245,7 +245,7 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 19] = [
+    const SOURCES: [(&str, &str); 20] = [
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
@@ -260,6 +260,7 @@ mod tests {
         ("logs", include_str!("logs.rs")),
         ("message", include_str!("message.rs")),
         ("operation", include_str!("operation.rs")),
+        ("restart", include_str!("restart.rs")),
         ("runtime", include_str!("runtime.rs")),
         ("secret", include_str!("secret.rs")),
         ("storage", include_str!("storage.rs")),

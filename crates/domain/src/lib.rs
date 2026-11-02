@@ -33,6 +33,7 @@ mod os_version;
 mod process;
 mod provider;
 mod registry;
+mod restart;
 mod rule;
 mod runtime;
 mod secret;
@@ -55,7 +56,7 @@ pub use error::{
 };
 pub use id::{
     BackupId, EnvironmentId, InstanceId, InvalidId, LeaseId, OperationId, ProviderSourceId,
-    RuntimeId, ShortKey,
+    RestartPlanId, RuntimeId, ShortKey,
 };
 pub use instance::{
     DesiredState, ExitKind, Instance, InstanceLifecycle, LifecycleEvent, NewInstance,
@@ -102,6 +103,11 @@ pub use registry::{
     SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
     SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, SignatureInfoJson,
     Versioned, WriteBatch, WriteOp,
+};
+pub use restart::{
+    NewRestartPlan, PlanCloseReason, PlanDecision, PlanInstance, PlanOutcome, PlanReason,
+    PlanState, RestartPlan, RestartPlanError, StopIntent, StoredRestartPlan, plan_decision,
+    plan_digest_text,
 };
 pub use rule::Rule;
 pub use runtime::{

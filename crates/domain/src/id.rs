@@ -110,6 +110,12 @@ uuid_id! {
 }
 
 uuid_id! {
+    /// Stable identifier of a daemon restart plan, always a UUID version 7
+    /// (spec 0030).
+    RestartPlanId
+}
+
+uuid_id! {
     /// Stable identifier of a backup, always a UUID version 7.
     ///
     /// Feature 4 uses it only to name recovery snapshots that keep a runtime

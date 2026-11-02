@@ -33,11 +33,15 @@ pub(super) enum History {
     ReleasedLeases,
     /// Process observations.
     ProcessObservations,
+    /// Final daemon restart plans, whose instance rows go with them by
+    /// cascade (spec 0030). A plan also goes when its operation is pruned.
+    RestartPlans,
 }
 
 impl History {
     /// Every kind, in the order a prune visits them.
-    pub(super) const ALL: [Self; 4] = [
+    pub(super) const ALL: [Self; 5] = [
+        Self::RestartPlans,
         Self::Operations,
         Self::AuditEvents,
         Self::ReleasedLeases,
@@ -48,9 +52,10 @@ impl History {
     pub(super) const fn batch_rows(self) -> usize {
         match self {
             Self::Operations => OPERATION_PRUNE_BATCH_ROWS,
-            Self::AuditEvents | Self::ReleasedLeases | Self::ProcessObservations => {
-                PRUNE_BATCH_ROWS
-            }
+            Self::AuditEvents
+            | Self::ReleasedLeases
+            | Self::ProcessObservations
+            | Self::RestartPlans => PRUNE_BATCH_ROWS,
         }
     }
 }
@@ -65,6 +70,7 @@ pub(super) struct Limits {
     operation_max_rows: i64,
     audit_max_rows: i64,
     observations_per_instance: i64,
+    restart_plans: i64,
 }
 
 impl Limits {
@@ -77,6 +83,7 @@ impl Limits {
             operation_max_rows: i64::from(policy.operation_max_rows),
             audit_max_rows: i64::from(policy.audit_max_rows),
             observations_per_instance: i64::from(policy.observations_per_instance),
+            restart_plans: i64::from(policy.restart_plans),
         }
     }
 }
@@ -136,6 +143,15 @@ pub(super) fn delete_batch(
              WHERE rank > ?1 LIMIT ?2)",
             (limits.observations_per_instance, batch),
         ),
+        History::RestartPlans => tx.execute(
+            "DELETE FROM daemon_restart_plan WHERE id IN (\
+             SELECT id FROM (SELECT id, row_number() OVER (\
+             ORDER BY created_at DESC, id DESC) AS rank \
+             FROM daemon_restart_plan \
+             WHERE state NOT IN ('stopping', 'handed_over', 'restoring')) \
+             WHERE rank > ?1 LIMIT ?2)",
+            (limits.restart_plans, batch),
+        ),
     }
     .map_err(sql_error)?;
     tx.commit().map_err(sql_error)?;
@@ -168,6 +184,7 @@ mod tests {
             History::AuditEvents,
             History::ReleasedLeases,
             History::ProcessObservations,
+            History::RestartPlans,
         ] {
             assert_eq!(history.batch_rows(), 5_000);
         }

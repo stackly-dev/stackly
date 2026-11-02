@@ -974,6 +974,12 @@ async fn dispatch(
             .map(Reply::DaemonShutdown),
             None,
         ),
+        Call::DaemonRestartPreview => (
+            guarded(core, handlers, context, |h, c, x| h.restart_preview(c, x))
+                .await
+                .map(Reply::DaemonRestartPreview),
+            None,
+        ),
         Call::EventsSubscribe(params) => match conn.subscribe(core, params) {
             Ok(subscription) => {
                 let subscribed = Subscribed {

@@ -1,1 +1,1 @@
-${instance.config}/peers.yaml
+fake.${endpoint.http.port}

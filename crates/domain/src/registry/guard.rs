@@ -13,6 +13,7 @@ use crate::registry::batch::{Committed, WriteOp};
 use crate::registry::error::RegistryError;
 use crate::registry::query::InstanceFilter;
 use crate::registry::record::ProviderRevisionRecord;
+use crate::restart::RestartPlan;
 use crate::runtime::Runtime;
 
 /// What a commit guard may read: the registry inside the guarded commit's
@@ -54,6 +55,14 @@ pub trait GuardView {
         &self,
         instance: InstanceId,
     ) -> Result<Vec<(Operation, JournalView)>, RegistryError>;
+
+    /// Returns the open daemon restart plan, read inside the guarded
+    /// commit (spec 0030).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn open_restart_plan(&self) -> Result<Option<RestartPlan>, RegistryError>;
 }
 
 /// What a guard decided after reading.

@@ -35,6 +35,9 @@
 //!   that holds its process, readiness, health, and
 //!   [`InstanceStatus::status_seq`]; [`SupervisorEvents`] reports what a
 //!   client can see change.
+//! - [`write_plan_guard`] writes a daemon restart plan in one guarded
+//!   commit, refused while another plan is open or when its digest changed
+//!   (spec 0030).
 //! - [`SupervisorConfig`] holds every constant, shrinkable in tests.
 
 mod actor;
@@ -57,6 +60,7 @@ mod init;
 mod lock;
 mod pending;
 mod persist;
+mod plan;
 mod ports;
 pub(crate) mod prepare;
 pub mod probe;
@@ -94,6 +98,7 @@ pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents,
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
 pub use force::ForceStopRequest;
 pub use init::InitRequest;
+pub use plan::{PlanRefusal, write_plan_guard};
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};
 pub use reload::ReloadRequest;

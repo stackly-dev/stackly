@@ -29,7 +29,8 @@
           "context": "manual",
           "label": null,
           "bundlePath": null
-        }
+        },
+        "restart": null
       }
     }
   }

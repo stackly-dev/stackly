@@ -36,6 +36,7 @@ fn migrating_v2_replaces_the_old_secret_references_and_keeps_every_other_row() {
     let kept = |table: &str| {
         table != "schema_migrations"
             && table != "compatibility_records"
+            && !table.starts_with("daemon_restart_plan")
             && !table.starts_with("secret_")
     };
     let mut before = row_counts(&harness.connect());

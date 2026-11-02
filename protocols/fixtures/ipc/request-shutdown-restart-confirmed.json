@@ -1,0 +1,12 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000003002",
+  "idempotencyKey": "restart-2026-11-02-1",
+  "call": {
+    "type": "daemon.shutdown",
+    "content": {
+      "mode": "restart",
+      "expectedPlanDigest": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "force": true
+    }
+  }
+}

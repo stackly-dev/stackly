@@ -1,1 +1,1 @@
-${instance.name}
+nats://${endpoint.client.address}

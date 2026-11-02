@@ -1,1 +1,1 @@
-${endpoint.http.address}
+--label=${settings.mode}
