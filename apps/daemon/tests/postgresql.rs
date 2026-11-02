@@ -40,6 +40,8 @@ mod mismatch;
 mod phases;
 #[path = "postgresql/readiness.rs"]
 mod readiness;
+#[path = "postgresql/reconcile.rs"]
+mod reconcile;
 #[path = "postgresql/reload.rs"]
 mod reload;
 #[path = "postgresql/role_failure.rs"]

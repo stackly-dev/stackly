@@ -60,6 +60,7 @@ mod force;
 mod helper;
 mod http;
 mod init;
+mod integrity;
 mod lock;
 mod pending;
 mod persist;
@@ -102,6 +103,7 @@ pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents,
 pub use error::{EndpointFault, SupervisorError, UnavailableReason};
 pub use force::ForceStopRequest;
 pub use init::InitRequest;
+pub use integrity::{FindingKind, ReconcileFinding};
 pub use plan::{PlanRefusal, write_plan_guard};
 pub use ports::{BindOptions, BindOutcome, PortProbe, SocketPortProbe};
 pub use reconcile::{ReconcilePhase, ReconcileReport, RegistryMode};

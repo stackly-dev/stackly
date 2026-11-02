@@ -20,8 +20,8 @@ use super::drift::RenderTarget;
 use super::error::SupervisorError;
 use super::persist::{blocking, read_instance};
 use crate::provider::{
-    NameCheck, PlanContext, ResolvedEndpoint, RuntimeContext, SettingsValues, ValidatedPackage,
-    read_package,
+    DATA_MARKER_MAX_LEN, MarkerRead, NameCheck, PlanContext, ResolvedEndpoint, RuntimeContext,
+    SettingsValues, ValidatedPackage, read_package,
 };
 
 /// Everything the plans of one action are built from.
@@ -132,7 +132,10 @@ pub(crate) async fn prepare(
             let package = load_package(&platform, &layout, &instance)?;
             let paths = layout.layout().instance_paths(instance.id());
             if checks == Checks::Full {
-                check_instance_folder(&platform, &paths)?;
+                // Data that was initialized must still be there: this runs
+                // before any run folder is made (spec 0030, AC-4).
+                let initialized = instance.data_initialized_at().is_some().then_some(&package);
+                check_instance_folder(&platform, &paths, initialized)?;
             }
             let (revision, settings) = settings(&*registry, &package, instance.id())?;
             Ok(Loaded {
@@ -251,10 +254,17 @@ pub(crate) fn load_package(
     Ok(package)
 }
 
-/// The instance folder must be a private folder of the current user.
+/// The instance folder must be a private folder of the current user, and
+/// when `initialized` names the pinned package (the data was initialized)
+/// the data must still be there: see [`data_missing`].
+///
+/// # Errors
+///
+/// Returns [`SupervisorError::DataUnavailable`] naming what failed.
 pub(crate) fn check_instance_folder(
     platform: &stackly_platform::Platform,
     paths: &InstancePaths,
+    initialized: Option<&ValidatedPackage>,
 ) -> Result<(), SupervisorError> {
     let unavailable = |reason: String| SupervisorError::DataUnavailable {
         path: paths.root.display().to_string(),
@@ -269,7 +279,45 @@ pub(crate) fn check_instance_folder(
         .identity()
         .current_user()
         .map_err(|error| unavailable(error.to_string()))?;
-    check_private_dir(&info, &user).map_err(|violation| unavailable(violation.to_string()))
+    check_private_dir(&info, &user).map_err(|violation| unavailable(violation.to_string()))?;
+    if let Some(package) = initialized
+        && let Some(reason) = data_missing(platform.fs(), package, paths)
+    {
+        return Err(unavailable(reason));
+    }
+    Ok(())
+}
+
+/// Says why the data of an initialized instance is gone, or `None` when it
+/// is there (spec 0030, *Pemeriksaan rekonsiliasi tambahan*): the data
+/// folder does not exist or is empty, or the package declares a data
+/// marker and the file is missing. Only reads. A folder or marker that
+/// cannot be read is not missing; the data check of spec 0025 judges it.
+pub(crate) fn data_missing(
+    fs: &dyn stackly_platform::Filesystem,
+    package: &ValidatedPackage,
+    paths: &InstancePaths,
+) -> Option<String> {
+    match fs.symlink_metadata(&paths.data) {
+        Ok(None) | Err(stackly_platform::PlatformError::NotFound { .. }) => {
+            return Some("the data folder is missing".to_owned());
+        }
+        Ok(Some(info))
+            if info.kind == stackly_platform::FileKind::Dir
+                && fs
+                    .read_dir(&paths.data)
+                    .is_ok_and(|entries| entries.is_empty()) =>
+        {
+            return Some("the data folder is empty".to_owned());
+        }
+        _ => {}
+    }
+    let marker = package.data_marker_path(paths)?;
+    matches!(
+        MarkerRead::from_read(fs.read_file_limited(&marker, DATA_MARKER_MAX_LEN)),
+        MarkerRead::Missing
+    )
+    .then(|| "the data marker is missing".to_owned())
 }
 
 /// The active config revision and its settings, validated again against

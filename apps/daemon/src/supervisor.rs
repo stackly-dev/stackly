@@ -11,8 +11,8 @@ use stackly_core::PreparedLayout;
 use stackly_core::logs::DurableLog;
 use stackly_core::secret::{Redactor, SecretService};
 use stackly_core::supervisor::{
-    LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor, SupervisorConfig,
-    SupervisorDeps, SupervisorError, SupervisorEvents, WeakSupervisor,
+    FindingKind, LogSink, ReconcilePhase, ReconcileReport, RegistryMode, SinkSet, Supervisor,
+    SupervisorConfig, SupervisorDeps, SupervisorError, SupervisorEvents, WeakSupervisor,
 };
 use stackly_domain::{Instance, InstanceId, Registry, ResourceRevision};
 use stackly_platform::Platform;
@@ -20,7 +20,8 @@ use stackly_protocol::codes::registry;
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
 use stackly_protocol::events::EventKind;
 use stackly_protocol::instance::{
-    DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcilePhase as WirePhase,
+    DaemonReconciling, InstanceRemoved, InstanceStateChanged, ReconcileFinding,
+    ReconcileFindingCode, ReconcilePhase as WirePhase,
 };
 use stackly_protocol::{Count, ErrorBody, ResourceKind, ResourceRef};
 
@@ -356,8 +357,19 @@ impl SupervisorEvents for BusSupervisorEvents {
                 adopted: Count::saturating(u64::from(report.adopted)),
                 unknown: Count::saturating(u64::from(report.unknown)),
                 restarting: Count::saturating(u64::from(report.restarting)),
-                // provisional: F30 (milestone 2 fills the findings)
-                findings: Vec::new(),
+                findings: report
+                    .findings
+                    .iter()
+                    .map(|finding| ReconcileFinding {
+                        instance_id: finding.instance_id.as_uuid(),
+                        name: finding.name.clone(),
+                        code: match finding.kind {
+                            FindingKind::DataMissing => ReconcileFindingCode::DataMissing,
+                            FindingKind::RuntimeMissing => ReconcileFindingCode::RuntimeMissing,
+                            _ => ReconcileFindingCode::Unrecognized,
+                        },
+                    })
+                    .collect(),
             },
             _ => return,
         };
