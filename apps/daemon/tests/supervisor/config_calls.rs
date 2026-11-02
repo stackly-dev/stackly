@@ -13,8 +13,8 @@ use serde_json::Value;
 use stackly_ipc::CallOptions;
 use stackly_protocol::instance::config::{
     ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
-    ConfigChangeRequest, ConfigImpact, GetConfigParams, InstanceConfigView, KeepRevisionParams,
-    ValidateConfigParams,
+    ConfigChangeRequest, ConfigImpact, ConfigValidation, GetConfigParams, InstanceConfigView,
+    KeepRevisionParams, ValidateConfigParams,
 };
 use stackly_protocol::instance::{
     EndpointRequest, InstanceActionAccepted, InstanceSummary, PortRequest, SettingsDocument,
@@ -72,7 +72,12 @@ impl Cfg<'_> {
         }
     }
 
-    pub async fn impact(&self, id: Uuid, base: u64, change: ConfigChangeRequest) -> ConfigImpact {
+    pub async fn validate(
+        &self,
+        id: Uuid,
+        base: u64,
+        change: ConfigChangeRequest,
+    ) -> ConfigValidation {
         match self
             .api
             .client
@@ -84,12 +89,15 @@ impl Cfg<'_> {
             .await
             .expect("the validation answers")
         {
-            Reply::InstanceConfigValidate(verdict) => {
-                assert!(verdict.valid, "{verdict:#?}");
-                verdict.impact
-            }
+            Reply::InstanceConfigValidate(verdict) => *verdict,
             other => panic!("not a validate reply: {other:?}"),
         }
+    }
+
+    pub async fn impact(&self, id: Uuid, base: u64, change: ConfigChangeRequest) -> ConfigImpact {
+        let verdict = self.validate(id, base, change).await;
+        assert!(verdict.valid, "{verdict:#?}");
+        verdict.impact
     }
 
     pub async fn apply(
