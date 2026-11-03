@@ -24,6 +24,9 @@ struct SettingsAvailabilityTests {
         #expect(SettingsAvailability.rows(in: .updates) == [.updateChannel, .telemetry])
         #expect(SettingsAvailability.rows(in: .instances) == [.autostartNewInstances])
         #expect(SettingsAvailability.rows(in: .sources) == [.catalogSource, .providers])
+        #expect(
+            SettingsAvailability.rows(in: .storage)
+                == [.dataLocation, .logsLocation, .cacheLocation, .logRetention])
         #expect(SettingsAvailability.rows(in: .general).contains(.appearance))
     }
 

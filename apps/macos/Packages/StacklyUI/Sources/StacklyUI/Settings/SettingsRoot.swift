@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The content of the Settings scene: General, Instances, Sources, and Updates (spec 0032
-/// AC-13). The Storage tab joins them once its rows are built (see ``SettingsAvailability``).
+/// The content of the Settings scene: General, Instances, Sources, Storage, and Updates
+/// (spec 0032 AC-13).
 public struct SettingsRoot: View {
     /// The size of the Settings window.
     static let size = CGSize(width: 560, height: 440)
@@ -32,6 +32,9 @@ public struct SettingsRoot: View {
             }
             Tab(SettingsTab.sources.title, systemImage: SettingsTab.sources.symbol) {
                 SourcesSettingsTab(model: model)
+            }
+            Tab(SettingsTab.storage.title, systemImage: SettingsTab.storage.symbol) {
+                StorageSettingsTab(model: model)
             }
             Tab(SettingsTab.updates.title, systemImage: SettingsTab.updates.symbol) {
                 UpdatesSettingsTab(model: model)

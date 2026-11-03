@@ -152,6 +152,17 @@ public struct NewInstanceSheet: View {
                                 .foregroundStyle(StacklyColor.textSecondary)
                         }
                     }
+
+                    if let form = model.form {
+                        LabeledContent("Data folder") {
+                            Text(form.dataLocation)
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                                .textSelection(.enabled)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                        }
+                    }
                 }
             }
         }

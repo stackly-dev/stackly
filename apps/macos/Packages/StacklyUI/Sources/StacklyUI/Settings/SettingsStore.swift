@@ -60,6 +60,10 @@ public final class SettingsStore {
     public private(set) var saving: Edit?
     /// The line under a row whose last change did not go through.
     public private(set) var notices: [Field: String] = [:]
+    /// The location kind whose default is being changed, or `nil`.
+    public private(set) var savingLocation: LocationKind?
+    /// The line under a location row whose last change did not go through.
+    public private(set) var locationNotices: [LocationKind: String] = [:]
 
     @ObservationIgnored private let client: SettingsClient
     @ObservationIgnored private let newKey: () -> String
@@ -156,17 +160,44 @@ public final class SettingsStore {
 
     /// Writes why `field` did not change.
     func fail(_ error: ClientError, field: Field) async {
+        notices[field] = await message(for: error)
+    }
+
+    /// The line for a change that failed, after the reads that make the screen right again:
+    /// a stale revision or a lost answer reads the daemon's values.
+    private func message(for error: ClientError) async -> String {
         switch error {
         case .rejected(let body) where body.code == Self.revisionMismatch:
-            notices[field] = SettingsCopy.changedElsewhere
             await refresh()
+            return SettingsCopy.changedElsewhere
         case .rejected(let body):
-            notices[field] = DaemonText.sentence(body.message)
+            return DaemonText.sentence(body.message)
         case .notSent:
-            notices[field] = MutationFeedback.notSent
+            return MutationFeedback.notSent
         case .outcomeUnknown:
-            notices[field] = MutationFeedback.outcomeUnknown
             await refresh()
+            return MutationFeedback.outcomeUnknown
+        }
+    }
+
+    // MARK: - Locations
+
+    /// Points the default location of `kind` at `target`. The daemon checks the folder against
+    /// its rules and refuses the first one it breaks; the sentence of that rule shows under the
+    /// row. Both buttons of the row stay off while it runs. Afterwards the settings and the
+    /// locations are read again, since the daemon's revision rose and a user count moved.
+    public func setLocation(_ kind: LocationKind, to target: LocationTarget) async {
+        guard savingLocation == nil, let current = settings else { return }
+        locationNotices[kind] = nil
+        savingLocation = kind
+        defer { savingLocation = nil }
+        do throws(ClientError) {
+            _ = try await client.setLocation(
+                kind: kind, target: target, expectedRevision: current.revision,
+                idempotencyKey: newKey())
+            await refresh()
+        } catch {
+            locationNotices[kind] = await message(for: error)
         }
     }
 

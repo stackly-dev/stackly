@@ -56,4 +56,20 @@ nonisolated enum FixtureSettings {
             subscriptionId: 1, sequence: revision, at: FixtureClock.now, resource: nil,
             revision: nil, kind: .settingsChanged(SettingsChanged(revision: revision)))
     }
+
+    /// The settings after the default of `location.kind` moved to `location`.
+    static func moving(_ settings: DaemonSettingsView, to location: StorageLocationView)
+        -> DaemonSettingsView
+    {
+        let old = settings.locations
+        let locations = DefaultLocations(
+            data: location.kind == .data ? location : old.data,
+            logs: location.kind == .logs ? location : old.logs,
+            cache: location.kind == .cache ? location : old.cache)
+        return DaemonSettingsView(
+            revision: settings.revision + 1, defaultStartup: settings.defaultStartup,
+            updateChannel: settings.updateChannel, telemetry: settings.telemetry,
+            telemetryCopyVersion: settings.telemetryCopyVersion, locations: locations,
+            logRetention: settings.logRetention, updatedAt: settings.updatedAt)
+    }
 }

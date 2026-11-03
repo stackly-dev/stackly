@@ -73,7 +73,12 @@ struct SettingsStoreTests {
                 defer { state.failNext = nil }
                 return state.failNext
             }
-            if let failure, case .settingsUpdate = call { throw failure }
+            if let failure {
+                switch call {
+                case .settingsUpdate, .storageSetLocation: throw failure
+                default: break
+                }
+            }
             switch call {
             case .settingsGet:
                 return .settingsGet(state.withLock { $0.settings })
@@ -86,6 +91,21 @@ struct SettingsStoreTests {
                     }
                     state.settings = FixtureSettings.apply(params.patch, to: state.settings)
                     return .settingsUpdate(state.settings)
+                }
+            case .storageSetLocation(let params):
+                return state.withLock { state in
+                    let moved = FixtureSettings.location(
+                        params.kind, number: 9,
+                        path: {
+                            if case .path(let path) = params.target {
+                                path + "/Stackly"
+                            } else {
+                                nil
+                            }
+                        }(),
+                        builtIn: params.target == .builtIn)
+                    state.settings = FixtureSettings.moving(state.settings, to: moved)
+                    return .storageSetLocation(moved)
                 }
             default:
                 throw .rejected(ClientErrorCatalog.protocolViolation())
@@ -280,6 +300,65 @@ struct SettingsStoreTests {
 
         #expect(store.notices[.telemetry] == nil)
         #expect(store.settings?.telemetry == true)
+    }
+
+    // MARK: - Locations
+
+    @Test func changingALocationSendsTheKindTheTargetAndTheRevisionThenReadsAgain() async throws {
+        let daemon = Daemon()
+        let store = Self.store(daemon)
+        await store.refresh()
+        await store.setLocation(.data, to: .path("/Volumes/Work"))
+
+        let sent = try #require(
+            daemon.calls.first {
+                if case .storageSetLocation = $0 { return true } else { return false }
+            })
+        #expect(
+            sent
+                == .storageSetLocation(
+                    SetLocationParams(
+                        kind: .data, target: .path("/Volumes/Work"), expectedRevision: 3)))
+        #expect(store.settings?.locations.data.path == "/Volumes/Work/Stackly")
+        #expect(store.settings?.revision == 4)
+        #expect(store.savingLocation == nil)
+        #expect(store.locationNotices.isEmpty)
+    }
+
+    @Test func aFolderTheDaemonRefusesShowsTheRuleSentenceUnderTheRow() async {
+        let daemon = Daemon()
+        let store = Self.store(daemon)
+        await store.refresh()
+        daemon.fail(
+            next: .rejected(
+                ErrorBody(
+                    code: "storage.location_invalid", category: .invalidInput,
+                    message: "that folder is on an external volume", retryable: false,
+                    resource: nil, fields: nil, hint: nil, details: nil, operationId: nil,
+                    rule: nil, items: nil)))
+        await store.setLocation(.cache, to: .path("/Volumes/USB"))
+
+        #expect(store.locationNotices[.cache] == "That folder is on an external volume.")
+        #expect(store.settings?.locations.cache.builtIn == true)
+    }
+
+    @Test func aStaleRevisionOnALocationShowsChangedElsewhere() async {
+        let daemon = Daemon()
+        let store = Self.store(daemon)
+        await store.refresh()
+        daemon.replace(FixtureSettings.view(revision: 8))
+        daemon.fail(next: Self.mismatch())
+        await store.setLocation(.logs, to: .builtIn)
+
+        #expect(store.locationNotices[.logs] == "Changed elsewhere. Try again.")
+        #expect(store.settings?.revision == 8)
+    }
+
+    @Test func nothingIsSentForALocationBeforeTheFirstRead() async {
+        let daemon = Daemon()
+        let store = Self.store(daemon)
+        await store.setLocation(.data, to: .builtIn)
+        #expect(daemon.calls.isEmpty)
     }
 
     // MARK: - Events
