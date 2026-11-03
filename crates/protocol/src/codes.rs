@@ -955,6 +955,8 @@ area! {
             details [], "the cli panicked, and the panic message is never shown";
         AGENT_ROOT_OVERRIDE = "cli.agent_root_override", InvalidInput, retryable false,
             details ["variable"], "an agent command was asked while STACKLY_ROOT is set, and the agent only serves the default root (spec 0015)";
+        AGENT_OFF_BLOCKED = "cli.agent_off_blocked", Conflict, retryable false,
+            details ["count"], "the daemon stayed up after agent_off because instances could not be stopped, so the background agent was not unregistered (spec 0031)";
         AGENT_NOT_BUNDLED = "cli.agent_not_bundled", Unsupported, retryable false,
             details ["executable"], "the cli does not run from inside the Stackly app bundle, so macOS cannot be asked about the agent (spec 0015)";
         AGENT_HELPER_MISSING = "cli.agent_helper_missing", Unavailable, retryable false,
@@ -1493,6 +1495,7 @@ mod tests {
                 ErrorCategory::InvalidInput,
                 &["variable"],
             ),
+            ("cli.agent_off_blocked", ErrorCategory::Conflict, &["count"]),
             (
                 "cli.agent_not_bundled",
                 ErrorCategory::Unsupported,

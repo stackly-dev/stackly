@@ -12,10 +12,12 @@ use std::time::Duration;
 
 use stackly_ipc::EventStream;
 use stackly_protocol::codes::{daemon, ipc};
-use stackly_protocol::daemon::{DaemonInfo, ShutdownMode, ShutdownParams};
+use stackly_protocol::daemon::{DaemonInfo, ShutdownAccepted, ShutdownMode, ShutdownParams};
 use stackly_protocol::events::{EventKind, SubscribeParams};
+use stackly_protocol::instance::{ListInstancesParams, StartupPolicyKind};
 use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::restart::{PlanState, RestartPlanView, RestartPreview};
+use stackly_protocol::stop_all::StopAllPreview;
 use stackly_protocol::{Call, Reply};
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -83,6 +85,25 @@ pub struct RestartHandover {
     pub eof: bool,
 }
 
+/// What the Turn Off question needs (spec 0031, *Matikan agent*, step 1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentOffPreview {
+    /// What `instance.preview_stop_all` found.
+    pub preview: StopAllPreview,
+    /// How many instances have the policy `at_login`.
+    pub at_login: usize,
+}
+
+/// How an `agent_off` request went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentOffReply {
+    /// The daemon's answer.
+    pub accepted: ShutdownAccepted,
+    /// Whether the daemon closed the connection within the limit; read only
+    /// when it said `exiting`.
+    pub eof: bool,
+}
+
 /// What [`DaemonProbe::watch_plan`] saw.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanWatch {
@@ -130,6 +151,19 @@ pub trait DaemonProbe: Send + Sync {
         request: &RestartRequest,
         eof_limit: Duration,
     ) -> BoxFuture<'_, Result<RestartHandover, CliFailure>>;
+
+    /// Reads `instance.preview_stop_all` and counts the `at_login`
+    /// instances of `instance.list` (spec 0031).
+    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>>;
+
+    /// Sends `daemon.shutdown { mode: agent_off }` under the interactive
+    /// time limit. When the daemon answers `exiting`, reads the connection
+    /// until the daemon closes it, for up to `eof_limit`.
+    fn agent_off(
+        &self,
+        idempotency_key: &str,
+        eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>>;
 
     /// Follows plan `plan_id` on the daemon that runs now, connecting
     /// again when the connection ends, until the plan is final or `limit`
@@ -408,6 +442,100 @@ impl DaemonProbe for LiveProbe {
                 plan,
                 eof,
             })
+        })
+    }
+
+    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
+        Box::pin(async move {
+            let session = self.session().await?;
+            let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
+            let preview = match session
+                .call(
+                    &Call::InstancePreviewStopAll,
+                    &CallSpec::control(),
+                    &mut sink,
+                    false,
+                )
+                .await?
+            {
+                Reply::InstancePreviewStopAll(preview) => *preview,
+                _ => return Err(CliFailure::unexpected_reply(None)),
+            };
+            let mut at_login = 0;
+            let mut before = None;
+            loop {
+                let params = ListInstancesParams {
+                    limit: None,
+                    before: before.take(),
+                };
+                match session
+                    .call(
+                        &Call::InstanceList(params),
+                        &CallSpec::control(),
+                        &mut sink,
+                        false,
+                    )
+                    .await?
+                {
+                    Reply::InstanceList(page) => {
+                        at_login += page
+                            .items
+                            .iter()
+                            .filter(|item| item.autostart.policy == StartupPolicyKind::AtLogin)
+                            .count();
+                        match page.next {
+                            Some(next) => before = Some(next),
+                            None => break,
+                        }
+                    }
+                    _ => return Err(CliFailure::unexpected_reply(None)),
+                }
+            }
+            Ok(AgentOffPreview { preview, at_login })
+        })
+    }
+
+    fn agent_off(
+        &self,
+        idempotency_key: &str,
+        eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>> {
+        let key = idempotency_key.to_owned();
+        Box::pin(async move {
+            let session = self.session().await?;
+            let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
+            let subscribe = SubscribeParams {
+                kinds: vec!["daemon.".to_owned()],
+                ..SubscribeParams::default()
+            };
+            let mut stream = match session.subscribe(subscribe, &mut sink, false).await {
+                Ok((_, stream)) => Some(stream),
+                Err(failure) if failure.body.is(&daemon::SHUTTING_DOWN) => None,
+                Err(failure) => return Err(failure),
+            };
+            let spec = CallSpec {
+                timeout: RequestTimeout::Interactive,
+                idempotency_key: Some(key),
+            };
+            let call = Call::DaemonShutdown(ShutdownParams::new(ShutdownMode::AgentOff));
+            let accepted = match session.call_once(call, &spec, &mut sink, false).await {
+                Ok(Reply::DaemonShutdown(accepted)) => accepted,
+                Ok(_) => return Err(CliFailure::unexpected_reply(None)),
+                Err(failure) => return Err(failure),
+            };
+            let eof = if accepted.exiting {
+                match stream.as_mut() {
+                    Some(stream) => tokio::time::timeout(eof_limit, read_to_end(stream))
+                        .await
+                        .is_ok(),
+                    None => tokio::time::timeout(eof_limit, self.until_absent())
+                        .await
+                        .is_ok(),
+                }
+            } else {
+                false
+            };
+            Ok(AgentOffReply { accepted, eof })
         })
     }
 
