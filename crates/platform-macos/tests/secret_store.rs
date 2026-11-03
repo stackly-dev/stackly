@@ -28,6 +28,16 @@ const NO_DIALOG_LIMIT: Duration = Duration::from_secs(1);
 const GUI_OWNER: &str = "the user of this Mac, logged in to a GUI session";
 
 /// Runs a command and returns its output.
+/// The process IDs of `SecurityAgent`, the process that shows the Keychain
+/// dialog. Only read; nothing is signalled.
+fn security_agents() -> Vec<String> {
+    let output = run("pgrep", &["-x", "SecurityAgent"]);
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect()
+}
+
 fn run(program: &str, args: &[&str]) -> Output {
     Command::new(program)
         .args(args)
@@ -298,6 +308,7 @@ fn a_locked_file_keychain_refuses_reads_and_writes_without_a_dialog() {
         .unwrap();
     let lock = run("security", &["lock-keychain", &keychain.path_text()]);
     assert!(lock.status.success(), "security lock-keychain failed");
+    let agents_before = security_agents();
 
     let (read, read_took) = timed("read", || store.read(&kept, Interaction::Never));
     assert_eq!(read.unwrap_err(), SecretStoreError::Locked);
@@ -310,6 +321,11 @@ fn a_locked_file_keychain_refuses_reads_and_writes_without_a_dialog() {
         )
     });
     assert_eq!(write, Err(SecretStoreError::Locked));
+    assert_eq!(
+        security_agents(),
+        agents_before,
+        "a locked keychain with no interaction allowed starts no SecurityAgent dialog"
+    );
     assert_eq!(store.state(), StoreState::Locked);
     let (probe, _) = timed("probe", || store.probe(&kept));
     assert_eq!(probe, Ok(SecretPresence::Present));

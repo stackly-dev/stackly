@@ -339,6 +339,24 @@ impl MacosSecretStore {
         &self.target
     }
 
+    /// Whether the keychain is locked right now, read live: the cache of
+    /// [`state`](SecretStore::state) only changes after a call, so a lock
+    /// from another process is not in it yet. A check that fails counts as
+    /// not locked, and the call goes on as it always did.
+    fn locked_now(&self) -> bool {
+        match keychain_unlocked(&self.keychain) {
+            Ok(unlocked) => {
+                *self.state.lock().unwrap_or_else(PoisonError::into_inner) = if unlocked {
+                    StoreState::Available
+                } else {
+                    StoreState::Locked
+                };
+                !unlocked
+            }
+            Err(_) => false,
+        }
+    }
+
     fn search(&self, reference: &SecretRef) -> ItemSearchOptions {
         let mut search = ItemSearchOptions::new();
         search
@@ -371,6 +389,10 @@ impl MacosSecretStore {
         value: &SecretValue,
         interaction: Interaction,
     ) -> Result<(), SecretStoreError> {
+        // A write to a locked keychain asks for a dialog like a read does.
+        if interaction == Interaction::Never && self.locked_now() {
+            return Err(SecretStoreError::Locked);
+        }
         let data = CFData::from_buffer(value.expose().as_bytes());
         let mut options = ItemAddOptions::new(ItemAddValue::Data {
             class: ItemClass::generic_password(),
@@ -391,6 +413,9 @@ impl MacosSecretStore {
         value: &SecretValue,
         interaction: Interaction,
     ) -> Result<(), SecretStoreError> {
+        if interaction == Interaction::Never && self.locked_now() {
+            return Err(SecretStoreError::Locked);
+        }
         let search = self.search(reference);
         let mut changes = ItemUpdateOptions::new();
         changes.set_value(ItemUpdateValue::Data(CFData::from_buffer(
@@ -441,6 +466,16 @@ impl SecretStore for MacosSecretStore {
         reference: &SecretRef,
         interaction: Interaction,
     ) -> Result<SecretValue, SecretStoreError> {
+        // Reading the value of an item of a locked keychain asks securityd to
+        // unlock it, which shows a dialog whatever the interaction switch
+        // says. With no dialog allowed the answer is known without asking:
+        // the item is missing, or the keychain is locked.
+        if interaction == Interaction::Never && self.locked_now() {
+            return match self.probe(reference)? {
+                SecretPresence::Missing => Err(SecretStoreError::NotFound),
+                SecretPresence::Present => Err(SecretStoreError::Locked),
+            };
+        }
         let mut search = self.search(reference);
         search.load_data(true);
         let results = self.call(interaction, || search.search())?;
