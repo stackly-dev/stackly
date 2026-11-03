@@ -41,7 +41,8 @@
                 commandLineTool: CommandLineToolModel(
                     controller: tool, initialStatus: FakeCommandLineTool.fixtureStatus),
                 onboardingStore: InMemoryOnboardingRecordStore(
-                    isFinished: scenario.onboardingFinished))
+                    isFinished: scenario.onboardingFinished),
+                loginItem: LoginItemModel.fake())
         }
     }
 #endif

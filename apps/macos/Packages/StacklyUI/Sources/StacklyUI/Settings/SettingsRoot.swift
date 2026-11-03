@@ -8,21 +8,24 @@ public struct SettingsRoot: View {
 
     private let model: DaemonModel
     private let preferences: AppPreferences
+    private let loginItem: LoginItemModel
 
     /// Creates the Settings content.
     /// - Parameters:
     ///   - model: The daemon model the app holds for the whole launch.
     ///   - preferences: The choices that belong to this Mac, such as Appearance.
-    public init(model: DaemonModel, preferences: AppPreferences) {
+    ///   - loginItem: Open Stackly at login, read from the OS.
+    public init(model: DaemonModel, preferences: AppPreferences, loginItem: LoginItemModel) {
         self.model = model
         self.preferences = preferences
+        self.loginItem = loginItem
     }
 
     /// The Settings content.
     public var body: some View {
         TabView {
             Tab(SettingsTab.general.title, systemImage: SettingsTab.general.symbol) {
-                GeneralSettingsTab()
+                GeneralSettingsTab(loginItem: loginItem)
             }
             Tab(SettingsTab.instances.title, systemImage: SettingsTab.instances.symbol) {
                 InstancesSettingsTab(model: model)
@@ -41,8 +44,10 @@ public struct SettingsRoot: View {
     }
 }
 
-/// The General tab: Appearance and the Daemon section.
+/// The General tab: Appearance, the Startup group, and the Daemon section.
 struct GeneralSettingsTab: View {
+    let loginItem: LoginItemModel
+
     @Environment(DaemonModel.self) private var model: DaemonModel?
     @Environment(AppPreferences.self) private var preferences: AppPreferences?
 
@@ -64,6 +69,7 @@ struct GeneralSettingsTab: View {
                         .pickerStyle(.segmented)
                     }
                 }
+                StartupSettingsSection(model: model, loginItem: loginItem)
                 DaemonSettingsSection(model: model)
             }
             .formStyle(.grouped)

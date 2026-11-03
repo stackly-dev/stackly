@@ -26,7 +26,8 @@ struct StacklyApp: App {
 
         Settings {
             SettingsRoot(
-                model: appDelegate.runtime.model, preferences: appDelegate.runtime.preferences)
+                model: appDelegate.runtime.model, preferences: appDelegate.runtime.preferences,
+                loginItem: appDelegate.runtime.loginItem)
         }
 
         #if DEBUG

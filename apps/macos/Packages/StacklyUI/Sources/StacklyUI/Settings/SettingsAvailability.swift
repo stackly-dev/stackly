@@ -72,8 +72,8 @@ enum SettingsAvailability {
     /// The table, one entry per row.
     static let entries: [Entry] = [
         Entry(row: .appearance, tab: .general, owner: "feature 32", isBuilt: true),
-        Entry(row: .agentStartup, tab: .general, owner: "features 15 and 31", isBuilt: false),
-        Entry(row: .openAtLogin, tab: .general, owner: "feature 32", isBuilt: false),
+        Entry(row: .agentStartup, tab: .general, owner: "features 15 and 31", isBuilt: true),
+        Entry(row: .openAtLogin, tab: .general, owner: "feature 32", isBuilt: true),
         Entry(row: .daemon, tab: .general, owner: "features 13 and 30", isBuilt: true),
         Entry(row: .autostartNewInstances, tab: .instances, owner: "feature 32", isBuilt: true),
         Entry(
