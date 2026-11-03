@@ -150,3 +150,26 @@ Langkah build 12 dan 13. Langkah 13 (Keychain terkunci) dikerjakan lebih dulu; l
 #### Native
 
 - [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test supervisor native_keychain -- --ignored --test-threads 1` → keychain file di root sementara (login Keychain tidak disentuh), dikunci dengan `security lock-keychain`, lalu dibuka dengan `security unlock-keychain` → AC-15 · run 2026-11-03: FAIL. Pembacaan pertama dan kedua dari keychain yang dikunci dari luar menjawab `Backend { code: -60008 }` (`errAuthorizationInternal`) walau `state()` sesudahnya `Locked`, jadi start login berakhir `failed` dengan `secret.store_backend`, bukan blocker `needsSecret`, dan timer tidak punya apa pun untuk dicoba lagi. `map_status` di `crates/platform-macos/src/secret.rs` hanya memetakan -25293 dan -25308 ke `Locked`. Diusulkan: `-60008` dengan keychain terkunci menjadi `Locked`. File itu di luar kepemilikan milestone ini, jadi menunggu keputusan lead.
+
+### Langkah 12: Agent off (AC-19, AC-20), bagian yang tidak menyentuh protokol
+
+Selesai sampai batas kontrak: `ShutdownMode::AgentOff`, field `exiting` dan `stopAll` di `ShutdownAccepted`, dispatch `daemon.shutdown`, `stackly daemon uninstall`, dan tombol Turn Off… menunggu protokol 3.0 dari F32 di `main`, lalu bump minor 3.1.
+
+#### UI / manual
+
+- [ ] Buka `crates/core/src/operation/mod.rs` `begin_bypassing_quiesce` dan `scheduler.rs` → gerbang quiesce spec 0030 dilewati hanya lewat metode ini; `begin` biasa tetap menolak `Origin::Request` selama quiesce → AC-20
+- [ ] Buka `apps/daemon/src/ipc/agent_off.rs` → urutan: `replay_operation` lebih dulu; `registry.recovery_mode`, `daemon.shutting_down`, `daemon.restart_pending` tanpa efek; klaim satu `agent_off` per daemon dan gerbang ditutup; satu `stop_all_instances` (sumber `agent_off`) untuk himpunan `stop` ditambah `already_stopping`; `select` sekali lagi; keluar hanya kalau tidak ada `failed`, `skipped`, `stop`, `already_stopping`, atau `skipped` baru → AC-20
+- [ ] Buka `apps/daemon/src/ipc/operation.rs` `start_operation_gated` → selama `agent_off` aktif gerbang menjawab `daemon.shutting_down`, bukan `daemon.restart_pending` → AC-20
+- [ ] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Agent/TurnOffPlan.swift` → judul "Turn Off Background Agent?", isi dari `items` plus `alreadyStopping` dan jumlah instance `at_login`, tombol nonaktif bila `skipped` tidak kosong, dan kalimat penolakan "Background agent is still on. …" → AC-19, AC-20
+
+#### Commands
+
+- [ ] `cargo test -p stacklyd --test supervisor agent_off` → instance berhenti, daemon meminta stop (`exiting`), kunci yang sama menjawab sama, permintaan baru sesudahnya `daemon.shutting_down`; instance berlease environment membuat `exiting` false, gerbang dan klaim dicabut, daemon menerima start lagi; quiesce restart menolak dengan `daemon.restart_pending` dan `agent_off` kedua dengan `daemon.shutting_down` → AC-20
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter TurnOffPlanTests` → bentuk tunggal dan jamak, alasan skip, dan kalimat penolakan → AC-19, AC-20
+
+#### Belum (menunggu protokol 3.0 di `main`)
+
+- [ ] `ShutdownMode::AgentOff`, `ShutdownAccepted { exiting, stopAll }` (tidak lagi `Copy`), `idempotencyKey` wajib untuk `agent_off`, fixture, dan bump 3.1 → AC-17, AC-20
+- [ ] Dispatch `daemon.shutdown` memanggil `agent_off` dan mengubah `AgentOffOutcome` menjadi `ShutdownAccepted` → AC-20
+- [ ] `stackly daemon uninstall [--yes]` (konfirmasi `Confirm`, unregister hanya bila `exiting: true`, exit `conflict` bila tidak) → AC-18, AC-20
+- [ ] Tombol Turn Off… di Diagnostics: kirim `agent_off`, tunggu socket hilang, lalu `unregister` → AC-19, AC-20
