@@ -315,9 +315,11 @@ pub(crate) async fn replay(
 pub(crate) async fn begin(
     inner: &Arc<Inner>,
     mut request: BeginRequest,
+    bypass_quiesce: bool,
 ) -> Result<BeginOutcome, BeginError> {
     check_phase(inner)?;
-    if inner.quiesce.load(Ordering::SeqCst)
+    if !bypass_quiesce
+        && inner.quiesce.load(Ordering::SeqCst)
         && matches!(request.origin, Origin::Request(_))
         && request.kind != OperationKind::DaemonRestart
     {

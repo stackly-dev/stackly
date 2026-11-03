@@ -668,7 +668,7 @@ pub fn shutdown<'a>(
                 ));
             }
         }
-        if core.shutdown_pending() {
+        if core.shutdown_pending() || core.agent_off_active() {
             return Err(Box::new(ErrorBody::new(
                 &daemon::SHUTTING_DOWN,
                 "the daemon is already stopping",

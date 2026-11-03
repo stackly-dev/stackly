@@ -45,7 +45,7 @@ const POLL: Duration = Duration::from_millis(20);
 /// The method name the idempotency record keeps for `instance.stop_all`.
 const METHOD: &str = "instance.stop_all";
 
-fn unexpected(detail: &'static str) -> Box<ErrorBody> {
+pub(crate) fn unexpected(detail: &'static str) -> Box<ErrorBody> {
     Box::new(ErrorBody::new(
         &stackly_protocol::codes::internal::UNEXPECTED,
         detail,
@@ -74,7 +74,7 @@ fn item(entry: &CoreEntry) -> StopAllItem {
 }
 
 /// The selection the registry gives now.
-async fn current_selection(
+pub(crate) async fn current_selection(
     core: &DaemonCore,
 ) -> Result<stackly_core::instance::stop_all::StopAllSelection, Box<ErrorBody>> {
     let registry = core.registry().ok_or_else(|| {
@@ -126,15 +126,17 @@ pub fn preview(core: &DaemonCore) -> HandlerFuture<'_, Box<StopAllPreview>> {
 }
 
 /// What the journal input of a `stop_all_instances` holds.
-struct StopAllInput {
-    steps: Vec<Uuid>,
-    skipped: Vec<(Uuid, String)>,
+pub(crate) struct StopAllInput {
+    /// Who asks: `stop_all` or `agent_off`. A parsed input leaves it empty.
+    pub(crate) source: &'static str,
+    pub(crate) steps: Vec<Uuid>,
+    pub(crate) skipped: Vec<(Uuid, String)>,
 }
 
 impl StopAllInput {
-    fn to_json(&self) -> String {
+    pub(crate) fn to_json(&self) -> String {
         serde_json::json!({
-            "source": "stop_all",
+            "source": self.source,
             "steps": self.steps.iter().map(ToString::to_string).collect::<Vec<_>>(),
             "preSkipped": self
                 .skipped
@@ -167,13 +169,17 @@ impl StopAllInput {
                 ))
             })
             .collect::<Option<Vec<_>>>()?;
-        Some(Self { steps, skipped })
+        Some(Self {
+            source: "",
+            steps,
+            skipped,
+        })
     }
 }
 
 /// The reply of an operation that ended, from its state, its input, and its
 /// result: the same for the first answer and for a replay (spec 0031).
-fn reply_of(detail: &OperationDetailView) -> Result<StopAllResult, Box<ErrorBody>> {
+pub(crate) fn reply_of(detail: &OperationDetailView) -> Result<StopAllResult, Box<ErrorBody>> {
     let journal = &detail.view.journal;
     let id = detail.view.operation.id();
     let input = StopAllInput::parse(journal.input().as_str())
@@ -234,7 +240,7 @@ fn reply_of(detail: &OperationDetailView) -> Result<StopAllResult, Box<ErrorBody
 }
 
 /// Waits until the operation is final and reads it.
-async fn wait_final(
+pub(crate) async fn wait_final(
     core: &DaemonCore,
     operation: Uuid,
 ) -> Result<OperationDetailView, Box<ErrorBody>> {
@@ -272,6 +278,7 @@ pub fn stop_all<'a>(
         let selection = current_selection(core).await?;
         let steps: Vec<InstanceId> = selection.stop.iter().map(|entry| entry.id).collect();
         let input = StopAllInput {
+            source: "stop_all",
             steps: steps.iter().map(|id| id.as_uuid()).collect(),
             skipped: selection
                 .skipped
@@ -324,6 +331,7 @@ mod tests {
         let first = Uuid::now_v7();
         let second = Uuid::now_v7();
         let input = StopAllInput {
+            source: "stop_all",
             steps: vec![first],
             skipped: vec![(second, "supervisor.identity_unproven".to_owned())],
         };

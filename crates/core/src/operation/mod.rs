@@ -749,8 +749,32 @@ impl OperationEngine {
     /// Returns a [`BeginError`] in the check order of spec 0007; nothing is
     /// written then.
     pub async fn begin(&self, request: BeginRequest) -> Result<BeginOutcome, BeginError> {
+        self.begin_gated(request, false).await
+    }
+
+    /// Starts an operation like [`begin`](Self::begin), but a request from a
+    /// client passes the quiesce gate of a planned restart. Only the
+    /// handler of `daemon.shutdown` `agent_off` uses it, for the one
+    /// operation that stops the instances (spec 0031, *Matikan agent*).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`BeginError`] in the check order of spec 0007, except
+    /// that [`BeginError::RestartPending`] never comes from the gate.
+    pub async fn begin_bypassing_quiesce(
+        &self,
+        request: BeginRequest,
+    ) -> Result<BeginOutcome, BeginError> {
+        self.begin_gated(request, true).await
+    }
+
+    async fn begin_gated(
+        &self,
+        request: BeginRequest,
+        bypass_quiesce: bool,
+    ) -> Result<BeginOutcome, BeginError> {
         let inner = Arc::clone(&self.inner);
-        tokio::spawn(async move { scheduler::begin(&inner, request).await })
+        tokio::spawn(async move { scheduler::begin(&inner, request, bypass_quiesce).await })
             .await
             .unwrap_or_else(|_| {
                 Err(BeginError::Registry(RegistryError::Io {
