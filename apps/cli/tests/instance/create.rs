@@ -870,9 +870,11 @@ fn the_form_gets_the_revision_and_a_refused_form_ends_the_command_without_a_crea
     ev.pass();
 }
 
-/// Spec 0031 AC-18.
+/// Spec 0031 AC-18 and spec 0032 AC-18: `--autostart` sends `at_login`,
+/// `--no-autostart` sends `manual`, and with neither no policy is sent, so
+/// the daemon uses its default setting.
 #[test]
-fn create_sends_startup_at_login_only_with_autostart() {
+fn create_sends_the_startup_a_flag_names_and_none_without_a_flag() {
     let root = TestRoot::new().expect("a test root is made");
     let daemon = ScriptedDaemon::serve(
         &root,
@@ -882,17 +884,32 @@ fn create_sends_startup_at_login_only_with_autostart() {
     with.extend(["--autostart", "--idempotency-key", KEY, "--json"]);
     let mut without = base();
     without.extend(["--idempotency-key", "create-demo-0002", "--json"]);
+    let mut manual = base();
+    manual.extend([
+        "--no-autostart",
+        "--idempotency-key",
+        "create-demo-0003",
+        "--json",
+    ]);
+    let mut both = base();
+    both.extend(["--autostart", "--no-autostart"]);
 
     let first = run(root.path(), &with);
     let second = run(root.path(), &without);
+    let third = run(root.path(), &manual);
+    let conflict = run(root.path(), &both);
 
     assert_eq!(first.code, Some(0), "{first:?}");
     assert_eq!(second.code, Some(0), "{second:?}");
+    assert_eq!(third.code, Some(0), "{third:?}");
+    assert_eq!(conflict.code, Some(2), "the two flags exclude each other");
     let sent = params(&daemon);
+    assert_eq!(sent.len(), 3);
     assert_eq!(sent[0]["startup"], "at_login");
     assert_eq!(
         sent[1]["startup"],
         serde_json::Value::Null,
-        "no flag sends no policy, so the daemon keeps manual"
+        "no flag sends no policy, so the daemon uses its default setting"
     );
+    assert_eq!(sent[2]["startup"], "manual");
 }

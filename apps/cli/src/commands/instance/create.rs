@@ -78,6 +78,9 @@ pub struct CreateArgs {
     /// Start the instance at every login, without opening the app
     #[arg(long)]
     pub autostart: bool,
+    /// Start it only when asked, also when new instances start at login by default
+    #[arg(long, conflicts_with = "autostart")]
+    pub no_autostart: bool,
     /// Only judge the draft: print the preflight and exit 0 when it is ready, without creating anything
     #[arg(long)]
     pub dry_run: bool,
@@ -207,9 +210,16 @@ pub(super) fn plan_source(source: &SecretSource) -> PlanSource {
 
 impl CreateArgs {
     /// The startup policy these flags ask for: `at_login` with `--autostart`,
-    /// else none is sent and the daemon keeps `manual`.
+    /// `manual` with `--no-autostart`, and with neither none is sent, so the
+    /// daemon uses its default setting (spec 0032, AC-18).
     fn startup(&self) -> Option<StartupPolicyKind> {
-        self.autostart.then_some(StartupPolicyKind::AtLogin)
+        if self.autostart {
+            Some(StartupPolicyKind::AtLogin)
+        } else if self.no_autostart {
+            Some(StartupPolicyKind::Manual)
+        } else {
+            None
+        }
     }
 
     /// The secret sources these flags name, the last one for a field

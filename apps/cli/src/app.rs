@@ -21,6 +21,8 @@ use crate::commands::operation::OperationCommand;
 use crate::commands::provider::ProviderCommand;
 use crate::commands::runtime::RuntimeCommand;
 use crate::commands::secret::SecretCommand;
+use crate::commands::settings::SettingsCommand;
+use crate::commands::storage::StorageCommand;
 use crate::context::Context;
 use crate::env;
 use crate::exit::{EXIT_SUCCESS, EXIT_TABLE, EXIT_USAGE};
@@ -130,6 +132,12 @@ pub enum Command {
     /// Store, inspect, reveal, or delete secrets in the Keychain
     #[command(subcommand, arg_required_else_help = true)]
     Secret(SecretCommand),
+    /// Show or change the daemon settings
+    #[command(subcommand, arg_required_else_help = true)]
+    Settings(SettingsCommand),
+    /// Choose where new instances, logs, and downloads go
+    #[command(subcommand, arg_required_else_help = true)]
+    Storage(StorageCommand),
     /// Write the completion script of a shell
     #[command(after_help = "Examples:\n  stackly completion zsh\n  stackly completion bash --json")]
     Completion(CompletionArgs),
@@ -151,6 +159,8 @@ impl Command {
             Self::Provider(command) => command.run(cx).await,
             Self::Runtime(command) => command.run(cx).await,
             Self::Secret(command) => command.run(cx).await,
+            Self::Settings(command) => command.run(cx).await,
+            Self::Storage(command) => command.run(cx).await,
             Self::Completion(args) => execute(args, cx).await,
             Self::Manpage(args) => execute(args, cx).await,
         }
