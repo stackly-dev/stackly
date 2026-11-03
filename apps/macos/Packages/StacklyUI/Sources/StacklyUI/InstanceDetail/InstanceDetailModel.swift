@@ -84,7 +84,9 @@ public final class InstanceDetailModel {
     public var autostartContext: AutostartContext { service.autostartContext() }
 
     /// Turns "Start at login" on or off with `instance.set_startup` (spec 0031, AC-16). The
-    /// summary follows with the daemon's `instance.state_changed`.
+    /// summary follows with the daemon's `instance.state_changed`. The request carries the
+    /// revision of the summary the row shows, so a change made elsewhere since then is
+    /// refused with `resource.revision_mismatch` and nothing is written.
     /// - Parameter enabled: Whether the instance starts at login.
     /// - Returns: How the mutation ended.
     @MainActor
@@ -94,7 +96,8 @@ public final class InstanceDetailModel {
         }
         isChangingAutostart = true
         defer { isChangingAutostart = false }
-        return await service.setStartup(instanceId, enabled ? .atLogin : .manual)
+        return await service.setStartup(
+            instanceId, enabled ? .atLogin : .manual, observedRevision)
     }
 
     // MARK: - Loading
