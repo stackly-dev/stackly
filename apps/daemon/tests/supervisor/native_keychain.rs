@@ -108,6 +108,9 @@ async fn a_locked_file_keychain_holds_the_login_start_and_the_retry_starts_it_wh
         })
         .await;
     assert_eq!(blocked.lifecycle, InstanceLifecycle::Stopped);
+    // launchd starts SecurityAgent a few milliseconds after securityd asks
+    // for it, so the list is read after a pause.
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     assert_eq!(
         security_agents(),
         agents_before,
