@@ -127,6 +127,7 @@ struct CreateInstanceModelTests {
 
         rig.model.setStartAtLogin(true)
         await settle("a preflight") { rig.service.preflightCalls.count == before + 1 }
+        await settle("its reply") { rig.model.createDisabledReason == nil }
         #expect(rig.service.preflightCalls.last?.startup == .atLogin)
 
         await creating(
@@ -148,6 +149,7 @@ struct CreateInstanceModelTests {
             endpoints: form.endpoints, fields: form.fields, capabilities: form.capabilities)
     }
 
+    // covers: AC-18, AC-19
     @Test func theToggleStartsAtTheDaemonsDefaultStartup() async {
         let form = Self.form(startupDefault: .atLogin)
         let rig = await editing { $0.service.onForm = { _ in form } }
@@ -156,6 +158,7 @@ struct CreateInstanceModelTests {
         #expect(rig.model.form?.dataLocation == "/Volumes/Work/Stackly")
     }
 
+    // covers: AC-18
     @Test func turningTheDefaultOffSendsAnExplicitManualPolicy() async throws {
         let form = Self.form(startupDefault: .atLogin)
         let rig = await editing { $0.service.onForm = { _ in form } }
@@ -166,6 +169,7 @@ struct CreateInstanceModelTests {
         #expect(rig.model.startAtLogin == false)
     }
 
+    // covers: AC-18
     @Test func aChoiceSurvivesChangingTheRuntime() async {
         let form = Self.form(startupDefault: .atLogin)
         let rig = await editing { $0.service.onForm = { _ in form } }
@@ -484,6 +488,7 @@ struct CreateInstanceModelTests {
             rig,
             secrets: [SecretFieldInput(field: "superuserPassword", input: .value("typed-text"))])
         await settle("another preflight") { rig.service.preflightCalls.count == before + 1 }
+        await settle("its reply") { rig.model.currentPreflight != nil }
 
         #expect(rig.model.phase == .editing)
         #expect(

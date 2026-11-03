@@ -33,6 +33,7 @@ fn patch(telemetry: bool) -> SettingsPatch {
     }
 }
 
+// covers: AC-16, AC-17
 #[test]
 fn an_update_checks_the_revision_then_whether_anything_changes() {
     let root = TestRoot::new().unwrap();
@@ -72,6 +73,7 @@ fn an_update_checks_the_revision_then_whether_anything_changes() {
     ));
 }
 
+// covers: AC-19
 #[test]
 fn a_location_change_to_the_built_in_default_is_already_done() {
     let root = TestRoot::new().unwrap();
@@ -129,6 +131,7 @@ fn manifest(fake: &FakePlatform, id: InstanceId) -> InstanceManifest {
     })
 }
 
+// covers: AC-19
 #[test]
 fn the_inventory_lists_the_instances_of_a_custom_data_location_and_skips_a_gone_disk() {
     let root = TestRoot::new().unwrap();
