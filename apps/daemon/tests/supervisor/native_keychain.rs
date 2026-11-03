@@ -17,7 +17,7 @@ use serde_json::json;
 use stackly_platform_macos::{KeychainTarget, MacosSecretStore};
 use stackly_protocol::instance::{InstanceBlocker, InstanceLifecycle, InstanceReadinessState};
 use stackly_testkit::FakeLoginSessionInfo;
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Kind, Source, evidence};
 
 use crate::login::{launchd, set_at_login, start, stop};
 use crate::support::Site;
@@ -58,6 +58,12 @@ async fn a_locked_file_keychain_holds_the_login_start_and_the_retry_starts_it_wh
         );
         return;
     }
+    let macos = Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .expect("sw_vers runs");
+    ev.subject("macos-keychain", &macos, None, Source::External);
     let mut site = Site::new();
     let dir = site.root.path().join("keychain-native");
     let target = KeychainTarget::in_dir(&dir);
@@ -106,7 +112,9 @@ async fn a_locked_file_keychain_holds_the_login_start_and_the_retry_starts_it_wh
     api.stop_when_free(id).await;
     drop(api);
     stop(second).await;
-    ev.pass();
+    ev.pass_with(
+        "locked file keychain: the login start left the instance stopped with a needsSecret blocker; after unlock-keychain the secret_retry start ran it and the blocker went",
+    );
 }
 
 fn path_text(path: &Path) -> &str {
