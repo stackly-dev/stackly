@@ -170,3 +170,25 @@ Protokol 3.1 (`ShutdownMode::AgentOff`, `ShutdownAccepted { exiting, stopAll }` 
 - [ ] `cargo test -p stackly-cli` → enam skenario `daemon uninstall` (unregister sesudah exit, tetap terdaftar dengan `cli.agent_off_blocked`, `skipped` menahan sebelum mengirim, ditolak konfirmasi, tanpa daemon, tidak terdaftar) → AC-18, AC-20
 - [ ] `cargo xtask codegen --check` dan `cargo test -p stackly-protocol` → fixture `daemon.shutdown` `agent_off` (permintaan, jawaban keluar, jawaban tetap), jawaban `stop` dan `restart` membawa `exiting: true`, kode `cli.agent_off_blocked`, 3.1 → AC-17
 - [ ] `swift test --package-path clients/swift` dan `--filter TurnOffModelTests`, `TurnOffPlanTests` pada StacklyUI → semua lulus → AC-17, AC-19, AC-20
+
+## Milestone 5: Bukti native
+
+Langkah build 14 (AC-21), bagian yang bisa dibuat tanpa user: job launchd dengan label uji `dev.stackly.test.agent.*` di `gui/<uid>`. Login Keychain tidak disentuh. Keychain terkunci sudah dicatat di Milestone 4 (`native_keychain`).
+
+### Native
+
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_session -- --ignored --test-threads 1` → dua record native, PASS, 0 problems, 27,9 detik, subject `launchd` → AC-11, AC-13, AC-21
+  - `kickstart_ends_the_session_and_the_next_daemon_starts_the_instance_again`: daemon pertama merotasi `first`; instance `keep` jalan dan instance `user` dihentikan orang. `launchctl kickstart -k` mengirim `SIGTERM` tanpa `daemon.shutdown` lebih dulu, jadi *Akhir sesi* berjalan: `keep` berhenti dengan desired tetap `running`, daemon keluar tanpa `SIGKILL` (last exit bukan 9). Daemon berikutnya melaporkan sesi yang sama dan rotasi `continued`, menyalakan `keep` lagi dengan pid lain, dan `user` tetap `stopped` tanpa proses.
+  - `bootout_and_bootstrap_end_the_session_and_the_next_daemon_starts_the_instance_again`: sama lewat `bootout` lalu `bootstrap`; sesudah `bootout` tidak ada daemon dan tidak ada proses instance, sesudah `bootstrap` rotasi `continued` di sesi yang sama dan `keep` menyala lagi.
+
+### Temuan: tes native lama yang bertabrakan dengan AC-11
+
+- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd a_fake_instance_survives -- --ignored --test-threads 1` → FAIL (2026-11-03) di `get_until(.. same_process)` sesudah `kickstart -k`. Tes ini (spec 0015 AC-16) menuntut instance tetap jalan lewat `kickstart -k` dan `bootout`. Sejak spec 0031 AC-11, `SIGTERM` di konteks launchd tanpa `daemon.shutdown` adalah *Akhir sesi*, yang menghentikan instance. Yang tetap diadopsi hanya restart terencana (`daemon.shutdown` `restart`, spec 0030), `SIGKILL`, dan crash. Varian PostgreSQL 17, PostgreSQL 18, dan NATS di `native_launchd.rs` (`survives_every_end`) memakai urutan yang sama, jadi diduga gagal pada langkah `kickstart -k` dan `bootout` (belum dijalankan, butuh runtime native). Tes ini perlu diubah oleh pemilik spec 0015 dan 0030; saya tidak mengubahnya.
+
+### BLOCKED
+
+- [ ] Login nyata: sesi baru (asid baru) membuat rotasi `new` dan menyalakan instance `at_login` → BLOCKED · reason: keputusan user 2026-11-03, tidak ada login atau logout nyata · owner: @ojiepermana
+- [ ] Logout nyata: macOS mengirim `SIGTERM` ke job launchd saat logout dan menunggu `ExitTimeOut` 30 detik → BLOCKED · reason: keputusan user 2026-11-03, tidak ada logout nyata · owner: @ojiepermana
+- [ ] Reboot nyata: boot baru dengan login baru tidak menyalakan apa pun sebelum login dan sesi baru menyalakan instance `at_login` → BLOCKED · reason: keputusan user 2026-11-03, tidak ada reboot nyata · owner: @ojiepermana
+- [ ] Login Items yang dicabut: instance `at_login` menampilkan "Won’t start at login" dan Stackly tidak mendaftarkan ulang agent → BLOCKED · reason: keputusan user 2026-11-03, tidak mengubah Login Items nyata · owner: @ojiepermana
+- [ ] Spike audit session lintas sleep dan dua logout (langkah 1) dan spike logout (langkah 10) tetap BLOCKED seperti di Milestone 3 → owner: @ojiepermana
