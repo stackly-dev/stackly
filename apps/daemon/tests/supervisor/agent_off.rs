@@ -1,6 +1,5 @@
 //! The part of `daemon.shutdown` `agent_off` that stops the instances (spec
-//! 0031 AC-20), called in process because the mode itself arrives with the
-//! protocol: it stops what `stop_all::select` chose, exits only when the last
+//! 0031 AC-20), first called in process and then over the socket: it stops what `stop_all::select` chose, exits only when the last
 //! selection is empty, answers a repeated key the same, and keeps the daemon
 //! up with the gate lifted when an instance cannot be stopped.
 
@@ -37,14 +36,11 @@ fn context(key: &str) -> RequestContext {
     context
 }
 
-/// The fingerprint of a stop request; the mode `agent_off` has no wire value
-/// before the protocol adds it, so the test names the call by `stop`.
+/// The fingerprint of the `agent_off` request.
 fn fingerprint() -> [u8; 32] {
-    request_fingerprint(&Call::DaemonShutdown(ShutdownParams {
-        mode: ShutdownMode::Stop,
-        expected_plan_digest: None,
-        force: false,
-    }))
+    request_fingerprint(&Call::DaemonShutdown(ShutdownParams::new(
+        ShutdownMode::AgentOff,
+    )))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -171,6 +167,57 @@ async fn a_planned_restart_in_progress_and_a_second_agent_off_are_refused_with_n
         .expect_err("only one agent off runs at a time");
     assert_eq!(second.code(), "daemon.shutting_down");
     core.end_agent_off();
+    daemon
+        .shutdown(ShutdownReason::Requested, std::future::pending())
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn agent_off_over_the_socket_needs_a_key_and_asks_the_daemon_to_exit() {
+    use stackly_ipc::CallOptions;
+    use stackly_protocol::Reply;
+
+    let site = Site::new();
+    let daemon = site.start().await;
+    let api = site.api().await;
+    let a = api.create_ready("alpha", json!({})).await;
+    api.start_ready(a).await;
+
+    let keyless = api
+        .client
+        .call_detailed(
+            Call::DaemonShutdown(ShutdownParams::new(ShutdownMode::AgentOff)),
+            CallOptions::default(),
+        )
+        .await
+        .expect_err("agent off needs an idempotency key");
+    assert_eq!(keyless.code(), "operation.idempotency_key_required");
+    assert!(
+        !daemon.core().shutdown_pending(),
+        "a refused request changes nothing"
+    );
+
+    let accepted = match api
+        .client
+        .call_detailed(
+            Call::DaemonShutdown(ShutdownParams::new(ShutdownMode::AgentOff)),
+            CallOptions::default().with_idempotency_key(key()),
+        )
+        .await
+        .expect("agent off is accepted")
+    {
+        Reply::DaemonShutdown(accepted) => accepted,
+        other => panic!("not a shutdown reply: {other:?}"),
+    };
+
+    assert_eq!(accepted.mode, ShutdownMode::AgentOff);
+    assert!(accepted.exiting);
+    assert_eq!(accepted.stop_all.expect("the stop result").stopped, vec![a]);
+    let mode = tokio::time::timeout(std::time::Duration::from_secs(5), daemon.stop_requested())
+        .await
+        .expect("the daemon asks for its stop order");
+    assert_eq!(mode, ShutdownMode::Stop);
+    drop(api);
     daemon
         .shutdown(ShutdownReason::Requested, std::future::pending())
         .await;

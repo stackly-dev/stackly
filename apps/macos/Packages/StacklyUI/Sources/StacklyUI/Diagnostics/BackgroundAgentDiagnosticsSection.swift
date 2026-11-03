@@ -8,6 +8,7 @@ struct BackgroundAgentDiagnosticsSection: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @State private var confirmation: ConfirmationRequest?
 
     var body: some View {
         if let model, let agent = model.agent {
@@ -33,6 +34,10 @@ struct BackgroundAgentDiagnosticsSection: View {
                     Button(action.title) { perform(action, agent: agent) }
                         .disabled(agent.isWorking)
                 }
+                if agent.assessment?.state == .enabled {
+                    Button("Turn Off…") { Task { await model.turnOff.begin() } }
+                        .disabled(agent.isWorking || model.turnOff.phase != .idle)
+                }
                 Button("Check Again") { Task { await agent.refresh() } }
                     .disabled(agent.isWorking)
                 Button("Copy Details") {
@@ -41,7 +46,21 @@ struct BackgroundAgentDiagnosticsSection: View {
             }
             .buttonStyle(.bordered)
             .padding(.top, Spacing.s4)
+            if let message = model.turnOff.message {
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(StacklyColor.textSecondary)
+            }
         }
+        .onChange(of: model.turnOff.plan) { _, plan in
+            confirmation = plan.map { plan in
+                ConfirmationRequest(
+                    title: plan.title, message: plan.message, actionTitle: "Turn Off",
+                    role: .destructive,
+                    perform: { Task { await model.turnOff.confirm() } })
+            }
+        }
+        .stacklyConfirmation(item: $confirmation)
     }
 
     /// The actions that fit `state`, as the banner offers them. Start stacklyd shows for an

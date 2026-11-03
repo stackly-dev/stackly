@@ -111,6 +111,8 @@ public final class DaemonModel {
     public let restart: DaemonRestartModel
     /// The daemon's settings and storage locations, for the Settings window (spec 0032).
     public let settings: SettingsStore
+    /// Turn Off… of the background agent (spec 0031).
+    public let turnOff: TurnOffModel
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
     /// the model is created; the agent model learned the same value at creation.
     public internal(set) var rootOverrideActive = false
@@ -240,12 +242,44 @@ public final class DaemonModel {
             client: SettingsClient { call, key, options throws(ClientError) in
                 try await link.call(call, key, options)
             })
+        let turnOffAgent = agent
+        turnOff = TurnOffModel(
+            preview: { () throws(ClientError) in try await restartClient.previewTurnOff() },
+            atLoginCount: { [instances] in
+                instances.instances.filter { $0.autostart?.policy == .atLogin }.count
+            },
+            names: { [instances] in
+                Dictionary(
+                    instances.instances.map { ($0.id, $0.name) },
+                    uniquingKeysWith: { first, _ in first })
+            },
+            agentOff: { key in
+                do throws(ClientError) {
+                    return .accepted(try await restartClient.agentOff(idempotencyKey: key))
+                } catch {
+                    switch error {
+                    case .rejected(let body): return .rejected(body)
+                    case .notSent(let body): return .notSent(body)
+                    case .outcomeUnknown(let body): return .outcomeUnknown(body)
+                    }
+                }
+            },
+            unregister: { await turnOffAgent?.turnOff() })
         mutationPathBox = mutations
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
 
             systemRetry: { [weak self] in self?.systemRetry() })
         mutationPathBox.path = MutationPath(model: self)
+        turnOff.attach(daemonGone: { [weak self] in
+            // The daemon closes its socket on the way out; wait for the link to see that.
+            for _ in 0..<40 {
+                guard let model = self else { return true }
+                if model.presence.isUnreachable { return true }
+                try? await model.sleep(.milliseconds(500))
+            }
+            return false
+        })
     }
 
     /// Whether mutations can run, from the presentation.

@@ -295,6 +295,23 @@ impl CliFailure {
         )
     }
 
+    /// `cli.agent_off_blocked` (spec 0031, *Matikan agent*): the daemon
+    /// stayed up because `blockers` could not be stopped, so nothing was
+    /// unregistered.
+    #[must_use]
+    pub fn agent_off_blocked(stopped: usize, blockers: &[String]) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::AGENT_OFF_BLOCKED,
+                format!(
+                    "the background agent is still on: stopped {stopped} instances, and these could not be stopped: {}",
+                    blockers.join(", ")
+                ),
+            )
+            .with_detail("count", blockers.len().to_string()),
+        )
+    }
+
     /// `cli.agent_not_bundled`: the executable `executable` is not inside
     /// the Stackly app bundle.
     #[must_use]
@@ -649,6 +666,7 @@ mod tests {
             CliFailure::runtime_ambiguous("postgresql@18", &[Uuid::nil(), Uuid::max()]),
             CliFailure::panic(),
             CliFailure::agent_root_override(),
+            CliFailure::agent_off_blocked(1, &["orders-db · it didn’t stop in time".to_owned()]),
             CliFailure::agent_not_bundled("/work/target/debug/stackly"),
             CliFailure::agent_helper_missing("/Applications/Stackly.app"),
             CliFailure::agent_not_registered(),

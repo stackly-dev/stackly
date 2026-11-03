@@ -19,8 +19,8 @@ use uuid::Uuid;
 use super::agent::AgentEnv;
 use super::plan::PlanPrompt;
 use super::wait::{
-    BoxFuture, DaemonProbe, Interrupt, LaunchRecordSource, PlanWatch, Reachable, RestartHandover,
-    RestartRequest, Shutdown,
+    AgentOffPreview, AgentOffReply, BoxFuture, DaemonProbe, Interrupt, LaunchRecordSource,
+    PlanWatch, Reachable, RestartHandover, RestartRequest, Shutdown,
 };
 use crate::failure::CliFailure;
 
@@ -85,6 +85,9 @@ pub struct ScriptedProbe {
     watch_hangs: bool,
     restart_hangs: bool,
     infos: Mutex<Option<DaemonInfo>>,
+    off_preview: Mutex<Option<Result<AgentOffPreview, CliFailure>>>,
+    off_reply: Mutex<Option<Result<AgentOffReply, CliFailure>>>,
+    off_keys: Mutex<Vec<String>>,
 }
 
 /// A preview with no instances for a launchd daemon.
@@ -117,7 +120,39 @@ impl ScriptedProbe {
             watch_hangs: false,
             restart_hangs: false,
             infos: Mutex::new(None),
+            off_preview: Mutex::new(None),
+            off_reply: Mutex::new(None),
+            off_keys: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The answer to the Turn Off preview; with none, the probe follows its
+    /// attempts.
+    #[must_use]
+    pub fn on_agent_off_preview(self, result: Result<AgentOffPreview, CliFailure>) -> Self {
+        *self
+            .off_preview
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(result);
+        self
+    }
+
+    /// The answer to the `agent_off` request.
+    #[must_use]
+    pub fn on_agent_off(self, result: Result<AgentOffReply, CliFailure>) -> Self {
+        *self
+            .off_reply
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(result);
+        self
+    }
+
+    /// The idempotency keys of the `agent_off` requests so far.
+    pub fn agent_off_keys(&self) -> Vec<String> {
+        self.off_keys
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     /// The next preview the probe answers; with none queued, an empty one.
@@ -318,6 +353,41 @@ impl DaemonProbe for ScriptedProbe {
                     plan: None,
                     eof: shutdown.eof,
                 })
+        })
+    }
+
+    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
+        Box::pin(async move {
+            if let Some(result) = self
+                .off_preview
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+            {
+                return result;
+            }
+            Err((self.attempt)(usize::MAX, self.started.elapsed())
+                .err()
+                .unwrap_or_else(missing))
+        })
+    }
+
+    fn agent_off(
+        &self,
+        idempotency_key: &str,
+        _eof_limit: Duration,
+    ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>> {
+        let key = idempotency_key.to_owned();
+        Box::pin(async move {
+            self.off_keys
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(key);
+            self.off_reply
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+                .unwrap_or_else(|| Err(missing()))
         })
     }
 

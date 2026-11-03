@@ -689,6 +689,9 @@ pub fn shutdown<'a>(
     context: &RequestContext,
     params: ShutdownParams,
 ) -> HandlerFuture<'a, ShutdownAccepted> {
+    if params.mode == ShutdownMode::AgentOff {
+        return crate::ipc::agent_off::shutdown(core, context, params);
+    }
     if params.mode == ShutdownMode::Restart
         && restart::launch_context(core) == LaunchContextKind::Launchd
     {
@@ -736,6 +739,8 @@ pub fn shutdown<'a>(
             server_instance_id: core.start_info().server_instance_id,
             mode,
             plan_id: None,
+            exiting: true,
+            stop_all: None,
         })
     })
 }

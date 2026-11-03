@@ -212,6 +212,31 @@ public final class BackgroundAgentModel {
         }
     }
 
+    /// Turn Off: unregisters the agent, after the daemon exited (spec 0031, *Matikan agent*,
+    /// step 3). It only runs for a person who confirmed Turn Off, never by itself.
+    func turnOff() async {
+        guard isWorking == false, rootOverrideActive == false, isStopped == false else { return }
+        isWorking = true
+        actionRunning = true
+        lastError = nil
+        if let task = refreshTask { await task.value }
+        var result: Result<AgentProbe, AgentActionError>
+        do {
+            result = .success(try await controller.unregister())
+        } catch {
+            fail(with: error)
+            result = await readStatus()
+        }
+        guard Task.isCancelled == false, isStopped == false else {
+            actionRunning = false
+            return
+        }
+        let record = await launchRecord.read()
+        apply(result, record: record, justRegistered: false, report: true)
+        actionRunning = false
+        isWorking = false
+    }
+
     /// Open Login Items: opens System Settings. It changes nothing.
     func openLoginItems() {
         controller.openApprovalSettings()
@@ -440,7 +465,7 @@ public final class BackgroundAgentModel {
 
 extension DaemonPresence {
     /// Whether the presence is `unreachable`.
-    fileprivate var isUnreachable: Bool {
+    var isUnreachable: Bool {
         if case .unreachable = self { return true }
         return false
     }

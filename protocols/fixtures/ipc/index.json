@@ -1931,6 +1931,21 @@
       "langs": [
         "rust"
       ]
+    },
+    {
+      "file": "request-shutdown-agent-off.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-shutdown-agent-off.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-shutdown-agent-off-staying.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

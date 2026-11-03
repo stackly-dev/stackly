@@ -36,7 +36,9 @@ struct DaemonRestartModelTests {
     }
 
     private static let accepted = RestartOutcome.accepted(
-        ShutdownAccepted(serverInstanceId: UUID(), mode: .restart, planId: F.planID))
+        ShutdownAccepted(
+            serverInstanceId: UUID(), mode: .restart, planId: F.planID, exiting: true, stopAll: nil)
+    )
 
     static func refusal(_ code: String) -> ErrorBody {
         ErrorBody(
@@ -309,7 +311,8 @@ struct DaemonRestartModelTests {
 
     @Test func aRestartInRecoveryModeWritesNoPlanSoNothingWaitsForOne() async {
         let unplanned = RestartOutcome.accepted(
-            ShutdownAccepted(serverInstanceId: UUID(), mode: .restart, planId: nil))
+            ShutdownAccepted(
+                serverInstanceId: UUID(), mode: .restart, planId: nil, exiting: true, stopAll: nil))
         let script = Script(previews: [.success(F.preview())], outcomes: [unplanned])
         let model = script.model()
         await model.begin()

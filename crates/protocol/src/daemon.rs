@@ -10,6 +10,7 @@ use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
 use crate::restart::{RestartPlanView, is_plan_digest};
 use crate::secret::SecretStoreStatus;
+use crate::stop_all::StopAllResult;
 use crate::version::ProtocolVersion;
 use crate::wire::{Count, Timestamp};
 
@@ -206,6 +207,10 @@ pub enum ShutdownMode {
     /// Stop so launchd starts the daemon again; the process exits 75. Only
     /// a `launchd` daemon accepts it.
     Restart,
+    /// Stop the instances the daemon can stop, then exit 0 only when none is
+    /// left, so the client can unregister the background agent (spec 0031,
+    /// *Matikan agent*). It needs the request's `idempotencyKey`.
+    AgentOff,
     /// A mode this build does not know. A client never sends it.
     #[serde(other)]
     Unrecognized,
@@ -214,7 +219,7 @@ pub enum ShutdownMode {
 /// Reply of `daemon.shutdown`, queued before the first step of the stop
 /// order so it is flushed with the connections.
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ShutdownAccepted {
     /// The daemon run that accepted the request.
@@ -225,6 +230,15 @@ pub struct ShutdownAccepted {
     /// `daemon.restart_plan` events (spec 0030).
     #[serde(default)]
     pub plan_id: Option<Uuid>,
+    /// Whether the daemon goes on to exit. Always true for `stop` and
+    /// `restart`; for `agent_off` false when an instance could not be
+    /// stopped, and the daemon stays up (spec 0031, *Matikan agent*).
+    #[serde(default)]
+    pub exiting: bool,
+    /// What `agent_off` stopped, failed on, and skipped; null for `stop` and
+    /// `restart`.
+    #[serde(default)]
+    pub stop_all: Option<StopAllResult>,
 }
 
 /// The daemon's resolved (not canonical) roots, as lossy UTF-8 text.
