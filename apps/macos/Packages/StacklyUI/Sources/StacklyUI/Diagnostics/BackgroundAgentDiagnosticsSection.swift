@@ -53,7 +53,7 @@ struct BackgroundAgentDiagnosticsSection: View {
             }
         }
         .onChange(of: model.turnOff.plan) { _, plan in
-            confirmation = plan.map { plan in
+            confirmation = (model.turnOff.origin == .diagnostics ? plan : nil).map { plan in
                 ConfirmationRequest(
                     title: plan.title, message: plan.message, actionTitle: "Turn Off",
                     role: .destructive,

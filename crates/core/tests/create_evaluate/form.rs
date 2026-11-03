@@ -3,9 +3,9 @@
 
 use stackly_core::catalog::{CatalogEntry, CatalogState};
 use stackly_core::instance::create::{
-    FormError, PortRequestDraft, build_form, names_of, select_provider, suggested_name,
+    FormError, PortRequestDraft, build_form, evaluate, names_of, select_provider, suggested_name,
 };
-use stackly_domain::{InstanceName, RuntimeState};
+use stackly_domain::{InstanceName, RuntimeState, StartupPolicy};
 use stackly_evidence::{Kind, evidence};
 use stackly_testkit::RuntimeBuilder;
 
@@ -204,4 +204,32 @@ fn the_runtime_label_is_software_at_version_when_one_installed_runtime_matches()
     draft.runtime_id = crate::common::unused_runtime();
     let command = site.evaluate(&draft).command;
     assert_eq!(command.runtime_label, draft.runtime_id.to_string());
+}
+
+// covers: AC-18
+#[test]
+fn the_command_says_no_autostart_only_against_an_at_login_default() {
+    let site = Site::new();
+    let mut draft = site.draft("orders");
+    let mut facts = site.facts(&draft);
+
+    // Manual asked, and the default is manual: nothing to say.
+    facts.locations.startup_default = StartupPolicy::Manual;
+    let command = evaluate(&draft, &facts).command;
+    assert!(!command.autostart && !command.no_autostart);
+
+    // Manual asked against an at login default: the command must say so.
+    facts.locations.startup_default = StartupPolicy::AtLogin;
+    let command = evaluate(&draft, &facts).command;
+    assert!(command.no_autostart && !command.autostart);
+
+    // At login asked: `--autostart`, whatever the default.
+    draft.startup = Some(StartupPolicy::AtLogin);
+    let command = evaluate(&draft, &facts).command;
+    assert!(command.autostart && !command.no_autostart);
+
+    // No policy asked: the default decides, so the command says nothing.
+    draft.startup = None;
+    let command = evaluate(&draft, &facts).command;
+    assert!(!command.autostart && !command.no_autostart);
 }

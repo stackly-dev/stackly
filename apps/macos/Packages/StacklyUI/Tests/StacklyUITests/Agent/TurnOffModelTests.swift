@@ -66,6 +66,17 @@ struct TurnOffModelTests {
         #expect(model.phase == .idle)
     }
 
+    @Test func theConfirmationBelongsToTheWindowThatAskedForIt() async {
+        let model = Script(preview: Self.preview(), outcomes: [Self.accepted(exiting: true)])
+            .model()
+        await model.begin()
+        #expect(model.origin == .diagnostics)
+        model.cancel()
+        await model.begin(from: .settings)
+        #expect(model.origin == .settings)
+        #expect(model.plan != nil)
+    }
+
     @Test func aDaemonThatExitsIsFollowedByTheUnregister() async {
         let script = Script(preview: Self.preview(), outcomes: [Self.accepted(exiting: true)])
         let model = script.model()
