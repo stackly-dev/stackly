@@ -16,6 +16,10 @@ public final class ShellRuntime {
     public let commandLineTool: CommandLineToolModel?
     /// Whether the onboarding shows in the main window and at which step (spec 0016).
     public let onboarding: OnboardingModel
+    /// The choices that belong to this Mac, such as Appearance (spec 0032).
+    public let preferences: AppPreferences
+    /// Open Stackly at login, read from the OS (spec 0032).
+    public let loginItem: LoginItemModel
     private var observers: [any NSObjectProtocol] = []
     private let activity: ShellActivity
     private var activityToken: (any NSObjectProtocol)?
@@ -28,14 +32,20 @@ public final class ShellRuntime {
     ///   - commandLineTool: The command line tool model, or `nil`.
     ///   - onboardingStore: Where the finished record of the onboarding lives; the app's
     ///     `UserDefaults` by default.
+    ///   - preferences: The app's own choices; one that applies nothing to the app by default.
+    ///   - loginItem: Open Stackly at login; the live `SMAppService.mainApp` by default.
     ///   - activity: Keeps the app out of App Nap while it runs; the process's own by default.
     public init(
         model: DaemonModel, closeNotice: CloseNotice = CloseNotice(),
         commandLineTool: CommandLineToolModel? = nil,
         onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore(),
+        preferences: AppPreferences = AppPreferences(apply: { _ in }),
+        loginItem: LoginItemModel = LoginItemModel(),
         activity: ShellActivity = .process
     ) {
         self.model = model
+        self.preferences = preferences
+        self.loginItem = loginItem
         self.closeNotice = closeNotice
         self.commandLineTool = commandLineTool
         onboarding = OnboardingModel(store: onboardingStore)
@@ -68,6 +78,7 @@ public final class ShellRuntime {
     /// agent's status again (spec 0015). Neither changes the registration.
     public func didBecomeActive() {
         model.systemRetry()
+        Task { await loginItem.refresh() }
         if let agent = model.agent {
             agent.resumePolling()
             Task { await agent.refresh() }
@@ -207,7 +218,7 @@ public enum ShellBootstrap {
             runtime: ShellRuntime(
                 model: model, closeNotice: closeNotice,
                 commandLineTool: commandLineTool.map { CommandLineToolModel(controller: $0) },
-                onboardingStore: onboardingStore),
+                onboardingStore: onboardingStore, preferences: AppPreferences()),
             link: link,
             engine: engine)
     }

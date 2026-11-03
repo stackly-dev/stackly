@@ -122,7 +122,7 @@ struct CreateInstanceModelTests {
     @Test func startAtLoginIsOffUntilChosenAndGoesToThePreflightAndTheCreate() async throws {
         let rig = await editing()
         #expect(rig.model.startAtLogin == false)
-        #expect(rig.model.draft()?.startup == nil)
+        #expect(rig.model.draft()?.startup == .manual)
         let before = rig.service.preflightCalls.count
 
         rig.model.setStartAtLogin(true)
@@ -137,6 +137,42 @@ struct CreateInstanceModelTests {
             return
         }
         #expect(params.startup == .atLogin)
+    }
+
+    private static func form(startupDefault: StartupPolicyKind) -> CreateForm {
+        let form = FixtureCreateForm.database
+        return CreateForm(
+            provider: form.provider, runtime: form.runtime, suggestedName: form.suggestedName,
+            dataPath: form.dataPath, startupDefault: startupDefault,
+            dataLocation: "/Volumes/Work/Stackly", logsLocation: form.logsLocation,
+            endpoints: form.endpoints, fields: form.fields, capabilities: form.capabilities)
+    }
+
+    @Test func theToggleStartsAtTheDaemonsDefaultStartup() async {
+        let form = Self.form(startupDefault: .atLogin)
+        let rig = await editing { $0.service.onForm = { _ in form } }
+        #expect(rig.model.startAtLogin)
+        #expect(rig.model.draft()?.startup == .atLogin)
+        #expect(rig.model.form?.dataLocation == "/Volumes/Work/Stackly")
+    }
+
+    @Test func turningTheDefaultOffSendsAnExplicitManualPolicy() async throws {
+        let form = Self.form(startupDefault: .atLogin)
+        let rig = await editing { $0.service.onForm = { _ in form } }
+        let before = rig.service.preflightCalls.count
+        rig.model.setStartAtLogin(false)
+        await settle("a preflight") { rig.service.preflightCalls.count == before + 1 }
+        #expect(rig.service.preflightCalls.last?.startup == .manual)
+        #expect(rig.model.startAtLogin == false)
+    }
+
+    @Test func aChoiceSurvivesChangingTheRuntime() async {
+        let form = Self.form(startupDefault: .atLogin)
+        let rig = await editing { $0.service.onForm = { _ in form } }
+        rig.model.setStartAtLogin(false)
+        rig.model.selectCategory(.messaging)
+        await settle("the new form") { rig.model.phase == .editing }
+        #expect(rig.model.startAtLogin == false)
     }
 
     @Test func everyChangeOfTheDraftAsksAgain() async {

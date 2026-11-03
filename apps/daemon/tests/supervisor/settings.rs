@@ -265,6 +265,17 @@ async fn a_create_without_a_startup_takes_the_default_and_an_existing_instance_k
         .await
         .expect("the create form");
     assert_eq!(form.startup_default, StartupPolicyKind::Manual);
+    let mut manual_draft = api.preflight_params("preview", json!({}));
+    manual_draft.startup = Some(StartupPolicyKind::Manual);
+    let command = api
+        .preflight(manual_draft)
+        .await
+        .expect("a preflight")
+        .command;
+    assert!(
+        !command.contains("autostart"),
+        "manual against a manual default needs no flag: {command}"
+    );
 
     let current = settings_of(&api).await;
     update(
@@ -283,6 +294,23 @@ async fn a_create_without_a_startup_takes_the_default_and_an_existing_instance_k
         .await
         .expect("the create form");
     assert_eq!(form.startup_default, StartupPolicyKind::AtLogin);
+
+    // The equivalent command says `--no-autostart` only when the draft asks for manual
+    // against an at login default, and `--autostart` when it asks for at login.
+    let command_for = |startup: Option<StartupPolicyKind>| {
+        let mut params = api.preflight_params("preview", json!({}));
+        params.startup = startup;
+        let api = &api;
+        async move { api.preflight(params).await.expect("a preflight").command }
+    };
+    let manual = command_for(Some(StartupPolicyKind::Manual)).await;
+    assert!(manual.contains(" --no-autostart"), "{manual}");
+    assert!(!manual.contains(" --autostart"), "{manual}");
+    let at_login = command_for(Some(StartupPolicyKind::AtLogin)).await;
+    assert!(at_login.contains(" --autostart"), "{at_login}");
+    assert!(!at_login.contains("--no-autostart"), "{at_login}");
+    let unspecified = command_for(None).await;
+    assert!(!unspecified.contains("autostart"), "{unspecified}");
 
     let follows = api.create_ready("second", json!({})).await;
     let policy_of = |summary: InstanceSummary| summary.autostart.policy;
