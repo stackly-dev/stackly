@@ -6,10 +6,9 @@ import SwiftUI
 public final class CloseNotice {
     /// The title.
     static let title = "Stackly is still running"
-    /// The message, which points to the Dock.
-    // provisional: F32 (the menu bar copy of the mockup replaces the Dock sentence)
+    /// The message, which points to the menu bar item (spec 0032, AC-11).
     static let message =
-        "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it."
+        "Closing the window doesn’t stop stacklyd or your instances. Use the menu bar icon to reopen it."
     /// How long the notice stays.
     static let displayDuration: Duration = .seconds(4)
     /// The gap between the notice and the bottom of the screen's visible area.

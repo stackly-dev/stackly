@@ -122,7 +122,7 @@ Sesudah `git merge main` (F31 milestone 4, kontrak 3.1: `ShutdownMode::AgentOff`
 
 ## Milestone 3: Menu bar dan Stop All
 
-Langkah build 9 saja (daemon dan CLI). Langkah 10 dan 11 (scene `MenuBarExtra`, popover, `ActivationPolicyController`) menyusul di sesi Swift, jadi AC-1 sampai AC-6, AC-10, AC-11, dan AC-12 belum tercakup di bagian ini.
+Langkah build 9 (daemon dan CLI), 10 (scene `MenuBarExtra`, `MenuBarModel`, popover), dan 11 (`ActivationPolicyController`, notice tutup jendela, deteksi login item). Langkah manual GUI dilewati user, jadi AC yang butuh app yang berjalan (ikon di menu bar nyata, Quit saat instance jalan, login item nyata) menunggu langkah 14.
 
 ### UI / manual
 
@@ -131,18 +131,34 @@ Langkah build 9 saja (daemon dan CLI). Langkah 10 dan 11 (scene `MenuBarExtra`, 
 - [ ] Jalankan `target/debug/stackly instance stop --help` → `--all`, dan `--yes` berlaku untuk `--force` dan `--all` → AC-9
 - [ ] Jalankan `target/debug/stackly instance stop --all` di terminal dengan dua instance berjalan → baris preview di stderr ("alpha · Started by you"), pertanyaan "Stop All Services?", dan kalimat "Data is kept. …"; `y` menghentikan, Enter menolak dengan exit 9 → AC-9
 
+- [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/MenuBar/MenuBarRows.swift` → urutan empat grup, batas delapan, dan tabel *Tombol baris* dalam urutan spec (offline, operasi lain, dibuat, unknown, stopping, lalu Start atau Stop); baris kapabilitas start/stop belum bisa terjadi karena kontrak hanya punya `reload` (ditandai `provisional`) → AC-3, AC-4
+- [x] Buka `MenuBar/MenuBarModel.swift` → Stop All membaca `instance.preview_stop_all`, mengirim `instance.stop_all` dengan `expectedInstanceIds` dari preview dan kunci baru, dan pada `instance.stop_all_changed` membaca preview lagi tanpa menghentikan apa pun; tidak ada request saat popover ditutup → AC-6, AC-7, AC-8, AC-10
+- [x] Buka `Shell/ActivationPolicyController.swift` → jendela dihitung dari `didBecomeKey` dan `willClose` (panel, sheet, dan popover tidak dihitung); jendela terakhir tutup menjadi `accessory`, `prepareToShowWindow()` menjadi `regular` dan aktif; deteksi `keyAELaunchedAsLogInItem` dengan fallback jendela utama → AC-11, AC-12
+- [x] Buka `apps/macos/design.md` bagian *Menu bar* dan *Activation policy and login item* → hasil pemeriksaan macOS 27 dari header SDK dan kode, dan apa yang belum terbukti → AC-12
+- [ ] Jalankan `Stackly.app` Debug, lihat ikon menu bar tiga varian di bar terang dan gelap, buka popover, Stop All Services…, Settings… dari mode `accessory`, tutup jendela terakhir (ikon Dock hilang), Quit saat instance jalan → `BLOCKED` untuk sesi ini (user melewati langkah manual GUI); dicatat di langkah 14 → AC-1, AC-6, AC-10, AC-11
+
 ### Commands
 
 - [x] `cargo test -p stackly-core --test stop_all_select` → enam test baru untuk `confirmed_steps`: tanpa field, himpunan sama dalam urutan lain dengan ulangan, instance yang bergabung sejak preview, yang keluar, `already_stopping` tidak dihitung, dan himpunan kosong → AC-7, AC-8
 - [x] `cargo test -p stacklyd --test stop_all` → lima test di daemon dan filesystem asli: konfirmasi preview menghentikan persis isinya dan replay (urutan lain, dengan ulangan) menjawab sama; instance yang menyala sesudah preview ditolak `instance.stop_all_changed`, tidak ada yang berhenti, dan kunci yang sama dipakai lagi dengan preview baru; instance yang berhenti sesudah preview, ID bukan instance, dan himpunan kosong di atas instance berjalan ditolak; kunci yang sama dengan himpunan lain, atau tanpa field, ditolak `operation.idempotency_key_reused` → AC-7, AC-8
 - [x] `cargo test -p stackly-cli --bin stackly stop` → teks preview, kaki, hasil, dan kegagalan mengikuti tabel *Copy Stop All* → AC-9
 - [x] `cargo test -p stackly-cli --test instance stop_all` → `--yes` mengirim `expectedInstanceIds` dari preview dengan kunci; `--json` menulis satu envelope `{ preview, outcome }`; tidak ada yang berjalan menulis "Nothing is running." tanpa mengirim stop; tanpa `--yes` dan tanpa terminal (juga dengan `--json`) keluar 2 `cli.confirmation_required` sebelum stop dikirim; di terminal `y` menghentikan dan Enter keluar 9; `instance.stop_all_changed` keluar 3 tanpa mengulang; instance yang gagal berhenti disebut namanya dan keluar sesuai kodenya; `--all` menolak nama instance, `--force`, dan `--wait` → AC-8, AC-9
+- [x] `swift test --package-path clients/swift --filter DaemonRestartClientTests` → `stopAll` mengirim `expectedInstanceIds` dengan kunci di bawah batas 190 detik, `previewStopAll` tanpa kunci, dan penolakan lewat apa adanya → AC-7, AC-8
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "MenuBarRowsTests|StopAllCopyTests|MenuBarModelTests|ActivationPolicyControllerTests"` → urutan grup dan tie ID, tabel tombol, prioritas ikon (offline, gagal, normal), template image tiga varian, persen dari progress, setiap baris *Copy Stop All*, alur Stop All (hasil, daftar berubah, penolakan lain, kosong, offline, batal), delapan baris dan "Show all 12 in Stackly…", kebijakan aktivasi dengan host palsu, pengenalan login item dari Apple event, dan antrean tujuan → AC-1, AC-3, AC-4, AC-6, AC-7, AC-8, AC-11, AC-12
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "AutostartTests|ShellStructureTests"` → toggle Autostart di Summary mengirim `instance.set_startup` dengan revision baris yang tampil (perbaikan F31, spec 0031 *GUI*), dan notice tutup jendela memakai kalimat menu bar → AC-11
+- [x] `swift test --package-path clients/swift` dan `swift test --package-path apps/macos/Packages/StacklyUI` penuh, `xcrun swift-format lint --strict`, dan `cargo xtask build-app` → lihat laporan untuk angka dan test yang dikenal flaky
 - [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask codegen --check`, `cargo xtask evidence check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
 
 ### Acceptance-criteria coverage
 
-- AC-7 · konfirmasi mengirim `expectedInstanceIds` dari preview, operasi hanya membuat langkah untuk irisan, hasil `StopAllResult` dengan `failed` dan `skipped`; popover yang menggambar hasil menunggu langkah 10
-- AC-8 · `instance.stop_all_changed` sebelum operasi dibuat, tanpa payload; CLI keluar 3 dan menyuruh menjalankan ulang; popover yang memanggil preview lagi menunggu langkah 10
+- AC-1 · tiga varian template image dan prioritas offline > gagal > normal (diuji); item selalu terpasang (`MenuBarExtra` tanpa `isInserted`); `applicationShouldHandleReopen` memanggil `prepareToShowWindow()`; ikon di bar nyata menunggu langkah 14
+- AC-2, AC-3, AC-4 · header, delapan baris, urutan, teks Endpoint tabel Instances, tombol dan tooltip, label "last known" saat offline
+- AC-5 · baris operasi dengan persen atau "Working…", hanya kind yang terdaftar, tanpa Cancel
+- AC-6 · preview dan hasil di popover dengan *Copy Stop All*; Cancel tombol default lewat gaya `borderedProminent`, bukan shortcut, karena keputusan 2026-10-24 melarang `keyboardShortcut` (aturan sumber `NativeInteractionPolicyTests`)
+- AC-10 · Quit memanggil `NSApp.terminate` dan tidak mengirim request; membuktikan instance tetap jalan menunggu langkah 14
+- AC-11, AC-12 · kebijakan aktivasi, notice baru, deteksi login item dengan fallback; pendaftaran dan login nyata menunggu langkah 14 (`BLOCKED` tanpa signing identity)
+- AC-7 · konfirmasi mengirim `expectedInstanceIds` dari preview, operasi hanya membuat langkah untuk irisan, hasil `StopAllResult` dengan `failed` dan `skipped`; popover menggambar hasil dari `StopAllResult`
+- AC-8 · `instance.stop_all_changed` sebelum operasi dibuat, tanpa payload; CLI keluar 3 dan menyuruh menjalankan ulang; popover membaca preview lagi dan menggambar ulang
 - AC-9 · `stackly instance stop --all [--yes] [--json]` dengan preview, konfirmasi, exit 2 tanpa terminal dan tanpa `--yes`, dan envelope `{ preview, outcome }`
 
 ### Catatan
@@ -153,6 +169,13 @@ Langkah build 9 saja (daemon dan CLI). Langkah 10 dan 11 (scene `MenuBarExtra`, 
 - **`--all` dan `--wait`.** Keduanya saling menolak, karena balasan `instance.stop_all` baru datang setelah operasi selesai.
 - **Lokasi test daemon.** `apps/daemon/tests/stop_all.rs` memakai rig `Site` dan `Api` dari `tests/supervisor/support.rs` lewat `#[path]`, supaya tidak menyentuh `supervisor/main.rs` milik sesi lain. Test `supervisor/stop_all.rs` milik fitur 31 tetap menguji `instance.stop_all` tanpa field.
 - **Berkas CLI.** `StopArgs` ada di `action.rs`, jadi flag `--all` dan penyaluran ke `stop.rs` mengubah `action.rs` dan `mod.rs` selain `stop.rs`.
+- **Ikon.** Tiga template image digambar di kode (`MenuBarIcon`), bukan aset katalog: tiga batang bertumpuk, titik di pojok untuk gagal, garis miring untuk offline. Tidak ada file biner baru.
+- **Antrean tujuan.** Klik nama service atau "Show all" menitipkan tujuan di `ShellDestinationQueue`; `AppShell` mengambilnya, juga saat jendela baru dibuka karena permintaan itu. `AppShell` dan `MainWindowRoot` berubah sedikit untuk ini.
+- **Ke `AppDelegate`.** Tiga tambahan kecil: `applicationDidFinishLaunching` (mulai kebijakan aktivasi dan deteksi login item), `prepareToShowWindow()` di reopen, dan `menuBarActions`. Dilaporkan ke lead karena `AppDelegate` juga disentuh `dev-f32-m4`.
+- **Fix F31.** `InstanceDetailService.setStartup` kini membawa `UInt64?` revision dan `InstanceDetailModel` mengirim revision summary yang diamati.
+- **Client Swift.** `DaemonRestartClient` mendapat `previewStopAll()` dan `stopAll(expectedInstanceIds:idempotencyKey:)` (batas 190 detik, kunci wajib); `DaemonModel.stopAllClient` membukanya untuk menu bar.
+- **Fixture dan snapshot.** Scenario `menubar-*` dan snapshotnya adalah langkah 13, bukan bagian ini.
+
 
 ## Milestone 4: Notifikasi
 
@@ -185,6 +208,39 @@ Langkah build 12. Bagian AC yang belum: izin notifikasi sungguhan di macOS (dan 
 - **Durasi operasi.** `OperationSummary` tidak punya `finishedAt`; spec menulis `finishedAt − startedAt`. Model memakai `updatedAt` dari event ke state akhir (waktu perubahan state itu) dikurangi `startedAt`. Spec perlu mengikuti, atau kontrak menambah `finishedAt`.
 - **Ringkasan hasil operasi.** Isi notifikasi operasi memakai kalimat tetap ("Took 42 seconds.", "Open Stackly to see what happened.", "It was cancelled after 1 minute.") dan tidak membawa teks error daemon, supaya tidak ada path atau secret yang ikut.
 - **Readiness hilang.** Hanya perpindahan ke `not_ready` yang dihitung (bukan `unknown`), dan hanya saat lifecycle `running` menurut gambaran model sendiri; event `instance.health_changed` tidak membawa lifecycle.
-- **Klik dan jendela.** Klik memanggil `WindowOpener.openMain()` dan `NSApplication.activate()`. Perpindahan activation policy dan `prepareToShowWindow()` datang dengan langkah 11 (milestone 3); sampai saat itu jendela utama selalu ada selama app hidup.
+- **Klik dan jendela.** Klik memanggil `WindowOpener.openMain()` dan `NSApplication.activate()`. Sesudah penggabungan dengan milestone 3, klik memanggil `ActivationPolicyController.prepareToShowWindow()` sebelum `openMain()`, jadi app kembali `regular` dan aktif walau jendela terakhir sudah ditutup (AC-11).
 - **Pemakaian bersama dengan milestone 3.** `ShellRuntime`, `AppDelegate`, `AppShell`, dan `MainWindowRoot` mendapat diff kecil (parameter `notifications`, `applicationDidFinishLaunching`, `.onChange` untuk `pending`, `.environment`). Kalau `dev-f32-m3-s9` atau sesi menu bar menyentuh file yang sama, gabungkan keduanya.
 - **Fixture.** Runtime fixture tidak memasang model notifikasi (`notifications: nil` memakai model inert yang tidak pernah mengirim), jadi tidak ada notifikasi saat scenario berjalan.
+
+## Milestone 5: Tampilan dan bukti
+
+Langkah build 13 (fixture dan snapshot) dikerjakan. Langkah 14 (bukti manual di Mac ini) dicatat saja dan tidak dijalankan: user melewati langkah manual GUI, dan Open Stackly at login `BLOCKED`.
+
+### UI / manual
+
+- [x] Buka `Sources/StacklyUI/Fixtures/FixtureScenario+MenuBarSettings.swift` → empat belas scenario *Fixture* spec dengan nama tetap: `menubar-normal`, `menubar-failed`, `menubar-offline-last-known`, `menubar-many` (12 instance), `menubar-empty`, `menubar-stop-preview` (dengan already stopping dan dua yang dilewati), `menubar-stop-partial` (dua gagal), `settings-general`, `settings-instances-denied`, `settings-sources`, `settings-storage-custom` (lokasi kustom, lokasi lama, satu tidak terjangkau), `settings-updates`, `settings-offline`, dan `settings-conflict` → AC-26
+- [x] Buka `Fixtures/ShellBootstrap+Fixture.swift` → scenario memakai suite `UserDefaults` sendiri dan `FakeNotificationPoster`, jadi tidak membaca atau menulis defaults app dan tidak meminta izin ke macOS → AC-26, AC-22
+- [x] Buka `Tests/StacklyUITests/SnapshotTests/__Snapshots__/MenuBarSnapshotTests/` dan `SettingsSnapshotTests/` → 28 PNG, satu light dan satu dark per scenario, sudah ditinjau satu per satu bentuknya (popover 340 pt, tab Settings 560 × 440 pt) → AC-26
+- [ ] Izin notifikasi sungguhan (izinkan lalu tolak) → `BLOCKED` untuk sesi ini: langkah manual dilewati user, dialog izin sistem tidak dipicu. Perilaku izin dibuktikan oleh `FakeNotificationPoster` di milestone 4 dan snapshot `settings-instances-denied` → AC-22
+- [ ] Menu bar light dan dark di bar sungguhan, termasuk item yang dilarang di System Settings > Menu Bar (jendela utama tetap terbuka dari Finder atau Launchpad lewat `applicationShouldHandleReopen`) → dilewati user (app tidak dibuka) → AC-1
+- [ ] Quit Stackly saat instance berjalan (daemon, instance, dan operasi tetap hidup, `stackly daemon status` sehat, tidak ada request saat Quit) → dilewati user (app tidak dibuka) → AC-10
+- [ ] Open Stackly at login sungguhan, dan peluncuran login item tanpa jendela → `BLOCKED`, reason `no code signing identity on this Mac (OQ-012)` → AC-11, AC-12
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "MenuBarSnapshotTests|SettingsSnapshotTests"` → 14 test, 28 gambar light dan dark cocok dengan referensi, dijalankan dua kali berturut turut tanpa beda → AC-26
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → katalog 35 scenario dengan nama tetap, setiap scenario baru berhenti di presence yang diharapkan (offline di dua scenario, terhubung di sisanya), dan setiap DTO round trip → AC-26
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` penuh, `xcrun swift-format lint --strict`, dan `cargo xtask build-app` → lihat laporan untuk angka dan test yang dikenal flaky
+
+### Acceptance-criteria coverage
+
+- AC-26 · empat belas scenario dan 28 snapshot light dan dark; popover dan tab Settings mengikuti spec dan mockup kecuali *Selisih mockup yang disengaja*
+- AC-1, AC-10, AC-11, AC-12, AC-22 · sisi manual dicatat (dilewati atau `BLOCKED`) di atas; sisi kodenya dibuktikan di milestone 3 dan 4
+
+### Catatan
+
+- **Bentuk scenario.** Scenario Settings menjawab `settings.get` dan `storage.list_locations` lewat `replies`; `settings-conflict` menjawab `settings.update` dengan `resource.revision_mismatch`, dan snapshot nya diambil sesudah `SettingsStore.apply`. `settings-instances-denied` memakai izin `denied` dengan toggle menyala lewat dua field baru di `FixtureScenario` (`notificationPermission`, `notificationsEnabled`).
+- **Popover.** `MenuBarPopover` mendapat init internal dengan `clearsFinishedStopAll`, supaya snapshot hasil Stop All tidak dihapus oleh `onAppear` yang membersihkan hasil lama saat popover dibuka lagi.
+- **Tinggi snapshot Settings.** Tab digambar dalam ukuran jendela (560 × 440), jadi tab Storage yang lebih panjang terpotong di bawah seperti pada jendela sebelum di-scroll.
+- **Perubahan di luar Fixtures.** `FixtureScenarioTests` dan `FixtureShellTests` menambah nama dan judul banner scenario baru (katalog spec 0068 dipin di sana).
+

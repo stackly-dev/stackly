@@ -1,4 +1,5 @@
 #if DEBUG
+    import Foundation
     import StacklyClient
 
     extension ShellBootstrap {
@@ -36,13 +37,24 @@
                 }
             }
             let tool = FakeCommandLineTool()
+            // The choices live in a suite of their own, so a scenario never reads or writes the
+            // app's defaults (spec 0068).
+            let suite = "stackly.fixture.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite) ?? .standard
+            defaults.removePersistentDomain(forName: suite)
+            let preferences = AppPreferences(defaults: defaults, apply: { _ in })
+            preferences.notificationsEnabled = scenario.notificationsEnabled
             return ShellRuntime(
                 model: model, closeNotice: CloseNotice(presentsPanel: false),
                 commandLineTool: CommandLineToolModel(
                     controller: tool, initialStatus: FakeCommandLineTool.fixtureStatus),
                 onboardingStore: InMemoryOnboardingRecordStore(
                     isFinished: scenario.onboardingFinished),
-                loginItem: LoginItemModel.fake())
+                preferences: preferences,
+                loginItem: LoginItemModel.fake(),
+                notifications: NotificationModel(
+                    poster: FakeNotificationPoster(permission: scenario.notificationPermission),
+                    preferences: preferences))
         }
     }
 #endif

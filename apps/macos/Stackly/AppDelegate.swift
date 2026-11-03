@@ -65,6 +65,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The click that launched the app is delivered once the delegate is set, so it goes
         // before the first event is handled (spec 0032, *Notifikasi*).
         runtime.notifications.begin()
+        runtime.activation.start()
+        // A login item launch lives in the menu bar with no window; any other launch, and a
+        // launch that cannot be recognized, opens the main window as usual (spec 0032, AC-12).
+        // Checked on macOS 27; see `apps/macos/design.md`, Menu bar.
+        if LaunchOrigin.isLoginItem(NSAppleEventManager.shared().currentAppleEvent) {
+            runtime.activation.launchedAsLoginItem()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -74,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
         -> Bool
     {
+        // The app is `regular` and active before any window comes (spec 0032, AC-11).
+        runtime.activation.prepareToShowWindow()
         // A minimized window counts as visible, and AppKit restores it by itself.
         guard flag == false else { return true }
         return runtime.windowOpener.openMain() == false
@@ -87,6 +96,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Closes the daemon socket synchronously; the link never tries again.
         runtime.willTerminate()
+    }
+
+    /// What the menu bar popover asks of the windows: each path that opens one makes the app
+    /// `regular` and active first (spec 0032, AC-11).
+    var menuBarActions: MenuBarActions {
+        let runtime = runtime
+        let openMain: @MainActor () -> Void = {
+            runtime.activation.prepareToShowWindow()
+            runtime.windowOpener.openMain()
+        }
+        return MenuBarActions(
+            openStackly: openMain,
+            openInstance: { id in
+                runtime.destinations.request(.instance(id))
+                openMain()
+            },
+            showAllInstances: {
+                runtime.destinations.request(.instances())
+                openMain()
+            },
+            prepareSettings: { runtime.activation.prepareToShowWindow() },
+            closeWindow: { runtime.activation.closeMainWindow() },
+            isMainWindowOpen: { runtime.activation.isMainWindowOpen },
+            quit: { NSApp.terminate(nil) })
     }
 
     /// Shows the close notice when the main window closes, unless the app is quitting.

@@ -256,6 +256,11 @@
                     id: id, connection: [.state(connected(.fixture()))],
                     handshake: .fixture, daemonInfo: .fixture, health: .fixture(),
                     onboardingFinished: false, expectedPresence: nil)
+            case .menubarNormal, .menubarFailed, .menubarOfflineLastKnown, .menubarMany,
+                .menubarEmpty, .menubarStopPreview, .menubarStopPartial, .settingsGeneral,
+                .settingsInstancesDenied, .settingsSources, .settingsStorageCustom,
+                .settingsUpdates, .settingsOffline, .settingsConflict:
+                return menuBarSettings(id)
             }
         }
 
@@ -272,13 +277,17 @@
                 expectedPresence: .unreachable(lastKnownAt: nil), agent: agent)
         }
 
-        private static func connectedScenario(
+        static func connectedScenario(
             _ id: ID,
             health: DaemonHealth,
             data: ([InstanceSummary], [OperationSummary], [ProviderSummary]) = ([], [], []),
             holdSnapshot: Bool = false,
             afterSnapshot: ConnectionState? = nil,
-            presence: DaemonPresence
+            presence: DaemonPresence,
+            replies extra: [String: FixtureReply] = [:],
+            agent: FixtureAgent = .fresh,
+            notificationPermission: NotificationPermission = .notDetermined,
+            notificationsEnabled: Bool = false
         ) -> FixtureScenario {
             var steps: [FixtureConnectionStep] = [.state(connected(health))]
             if holdSnapshot { steps.append(.holdSnapshot) }
@@ -286,12 +295,15 @@
             return FixtureScenario(
                 id: id, connection: steps, handshake: .fixture, daemonInfo: .fixture,
                 health: health, instances: data.0, operations: data.1, providers: data.2,
-                replies: data.0.isEmpty
+                replies: (data.0.isEmpty
                     ? [:]
                     : FixtureRuntime.replies.merging(FixtureCreateForm.replies) { first, _ in first
                     }
-                    .merging(FixtureCreateDuplicate.replies) { first, _ in first },
-                expectedPresence: presence)
+                    .merging(FixtureCreateDuplicate.replies) { first, _ in first })
+                    .merging(extra) { _, new in new },
+                expectedPresence: presence, agent: agent,
+                notificationPermission: notificationPermission,
+                notificationsEnabled: notificationsEnabled)
         }
     }
 

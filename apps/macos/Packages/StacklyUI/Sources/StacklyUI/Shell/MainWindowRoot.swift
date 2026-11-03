@@ -52,8 +52,13 @@ public struct MainWindowRoot: View {
             .environment(runtime.notifications)
             .environment(\.feedbackCenter, feedbackCenter)
             .environment(\.mainWindowKey, windowKey)
+            .environment(\.shellDestinationQueue, runtime.destinations)
             .background(
-                MainWindowAccessor(windowKey: windowKey, windowWillClose: windowWillClose)
+                MainWindowAccessor(
+                    windowKey: windowKey, windowWillClose: windowWillClose,
+                    windowDidAttach: { [activation = runtime.activation] in
+                        activation.trackMainWindow($0)
+                    })
             )
             .onAppear {
                 runtime.windowOpener.capture(openWindow)

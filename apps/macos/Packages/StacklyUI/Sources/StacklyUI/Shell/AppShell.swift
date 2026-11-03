@@ -24,6 +24,7 @@ public struct AppShell: View {
     @State private var navigator = ShellNavigator()
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.fixtureNow) private var fixtureNow
+    @Environment(\.shellDestinationQueue) private var destinationQueue
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
     @Environment(NotificationModel.self) private var notifications: NotificationModel?
 
@@ -159,6 +160,11 @@ public struct AppShell: View {
         }
         .onChange(of: navigator.section) { _, new in
             if section != new { section = new }
+        }
+        // The menu bar popover leaves a destination here, also while this window opens.
+        .onChange(of: destinationQueue?.pending, initial: true) { _, pending in
+            guard pending != nil, let destination = destinationQueue?.take() else { return }
+            navigator.show(destination)
         }
         .onAppear {
             connectNewInstance()

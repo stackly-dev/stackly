@@ -61,6 +61,47 @@ struct DaemonRestartClientTests {
         #expect(reply == accepted)
     }
 
+    @Test func stopAllSendsTheExpectedIdsAndTheKeyUnderTheLongLimit() async throws {
+        let first = UUID()
+        let second = UUID()
+        let result = StopAllResult(stopped: [first, second], failed: [], skipped: [])
+        let fake = Fake(.success(.instanceStopAll(result)))
+
+        let reply = try await fake.client.stopAll(
+            expectedInstanceIds: [first, second], idempotencyKey: "key-2")
+
+        let made = try #require(fake.made.first)
+        #expect(
+            made.call == .instanceStopAll(StopAllParams(expectedInstanceIds: [first, second])))
+        #expect(made.key == "key-2")
+        #expect(made.timeout == SecretsClient.interactiveTimeout)
+        #expect(reply == result)
+    }
+
+    @Test func theStopAllPreviewReadsWithoutAKey() async throws {
+        let preview = StopAllPreview(
+            items: [], alreadyStopping: [], skipped: [], atLoginCount: 0)
+        let fake = Fake(.success(.instancePreviewStopAll(preview)))
+
+        let reply = try await fake.client.previewStopAll()
+
+        let made = try #require(fake.made.first)
+        #expect(made.call == .instancePreviewStopAll)
+        #expect(made.key == nil)
+        #expect(reply == preview)
+    }
+
+    @Test func aStopAllThePreviewNoLongerMatchesPassesTheRefusalThrough() async throws {
+        let refusal = ClientErrorCatalog.protocolViolation()
+        let fake = Fake(.failure(.rejected(refusal)))
+        do {
+            _ = try await fake.client.stopAll(expectedInstanceIds: [], idempotencyKey: "k")
+            Issue.record("expected a refusal")
+        } catch {
+            #expect(error == .rejected(refusal))
+        }
+    }
+
     @Test func aReplyOfAnotherKindIsABrokenContract() async {
         let fake = Fake(.success(.daemonRestartPreview(Self.preview)))
         await #expect(throws: ClientError.self) {

@@ -113,6 +113,8 @@ public final class DaemonModel {
     public let settings: SettingsStore
     /// Turn Off… of the background agent (spec 0031).
     public let turnOff: TurnOffModel
+    /// The preview and the confirmed Stop All, for the menu bar (spec 0032, AC-6 to AC-8).
+    public let stopAllClient: DaemonRestartClient
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
     /// the model is created; the agent model learned the same value at creation.
     public internal(set) var rootOverrideActive = false
@@ -222,6 +224,7 @@ public final class DaemonModel {
         let restartClient = DaemonRestartClient { call, key, options throws(ClientError) in
             try await link.call(call, key, options)
         }
+        stopAllClient = restartClient
         restart = DaemonRestartModel(
             preview: { () throws(ClientError) in try await restartClient.preview() },
             restart: { digest, force, key in

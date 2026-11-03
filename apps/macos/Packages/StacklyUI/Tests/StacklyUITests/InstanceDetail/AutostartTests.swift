@@ -80,17 +80,21 @@ struct AutostartTests {
         let item = try DetailFixture.triple("postgresql")
         let script = DetailScript(detail: item.detail, usage: item.dataUsage)
         let sent = Mutex<[StartupPolicyKind]>([])
+        let revisions = Mutex<[UInt64?]>([])
         var service = script.service
-        service.setStartup = { _, startup in
+        service.setStartup = { _, startup, revision in
             sent.withLock { $0.append(startup) }
+            revisions.withLock { $0.append(revision) }
             return .rejected(.refusal("supervisor.instance_retained"))
         }
         let model = InstanceDetailModel(instanceId: item.detail.instanceId, service: service)
 
+        model.observe(item.instance)
         let on = await model.setAutostart(true)
         let off = await model.setAutostart(false)
 
         #expect(sent.withLock { $0 } == [.atLogin, .manual])
+        #expect(revisions.withLock { $0 } == [item.instance.revision, item.instance.revision])
         #expect(on == .rejected(.refusal("supervisor.instance_retained")))
         #expect(off == on)
         #expect(model.isChangingAutostart == false)

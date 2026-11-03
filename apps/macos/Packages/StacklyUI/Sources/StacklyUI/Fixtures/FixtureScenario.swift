@@ -70,6 +70,34 @@
             case agentNotFound = "agent-not-found"
             /// Unreachable; the status of the agent cannot be read.
             case agentUnavailable = "agent-unavailable"
+            /// The menu bar popover with running and stopped services (spec 0032).
+            case menubarNormal = "menubar-normal"
+            /// The popover with an instance that failed.
+            case menubarFailed = "menubar-failed"
+            /// The popover while stacklyd is unreachable, from the last known state.
+            case menubarOfflineLastKnown = "menubar-offline-last-known"
+            /// The popover with twelve instances, so it shows eight and "Show all".
+            case menubarMany = "menubar-many"
+            /// The popover with no instance.
+            case menubarEmpty = "menubar-empty"
+            /// The Stop All preview with an instance already stopping and ones left alone.
+            case menubarStopPreview = "menubar-stop-preview"
+            /// The Stop All result with two instances that did not stop.
+            case menubarStopPartial = "menubar-stop-partial"
+            /// The General tab of Settings.
+            case settingsGeneral = "settings-general"
+            /// The Instances tab with notification permission denied.
+            case settingsInstancesDenied = "settings-instances-denied"
+            /// The Sources tab.
+            case settingsSources = "settings-sources"
+            /// The Storage tab with custom, old, and unreachable locations.
+            case settingsStorageCustom = "settings-storage-custom"
+            /// The Updates tab with the beta channel and statistics turned on.
+            case settingsUpdates = "settings-updates"
+            /// Settings while stacklyd is unreachable, from the last known values.
+            case settingsOffline = "settings-offline"
+            /// A change that the daemon refuses because the settings changed elsewhere.
+            case settingsConflict = "settings-conflict"
         }
 
         /// The scenario's name.
@@ -96,6 +124,10 @@
         public let expectedPresence: DaemonPresence?
         /// The background agent; ``FixtureAgent/fresh`` except in the agent scenarios.
         public let agent: FixtureAgent
+        /// What macOS answers for the notification permission (spec 0032, AC-22).
+        public let notificationPermission: NotificationPermission
+        /// Whether the Notifications toggle is on.
+        public let notificationsEnabled: Bool
 
         /// Creates a scenario from its parts.
         public init(
@@ -110,7 +142,9 @@
             replies: [String: FixtureReply] = [:],
             onboardingFinished: Bool = true,
             expectedPresence: DaemonPresence?,
-            agent: FixtureAgent = .fresh
+            agent: FixtureAgent = .fresh,
+            notificationPermission: NotificationPermission = .notDetermined,
+            notificationsEnabled: Bool = false
         ) {
             self.id = id
             self.connection = connection
@@ -124,6 +158,8 @@
             self.onboardingFinished = onboardingFinished
             self.expectedPresence = expectedPresence
             self.agent = agent
+            self.notificationPermission = notificationPermission
+            self.notificationsEnabled = notificationsEnabled
         }
 
         /// Every scenario, in the order of ``ID``.
