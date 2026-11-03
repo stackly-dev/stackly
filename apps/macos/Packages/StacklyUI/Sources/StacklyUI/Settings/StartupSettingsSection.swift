@@ -15,7 +15,7 @@ struct StartupSettingsSection: View {
     var body: some View {
         Section("Startup") {
             if SettingsAvailability.isShown(.agentStartup), let agent = model.agent {
-                AgentStartupRow(agent: agent, atLoginCount: atLoginCount)
+                AgentStartupRow(model: model, agent: agent, atLoginCount: atLoginCount)
             }
             if SettingsAvailability.isShown(.openAtLogin) {
                 OpenAtLoginRow(loginItem: loginItem)
@@ -27,12 +27,17 @@ struct StartupSettingsSection: View {
 
 /// The Start stacklyd at login row.
 private struct AgentStartupRow: View {
+    let model: DaemonModel
     let agent: BackgroundAgentModel
     let atLoginCount: Int
+    @State private var confirmation: ConfirmationRequest?
+
+    private var turnOff: TurnOffModel { model.turnOff }
 
     var body: some View {
         let content = StartupRowContent.make(
-            assessment: agent.assessment, atLoginCount: atLoginCount, isWorking: agent.isWorking)
+            assessment: agent.assessment, atLoginCount: atLoginCount, isWorking: agent.isWorking,
+            isTurningOff: turnOff.phase != .idle)
         LabeledContent {
             HStack(spacing: Spacing.s8) {
                 if agent.isWorking {
@@ -50,7 +55,11 @@ private struct AgentStartupRow: View {
                     isOn: Binding(
                         get: { content.isOn },
                         set: { on in
-                            if on { Task { await agent.turnOn() } }
+                            if on {
+                                Task { await agent.turnOn() }
+                            } else {
+                                Task { await turnOff.begin(from: .settings) }
+                            }
                         })
                 )
                 .labelsHidden()
@@ -69,11 +78,28 @@ private struct AgentStartupRow: View {
                         .foregroundStyle(StacklyColor.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let reason = content.toggleDisabledReason, agent.isWorking == false {
+                if let reason = content.toggleDisabledReason, agent.isWorking == false,
+                    turnOff.phase == .idle
+                {
                     DisabledReasonText(reason)
+                }
+                if let message = turnOff.message {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(StacklyColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+        .onChange(of: turnOff.plan) { _, plan in
+            confirmation = (turnOff.origin == .settings ? plan : nil).map { plan in
+                ConfirmationRequest(
+                    title: plan.title, message: plan.message, actionTitle: "Turn Off",
+                    role: .destructive,
+                    perform: { Task { await turnOff.confirm() } })
+            }
+        }
+        .stacklyConfirmation(item: $confirmation)
     }
 }
 

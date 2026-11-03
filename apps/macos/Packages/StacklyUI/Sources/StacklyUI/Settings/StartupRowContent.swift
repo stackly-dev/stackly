@@ -31,8 +31,9 @@ struct StartupRowContent: Equatable {
     ///   - assessment: The agent's state, or `nil` before the first answer.
     ///   - atLoginCount: How many instances have the policy `at_login`.
     ///   - isWorking: Whether a Turn On or Start call is out.
+    ///   - isTurningOff: Whether Turn Off is reading its preview or running.
     static func make(
-        assessment: AgentAssessment?, atLoginCount: Int, isWorking: Bool
+        assessment: AgentAssessment?, atLoginCount: Int, isWorking: Bool, isTurningOff: Bool = false
     ) -> StartupRowContent {
         guard let assessment else {
             return StartupRowContent(
@@ -40,17 +41,16 @@ struct StartupRowContent: Equatable {
                 toggleDisabledReason: nil, showsOpenLoginItems: false)
         }
         let text = AgentDiagnostics.text(for: assessment)
-        let busy = isWorking ? "Working on it…" : nil
+        let busy = isWorking || isTurningOff ? "Working on it…" : nil
         switch assessment.state {
         case .enabled:
             return StartupRowContent(
                 stateText: text, note: nextLogin(atLoginCount: atLoginCount), isOn: true,
-                toggleDisabledReason: busy ?? StartupCopy.turnOffPending,
-                showsOpenLoginItems: false)
+                toggleDisabledReason: busy, showsOpenLoginItems: false)
         case .requiresApproval:
             return StartupRowContent(
                 stateText: text, note: AutostartText.agentNeedsApproval, isOn: true,
-                toggleDisabledReason: busy ?? StartupCopy.turnOffPending,
+                toggleDisabledReason: busy ?? StartupCopy.removeInLoginItems,
                 showsOpenLoginItems: true)
         case .notRegistered:
             return StartupRowContent(
@@ -78,9 +78,10 @@ enum StartupCopy {
     static let openAtLoginNote = "Opens in the menu bar, without a window."
     /// The line under Open Stackly at login while macOS waits for the user.
     static let openAtLoginApproval = "Allow Stackly in Login Items to finish."
-    /// Why the Start stacklyd at login toggle cannot turn the agent off.
-    // provisional: F31 milestone 4 (the agent_off shutdown mode and the unregister that follows)
-    static let turnOffPending = "Turning it off needs the Turn Off action, which isn’t built yet."
+    /// Why the toggle cannot turn off an agent that macOS still waits to approve: Turn Off
+    /// stops the running daemon first, and there is none to stop.
+    static let removeInLoginItems =
+        "To remove it, turn Stackly off in System Settings > General > Login Items & Extensions."
     /// Why the toggle cannot turn the agent on again after the user turned it off in macOS.
     static let turnOnInLoginItems =
         "Turn on Stackly in System Settings > General > Login Items & Extensions."

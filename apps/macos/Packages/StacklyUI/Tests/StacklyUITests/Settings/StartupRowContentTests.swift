@@ -72,8 +72,20 @@ struct StartupRowContentTests {
         #expect(row.note == nil)
     }
 
-    @Test func turningOffWaitsForTheTurnOffAction() {
-        #expect(content(.enabled).toggleDisabledReason == StartupCopy.turnOffPending)
+    @Test func anEnabledAgentCanBeTurnedOff() {
+        #expect(content(.enabled).toggleDisabledReason == nil)
+    }
+
+    @Test func anAgentWaitingForApprovalIsRemovedInLoginItems() {
+        #expect(
+            content(.requiresApproval).toggleDisabledReason == StartupCopy.removeInLoginItems)
+    }
+
+    @Test func aTurnOffInFlightDisablesTheToggleWithAReason() {
+        let row = StartupRowContent.make(
+            assessment: AgentAssessment(state: .enabled, recovery: .none), atLoginCount: 1,
+            isWorking: false, isTurningOff: true)
+        #expect(row.toggleDisabledReason == "Working on it…")
     }
 
     @Test func aCallInFlightDisablesTheToggleWithAReason() {
