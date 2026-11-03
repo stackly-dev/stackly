@@ -218,6 +218,16 @@
       "summary": "the background agent is not registered, so there is nothing to start (spec 0015)"
     },
     {
+      "code": "cli.agent_off_blocked",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "count"
+      ],
+      "items": null,
+      "summary": "the daemon stayed up after agent_off because instances could not be stopped, so the background agent was not unregistered (spec 0031)"
+    },
+    {
       "code": "cli.agent_os_error",
       "category": "failed",
       "retryable": false,

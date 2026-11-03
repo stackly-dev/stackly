@@ -666,7 +666,12 @@ mod tests {
             // answers on a keychain locked from another process.
             (-50, true, PROMPT, Locked),
             (-60_008, true, NEVER, Locked),
+            (-60_008, true, PROMPT, Locked),
             (-60_008, false, NEVER, Backend { code: -60_008 }),
+            (-60_008, false, PROMPT, Backend { code: -60_008 }),
+            (-25_291, true, NEVER, Locked),
+            (-25_291, true, PROMPT, Locked),
+            (-25_291, false, PROMPT, Backend { code: -25_291 }),
         ];
         for (code, locked, interaction, expected) in cases {
             assert_eq!(

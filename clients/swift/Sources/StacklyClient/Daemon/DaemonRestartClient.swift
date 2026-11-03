@@ -59,6 +59,33 @@ public struct DaemonRestartClient: Sendable {
         return accepted
     }
 
+    /// `instance.preview_stop_all`: the instances a Turn Off of the background agent would stop,
+    /// the ones already stopping, and the ones the daemon must leave alone (spec 0031).
+    ///
+    /// - Throws: ``ClientError``, such as `daemon.shutting_down`.
+    public func previewTurnOff() async throws(ClientError) -> StopAllPreview {
+        let reply = try await send(.instancePreviewStopAll, nil, .standard)
+        guard case .instancePreviewStopAll(let preview) = reply else {
+            throw Self.unexpectedReply()
+        }
+        return preview
+    }
+
+    /// `daemon.shutdown { mode: agent_off }`: asks the daemon to stop its instances and to exit
+    /// when none is left. The answer comes after the stops, so it uses the long time limit; a
+    /// retry after a lost answer reuses the key and gets the same answer.
+    ///
+    /// - Parameter idempotencyKey: The key of the action.
+    /// - Throws: ``ClientError``, such as `daemon.restart_pending`, `daemon.shutting_down`, or
+    ///   `registry.recovery_mode`.
+    public func agentOff(idempotencyKey: String) async throws(ClientError) -> ShutdownAccepted {
+        let params = ShutdownParams(mode: .agentOff, expectedPlanDigest: nil, force: false)
+        let reply = try await send(
+            .daemonShutdown(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
+        guard case .daemonShutdown(let accepted) = reply else { throw Self.unexpectedReply() }
+        return accepted
+    }
+
     /// A reply of another kind than the call asked for is a broken contract, which the
     /// caller treats as an unknown outcome.
     private static func unexpectedReply() -> ClientError {

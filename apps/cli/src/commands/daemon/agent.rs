@@ -222,6 +222,63 @@ impl AgentEnv {
         acted
     }
 
+    /// Unregisters the background agent (spec 0031, *Matikan agent*, step
+    /// 3), only for a person who asked for it. With `STACKLY_ROOT` set the OS
+    /// is never asked. The call succeeded when the state read right after it
+    /// is `not_registered`.
+    pub async fn unregister(&self) -> Acted {
+        let op = AgentOp::Unregister;
+        if self.root_override {
+            return Acted {
+                assessment: self.assess(&ProbeOutcome::NotChecked, false),
+                failure: Some(CliFailure::agent_root_override()),
+            };
+        }
+        match self.call(op).await {
+            CallEnd::TimedOut => {
+                let probe = ProbeOutcome::Failed { code: None };
+                Acted {
+                    assessment: self.assess(&probe, false),
+                    failure: Some(CliFailure::agent_call_timeout(op, self.call_timeout)),
+                }
+            }
+            CallEnd::Done(Err(BackgroundAgentError::Os {
+                domain,
+                code,
+                message,
+                ..
+            })) => {
+                let failure = CliFailure::agent_os_error(op, &message, Some(&domain), Some(code));
+                self.failed_with(failure).await
+            }
+            CallEnd::Done(Err(error)) => Acted {
+                assessment: self.assess(&ProbeOutcome::Unsupported, false),
+                failure: Some(CliFailure::agent_status_unavailable(
+                    op,
+                    &error.to_string(),
+                    None,
+                )),
+            },
+            CallEnd::Done(Ok(_)) => {
+                let probe = self.read_status().await;
+                let assessment = self.assess(&probe, false);
+                let failure =
+                    (assessment.state != BackgroundAgentState::NotRegistered).then(|| {
+                        CliFailure::agent_os_error(
+                            op,
+                            "macOS did not remove the registration",
+                            None,
+                            None,
+                        )
+                    });
+                Acted {
+                    assessment,
+                    failure,
+                }
+            }
+        }
+    }
+
     async fn settle(&self, op: AgentOp, end: CallEnd) -> Acted {
         let probe = match end {
             CallEnd::TimedOut => {

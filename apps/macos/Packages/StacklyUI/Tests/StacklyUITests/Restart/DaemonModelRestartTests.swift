@@ -146,7 +146,8 @@ struct DaemonModelRestartTests {
         await model.restart.begin()
         #expect(model.restart.confirmation?.preview.digest == "abc")
 
-        let accepted = ShutdownAccepted(serverInstanceId: UUID(), mode: .restart, planId: F.planID)
+        let accepted = ShutdownAccepted(
+            serverInstanceId: UUID(), mode: .restart, planId: F.planID, exiting: true, stopAll: nil)
         link.result.withLock { $0 = .success(.daemonShutdown(accepted)) }
         await model.restart.confirm()
 

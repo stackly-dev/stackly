@@ -13,6 +13,7 @@ pub mod restart;
 pub mod start;
 pub mod status;
 pub mod stop;
+pub mod uninstall;
 pub mod wait;
 
 use clap::{Args, Subcommand};
@@ -24,6 +25,7 @@ use self::restart::{RestartOptions, RestartResult, restart};
 use self::start::{StartResult, start};
 use self::status::StatusArgs;
 use self::stop::{StopResult, stop};
+use self::uninstall::{TerminalUninstallPrompt, UninstallResult, uninstall};
 use self::wait::{DaemonProbe, Interrupt, LiveProbe};
 use super::{RunCommand, execute};
 use crate::confirm::ConfirmArgs;
@@ -51,6 +53,11 @@ pub enum DaemonCommand {
         after_help = "Examples:\n  stackly daemon restart\n  stackly daemon restart --yes --json\n  stackly daemon restart --no-wait-instances"
     )]
     Restart(RestartArgs),
+    /// Turn off the background agent: stops the instances, then unregisters the agent. The app, your data, and the command line link stay
+    #[command(
+        after_help = "Examples:\n  stackly daemon uninstall\n  stackly daemon uninstall --yes --json"
+    )]
+    Uninstall(UninstallArgs),
 }
 
 impl DaemonCommand {
@@ -62,6 +69,7 @@ impl DaemonCommand {
             Self::Start(args) => execute(args, cx).await,
             Self::Stop(args) => execute(args, cx).await,
             Self::Restart(args) => execute(args, cx).await,
+            Self::Uninstall(args) => execute(args, cx).await,
         }
     }
 }
@@ -90,6 +98,13 @@ pub struct RestartArgs {
     /// instances that stop and start again
     #[arg(long)]
     no_wait_instances: bool,
+}
+
+/// The arguments of `stackly daemon uninstall`.
+#[derive(Debug, Args)]
+pub struct UninstallArgs {
+    #[command(flatten)]
+    confirm: ConfirmArgs,
 }
 
 /// What the logic of the verbs runs against.
@@ -218,6 +233,24 @@ impl RunCommand for RestartArgs {
             interrupt: &mut interrupt,
         };
         restart(&mut deps, options, &mut prompt).await
+    }
+}
+
+impl RunCommand for UninstallArgs {
+    type Output = UninstallResult;
+
+    async fn run(self, cx: &mut Context) -> CommandOutput<UninstallResult> {
+        let agent = cx.agent.clone();
+        let probe = LiveProbe::new(cx.connector().clone());
+        let mut interrupt = live_interrupt();
+        let key = uuid::Uuid::now_v7().to_string();
+        let mut prompt = TerminalUninstallPrompt::new(cx, self.confirm.approval());
+        let mut deps = Deps {
+            agent: &agent,
+            probe: &probe,
+            interrupt: &mut *interrupt,
+        };
+        uninstall(&mut deps, &mut prompt, &key).await
     }
 }
 
