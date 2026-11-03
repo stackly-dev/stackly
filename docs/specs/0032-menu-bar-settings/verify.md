@@ -128,8 +128,8 @@ Langkah build 9 (daemon dan CLI), 10 (scene `MenuBarExtra`, `MenuBarModel`, popo
 
 - [x] Buka `crates/core/src/instance/stop_all.rs` → `confirmed_steps` membandingkan himpunan `stop` dari `select` dengan `expectedInstanceIds` sebagai himpunan (urutan dan ulangan tidak berarti), menolak dengan `StopAllChanged` kalau berbeda, dan mengembalikan irisan dalam urutan nama → AC-7, AC-8
 - [x] Buka `apps/daemon/src/ipc/stop_all.rs` → urutan `replay_operation`, pilihan, `confirmed_steps`, baru `start_operation`; `instance.stop_all_changed` dikirim sebelum operasi dibuat, jadi kunci idempotency tidak terikat; field itu diurutkan dan dibuang ulangannya sebelum sidik jari → AC-7, AC-8
-- [ ] Jalankan `target/debug/stackly instance stop --help` → `--all`, dan `--yes` berlaku untuk `--force` dan `--all` → AC-9
-- [ ] Jalankan `target/debug/stackly instance stop --all` di terminal dengan dua instance berjalan → baris preview di stderr ("alpha · Started by you"), pertanyaan "Stop All Services?", dan kalimat "Data is kept. …"; `y` menghentikan, Enter menolak dengan exit 9 → AC-9
+- [x] Jalankan `target/debug/stackly instance stop --help` → `--all`, dan `--yes` berlaku untuk `--force` dan `--all` → AC-9
+- [x] Jalankan `target/debug/stackly instance stop --all` di terminal dengan dua instance berjalan → baris preview di stderr ("alpha · Started by you"), pertanyaan "Stop All Services?", dan kalimat "Data is kept. …"; `y` menghentikan, Enter menolak dengan exit 9 → AC-9
 
 - [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/MenuBar/MenuBarRows.swift` → urutan empat grup, batas delapan, dan tabel *Tombol baris* dalam urutan spec (offline, operasi lain, dibuat, unknown, stopping, lalu Start atau Stop); baris kapabilitas start/stop belum bisa terjadi karena kontrak hanya punya `reload` (ditandai `provisional`) → AC-3, AC-4
 - [x] Buka `MenuBar/MenuBarModel.swift` → Stop All membaca `instance.preview_stop_all`, mengirim `instance.stop_all` dengan `expectedInstanceIds` dari preview dan kunci baru, dan pada `instance.stop_all_changed` membaca preview lagi tanpa menghentikan apa pun; tidak ada request saat popover ditutup → AC-6, AC-7, AC-8, AC-10
