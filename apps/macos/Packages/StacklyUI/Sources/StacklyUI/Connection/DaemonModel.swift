@@ -109,6 +109,8 @@ public final class DaemonModel {
     /// Restart Daemon: the confirmation sheet, the plan, and the banner, row marks, and toast
     /// that follow it (spec 0030).
     public let restart: DaemonRestartModel
+    /// The daemon's settings and storage locations, for the Settings window (spec 0032).
+    public let settings: SettingsStore
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
     /// the model is created; the agent model learned the same value at creation.
     public internal(set) var rootOverrideActive = false
@@ -234,6 +236,10 @@ public final class DaemonModel {
                 }
             },
             now: now)
+        settings = SettingsStore(
+            client: SettingsClient { call, key, options throws(ClientError) in
+                try await link.call(call, key, options)
+            })
         mutationPathBox = mutations
         agent?.attach(
             presence: presence, now: now, sleep: sleep,
@@ -505,11 +511,17 @@ public final class DaemonModel {
             // The handshake read the info before the event subscription, so a plan that
             // changed in between, or events lost to a gap, are only found by reading again.
             rereadRestartPlan()
+            // Events lost to a gap, or settings changed while the link was down, are only
+            // found by reading again (spec 0032 AC-16).
+            Task { await settings.refresh() }
         case .event, .lastFrameAt:
             break
         }
         sync.handle(signal)
-        if case .event(let event) = signal { restart.receive(event: event) }
+        if case .event(let event) = signal {
+            restart.receive(event: event)
+            settings.receive(event: event)
+        }
         if case .lastFrameAt(let date) = signal, inputs.refreshed {
             lastKnownAt = date
         }

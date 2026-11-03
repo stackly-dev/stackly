@@ -25,8 +25,8 @@ struct StacklyApp: App {
         .commands { StacklyCommands(runtime: appDelegate.runtime) }
 
         Settings {
-            // provisional: F32
-            SettingsRoot(model: appDelegate.runtime.model)
+            SettingsRoot(
+                model: appDelegate.runtime.model, preferences: appDelegate.runtime.preferences)
         }
 
         #if DEBUG
