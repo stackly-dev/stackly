@@ -268,7 +268,7 @@ Error sisi client di `stackly-ipc` (`IpcError`, thiserror) punya `to_error_body(
 
 - `Event { subscriptionId: u32, sequence: Sequence, at: Timestamp, resource: Option<ResourceRef>, revision: Option<Revision>, kind: EventKind }`. Di daemon, event hanya dibuat lewat `publish_resource(kind, ResourceRef, Revision)` atau `publish_daemon(kind)`, jadi event tentang resource selalu membawa `resource` sekaligus `revision`, dan event daemon tidak membawa keduanya.
 - **Aturan revision** (untuk semua pemilik resource): revision naik per resource (bukan global) dan tidak pernah turun; `revision` di event adalah revision resource setelah perubahan itu; event penghapusan membawa revision terakhir ditambah 1; setiap DTO snapshot resource membawa `revision` dengan arti yang sama. Observasi (readiness dan health spec 0004, blocker dan status secret spec 0011) tidak menaikkan revision, jadi event observasi membawa revision resource yang sama dengan sebelumnya. Event yang revision nya tidak naik hanya boleh membawa observasi, dan setiap observasi membawa waktu observasinya (`observedAt`, atau nama yang ditetapkan pemiliknya seperti `statusObservedAt`). Jenis observasi dibedakan per resource (readiness, health, blocker, status secret). Pemilik observasi wajib mempublikasikan event saat nilai efektif yang dikirim berubah tanpa observasi baru, misalnya readiness `ready` yang menjadi `unknown` karena basi (spec 0004 `effective`), karena client tidak menghitung kesegaran sendiri.
-- `EventKind` di spec ini: `events.gap(Gap { reason: GapReason })` dengan `GapReason` `overflow`, `cursor_expired`, `server_restarted`, dan `daemon.shutting_down(ShuttingDown { reason: ShutdownReason })` dengan `ShutdownReason` `signal` (SIGTERM atau SIGINT), `requested` (`daemon.shutdown` mode `stop`, spec 0015), dan `restart_requested` (`daemon.shutdown` mode `restart`, ditambah spec 0015). Jenis lain ditambah pemiliknya (lihat *Asumsi ke spec lain*). `EventKind::KINDS` adalah daftar jenis yang dikenal.
+- `EventKind` di spec ini: `events.gap(Gap { reason: GapReason })` dengan `GapReason` `overflow`, `cursor_expired`, `server_restarted`, dan `daemon.shutting_down(ShuttingDown { reason: ShutdownReason })` dengan `ShutdownReason` `signal` (SIGTERM, SIGINT, atau SIGHUP), `requested` (`daemon.shutdown` mode `stop`, spec 0015), dan `restart_requested` (`daemon.shutdown` mode `restart`, ditambah spec 0015). Jenis lain ditambah pemiliknya (lihat *Asumsi ke spec lain*). `EventKind::KINDS` adalah daftar jenis yang dikenal.
 - `EventCursor { serverInstanceId: Uuid, sequence: Sequence }`. `serverInstanceId` adalah UUID v7 baru setiap daemon start. `sequence` dihitung per run, mulai 1, naik 1 per event yang dipublikasikan; `head` dengan `sequence` 0 berarti belum ada event.
 - Event bus di library `stacklyd`: satu `Mutex` memegang penghitung sequence, ring `VecDeque<Arc<Event>>` berisi `EVENT_REPLAY_LEN` (4096) event terakhir, dan `tokio::sync::broadcast::Sender` berkapasitas `EVENT_BUFFER_LEN` (1024). Publish adalah fungsi sync: mengambil `at` dari `Clock`, memberi sequence, memasukkan ke ring, dan mengirim ke broadcast di dalam lock yang sama, sehingga urutan ring dan broadcast selalu sama dan publish tidak pernah menunggu subscriber.
 - `events.subscribe(SubscribeParams { since: Option<EventCursor>, kinds: Vec<String>, resource: Option<ResourceRef> })`. `kinds` kosong berarti semua; setiap entri adalah jenis lengkap (`instance.state_changed`) atau awalan area yang diakhiri titik (`operation.`), cocok dengan `^[a-z][a-z0-9_]*\.([a-z][a-z0-9_]*)?$`, paling banyak 32 entri (dicek `Validate`). `resource` membatasi ke satu resource. `events.gap` dan `daemon.shutting_down` selalu dikirim walau tidak cocok dengan filter.
@@ -380,7 +380,7 @@ Exit code `stacklyd`: 0 berhenti normal (atau `--print-roots` berhasil), 1 gagal
 
 **Pemeriksa socket** (di dalam accept loop): `check_bound()`. `Missing` atau `Replaced`: panggil `ensure_runtime_root` (core, baru), lalu `rebind()`, naikkan `socketRebinds`, dan catat warning `socket_rebound`. Kalau rebind gagal, subsystem `ipc` menjadi `unavailable`, status `degraded`, dan percobaan diulang di pemeriksaan berikutnya.
 
-**Berhenti**: SIGTERM atau SIGINT pertama, atau `daemon.shutdown` yang diterima (spec 0015, setelah `ShutdownAccepted` diantrekan):
+**Berhenti**: SIGTERM, SIGINT, atau SIGHUP pertama (tabel sinyal di bawah), atau `daemon.shutdown` yang diterima (spec 0015, setelah `ShutdownAccepted` diantrekan):
 
 1. Hentikan accept loop, lalu `unlink_if_own()` dan buang listener, sehingga client baru langsung mendapat `ipc.endpoint_missing`.
 2. Status `stopping`; publish `daemon.shutting_down` dengan reason pemicunya: `signal` untuk sinyal, `requested` untuk mode `stop`, `restart_requested` untuk mode `restart`.
@@ -390,7 +390,16 @@ Exit code `stacklyd`: 0 berhenti normal (atau `--print-roots` berhasil), 1 gagal
 6. Lepas lock (isi file dibiarkan, start berikutnya menimpanya).
 7. Kosongkan antrian log paling lama 1 detik, lalu keluar 0 (sinyal dan mode `stop`) atau 75 (mode `restart`).
 
-Sinyal kedua selama itu langsung melompat ke langkah 6. Spec ini tidak menghentikan instance apa pun saat daemon berhenti; perilaku itu milik fitur 10 dan 30.
+Sinyal kedua selama itu langsung melompat ke langkah 6. Spec ini tidak menghentikan instance apa pun saat daemon berhenti; perilaku itu milik fitur 10, 30, dan 31.
+
+**Tabel sinyal** (diselaraskan 2026-11-03 dengan spec 0031, bagian *Sinyal per konteks*): `StopSignals` di `apps/daemon/src/shutdown.rs` memasang handler untuk `SIGTERM`, `SIGINT`, dan `SIGHUP`; `SIGHUP` ditambah oleh spec 0031.
+
+| Konteks | Sinyal | Perilaku |
+| --- | --- | --- |
+| manual | `SIGTERM`, `SIGINT`, `SIGHUP` | urutan *Berhenti* di atas, reason `signal`, exit 0; instance dibiarkan untuk diadopsi (spec 0010) |
+| launchd | `SIGINT`, `SIGHUP`, dan `SIGTERM` sesudah `daemon.shutdown` atau rencana restart spec 0030 di commit `stopping` | urutan *Berhenti*; instance dibiarkan |
+| launchd | `SIGTERM` tanpa shutdown yang tercatat | *Akhir sesi* spec 0031 lebih dulu (instance dihentikan dengan bersih, desired tetap), lalu urutan *Berhenti* |
+| semua | `SIGKILL`, crash | tidak ada handler; adopsi di start berikutnya (spec 0010) |
 
 **Kesehatan**: `DaemonHealth { status: DaemonHealthStatus, subsystems: Vec<SubsystemHealth { name, status: SubsystemStatus, detail: Option<String> }>, counters: DaemonCounters, recovery: Option<RegistryRecovery> }`. `RegistryRecovery { reason: String, reportPath: String, detectedAt: Timestamp, appSchemaVersion: u32, dbSchemaVersion: Option<u32> }` (field opsional, minor; `reason` adalah kode reason recovery spec 0005) hanya terisi dalam recovery mode, supaya heartbeat GUI (spec 0013) dan `stackly daemon status` melihatnya tanpa panggilan tambahan.
 
