@@ -43,7 +43,8 @@ struct DaemonRestartClientTests {
 
     @Test func restartSendsTheDigestTheForceFlagAndTheKeyUnderTheLongLimit() async throws {
         let accepted = ShutdownAccepted(
-            serverInstanceId: UUID(), mode: .restart, planId: UUID())
+            serverInstanceId: UUID(), mode: .restart, planId: UUID(), exiting: true,
+            stopAll: nil)
         let fake = Fake(.success(.daemonShutdown(accepted)))
         let reply = try await fake.client.restart(
             expectedPlanDigest: "abc123", force: true, idempotencyKey: "key-1")

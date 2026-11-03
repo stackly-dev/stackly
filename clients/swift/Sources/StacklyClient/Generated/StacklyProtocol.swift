@@ -8348,8 +8348,41 @@ public enum ShutdownMode: String, Codable, Sendable, Equatable {
 	/// Stop so launchd starts the daemon again; the process exits 75. Only
 	/// a `launchd` daemon accepts it.
 	case restart
+	/// Stop the instances the daemon can stop, then exit 0 only when none is
+	/// left, so the client can unregister the background agent (spec 0031,
+	/// *Matikan agent*). It needs the request's `idempotencyKey`.
+	case agentOff = "agent_off"
 	/// A mode this build does not know. A client never sends it.
 	case unrecognized
+}
+
+/// One instance that did not stop, with the error code that says why.
+public struct StopAllEntry: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// The error code, such as `supervisor.stop_timeout`.
+	public let code: String
+
+	public init(instanceId: UUID, code: String) {
+		self.instanceId = instanceId
+		self.code = code
+	}
+}
+
+/// Reply of `instance.stop_all`, once the operation ended.
+public struct StopAllResult: Codable, Sendable, Equatable {
+	/// The instances that stopped.
+	public let stopped: [UUID]
+	/// The instances whose stop failed.
+	public let failed: [StopAllEntry]
+	/// The instances left alone, including the ones a cancel reached.
+	public let skipped: [StopAllEntry]
+
+	public init(stopped: [UUID], failed: [StopAllEntry], skipped: [StopAllEntry]) {
+		self.stopped = stopped
+		self.failed = failed
+		self.skipped = skipped
+	}
 }
 
 /// Reply of `daemon.shutdown`, queued before the first step of the stop
@@ -8362,11 +8395,20 @@ public struct ShutdownAccepted: Codable, Sendable, Equatable {
 	/// The restart plan it wrote, for `restart`; its progress follows in
 	/// `daemon.restart_plan` events (spec 0030).
 	public let planId: UUID?
+	/// Whether the daemon goes on to exit. Always true for `stop` and
+	/// `restart`; for `agent_off` false when an instance could not be
+	/// stopped, and the daemon stays up (spec 0031, *Matikan agent*).
+	public let exiting: Bool?
+	/// What `agent_off` stopped, failed on, and skipped; null for `stop` and
+	/// `restart`.
+	public let stopAll: StopAllResult?
 
-	public init(serverInstanceId: UUID, mode: ShutdownMode, planId: UUID?) {
+	public init(serverInstanceId: UUID, mode: ShutdownMode, planId: UUID?, exiting: Bool?, stopAll: StopAllResult?) {
 		self.serverInstanceId = serverInstanceId
 		self.mode = mode
 		self.planId = planId
+		self.exiting = exiting
+		self.stopAll = stopAll
 	}
 }
 
@@ -8425,19 +8467,6 @@ public struct StartInstanceParams: Codable, Sendable, Equatable {
 	public init(instanceId: UUID, expectedRevision: UInt64?) {
 		self.instanceId = instanceId
 		self.expectedRevision = expectedRevision
-	}
-}
-
-/// One instance that did not stop, with the error code that says why.
-public struct StopAllEntry: Codable, Sendable, Equatable {
-	/// The instance.
-	public let instanceId: UUID
-	/// The error code, such as `supervisor.stop_timeout`.
-	public let code: String
-
-	public init(instanceId: UUID, code: String) {
-		self.instanceId = instanceId
-		self.code = code
 	}
 }
 
@@ -8521,22 +8550,6 @@ public struct StopAllPreview: Codable, Sendable, Equatable {
 		self.alreadyStopping = alreadyStopping
 		self.skipped = skipped
 		self.atLoginCount = atLoginCount
-	}
-}
-
-/// Reply of `instance.stop_all`, once the operation ended.
-public struct StopAllResult: Codable, Sendable, Equatable {
-	/// The instances that stopped.
-	public let stopped: [UUID]
-	/// The instances whose stop failed.
-	public let failed: [StopAllEntry]
-	/// The instances left alone, including the ones a cancel reached.
-	public let skipped: [StopAllEntry]
-
-	public init(stopped: [UUID], failed: [StopAllEntry], skipped: [StopAllEntry]) {
-		self.stopped = stopped
-		self.failed = failed
-		self.skipped = skipped
 	}
 }
 

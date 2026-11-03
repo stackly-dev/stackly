@@ -332,6 +332,8 @@ pub fn restart<'a>(
             server_instance_id: core.start_info().server_instance_id,
             mode: ShutdownMode::Restart,
             plan_id: plan,
+            exiting: true,
+            stop_all: None,
         };
         let force = params.force;
         let expected = params.expected_plan_digest.clone();

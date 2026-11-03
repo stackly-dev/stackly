@@ -15,10 +15,11 @@
 use stackly_core::operation::{BeginRequest, BusyPolicy, Origin};
 use stackly_core::supervisor::StopAllRequest;
 use stackly_domain::{InstanceId, JournalPayload, LockKey, OperationKind, OperationResource};
-use stackly_protocol::ErrorBody;
 use stackly_protocol::codes::{daemon, registry};
-use stackly_protocol::daemon::ShutdownMode;
+use stackly_protocol::daemon::{ShutdownAccepted, ShutdownMode, ShutdownParams};
+use stackly_protocol::fingerprint::request_fingerprint;
 use stackly_protocol::stop_all::StopAllResult;
+use stackly_protocol::{Call, ErrorBody};
 
 use super::operation::{
     StartRequest as OperationStart, payload_too_large, replay_operation,
@@ -26,7 +27,7 @@ use super::operation::{
 };
 use super::restart::restart_pending;
 use super::stop_all::{StopAllInput, current_selection, reply_of, unexpected, wait_final};
-use crate::dispatch::RequestContext;
+use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::state::DaemonCore;
 
 /// What `agent_off` found out, for `ShutdownAccepted`.
@@ -70,6 +71,27 @@ impl Drop for Gate<'_> {
             self.core.end_agent_off();
         }
     }
+}
+
+/// The real `daemon.shutdown` with `mode: agent_off` (spec 0031, *Matikan
+/// agent*): the same in a launchd daemon and a manual one.
+pub fn shutdown<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ShutdownParams,
+) -> HandlerFuture<'a, ShutdownAccepted> {
+    let context = context.clone();
+    Box::pin(async move {
+        let fingerprint = request_fingerprint(&Call::DaemonShutdown(params));
+        let outcome = agent_off(core, &context, "daemon.shutdown", fingerprint).await?;
+        Ok(ShutdownAccepted {
+            server_instance_id: core.start_info().server_instance_id,
+            mode: ShutdownMode::AgentOff,
+            plan_id: None,
+            exiting: outcome.exiting,
+            stop_all: Some(outcome.stop_all),
+        })
+    })
 }
 
 /// Runs `agent_off` for the request `context` with the idempotency

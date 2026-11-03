@@ -1,0 +1,32 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003102",
+    "reply": {
+      "type": "daemon.shutdown",
+      "content": {
+        "serverInstanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e",
+        "mode": "agent_off",
+        "planId": null,
+        "exiting": false,
+        "stopAll": {
+          "stopped": [
+            "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d41"
+          ],
+          "failed": [
+            {
+              "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d42",
+              "code": "supervisor.stop_timeout"
+            }
+          ],
+          "skipped": [
+            {
+              "instanceId": "0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d43",
+              "code": "supervisor.stop_requires_override"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

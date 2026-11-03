@@ -194,6 +194,8 @@ impl Scenario {
                         server_instance_id: common::scripted::server_instance(1),
                         mode: ShutdownMode::Restart,
                         plan_id: Some(PLAN),
+                        exiting: true,
+                        stop_all: None,
                     }))];
                     for view in &handler_scenario.old_events {
                         steps.push(Step::Sleep(Duration::from_millis(30)));

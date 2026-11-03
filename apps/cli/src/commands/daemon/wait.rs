@@ -386,11 +386,11 @@ impl DaemonProbe for LiveProbe {
                 Err(failure) if failure.body.is(&daemon::SHUTTING_DOWN) => None,
                 Err(failure) => return Err(failure),
             };
-            let server_instance_id = accepted.map_or_else(
+            let server_instance_id = accepted.as_ref().map_or_else(
                 || session.accepted().server_instance_id,
                 |accepted| accepted.server_instance_id,
             );
-            let plan_id = accepted.and_then(|accepted| accepted.plan_id);
+            let plan_id = accepted.as_ref().and_then(|accepted| accepted.plan_id);
             let mut plan = None;
             let eof = match stream.as_mut() {
                 Some(stream) => {

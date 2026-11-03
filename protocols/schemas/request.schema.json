@@ -2768,6 +2768,11 @@
           "const": "restart"
         },
         {
+          "description": "Stop the instances the daemon can stop, then exit 0 only when none is\nleft, so the client can unregister the background agent (spec 0031,\n*Matikan agent*). It needs the request's `idempotencyKey`.",
+          "type": "string",
+          "const": "agent_off"
+        },
+        {
           "description": "A mode this build does not know. A client never sends it.",
           "type": "string",
           "const": "unrecognized"
