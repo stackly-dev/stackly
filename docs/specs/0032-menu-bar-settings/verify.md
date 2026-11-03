@@ -55,3 +55,55 @@ Langkah build 1 sampai 5 (commit `6f1d95dd`, `2e9fb672`, `48f2f33b`, `de7ea0e8`,
 - **Perintah setara.** Perintah setara di sheet create hanya menulis `--autostart`; `--no-autostart` eksplisit tidak ditulis karena `CommandDraft.autostart` adalah bool. Berlaku hanya saat default di daemon menyala.
 - **Lokasi file test.** Test daemon ada di `apps/daemon/tests/supervisor/settings.rs` dan `storage_locations.rs` karena rig `Site` dan `Api` ada di sana.
 - **Tidak terkirim.** Pesan ke `dev-f31-m3` soal blok kecil di `apps/daemon/src/server.rs` gagal terkirim (sesi itu tidak terhubung ke sesi ini). Perubahannya satu blok sesudah `core.set_registry(RegistryState::Ready { .. })`.
+
+## Milestone 2: Jendela Settings
+
+Langkah build 6 sampai 8 (commit `37fda004`, `001d6e73`, `4b6d0ee3`). Bagian AC yang belum: Stop All dan menu bar (milestone 3), notifikasi dan baris izin (milestone 4), fixture, snapshot, dan semua evidence native (milestone 5), serta jalur matikan agent dari baris General (menunggu kontrak 3.1 milik `dev-f31-m4`).
+
+### UI / manual
+
+- [x] Buka `clients/swift/Sources/StacklyClient/Settings/SettingsClient.swift` → empat method bertipe (`get`, `update`, `locations`, `setLocation`), balasan jenis lain menjadi `protocolViolation` → AC-16, AC-19
+- [x] Buka `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Settings/SettingsStore.swift` → salinan terakhir, satu perubahan pada satu waktu dengan revision salinan itu, `resource.revision_mismatch` menjadi "Changed elsewhere. Try again." lalu baca ulang, jawaban lebih lama tidak menimpa yang lebih baru → AC-16, AC-17, AC-24
+- [x] Buka `Connection/DaemonModel.swift` → `settings` membaca ulang pada `.resnapshot` dan `.caughtUp` (gap dan sambung ulang) dan pada event `settings.changed` → AC-16
+- [x] Buka `Settings/SettingsAvailability.swift` → satu entri per baris dengan fitur pemiliknya; Notifications (milestone 4), Clean Up (fitur 55), sumber community dan import (fitur 37) tidak tampil → AC-13
+- [x] Buka `Settings/AppPreferences.swift` → Appearance System, Light, Dark di `UserDefaults`, diterapkan lewat `NSApp.appearance` saat app mulai dan saat berubah → AC-14
+- [x] Buka tab Instances, Sources, Updates di `Settings/SettingsTabs.swift` → toggle dan segmented langsung berlaku tanpa Apply, indikator kecil selama operasi, banner "Can’t connect to stacklyd.", "last known", "Not available while stacklyd is offline.", dan catatan jujur channel dan telemetry → AC-13, AC-23, AC-24
+- [x] Buka `Settings/StartupRowContent.swift` dan `StartupSettingsSection.swift` → baris agent untuk enam state, kalimat login berikutnya dengan jumlah instance `at_login`, atau teks "Won’t start at login…" → AC-15
+- [x] Buka `Agent/SMAppServiceMainApp.swift`, `LoginItemModel.swift` → toggle Open Stackly at login terpisah dari agent, state dibaca dari OS setiap app aktif, `requiresApproval` dengan Open Login Items; aturan sumber spec 0012 mengizinkan `import ServiceManagement` di file ini → AC-12
+- [x] Buka `Settings/StorageSettingsTab.swift` dan `LocationRowContent.swift` → Change… (panel folder, lalu konfirmasi), Use Default hanya saat default bukan bawaan, Reveal in Finder, lokasi lama, "Not reachable", "Unknown while stacklyd is offline", baris retention read only → AC-19, AC-21, AC-24
+- [x] Buka `CreateInstance/CreateInstanceModel.swift` dan `NewInstanceSheet.swift` → toggle Start at login mulai dari `startupDefault` form (create dan duplicate), pilihan orang tidak ditimpa, `startup` selalu eksplisit (`at_login` atau `manual`), baris "Data folder" → AC-18, AC-19
+
+### Commands
+
+- [x] `swift test --package-path clients/swift` → `SettingsClientTests` (6 test) lulus bersama suite lain; lihat hasil akhir di bawah → AC-16, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → `SettingsStoreTests`, `AppPreferencesTests`, `SettingsAvailabilityTests`, `StartupRowContentTests`, `LoginItemModelTests`, `LocationRowContentTests`, `StorageSettingsModelTests`, tiga test baru di `CreateInstanceModelTests`, dan `SourceRuleTests` → AC-12 sampai AC-19, AC-21, AC-23, AC-24
+- [x] `xcrun swift-format lint --strict` dan `cargo xtask build-app` → bersih
+- [ ] Open Stackly at login sungguhan (mendaftarkan `SMAppService.mainApp` dari app yang ditandatangani di `/Applications`) → `BLOCKED`, reason `no code signing identity on this Mac (OQ-012)`. Adapter dan model dibuktikan dengan fake → AC-12
+- [ ] Mematikan agent dari baris Start stacklyd at login (konfirmasi "Turn Off Background Agent?", `daemon.shutdown { mode: agent_off }`, unregister hanya kalau `exiting: true`) → `BLOCKED`, reason `waits for contract 3.1 (agent_off, dev-f31-m4)`. Toggle menampilkan alasannya dan tidak mengirim apa pun → AC-15
+- [ ] Panel folder dan Reveal in Finder sungguhan, serta jendela Settings terlihat → langkah manual milestone 5 (tidak dijalankan di sini, app tidak dibuka) → AC-14, AC-19
+
+### Acceptance-criteria coverage
+
+- AC-12 · adapter, model, dan toggle selesai dengan fake; pendaftaran nyata `BLOCKED`; deteksi peluncuran sebagai login item di milestone 3 (langkah 11)
+- AC-13 · lima tab; baris fitur yang belum ada tidak tampil lewat `SettingsAvailability`; `SettingsPlaceholder` sudah tidak ada
+- AC-14 · Appearance di `UserDefaults`, berlaku lewat `NSApp.appearance` untuk semua jendela
+- AC-15 · baris agent untuk enam state, kalimat login berikutnya, Turn On, Open Login Items; jalur matikan menunggu kontrak 3.1
+- AC-16 · refetch saat event, gap, dan sambung ulang di `DaemonModel`
+- AC-17 · "Changed elsewhere. Try again." di baris dan di baris lokasi
+- AC-18 · `startupDefault` mengisi toggle di sheet New Instance dan Duplicate
+- AC-19 · Change…, konfirmasi, Use Default, Reveal in Finder, lokasi lama, "Not reachable"; panel folder nyata di manual
+- AC-20 · sisi GUI hanya menampilkan `storage.location_invalid` dan "Not reachable"; sisi daemon di milestone 1
+- AC-21 · baris "Instance logs" dari `DaemonSettingsView.logRetention`
+- AC-23 · catatan channel dan telemetry persis seperti spec
+- AC-24 · banner, "last known", "Unknown while stacklyd is offline", "Not available while stacklyd is offline."
+
+### Catatan
+
+- **Matikan agent.** `ShutdownMode.agentOff` dan `BackgroundAgentModel.unregister` belum ada (kontrak 3.1 milik `dev-f31-m4`). Toggle Start stacklyd at login bisa menyalakan agent, menampilkan state, dan menampilkan kalimat login berikutnya, tetapi saat agent menyala toggle nonaktif dengan alasan `StartupCopy.turnOffPending` (ditandai `// provisional: F31 milestone 4`). Setelah 3.1 mendarat, ganti alasan itu dengan konfirmasi `TurnOffPlan` dan urutan spec 0031.
+- **`startup` selalu eksplisit.** Sheet create mengirim `at_login` atau `manual`, tidak lagi `nil`. Kalau tidak, default `at_login` dengan toggle dimatikan orang akan tetap membuat instance `at_login`. Test lama yang mengharapkan `nil` diubah menjadi `manual`.
+- **Perintah setara.** Daemon membangun perintah dari `CommandDraft.autostart` yang bool; dengan default `at_login` dan toggle dimatikan, perintah itu tidak menulis `--no-autostart`. Itu ada di kode Rust (`apps/daemon/src/map/create.rs`), jadi tidak diubah di sini. Perlu ditindaklanjuti sesi yang memegang kontrak.
+- **Retention.** Ukuran segmen ditulis dalam MiB, sama dengan CLI (`mebibytes`), bukan satuan desimal katalog.
+- **Reveal in Finder.** Memakai `OpenInPorts.system.opener.reveal` yang sudah ada; folder lokasi ditampilkan terpilih di folder induknya.
+- **Graf pengetahuan.** `graphify-out/` ada di `.gitignore` dan tidak ada di worktree ini, jadi `graphify update .` tidak dijalankan sebelum commit.
+- **Snapshot.** Baris "Data folder" menambah satu baris di sheet New Instance, jadi 24 PNG `NewInstanceSnapshotTests` (light, dark, narrow) direkam ulang dan dilihat; tidak ada snapshot lain yang berubah. Snapshot jendela Settings baru dan fixture nya di milestone 5 (langkah 13).
+- **Hasil suite penuh.** Client 253 test lulus. StacklyUI 1757 test: dua test `CreateInstanceModelTests` (`aRefusedCreateLeavesAnEnterSecretOffUntilTheTextIsTypedAgain`, `startAtLoginIsOffUntilChosenAndGoesToThePreflightAndTheCreate`) gagal pada run penuh dan lulus (45 dari 45) kalau dijalankan sendiri, flaky yang sudah diketahui; 24 snapshot sheet gagal sebelum direkam ulang dan lulus sesudahnya.
