@@ -1,7 +1,9 @@
 //! The rule that chooses what Stop All stops (spec 0031 AC-10, *Pilihan stop
 //! all*): one case per row of its table, the order, and the cut down view.
 
-use stackly_core::instance::stop_all::{DemandSource, StopAllInstance, StopAllView, select};
+use stackly_core::instance::stop_all::{
+    DemandSource, StopAllChanged, StopAllInstance, StopAllView, confirmed_steps, select,
+};
 use stackly_domain::{
     DesiredState, EnvironmentId, InstanceId, InstanceLifecycle, Lease, LeaseHolder, LeaseId,
     SessionId, StartupPolicy,
@@ -188,4 +190,79 @@ fn the_view_of_one_instance_holds_only_that_instance() {
 
     assert_eq!(one.instances.len(), 1);
     assert!(both.of_instance(InstanceId::generate()).is_none());
+}
+
+#[test]
+fn without_an_expected_set_every_selected_instance_is_a_step() {
+    let a = item("a", L::Running, DesiredState::Running);
+    let b = item("b", L::Running, DesiredState::Running);
+    let ids = [a.id, b.id];
+    let selection = select(&view(vec![b, a]));
+
+    let steps = confirmed_steps(&selection, None).expect("no expectation never changes");
+
+    assert_eq!(steps, ids);
+}
+
+#[test]
+fn the_expected_set_in_any_order_with_repeats_gives_the_selected_steps_by_name() {
+    let a = item("a", L::Running, DesiredState::Running);
+    let b = item("b", L::Running, DesiredState::Running);
+    let (a_id, b_id) = (a.id, b.id);
+    let selection = select(&view(vec![a, b]));
+
+    let steps =
+        confirmed_steps(&selection, Some(&[b_id, a_id, b_id])).expect("the same set confirms");
+
+    assert_eq!(steps, [a_id, b_id]);
+}
+
+#[test]
+fn an_instance_that_joined_the_selection_since_the_preview_changes_it() {
+    let a = item("a", L::Running, DesiredState::Running);
+    let late = item("late", L::Starting, DesiredState::Running);
+    let a_id = a.id;
+    let selection = select(&view(vec![a, late]));
+
+    assert_eq!(
+        confirmed_steps(&selection, Some(&[a_id])),
+        Err(StopAllChanged)
+    );
+}
+
+#[test]
+fn an_instance_that_left_the_selection_since_the_preview_changes_it() {
+    let a = item("a", L::Running, DesiredState::Running);
+    let gone = InstanceId::generate();
+    let a_id = a.id;
+    let selection = select(&view(vec![a]));
+
+    assert_eq!(
+        confirmed_steps(&selection, Some(&[a_id, gone])),
+        Err(StopAllChanged)
+    );
+}
+
+#[test]
+fn an_instance_that_began_stopping_on_its_own_is_not_in_the_selected_set() {
+    let a = item("a", L::Running, DesiredState::Running);
+    let stopping = item("b", L::Stopping, DesiredState::Stopped);
+    let (a_id, stopping_id) = (a.id, stopping.id);
+    let selection = select(&view(vec![a, stopping]));
+
+    assert_eq!(confirmed_steps(&selection, Some(&[a_id])), Ok(vec![a_id]));
+    assert_eq!(
+        confirmed_steps(&selection, Some(&[a_id, stopping_id])),
+        Err(StopAllChanged)
+    );
+}
+
+#[test]
+fn an_empty_expected_set_matches_an_empty_selection_only() {
+    let idle = item("idle", L::Stopped, DesiredState::Stopped);
+    let empty = select(&view(vec![idle]));
+    let running = select(&view(vec![item("a", L::Running, DesiredState::Running)]));
+
+    assert_eq!(confirmed_steps(&empty, Some(&[])), Ok(Vec::new()));
+    assert_eq!(confirmed_steps(&running, Some(&[])), Err(StopAllChanged));
 }

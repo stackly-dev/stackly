@@ -7,6 +7,8 @@
 //! [`StopAllView::of_instance`] cuts it down to one instance for the check
 //! each step makes just before it stops.
 
+use std::collections::BTreeSet;
+
 use stackly_domain::{
     DesiredState, ErrorCodeName, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
     InstanceName, Lease, LeaseFilter, LeaseHolder, LeaseState, OperationKind, OperationResource,
@@ -220,6 +222,40 @@ pub fn select(view: &StopAllView) -> StopAllSelection {
         .sort_by(|a, b| (&a.name, a.id).cmp(&(&b.name, b.id)));
     selection
 }
+
+/// The instances `instance.stop_all` stops when the client confirmed
+/// `expected` from a preview (spec 0032 AC-7, AC-8): the `stop` list of
+/// `selection` cut down to `expected`. With no `expected`, all of `stop`.
+///
+/// # Errors
+///
+/// Returns [`StopAllChanged`] when `expected` and the `stop` list are not the
+/// same set. `already_stopping` and `skipped` do not count, so an instance
+/// that left the list or joined it since the preview changes the answer, and
+/// nothing is stopped.
+pub fn confirmed_steps(
+    selection: &StopAllSelection,
+    expected: Option<&[InstanceId]>,
+) -> Result<Vec<InstanceId>, StopAllChanged> {
+    let steps: Vec<InstanceId> = selection.stop.iter().map(|entry| entry.id).collect();
+    let Some(expected) = expected else {
+        return Ok(steps);
+    };
+    let confirmed: BTreeSet<InstanceId> = expected.iter().copied().collect();
+    let chosen: BTreeSet<InstanceId> = steps.iter().copied().collect();
+    if confirmed != chosen {
+        return Err(StopAllChanged);
+    }
+    Ok(steps
+        .into_iter()
+        .filter(|id| confirmed.contains(id))
+        .collect())
+}
+
+/// The instances Stop All would stop are not the ones the client confirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("the instances to stop changed since the preview")]
+pub struct StopAllChanged;
 
 /// Reads the input of [`select`] from the registry: every instance, the
 /// leases that are not released, and the operations that are not final. The
