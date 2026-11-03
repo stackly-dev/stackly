@@ -342,11 +342,44 @@ pub async fn start_operation(
     start: StartRequest<'_>,
     build: impl FnOnce(Origin) -> BeginRequest,
 ) -> Result<StartOutcome, Box<ErrorBody>> {
+    start_operation_gated(core, context, start, build, false).await
+}
+
+/// Like [`start_operation`], but the request passes the quiesce gate. Only
+/// the handler of `daemon.shutdown` `agent_off` uses it, for the operation
+/// that stops the instances (spec 0031, *Matikan agent*).
+///
+/// # Errors
+///
+/// The same as [`start_operation`].
+pub async fn start_operation_bypassing_quiesce(
+    core: &DaemonCore,
+    context: &RequestContext,
+    start: StartRequest<'_>,
+    build: impl FnOnce(Origin) -> BeginRequest,
+) -> Result<StartOutcome, Box<ErrorBody>> {
+    start_operation_gated(core, context, start, build, true).await
+}
+
+async fn start_operation_gated(
+    core: &DaemonCore,
+    context: &RequestContext,
+    start: StartRequest<'_>,
+    build: impl FnOnce(Origin) -> BeginRequest,
+    bypass_quiesce: bool,
+) -> Result<StartOutcome, Box<ErrorBody>> {
     let (engine, origin) = request_parts(core, context, &start)?;
-    let outcome = engine
-        .begin(build(Origin::Request(origin)))
-        .await
-        .map_err(|error| boxed(begin_error(&error, start.method)))?;
+    let request = build(Origin::Request(origin));
+    let outcome = if bypass_quiesce {
+        engine.begin_bypassing_quiesce(request).await
+    } else {
+        engine.begin(request).await
+    }
+    .map_err(|error| match error {
+        // While an `agent_off` runs, the gate says the daemon is stopping.
+        BeginError::RestartPending if core.agent_off_active() => boxed(shutting_down()),
+        error => boxed(begin_error(&error, start.method)),
+    })?;
     Ok(match outcome {
         BeginOutcome::Created(view) => accepted(&view, false),
         BeginOutcome::Replayed(view) => accepted(&view, true),

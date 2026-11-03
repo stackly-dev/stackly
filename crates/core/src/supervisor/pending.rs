@@ -29,6 +29,9 @@ pub(super) const SESSION_ROTATION_INPUT: &str = r#"{"trigger":"session_rotation"
 /// The journal input of the stop that ends a login session (spec 0031,
 /// *Akhir sesi*, step 3).
 pub(super) const SESSION_END_INPUT: &str = r#"{"trigger":"session_end"}"#;
+/// The journal input of the start that follows a locked Keychain opening
+/// (spec 0031, AC-15).
+pub(super) const SECRET_RETRY_INPUT: &str = r#"{"trigger":"secret_retry"}"#;
 /// The journal input of a start after a new login (spec 0031, AC-4).
 pub(super) const LOGIN_INPUT: &str = r#"{"trigger":"login"}"#;
 /// The journal input of the start that restores an instance a planned

@@ -181,7 +181,11 @@ pub enum KeychainSetupError {
 /// | `errSecAuthFailed` (-25293) | `Locked` when locked; else `AccessDenied`, `by_user` only under `AllowPrompt` |
 /// | `errSecInteractionNotAllowed` (-25308) | `Locked` when locked; else `AccessDenied { by_user: false }` |
 /// | `errSecUserCanceled` (-128) | `AccessDenied { by_user: true }` |
-/// | any other | `Backend { code }` |
+/// | any other, such as `errAuthorizationInternal` (-60008) | `Locked` when locked; else `Backend { code }` |
+///
+/// The lock status comes from a check made only after the call failed; a
+/// check that itself failed counts as not locked, so the code stays a
+/// `Backend` error.
 #[must_use]
 pub const fn map_status(
     code: i32,
@@ -199,6 +203,7 @@ pub const fn map_status(
         },
         ERR_INTERACTION_NOT_ALLOWED => SecretStoreError::AccessDenied { by_user: false },
         ERR_USER_CANCELED => SecretStoreError::AccessDenied { by_user: true },
+        _ if keychain_locked => SecretStoreError::Locked,
         code => SecretStoreError::Backend { code },
     }
 }
@@ -655,7 +660,13 @@ mod tests {
             (-128, true, PROMPT, AccessDenied { by_user: true }),
             (-26_275, false, NEVER, Backend { code: -26_275 }),
             (-25_291, false, NEVER, Backend { code: -25_291 }),
-            (-50, true, PROMPT, Backend { code: -50 }),
+            (-50, false, PROMPT, Backend { code: -50 }),
+            // A locked keychain makes any other status `Locked`; the
+            // Authorization Services status -60008 is what an item read
+            // answers on a keychain locked from another process.
+            (-50, true, PROMPT, Locked),
+            (-60_008, true, NEVER, Locked),
+            (-60_008, false, NEVER, Backend { code: -60_008 }),
         ];
         for (code, locked, interaction, expected) in cases {
             assert_eq!(

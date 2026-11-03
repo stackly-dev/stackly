@@ -68,4 +68,14 @@ nonisolated public struct SecretNeed: Identifiable, Sendable, Equatable {
         case .unrecognized: "The value can’t be read."
         }
     }
+
+    /// The sentence for an instance that waits for a locked or busy Keychain, or `nil` when some
+    /// reference needs the person (spec 0031, AC-15). The daemon reads the secrets again every
+    /// 30 seconds, so the person has nothing to do while the store is locked.
+    public static func keychainWaitNote(for needs: [SecretNeed]) -> String? {
+        guard needs.isEmpty == false,
+            needs.allSatisfy({ $0.reason == .storeLocked || $0.reason == .storeBusy })
+        else { return nil }
+        return "The Keychain is locked. Stackly tries again every 30 seconds."
+    }
 }

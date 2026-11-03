@@ -9,6 +9,7 @@
 mod common;
 
 mod actions;
+mod agent_off;
 mod budget;
 mod config;
 mod create;
@@ -24,6 +25,7 @@ mod list_performance;
 mod login;
 mod logs;
 mod metrics;
+mod native_keychain;
 mod offline;
 mod open_with;
 mod process;

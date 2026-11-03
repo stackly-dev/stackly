@@ -61,8 +61,8 @@ struct InstanceDetailBanner: View {
         if item.rule == "I4", let needs = Self.needs(of: summary), needs.isEmpty == false {
             StateBanner(
                 tone: item.tone, title: "Needs a secret to start",
-                message:
-                    needs.map(\.reference).joined(separator: "\n"),
+                message: ([SecretNeed.keychainWaitNote(for: needs)].compactMap { $0 }
+                    + needs.map(\.reference)).joined(separator: "\n"),
                 actions: [
                     StateAction(
                         title: "Enter Secret…", mutates: true,

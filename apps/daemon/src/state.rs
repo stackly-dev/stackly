@@ -2,7 +2,7 @@
 //! *Kesehatan*): its phase, its subsystems, its counters, and the facts
 //! `daemon.get_info` reports.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Instant;
 
@@ -177,6 +177,10 @@ pub struct DaemonCore {
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
     shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
+    /// Set while a `daemon.shutdown` `agent_off` runs (spec 0031, *Matikan
+    /// agent*): other shutdown requests and new operations from clients get
+    /// `daemon.shutting_down`.
+    agent_off: AtomicBool,
 }
 
 impl std::fmt::Debug for DaemonCore {
@@ -235,7 +239,26 @@ impl DaemonCore {
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
             shutdown: Arc::new(watch::Sender::new(None)),
+            agent_off: AtomicBool::new(false),
         }
+    }
+
+    /// Claims the one `agent_off` a daemon runs at a time; `false` means
+    /// another one runs.
+    pub fn begin_agent_off(&self) -> bool {
+        !self.agent_off.swap(true, Ordering::SeqCst)
+    }
+
+    /// Ends the claim of [`begin_agent_off`](Self::begin_agent_off) when the
+    /// daemon stays up.
+    pub fn end_agent_off(&self) {
+        self.agent_off.store(false, Ordering::SeqCst);
+    }
+
+    /// Whether an `agent_off` runs right now.
+    #[must_use]
+    pub fn agent_off_active(&self) -> bool {
+        self.agent_off.load(Ordering::SeqCst)
     }
 
     /// The reply of `daemon.get_info`: the facts recorded at start, plus

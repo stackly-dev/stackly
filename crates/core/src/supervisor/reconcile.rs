@@ -445,6 +445,7 @@ impl Supervisor {
         deps.events
             .reconciling(&ReconcilePhase::Finished(report.clone()));
         recheck::spawn_recheck(self);
+        super::secret_retry::spawn_secret_retry(self);
         Ok(report)
     }
 
