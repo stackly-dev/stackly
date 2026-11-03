@@ -132,6 +132,10 @@ pub enum OperationKind {
     SetInstanceStartup,
     /// Stop every instance that is wanted or runs (spec 0031).
     StopAllInstances,
+    /// Change daemon settings (spec 0032).
+    UpdateDaemonSettings,
+    /// Point the default location of a kind at another folder (spec 0032).
+    SetStorageLocation,
     /// Write a new config revision and make it take effect (spec 0029).
     ApplyConfig,
     /// Change the ports of an instance's endpoints (spec 0029).

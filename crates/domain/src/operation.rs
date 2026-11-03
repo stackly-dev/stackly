@@ -221,6 +221,12 @@ code_enum! {
         /// Stop every instance that is wanted or runs, one step each (spec
         /// 0031); its resource is the manager.
         StopAllInstances => "stop_all_instances",
+        /// Change the daemon settings (spec 0032); its resource is the
+        /// manager.
+        UpdateDaemonSettings => "update_daemon_settings",
+        /// Point the default location of a kind at another folder (spec
+        /// 0032); its resource is the manager.
+        SetStorageLocation => "set_storage_location",
         /// Remove an instance and keep its data.
         RemoveInstance => "remove_instance",
         /// Delete an instance and its data.

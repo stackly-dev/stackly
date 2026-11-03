@@ -81,7 +81,7 @@ pub fn gather_config(
     let last_known_good = registry.last_known_good(id)?.value;
     let package = load_package(platform, layout, &instance)?;
     let settings = active_settings(&package, &active)?;
-    let paths = layout.layout().instance_paths(id);
+    let paths = layout.instance_paths(id);
     let runtime = runtime_fact(platform, layout, registry, &instance)?;
     let reload_supported = package
         .provider_revision()

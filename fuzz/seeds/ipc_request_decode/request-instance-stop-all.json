@@ -3,6 +3,8 @@
   "idempotencyKey": "stop-all-0001",
   "call": {
     "type": "instance.stop_all",
-    "content": {}
+    "content": {
+      "expectedInstanceIds": null
+    }
   }
 }

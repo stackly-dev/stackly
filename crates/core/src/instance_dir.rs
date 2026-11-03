@@ -129,7 +129,6 @@ pub fn create_instance_layout(
     known: &[InstanceId],
 ) -> Result<InstancePaths, CoreError> {
     let fs = platform.fs();
-    let layout = prepared.layout();
     let id = manifest.instance_id();
     let key = id.short_key();
     if known.iter().any(|other| other.short_key() == key) {
@@ -149,8 +148,8 @@ pub fn create_instance_layout(
     }
     let bytes = encode_manifest(manifest)?;
 
-    let paths = layout.instance_paths(id);
-    for existing in [&paths.root, &layout.retained_instance_paths(id).root] {
+    let paths = prepared.instance_paths(id);
+    for existing in [&paths.root, &prepared.retained_instance_paths(id).root] {
         if fs.symlink_metadata(existing)?.is_some() {
             return Err(CoreError::AlreadyExists {
                 path: existing.clone(),
@@ -250,10 +249,7 @@ mod tests {
 
         let paths = create_instance_layout(&platform, &prepared, &manifest, &[]).unwrap();
 
-        assert_eq!(
-            paths,
-            prepared.layout().instance_paths(manifest.instance_id())
-        );
+        assert_eq!(paths, prepared.instance_paths(manifest.instance_id()));
         let created: Vec<(FsOp, PathBuf)> = fake.fs().mutations()[before..]
             .iter()
             .map(|Mutation { op, path, .. }| (*op, path.clone()))
@@ -372,7 +368,7 @@ mod tests {
         let neighbour_paths =
             create_instance_layout(&platform, &prepared, &neighbour, &[]).unwrap();
         let manifest = manifest_for(&platform, InstanceId::generate());
-        let paths = prepared.layout().instance_paths(manifest.instance_id());
+        let paths = prepared.instance_paths(manifest.instance_id());
         fake.fs()
             .fail_when(FsOp::CreateDirPrivate, "config", Fault::NoSpace);
 
@@ -414,7 +410,7 @@ mod tests {
         let (fake, prepared) = prepared(&root);
         let platform = fake.platform();
         let manifest = manifest_for(&platform, InstanceId::generate());
-        let paths = prepared.layout().instance_paths(manifest.instance_id());
+        let paths = prepared.instance_paths(manifest.instance_id());
         fake.fs().fail_next(FsOp::WriteFileAtomic, Fault::Io);
 
         let result = create_instance_layout(&platform, &prepared, &manifest, &[]);

@@ -1,5 +1,7 @@
 //! The free space of the disk that holds Stackly data (spec 0022).
 
+mod location;
+
 use std::io;
 use std::path::Path;
 
@@ -7,6 +9,11 @@ use jiff::Timestamp;
 use stackly_domain::CapacityLevel;
 use stackly_domain::capacity;
 use stackly_platform::{Filesystem, PlatformError};
+
+pub use location::{
+    FolderFact, LOCATION_DIR, LocationContext, LocationFacts, LocationState, LocationVerdict,
+    MARKER_FILE, Marker, check_location, gather_location_facts, prepare_location, probe_location,
+};
 
 /// One reading of the volume that holds the data root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -88,12 +88,18 @@ pub struct StopAllPreview {
     pub at_login_count: Count,
 }
 
-/// Params of `instance.stop_all`. None yet; the struct keeps room for
-/// fields without a new major.
+/// Params of `instance.stop_all`.
 #[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct StopAllParams {}
+pub struct StopAllParams {
+    /// The instances the person saw in the preview. When present, the daemon
+    /// refuses with `instance.stop_all_changed` unless the instances it would
+    /// stop are exactly these, and it only ever stops that set (spec 0032).
+    /// Absent: stop what the rule chooses (`agent_off` does this).
+    #[serde(default)]
+    pub expected_instance_ids: Option<Vec<Uuid>>,
+}
 
 impl Validate for StopAllParams {}
 

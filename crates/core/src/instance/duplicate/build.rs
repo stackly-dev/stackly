@@ -71,7 +71,7 @@ pub fn build_duplicate(facts: &DuplicateFacts) -> DuplicateModel {
             .collect(),
         secret_values: Vec::new(),
         start: false,
-        startup: stackly_domain::StartupPolicy::Manual,
+        startup: None,
     };
     let secret_sources = secret_fields
         .iter()

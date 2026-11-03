@@ -1,0 +1,58 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000d10",
+    "reply": {
+      "type": "storage.list_locations",
+      "content": {
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-000000000001",
+            "kind": "data",
+            "path": "/Users/dev/Library/Application Support/Stackly",
+            "builtIn": true,
+            "isDefault": false,
+            "instanceCount": 1,
+            "reachable": true
+          },
+          {
+            "id": "00000000-0000-7000-8000-000000000002",
+            "kind": "logs",
+            "path": "/Users/dev/Library/Logs/Stackly",
+            "builtIn": true,
+            "isDefault": true,
+            "instanceCount": 4,
+            "reachable": true
+          },
+          {
+            "id": "00000000-0000-7000-8000-000000000003",
+            "kind": "cache",
+            "path": "/Users/dev/Library/Caches/Stackly",
+            "builtIn": true,
+            "isDefault": true,
+            "instanceCount": 0,
+            "reachable": true
+          },
+          {
+            "id": "0192f3a9-0000-7000-8000-000000000001",
+            "kind": "data",
+            "path": "/Volumes/Work/Stackly",
+            "builtIn": false,
+            "isDefault": true,
+            "instanceCount": 2,
+            "reachable": true
+          },
+          {
+            "id": "0192f3a9-0000-7000-8000-000000000002",
+            "kind": "data",
+            "path": "/Volumes/Gone/Stackly",
+            "builtIn": false,
+            "isDefault": false,
+            "instanceCount": 1,
+            "reachable": false
+          }
+        ]
+      }
+    }
+  }
+}

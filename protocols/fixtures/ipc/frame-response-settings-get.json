@@ -1,0 +1,50 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000d07",
+    "reply": {
+      "type": "settings.get",
+      "content": {
+        "revision": 3,
+        "defaultStartup": "manual",
+        "updateChannel": "stable",
+        "telemetry": false,
+        "telemetryCopyVersion": 1,
+        "locations": {
+          "data": {
+            "id": "0192f3a9-0000-7000-8000-000000000001",
+            "kind": "data",
+            "path": "/Volumes/Work/Stackly",
+            "builtIn": false,
+            "isDefault": true,
+            "instanceCount": 2,
+            "reachable": true
+          },
+          "logs": {
+            "id": "00000000-0000-7000-8000-000000000002",
+            "kind": "logs",
+            "path": "/Users/dev/Library/Logs/Stackly",
+            "builtIn": true,
+            "isDefault": true,
+            "instanceCount": 4,
+            "reachable": true
+          },
+          "cache": {
+            "id": "00000000-0000-7000-8000-000000000003",
+            "kind": "cache",
+            "path": "/Users/dev/Library/Caches/Stackly",
+            "builtIn": true,
+            "isDefault": true,
+            "instanceCount": 0,
+            "reachable": true
+          }
+        },
+        "logRetention": {
+          "segmentsPerStream": 5,
+          "segmentMaxBytes": 20971520
+        },
+        "updatedAt": "2026-11-03T08:00:00.000Z"
+      }
+    }
+  }
+}

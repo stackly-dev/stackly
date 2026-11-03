@@ -1663,8 +1663,12 @@
             "$ref": "#/$defs/CapabilityStatus"
           }
         },
+        "dataLocation": {
+          "description": "The folder the data of the new instance goes in: the default data\nlocation, resolved (spec 0032).",
+          "type": "string"
+        },
         "dataPath": {
-          "description": "Where the data lives, relative to the data root:\n`instances/<new instance id>/data`.",
+          "description": "Where the data lives, relative to the data location:\n`instances/<new instance id>/data`.",
           "type": "string"
         },
         "endpoints": {
@@ -1681,6 +1685,10 @@
             "$ref": "#/$defs/FormField"
           }
         },
+        "logsLocation": {
+          "description": "The folder the logs of the new instance go in: the default log\nlocation, resolved (spec 0032).",
+          "type": "string"
+        },
         "provider": {
           "description": "The provider the form was built from.",
           "$ref": "#/$defs/CreateProvider"
@@ -1688,6 +1696,10 @@
         "runtime": {
           "description": "The runtime the instance will run on.",
           "$ref": "#/$defs/RuntimeSummary"
+        },
+        "startupDefault": {
+          "description": "The startup policy the Start at login toggle begins with: the daemon\nsetting `defaultStartup` (spec 0032).",
+          "$ref": "#/$defs/StartupPolicyKind"
         },
         "suggestedName": {
           "description": "The name the form starts with; absent when every candidate is taken.",
@@ -1702,6 +1714,9 @@
         "provider",
         "runtime",
         "dataPath",
+        "startupDefault",
+        "dataLocation",
+        "logsLocation",
         "endpoints",
         "fields",
         "capabilities"
@@ -2334,6 +2349,61 @@
         "rotation"
       ]
     },
+    "DaemonSettingsView": {
+      "description": "Reply of `settings.get`, and of `settings.update` once it ended.",
+      "type": "object",
+      "properties": {
+        "defaultStartup": {
+          "description": "The startup policy of an instance created without one.",
+          "$ref": "#/$defs/StartupPolicyKind"
+        },
+        "locations": {
+          "description": "The default locations.",
+          "$ref": "#/$defs/DefaultLocations"
+        },
+        "logRetention": {
+          "description": "What the instance logs keep, from the daemon's constants.",
+          "$ref": "#/$defs/LogRetention"
+        },
+        "revision": {
+          "description": "Rises with every change; `settings.update` and `storage.set_location`\ntake it back as `expectedRevision`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "telemetry": {
+          "description": "Whether the person agreed to share usage statistics. Nothing is sent\nwhatever the value.",
+          "type": "boolean"
+        },
+        "telemetryCopyVersion": {
+          "description": "The version of the text the person agreed to.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "updateChannel": {
+          "description": "The update channel.",
+          "$ref": "#/$defs/UpdateChannel"
+        },
+        "updatedAt": {
+          "description": "When a setting last changed.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "revision",
+        "defaultStartup",
+        "updateChannel",
+        "telemetry",
+        "telemetryCopyVersion",
+        "locations",
+        "logRetention",
+        "updatedAt"
+      ]
+    },
     "DataUsage": {
       "description": "The size of a data folder.",
       "type": "object",
@@ -2430,6 +2500,29 @@
           "default": null
         }
       }
+    },
+    "DefaultLocations": {
+      "description": "The default location of each kind.",
+      "type": "object",
+      "properties": {
+        "cache": {
+          "description": "Where new downloads go.",
+          "$ref": "#/$defs/StorageLocationView"
+        },
+        "data": {
+          "description": "Where the data of new instances goes.",
+          "$ref": "#/$defs/StorageLocationView"
+        },
+        "logs": {
+          "description": "Where the logs of new instances go.",
+          "$ref": "#/$defs/StorageLocationView"
+        }
+      },
+      "required": [
+        "data",
+        "logs",
+        "cache"
+      ]
     },
     "DeleteSecretReply": {
       "description": "Reply of `secret.delete`.",
@@ -3601,6 +3694,23 @@
             "type": {
               "type": "string",
               "const": "daemon.restart_plan"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The daemon settings or a default location changed (spec 0032). A\ndaemon event: no resource, no revision; clients read `settings.get`\nagain.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SettingsChanged"
+            },
+            "type": {
+              "type": "string",
+              "const": "settings.changed"
             }
           },
           "required": [
@@ -5534,6 +5644,47 @@
         "store"
       ]
     },
+    "LocationKind": {
+      "description": "What a storage location holds. Open.",
+      "oneOf": [
+        {
+          "description": "The data folders of new instances.",
+          "type": "string",
+          "const": "data"
+        },
+        {
+          "description": "The log folders of new instances.",
+          "type": "string",
+          "const": "logs"
+        },
+        {
+          "description": "The downloads of runtimes.",
+          "type": "string",
+          "const": "cache"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LocationList": {
+      "description": "Reply of `storage.list_locations`: every location the registry knows,\nbuilt in ones first, then by creation.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "The locations.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StorageLocationView"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
     "LogCursor": {
       "description": "A position in one instance's log store.",
       "type": "object",
@@ -6734,6 +6885,16 @@
           "const": "stop_all_instances"
         },
         {
+          "description": "Change daemon settings (spec 0032).",
+          "type": "string",
+          "const": "update_daemon_settings"
+        },
+        {
+          "description": "Point the default location of a kind at another folder (spec 0032).",
+          "type": "string",
+          "const": "set_storage_location"
+        },
+        {
           "description": "Write a new config revision and make it take effect (spec 0029).",
           "type": "string",
           "const": "apply_config"
@@ -7633,6 +7794,11 @@
           "description": "The data folder.",
           "type": "string",
           "const": "data"
+        },
+        {
+          "description": "The default data and log locations (spec 0032).",
+          "type": "string",
+          "const": "storage_location"
         },
         {
           "description": "The free disk space.",
@@ -8919,6 +9085,74 @@
             "type": {
               "type": "string",
               "const": "storage.get_capacity"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The daemon settings.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DaemonSettingsView"
+            },
+            "type": {
+              "type": "string",
+              "const": "settings.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The settings after the change, or as they were.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DaemonSettingsView"
+            },
+            "type": {
+              "type": "string",
+              "const": "settings.update"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The storage locations.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/LocationList"
+            },
+            "type": {
+              "type": "string",
+              "const": "storage.list_locations"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The default location of the kind after the change.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/StorageLocationView"
+            },
+            "type": {
+              "type": "string",
+              "const": "storage.set_location"
             }
           },
           "required": [
@@ -10876,6 +11110,22 @@
         }
       ]
     },
+    "SettingsChanged": {
+      "description": "Content of the `settings.changed` event: the settings or a default\nlocation changed, so a client reads them again.",
+      "type": "object",
+      "properties": {
+        "revision": {
+          "description": "The revision after the change.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
     "ShutdownAccepted": {
       "description": "Reply of `daemon.shutdown`, queued before the first step of the stop\norder so it is flushed with the connections.",
       "type": "object",
@@ -11252,6 +11502,53 @@
         "instanceId",
         "name",
         "code"
+      ]
+    },
+    "StorageLocationView": {
+      "description": "One storage location as a client shows it.",
+      "type": "object",
+      "properties": {
+        "builtIn": {
+          "description": "Whether it is the location that comes with Stackly.",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "The location.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "instanceCount": {
+          "description": "How many instances use it; 0 for the cache.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "isDefault": {
+          "description": "Whether new instances, or new downloads, use it now.",
+          "type": "boolean"
+        },
+        "kind": {
+          "description": "What it holds.",
+          "$ref": "#/$defs/LocationKind"
+        },
+        "path": {
+          "description": "The resolved path, never empty.",
+          "type": "string"
+        },
+        "reachable": {
+          "description": "Whether the folder exists now.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "builtIn",
+        "isDefault",
+        "instanceCount",
+        "reachable"
       ]
     },
     "Subscribed": {
@@ -11674,6 +11971,26 @@
         },
         {
           "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UpdateChannel": {
+      "description": "Which update channel Stackly follows once it can update itself. Open.",
+      "oneOf": [
+        {
+          "description": "Releases that passed every check.",
+          "type": "string",
+          "const": "stable"
+        },
+        {
+          "description": "Earlier builds.",
+          "type": "string",
+          "const": "beta"
+        },
+        {
+          "description": "A channel this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
         }

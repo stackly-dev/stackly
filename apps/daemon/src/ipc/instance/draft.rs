@@ -55,11 +55,13 @@ fn settings(document: &SettingsDocument) -> serde_json::Value {
     serde_json::Value::Object(document.as_map().clone())
 }
 
-/// The startup policy a request asks for; `manual` when it asks for none.
-fn startup_of(startup: Option<StartupPolicyKind>) -> StartupPolicy {
+/// The startup policy a request asks for; `None` when it asks for none, so
+/// create takes the `defaultStartup` setting (spec 0032, AC-18).
+fn startup_of(startup: Option<StartupPolicyKind>) -> Option<StartupPolicy> {
     match startup {
-        Some(StartupPolicyKind::AtLogin) => StartupPolicy::AtLogin,
-        _ => StartupPolicy::Manual,
+        Some(StartupPolicyKind::AtLogin) => Some(StartupPolicy::AtLogin),
+        Some(StartupPolicyKind::Manual) => Some(StartupPolicy::Manual),
+        Some(StartupPolicyKind::Unrecognized) | None => None,
     }
 }
 

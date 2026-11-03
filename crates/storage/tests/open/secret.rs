@@ -38,6 +38,8 @@ fn migrating_v2_replaces_the_old_secret_references_and_keeps_every_other_row() {
             && table != "compatibility_records"
             && !table.starts_with("daemon_restart_plan")
             && table != "daemon_sessions"
+            && table != "daemon_settings"
+            && table != "storage_locations"
             && !table.starts_with("secret_")
     };
     let mut before = row_counts(&harness.connect());

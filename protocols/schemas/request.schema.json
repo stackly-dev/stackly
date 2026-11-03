@@ -572,6 +572,66 @@
           ]
         },
         {
+          "description": "The daemon settings (spec 0032).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "settings.get"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Changes daemon settings (spec 0032).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/UpdateSettingsParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "settings.update"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Every storage location and which one is the default (spec 0032).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "storage.list_locations"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Points the default location of a kind at a folder, or back at the\nbuilt in one (spec 0032).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/SetLocationParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "storage.set_location"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "Resolves a selector and starts the operation that installs the\nartifact, or answers that it is installed already.",
           "type": "object",
           "properties": {
@@ -1644,6 +1704,66 @@
         }
       }
     },
+    "LocationKind": {
+      "description": "What a storage location holds. Open.",
+      "oneOf": [
+        {
+          "description": "The data folders of new instances.",
+          "type": "string",
+          "const": "data"
+        },
+        {
+          "description": "The log folders of new instances.",
+          "type": "string",
+          "const": "logs"
+        },
+        {
+          "description": "The downloads of runtimes.",
+          "type": "string",
+          "const": "cache"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LocationTarget": {
+      "description": "Where `storage.set_location` points a kind. Tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "A folder; the daemon uses its `Stackly` subfolder.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "path"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The location that comes with Stackly.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "builtIn"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
     "LogAnchor": {
       "description": "The content of a `before` or `after` position.",
       "type": "object",
@@ -2501,6 +2621,32 @@
         "reference"
       ]
     },
+    "SetLocationParams": {
+      "description": "Params of `storage.set_location`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the settings are at\nthis revision.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "kind": {
+          "description": "Which default to change.",
+          "$ref": "#/$defs/LocationKind"
+        },
+        "target": {
+          "description": "The new default.",
+          "$ref": "#/$defs/LocationTarget"
+        }
+      },
+      "required": [
+        "kind",
+        "target",
+        "expectedRevision"
+      ]
+    },
     "SetSecretParams": {
       "description": "Params of `secret.set`.",
       "type": "object",
@@ -2569,6 +2715,44 @@
         "instanceId",
         "startup"
       ]
+    },
+    "SettingsPatch": {
+      "description": "A partial change of the settings. At least one field must be set.",
+      "type": "object",
+      "properties": {
+        "defaultStartup": {
+          "description": "The startup policy of instances created from now on.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupPolicyKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "telemetry": {
+          "description": "Whether the person agrees to share usage statistics.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "updateChannel": {
+          "description": "The update channel.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpdateChannel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
     },
     "ShutdownMode": {
       "description": "What `daemon.shutdown` asks for. Open: newer daemons may add values.",
@@ -2662,8 +2846,22 @@
       ]
     },
     "StopAllParams": {
-      "description": "Params of `instance.stop_all`. None yet; the struct keeps room for\nfields without a new major.",
-      "type": "object"
+      "description": "Params of `instance.stop_all`.",
+      "type": "object",
+      "properties": {
+        "expectedInstanceIds": {
+          "description": "The instances the person saw in the preview. When present, the daemon\nrefuses with `instance.stop_all_changed` unless the instances it would\nstop are exactly these, and it only ever stops that set (spec 0032).\nAbsent: stop what the rule chooses (`agent_off` does this).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
     },
     "StopInstanceParams": {
       "description": "Params of `instance.stop`.",
@@ -2746,6 +2944,47 @@
       },
       "required": [
         "subscriptionId"
+      ]
+    },
+    "UpdateChannel": {
+      "description": "Which update channel Stackly follows once it can update itself. Open.",
+      "oneOf": [
+        {
+          "description": "Releases that passed every check.",
+          "type": "string",
+          "const": "stable"
+        },
+        {
+          "description": "Earlier builds.",
+          "type": "string",
+          "const": "beta"
+        },
+        {
+          "description": "A channel this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UpdateSettingsParams": {
+      "description": "Params of `settings.update`.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "Refuse with `resource.revision_mismatch` unless the settings are at\nthis revision.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "patch": {
+          "description": "What to change.",
+          "$ref": "#/$defs/SettingsPatch"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "patch"
       ]
     },
     "ValidateConfigParams": {

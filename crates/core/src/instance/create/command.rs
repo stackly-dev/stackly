@@ -52,7 +52,7 @@ pub(super) fn command_spec(draft: &CreateDraft, facts: &CreateFacts) -> CommandS
             .unwrap_or_default(),
         secrets: draft.secrets.clone(),
         start: draft.start,
-        autostart: draft.startup == StartupPolicy::AtLogin,
+        autostart: draft.startup == Some(StartupPolicy::AtLogin),
     }
 }
 

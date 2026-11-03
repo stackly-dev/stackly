@@ -47,7 +47,7 @@ pub(crate) fn ensure_directories(deps: &SupervisorDeps, dirs: &[PathBuf]) -> Res
     let user = platform.identity().current_user()?;
     for dir in dirs {
         let owned = check_owned_path(platform, &deps.layout, dir)?;
-        let root = deps.layout.canonical_root(owned.root());
+        let root = owned.root_path();
         let canonical = owned.canonical();
         let mut chain: Vec<&Path> = canonical
             .ancestors()

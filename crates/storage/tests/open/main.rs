@@ -10,6 +10,7 @@ mod detect;
 mod failure;
 mod fixture;
 mod journal;
+mod locations;
 mod migrate;
 mod schema;
 mod secret;

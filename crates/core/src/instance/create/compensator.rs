@@ -113,10 +113,7 @@ fn delete(
                 reason: CREATED_BY_OTHER_OPERATION,
             });
         }
-        check_instance_lock(
-            &scope.platform,
-            &scope.layout.layout().instance_paths(id).lock,
-        )?;
+        check_instance_lock(&scope.platform, &scope.layout.instance_paths(id).lock)?;
         let revision = instance.revision();
         let op = WriteOp::DeleteInstanceCreatedBy {
             id,

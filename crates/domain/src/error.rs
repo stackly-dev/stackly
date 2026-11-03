@@ -106,6 +106,14 @@ pub enum ValueKind {
     DesiredState,
     /// A [`StartupPolicy`](crate::StartupPolicy).
     StartupPolicy,
+    /// A [`LocationKind`](crate::LocationKind).
+    LocationKind,
+    /// An [`UpdateChannel`](crate::UpdateChannel).
+    UpdateChannel,
+    /// A [`LocationRule`](crate::LocationRule).
+    LocationRule,
+    /// The path of a [`StorageLocation`](crate::StorageLocation).
+    LocationPath,
     /// An [`ExitKind`](crate::ExitKind).
     ExitKind,
     /// An [`OperationState`](crate::OperationState).
@@ -277,6 +285,10 @@ impl ValueKind {
             Self::InstanceLifecycle => "instance lifecycle",
             Self::DesiredState => "desired state",
             Self::StartupPolicy => "startup policy",
+            Self::LocationKind => "location kind",
+            Self::UpdateChannel => "update channel",
+            Self::LocationRule => "location rule",
+            Self::LocationPath => "location path",
             Self::ExitKind => "exit kind",
             Self::OperationState => "operation state",
             Self::OperationKind => "operation kind",

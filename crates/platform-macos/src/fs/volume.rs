@@ -29,10 +29,42 @@ pub(super) fn volume_facts(path: &Path) -> Result<VolumeFacts, PlatformError> {
         .map(|&byte| byte as u8)
         .collect();
     let local = stat.f_flags & (libc::MNT_LOCAL as u32) != 0;
-    Ok(VolumeFacts::new(
-        String::from_utf8_lossy(&name).into_owned(),
-        local,
-    ))
+    let facts = VolumeFacts::new(String::from_utf8_lossy(&name).into_owned(), local);
+    // A volume the system cannot describe counts as not internal: the
+    // location rules then refuse it instead of trusting it (spec 0032).
+    Ok(facts.with_internal(local && volume_is_internal(path)))
+}
+
+/// Whether `NSURLVolumeIsInternalKey` is true for the volume that holds
+/// `path` and `NSURLVolumeIsRemovableKey` is false; false when the system
+/// does not answer.
+fn volume_is_internal(path: &Path) -> bool {
+    use objc2_foundation::{
+        NSNumber, NSString, NSURL, NSURLVolumeIsInternalKey, NSURLVolumeIsRemovableKey,
+    };
+
+    let Some(text) = path.to_str() else {
+        return false;
+    };
+    let url = NSURL::fileURLWithPath(&NSString::from_str(text));
+    let flag = |key| {
+        let mut value = None;
+        // SAFETY: `value` is a valid out pointer for one object and `key` is
+        // one of the constants the system defines for resource values.
+        unsafe { url.getResourceValue_forKey_error(&mut value, key) }
+            .ok()
+            .and(value)
+            .and_then(|value| value.downcast::<NSNumber>().ok())
+            .map(|number| number.boolValue())
+    };
+    // SAFETY: both keys are immutable constants of Foundation.
+    let (internal, removable) = unsafe {
+        (
+            flag(NSURLVolumeIsInternalKey),
+            flag(NSURLVolumeIsRemovableKey),
+        )
+    };
+    internal == Some(true) && removable != Some(true)
 }
 
 /// Reads the volume that holds `path` with `statfs`, the one helper every

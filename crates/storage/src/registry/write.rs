@@ -14,16 +14,17 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use stackly_domain::{
     ArtifactFormat, ArtifactRecord, BatchError, CommitGuard, Committed, CompatibilityRecordRow,
     DependencyManifestJson, Endpoint, Environment, Generation, GuardDecision, GuardView, Guarded,
-    InstallMode, Instance, InstanceFilter, Lease, LeaseHolder, LeaseState, Operation, Ownership,
-    PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord, RegistryError, ResourceRef,
-    ResourceRevision, Runtime, RuntimeId, SignatureInfoJson, SoftwareName, WriteBatch, WriteOp,
+    InstallMode, Instance, InstanceFilter, InstancePathEntry, Lease, LeaseHolder, LeaseState,
+    Operation, Ownership, PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord,
+    RegistryError, ResourceRef, ResourceRevision, Runtime, RuntimeId, SignatureInfoJson,
+    SoftwareName, StorageLocationId, WriteBatch, WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
 use super::column::{corrupt, exists, first, int, opt_ts, sql_error, ts};
 use super::journal;
 use super::read::{self, InstanceSelect, resource_columns};
-use super::{secret, source, supervision};
+use super::{secret, settings, source, supervision};
 
 /// Applies `batch` in one transaction stamped `now`: all of it, or none.
 pub(super) fn commit(
@@ -115,6 +116,14 @@ impl GuardView for TransactionView<'_> {
     fn latest_session(&self) -> Result<Option<stackly_domain::DaemonSession>, RegistryError> {
         super::session::latest(self.tx)
     }
+
+    fn daemon_settings(&self) -> Result<stackly_domain::DaemonSettings, RegistryError> {
+        settings::settings(self.tx)
+    }
+
+    fn storage_locations(&self) -> Result<Vec<stackly_domain::StorageLocation>, RegistryError> {
+        settings::locations(self.tx)
+    }
 }
 
 fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {
@@ -186,13 +195,22 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         }
         WriteOp::InsertInstance(instance) => {
             expect_new(conn, "instances", &instance.id().to_string(), op)?;
-            let pk = check_instance(conn, instance, Write::Insert)?;
-            write_instance(conn, instance, pk, now, Write::Insert)
+            let (data, logs) = settings::default_pair(conn)?;
+            insert_instance(conn, instance, data, logs, now)
+        }
+        WriteOp::InsertInstanceAt {
+            instance,
+            data,
+            logs,
+        } => {
+            expect_new(conn, "instances", &instance.id().to_string(), op)?;
+            settings::check_pair(conn, *data, *logs)?;
+            insert_instance(conn, instance, *data, *logs, now)
         }
         WriteOp::UpdateInstance { instance, expected } => {
             expect_revision(conn, "instances", &instance.id().to_string(), op, *expected)?;
-            let pk = check_instance(conn, instance, Write::Update)?;
-            write_instance(conn, instance, pk, now, Write::Update)
+            let pk = check_instance(conn, instance, Write::Update, None)?;
+            write_instance(conn, instance, pk, now, Write::Update, None)
         }
         WriteOp::InsertEnvironment(environment) => {
             expect_new(conn, "environments", &environment.id().to_string(), op)?;
@@ -286,8 +304,8 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
             record,
         } => {
             expect_revision(conn, "instances", &instance.id().to_string(), op, *expected)?;
-            let pk = check_instance(conn, instance, Write::Update)?;
-            write_instance(conn, instance, pk, now, Write::Update)?;
+            let pk = check_instance(conn, instance, Write::Update, None)?;
+            write_instance(conn, instance, pk, now, Write::Update, None)?;
             supervision::activate_config_revision(conn, instance, record, op)
         }
         WriteOp::MarkConfigRevisionReady { revision, at } => {
@@ -308,10 +326,35 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
         WriteOp::EndSession { id, at, reason } => super::session::end(conn, id, *at, *reason),
         WriteOp::ReopenSession { id } => super::session::reopen(conn, id),
         WriteOp::PruneSessions { keep } => super::session::prune(conn, *keep),
+        WriteOp::UpdateDaemonSettings {
+            patch,
+            expected,
+            at,
+        } => settings::update(conn, patch, *expected, *at),
+        WriteOp::InsertStorageLocation(location) => settings::insert_location(conn, location, op),
+        WriteOp::SetDefaultLocation {
+            kind,
+            id,
+            expected,
+            at,
+        } => settings::set_default(conn, *kind, *id, *expected, *at),
         _ => Err(RegistryError::Integrity {
             detail: "the SQLite registry does not support this write op yet".to_owned(),
         }),
     }
+}
+
+/// Writes a new instance in the given data and log locations: the
+/// references and unique rules first, then its rows.
+fn insert_instance(
+    conn: &Connection,
+    instance: &Instance,
+    data: StorageLocationId,
+    logs: StorageLocationId,
+    now: &str,
+) -> Result<(), RegistryError> {
+    let pk = check_instance(conn, instance, Write::Insert, Some((data, logs)))?;
+    write_instance(conn, instance, pk, now, Write::Insert, Some((data, logs)))
 }
 
 /// Whether an op creates its row or rewrites it.
@@ -702,6 +745,7 @@ fn check_instance(
     conn: &Connection,
     instance: &Instance,
     write: Write,
+    locations: Option<(StorageLocationId, StorageLocationId)>,
 ) -> Result<i64, RegistryError> {
     let id = instance.id().to_string();
     let runtime_software: Option<String> = first(
@@ -744,15 +788,27 @@ fn check_instance(
         )? {
             return Err(RegistryError::ShortKeyTaken { key, existing });
         }
-        for entry in instance_path_entries(instance.id()) {
-            if let Some(existing) = find_id(
-                conn,
-                "SELECT instance_id FROM instance_paths \
-                 WHERE logical_root = ?1 AND relative_path = ?2 AND instance_id <> ?3",
-                (entry.root().as_code(), entry.path().as_str(), &id),
-                "instance_paths",
-                "instance_id",
-            )? {
+        for entry in new_entries(instance, locations)? {
+            let taken = match entry.location() {
+                Some(location) => find_id(
+                    conn,
+                    "SELECT instance_id FROM instance_paths \
+                     WHERE location_id = ?1 AND relative_path = ?2 AND instance_id <> ?3",
+                    (location.to_string(), entry.path().as_str(), &id),
+                    "instance_paths",
+                    "instance_id",
+                )?,
+                None => find_id(
+                    conn,
+                    "SELECT instance_id FROM instance_paths \
+                     WHERE location_id IS NULL AND logical_root = ?1 AND relative_path = ?2 \
+                     AND instance_id <> ?3",
+                    (entry.root().as_code(), entry.path().as_str(), &id),
+                    "instance_paths",
+                    "instance_id",
+                )?,
+            };
+            if let Some(existing) = taken {
                 return Err(RegistryError::PathTaken {
                     root: entry.root(),
                     path: entry.path().clone(),
@@ -776,12 +832,24 @@ fn check_instance(
     Ok(pk)
 }
 
+/// The seven paths of a new instance in its two locations.
+fn new_entries(
+    instance: &Instance,
+    locations: Option<(StorageLocationId, StorageLocationId)>,
+) -> Result<[InstancePathEntry; 7], RegistryError> {
+    let (data, logs) = locations.ok_or_else(|| RegistryError::Integrity {
+        detail: "a new instance names its locations".to_owned(),
+    })?;
+    Ok(instance_path_entries(instance.id(), data, logs))
+}
+
 fn write_instance(
     conn: &Connection,
     instance: &Instance,
     provider_revision_pk: i64,
     now: &str,
     write: Write,
+    locations: Option<(StorageLocationId, StorageLocationId)>,
 ) -> Result<(), RegistryError> {
     let id = instance.id().to_string();
     let values = params![
@@ -819,15 +887,16 @@ fn write_instance(
                 values,
             )
             .map_err(sql_error)?;
-            for entry in instance_path_entries(instance.id()) {
+            for entry in new_entries(instance, locations)? {
                 conn.execute(
                     "INSERT INTO instance_paths (instance_id, kind, logical_root, \
-                     relative_path, managed) VALUES (?1, ?2, ?3, ?4, 1)",
+                     relative_path, managed, location_id) VALUES (?1, ?2, ?3, ?4, 1, ?5)",
                     (
                         &id,
                         entry.kind().as_code(),
                         entry.root().as_code(),
                         entry.path().as_str(),
+                        entry.location().map(|location| location.to_string()),
                     ),
                 )
                 .map_err(sql_error)?;

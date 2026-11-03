@@ -57,7 +57,7 @@ pub(crate) async fn data_is_missing(sup: &Supervisor, instance: &Instance) -> bo
     let instance = instance.clone();
     blocking(move || {
         let package = prepare::load_package(&deps.platform, &deps.layout, &instance).ok()?;
-        let paths = deps.layout.layout().instance_paths(instance.id());
+        let paths = deps.layout.instance_paths(instance.id());
         prepare::data_missing(deps.platform.fs(), &package, &paths)
     })
     .await

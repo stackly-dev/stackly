@@ -1,6 +1,7 @@
 //! The per user directory layout: four owned roots and every path derived
 //! from them.
 
+mod locations;
 mod root_override;
 mod roots;
 
@@ -8,11 +9,13 @@ use std::path::{Path, PathBuf};
 
 use stackly_domain::{
     EnvironmentId, ExactVersion, InstanceId, InstancePathEntry, InstancePathKind, LogicalRoot,
-    ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, Target,
+    ProviderRevisionKey, RelativePath, Sha256Digest, ShortKey, SoftwareName, StorageLocationId,
+    Target,
 };
 
 use crate::process::OutputStream;
 
+pub use locations::{LocationSet, UnknownLocation};
 pub use root_override::{ROOT_OVERRIDE_ENV, validate_root_override};
 pub use roots::{
     DirectoryResolver, FixedRoots, RUNTIME_ROOT_MAX, RootKind, RootSet, SOCKET_NAME_MAX,
@@ -213,10 +216,21 @@ impl DirectoryLayout {
         self.roots.data().join(INSTANCES_DIR)
     }
 
-    /// Returns the paths of an active instance, under `instances/<id>/`.
+    /// Returns the paths of an active instance, under `instances/<id>/`
+    /// of the built in data location and `instances/<id>/` of the built in
+    /// log location.
     #[must_use]
     pub fn instance_paths(&self, id: InstanceId) -> InstancePaths {
-        self.paths_under(&self.instances_dir(), id)
+        self.instance_paths_in(id, self.roots.data(), self.roots.logs())
+    }
+
+    /// Returns the paths of an active instance whose data lives in the
+    /// location folder `data` and whose logs live in the location folder
+    /// `logs`: the folders [`LocationSet::base`] gives. The relative paths
+    /// are the same in every location (spec 0032).
+    #[must_use]
+    pub fn instance_paths_in(&self, id: InstanceId, data: &Path, logs: &Path) -> InstancePaths {
+        self.paths_under(&data.join(INSTANCES_DIR), &logs.join(INSTANCES_DIR), id)
     }
 
     /// Returns the folder that holds retained instance folders.
@@ -229,7 +243,19 @@ impl DirectoryLayout {
     /// The tree is the same as for an active instance.
     #[must_use]
     pub fn retained_instance_paths(&self, id: InstanceId) -> InstancePaths {
-        self.paths_under(&self.retained_dir(), id)
+        self.retained_instance_paths_in(id, self.roots.data(), self.roots.logs())
+    }
+
+    /// Returns the paths of a retained instance in the location folders
+    /// `data` and `logs`: `retained/<id>/` under `data`.
+    #[must_use]
+    pub fn retained_instance_paths_in(
+        &self,
+        id: InstanceId,
+        data: &Path,
+        logs: &Path,
+    ) -> InstancePaths {
+        self.paths_under(&data.join("retained"), &logs.join(INSTANCES_DIR), id)
     }
 
     /// Returns the folder that holds environment folders.
@@ -282,10 +308,17 @@ impl DirectoryLayout {
         self.instance_log_dir(id).join(CAPTURED_LOGS_DIR)
     }
 
-    /// Returns the folder for downloads.
+    /// Returns the folder for downloads in the built in cache location.
     #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
-        self.roots.cache().join("downloads")
+        Self::downloads_dir_in(self.roots.cache())
+    }
+
+    /// Returns the folder for downloads in the cache location folder
+    /// `location`: `downloads/` under it (spec 0032).
+    #[must_use]
+    pub fn downloads_dir_in(location: &Path) -> PathBuf {
+        location.join("downloads")
     }
 
     /// Returns the daemon's Unix socket.
@@ -326,7 +359,7 @@ impl DirectoryLayout {
         self.instance_run_dir(key).join(stream.spool_file_name())
     }
 
-    fn paths_under(&self, parent: &Path, id: InstanceId) -> InstancePaths {
+    fn paths_under(&self, parent: &Path, logs_parent: &Path, id: InstanceId) -> InstancePaths {
         let root = parent.join(id.to_string());
         InstancePaths {
             manifest: root.join(INSTANCE_MANIFEST_FILE),
@@ -335,7 +368,7 @@ impl DirectoryLayout {
             config: root.join(INSTANCE_CONFIG_DIR),
             config_history: root.join(INSTANCE_CONFIG_HISTORY_DIR),
             temp: root.join(INSTANCE_TEMP_DIR),
-            logs: self.instance_log_dir(id),
+            logs: logs_parent.join(id.to_string()),
             run: self.instance_run_dir(id.short_key()),
             root,
         }
@@ -355,10 +388,18 @@ impl DirectoryLayout {
 /// | `logs` | logs | `instances/<id>` |
 /// | `run` | runtime | `i/<short key>` |
 ///
-/// It needs no roots: [`RootSet::resolve`] of each entry equals the
-/// matching field of [`DirectoryLayout::instance_paths`].
+/// Every entry but `run` names the storage location that holds it: `data`
+/// for the five data kinds and `logs` for the log folder (spec 0032). The
+/// relative paths are the same in every location. For the built in
+/// locations, [`RootSet::resolve`] of each entry equals the matching field
+/// of [`DirectoryLayout::instance_paths`]; a custom location resolves
+/// through the location set (step 3 of spec 0032).
 #[must_use]
-pub fn instance_path_entries(id: InstanceId) -> [InstancePathEntry; 7] {
+pub fn instance_path_entries(
+    id: InstanceId,
+    data: StorageLocationId,
+    logs: StorageLocationId,
+) -> [InstancePathEntry; 7] {
     let instance = format!("{INSTANCES_DIR}/{id}");
     let inside = |dir: &str| format!("{instance}/{dir}");
     InstancePathKind::ALL.map(|kind| {
@@ -378,7 +419,12 @@ pub fn instance_path_entries(id: InstanceId) -> [InstancePathEntry; 7] {
         };
         let path = RelativePath::new(path)
             .expect("an instance path joins fixed folder names, an ID, and a short key");
-        InstancePathEntry::new(kind, root, path)
+        let entry = InstancePathEntry::new(kind, root, path);
+        match root {
+            LogicalRoot::Data => entry.in_location(data),
+            LogicalRoot::Logs => entry.in_location(logs),
+            LogicalRoot::Runtime => entry,
+        }
     })
 }
 
@@ -410,6 +456,8 @@ pub struct InstancePaths {
 
 #[cfg(test)]
 mod tests {
+    use stackly_domain::LocationKind;
+
     use super::*;
 
     const ID: &str = "01928c3e-6f1a-7b2c-8d4e-5f60718293a4";
@@ -426,6 +474,14 @@ mod tests {
                 base.join("r"),
             )
             .unwrap(),
+        )
+    }
+
+    fn built_in_entries(id: InstanceId) -> [InstancePathEntry; 7] {
+        instance_path_entries(
+            id,
+            LocationKind::Data.built_in_id(),
+            LocationKind::Logs.built_in_id(),
         )
     }
 
@@ -472,7 +528,7 @@ mod tests {
         for _ in 0..1000 {
             let id = InstanceId::generate();
             let paths = layout.instance_paths(id);
-            let entries = instance_path_entries(id);
+            let entries = built_in_entries(id);
             let resolved = |kind: InstancePathKind| {
                 let entry = entries.iter().find(|entry| entry.kind() == kind).unwrap();
                 layout.roots().resolve(entry.root(), entry.path())
@@ -494,9 +550,126 @@ mod tests {
     }
 
     #[test]
+    fn data_kinds_name_the_data_location_the_logs_kind_the_log_location_and_run_none() {
+        let id: InstanceId = ID.parse().unwrap();
+        let data = StorageLocationId::generate();
+        let logs = StorageLocationId::generate();
+        let locations: Vec<_> = instance_path_entries(id, data, logs)
+            .iter()
+            .map(|entry| (entry.kind(), entry.location()))
+            .collect();
+
+        assert_eq!(
+            locations,
+            [
+                (InstancePathKind::Root, Some(data)),
+                (InstancePathKind::Data, Some(data)),
+                (InstancePathKind::Config, Some(data)),
+                (InstancePathKind::ConfigHistory, Some(data)),
+                (InstancePathKind::Temp, Some(data)),
+                (InstancePathKind::Logs, Some(logs)),
+                (InstancePathKind::Run, None),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_thousand_instances_across_three_locations_resolve_like_the_layout_and_never_nest() {
+        // spec 0032, AC-10 per location.
+        let layout = layout();
+        let base = layout.roots().data().parent().unwrap().to_path_buf();
+        let work_data = StorageLocationId::generate();
+        let work_logs = StorageLocationId::generate();
+        let disk_data = StorageLocationId::generate();
+        let set = LocationSet::new(layout.roots().clone())
+            .with_location(work_data, LocationKind::Data, base.join("work/Stackly"))
+            .with_location(work_logs, LocationKind::Logs, base.join("work/Stackly"))
+            .with_location(disk_data, LocationKind::Data, base.join("disk/Stackly"));
+        let pairs = [
+            (
+                LocationKind::Data.built_in_id(),
+                LocationKind::Logs.built_in_id(),
+            ),
+            (work_data, work_logs),
+            (disk_data, LocationKind::Logs.built_in_id()),
+        ];
+        let mut seen: Vec<PathBuf> = Vec::new();
+        for turn in 0..1000 {
+            let id = InstanceId::generate();
+            let (data, logs) = pairs[turn % pairs.len()];
+            let expected =
+                layout.instance_paths_in(id, &set.base(data).unwrap(), &set.base(logs).unwrap());
+            let entries = instance_path_entries(id, data, logs);
+            let resolved = |kind: InstancePathKind| {
+                let entry = entries.iter().find(|entry| entry.kind() == kind).unwrap();
+                set.resolve(entry).unwrap()
+            };
+            assert_eq!(resolved(InstancePathKind::Root), expected.root);
+            assert_eq!(resolved(InstancePathKind::Data), expected.data);
+            assert_eq!(resolved(InstancePathKind::Config), expected.config);
+            assert_eq!(
+                resolved(InstancePathKind::ConfigHistory),
+                expected.config_history
+            );
+            assert_eq!(resolved(InstancePathKind::Temp), expected.temp);
+            assert_eq!(resolved(InstancePathKind::Logs), expected.logs);
+            assert_eq!(resolved(InstancePathKind::Run), expected.run);
+            for path in [&expected.root, &expected.logs, &expected.run] {
+                for other in &seen {
+                    assert!(
+                        !path.starts_with(other) && !other.starts_with(path),
+                        "{} and {} nest",
+                        path.display(),
+                        other.display()
+                    );
+                }
+            }
+            seen.extend([expected.root, expected.logs, expected.run]);
+        }
+    }
+
+    #[test]
+    fn a_location_the_set_does_not_know_does_not_resolve() {
+        let layout = layout();
+        let set = LocationSet::new(layout.roots().clone());
+        let unknown = StorageLocationId::generate();
+        let id: InstanceId = ID.parse().unwrap();
+        let entry = instance_path_entries(id, unknown, LocationKind::Logs.built_in_id())
+            .into_iter()
+            .find(|entry| entry.kind() == InstancePathKind::Data)
+            .unwrap();
+
+        assert_eq!(set.resolve(&entry), Err(UnknownLocation(unknown)));
+        assert_eq!(set.kind(unknown), None);
+        assert_eq!(
+            set.kind(LocationKind::Cache.built_in_id()),
+            Some(LocationKind::Cache)
+        );
+    }
+
+    #[test]
+    fn downloads_and_retained_folders_sit_under_their_location_folder() {
+        let layout = layout();
+        let folder = Path::new("/Volumes/Work/Stackly");
+        let id: InstanceId = ID.parse().unwrap();
+
+        assert_eq!(
+            DirectoryLayout::downloads_dir_in(folder),
+            folder.join("downloads")
+        );
+        assert_eq!(
+            DirectoryLayout::downloads_dir_in(layout.roots().cache()),
+            layout.downloads_dir()
+        );
+        let retained = layout.retained_instance_paths_in(id, folder, layout.roots().logs());
+        assert_eq!(retained.root, folder.join("retained").join(ID));
+        assert_eq!(retained.logs, layout.instance_log_dir(id));
+    }
+
+    #[test]
     fn instance_path_entries_of_one_id_are_the_documented_table() {
         let id: InstanceId = ID.parse().unwrap();
-        let entries: Vec<_> = instance_path_entries(id)
+        let entries: Vec<_> = built_in_entries(id)
             .iter()
             .map(|entry| {
                 format!(

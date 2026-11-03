@@ -312,7 +312,7 @@ pub async fn observe_active(
     let Some(active) = active else {
         return Ok(DriftReport::default());
     };
-    let paths = deps.layout.layout().instance_paths(id);
+    let paths = deps.layout.instance_paths(id);
     observe(sup, id, &RenderTarget::new(&paths, active.id)).await
 }
 
@@ -379,7 +379,7 @@ async fn resolve(sup: &Supervisor, id: InstanceId, mut ctx: OperationContext) ->
                 reason: "no_config_revision".to_owned(),
             })
         })?;
-    let paths = deps.layout.layout().instance_paths(id);
+    let paths = deps.layout.instance_paths(id);
     let target = RenderTarget::new(&paths, active.id);
     let report = observe(sup, id, &target).await.map_err(failed)?;
 

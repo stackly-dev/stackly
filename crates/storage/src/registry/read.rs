@@ -19,8 +19,8 @@ use stackly_domain::{
     Operation, OperationCursor, OperationFailure, OperationId, OperationPage, OperationQuery,
     OperationResource, Ownership, PortRequest, Progress, ProviderRevision, ProviderRevisionKey,
     ProviderRevisionRecord, ProviderSourceId, RegistryError, RelativePath, ResourceRef, Runtime,
-    RuntimeId, RuntimeLine, RuntimeReferences, Sha256Digest, StoredEnvironment, StoredInstance,
-    StoredLease, StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
+    RuntimeId, RuntimeLine, RuntimeReferences, Sha256Digest, StorageLocationId, StoredEnvironment,
+    StoredInstance, StoredLease, StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
 };
 
 use super::column::{Cells, collect, corrupt, exists, first, inconsistent, sql_error, ts};
@@ -515,15 +515,20 @@ pub(super) fn instance_paths(
     }
     let mut entries = collect(
         conn,
-        "SELECT kind, logical_root, relative_path FROM instance_paths WHERE instance_id = ?1",
+        "SELECT kind, logical_root, relative_path, location_id FROM instance_paths \
+         WHERE instance_id = ?1",
         [&key],
         "instance_paths",
         |cells| {
-            Ok(InstancePathEntry::new(
+            let entry = InstancePathEntry::new(
                 cells.parse::<InstancePathKind>("kind")?,
                 cells.parse::<LogicalRoot>("logical_root")?,
                 cells.parse::<RelativePath>("relative_path")?,
-            ))
+            );
+            Ok(match cells.opt_parse::<StorageLocationId>("location_id")? {
+                Some(location) => entry.in_location(location),
+                None => entry,
+            })
         },
     )?;
     entries.sort_by_key(InstancePathEntry::kind);

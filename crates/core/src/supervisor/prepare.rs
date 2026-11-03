@@ -130,8 +130,12 @@ pub(crate) async fn prepare(
             }
             let runtime_root = runtime_root(&platform, &layout, &runtime)?;
             let package = load_package(&platform, &layout, &instance)?;
-            let paths = layout.layout().instance_paths(instance.id());
+            let paths = layout.instance_paths(instance.id());
             if checks == Checks::Full {
+                // The locations the instance was created in come first, so a
+                // disk that went away reads as that, not as a missing data
+                // folder (spec 0032, AC-20).
+                check_locations(&platform, &layout, instance.id())?;
                 // Data that was initialized must still be there: this runs
                 // before any run folder is made (spec 0030, AC-4).
                 let initialized = instance.data_initialized_at().is_some().then_some(&package);
@@ -159,6 +163,42 @@ pub(crate) async fn prepare(
         settings: loaded.settings,
         revision: loaded.revision,
     })
+}
+
+/// The folders of the data and log locations of an instance are there and
+/// the daemon can write to them. A built in location always passes: the
+/// layout makes its folders.
+fn check_locations(
+    platform: &stackly_platform::Platform,
+    layout: &crate::PreparedLayout,
+    id: InstanceId,
+) -> Result<(), SupervisorError> {
+    let (data, logs) = layout.locations().locations_of(id);
+    for (location, kind) in [
+        (data, stackly_domain::LocationKind::Data),
+        (logs, stackly_domain::LocationKind::Logs),
+    ] {
+        if location == kind.built_in_id() {
+            continue;
+        }
+        let Some(base) = layout.locations().base(location) else {
+            continue;
+        };
+        let path = base.display().to_string();
+        match crate::storage::probe_location(platform, &base) {
+            crate::storage::LocationState::Ready => {}
+            crate::storage::LocationState::Missing => {
+                return Err(SupervisorError::StorageLocationMissing { kind, path });
+            }
+            crate::storage::LocationState::NotWritable => {
+                return Err(SupervisorError::LocationUnusable {
+                    rule: stackly_domain::LocationRule::NotWritable,
+                    path,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 struct Loaded {

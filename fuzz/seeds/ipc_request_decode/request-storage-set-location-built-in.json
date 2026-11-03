@@ -1,0 +1,14 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000d05",
+  "idempotencyKey": "location-0002",
+  "call": {
+    "type": "storage.set_location",
+    "content": {
+      "kind": "logs",
+      "target": {
+        "type": "builtIn"
+      },
+      "expectedRevision": 4
+    }
+  }
+}

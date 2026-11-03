@@ -781,6 +781,10 @@ area! {
             details ["action", "reason"], "the action can't be opened now: the instance is not running or ready, is retained, or its package or port is missing";
         OPEN_SCRIPT_UNWRITABLE = "instance.open_script_unwritable", Internal, retryable true,
             details ["reason"], "the terminal script could not be written to the temp folder of the instance";
+        STOP_ALL_CHANGED = "instance.stop_all_changed", Conflict, retryable false,
+            details [], "the instances Stop All would stop are not the ones the client confirmed, so nothing was stopped (spec 0032)";
+        STORAGE_LOCATION_MISSING = "instance.storage_location_missing", Unavailable, retryable false,
+            details ["kind", "path"], "the folder of the data or log location this instance was created in does not exist (spec 0032)";
 
         @functions
 
@@ -822,6 +826,9 @@ area! {
                 }
                 "instance.data_overlap" => "run stackly doctor",
                 "instance.short_key_taken" => "try again, a new ID is generated",
+                "instance.storage_location_missing" => {
+                    "reconnect the disk or put the folder back, then start the instance again"
+                }
                 "instance.data_usage_unavailable" => {
                     return match details
                         .iter()
@@ -862,6 +869,9 @@ area! {
         CAPACITY_UNAVAILABLE = "storage.capacity_unavailable", Unavailable, retryable true,
             details ["reason", "kind"],
             "the space left on the volume that holds the data folder cannot be read";
+        LOCATION_INVALID = "storage.location_invalid", InvalidInput, retryable false,
+            details ["rule", "path"],
+            "the folder cannot be a storage location; rule names the first rule it broke (spec 0032)";
 
         @functions
 
@@ -1975,6 +1985,12 @@ mod tests {
                 "instance.open_script_unwritable",
                 ErrorCategory::Internal,
                 &["reason"],
+            ),
+            ("instance.stop_all_changed", ErrorCategory::Conflict, &[]),
+            (
+                "instance.storage_location_missing",
+                ErrorCategory::Unavailable,
+                &["kind", "path"],
             ),
         ];
         assert_eq!(table, expected);

@@ -138,6 +138,8 @@ struct CreateInstanceDuplicateTests {
             provider: duplicate.form.provider,
             runtime: Self.external(duplicate.form.runtime),
             suggestedName: duplicate.form.suggestedName, dataPath: duplicate.form.dataPath,
+            startupDefault: duplicate.form.startupDefault,
+            dataLocation: duplicate.form.dataLocation, logsLocation: duplicate.form.logsLocation,
             endpoints: duplicate.form.endpoints, fields: duplicate.form.fields,
             capabilities: duplicate.form.capabilities)
         let rig = CreateRig()

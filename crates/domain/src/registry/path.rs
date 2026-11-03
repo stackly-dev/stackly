@@ -5,6 +5,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::{ValueError, ValueKind};
+use crate::id::StorageLocationId;
 use crate::text::serde_as_text;
 
 /// Longest [`RelativePath`], in bytes.
@@ -210,19 +211,41 @@ impl FromStr for RelativePath {
 serde_as_text!(RelativePath => "a relative path");
 
 /// One stored path of an instance: what it is for, the root it is
-/// relative to, and the path under that root.
+/// relative to, the path under that root, and for a data or log path the
+/// storage location that holds it (spec 0032).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InstancePathEntry {
     kind: InstancePathKind,
     root: LogicalRoot,
     path: RelativePath,
+    location: Option<StorageLocationId>,
 }
 
 impl InstancePathEntry {
-    /// Bundles one stored path.
+    /// Bundles one stored path that belongs to no storage location, such as
+    /// the run folder.
     #[must_use]
     pub const fn new(kind: InstancePathKind, root: LogicalRoot, path: RelativePath) -> Self {
-        Self { kind, root, path }
+        Self {
+            kind,
+            root,
+            path,
+            location: None,
+        }
+    }
+
+    /// This entry held by a storage location.
+    #[must_use]
+    pub const fn in_location(mut self, location: StorageLocationId) -> Self {
+        self.location = Some(location);
+        self
+    }
+
+    /// Returns the storage location that holds the path, or `None` for the
+    /// run folder.
+    #[must_use]
+    pub const fn location(&self) -> Option<StorageLocationId> {
+        self.location
     }
 
     /// Returns what the path is for.

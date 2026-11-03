@@ -8,4 +8,5 @@ pub mod operation;
 pub mod restart;
 pub mod runtime;
 pub mod secret;
+pub mod settings;
 pub mod stop_all;

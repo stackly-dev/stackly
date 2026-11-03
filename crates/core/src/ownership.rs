@@ -11,6 +11,7 @@ use crate::layout::PreparedLayout;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnedPath {
     root: RootKind,
+    root_path: PathBuf,
     canonical: PathBuf,
 }
 
@@ -19,6 +20,13 @@ impl OwnedPath {
     #[must_use]
     pub const fn root(&self) -> RootKind {
         self.root
+    }
+
+    /// Returns the canonical folder of the owned root the path lies in: one
+    /// of the four roots, or the folder of a custom storage location.
+    #[must_use]
+    pub fn root_path(&self) -> &Path {
+        &self.root_path
     }
 
     /// Returns the canonical path: the existing part resolved, the missing
@@ -48,14 +56,24 @@ pub fn check_owned_path(
     path: &Path,
 ) -> Result<OwnedPath, CoreError> {
     let canonical = resolve_normalized(platform, path)?;
-    for (root, root_path) in prepared.canonical_roots() {
+    let extras = prepared.locations().extra_roots();
+    let roots = prepared
+        .canonical_roots()
+        .into_iter()
+        .map(|(root, root_path)| (root, root_path.to_path_buf()))
+        .chain(extras);
+    for (root, root_path) in roots {
         if canonical == root_path {
             return Err(CoreError::IsOwnedRoot {
                 path: path.to_path_buf(),
             });
         }
-        if canonical.starts_with(root_path) {
-            return Ok(OwnedPath { root, canonical });
+        if canonical.starts_with(&root_path) {
+            return Ok(OwnedPath {
+                root,
+                root_path,
+                canonical,
+            });
         }
     }
     Err(CoreError::OutsideOwnedRoots {
@@ -97,27 +115,32 @@ pub fn remove_owned_tree(
         split_at_owned_root(prepared, path).ok_or_else(|| CoreError::OutsideOwnedRoots {
             path: path.to_path_buf(),
         })?;
-    Ok(platform.fs().remove_tree(root, relative)?)
+    Ok(platform.fs().remove_tree(&root, &relative)?)
 }
 
 /// Returns the canonical form of the owned root `path` lies in as written
 /// (matching the root as the layout gives it or its canonical form), and
 /// the non empty rest of `path` after it.
-fn split_at_owned_root<'a>(
-    prepared: &'a PreparedLayout,
-    path: &'a Path,
-) -> Option<(&'a Path, &'a Path)> {
+fn split_at_owned_root(prepared: &PreparedLayout, path: &Path) -> Option<(PathBuf, PathBuf)> {
     let given = prepared.layout().owned_roots();
+    let split = |given: &Path, canonical: &Path| {
+        [given, canonical]
+            .into_iter()
+            .find_map(|root| path.strip_prefix(root).ok())
+            .filter(|rest| !rest.as_os_str().is_empty())
+            .map(|rest| (canonical.to_path_buf(), rest.to_path_buf()))
+    };
     prepared
         .canonical_roots()
         .into_iter()
         .zip(given)
-        .find_map(|((_, canonical), given)| {
-            [given, canonical]
+        .find_map(|((_, canonical), given)| split(given, canonical))
+        .or_else(|| {
+            prepared
+                .locations()
+                .extra_roots()
                 .into_iter()
-                .find_map(|root| path.strip_prefix(root).ok())
-                .filter(|rest| !rest.as_os_str().is_empty())
-                .map(|rest| (canonical, rest))
+                .find_map(|(_, root)| split(&root, &root))
         })
 }
 
@@ -274,9 +297,7 @@ mod tests {
     fn a_path_inside_a_root_is_accepted_even_before_it_exists() {
         let root = TestRoot::new().unwrap();
         let (fake, prepared) = prepared(&root);
-        let paths = prepared
-            .layout()
-            .instance_paths(stackly_domain::InstanceId::generate());
+        let paths = prepared.instance_paths(stackly_domain::InstanceId::generate());
 
         let data = check_owned_path(&fake.platform(), &prepared, &paths.data).unwrap();
         let logs = check_owned_path(&fake.platform(), &prepared, &paths.logs).unwrap();
@@ -381,7 +402,7 @@ mod tests {
         let existing =
             create_instance_layout(&platform, &prepared, &manifest_for(&platform, id), &[])
                 .unwrap();
-        let other = prepared.layout().instance_paths(InstanceId::generate());
+        let other = prepared.instance_paths(InstanceId::generate());
         let alias = root.path().join("alias");
         symlink(&existing.root, &alias).unwrap();
         let instances_alias = root.path().join("instances-alias");
