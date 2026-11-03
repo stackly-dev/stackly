@@ -12,7 +12,8 @@
         "settings": [],
         "secrets": [],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime postgresql@18.6"
     },
@@ -28,7 +29,8 @@
         "settings": [],
         "secrets": [],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --revision 2026.10.1"
     },
@@ -44,7 +46,8 @@
         "settings": [],
         "secrets": [],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime postgresql@18.6 --display-name 'Orders DB (it'\\''s live)'"
     },
@@ -74,7 +77,8 @@
         "settings": [],
         "secrets": [],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --port postgres=5432 --port admin=auto"
     },
@@ -145,7 +149,8 @@
         ],
         "secrets": [],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create search --runtime nats@2.15 --provider official/nats --set 'serverName=search node' --set jetstream=false --set maxPayloadBytes=2097152 --set-json 'limits=[{\"limit\":-3,\"name\":\"a\",\"on\":true}]'"
     },
@@ -188,7 +193,8 @@
           }
         ],
         "start": false,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime postgresql@18.6 --provider official/postgresql --secret superuserPassword=generate --secret replicaPassword=prompt --secret auditPassword=copy:local:erp/db/audit --secret backupPassword=bind:local:erp/db/backup"
     },
@@ -212,9 +218,44 @@
         "settings": [],
         "secrets": [],
         "start": true,
-        "autostart": false
+        "autostart": false,
+        "noAutostart": false
       },
       "command": "stackly instance create orders-db --runtime 0192f3a6-0000-7000-8000-0000000000a1 --port postgres=5432 --start"
+    },
+    {
+      "name": "autostart",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": null,
+        "revision": null,
+        "displayName": null,
+        "ports": [],
+        "settings": [],
+        "secrets": [],
+        "start": true,
+        "autostart": true,
+        "noAutostart": false
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --autostart --start"
+    },
+    {
+      "name": "no autostart against an at login default",
+      "draft": {
+        "name": "orders-db",
+        "runtime": "postgresql@18.6",
+        "provider": null,
+        "revision": null,
+        "displayName": null,
+        "ports": [],
+        "settings": [],
+        "secrets": [],
+        "start": true,
+        "autostart": false,
+        "noAutostart": true
+      },
+      "command": "stackly instance create orders-db --runtime postgresql@18.6 --no-autostart --start"
     }
   ]
 }

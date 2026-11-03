@@ -72,8 +72,12 @@ public final class CreateInstanceModel {
     public private(set) var endpoints: [EndpointDraft] = []
     /// Whether the instance starts after it is created.
     public private(set) var startAfterCreating = true
-    /// Whether the new instance starts at every login (spec 0031, AC-19). Off by default.
+    /// Whether the new instance starts at every login (spec 0031, AC-19). It begins with the
+    /// daemon's `defaultStartup` once the form is read (spec 0032 AC-18), off before that.
     public private(set) var startAtLogin = false
+    /// Whether the person chose ``startAtLogin`` themselves, so a form read later does not
+    /// replace the choice with the default.
+    @ObservationIgnored private var startAtLoginChosen = false
     /// The draft generation: raised by every change.
     public private(set) var generation = 0
     /// The newest preflight reply received, of any generation.
@@ -319,7 +323,11 @@ public final class CreateInstanceModel {
         preflightTask?.cancel()
         watchTask?.cancel()
         loadToken = UUID()
-        if !keepRuntime { runtimeID = nil }
+        if !keepRuntime {
+            runtimeID = nil
+            startAtLogin = false
+            startAtLoginChosen = false
+        }
         form = nil
         schema = nil
         name = ""
@@ -398,6 +406,7 @@ public final class CreateInstanceModel {
         guard token == loadToken else { return }
         let form = duplicate.form
         self.form = form
+        applyStartupDefault(of: form)
         runtimeID = form.runtime.id
         providerSelector = duplicate.draft.provider
         sourceReferences = Dictionary(
@@ -437,6 +446,7 @@ public final class CreateInstanceModel {
     private func formLoaded(_ form: CreateForm, token: UUID) {
         guard token == loadToken else { return }
         self.form = form
+        applyStartupDefault(of: form)
         let schema = SchemaFormModel(fields: form.fields)
         schema.onChange = { [weak self] in self?.draftDidChange() }
         self.schema = schema
@@ -447,6 +457,12 @@ public final class CreateInstanceModel {
             .map(EndpointDraft.init)
         phase = .editing
         draftDidChange(immediately: true)
+    }
+
+    /// Starts the Start at login toggle at the daemon's default, unless the person chose.
+    private func applyStartupDefault(of form: CreateForm) {
+        guard startAtLoginChosen == false else { return }
+        startAtLogin = form.startupDefault == .atLogin
     }
 
     private func formFailed(_ error: ClientError, token: UUID) {
@@ -549,6 +565,7 @@ public final class CreateInstanceModel {
 
     /// Sets "Start at login".
     public func setStartAtLogin(_ value: Bool) {
+        startAtLoginChosen = true
         guard value != startAtLogin else { return }
         startAtLogin = value
         draftDidChange()
@@ -563,7 +580,7 @@ public final class CreateInstanceModel {
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: schema.secretPlans(), start: startAfterCreating,
-            startup: startAtLogin ? .atLogin : nil)
+            startup: startAtLogin ? .atLogin : .manual)
     }
 
     private func draftDidChange(immediately: Bool = false, fromPerson: Bool = true) {
@@ -741,7 +758,7 @@ public final class CreateInstanceModel {
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: secrets,
-            startup: startAtLogin ? .atLogin : nil)
+            startup: startAtLogin ? .atLogin : .manual)
         let outcome = await send(.instanceCreate(params), key)
         switch outcome {
         case .completed(let reply):

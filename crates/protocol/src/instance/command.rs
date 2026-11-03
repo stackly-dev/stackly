@@ -43,6 +43,11 @@ pub struct CommandDraft {
     /// `--autostart` (spec 0031).
     #[serde(default)]
     pub autostart: bool,
+    /// `--no-autostart`: the draft asks for the `manual` policy while the
+    /// default of the daemon is `at_login`, so the command must say so
+    /// (spec 0032 AC-18). Never set together with `autostart`.
+    #[serde(default)]
+    pub no_autostart: bool,
 }
 
 /// One `--port <endpoint>=<port|auto>`.
@@ -135,6 +140,9 @@ pub fn equivalent_command(draft: &CommandDraft) -> String {
     if draft.autostart {
         words.push("--autostart".to_owned());
     }
+    if draft.no_autostart {
+        words.push("--no-autostart".to_owned());
+    }
     if draft.start {
         words.push("--start".to_owned());
     }
@@ -177,7 +185,31 @@ mod tests {
             secrets: Vec::new(),
             start: false,
             autostart: false,
+            no_autostart: false,
         }
+    }
+
+    #[test]
+    fn the_no_autostart_flag_is_written_after_the_secrets_and_before_start() {
+        let mut draft = base();
+        draft.no_autostart = true;
+        draft.start = true;
+
+        assert_eq!(
+            equivalent_command(&draft),
+            "stackly instance create orders-db --runtime postgresql@18.1 --no-autostart --start"
+        );
+    }
+
+    #[test]
+    fn a_draft_from_before_no_autostart_decodes_with_it_off() {
+        let draft: CommandDraft = serde_json::from_str(
+            r#"{"name":"a","runtime":"r","ports":[],"settings":[],"secrets":[],"start":false}"#,
+        )
+        .expect("the older shape decodes");
+
+        assert!(!draft.autostart);
+        assert!(!draft.no_autostart);
     }
 
     #[test]

@@ -645,6 +645,7 @@ mod tests {
                 .collect(),
             start: args.start,
             autostart: args.autostart,
+            no_autostart: args.no_autostart,
         }
     }
 

@@ -173,9 +173,12 @@ import Testing
             allowedExamples: ["environment[\"STACKLY_ROOT\"]"]
         ),
         Rule(
-            name: "ServiceManagement outside the SMAppService adapter (spec 0015 AC-11)",
+            name: "ServiceManagement outside the SMAppService adapters (specs 0015, 0032)",
             patterns: [#"\bimport ServiceManagement\b"#, #"\bSMAppService\b"#],
-            allowed: [stacklyUI + "Agent/SMAppServiceAgent.swift"],
+            allowed: [
+                stacklyUI + "Agent/SMAppServiceAgent.swift",
+                stacklyUI + "Agent/SMAppServiceMainApp.swift",
+            ],
             forbiddenExamples: [
                 "import ServiceManagement",
                 "let service = SMAppService.mainApp",
@@ -183,6 +186,7 @@ import Testing
             ],
             allowedExamples: [
                 "let agent = SMAppServiceAgent()",
+                "let loginItem = SMAppServiceMainApp()",
                 "controller.openApprovalSettings()",
             ]
         ),

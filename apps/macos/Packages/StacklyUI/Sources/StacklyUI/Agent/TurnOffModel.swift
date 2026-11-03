@@ -30,8 +30,18 @@ public final class TurnOffModel {
         case working
     }
 
+    /// Where Turn Off… was asked, so only that window shows the confirmation.
+    public enum Origin: Equatable, Sendable {
+        /// The Background Agent section of Diagnostics.
+        case diagnostics
+        /// The Start stacklyd at login row of Settings (spec 0032 AC-15).
+        case settings
+    }
+
     /// What the model is doing.
     public private(set) var phase = Phase.idle
+    /// Where the open confirmation was asked.
+    public private(set) var origin = Origin.diagnostics
     /// The plan the confirmation shows, or `nil` while no confirmation is open.
     public private(set) var plan: TurnOffPlan?
     /// Why the last Turn Off did not finish, or `nil`.
@@ -76,8 +86,10 @@ public final class TurnOffModel {
     }
 
     /// Turn Off…: reads the preview and opens the confirmation.
-    public func begin() async {
+    /// - Parameter origin: Where it was asked; only that window shows the confirmation.
+    public func begin(from origin: Origin = .diagnostics) async {
         guard phase == .idle else { return }
+        self.origin = origin
         phase = .loadingPreview
         message = nil
         do throws(ClientError) {
