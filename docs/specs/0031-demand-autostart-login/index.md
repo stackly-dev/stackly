@@ -1,7 +1,7 @@
 # 0031. Demand, autostart, dan login
 
 **Date**: 2026-11-02
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
@@ -96,7 +96,7 @@ Desired state tetap field sendiri (spec 0004). Lease menjelaskan alasan:
 | Sumber | Dibuat | Berakhir | Sesi |
 | --- | --- | --- | --- |
 | `startup` | rotasi `new`, untuk instance `at_login` yang bisa jalan | `suppressed` oleh stop manual atau `stop_all`; `released` di rotasi `new` berikutnya atau saat policy menjadi `manual` | wajib, sesi sekarang |
-| `manual` | `instance.start` pengguna (AC-9) | `released` oleh stop manual, `stop_all`, atau rotasi `new` | sesi sekarang, atau tanpa sesi di konteks manual |
+| `manual` | `instance.start` pengguna (AC-9), dan juga restart pengguna spec 0026, karena separuh start nya memakai `StartRequest::user` (`restart_op.rs`) | `released` oleh stop manual, `stop_all`, atau rotasi `new` | sesi sekarang, atau tanpa sesi di konteks manual |
 | `environment` | fitur 46 | fitur 47 | tanpa sesi, bertahan lintas sesi |
 
 `stopped` dengan desired `running` adalah keadaan istirahat yang sah (misalnya sesudah *Akhir sesi*, atau saat menunggu Keychain). Exit proses yang dihentikan *Akhir sesi* tidak pernah dibaca sebagai crash, karena stop selalu lewat `stopping` dan exit saat `stopping` menjadi `exited` (spec 0010).
@@ -109,7 +109,7 @@ Desired state tetap field sendiri (spec 0004). Lease menjelaskan alasan:
 4. Rekonsiliasi spec 0010, dengan `session_changed` true hanya untuk rotasi `new`, plus aturan restore spec 0030. Karena rotasi berjalan lebih dulu, restore membaca desired sesudah rotasi.
 5. `OperationEngine::start()`, lalu *Antrean start* (konteks launchd), atau daftar "jalankan lagi" spec 0010 apa adanya (konteks manual). Restore spec 0030 (`PendingKind::Restore`) berjalan di slot yang sama.
 
-Gagal membaca `LoginSession` di konteks launchd membuat rotasi `skipped`, subsystem `session` `degraded` dengan kode `platform.session_unavailable`, dan antrean start hanya berisi daftar "jalankan lagi" spec 0010. Guard rotasi yang gagal (error registry) menghentikan start daemon dengan exit 1, seperti error registry lain di slot start.
+Gagal membaca `LoginSession` di konteks launchd membuat rotasi `skipped`, subsystem `session` `degraded` dengan kode `platform.session_unavailable`, dan antrean start hanya berisi daftar "jalankan lagi" spec 0010. Rotasi yang gagal ditulis (guard atau error registry) diperlakukan sama, bukan exit 1: subsystem `session` `degraded` dengan `platform.session_unavailable`, `DaemonInfo.session` null, dan hanya daftar "jalankan lagi" spec 0010 yang dinyalakan (`SessionStatus::Unavailable` di `apps/daemon/src/session.rs`; keputusan lead 2026-11-03, ikut kode).
 
 ### Rotasi sesi
 
@@ -146,7 +146,7 @@ Satu antrean per daemon start (konteks launchd), dibangun sesudah rekonsiliasi d
 | launchd | `SIGTERM` sesudah `daemon.shutdown` `stop` diterima | spec 0010: instance dibiarkan, baris sesi ditutup `clean` |
 | launchd | `SIGTERM` sesudah rencana restart spec 0030 di commit `stopping` | rencana restart spec 0030; baris sesi ditutup `clean` |
 | launchd | `SIGTERM` sesudah `agent_off` memutuskan `exiting: true` | sama dengan `stop`; semua instance pilihan sudah berhenti |
-| launchd | `SIGINT`, `SIGHUP` | sama dengan `SIGTERM` sesudah `daemon.shutdown` `stop` (bukan logout) |
+| launchd | `SIGINT`, `SIGHUP` | sama dengan `SIGTERM` sesudah `daemon.shutdown` `stop` (bukan logout); `StopSignals` di `apps/daemon/src/shutdown.rs` kini juga mengikat `SIGHUP`, jadi `SIGHUP` menghentikan daemon (tabel sinyal spec 0006) |
 | manual | `SIGTERM`, `SIGINT`, `SIGHUP` | spec 0006 dan 0010 apa adanya, tanpa sesi |
 | semua | crash, `SIGKILL` | tidak ada handler; adopsi di start berikutnya (spec 0010 AC-21) |
 
@@ -158,9 +158,9 @@ Urutan bernomor sejak `SIGTERM` diterima (`t0`):
 
 1. Server IPC menolak setiap request baru, termasuk `daemon.shutdown`, dengan `daemon.shutting_down`.
 2. Operasi yang sedang berjalan dibatalkan lewat jalur cancel spec 0007 dan 0010 (start yang dibatalkan dengan proses hidup berakhir lewat alur *Stop* spec 0010).
-3. Untuk setiap instance dengan proses hidup, mulai operasi `stop_instance` dengan pemicu `session_end` dan idempotency key `session_end:<SessionId>:<InstanceId>`, tanpa `evaluate_stop`. Instance yang lock nya masih dipegang operasi yang sedang dibatalkan menunggu lock itu di dalam tenggat yang sama.
+3. Untuk setiap instance dengan proses hidup, mulai operasi `stop_instance` dengan pemicu `session_end` lewat `Origin::Background`, tanpa idempotency key dan tanpa `evaluate_stop`. Engine hanya mengikat key pada `Origin::Request`, dan origin itu kena gerbang quiesce restart yang justru dibatalkan akhir sesi; satu daemon menjalankan akhir sesi sekali (sinyal kedua memotongnya), jadi tidak ada yang perlu di replay. Stopnya memakai `StopRequest::session_end` (`StopIntent::PlannedRestart`: tanpa cek lease dan tanpa menulis desired). Instance yang lock nya masih dipegang operasi yang sedang dibatalkan menunggu lock itu di dalam tenggat yang sama.
 4. Tunggu sampai semua stop commit, atau sampai `t0 + SESSION_END_STOP_BUDGET` (15 detik).
-5. Tulis `EndSession { end_reason }`: `clean` atau `interrupted`. Gagal commit tidak memblokir exit; rotasi berikutnya menutup baris itu `unknown`.
+5. Tulis `EndSession { end_reason }`: `clean` kalau setiap instance dengan proses hidup mendapat operasi stop dan semuanya selesai `succeeded` sebelum tenggat; selain itu `interrupted`, yaitu ada stop yang belum final saat tenggat, stop yang selesai tetapi gagal, atau stop yang tidak bisa dimulai (`crates/core/src/supervisor/session_end.rs`). Gagal commit tidak memblokir exit; rotasi berikutnya menutup baris itu `unknown`.
 6. Urutan berhenti spec 0006 (actor, probe, pembaca spool, dan watcher berhenti tanpa commit lifecycle, seperti spec 0010).
 
 `SESSION_END_STOP_BUDGET` + batas urutan berhenti spec 0006 + margin 3 detik ≤ `ExitTimeOut` 30. Test konstanta memeriksa relasi ini, dan kalau batas spec 0006 ternyata lebih dari 12 detik, budget stop yang dikurangi. Instance yang masih `stopping` saat tenggat dibiarkan; rekonsiliasi berikutnya membaca `stopping` plus `Gone` sebagai `exited` (spec 0010).
@@ -214,9 +214,9 @@ Spec 0032 (*Tambahan pada kontrak spec 0031*) memperluas kontrak ini. Fitur 31 m
 2. `daemon.shutdown { mode: agent_off, idempotencyKey }`. Key wajib, seperti `restart` spec 0030, dan client memakai timeout interaktif seperti *Operasi `stop_all_instances`* langkah 9, karena balasannya baru datang setelah semua stop selesai. Perilakunya sama di konteks launchd dan manual.
    - Handler memanggil `replay_operation` lebih dulu, jadi kiriman ulang dengan key yang sama setelah timeout menunggu operasi yang sama, bukan ditolak gerbang.
    - Ditolak tanpa efek: `daemon.restart_pending` selama quiesce atau rencana restart `stopping` spec 0030; `daemon.shutting_down` sesudah `handed_over`, sesudah `stop` diterima, dan selama `agent_off` lain berjalan; `registry.recovery_mode` dalam recovery mode, karena tanpa registry daemon tidak bisa memilih atau menghentikan instance. Turn Off menampilkan kode itu, dan `daemon.shutdown { mode: stop }` tetap tersedia. Selama `agent_off` berjalan, `daemon.shutdown` `stop` dan `restart` juga ditolak `daemon.shutting_down`.
-   - Sejak request diterima, gerbang quiesce spec 0030 di `OperationEngine::begin` menolak operasi baru dari `Origin::Request` dengan `daemon.shutting_down`. Hanya `BeginRequest` dengan flag `bypass_quiesce`, yang hanya diset handler `agent_off` untuk operasinya sendiri, yang lolos; `replay` tidak diperiksa gerbang. Operasi latar tetap boleh, karena start sistem memeriksa desired di bawah lock (*Antrean start*) dan instance yang dihentikan sudah desired `stopped`.
+   - Sejak request diterima, gerbang quiesce spec 0030 di `OperationEngine::begin` menolak operasi baru dari `Origin::Request` dengan `daemon.shutting_down`. Hanya operasi yang dimulai lewat method `OperationEngine::begin_bypassing_quiesce`, yang hanya dipanggil handler `agent_off` untuk operasinya sendiri, yang lolos (method, bukan field `bypass_quiesce` di `BeginRequest`); `replay` tidak diperiksa gerbang. Operasi latar tetap boleh, karena start sistem memeriksa desired di bawah lock (*Antrean start*) dan instance yang dihentikan sudah desired `stopped`.
    - Daemon menjalankan satu operasi `stop_all_instances` (`source` `agent_off`) dengan langkah untuk himpunan `stop` dan juga `already_stopping` dari *Pilihan stop all*. Langkah `already_stopping` menunggu lock nya lalu berjalan seperti langkah lain, jadi daemon tidak keluar selagi stop lain masih berjalan, dan instance yang macet di `stopping` berakhir di `failed`.
-   - Kalau `failed` dan `skipped` kosong, daemon menjalankan `select` sekali lagi. Kalau `stop` dan `already_stopping` juga kosong, daemon membalas `ShutdownAccepted` (spec 0030) dengan `exiting: true` dan `stopAll`, lalu keluar 0 seperti `stop`. Selain itu, daemon membalas `exiting: false` dengan `stopAll`, mencabut gerbang, dan tetap jalan. Replay dengan key yang sama selama daemon masih jalan mengembalikan balasan yang sama.
+   - Kalau `failed` dan `skipped` hasil operasi kosong, daemon menjalankan `select` sekali lagi. Kalau `stop`, `already_stopping`, dan `skipped` dari `select` terakhir itu juga kosong (`apps/daemon/src/ipc/agent_off.rs`), daemon membalas `ShutdownAccepted` (spec 0030) dengan `exiting: true` dan `stopAll`, lalu keluar 0 seperti `stop`. Selain itu, daemon membalas `exiting: false` dengan `stopAll`, mencabut gerbang, dan tetap jalan. Replay dengan key yang sama selama daemon masih jalan mengembalikan balasan yang sama.
 3. Dengan `exiting: true`, client menunggu socket hilang (spec 0015 AC-10), lalu memanggil `unregister` (CLI lewat port `BackgroundAgent`, GUI lewat `SMAppService` di Swift). Status sesudahnya `not_registered`, dan banner Turn On spec 0015 muncul. Dengan `exiting: false`, client berhenti dan menyebut setiap instance yang menghalangi.
 4. Daemon tidak terjangkau:
    - Dengan state agent `requires_approval` atau `disabled`, launchd tidak menjalankan daemon, jadi `unregister` langsung boleh.
@@ -273,12 +273,12 @@ Operasi registry baru: `InsertSession`, `EndSession { id, at, reason }`, `Reopen
 | `instance.create` (diperluas) | `startup` opsional, default `manual` (spec 0032 AC-18 menggantinya dengan `default_startup`) | sama | sama | sama |
 | `daemon.shutdown` (diperluas) | `mode` `agent_off` baru; `idempotencyKey` wajib untuk `agent_off` dan `restart` | `ShutdownAccepted` spec 0030 diperluas dengan `exiting: bool` dan `stopAll: StopAllResult \| null`; `stopAll` null untuk `stop` dan `restart` | sama | sama, plus `daemon.restart_pending` (spec 0030), `daemon.shutting_down`, dan `registry.recovery_mode` untuk `agent_off` (*Matikan agent*) |
 
-`ShutdownAccepted` tidak lagi `Copy` setelah `stopAll` ditambah. Kontrak berubah di langkah 5, 9, dan 12. Setiap langkah itu menaikkan minor `ProtocolVersion::CURRENT` dari versi di `main` saat itu (2.1 pada 2026-11-02, dan spec 0028 sedang membuat 2.2), kecuali versi itu belum ada di `main` (`cargo xtask codegen --amend`).
+`ShutdownAccepted` tidak lagi `Copy` setelah `stopAll` ditambah. Kontrak berubah di langkah 5, 9, dan 12. Setiap langkah itu menaikkan minor `ProtocolVersion::CURRENT` dari versi di `main` saat itu (2.1 pada 2026-11-02, dan spec 0028 sedang membuat 2.2), kecuali versi itu belum ada di `main` (`cargo xtask codegen --amend`). Hasil di `main`: 3.1, karena spec 0032 lebih dulu menaikkan mayor ke 3.0 dan langkah 12 menambah satu minor.
 
 Nilai DTO baru:
 
 - `InstanceAutostart { policy: StartupPolicyKind, session: AutostartSession }`, opsional `#[serde(default)]` di `InstanceSummary`. `session` bernilai `active` (lease startup sesi ini `active`), `suppressed` (lease itu `suppressed`), `none` (tidak ada lease startup sesi ini, termasuk di konteks manual), atau `Unrecognized`.
-- `DaemonSessionInfo`, opsional di `DaemonInfo`, null di konteks manual atau saat sesi gagal dibaca:
+- `DaemonSessionInfo`, opsional di `DaemonInfo`, null di konteks manual, di recovery mode (rotasi dilewati), saat sesi gagal dibaca atau rotasi gagal ditulis, dan selama daemon launchd belum selesai rotasi (`starting`); hanya `SessionStatus::Rotated` yang mengisinya (`session_info` di `apps/daemon/src/session.rs`):
   - `id`;
   - `startedAt`: `started_at` baris sesi, yaitu awal sesi, bukan awal run daemon;
   - `rotation`: `first`, `new`, atau `continued`, hasil run daemon ini yang disimpan di memori;
@@ -313,10 +313,11 @@ Nilai DTO baru:
 | Summary | `policy` `at_login`, `session` `none`, `rotation` bukan `new` di sesi ini | "Starts at your next login." |
 | Summary | `policy` `at_login`, agent tidak enabled (AC-19) | "Won’t start at login: the background agent is off." atau "Won’t start at login: the background agent needs approval in Login Items." |
 | Summary | lainnya | tanpa teks sekunder |
-| Blocker | `NeedsSecret` dengan `store_locked` atau `busy` | "The Keychain is locked. Stackly tries again every 30 seconds." |
+| Blocker | `NeedsSecret` dengan `store_locked` atau `store_busy` | "The Keychain is locked. Stackly tries again every 30 seconds." |
 | Konfirmasi Turn Off | | judul "Turn Off Background Agent?"; isi "{n} running instances will stop. {m} instances set to start at login won’t start until you turn it on again."; tombol "Turn Off" (`n` = `items` ditambah `alreadyStopping` preview) |
 | Konfirmasi Turn Off | `skipped` preview tidak kosong | ditambah "Turn Off can’t finish while these instances run: {nama · alasan}."; tombol Turn Off nonaktif |
 | Turn Off ditolak | `exiting: false` | "Background agent is still on. Stopped {a} instances. These couldn’t be stopped: {daftar}." |
+| Alasan per instance di konfirmasi Turn Off, Turn Off ditolak, dan `stackly daemon uninstall` | kode `skipped` atau `failed` | `supervisor.stop_requires_override` "an environment uses it", `supervisor.identity_unproven` "it can’t be confirmed as running", `operation.recovery_required` "an operation needs recovery", `supervisor.stop_timeout` "it didn’t stop in time", `operation.cancelled` "the stop was cancelled"; kode lain ditulis apa adanya. Setiap item ditulis "{nama} · {alasan}" (`TurnOffPlan.reason(of:)` di GUI, `reason` di `apps/cli/src/commands/daemon/uninstall.rs`) |
 
 ### Value sourcing
 
@@ -389,7 +390,7 @@ Tidak ada env var baru. `SESSION_END_STOP_BUDGET` (15 detik), `LOGIN_SECRET_RETR
 - **Spec 0005**: tabel `daemon_sessions` dan unique index lease startup.
 - **Spec 0020 dan 0021**: `startup` di create (AC-16), dan baris Autostart menjadi toggle (AC-19).
 - **Spec 0030**: Follow-up baris 1 terjawab di sini (`ShutdownAccepted` diperluas, bukan diganti; `agent_off` ditolak selama quiesce dan rencana `stopping`; restore menang atas *Antrean start* selama rencana `restoring`), jadi barisnya bisa dicentang.
-- **Spec 0007**: kode `operation.cancelled` masuk katalog `operation`; flag `bypass_quiesce` di `BeginRequest`.
+- **Spec 0007**: kode `operation.cancelled` masuk katalog `operation`; bypass quiesce sebagai method `OperationEngine::begin_bypassing_quiesce` (rencana awalnya flag `bypass_quiesce` di `BeginRequest`).
 - **Spec 0010**: start sistem (`reconcile`, dan pemicu baru di spec ini) memeriksa desired di bawah lock dan selesai tanpa start kalau bukan `running` (*Antrean start*).
 - **Spec 0030**: restore untuk instance `stop_restore` yang desired nya kini `stopped` (Stop All, Turn Off, atau rotasi sesi menang lebih dulu) mendapat outcome `skipped`, supaya rencana tetap bisa `finished`.
 - **Spec 0030** *(ditambah 2026-11-03, disetujui user)*: AC-8 membuktikan survival PostgreSQL dan NATS lewat `stackly daemon restart` dan crash daemon (`SIGKILL`), bukan `launchctl kickstart -k` dan `bootout`, yang di konteks launchd kini akhir sesi (AC-11, AC-13); `HANDOVER_PROVEN` tetap didasarkan pada test itu. Tabel test, *Edge cases*, dan *Consequences* ikut disesuaikan. Spec 0015 AC-16 mendapat penyesuaian yang sama untuk instance fake.
@@ -425,7 +426,7 @@ Di antara journey 1 dan 5, start sistem dengan Keychain terkunci sudah berakhir 
 
 **Journey 4: agent dimatikan atau dicabut**
 
-12. `ShutdownMode::AgentOff` di atas `ShutdownAccepted` spec 0030 (replay dulu, gerbang quiesce dengan `bypass_quiesce`, langkah `already_stopping`, `select` terakhir sebelum exit, penolakan di recovery mode), konfirmasi dari `instance.preview_stop_all`, `stackly daemon uninstall`, Turn Off… di Diagnostics, dan teks "Won’t start at login". Memenuhi **AC-19**, **AC-20**.
+12. `ShutdownMode::AgentOff` di atas `ShutdownAccepted` spec 0030 (replay dulu, gerbang quiesce dengan `begin_bypassing_quiesce`, langkah `already_stopping`, `select` terakhir sebelum exit, penolakan di recovery mode), konfirmasi dari `instance.preview_stop_all`, `stackly daemon uninstall`, Turn Off… di Diagnostics, dan teks "Won’t start at login". Memenuhi **AC-19**, **AC-20**.
 
 **Journey 5: Keychain terkunci**
 
@@ -469,6 +470,8 @@ Di antara journey 1 dan 5, start sistem dengan Keychain terkunci sudah berakhir 
 - [ ] Fitur 30: restart daemon terencana memakai `daemon.shutdown` supaya tidak masuk jalur *Akhir sesi*.
 - [ ] Fitur 66: runbook memuat tabel *Batas disruption*.
 - [ ] Cek mockup baris Autostart di Summary; kalau mockup menggambar teks biasa, toggle dicatat sebagai selisih yang disengaja di `docs/scope/ui-macos.md`.
+- [ ] `LAUNCHD_EXIT_TIMEOUT` (`apps/daemon/src/shutdown.rs`, dipakai test relasi budget akhir sesi) dan `EXIT_TIMEOUT_SECS` (`xtask/src/build_app/plist.rs`, nilai `ExitTimeOut` di plist) sama sama 30 detik tetapi tidak terhubung. Satukan di satu konstanta, misalnya di `crates/platform/src/bundle.rs` seperti `LAUNCHD_THROTTLE_INTERVAL_SECS`, atau tambah test yang membandingkan keduanya, supaya relasi AC-11 tetap benar kalau salah satunya berubah.
+- [ ] Blocker `store_locked` yang basi saat resolve secret menjawab `Backend`, dan timer `secret_retry` yang tidak berhenti dalam keadaan itu (spec 0011 *Needs secret*, AC-15 spec ini). Kalau perbaikannya mengubah teks AC, perubahan itu butuh persetujuan user. Tambah juga log level debug dengan kode status asli Keychain di adapter `crates/platform-macos/src/secret.rs`.
 
 ## Rationale
 
