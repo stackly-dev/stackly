@@ -167,9 +167,29 @@ fn shutdown(socket: &Path, mode: ShutdownMode) {
     let reply = std::thread::spawn(move || {
         runtime().block_on(async {
             let (client, _) = common::client(&socket).await;
-            client
-                .call(Call::DaemonShutdown(ShutdownParams::new(mode)))
-                .await
+            // A restart starts an operation, so it needs an idempotency key
+            // (spec 0030); a stop does not.
+            let key = uuid::Uuid::now_v7().to_string();
+            // The supervisor serves a moment after the socket answers, and a
+            // restart waits for it (`daemon.starting`); the same key is sent
+            // again until it does.
+            let deadline = Instant::now() + PATIENCE;
+            loop {
+                let reply = client
+                    .call_detailed(
+                        Call::DaemonShutdown(ShutdownParams::new(mode)),
+                        stackly_ipc::CallOptions::default().with_idempotency_key(&key),
+                    )
+                    .await;
+                match &reply {
+                    Err(error)
+                        if error.code() == "daemon.starting" && Instant::now() < deadline =>
+                    {
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                    _ => return reply,
+                }
+            }
         })
     })
     .join()
@@ -440,14 +460,16 @@ fn servers(root: &TestRoot, id: &str) -> Vec<u32> {
         .collect()
 }
 
-/// Spec 0015 AC-16: an instance outlives the agent's daemon.
+/// Spec 0015 AC-16 and spec 0031 AC-11 and AC-13: an instance outlives a
+/// crash of the agent's daemon, and the end of a session stops it and the
+/// next daemon starts it again.
 #[test]
 #[ignore = "native: launchd gui domain"]
-fn a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it() {
+fn a_fake_instance_survives_sigkill_and_returns_after_kickstart_and_bootout() {
     let ev = evidence!(
         covers = ["REQ-013", "AC-013"],
         kind = Kind::Native,
-        expected = "a running fake instance keeps its pid and start time when the agent's job is restarted with launchctl kickstart -k and when it is booted out, with no AbandonProcessGroup in the plist, and the next launchd daemon adopts it as ready with the same process",
+        expected = "a running fake instance keeps its pid and start time when the agent's daemon is killed with SIGKILL and the next launchd daemon adopts it as ready with the same process, with no AbandonProcessGroup in the plist; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
     );
     if !gui_session(&ev) {
         return;
@@ -498,33 +520,68 @@ fn a_fake_instance_survives_kickstart_and_bootout_and_the_next_daemon_adopts_it(
             && instance["process"]["startedAt"] == process["startedAt"]
             && instance["process"]["adopted"] == true
     };
+    let other_process = |than: u32| {
+        move |instance: &Value| {
+            instance["readiness"]["state"] == "ready"
+                && instance["process"]["pid"].as_u64() != Some(u64::from(than))
+        }
+    };
 
     let first = rig.bootstrap();
     get_until(&cli, &id, same_process);
 
+    // A crash of the daemon leaves the instance alone.
+    let status = Command::new("/bin/kill")
+        .args(["-KILL", &first.pid.to_string()])
+        .status()
+        .expect("kill runs");
+    assert!(status.success());
+    let second = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != first.server_instance_id
+        })
+        .expect("the job runs a new daemon after SIGKILL");
+    get_until(&cli, &id, same_process);
+    assert_eq!(servers(rig.root(), &id), [pid], "after SIGKILL");
+
+    // kickstart -k ends the session: the instance stops, and the next
+    // daemon starts it again.
     rig.agent.kickstart_kill().expect("kickstart -k runs");
     rig.wait_launchd(RESTART_BOUND, |info| {
-        info.server_instance_id != first.server_instance_id
+        info.server_instance_id != second.server_instance_id
     })
     .expect("the job runs a new daemon after kickstart -k");
-    get_until(&cli, &id, same_process);
-    assert_eq!(servers(rig.root(), &id), [pid], "after kickstart -k");
+    let restarted = get_until(&cli, &id, other_process(pid));
+    let restarted_pid =
+        u32::try_from(restarted["process"]["pid"].as_u64().expect("a pid")).expect("a pid fits");
+    assert!(!support::alive(pid), "the old process stopped");
+    assert_eq!(servers(rig.root(), &id), [restarted_pid]);
 
+    // bootout ends it again; bootstrap brings it back.
     rig.agent.bootout().expect("the job boots out");
     assert!(info(&rig.socket).is_none(), "no daemon after bootout");
-    assert_eq!(servers(rig.root(), &id), [pid], "after bootout");
-
+    wait_no_server(rig.root(), &id, "after bootout");
     rig.bootstrap();
-    get_until(&cli, &id, same_process);
-    assert_eq!(servers(rig.root(), &id), [pid], "after the next daemon");
+    let returned = get_until(&cli, &id, other_process(restarted_pid));
+    let returned_pid =
+        u32::try_from(returned["process"]["pid"].as_u64().expect("a pid")).expect("a pid fits");
 
     let (code, stopped) = json(&cli, &["instance", "stop", &id, "--wait"]);
     assert_eq!(code, Some(0), "{stopped}");
     assert!(servers(rig.root(), &id).is_empty());
     ev.pass_with(&format!(
-        "fake server pid {pid} started at {} stayed the adopted, ready process through kickstart -k, bootout, and the next daemon",
+        "fake server pid {pid} started at {} stayed the adopted, ready process through SIGKILL; kickstart -k moved it to pid {restarted_pid} and bootout with bootstrap to pid {returned_pid}",
         process["startedAt"]
     ));
+}
+
+/// Waits until no fake server runs on the instance.
+fn wait_no_server(root: &TestRoot, id: &str, when: &str) {
+    let deadline = Instant::now() + SLOW;
+    while !servers(root, id).is_empty() {
+        assert!(Instant::now() < deadline, "a server still runs {when}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 // Spec 0030 AC-8: PostgreSQL 17, PostgreSQL 18, and NATS outlive the daemon
@@ -648,27 +705,49 @@ fn planned_restart(
     })
 }
 
+/// Waits until the instance is ready with a process other than `old`, which
+/// the daemon started itself, and returns it.
+fn wait_restarted(
+    rig: &Rig,
+    runtime_id: uuid::Uuid,
+    id: uuid::Uuid,
+    old: &Seen,
+    when: &str,
+) -> Seen {
+    let deadline = Instant::now() + SLOW;
+    loop {
+        let process = summary_of(&rig.socket, runtime_id, id).and_then(|summary| {
+            (summary.readiness.state == stackly_protocol::instance::InstanceReadinessState::Ready)
+                .then_some(summary.process)
+                .flatten()
+        });
+        if let Some(process) = process.filter(|process| process.pid != old.pid) {
+            assert!(
+                !support::alive(old.pid),
+                "{when}: the old process {} still runs",
+                old.pid
+            );
+            return Seen {
+                pid: process.pid,
+                started_at: process.started_at,
+            };
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{when}: the instance did not run again with another process"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
 /// The whole sequence for one instance that already runs under a manual
-/// daemon that has ended: the agent adopts it, `kickstart -k`, `bootout`,
-/// and a planned restart leave the process alone.
-fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen) {
+/// daemon that has ended. The agent adopts it; a planned restart and a
+/// `SIGKILL` of the daemon leave the process alone; `kickstart -k` and
+/// `bootout` end the session, so the instance stops and the next daemon
+/// starts it again with another process. Returns the last process.
+fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, seen: &Seen) -> Seen {
     let first = rig.bootstrap();
     wait_same(rig, runtime_id, id, seen, "after the first daemon");
-
-    rig.agent.kickstart_kill().expect("kickstart -k runs");
-    let second = rig
-        .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
-        })
-        .expect("the job runs a new daemon after kickstart -k");
-    wait_same(rig, runtime_id, id, seen, "after kickstart -k");
-
-    rig.agent.bootout().expect("the job boots out");
-    assert!(info(&rig.socket).is_none(), "no daemon after bootout");
-    assert!(support::alive(seen.pid), "after bootout");
-    let third = rig.bootstrap();
-    wait_same(rig, runtime_id, id, seen, "after bootout and bootstrap");
-    assert_ne!(third.server_instance_id, second.server_instance_id);
 
     let decision = planned_restart(&rig.socket, id);
     assert_eq!(
@@ -679,10 +758,11 @@ fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, see
         ),
         "the provider is in HANDOVER_PROVEN only when this test passes"
     );
-    rig.wait_launchd(RESTART_BOUND, |info| {
-        info.server_instance_id != third.server_instance_id
-    })
-    .expect("the job runs a new daemon after the planned restart");
+    let second = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != first.server_instance_id
+        })
+        .expect("the job runs a new daemon after the planned restart");
     wait_same(rig, runtime_id, id, seen, "after the planned restart");
     let plan = wait_info(&rig.socket, SLOW, |info| {
         info.restart
@@ -700,6 +780,41 @@ fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, see
         outcome,
         Some(stackly_protocol::restart::PlanOutcome::Adopted)
     );
+
+    let status = Command::new("/bin/kill")
+        .args(["-KILL", &second.pid.to_string()])
+        .status()
+        .expect("kill runs");
+    assert!(status.success());
+    let third = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != second.server_instance_id
+        })
+        .expect("the job runs a new daemon after SIGKILL");
+    wait_same(rig, runtime_id, id, seen, "after SIGKILL of the daemon");
+
+    rig.agent.kickstart_kill().expect("kickstart -k runs");
+    rig.wait_launchd(RESTART_BOUND, |info| {
+        info.server_instance_id != third.server_instance_id
+    })
+    .expect("the job runs a new daemon after kickstart -k");
+    let restarted = wait_restarted(rig, runtime_id, id, seen, "after kickstart -k");
+
+    rig.agent.bootout().expect("the job boots out");
+    assert!(info(&rig.socket).is_none(), "no daemon after bootout");
+    let deadline = Instant::now() + PATIENCE;
+    while support::alive(restarted.pid) {
+        assert!(Instant::now() < deadline, "the process outlived bootout");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    rig.bootstrap();
+    wait_restarted(
+        rig,
+        runtime_id,
+        id,
+        &restarted,
+        "after bootout and bootstrap",
+    )
 }
 
 /// Stops the instance through the agent's daemon and checks its process
@@ -746,46 +861,46 @@ fn postgresql_survives(ev: &Evidence, line: pg::Pg) {
     });
     manual.stop();
     let mut rig = Rig::at(site.root.path(), site.root.path(), None);
-    survives_every_end(&mut rig, site.runtime_id, id, &seen);
-    stop_and_check(&rig, site.runtime_id, id, &seen);
+    let last = survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &last);
     ev.pass_with(&format!(
-        "postgres pid {} started at {:?} stayed the adopted, ready process through kickstart -k, bootout, and a planned restart",
-        seen.pid, seen.started_at
+        "postgres pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon; kickstart -k and bootout ended the session and the instance ran again as pid {}",
+        seen.pid, seen.started_at, last.pid
     ));
 }
 
-/// Spec 0030 AC-8, PostgreSQL 17.
+/// Spec 0030 AC-8 and spec 0031 AC-11 and AC-13, PostgreSQL 17.
 #[test]
 #[ignore = "native: launchd gui domain"]
-fn postgresql_17_survives_kickstart_bootout_and_planned_restart() {
+fn postgresql_17_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
     let ev = evidence!(
         covers = ["REQ-013", "AC-013"],
         kind = Kind::Native,
-        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+        expected = "a running PostgreSQL instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
     );
     postgresql_survives(&ev, pg::PG17);
 }
 
-/// Spec 0030 AC-8, PostgreSQL 18.
+/// Spec 0030 AC-8 and spec 0031 AC-11 and AC-13, PostgreSQL 18.
 #[test]
 #[ignore = "native: launchd gui domain"]
-fn postgresql_18_survives_kickstart_bootout_and_planned_restart() {
+fn postgresql_18_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
     let ev = evidence!(
         covers = ["REQ-013", "AC-013"],
         kind = Kind::Native,
-        expected = "a running PostgreSQL instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+        expected = "a running PostgreSQL instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
     );
     postgresql_survives(&ev, pg::PG18);
 }
 
-/// Spec 0030 AC-8, NATS.
+/// Spec 0030 AC-8 and spec 0031 AC-11 and AC-13, NATS.
 #[test]
 #[ignore = "native: launchd gui domain"]
-fn nats_survives_kickstart_bootout_and_planned_restart() {
+fn nats_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
     let ev = evidence!(
         covers = ["REQ-013", "AC-013"],
         kind = Kind::Native,
-        expected = "a running NATS instance keeps its pid and start time through launchctl kickstart -k, launchctl bootout, and a planned daemon restart, and every next daemon adopts it as ready with a verified identity",
+        expected = "a running NATS instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
     );
     if !gui_session(&ev) {
         return;
@@ -802,11 +917,11 @@ fn nats_survives_kickstart_bootout_and_planned_restart() {
     });
     manual.stop().expect("the manual daemon stops");
     let mut rig = Rig::at(site.root.path(), &site.data_root, None);
-    survives_every_end(&mut rig, site.runtime_id, id, &seen);
-    stop_and_check(&rig, site.runtime_id, id, &seen);
+    let last = survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &last);
     ev.pass_with(&format!(
-        "nats-server pid {} started at {:?} stayed the adopted, ready process through kickstart -k, bootout, and a planned restart",
-        seen.pid, seen.started_at
+        "nats-server pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon; kickstart -k and bootout ended the session and the instance ran again as pid {}",
+        seen.pid, seen.started_at, last.pid
     ));
 }
 

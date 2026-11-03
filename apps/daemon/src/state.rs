@@ -123,6 +123,7 @@ impl Counters {
 #[derive(Debug, Clone)]
 pub struct ShutdownTrigger {
     shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
+    plan_stopping: Arc<AtomicBool>,
 }
 
 impl ShutdownTrigger {
@@ -130,6 +131,13 @@ impl ShutdownTrigger {
     /// was accepted already.
     pub fn request(&self, mode: ShutdownMode) -> bool {
         Self::request_on(&self.shutdown, mode)
+    }
+
+    /// Records that a restart plan is committed in `stopping`, or that it
+    /// closed as aborted (`false`). While it is set, a `SIGTERM` follows the
+    /// restart instead of ending the login session (spec 0031).
+    pub fn set_plan_stopping(&self, stopping: bool) {
+        self.plan_stopping.store(stopping, Ordering::SeqCst);
     }
 
     fn request_on(shutdown: &watch::Sender<Option<ShutdownMode>>, mode: ShutdownMode) -> bool {
@@ -181,6 +189,8 @@ pub struct DaemonCore {
     /// agent*): other shutdown requests and new operations from clients get
     /// `daemon.shutting_down`.
     agent_off: AtomicBool,
+    /// Set while a planned restart's plan is committed in `stopping`.
+    plan_stopping: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for DaemonCore {
@@ -240,7 +250,16 @@ impl DaemonCore {
             fatal: watch::Sender::new(None),
             shutdown: Arc::new(watch::Sender::new(None)),
             agent_off: AtomicBool::new(false),
+            plan_stopping: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Whether the plan of a planned restart is committed in `stopping`.
+    /// Together with [`shutdown_pending`](Self::shutdown_pending) it is the
+    /// `shutdown_requested` of spec 0031, *Sinyal per konteks*.
+    #[must_use]
+    pub fn plan_stopping(&self) -> bool {
+        self.plan_stopping.load(Ordering::SeqCst)
     }
 
     /// Claims the one `agent_off` a daemon runs at a time; `false` means
@@ -595,6 +614,7 @@ impl DaemonCore {
     pub fn shutdown_trigger(&self) -> ShutdownTrigger {
         ShutdownTrigger {
             shutdown: Arc::clone(&self.shutdown),
+            plan_stopping: Arc::clone(&self.plan_stopping),
         }
     }
 

@@ -213,6 +213,14 @@ impl RestartHandover for DaemonHandover {
     fn handed_over(&self) {
         let _ = self.trigger.request(ShutdownMode::Restart);
     }
+
+    fn plan_stopping(&self) {
+        self.trigger.set_plan_stopping(true);
+    }
+
+    fn plan_aborted(&self) {
+        self.trigger.set_plan_stopping(false);
+    }
 }
 
 fn restart_busy(blocking: &[ActiveOperation]) -> Box<ErrorBody> {

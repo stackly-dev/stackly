@@ -321,6 +321,9 @@ fn a_locked_file_keychain_refuses_reads_and_writes_without_a_dialog() {
         )
     });
     assert_eq!(write, Err(SecretStoreError::Locked));
+    // launchd starts SecurityAgent a few milliseconds after securityd asks
+    // for it, so the list is read after a pause.
+    std::thread::sleep(Duration::from_millis(500));
     assert_eq!(
         security_agents(),
         agents_before,
