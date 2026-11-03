@@ -34,6 +34,9 @@ pub struct CommandSpec {
     pub start: bool,
     /// Whether the command makes the instance start at login (`--autostart`).
     pub autostart: bool,
+    /// Whether the command keeps the instance from starting at login although the
+    /// default of the daemon is `at_login` (`--no-autostart`, spec 0032 AC-18).
+    pub no_autostart: bool,
 }
 
 /// Builds the command of `draft`.
@@ -53,6 +56,8 @@ pub(super) fn command_spec(draft: &CreateDraft, facts: &CreateFacts) -> CommandS
         secrets: draft.secrets.clone(),
         start: draft.start,
         autostart: draft.startup == Some(StartupPolicy::AtLogin),
+        no_autostart: draft.startup == Some(StartupPolicy::Manual)
+            && facts.locations.startup_default == StartupPolicy::AtLogin,
     }
 }
 
