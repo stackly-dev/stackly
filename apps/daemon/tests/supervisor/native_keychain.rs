@@ -22,6 +22,19 @@ use stackly_testkit::evidence::{Kind, Source, evidence};
 use crate::login::{launchd, set_at_login, start, stop};
 use crate::support::Site;
 
+/// The process IDs of `SecurityAgent`, the process that shows the Keychain
+/// dialog. Only read; nothing is signalled.
+fn security_agents() -> Vec<String> {
+    let output = Command::new("/usr/bin/pgrep")
+        .args(["-x", "SecurityAgent"])
+        .output()
+        .expect("pgrep runs");
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect()
+}
+
 /// `/usr/bin/security <verb> ...` on the file keychain.
 fn security(args: &[&str]) {
     let output = Command::new("/usr/bin/security")
@@ -84,6 +97,7 @@ async fn a_locked_file_keychain_holds_the_login_start_and_the_retry_starts_it_wh
     let first = start(&site, launchd(), &session).await;
     stop(first).await;
 
+    let agents_before = security_agents();
     security(&["lock-keychain", path_text(&keychain)]);
     session.set_audit_session(100_002);
     let second = start(&site, launchd(), &session).await;
@@ -94,6 +108,11 @@ async fn a_locked_file_keychain_holds_the_login_start_and_the_retry_starts_it_wh
         })
         .await;
     assert_eq!(blocked.lifecycle, InstanceLifecycle::Stopped);
+    assert_eq!(
+        security_agents(),
+        agents_before,
+        "a locked keychain read with no interaction allowed shows no dialog"
+    );
 
     security(&[
         "unlock-keychain",
