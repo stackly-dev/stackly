@@ -1,4 +1,4 @@
-# Verify: Edit config, nama, dan endpoint · spec 0029 · updated 2026-11-02
+# Verify: Edit config, nama, dan endpoint · spec 0029 · updated 2026-11-03
 
 _Langkah diturunkan dari acceptance criteria spec 0029. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27. Milestone 1 hanya membuktikan domain, registry, dan core pada fake (paket `providers/fake` 0.4.0); bukti lewat socket dan CLI ada di Milestone 2, provider nyata di Milestone 4._
 
@@ -14,7 +14,7 @@ _Langkah diturunkan dari acceptance criteria spec 0029. `/check verify` menjalan
 
 - [x] `cargo test -p stackly-domain` → semua lulus, termasuk `apply_allowed`, `rename_allowed`, `Instance::set_port_requests`, `ConfigRevisionRecord::following`, dan himpunan kind `CloseInterrupted` yang memuat `apply_config` dan `change_endpoints` (bukan `rename_instance` dan `resolve_config_drift`) → AC-6, AC-7, AC-12, AC-13
 - [x] `cargo test -p stackly-testkit` → `registry_conformance` lulus untuk `FakeRegistry`: `ActivateConfigRevision` (nomor naik, revision lama `superseded`, `Integrity` untuk endpoint yang tidak sama), `MarkConfigRevisionReady` idempoten, `PruneConfigRevisions` tidak pernah menghapus revision aktif atau last known good → AC-7, AC-12
-- [x] `cargo test -p stackly-storage --lib` → adapter SQLite lulus conformance yang sama; `cargo test -p stackly-storage --test open` memeriksa migrasi dari registry versi sebelumnya (test milik `dev-f30-m1`) → AC-7, AC-12
+- [x] `cargo test -p stackly-storage --test registry` → adapter SQLite lulus conformance yang sama (`crates/storage/tests/registry/conformance.rs`; baris ini dulu menyebut `--lib`, padahal conformance ada di test `registry`); `cargo test -p stackly-storage --test open` memeriksa migrasi dari registry versi sebelumnya (test milik `dev-f30-m1`) → AC-7, AC-12
 - [x] `cargo test -p stackly-core --test config_evaluate` → evaluator pada fake, PostgreSQL, NATS, dan Traefik: `reload` lawan `restart`, `secretReadOnly`, `immutableAfterInit`, `managed`, daftar `routes` dibandingkan lewat `name`, dampak menurut lifecycle, capability, dan port, pratinjau hanya file tidak sensitif dengan baris berubah → AC-1, AC-2, AC-15, AC-16
 - [x] `cargo test -p stackly-core --test supervisor_start -- config::` → 32 test lulus pada fake dan engine operasi (lihat daftar di bawah) → AC-3 sampai AC-14, AC-20
 - [x] `cargo test -p stackly-core --test provider_packages` → golden `plan` dan `reload` fake 0.4.0 cocok; `STACKLY_UPDATE_GOLDEN=1` tidak mengubah apa pun → AC-10
@@ -54,7 +54,7 @@ _Bukti lewat socket memakai fake (`providers/fake` 0.4.0) dan dummy server; Post
 - [x] `cargo xtask codegen --check` dan `cargo xtask fuzz seed` → bersih; digest 2.3 tercatat di `protocols/contract-versions.json` → kontrak
 - [x] `swift test --package-path clients/swift` → lulus (225 test; `everyCallVariantHasARoundTripFixture` menghitung 50 method)
 - [x] `cargo test -p stacklyd --lib` → lulus, termasuk `ipc::operation::dto::tests::every_domain_code_has_a_known_wire_value` untuk `apply_config`, `change_endpoints`, `rename_instance`, `resolve_config_drift`, dan `map::config::tests` → AC-20
-- [x] `cargo test -p stacklyd --test supervisor -- config::` → 12 test (1 ignored, lihat catatan) lulus, `--test-threads=1` → AC-3, AC-6, AC-8 sampai AC-14, AC-20, AC-21
+- [x] `cargo test -p stacklyd --test supervisor -- config::` → 12 test (1 ignored saat itu, lihat catatan) lulus, `--test-threads=1`; kini 14 lulus dan 0 ignored, setelah fix `4bd9c15e` dan test balapan create dan rename ke satu nama (`a65f4e0d`) → AC-3, AC-6, AC-8 sampai AC-14, AC-20, AC-21
 - [x] `cargo test -p stackly-cli --test instance -- config` → 9 test lulus (scripted daemon, goldens, dan matriks parity lawan `stacklyd` nyata) → AC-17
 - [x] `cargo clippy -p stackly-protocol -p stackly-core -p stacklyd -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
 
@@ -83,7 +83,7 @@ Rincian `config::` di `apps/daemon/tests/supervisor/config.rs`:
 
 ### Catatan
 
-- `a_running_instance_can_change_a_fixed_port_to_automatic` di-`#[ignore]`: mengubah port Fixed menjadi Auto pada instance yang sedang jalan gagal di langkah `stop` restart dengan `supervisor.config_invalid` ("endpoint http has no concrete address"), karena `Instance::set_port_requests` mengosongkan `bound_port` dan rencana stop memerlukan alamat konkret. Perbaikannya di `crates/core/src/supervisor/` (milik `dev-f30-m3`); hilangkan `#[ignore]` setelah diperbaiki → AC-14
+- `a_running_instance_can_change_a_fixed_port_to_automatic` di-`#[ignore]`: mengubah port Fixed menjadi Auto pada instance yang sedang jalan gagal di langkah `stop` restart dengan `supervisor.config_invalid` ("endpoint http has no concrete address"), karena `Instance::set_port_requests` mengosongkan `bound_port` dan rencana stop memerlukan alamat konkret. Perbaikannya di `crates/core/src/supervisor/` (milik `dev-f30-m3`); hilangkan `#[ignore]` setelah diperbaiki → AC-14. Sudah selesai di `4bd9c15e`: perbaikannya ternyata di domain, `IpEndpoint::set_request` menyimpan port yang dipegang proses sebagai `bound_port` saat permintaan baru `Auto`, dan `#[ignore]` sudah dihapus
 - Method `instance.config.apply` dan `instance.config.keep_revision` memakai nama `instance.config_apply` dan `instance.config_keep_revision` di rekaman idempotency, karena `MethodName` domain hanya menerima satu titik; nama di kawat tidak berubah
 - `start`, `restart`, dan `reload` menolak `config.drift_detected` dari blocker yang tersimpan di memori (diisi `instance.config.get`, setiap render, dan pemeriksaan saat daemon start); file yang diubah sesudah pemeriksaan terakhir ditangkap gerbang drift pada render, yang menggagalkan operasi sebelum menulis file
 
@@ -129,11 +129,11 @@ _Bukti memakai fixture tampilan (`FixtureConfiguration`) dan service yang dijawa
 
 ## Milestone 4: Provider nyata di Mac ini
 
-_Langkah 16, 17, dan 18 sudah dibangun: test native PostgreSQL 18, NATS, dan Traefik lewat daemon in process dan proses asli dari cache runtime xtask (tanpa unduhan). Langkah 19 (jaringan mati) tetap `BLOCKED` sampai kamu menyetujuinya lewat lead. Tidak ada kode produksi yang diubah; semua perubahan ada di `apps/daemon/tests/`._
+_Langkah 16, 17, dan 18 sudah dibangun: test native PostgreSQL 18, NATS, dan Traefik lewat daemon in process dan proses asli dari cache runtime xtask (tanpa unduhan). Langkah 19 (jaringan mati) dipindah ke langkah manual milikmu: kamu mengizinkannya (2026-11-02), tetapi mematikan Wi-Fi dan Ethernet mengubah setelan sistem dan memutus semua sesi Claude, termasuk Remote Control, jadi lead tidak menjalankannya. AC-21 dibuktikan oleh harness offline di dalam proses (Milestone 2). Tidak ada kode produksi yang diubah; semua perubahan ada di `apps/daemon/tests/`._
 
 ### UI / manual
 
-- [ ] BLOCKED, reason: run dengan jaringan mati sungguhan (GUI dan CLI) belum disetujui user, owner: @ojiepermana. Setelah izin: matikan jaringan, jalankan `stackly instance config get`, `config validate`, `config apply`, `config keep-revision`, `rename`, dan `endpoint set` pada instance PostgreSQL 18 yang pinned, lalu buka tab Configuration di app dan terapkan satu perubahan → semuanya berhasil tanpa akses katalog, unduhan, atau pemeriksaan tanda tangan baru → AC-21
+- [ ] BLOCKED, reason: run dengan jaringan mati sungguhan (GUI dan CLI) dipindah ke langkah manual milik user, owner: @ojiepermana. Cara menjalankannya sendiri: matikan jaringan, jalankan `stackly instance config get`, `config validate`, `config apply`, `config keep-revision`, `rename`, dan `endpoint set` pada instance PostgreSQL 18 yang pinned, lalu buka tab Configuration di app dan terapkan satu perubahan → semuanya berhasil tanpa akses katalog, unduhan, atau pemeriksaan tanda tangan baru → AC-21
 
 ### Commands
 
@@ -155,7 +155,7 @@ _Langkah 16, 17, dan 18 sudah dibangun: test native PostgreSQL 18, NATS, dan Tra
 - AC-11 · drift `postgresql.conf` pada PostgreSQL 18
 - AC-14 · ganti port Fixed dengan restart dan konflik dengan proses luar pada PostgreSQL 18
 - AC-16 · bagian native: form `routes` Traefik (nama ganda tidak valid) dan setting NATS lewat daemon nyata; tampilan GUI menunggu Milestone 3
-- AC-21 · BLOCKED sampai run jaringan mati disetujui; bagian fixture (harness offline) sudah di Milestone 2
+- AC-21 · dibuktikan oleh harness offline di dalam proses (Milestone 2); run jaringan mati sungguhan menjadi langkah manual milikmu
 
 ### Catatan
 
