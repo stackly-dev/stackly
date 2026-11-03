@@ -277,7 +277,7 @@ Unik `(instance_id, id)` untuk FK komposit dari `instances`, CHECK `previous_id 
 | `state_changed_at` | `ts` | |
 | `acquired_at`* | `ts` | |
 
-CHECK: `(source_kind = 'environment') = (source_id IS NOT NULL)`; holder `environment` tanpa session; holder `startup` wajib session; `(state = 'active') = (state_changed_at IS NULL)`; `suppressed` hanya untuk `startup`. Unique index `(instance_id, source_id) WHERE source_kind = 'environment' AND state = 'active'`. Index `(instance_id, state)` dan `source_id`. Lease tidak punya revision; perubahannya ikut batch yang membawa CAS instance bila perlu.
+CHECK: `(source_kind = 'environment') = (source_id IS NOT NULL)`; holder `environment` tanpa session; holder `startup` wajib session; `(state = 'active') = (state_changed_at IS NULL)`; `suppressed` hanya untuk `startup`. Unique index `(instance_id, source_id) WHERE source_kind = 'environment' AND state = 'active'`. Index `(instance_id, state)` dan `source_id`. Lease tidak punya revision; perubahannya ikut batch yang membawa CAS instance bila perlu. *(Ditambah fitur 31, spec 0031, migrasi 10: unique index parsial* `instance_demands_startup_session` *pada* `(instance_id, session_id) WHERE source_kind = 'startup' AND state IN ('active', 'suppressed')`*, jadi satu instance paling banyak punya satu lease startup yang belum* `released` *per sesi;* `session_id` *tetap tanpa FK ke* `daemon_sessions`*, lihat Tambahan fitur 31.)*
 
 **`operations`** (tabel dasar; journal dan step milik spec 0007)
 
@@ -482,6 +482,7 @@ Tambahan yang sudah dirancang spec pemiliknya (titik perluasan; dibangun dan diu
 | Secret dan audit | migrasi secret, record, op, dan baca di *Tambahan fitur 11* | fitur 11, spec 0011 (langkah 0) |
 | Tambahan fitur 18 | migrasi `NNNN_runtime_install.sql` dengan versi bebas berikutnya (kolom `artifacts` `catalog_id`, `build`, `format`, `size_bytes`; tabel `compatibility_records`), field baru `ArtifactRecord`, `CompatibilityRecordRow`, dan value type `SignatureInfoJson` serta `DependencyManifestJson` (teks JSON object kanonik dengan pola `ConfigValuesJson`), mengikuti runner, sidik jari, dan fixture beku spec ini; rinciannya di *Data model* spec 0018 | fitur 18, spec 0018 (langkah 6) |
 | Tambahan fitur 20 | `Registry::provider_source_by_location`, `WriteOp::InsertProviderSource`, `ProviderSourceRecord`, `ProviderRevisionRecord.source_id`, `ResourceRef::ProviderSource`, `WriteOp::DeleteInstanceCreatedBy`, dan `RegistryError::NotDeletable`, semuanya tanpa migrasi karena tabel `provider_sources`, kolom `source_id`, index, dan trigger immutability nya sudah ada di migrasi 0001 | fitur 20, spec 0020 (milestone 1 langkah 2, dengan K-2 spec 0017) |
+| Tambahan fitur 31 | migrasi `0010_daemon_sessions.sql` (tabel `daemon_sessions`, index sesi, dan unique index lease startup), `DaemonSession` dari modul domain `session` (spec 0004), `WriteOp::InsertSession`, `EndSession`, `ReopenSession`, dan `PruneSessions`, `Registry::recent_sessions`, `GuardView::leases` dan `GuardView::latest_session`, serta `ResourceRef::Session` dan `ResourceRef::Sessions`, mengikuti runner, sidik jari, dan fixture beku spec ini; rinciannya di *Tambahan fitur 31* | fitur 31, spec 0031 (langkah 3, *Model data*) |
 
 **Tambahan fitur 10** (dirancang 2026-10-19, dibangun langkah 2a spec 0010; `ProcessObservation` datang dari langkah 2 spec itu):
 
@@ -526,6 +527,33 @@ Conformance langkah 2a: instance yang tidak ada (`MissingReference` saat tulis, 
 
 - **Varian baru**: `ResourceRef::ConfigRevision(ConfigRevisionId)` (fitur 10), `ResourceRef::SecretReference(SecretRef)` dan `ResourceRef::AuditEvent(AuditEventId)` (fitur 11), dan `RegistryError::ReferenceInUse { reference: SecretRef, used_by: Vec<SecretUse> }`, yang dicek di tahap aturan unik `DeleteSecretReference` dan dipetakan ke `secret.conflict` (tabel di bawah). Di `ErrorBody.resource`, `ResourceRef::SecretReference` dikirim sebagai `ResourceKind` `secret` dengan teks reference sebagai ID (spec 0011), sedangkan `ConfigRevision` dan `AuditEvent` tidak punya `ResourceKind` dan tidak dikirim; begitu juga `ProviderSource` (fitur 20, spec 0020). Tidak ada tipe di atas yang bisa membawa nilai secret (AC-12).
 - **Conformance**: setiap cek di tabel itu dengan urutan cek yang sama untuk fake dan SQLite, `ObserveSecretReference` yang tidak menaikkan revision, delete yang ditolak dengan daftar `used_by` lengkap, restore dengan revision 1 yang ditolak, `ReplaceSecretUses` yang menggantikan seluruh pemakaian, dan halaman `audit_events`. Langkah 0 spec 0011 membuktikan ulang AC-1, AC-4, dan AC-12 spec ini untuk versi schema baru.
+
+**Tambahan fitur 31** (dirancang spec 0031 *Model data*, dibangun langkah 3 spec 0031 sebagai migrasi 10; diterapkan di spec ini 2026-11-03):
+
+- **Migrasi sesi**: `0010_daemon_sessions.sql`, dengan fixture beku `registry-v10.sql` dan sidik jari versi itu sendiri. Tabel `daemon_sessions` (`STRICT`), satu baris per sesi login yang dijalani daemon launchd:
+
+| Kolom | Jenis | Aturan |
+| --- | --- | --- |
+| `id` | `TEXT` PK | `SessionId`: 1 sampai 64, hanya `[!-~]`; isinya `<boot UUID huruf kecil>/<audit session desimal>` (spec 0004) |
+| `boot_id`* | `TEXT` | `kern.bootsessionuuid` huruf kecil: bentuk `uuid` (36 karakter, `[0-9a-f-]`, tanda hubung di posisi 9, 14, 19, dan 24) tanpa syarat versi 7, karena UUID boot bukan v7 |
+| `audit_session`* | `INTEGER` | 1 sampai 4294967295 (muat di `u32`) |
+| `started_at`* | `ts` | |
+| `ended_at` | `ts` | |
+| `end_reason` | `TEXT` | set tertutup `clean`, `interrupted`, `unknown` |
+
+  CHECK `(ended_at IS NULL) = (end_reason IS NULL)`. Unique index parsial `daemon_sessions_open` `((1)) WHERE ended_at IS NULL` (paling banyak satu sesi terbuka) dan index `daemon_sessions_started` `(started_at, id)`. Migrasi yang sama membuat unique index `instance_demands_startup_session` (lihat `instance_demands`). Baris sesi tidak punya revision dan tidak masuk `Committed.revisions`.
+- **`WriteOp`**:
+
+| Op | Yang ditulis | Cek khusus |
+| --- | --- | --- |
+| `InsertSession(DaemonSession)` | satu baris `daemon_sessions` | `DuplicateResource` (`ResourceRef::Session`) kalau ID sudah ada; sesi terbuka kedua melanggar `daemon_sessions_open` dan berakhir `Integrity`, jadi pemanggil menutup sesi yang terbuka lebih dulu di batch yang sama |
+| `EndSession { id, at, reason }` | `ended_at` dan `end_reason` | `NotFound` |
+| `ReopenSession { id }` | `ended_at` dan `end_reason` menjadi null | `NotFound`; baris yang masih terbuka tidak berubah |
+| `PruneSessions { keep }` | menghapus baris di luar `keep` terbaru menurut `(started_at, id)`, lalu setiap lease `manual` dan `startup` berstate `released` yang `session_id` nya terisi dan tidak lagi ada di `daemon_sessions` | menghapus nol baris bukan error; lease tanpa `session_id` tetap diatur `RetentionPolicy` (spec 0031 AC-14, `keep` = `SESSIONS_KEPT` 50) |
+
+- **Baca**: `Registry::recent_sessions(limit) -> Result<Versioned<Vec<DaemonSession>>, RegistryError>`, terbaru dulu menurut `started_at` lalu ID; rotasi sesi spec 0031 membaca dua baris terbaru untuk `startedAt` dan `previousEnd` di `DaemonSessionInfo`. Di dalam `commit_guarded`, `GuardView` mendapat `leases(instance, LeaseFilter)` (sama dengan `Registry::leases`, tanpa `Versioned`) dan `latest_session()` (baris terbaru menurut waktu start), supaya rotasi sesi spec 0031 membaca dan menulis dalam satu transaksi.
+- **Varian baru**: `ResourceRef::Session(SessionId)` dan `ResourceRef::Sessions` (tabel sesi seluruhnya, untuk prune), keduanya tanpa `ResourceKind` di wire.
+- **Conformance** (`sessions`): baris sesi round trip, paling banyak satu sesi terbuka, `EndSession` dan `ReopenSession` yang memeriksa keberadaan, prune yang menyisakan baris terbaru beserta lease yang sesinya masih ada, dan satu lease startup per instance per sesi, untuk fake dan SQLite.
 
 **Kode error di wire** (katalog `stackly-protocol::codes::registry`, area `registry` milik spec ini; dipetakan `stacklyd` di modul `map`). Semua `retryable` false: kegagalan registry di tengah satu request tidak menjamin request itu belum berefek apa pun, dan konflik generation sudah dicoba ulang lima kali oleh pemanggil. Resource yang punya `ResourceKind` di spec 0006 dikirim di `ErrorBody.resource`.
 
@@ -841,6 +869,7 @@ Untuk fitur lain:
 - [x] Fitur 20: panggil `known_instance_ids` sebelum `create_instance_layout`, lalu `InsertInstance` dalam batch yang sama dengan progress operasi; cek konflik endpoint dengan `endpoints_conflict` atas data yang dibaca, commit dengan `expected_generation` dari baca itu, dan ulangi paling banyak lima kali saat `GenerationConflict`. Dirancang spec 0020 (langkah `layout` dan `register`, AC-10); diterapkan 2026-10-20. Sejak langkah 20 spec 0020, `register` memakai `commit_guarded` tanpa `expected_generation` dan tanpa ulang (*Port registry*, aturan commit; diterapkan 2026-10-22).
 - [ ] Fitur 18 (langkah 6 spec 0018): bangun *Tambahan fitur 18* (migrasi, field `ArtifactRecord`, `compatibility_records`, value type JSON) di domain, `FakeRegistry`, `registry_conformance`, dan `SqliteRegistry`, dengan fixture beku dan sidik jari versi barunya.
 - [ ] Fitur 20 (milestone 1 langkah 2 spec 0020): bangun *Tambahan fitur 20* (`provider_source_by_location`, `InsertProviderSource`, `source_id`, `ResourceRef::ProviderSource`, `DeleteInstanceCreatedBy`, `NotDeletable`, dan kode `registry.not_deletable`) di domain, `FakeRegistry`, `registry_conformance`, `SqliteRegistry`, dan katalog `codes::registry`, dengan test pemetaan `stacklyd` untuk varian baru (AC-17).
+- [x] Fitur 31 (langkah 3 spec 0031): bangun *Tambahan fitur 31* (migrasi 10, `daemon_sessions`, unique index lease startup, op dan baca sesi, `GuardView::leases` dan `latest_session`) di domain, `FakeRegistry`, `registry_conformance`, dan `SqliteRegistry`, dengan fixture beku `registry-v10.sql`. Dibangun fitur 31 milestone 1 dan dicatat di spec ini 2026-11-03.
 - [ ] Fitur 29: putuskan kode `status` config revision dan apakah endpoint boleh dinonaktifkan (kolom `enabled`; domain `Endpoint` belum punya field itu).
 - [ ] Fitur 32 dan 35: simpan `RetentionPolicy` di `settings` dan tampilkan di Settings; fitur 32 memakai `logical_root` baru kalau path data untuk instance baru boleh diganti.
 - [ ] Fitur 48: restore registry dari snapshot `pre-migration` atau backup, dan tampilkan `RecoveryReport` di GUI dan CLI.
