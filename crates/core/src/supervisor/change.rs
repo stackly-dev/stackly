@@ -344,7 +344,7 @@ async fn remove_pruned_copies(sup: &Supervisor, id: InstanceId, before: Vec<Conf
     let deps = sup.deps();
     let registry = deps.registry.clone();
     let platform = deps.platform.clone();
-    let history = deps.layout.layout().instance_paths(id).config_history;
+    let history = deps.layout.instance_paths(id).config_history;
     let removed = blocking(move || -> Result<(), String> {
         let after: BTreeSet<ConfigRevisionId> = registry
             .config_revisions(id, u32::MAX)

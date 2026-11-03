@@ -167,7 +167,7 @@ pub fn check(
     }
     require_installed(registry, &runtime)?;
     let package = load_package(platform, layout, &instance)?;
-    let paths = layout.layout().instance_paths(id);
+    let paths = layout.instance_paths(id);
     check_instance_folder(platform, &paths, Some(&package))?;
     check_data_compatibility(
         platform.fs(),

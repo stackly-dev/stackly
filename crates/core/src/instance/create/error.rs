@@ -104,6 +104,10 @@ impl std::fmt::Display for CreateError {
             Self::StorageUnsupported { .. } => {
                 f.write_str("the data folder is on an unsupported file system")
             }
+            Self::StorageLocationMissing { .. } => {
+                f.write_str("the folder of a storage location is missing")
+            }
+            Self::LocationInvalid { rule, .. } => f.write_str(rule.sentence()),
             Self::InsufficientSpace { .. } => {
                 f.write_str("not enough free disk space to create an instance")
             }
@@ -213,6 +217,14 @@ impl OperationError for CreateError {
             Self::DataUnavailable { path, reason } => {
                 vec![(key("path"), path.clone()), (key("reason"), reason.clone())]
             }
+            Self::StorageLocationMissing { kind, path } => vec![
+                (key("kind"), kind.as_code().to_owned()),
+                (key("path"), path.clone()),
+            ],
+            Self::LocationInvalid { rule, path } => vec![
+                (key("rule"), rule.as_code().to_owned()),
+                (key("path"), path.clone()),
+            ],
             Self::StorageUnsupported { fs_type, root } => vec![
                 (key("fsType"), fs_type.clone()),
                 (key("root"), root.clone()),

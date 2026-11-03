@@ -361,7 +361,7 @@ impl std::fmt::Debug for DurableLog {
 
 /// Returns the store folder of `id` under the canonical logs root.
 pub(crate) fn store_dir(layout: &PreparedLayout, id: InstanceId) -> PathBuf {
-    let dir = layout.layout().instance_captured_logs_dir(id);
+    let dir = layout.instance_captured_logs_dir(id);
     match dir.strip_prefix(layout.layout().roots().logs()) {
         Ok(relative) => layout.canonical_root(RootKind::Logs).join(relative),
         Err(_) => dir,

@@ -370,3 +370,45 @@ async fn intact_instances_produce_no_findings() {
     assert_eq!(report.adopted, 1);
     assert!(report.findings.is_empty());
 }
+
+#[tokio::test]
+async fn a_start_checks_the_locations_the_instance_lives_in_before_its_data() {
+    // covers: spec 0032 AC-20
+    use std::os::unix::fs::PermissionsExt;
+
+    use stackly_domain::{LocationKind, StorageLocationId};
+
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+    let location = StorageLocationId::generate();
+    let base = rig.root.path().join("unplugged/Stackly");
+    rig.layout
+        .locations()
+        .add_location(location, LocationKind::Data, base.clone());
+    rig.layout
+        .locations()
+        .note_instance(id, location, LocationKind::Logs.built_in_id());
+
+    // The folder of the location is gone.
+    let op = rig.start(id).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+    assert_eq!(
+        Rig::failure_code(&detail),
+        "instance.storage_location_missing"
+    );
+    assert!(rig.processes().spawns().is_empty());
+
+    // The folder is there and the daemon cannot write to it.
+    std::fs::create_dir_all(base.join("instances")).expect("the folders are made");
+    std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o500))
+        .expect("the folder becomes read only");
+    let can_write = std::fs::File::create(base.join("probe")).is_ok();
+    if !can_write {
+        let op = rig.start(id).await;
+        let detail = rig.wait_state(op, OperationState::Failed).await;
+        assert_eq!(Rig::failure_code(&detail), "storage.location_invalid");
+        assert!(rig.processes().spawns().is_empty());
+    }
+    std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o700))
+        .expect("the folder opens again");
+}

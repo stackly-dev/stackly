@@ -134,6 +134,9 @@ impl Inventory {
 ///
 /// Each entry of `instances/` and then of `retained/`, each sorted by name,
 /// is classified with the data of its manifest (see [`InventoryEntry`]).
+/// Then each custom data location the layout knows adds its `instances/`
+/// the same way, by location ID; one that cannot be listed, a disk that went
+/// away, adds nothing (spec 0032).
 /// `.DS_Store` is skipped. A symlink is never followed, a manifest that is
 /// not a regular file is never opened, a manifest over
 /// [`INSTANCE_MANIFEST_MAX_LEN`] is recorded as unreadable, and nothing on
@@ -150,6 +153,7 @@ pub fn inventory_instances(
 ) -> Result<Inventory, CoreError> {
     let fs = platform.fs();
     let layout = prepared.layout();
+    let data = layout.roots().data();
     let mut entries = Vec::new();
     for location in InstanceLocation::ALL {
         let parent = match location {
@@ -162,7 +166,24 @@ pub fn inventory_instances(
             listing
                 .into_iter()
                 .filter(|entry| entry.name != FINDER_METADATA)
-                .map(|entry| classify(fs, layout, location, &parent, entry)),
+                .map(|entry| classify(fs, layout, location, data, &parent, entry)),
+        );
+    }
+    let set = prepared.locations().set();
+    for (_, kind, base) in set.custom() {
+        if kind != stackly_domain::LocationKind::Data {
+            continue;
+        }
+        let parent = base.join("instances");
+        let Ok(mut listing) = fs.read_dir(&parent) else {
+            continue;
+        };
+        listing.sort_by(|a, b| a.name.cmp(&b.name));
+        entries.extend(
+            listing
+                .into_iter()
+                .filter(|entry| entry.name != FINDER_METADATA)
+                .map(|entry| classify(fs, layout, InstanceLocation::Active, base, &parent, entry)),
         );
     }
     Ok(Inventory { entries })
@@ -172,6 +193,7 @@ fn classify(
     fs: &dyn Filesystem,
     layout: &DirectoryLayout,
     location: InstanceLocation,
+    data: &Path,
     parent: &Path,
     entry: DirEntryInfo,
 ) -> InventoryEntry {
@@ -195,9 +217,10 @@ fn classify(
             kind: FileKind::Dir,
         };
     };
+    let logs = layout.roots().logs();
     let paths = match location {
-        InstanceLocation::Active => layout.instance_paths(id),
-        InstanceLocation::Retained => layout.retained_instance_paths(id),
+        InstanceLocation::Active => layout.instance_paths_in(id, data, logs),
+        InstanceLocation::Retained => layout.retained_instance_paths_in(id, data, logs),
     };
     let dir = paths.root;
     let manifest = match read_manifest(fs, &paths.manifest) {
@@ -321,13 +344,9 @@ mod tests {
         let id = manifest.instance_id();
         manifest.record_retained(RetainedMarker::new(now, OperationId::generate()));
         manifest.record_write(now, daemon_info().version.to_owned());
-        let active = prepared.layout().instance_paths(id);
+        let active = prepared.instance_paths(id);
         write_instance_manifest(&platform, &active, manifest).unwrap();
-        std::fs::rename(
-            &active.root,
-            prepared.layout().retained_instance_paths(id).root,
-        )
-        .unwrap();
+        std::fs::rename(&active.root, prepared.retained_instance_paths(id).root).unwrap();
     }
 
     /// Every path under `dir` with its kind, length, and modification time,
@@ -370,7 +389,7 @@ mod tests {
         let now = platform.clock().now();
         initialized.record_initialized(now);
         initialized.record_write(now, daemon_info().version.to_owned());
-        let paths = prepared.layout().instance_paths(initialized.instance_id());
+        let paths = prepared.instance_paths(initialized.instance_id());
         write_instance_manifest(&platform, &paths, &initialized).unwrap();
         retain(&fake, &prepared, &mut retained);
         let mutations = fake.fs().mutations();

@@ -8,13 +8,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use stackly_domain::{
-    EndpointName, InstallMode, Instance, InstanceFilter, InstanceId, ProviderName,
-    ProviderSourceId, Registry, RegistryError, Runtime, RuntimeState, SecretRef,
+    EndpointName, InstallMode, Instance, InstanceFilter, InstanceId, LocationKind, ProviderName,
+    ProviderSourceId, Registry, RegistryError, Runtime, RuntimeState, SecretRef, StartupPolicy,
+    StorageLocationId,
 };
 use stackly_platform::{
     DirectoryLayout, FileKind, Platform, PlatformError, SecretBackend, SecretPresence,
     SecretStoreError, StoreState, VolumeFacts, check_private_dir,
 };
+
+pub use crate::storage::LocationState;
 
 use super::draft::{CreateDraft, SecretSourceKind};
 use super::port::{PortFacts, gather_ports, slots};
@@ -113,6 +116,30 @@ pub struct DataFacts {
     pub volume: Result<VolumeFacts, String>,
 }
 
+/// One default location as create needs it (spec 0032).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocationFact {
+    /// The location.
+    pub id: StorageLocationId,
+    /// What it holds.
+    pub kind: LocationKind,
+    /// The folder that holds `instances/`.
+    pub base: PathBuf,
+    /// Whether it is fit.
+    pub state: LocationState,
+}
+
+/// The default locations and startup policy a new instance takes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateLocations {
+    /// The startup policy of an instance created without one.
+    pub startup_default: StartupPolicy,
+    /// Where the data goes.
+    pub data: LocationFact,
+    /// Where the logs go.
+    pub logs: LocationFact,
+}
+
 /// What the store said about one source reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProbeFact {
@@ -172,9 +199,12 @@ pub struct CreateFacts {
     pub known_ids: Vec<InstanceId>,
     /// The trial binds of the fixed ports that reached them.
     pub ports: BTreeMap<EndpointName, PortFacts>,
-    /// The data root.
+    /// The data location new instances go to.
     pub data: DataFacts,
-    /// The bytes free in `instances/`, or why they could not be read.
+    /// The default locations and startup policy.
+    pub locations: CreateLocations,
+    /// The bytes free in the `instances/` of the data location, or why they
+    /// could not be read.
     pub disk: Result<u64, String>,
     /// The secret store.
     pub secrets: SecretFacts,
@@ -244,6 +274,7 @@ pub fn gather(deps: &CreateDeps<'_>, draft: &CreateDraft) -> Result<CreateFacts,
         Ok(found) => gather_ports(deps.probe, draft, &slots(&found.package), &instances),
         Err(_) => BTreeMap::new(),
     };
+    let locations = gather_locations(deps)?;
     Ok(CreateFacts {
         provider,
         source_id: deps.source,
@@ -254,12 +285,13 @@ pub fn gather(deps: &CreateDeps<'_>, draft: &CreateDraft) -> Result<CreateFacts,
         instances,
         known_ids,
         ports,
-        data: gather_data(deps),
+        data: gather_data(deps, &locations.data.base),
         disk: deps
             .platform
             .fs()
-            .available_space(&deps.prepared.layout().instances_dir())
+            .available_space(&locations.data.base.join("instances"))
             .map_err(|error| error.to_string()),
+        locations,
         secrets: gather_secrets(deps, draft)?,
         layout: deps.prepared.layout().clone(),
     })
@@ -454,8 +486,81 @@ fn check_programs(
     ProgramCheck::Complete
 }
 
-fn gather_data(deps: &CreateDeps<'_>) -> DataFacts {
+/// The defaults the New Instance sheet starts with (spec 0032, AC-18).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormLocations {
+    /// The startup policy the toggle starts with.
+    pub startup_default: StartupPolicy,
+    /// The folder the data of a new instance goes in.
+    pub data: PathBuf,
+    /// The folder the logs of a new instance go in.
+    pub logs: PathBuf,
+}
+
+/// Reads the defaults of the form.
+///
+/// # Errors
+///
+/// Returns the registry error of a read that fails.
+pub fn form_locations(
+    registry: &dyn Registry,
+    prepared: &PreparedLayout,
+) -> Result<FormLocations, RegistryError> {
+    let settings = registry.daemon_settings()?.value;
+    let book = prepared.locations();
+    if book.base(settings.data_location).is_none() || book.base(settings.logs_location).is_none() {
+        book.learn(&registry.storage_locations()?.value);
+    }
+    let roots = prepared.layout().roots();
+    Ok(FormLocations {
+        startup_default: settings.default_startup,
+        data: book
+            .base(settings.data_location)
+            .unwrap_or_else(|| roots.data().to_path_buf()),
+        logs: book
+            .base(settings.logs_location)
+            .unwrap_or_else(|| roots.logs().to_path_buf()),
+    })
+}
+
+/// The default locations from the settings, and whether their folders are
+/// fit. The book of the layout learns a location it does not know yet, so
+/// a registry opened elsewhere resolves the same way.
+fn gather_locations(deps: &CreateDeps<'_>) -> Result<CreateLocations, GatherError> {
+    let settings = deps.registry.daemon_settings()?.value;
+    let book = deps.prepared.locations();
+    if book.base(settings.data_location).is_none() || book.base(settings.logs_location).is_none() {
+        book.learn(&deps.registry.storage_locations()?.value);
+    }
+    let fact = |id: StorageLocationId, kind: LocationKind| {
+        let roots = deps.prepared.layout().roots();
+        let built_in = id == kind.built_in_id();
+        let base = book.base(id).unwrap_or_else(|| match kind {
+            LocationKind::Logs => roots.logs().to_path_buf(),
+            LocationKind::Data | LocationKind::Cache => roots.data().to_path_buf(),
+        });
+        let state = if built_in {
+            LocationState::Ready
+        } else {
+            crate::storage::probe_location(deps.platform, &base)
+        };
+        LocationFact {
+            id,
+            kind,
+            base,
+            state,
+        }
+    };
+    Ok(CreateLocations {
+        startup_default: settings.default_startup,
+        data: fact(settings.data_location, LocationKind::Data),
+        logs: fact(settings.logs_location, LocationKind::Logs),
+    })
+}
+
+fn gather_data(deps: &CreateDeps<'_>, base: &std::path::Path) -> DataFacts {
     let layout = deps.prepared.layout();
+    let built_in = base == layout.roots().data();
     let fs = deps.platform.fs();
     let user = deps.platform.identity().current_user();
     let check = |path: PathBuf| match (&user, fs.symlink_metadata(&path)) {
@@ -468,11 +573,14 @@ fn gather_data(deps: &CreateDeps<'_>) -> DataFacts {
         (_, Err(error)) => DirFact::Problem(error.to_string()),
     };
     DataFacts {
-        instances: check(layout.instances_dir()),
-        retained: check(layout.retained_dir()),
-        volume: fs
-            .volume_facts(layout.roots().data())
-            .map_err(|error| error.to_string()),
+        instances: check(base.join("instances")),
+        // Only the built in data location keeps retained instances.
+        retained: if built_in {
+            check(layout.retained_dir())
+        } else {
+            DirFact::Private
+        },
+        volume: fs.volume_facts(base).map_err(|error| error.to_string()),
     }
 }
 

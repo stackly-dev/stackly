@@ -1,11 +1,205 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, PoisonError, RwLock};
 
-use stackly_domain::ShortKey;
+use stackly_domain::{
+    InstanceId, InstancePathKind, LocationKind, Registry, RegistryError, ShortKey,
+    StorageLocationId,
+};
 use stackly_platform::{
-    DirectoryLayout, Filesystem, Platform, PlatformError, RootKind, UserId, check_private_dir,
+    DirectoryLayout, Filesystem, InstancePaths, LocationSet, Platform, PlatformError, RootKind,
+    RootSet, UserId, check_private_dir,
 };
 
 use crate::error::CoreError;
+
+/// The folders of the storage locations and the locations each instance was
+/// created in (spec 0032), shared by every holder of one
+/// [`PreparedLayout`].
+///
+/// Every path of an instance goes through it, so an instance created in a
+/// folder the person chose keeps resolving there while new ones follow the
+/// default. An instance the book does not know resolves in the built in
+/// locations, which is what a registry without custom locations holds.
+#[derive(Debug)]
+pub struct LocationBook {
+    state: RwLock<BookState>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct BookState {
+    set: LocationSet,
+    instances: HashMap<InstanceId, (StorageLocationId, StorageLocationId)>,
+    cache: StorageLocationId,
+}
+
+impl LocationBook {
+    fn new(roots: RootSet) -> Self {
+        Self {
+            state: RwLock::new(BookState {
+                set: LocationSet::new(roots),
+                instances: HashMap::new(),
+                cache: LocationKind::Cache.built_in_id(),
+            }),
+        }
+    }
+
+    fn read<T>(&self, read: impl FnOnce(&BookState) -> T) -> T {
+        read(&self.state.read().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    fn write<T>(&self, write: impl FnOnce(&mut BookState) -> T) -> T {
+        write(&mut self.state.write().unwrap_or_else(PoisonError::into_inner))
+    }
+
+    /// Returns the location set as the book knows it now.
+    #[must_use]
+    pub fn set(&self) -> LocationSet {
+        self.read(|state| state.set.clone())
+    }
+
+    /// Returns the folder that holds a location, or `None` for one the book
+    /// does not know.
+    #[must_use]
+    pub fn base(&self, id: StorageLocationId) -> Option<PathBuf> {
+        self.read(|state| state.set.base(id))
+    }
+
+    /// Learns a location, for example one `storage.set_location` added.
+    pub fn add_location(&self, id: StorageLocationId, kind: LocationKind, path: PathBuf) {
+        self.write(|state| state.set.insert(id, kind, path));
+    }
+
+    /// Learns every custom location in `locations` the book does not know.
+    pub fn learn(&self, locations: &[stackly_domain::StorageLocation]) {
+        self.write(|state| {
+            for location in locations.iter().filter(|location| !location.is_built_in()) {
+                if let Some(path) = location.path()
+                    && state.set.base(location.id()).is_none()
+                {
+                    state
+                        .set
+                        .insert(location.id(), location.kind(), PathBuf::from(path));
+                }
+            }
+        });
+    }
+
+    /// Records the data and log locations an instance lives in.
+    pub fn note_instance(&self, id: InstanceId, data: StorageLocationId, logs: StorageLocationId) {
+        self.write(|state| state.instances.insert(id, (data, logs)));
+    }
+
+    /// Returns the data and log locations of an instance, the built in ones
+    /// for an instance the book does not know.
+    #[must_use]
+    pub fn locations_of(&self, id: InstanceId) -> (StorageLocationId, StorageLocationId) {
+        self.read(|state| {
+            state.instances.get(&id).copied().unwrap_or((
+                LocationKind::Data.built_in_id(),
+                LocationKind::Logs.built_in_id(),
+            ))
+        })
+    }
+
+    /// Returns the folder of every custom location with the owned root kind
+    /// that stands for it: data for a data location, logs for a log
+    /// location, cache for a cache location. A custom folder is an owned
+    /// root like the built in ones, so destructive operations may touch
+    /// what lies inside it.
+    #[must_use]
+    pub fn extra_roots(&self) -> Vec<(RootKind, PathBuf)> {
+        self.read(|state| {
+            state
+                .set
+                .custom()
+                .map(|(_, kind, path)| {
+                    let root = match kind {
+                        LocationKind::Data => RootKind::Data,
+                        LocationKind::Logs => RootKind::Logs,
+                        LocationKind::Cache => RootKind::Cache,
+                    };
+                    (root, path.to_path_buf())
+                })
+                .collect()
+        })
+    }
+
+    /// Makes `id` the location new downloads go to.
+    pub fn set_cache(&self, id: StorageLocationId) {
+        self.write(|state| state.cache = id);
+    }
+
+    /// Returns the folder new downloads go to: `downloads/` in the default
+    /// cache location.
+    #[must_use]
+    pub fn downloads_dir(&self) -> PathBuf {
+        self.read(|state| {
+            let base = state
+                .set
+                .base(state.cache)
+                .unwrap_or_else(|| state.set.roots().cache().to_path_buf());
+            DirectoryLayout::downloads_dir_in(&base)
+        })
+    }
+
+    /// Reads every location, the default cache location, and the locations
+    /// of every instance from the registry. Run once when the daemon opens
+    /// the registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns the registry error of the first read that fails.
+    pub fn load(&self, registry: &dyn Registry) -> Result<(), RegistryError> {
+        let locations = registry.storage_locations()?.value;
+        let settings = registry.daemon_settings()?.value;
+        let ids = registry.known_instance_ids()?.value;
+        let mut instances = HashMap::new();
+        for id in ids {
+            let Some(entries) = registry.instance_paths(id)?.value else {
+                continue;
+            };
+            let find = |kind: InstancePathKind| {
+                entries
+                    .iter()
+                    .find(|entry| entry.kind() == kind)
+                    .and_then(|entry| entry.location())
+            };
+            if let (Some(data), Some(logs)) =
+                (find(InstancePathKind::Data), find(InstancePathKind::Logs))
+            {
+                instances.insert(id, (data, logs));
+            }
+        }
+        self.write(|state| {
+            for location in locations.iter().filter(|location| !location.is_built_in()) {
+                if let Some(path) = location.path() {
+                    state
+                        .set
+                        .insert(location.id(), location.kind(), PathBuf::from(path));
+                }
+            }
+            state.cache = settings.cache_location;
+            state.instances = instances;
+        });
+        Ok(())
+    }
+}
+
+/// A shared [`LocationBook`] that compares by what it holds, so two layouts
+/// prepared from the same roots are equal.
+#[derive(Debug, Clone)]
+struct SharedBook(Arc<LocationBook>);
+
+impl PartialEq for SharedBook {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+            || *self.0.state.read().unwrap_or_else(PoisonError::into_inner)
+                == *other.0.state.read().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+impl Eq for SharedBook {}
 
 /// The directory layout after [`prepare_layout`] checked it, with the
 /// canonical form of each owned root for containment checks.
@@ -16,6 +210,7 @@ use crate::error::CoreError;
 pub struct PreparedLayout {
     layout: DirectoryLayout,
     canonical: [PathBuf; 4],
+    book: SharedBook,
 }
 
 impl PreparedLayout {
@@ -23,6 +218,65 @@ impl PreparedLayout {
     #[must_use]
     pub const fn layout(&self) -> &DirectoryLayout {
         &self.layout
+    }
+
+    /// Returns the book of storage locations and the locations of each
+    /// instance.
+    #[must_use]
+    pub fn locations(&self) -> &LocationBook {
+        &self.book.0
+    }
+
+    /// Returns the paths of an active instance in the locations it was
+    /// created in. Use this, not [`DirectoryLayout::instance_paths`], for
+    /// an instance of the registry.
+    #[must_use]
+    pub fn instance_paths(&self, id: InstanceId) -> InstancePaths {
+        let (data, logs) = self.bases_of(id);
+        self.layout.instance_paths_in(id, &data, &logs)
+    }
+
+    /// Returns the paths of a retained instance in the locations it was
+    /// created in.
+    #[must_use]
+    pub fn retained_instance_paths(&self, id: InstanceId) -> InstancePaths {
+        let (data, logs) = self.bases_of(id);
+        self.layout.retained_instance_paths_in(id, &data, &logs)
+    }
+
+    /// Returns the log folder of an instance, `instances/<id>/` in its log
+    /// location.
+    #[must_use]
+    pub fn instance_log_dir(&self, id: InstanceId) -> PathBuf {
+        self.instance_paths(id).logs
+    }
+
+    /// Returns the durable log store of an instance.
+    #[must_use]
+    pub fn instance_captured_logs_dir(&self, id: InstanceId) -> PathBuf {
+        self.instance_log_dir(id)
+            .join(stackly_platform::CAPTURED_LOGS_DIR)
+    }
+
+    /// Returns the folder new downloads go to.
+    #[must_use]
+    pub fn downloads_dir(&self) -> PathBuf {
+        self.book.0.downloads_dir()
+    }
+
+    fn bases_of(&self, id: InstanceId) -> (PathBuf, PathBuf) {
+        let (data, logs) = self.book.0.locations_of(id);
+        let roots = self.layout.roots();
+        (
+            self.book
+                .0
+                .base(data)
+                .unwrap_or_else(|| roots.data().to_path_buf()),
+            self.book
+                .0
+                .base(logs)
+                .unwrap_or_else(|| roots.logs().to_path_buf()),
+        )
     }
 
     /// Returns the canonical form of one owned root.
@@ -69,11 +323,16 @@ pub fn prepare_layout(platform: &Platform) -> Result<PreparedLayout, CoreError> 
         ensure_private_dir(fs, root, &user)?;
     }
     let canonical = canonical_roots(fs, &roots.entries())?;
+    let book = SharedBook(Arc::new(LocationBook::new(roots.clone())));
     let layout = DirectoryLayout::new(roots);
     for dir in layout.standard_dirs() {
         ensure_private_dir(fs, &dir, &user)?;
     }
-    Ok(PreparedLayout { layout, canonical })
+    Ok(PreparedLayout {
+        layout,
+        canonical,
+        book,
+    })
 }
 
 /// Makes sure the run folder of one instance exists, `<runtime>/i/<key>/`,

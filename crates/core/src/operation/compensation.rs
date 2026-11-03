@@ -339,7 +339,7 @@ async fn instance_tree(
     };
     tokio::task::spawn_blocking(move || {
         let layout = scope.layout.layout();
-        let paths = layout.instance_paths(id);
+        let paths = scope.layout.instance_paths(id);
         match read_instance_manifest(&scope.platform, &paths) {
             Ok(manifest) if manifest.created_by_operation() != scope.operation => {
                 return Ok(CompensationResult::NotOwned {
@@ -362,8 +362,7 @@ async fn instance_tree(
         let platform = &scope.platform;
         let prepared = &scope.layout;
         remove_owned_tree(platform, prepared, &paths.root).map_err(|e| remove_failed(&e))?;
-        remove_owned_tree(platform, prepared, &layout.instance_log_dir(id))
-            .map_err(|e| remove_failed(&e))?;
+        remove_owned_tree(platform, prepared, &paths.logs).map_err(|e| remove_failed(&e))?;
         let shared = known
             .iter()
             .any(|other| *other != id && other.short_key() == id.short_key());

@@ -529,7 +529,7 @@ pub(crate) async fn settle_instance(
         Ok(Err(error)) => Err(error.to_string()),
         Err(error) => Err(error.to_string()),
     };
-    let lock_path = deps.layout.layout().instance_paths(id).lock;
+    let lock_path = deps.layout.instance_paths(id).lock;
     let gathered = match &recorded {
         Ok(observation) => {
             let identity = observation

@@ -4,7 +4,7 @@
 
 use std::net::IpAddr;
 
-use stackly_domain::{InstanceId, Port, RuntimeId, SecretRef};
+use stackly_domain::{InstanceId, LocationKind, LocationRule, Port, RuntimeId, SecretRef};
 
 use crate::secret::InvalidValueReason;
 
@@ -23,6 +23,8 @@ pub enum CheckKind {
     Settings,
     /// The data folder.
     Data,
+    /// The default data and log locations (spec 0032).
+    StorageLocation,
     /// The free disk space.
     Disk,
     /// One secret field.
@@ -233,6 +235,22 @@ pub enum CreateError {
         /// Why.
         reason: String,
     },
+    /// The folder of a default location is gone
+    /// (`instance.storage_location_missing`, spec 0032).
+    StorageLocationMissing {
+        /// Which default location.
+        kind: LocationKind,
+        /// Its folder.
+        path: String,
+    },
+    /// The daemon cannot write to the folder of a default location
+    /// (`storage.location_invalid` with rule `not_writable`, spec 0032).
+    LocationInvalid {
+        /// The rule the folder breaks.
+        rule: LocationRule,
+        /// Its folder.
+        path: String,
+    },
     /// The data root is not a local APFS or HFS volume (`instance.storage_unsupported`).
     StorageUnsupported {
         /// The file system type.
@@ -301,6 +319,8 @@ impl CreateError {
             Self::SettingsInvalid => "instance.settings_invalid",
             Self::DataUnavailable { .. } => "supervisor.data_unavailable",
             Self::StorageUnsupported { .. } => "instance.storage_unsupported",
+            Self::StorageLocationMissing { .. } => "instance.storage_location_missing",
+            Self::LocationInvalid { .. } => "storage.location_invalid",
             Self::InsufficientSpace { .. } => "instance.insufficient_space",
             Self::SecretStoreUnsupported => "secret.store_unsupported",
             Self::SecretInvalidReference { .. } => "secret.invalid_reference",

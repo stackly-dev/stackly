@@ -71,6 +71,34 @@ code_enum! {
     }
 }
 
+impl LocationRule {
+    /// The sentence that tells a person what to change, in English
+    /// (spec 0032, *Aturan lokasi*).
+    #[must_use]
+    pub const fn sentence(self) -> &'static str {
+        match self {
+            Self::NotAbsolute => "Choose a full folder path.",
+            Self::Missing => "This folder doesn’t exist.",
+            Self::NotDirectory => "Choose a folder, not a file.",
+            Self::Symlink => "Choose the real folder, not an alias or link.",
+            Self::NotOwned => "This folder belongs to another user.",
+            Self::TooOpen => "Other users can write to this folder.",
+            Self::ProtectedFolder => {
+                "macOS may block stacklyd from this folder. Choose a folder in your home folder or on a disk inside this Mac."
+            }
+            Self::NotLocalVolume => "Choose a folder on a disk in this Mac.",
+            Self::NotInternalVolume => {
+                "Choose a folder on a disk inside this Mac. External disks aren’t supported yet."
+            }
+            Self::OverlapsRoot => "This folder overlaps another Stackly location.",
+            Self::ForeignMarker => {
+                "This folder already has a Stackly folder that isn’t from this Mac’s Stackly."
+            }
+            Self::NotWritable => "stacklyd can’t write to this folder.",
+        }
+    }
+}
+
 impl LocationKind {
     /// The ID of the location of this kind that comes with Stackly.
     #[must_use]

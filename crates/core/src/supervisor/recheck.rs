@@ -65,7 +65,7 @@ pub(crate) async fn recheck_one(sup: &Supervisor, actor: &InstanceActor) {
         return;
     }
     let platform = deps.platform.clone();
-    let path = deps.layout.layout().instance_paths(id).lock;
+    let path = deps.layout.instance_paths(id).lock;
     let state = blocking(move || platform.processes().probe_lock(&path)).await;
     if matches!(state, Ok(Ok(LockState::Free))) {
         actor.update(deps, |state| state.set_supervisor_blocker(None));

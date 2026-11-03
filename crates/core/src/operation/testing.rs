@@ -317,7 +317,7 @@ async fn run_step(ctx: &mut OperationContext, step: ScriptedStep) -> Result<(), 
     }
     if step.creates_instance_tree {
         let (id, created) = ctx.new_instance_id().await?;
-        let root = ctx.layout().layout().instance_paths(id).root;
+        let root = ctx.layout().instance_paths(id).root;
         let platform = std::sync::Arc::clone(ctx.platform());
         let made = tokio::task::spawn_blocking(move || {
             platform.fs().create_dir_private(&root)?;

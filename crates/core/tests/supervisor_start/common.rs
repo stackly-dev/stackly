@@ -1041,7 +1041,7 @@ impl Rig {
     }
 
     pub fn paths(&self, id: InstanceId) -> stackly_platform::InstancePaths {
-        self.layout.layout().instance_paths(id)
+        self.layout.instance_paths(id)
     }
 
     /// A user start request, interactive.

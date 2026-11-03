@@ -7,15 +7,15 @@
 use stackly_core::catalog::category_code;
 use stackly_core::instance::create::{
     Check, CheckKind, CheckStatus, CommandSpec, CreateError, CreateFacts, CreateFormModel,
-    Evaluation, FieldCode as CoreFieldCode, FieldIssue, FormEndpoint, FormProvider, PackageSource,
-    PortRequestDraft, SecretSourceKind,
+    Evaluation, FieldCode as CoreFieldCode, FieldIssue, FormEndpoint, FormLocations, FormProvider,
+    PackageSource, PortRequestDraft, SecretSourceKind,
 };
 use stackly_core::provider::{
     ApplyClass, ArrayRules, EndpointPurpose as CorePurpose, EndpointTransport as CoreTransport,
     FieldKind as CoreKind, ItemField, ScalarKind, ScalarValue, SettingField, SettingsItem,
     TextRules, Visibility,
 };
-use stackly_domain::CapabilitySet;
+use stackly_domain::{CapabilitySet, StartupPolicy};
 use stackly_protocol::catalog::{CapabilityStatus, ProviderCapability};
 use stackly_protocol::instance as dto;
 use stackly_protocol::instance::command::{
@@ -33,16 +33,19 @@ pub fn create_form(
     model: &CreateFormModel,
     runtime: RuntimeSummary,
     capabilities: Vec<CapabilityStatus>,
+    locations: &FormLocations,
 ) -> dto::CreateForm {
     dto::CreateForm {
         provider: provider(&model.provider),
         runtime,
         suggested_name: model.suggested_name.as_ref().map(ToString::to_string),
         data_path: model.data_path.to_owned(),
-        // provisional: F32 step 3, the model carries the default locations.
-        startup_default: dto::StartupPolicyKind::Manual,
-        data_location: String::new(),
-        logs_location: String::new(),
+        startup_default: match locations.startup_default {
+            StartupPolicy::Manual => dto::StartupPolicyKind::Manual,
+            StartupPolicy::AtLogin => dto::StartupPolicyKind::AtLogin,
+        },
+        data_location: locations.data.display().to_string(),
+        logs_location: locations.logs.display().to_string(),
         endpoints: model.endpoints.iter().map(endpoint).collect(),
         fields: model.fields.iter().map(form_field).collect(),
         capabilities,
@@ -341,6 +344,7 @@ fn check(check: &Check, issues: &[FieldIssue]) -> dto::PreflightCheck {
             CheckKind::Endpoint => dto::PreflightCheckKind::Endpoint,
             CheckKind::Settings => dto::PreflightCheckKind::Settings,
             CheckKind::Data => dto::PreflightCheckKind::Data,
+            CheckKind::StorageLocation => dto::PreflightCheckKind::StorageLocation,
             CheckKind::Disk => dto::PreflightCheckKind::Disk,
             CheckKind::Secret => dto::PreflightCheckKind::Secret,
         },

@@ -85,6 +85,8 @@ pub struct CreateDraft {
     /// Whether the client starts the instance after create; only the
     /// equivalent command shows it.
     pub start: bool,
-    /// When the new instance starts on its own (spec 0031, AC-16).
-    pub startup: StartupPolicy,
+    /// When the new instance starts on its own (spec 0031, AC-16); `None`
+    /// asks for the `defaultStartup` setting, which create reads inside its
+    /// guarded commit (spec 0032, AC-18).
+    pub startup: Option<StartupPolicy>,
 }

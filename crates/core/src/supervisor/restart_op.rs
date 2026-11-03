@@ -227,7 +227,7 @@ async fn wait_for_free_lock(
     id: InstanceId,
 ) -> Result<(), WorkError> {
     let deps = sup.deps();
-    let path = deps.layout.layout().instance_paths(id).lock;
+    let path = deps.layout.instance_paths(id).lock;
     let deadline = Instant::now() + deps.config.restart_lock_wait;
     loop {
         let platform = deps.platform.clone();

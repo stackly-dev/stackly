@@ -57,7 +57,16 @@ fn form(name: &str, display_name: &str, version: &str, line: &str) -> CreateForm
         Vec::new(),
     );
     let capabilities = map::create::capabilities(&model.capabilities);
-    map::create::create_form(&model, summary, capabilities)
+    map::create::create_form(&model, summary, capabilities, &fixture_locations())
+}
+
+/// The defaults the golden fixtures were written with.
+fn fixture_locations() -> stackly_core::instance::create::FormLocations {
+    stackly_core::instance::create::FormLocations {
+        startup_default: stackly_domain::StartupPolicy::Manual,
+        data: "/Users/dev/Library/Application Support/Stackly".into(),
+        logs: "/Users/dev/Library/Logs/Stackly".into(),
+    }
 }
 
 // covers: AC-1, AC-17

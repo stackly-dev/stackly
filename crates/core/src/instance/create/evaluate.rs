@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use stackly_domain::{
     Capability, DisplayName, Endpoint, EndpointName, InstallMode, InstanceId, InstanceName,
-    IpEndpoint, Port, PortRequest, ProviderSourceId, Runtime, RuntimeState, SecretFieldName,
-    SecretPurpose, SecretRef, SocketName, Transport, UnixEndpoint,
+    IpEndpoint, LocationRule, Port, PortRequest, ProviderSourceId, Runtime, RuntimeState,
+    SecretFieldName, SecretPurpose, SecretRef, SocketName, Transport, UnixEndpoint,
 };
 use stackly_platform::SecretBackend;
 
@@ -22,8 +22,8 @@ use super::draft::{
     CREATE_MIN_FREE_BYTES, CreateDraft, PortRequestDraft, SecretSourceKind, placeholder_instance_id,
 };
 use super::facts::{
-    CreateFacts, DirFact, PackageSource, ProbeFact, ProgramCheck, ProviderFound, ProviderProblem,
-    SourceFact,
+    CreateFacts, DirFact, LocationState, PackageSource, ProbeFact, ProgramCheck, ProviderFound,
+    ProviderProblem, SourceFact,
 };
 use super::port::{self, Slot};
 use crate::provider::{
@@ -111,8 +111,15 @@ pub struct ResolvedCreate {
     pub settings: SettingsValues,
     /// One plan per secret field, in schema order.
     pub secrets: Vec<SecretPlan>,
-    /// When the new instance starts on its own.
-    pub startup: stackly_domain::StartupPolicy,
+    /// When the new instance starts on its own, or `None` for the default
+    /// setting, read at the commit.
+    pub startup: Option<stackly_domain::StartupPolicy>,
+    /// The data and log locations the instance is created in, read with the
+    /// facts (spec 0032).
+    pub locations: (
+        stackly_domain::StorageLocationId,
+        stackly_domain::StorageLocationId,
+    ),
 }
 
 /// Evaluates `draft` over `facts`, with the ID dry run plans use.
@@ -189,6 +196,7 @@ impl Judge<'_> {
             let settings = self.settings_row(found, name.as_ref());
             endpoints_ok.then_some(settings).flatten()
         });
+        self.storage_location_row();
         self.data_row();
         self.disk_row();
         if let Some(found) = found {
@@ -893,7 +901,11 @@ impl Judge<'_> {
                 },
                 |(name, _)| name.clone(),
             ),
-            paths: layout.instance_paths(id),
+            paths: layout.instance_paths_in(
+                id,
+                &facts.locations.data.base,
+                &facts.locations.logs.base,
+            ),
             runtime: RuntimeContext {
                 root: runtime_root.clone(),
                 version: version.clone(),
@@ -956,6 +968,10 @@ impl Judge<'_> {
     // data and disk
 
     fn data_row(&mut self) {
+        if self.facts.locations.data.state != LocationState::Ready {
+            // The storage location row says why the folders are not fit.
+            return;
+        }
         let data = &self.facts.data;
         let title = "Empty data directory";
         let problem = [("instances", &data.instances), ("retained", &data.retained)]
@@ -1012,6 +1028,58 @@ impl Judge<'_> {
                 None,
             ),
         }
+    }
+
+    /// The default data and log locations: their folders are there and the
+    /// daemon can write to them (spec 0032, AC-20).
+    fn storage_location_row(&mut self) {
+        let locations = &self.facts.locations;
+        let problem = [&locations.data, &locations.logs]
+            .into_iter()
+            .find(|fact| fact.state != LocationState::Ready);
+        let title = "Storage locations";
+        let Some(fact) = problem else {
+            let detail = format!(
+                "{} · {}",
+                locations.data.base.display(),
+                locations.logs.base.display()
+            );
+            self.row(
+                "storage_location",
+                CheckKind::StorageLocation,
+                CheckStatus::Ok,
+                title,
+                detail,
+                None,
+            );
+            return;
+        };
+        let path = fact.base.display().to_string();
+        let (detail, error) = if fact.state == LocationState::Missing {
+            (
+                "The folder of this storage location is gone.".to_owned(),
+                CreateError::StorageLocationMissing {
+                    kind: fact.kind,
+                    path,
+                },
+            )
+        } else {
+            (
+                LocationRule::NotWritable.sentence().to_owned(),
+                CreateError::LocationInvalid {
+                    rule: LocationRule::NotWritable,
+                    path,
+                },
+            )
+        };
+        self.error_row(
+            "storage_location",
+            CheckKind::StorageLocation,
+            title,
+            detail,
+            None,
+            error,
+        );
     }
 
     fn disk_row(&mut self) {
@@ -1233,6 +1301,7 @@ impl Judge<'_> {
             settings: settings.values,
             secrets: settings.secrets,
             startup: self.draft.startup,
+            locations: (self.facts.locations.data.id, self.facts.locations.logs.id),
         })
     }
 

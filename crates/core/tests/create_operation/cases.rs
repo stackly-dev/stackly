@@ -919,7 +919,7 @@ fn the_input_of_a_huge_settings_document_keeps_only_its_digest() {
         secrets: vec![("authToken".to_owned(), SecretSourceKind::Value)],
         secret_values: Vec::new(),
         start: false,
-        startup: stackly_domain::StartupPolicy::Manual,
+        startup: Some(stackly_domain::StartupPolicy::Manual),
     };
 
     let payload = encode_input(InstanceId::generate(), &draft).expect("it fits once shortened");
@@ -1078,4 +1078,185 @@ async fn a_created_instance_reads_never_observed_until_it_runs_and_a_later_note_
     let after = rig.sup.status(id);
     assert_eq!(after.readiness.state(), ReadinessState::Ready);
     assert_eq!(after.status_seq, ready.status_seq);
+}
+
+/// Makes a data location in a new folder of the rig and sets it as the
+/// default, as `storage.set_location` would; returns its folder and ID.
+fn use_new_data_location(
+    rig: &Rig,
+    name: &str,
+) -> (std::path::PathBuf, stackly_domain::StorageLocationId) {
+    use stackly_core::storage::prepare_location;
+    use stackly_domain::{LocationKind, StorageLocation, StorageLocationId, WriteBatch, WriteOp};
+
+    let folder = rig.root.path().join(name);
+    std::fs::create_dir_all(&folder).expect("the disk folder can be made");
+    let id = StorageLocationId::generate();
+    let made = prepare_location(rig.platform.fs(), &folder, LocationKind::Data, id)
+        .expect("the location folders can be made");
+    let text = made.to_str().expect("the path is text").to_owned();
+    let location =
+        StorageLocation::custom(id, LocationKind::Data, text, rig.fake_now()).expect("a location");
+    let settings = rig.registry.daemon_settings().expect("it reads").value;
+    rig.registry
+        .commit(WriteBatch::new(vec![
+            WriteOp::InsertStorageLocation(location),
+            WriteOp::SetDefaultLocation {
+                kind: LocationKind::Data,
+                id,
+                expected: settings.revision,
+                at: rig.fake_now(),
+            },
+        ]))
+        .expect("the location becomes the default");
+    rig.layout
+        .locations()
+        .add_location(id, LocationKind::Data, made.clone());
+    (made, id)
+}
+
+// covers: AC-19, AC-25
+#[tokio::test]
+async fn a_create_after_a_location_change_goes_to_the_new_default_and_an_old_instance_stays() {
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let first = InstanceId::generate();
+    let op = cr
+        .begin(
+            first,
+            cr.draft("orders"),
+            Vec::new(),
+            CreateHooks::default(),
+        )
+        .await
+        .expect("accepted");
+    finish_init(rig, 0).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+    let old = rig.paths(first);
+
+    let (made, location) = use_new_data_location(rig, "disk");
+    let second = InstanceId::generate();
+    let op = cr
+        .begin(
+            second,
+            cr.draft("invoices"),
+            Vec::new(),
+            CreateHooks::default(),
+        )
+        .await
+        .expect("accepted");
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    eprintln!(
+        "DEBUG violations {} spawns {:?}",
+        rig.processes().violations(),
+        rig.processes().spawns().len()
+    );
+    finish_init(rig, 1).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    let new = rig.paths(second);
+    assert!(new.data.starts_with(made.join("instances")), "{new:?}");
+    assert!(new.logs.starts_with(rig.layout.layout().roots().logs()));
+    assert!(
+        read_instance_manifest(&rig.platform, &new).is_ok(),
+        "the manifest is in the new location"
+    );
+    let stored = rig
+        .registry
+        .instance_paths(second)
+        .expect("it reads")
+        .value
+        .expect("the paths");
+    assert_eq!(
+        stored
+            .iter()
+            .filter(|entry| entry.location() == Some(location))
+            .count(),
+        5,
+        "the five data paths name the new location"
+    );
+    // The first instance did not move, and its row still says where it is.
+    assert_eq!(rig.paths(first), old);
+    assert!(old.data.starts_with(rig.layout.layout().roots().data()));
+    assert!(old.data.is_dir());
+    let before = rig
+        .registry
+        .instance_paths(first)
+        .expect("it reads")
+        .value
+        .expect("the paths");
+    assert!(
+        before
+            .iter()
+            .all(|entry| entry.location() != Some(location))
+    );
+}
+
+// covers: AC-18
+#[tokio::test]
+async fn a_create_without_a_startup_takes_the_default_setting_and_an_explicit_one_wins() {
+    use stackly_domain::{SettingsPatch, StartupPolicy, WriteBatch, WriteOp};
+
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let settings = rig.registry.daemon_settings().expect("it reads").value;
+    rig.registry
+        .commit(WriteBatch::new(vec![WriteOp::UpdateDaemonSettings {
+            patch: SettingsPatch {
+                default_startup: Some(StartupPolicy::AtLogin),
+                ..SettingsPatch::default()
+            },
+            expected: settings.revision,
+            at: rig.fake_now(),
+        }]))
+        .expect("the default changes");
+
+    let mut asked = cr.draft("follows-default");
+    asked.startup = None;
+    let follows = InstanceId::generate();
+    let op = cr
+        .begin(follows, asked, Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    finish_init(rig, 0).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    let explicit = InstanceId::generate();
+    let op = cr
+        .begin(
+            explicit,
+            cr.draft("says-manual"),
+            Vec::new(),
+            CreateHooks::default(),
+        )
+        .await
+        .expect("accepted");
+    finish_init(rig, 1).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    assert_eq!(rig.instance_row(follows).startup(), StartupPolicy::AtLogin);
+    assert_eq!(rig.instance_row(explicit).startup(), StartupPolicy::Manual);
+}
+
+// covers: AC-20
+#[tokio::test]
+async fn a_create_into_a_default_location_whose_folder_is_gone_is_refused_without_a_folder() {
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let (made, _) = use_new_data_location(rig, "unplugged");
+    std::fs::remove_dir_all(&made).expect("the disk goes away");
+    let id = InstanceId::generate();
+
+    let op = cr
+        .begin(id, cr.draft("orders"), Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    let failed = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        Rig::failure_code(&failed),
+        "instance.storage_location_missing"
+    );
+    assert!(!rig.paths(id).root.exists());
+    assert!(rig.registry.instance(id).expect("it reads").value.is_none());
 }

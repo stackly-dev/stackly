@@ -76,6 +76,7 @@ pub(super) async fn build_detail(
     let platform = core.platform().clone();
     let packages = core.pinned_packages().clone();
     let layout = core.prepared().layout().clone();
+    let locations = core.prepared().locations().set();
     let (built, instance_row) = tokio::task::spawn_blocking(move || {
         let facts = read_facts(&registry, id)?;
         let package = packages.get(&platform, &layout, facts.instance.provider_revision());
@@ -89,7 +90,8 @@ pub(super) async fn build_detail(
             &facts.leases,
             package.as_deref(),
             &layout,
-        );
+        )
+        .with_locations(&locations);
         Ok::<_, Unreadable>((build(&snapshot), facts.instance))
     })
     .await
