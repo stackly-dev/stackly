@@ -119,3 +119,38 @@ Sesudah `git merge main` (F31 milestone 4, kontrak 3.1: `ShutdownMode::AgentOff`
 - [x] `cargo test -p stackly-cli --test instance` → round trip perintah setara kembali ke draft yang sama untuk sembilan kasus fixture → AC-18
 - [x] `cargo test -p stacklyd --test supervisor a_create_without_a_startup_takes_the_default…` → preflight lewat daemon: `--no-autostart` hanya saat default `at_login` dan draft `manual`, `--autostart` untuk `at_login`, tidak ada flag tanpa policy atau saat default `manual` → AC-18
 - [x] `cargo xtask fuzz seed` → tidak ada seed yang berubah
+
+## Milestone 3: Menu bar dan Stop All
+
+Langkah build 9 saja (daemon dan CLI). Langkah 10 dan 11 (scene `MenuBarExtra`, popover, `ActivationPolicyController`) menyusul di sesi Swift, jadi AC-1 sampai AC-6, AC-10, AC-11, dan AC-12 belum tercakup di bagian ini.
+
+### UI / manual
+
+- [x] Buka `crates/core/src/instance/stop_all.rs` → `confirmed_steps` membandingkan himpunan `stop` dari `select` dengan `expectedInstanceIds` sebagai himpunan (urutan dan ulangan tidak berarti), menolak dengan `StopAllChanged` kalau berbeda, dan mengembalikan irisan dalam urutan nama → AC-7, AC-8
+- [x] Buka `apps/daemon/src/ipc/stop_all.rs` → urutan `replay_operation`, pilihan, `confirmed_steps`, baru `start_operation`; `instance.stop_all_changed` dikirim sebelum operasi dibuat, jadi kunci idempotency tidak terikat; field itu diurutkan dan dibuang ulangannya sebelum sidik jari → AC-7, AC-8
+- [ ] Jalankan `target/debug/stackly instance stop --help` → `--all`, dan `--yes` berlaku untuk `--force` dan `--all` → AC-9
+- [ ] Jalankan `target/debug/stackly instance stop --all` di terminal dengan dua instance berjalan → baris preview di stderr ("alpha · Started by you"), pertanyaan "Stop All Services?", dan kalimat "Data is kept. …"; `y` menghentikan, Enter menolak dengan exit 9 → AC-9
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test stop_all_select` → enam test baru untuk `confirmed_steps`: tanpa field, himpunan sama dalam urutan lain dengan ulangan, instance yang bergabung sejak preview, yang keluar, `already_stopping` tidak dihitung, dan himpunan kosong → AC-7, AC-8
+- [x] `cargo test -p stacklyd --test stop_all` → lima test di daemon dan filesystem asli: konfirmasi preview menghentikan persis isinya dan replay (urutan lain, dengan ulangan) menjawab sama; instance yang menyala sesudah preview ditolak `instance.stop_all_changed`, tidak ada yang berhenti, dan kunci yang sama dipakai lagi dengan preview baru; instance yang berhenti sesudah preview, ID bukan instance, dan himpunan kosong di atas instance berjalan ditolak; kunci yang sama dengan himpunan lain, atau tanpa field, ditolak `operation.idempotency_key_reused` → AC-7, AC-8
+- [x] `cargo test -p stackly-cli --bin stackly stop` → teks preview, kaki, hasil, dan kegagalan mengikuti tabel *Copy Stop All* → AC-9
+- [x] `cargo test -p stackly-cli --test instance stop_all` → `--yes` mengirim `expectedInstanceIds` dari preview dengan kunci; `--json` menulis satu envelope `{ preview, outcome }`; tidak ada yang berjalan menulis "Nothing is running." tanpa mengirim stop; tanpa `--yes` dan tanpa terminal (juga dengan `--json`) keluar 2 `cli.confirmation_required` sebelum stop dikirim; di terminal `y` menghentikan dan Enter keluar 9; `instance.stop_all_changed` keluar 3 tanpa mengulang; instance yang gagal berhenti disebut namanya dan keluar sesuai kodenya; `--all` menolak nama instance, `--force`, dan `--wait` → AC-8, AC-9
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask codegen --check`, `cargo xtask evidence check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-7 · konfirmasi mengirim `expectedInstanceIds` dari preview, operasi hanya membuat langkah untuk irisan, hasil `StopAllResult` dengan `failed` dan `skipped`; popover yang menggambar hasil menunggu langkah 10
+- AC-8 · `instance.stop_all_changed` sebelum operasi dibuat, tanpa payload; CLI keluar 3 dan menyuruh menjalankan ulang; popover yang memanggil preview lagi menunggu langkah 10
+- AC-9 · `stackly instance stop --all [--yes] [--json]` dengan preview, konfirmasi, exit 2 tanpa terminal dan tanpa `--yes`, dan envelope `{ preview, outcome }`
+
+### Catatan
+
+- **Hasil kosong.** Kalau preview tidak punya `items`, CLI menulis "Nothing is running.", tidak meminta konfirmasi, dan tidak mengirim `instance.stop_all`; `outcome` null. Spec tidak menyebut kasus ini untuk CLI.
+- **Keluar sesudah sebagian gagal.** `stop --all` keluar dengan kategori kode instance pertama di `failed` (misalnya `supervisor.stop_timeout`), atau `operation.cancelled` kalau Stop All dibatalkan. `skipped` biasa (lease environment, `unknown`) tidak membuat perintah gagal karena sudah tampil di preview. Spec hanya menetapkan exit 3 untuk `instance.stop_all_changed`; tidak ada kode baru yang ditambahkan.
+- **Kirim ulang.** Pada `ipc.call_timeout` CLI mengirim ulang dengan kunci yang sama, sampai tiga kali (spec 0031, *Operasi `stop_all_instances`* langkah 9).
+- **`--all` dan `--wait`.** Keduanya saling menolak, karena balasan `instance.stop_all` baru datang setelah operasi selesai.
+- **Lokasi test daemon.** `apps/daemon/tests/stop_all.rs` memakai rig `Site` dan `Api` dari `tests/supervisor/support.rs` lewat `#[path]`, supaya tidak menyentuh `supervisor/main.rs` milik sesi lain. Test `supervisor/stop_all.rs` milik fitur 31 tetap menguji `instance.stop_all` tanpa field.
+- **Berkas CLI.** `StopArgs` ada di `action.rs`, jadi flag `--all` dan penyaluran ke `stop.rs` mengubah `action.rs` dan `mod.rs` selain `stop.rs`.
+

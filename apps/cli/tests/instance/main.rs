@@ -31,3 +31,4 @@ mod parity;
 mod play;
 mod secrets;
 mod stacklyd;
+mod stop_all;

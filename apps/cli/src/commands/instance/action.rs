@@ -8,7 +8,8 @@ use stackly_protocol::instance::{
 };
 use stackly_protocol::{Call, Reply};
 
-use super::resolve::TargetArg;
+use super::resolve::{InstanceTarget, TargetArg};
+use super::stop::StopAll;
 use super::{InstanceAction, Verb, accepted, conclude};
 use crate::commands::RunCommand;
 use crate::confirm::{Approval, Confirm, ConfirmRequest, ConfirmRole, OnNoninteractive};
@@ -30,21 +31,45 @@ pub struct StartArgs {
 
 /// `stackly instance stop`. It never overrides a lease: stopping an
 /// instance that an environment holds waits for the environment feature.
+/// With `--all` it stops every service the preview shows, after asking.
 #[derive(Debug, Args)]
+#[command(group(clap::ArgGroup::new("confirms").args(["force", "all"])))]
 pub struct StopArgs {
-    /// The instance.
-    #[command(flatten)]
-    pub instance: TargetArg,
+    /// The instance name, or its whole ID
+    #[arg(value_name = "INSTANCE", required_unless_present = "all")]
+    pub target: Option<InstanceTarget>,
     /// `--wait`, `--timeout`, and `--idempotency-key`.
     #[command(flatten)]
     pub run: AsyncArgs,
     /// Send SIGKILL to the main process of an instance that is still
     /// stopping after a normal stop; asks first
-    #[arg(long)]
+    #[arg(long, conflicts_with = "all")]
     pub force: bool,
-    /// Confirm --force without asking; needed noninteractive and with --json
-    #[arg(short = 'y', long, requires = "force")]
+    /// Stop every running service after showing the list and asking; the
+    /// command waits for the end
+    #[arg(long, conflicts_with_all = ["target", "wait"])]
+    pub all: bool,
+    /// Confirm --force or --all without asking; needed noninteractive and with --json
+    #[arg(short = 'y', long, requires = "confirms")]
     pub yes: bool,
+}
+
+impl StopArgs {
+    /// The command of `--all`, or the args back when it was not given.
+    ///
+    /// # Errors
+    ///
+    /// Returns `self` unchanged when `--all` was not given.
+    pub fn into_all(self) -> Result<StopAll, Self> {
+        if self.all {
+            Ok(StopAll {
+                yes: self.yes,
+                idempotency_key: self.run.idempotency_key,
+            })
+        } else {
+            Err(self)
+        }
+    }
 }
 
 /// `stackly instance restart`: one daemon operation that stops the
@@ -153,15 +178,20 @@ impl RunCommand for StopArgs {
     type Output = InstanceAction;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<InstanceAction> {
+        let Some(named) = self.target.as_ref() else {
+            return CommandOutput::failed(CliFailure::usage(
+                "missing_argument",
+                "give an instance, or --all",
+            ));
+        };
         if self.force {
             // Asked before anything reaches the daemon, the name included.
-            let target = crate::output::escape::escape_display(&self.instance.target.to_string())
-                .into_owned();
+            let target = crate::output::escape::escape_display(&named.to_string()).into_owned();
             if let Err(failure) = confirm_force(cx, &target, self.yes) {
                 return CommandOutput::failed(failure);
             }
         }
-        let id = match self.instance.target.resolve(cx).await {
+        let id = match named.resolve(cx).await {
             Ok(id) => id,
             Err(failure) => return CommandOutput::failed(failure),
         };

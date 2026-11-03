@@ -25,6 +25,7 @@ mod open;
 mod rename;
 pub mod render;
 pub mod resolve;
+mod stop;
 
 use clap::Subcommand;
 use serde::Serialize;
@@ -77,9 +78,9 @@ pub enum InstanceCommand {
         after_help = "Examples:\n  stackly instance start orders-db\n  stackly instance start orders-db --wait --timeout 5m\n  stackly instance start 0192f3a5-0000-7000-8000-000000000001"
     )]
     Start(StartArgs),
-    /// Stop an instance, or force stop one that is still stopping
+    /// Stop an instance, force stop one that is still stopping, or stop every running service with --all
     #[command(
-        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop orders-db --force --yes --wait\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
+        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop orders-db --force --yes --wait\n  stackly instance stop --all\n  stackly instance stop --all --yes --json\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
     )]
     Stop(StopArgs),
     /// Restart a running instance: stop with the provider's strategy, then start
@@ -152,7 +153,10 @@ impl InstanceCommand {
             Self::Create(args) => execute(*args, cx).await,
             Self::Duplicate(args) => execute(*args, cx).await,
             Self::Start(args) => execute(args, cx).await,
-            Self::Stop(args) => execute(args, cx).await,
+            Self::Stop(args) => match args.into_all() {
+                Ok(all) => execute(all, cx).await,
+                Err(args) => execute(args, cx).await,
+            },
             Self::Restart(args) => execute(args, cx).await,
             Self::Reload(args) => execute(args, cx).await,
             Self::List(args) => execute(args, cx).await,

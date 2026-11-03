@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use stackly_core::instance::stop_all::{
-    DemandSource, StopAllEntry as CoreEntry, read_view, select,
+    DemandSource, StopAllEntry as CoreEntry, confirmed_steps, read_view, select,
 };
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, OperationDetailView, OperationOutcome, Origin, PartialOutcome,
@@ -49,6 +49,14 @@ pub(crate) fn unexpected(detail: &'static str) -> Box<ErrorBody> {
     Box::new(ErrorBody::new(
         &stackly_protocol::codes::internal::UNEXPECTED,
         detail,
+    ))
+}
+
+/// `instance.stop_all_changed`: what the person saw is not what would stop.
+fn changed() -> Box<ErrorBody> {
+    Box::new(ErrorBody::new(
+        &stackly_protocol::codes::instance::STOP_ALL_CHANGED,
+        "the instances to stop changed since the preview",
     ))
 }
 
@@ -266,6 +274,14 @@ pub fn stop_all<'a>(
 ) -> HandlerFuture<'a, Box<StopAllResult>> {
     let context = context.clone();
     Box::pin(async move {
+        // The expected set is a set: its order and repeats do not make
+        // another request.
+        let mut params = params;
+        if let Some(expected) = params.expected_instance_ids.as_mut() {
+            expected.sort_unstable();
+            expected.dedup();
+        }
+        let expected = params.expected_instance_ids.clone();
         let fingerprint = request_fingerprint(&Call::InstanceStopAll(params));
         let start = || OperationStart::new(METHOD, context.idempotency_key.as_deref(), fingerprint);
         // A request that came again with its key answers from the operation
@@ -276,7 +292,16 @@ pub fn stop_all<'a>(
         }
         let supervisor: Supervisor = core.supervision().supervisor()?;
         let selection = current_selection(core).await?;
-        let steps: Vec<InstanceId> = selection.stop.iter().map(|entry| entry.id).collect();
+        // An ID that is no instance ID can match nothing the rule chose.
+        let expected = expected
+            .map(|ids| {
+                ids.into_iter()
+                    .map(InstanceId::from_uuid)
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()
+            .map_err(|_| changed())?;
+        let steps = confirmed_steps(&selection, expected.as_deref()).map_err(|_| changed())?;
         let input = StopAllInput {
             source: "stop_all",
             steps: steps.iter().map(|id| id.as_uuid()).collect(),
