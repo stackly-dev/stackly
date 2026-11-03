@@ -821,3 +821,49 @@ Update `/architect` sesi `arc-foundation-update`. Kode di `main` sudah sesuai; n
 | AC-11 lewat daemon | coverage M4 di `verify.md` tidak lagi menyebut AC-11 lewat daemon "belum bisa dibuktikan"; ia terbukti oleh `skeleton.rs` dan `supervisor/actions` | temuan `chk-f11-m4` |
 
 Opsi yang tidak dipilih untuk prefix: langkah Build plan kecil yang membuat fixture prefix di `protocols/fixtures/` dan mengubah test Swift untuk membacanya. Opsi itu menambah satu file kontrak yang tidak pernah lewat wire, dan pemilik kontrak harus menjaga dua salinan nilai yang sama.
+
+## Pembaruan 2026-11-03 (status lain saat keychain terkunci)
+
+Update `/architect` sesi `arc-f11-update`, dipicu bukti native fitur 31 (spec 0031 AC-15). User menyetujui perubahan teks AC-3 ini pada 2026-11-03 (log koordinasi `docs/scope/coordination/04-kerja-harian.log.md`, bagian Keputusan). ID AC dan nomor langkah tidak berubah, dan tanda tangan `map_status(code, keychain_locked, interaction)` tetap. Ini mendukung **AC-3** dan **AC-11**.
+
+### Pengamatan native
+
+Bukti native F31 memakai keychain file di root sementara, lalu menguncinya dengan `security lock-keychain`. Membaca nilai dari keychain itu menjawab `OSStatus -60008` (`errAuthorizationInternal`), sedangkan `SecKeychainGetStatus` sesudah panggilan itu melaporkan terkunci, jadi `state()` menjadi `Locked`. Tabel lama hanya memetakan `errSecAuthFailed` (-25293) dan `errSecInteractionNotAllowed` (-25308) ke `Locked`, sehingga -60008 menjadi `Backend { code: -60008 }`. Di `resolve_for_start`, error `Backend` mengalahkan needs secret (AC-11), jadi start login berakhir `failed` dengan `secret.store_backend`, tanpa blocker `needsSecret`, dan timer `secret_retry` spec 0031 tidak punya apa pun untuk dicoba. Instance tidak pernah berjalan dengan auth kosong, tetapi ia juga tidak pernah pulih sendiri setelah kamu membuka kunci Keychain.
+
+Spike langkah 3 merekam -25293 untuk read di keychain terkunci. Keadaan yang tampak sama ternyata bisa menjawab kode berbeda. Penyebab selisihnya belum diketahui dari dua pengamatan ini, dan kita tidak mengendalikannya.
+
+### Keputusan
+
+Kode lain, yaitu kode yang tidak punya baris sendiri di tabel `map_status`, menjadi `Locked` kalau keychain melaporkan terkunci setelah panggilan itu (`keychain_locked` benar), dengan interaksi apa pun. Di luar kondisi itu, kode lain tetap `Backend { code }`. Status kunci yang gagal dibaca (`StoreState::Unknown`) dihitung tidak terkunci, jadi pemeriksaan state yang gagal tetap memberi `Backend`. Baris yang menyebut kode sendiri tidak berubah: `errSecItemNotFound` tetap `NotFound` (pencarian atribut tetap berjalan saat terkunci), `errSecDuplicateItem` tetap `AlreadyExists`, dan `errSecUserCanceled` tetap `AccessDenied { by_user: true }`, karena Cancel di dialog buka kunci memang jawaban pengguna (spike langkah 3) dan resolve harus berhenti meminta.
+
+| Opsi | Isi | Kenapa tidak dipilih |
+| --- | --- | --- |
+| 1, dipilih | kode lain saat `keychain_locked` benar menjadi `Locked` | |
+| 2 | tambahkan -60008 ke daftar kode, di samping -25293 dan -25308 | daftar itu hanya berisi kode yang kebetulan pernah kita lihat. Versi macOS berikutnya, login Keychain lawan keychain file, atau agent launchd lawan sesi GUI bisa menjawab kode lain lagi, dan setiap kode baru diam diam menjadi `secret.store_backend` yang mematahkan pemulihan spec 0031 sampai ada yang melihatnya |
+| 3 | semua kode lain menjadi `Locked`, terkunci atau tidak | menyembunyikan error backend asli saat keychain tidak terkunci, dan hint `needs_secret` ("buka kunci Keychain") menjadi salah |
+| 4 | tetap `Backend`, dan spec 0031 juga mencoba ulang `Backend` | AC-11 sengaja membuat `Backend` menang atas needs secret supaya error nyata tidak berulang diam diam; mencoba ulang setiap error backend mengubah AC-11 dan spec 0031, dan menyembunyikan kerusakan nyata di belakang timer |
+
+Status kunci dipakai, bukan daftar kode, karena status itu sudah dibaca setelah setiap panggilan (kurang dari satu mikrodetik, tanpa dialog), dan status itulah fakta yang dipedulikan BR: kalau keychain terkunci, nilai memang tidak bisa dibaca, apa pun kode yang dijawab macOS. Aturan ini juga tidak butuh kode baru selain satu cabang di fungsi murni yang sudah diuji per baris.
+
+### Risiko
+
+Error backend asli yang kebetulan terjadi saat keychain terkunci (misalnya keychain file yang rusak, atau parameter salah dari kode kita sendiri) terbaca `Locked`, dan kode `OSStatus` nya tidak ikut, karena `SecretStoreError::Locked` tidak membawa kode. Ini dapat diterima karena tujuan BR nya (AC-062, VAL-018) adalah instance tidak pernah dimulai dengan auth kosong, dan `Locked` tetap menghentikan start: ia menjadi `store_locked`, yang memicu blocker `needsSecret` yang bisa dicoba lagi, lewat timer `secret_retry` spec 0031 atau lewat aksi kamu. Tidak ada jalur yang memakai nilai pengganti. Biayanya diagnosis yang tertunda: setelah keychain dibuka kuncinya, panggilan berikutnya menjawab kode aslinya sebagai `Backend` kalau error itu masih terjadi, jadi start berikutnya berakhir `secret.store_backend` dengan kodenya. Blocker `store_locked` yang sudah tercatat tetap ada sampai resolve berikutnya berhasil (*Needs secret*, perilaku yang sudah ada sebelum update ini), dan apa yang dilakukan timer `secret_retry` saat pemeriksaannya menjawab `Backend` diatur spec 0031. Celah itu diteruskan ke lead (*Cross check* di bawah). Sebaliknya, tanpa perubahan ini keadaan yang menjadi tujuan BR ini (Keychain terkunci saat start latar) bisa berakhir gagal tanpa pemulihan hanya karena macOS memilih kode yang belum kita kenal.
+
+Risiko kedua: kode penolakan pengguna selain `errSecUserCanceled` (misalnya `errAuthorizationCanceled` -60006) yang muncul di keychain terkunci dengan `AllowPrompt` terbaca `Locked`, bukan `AccessDenied { by_user: true }`, jadi `resolve_for_start` tidak berhenti meminta dan reference sisanya bisa memunculkan dialog buka kunci lagi. Kode itu belum pernah teramati; spike langkah 3 merekam -128 untuk Cancel di dialog buka kunci. Ini diterima karena dampaknya terbatas pada satu aksi pengguna yang memang boleh menampilkan dialog, pemicu latar selalu memakai `Never`, dan tidak ada jalur yang memakai nilai pengganti. Kalau kode seperti itu teramati, ia mendapat baris sendiri di tabel.
+
+### Cross check
+
+Model lain (Sonnet 5.5) membaca draft update ini secara read only pada 2026-11-03, sesuai keputusan lintas scope `Another model`. Vonisnya "siap dengan perbaikan kecil", dengan sepuluh temuan.
+
+| Temuan | Tindak lanjut |
+| --- | --- |
+| Cakupan operasi aturan baru tidak disebut | diterapkan: AC-3 menyebut read, write, delete, dan probe |
+| Error buatan adapter (`KeychainGuard`, `errSecDecode` setelah read) tidak lewat `map_status` | diterapkan: kalimat di bawah tabel `map_status`; contoh test `-26275` diganti `-25291`, karena -26275 juga kode decode buatan adapter |
+| *Port `SecretStore`* masih menyebut `Locked` hanya untuk store yang tidak bisa mengecek | diterapkan: pengecualian untuk baris `lain` |
+| *Status dan probe* masih menyebut keychain terkunci tidak membuat status `unknown` | diterapkan: "tidak dengan sendirinya" |
+| Baris test integration "apa pun kode yang dijawab macOS" melebihi aturan | diterapkan: untuk item yang ada, selain kode yang punya baris sendiri |
+| `Unknown` tidak punya test, dan definisi `Unknown` di port hanya "belum ada observasi" | diterapkan: definisi ditambah "status kunci gagal dibaca"; kasus `Unknown` dicek lewat review, karena kegagalan `SecKeychainGetStatus` tidak bisa dipicu |
+| Klaim "keadaan yang paling umum" dan "menurut konteks panggilan" melebihi bukti | diterapkan: kalimat di *Pengamatan native* dan *Risiko* dilunakkan |
+| Kode penolakan pengguna selain -128 di keychain terkunci terbaca `Locked` | dicatat sebagai risiko yang diterima di *Risiko* |
+| Setelah keychain dibuka, resolve yang menjawab `Backend` tidak menghapus blocker `store_locked`, dan timer `secret_retry` spec 0031 tidak berhenti pada `Backend` | tidak diterapkan di sini: perilaku itu sudah ada sebelum update ini (blocker hanya hilang saat resolve berhasil), dan keputusannya menyentuh *Needs secret* dan spec 0031 AC-15 di luar aturan yang disetujui. Diteruskan ke lead sebagai keputusan baru |
+| Kode asli tidak tercatat saat baris `lain` menghasilkan `Locked` | tidak diterapkan di sini: adapter belum punya log, jadi ini menambah persyaratan kode di luar aturan yang disetujui. Diteruskan ke lead sebagai usulan |
