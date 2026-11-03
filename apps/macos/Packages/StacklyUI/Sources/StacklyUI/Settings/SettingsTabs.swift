@@ -1,11 +1,12 @@
 import StacklyClient
 import SwiftUI
 
-/// The Instances tab: defaults for the instances you create (spec 0032 AC-18). The
-/// Notifications row comes with the notification model and shows once `SettingsAvailability`
-/// says so.
+/// The Instances tab: defaults for the instances you create (spec 0032 AC-18) and the
+/// Notifications row (AC-22), which belongs to the app and works while stacklyd is offline.
 struct InstancesSettingsTab: View {
     let model: DaemonModel
+    let notifications: NotificationModel
+    let preferences: AppPreferences
 
     private var store: SettingsStore { model.settings }
 
@@ -35,9 +36,13 @@ struct InstancesSettingsTab: View {
                     }
                     .disabled(store.saving != nil && store.saving?.field != .defaultStartup)
                 }
+                if SettingsAvailability.isShown(.notifications) {
+                    NotificationsSettingsRow(notifications: notifications, preferences: preferences)
+                }
             }
         }
         .formStyle(.grouped)
+        .task { await notifications.refreshPermission() }
     }
 }
 

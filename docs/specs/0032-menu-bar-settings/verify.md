@@ -119,3 +119,38 @@ Sesudah `git merge main` (F31 milestone 4, kontrak 3.1: `ShutdownMode::AgentOff`
 - [x] `cargo test -p stackly-cli --test instance` → round trip perintah setara kembali ke draft yang sama untuk sembilan kasus fixture → AC-18
 - [x] `cargo test -p stacklyd --test supervisor a_create_without_a_startup_takes_the_default…` → preflight lewat daemon: `--no-autostart` hanya saat default `at_login` dan draft `manual`, `--autostart` untuk `at_login`, tidak ada flag tanpa policy atau saat default `manual` → AC-18
 - [x] `cargo xtask fuzz seed` → tidak ada seed yang berubah
+
+## Milestone 4: Notifikasi
+
+Langkah build 12. Bagian AC yang belum: izin notifikasi sungguhan di macOS (dan satu notifikasi sungguhan per pemicu), yang masuk evidence manual milestone 5 (langkah 14); menu bar dan Stop All (milestone 3).
+
+### UI / manual
+
+- [x] Buka `Notifications/NotificationPosting.swift` → port `NotificationPosting` (permission, request, post, openSystemSettings, installClickHandler), `NotificationTarget` (instance, operations, diagnostics) yang ikut sebagai `userInfo`, dan `AppNotification`; folder ini satu satunya yang `import UserNotifications` → AC-22
+- [x] Buka `Notifications/UserNotificationPoster.swift` → poster nyata di atas `UNUserNotificationCenter`; center dibaca saat dipanggil dan tidak disimpan, jadi membuat poster di luar app bundle tidak menyentuh apa pun; delegate center menerima klik dan tidak menampilkan notifikasi saat app aktif → AC-22
+- [x] Buka `Notifications/NotificationModel.swift` → empat pemicu sesuai tabel *Pemicu notifikasi*; setiap kiriman hanya bila toggle menyala, izin `authorized`, dan `NSApplication.isActive` false; gambaran lifecycle dan readiness diisi dari store sesudah setiap snapshot, jadi state yang sudah ada di snapshot tidak memicu dan pemulihan tidak pernah memicu → AC-22
+- [x] Buka `Notifications/NotificationContent.swift` → judul, isi, dan identifier (`instance-failed-<id>-<revision>`, `instance-unready-<id>-<statusSeq>`, `operation-<id>`, `daemon-unreachable-<since>`); tanpa secret, path, atau isi log → AC-22
+- [x] Buka `Settings/NotificationsSettingsRow.swift` → baris Notifications di tab Instances: toggle milik app (bisa diubah saat stacklyd offline), meminta izin sekali saat pertama dinyalakan, "Notifications are turned off for Stackly in System Settings." dengan Open Notification Settings kalau ditolak, izin dibaca ulang setiap app aktif dan saat tab terbuka → AC-22
+- [x] Buka `Connection/ShellRuntime.swift`, `Shell/AppShell.swift`, `apps/macos/Stackly/AppDelegate.swift` → klik membuka jendela utama lewat `WindowOpener` lalu `AppShell` menampilkan halaman dari `NotificationModel.pending` (detail instance, Operations, atau Diagnostics); delegate dipasang di `applicationDidFinishLaunching` sebelum event pertama diproses → AC-22
+- [x] Buka `Tests/StacklyUITests/SourceRuleTests.swift` → aturan baru: `UserNotifications` dan `UNUserNotificationCenter` hanya di `Notifications/` → AC-22
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter NotificationModelTests` → 36 test: keempat pemicu dan batasnya (satu per transisi, 5 menit per instance, lebih dari 10 detik dan hanya kind popover, 15 detik di luar jangkauan dan sekali per gangguan), tiga gerbang (toggle, izin, app aktif), izin tidak pernah diminta ulang dan penolakan tidak pernah memanggil `post`, klik, dan dua test yang memasang model ke `ShellSync` nyata → AC-22
+- [x] `swift test … --filter AppPreferencesTests` dan `SettingsAvailabilityTests` → toggle mati secara default dan tersimpan, baris Notifications tampil di tab Instances → AC-22
+- [x] `swift test … --filter SourceRuleTests` → aturan sumber spec 0012 untuk `UserNotifications` → AC-22
+- [x] Semua test memakai `FakeNotificationPoster` atau `NotificationModel.inert`; tidak ada test yang meminta izin ke sistem → AC-22
+- [ ] Izin notifikasi sungguhan (izinkan lalu tolak) dan satu notifikasi per pemicu di macOS → `BLOCKED` untuk sesi ini, langkah manual milestone 5 yang dilewati user (app tidak dibuka, dialog izin sistem tidak dipicu) → AC-22
+
+### Acceptance-criteria coverage
+
+- AC-22 · notifikasi mati secara default; menyalakan toggle meminta izin satu kali; sebelum izin tidak ada kiriman; izin ditolak tetap menyimpan pilihan dengan teks dan tombol Open Notification Settings; izin dibaca ulang setiap app aktif; empat pemicu saja dan hanya saat app tidak aktif; snapshot awal tidak memicu dan tidak ada notifikasi pemulihan; klik membuka detail instance, Operations, atau Diagnostics. Izin dan notifikasi sungguhan di macOS belum dicoba.
+
+### Catatan
+
+- **Durasi operasi.** `OperationSummary` tidak punya `finishedAt`; spec menulis `finishedAt − startedAt`. Model memakai `updatedAt` dari event ke state akhir (waktu perubahan state itu) dikurangi `startedAt`. Spec perlu mengikuti, atau kontrak menambah `finishedAt`.
+- **Ringkasan hasil operasi.** Isi notifikasi operasi memakai kalimat tetap ("Took 42 seconds.", "Open Stackly to see what happened.", "It was cancelled after 1 minute.") dan tidak membawa teks error daemon, supaya tidak ada path atau secret yang ikut.
+- **Readiness hilang.** Hanya perpindahan ke `not_ready` yang dihitung (bukan `unknown`), dan hanya saat lifecycle `running` menurut gambaran model sendiri; event `instance.health_changed` tidak membawa lifecycle.
+- **Klik dan jendela.** Klik memanggil `WindowOpener.openMain()` dan `NSApplication.activate()`. Perpindahan activation policy dan `prepareToShowWindow()` datang dengan langkah 11 (milestone 3); sampai saat itu jendela utama selalu ada selama app hidup.
+- **Pemakaian bersama dengan milestone 3.** `ShellRuntime`, `AppDelegate`, `AppShell`, dan `MainWindowRoot` mendapat diff kecil (parameter `notifications`, `applicationDidFinishLaunching`, `.onChange` untuk `pending`, `.environment`). Kalau `dev-f32-m3-s9` atau sesi menu bar menyentuh file yang sama, gabungkan keduanya.
+- **Fixture.** Runtime fixture tidak memasang model notifikasi (`notifications: nil` memakai model inert yang tidak pernah mengirim), jadi tidak ada notifikasi saat scenario berjalan.

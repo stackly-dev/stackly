@@ -60,6 +60,15 @@ struct AppPreferencesTests {
         #expect(rig.preferences().appearance == .system)
     }
 
+    @Test func notificationsAreOffUntilTheChoiceIsMadeAndTheChoiceIsSaved() {
+        let rig = Rig()
+        let preferences = rig.preferences()
+        #expect(preferences.notificationsEnabled == false)
+        preferences.notificationsEnabled = true
+        #expect(rig.defaults.bool(forKey: AppPreferences.notificationsKey))
+        #expect(rig.preferences().notificationsEnabled)
+    }
+
     @Test func theChoicesAreSystemLightAndDarkInThatOrder() {
         #expect(AppPreferences.Appearance.allCases.map(\.title) == ["System", "Light", "Dark"])
     }

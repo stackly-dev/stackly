@@ -61,6 +61,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // The click that launched the app is delivered once the delegate is set, so it goes
+        // before the first event is handled (spec 0032, *Notifikasi*).
+        runtime.notifications.begin()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

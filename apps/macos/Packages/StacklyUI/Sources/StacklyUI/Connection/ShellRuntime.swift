@@ -20,6 +20,8 @@ public final class ShellRuntime {
     public let preferences: AppPreferences
     /// Open Stackly at login, read from the OS (spec 0032).
     public let loginItem: LoginItemModel
+    /// Notifications: permission, the four triggers, and what a click opens (spec 0032).
+    public let notifications: NotificationModel
     private var observers: [any NSObjectProtocol] = []
     private let activity: ShellActivity
     private var activityToken: (any NSObjectProtocol)?
@@ -34,6 +36,8 @@ public final class ShellRuntime {
     ///     `UserDefaults` by default.
     ///   - preferences: The app's own choices; one that applies nothing to the app by default.
     ///   - loginItem: Open Stackly at login; the live `SMAppService.mainApp` by default.
+    ///   - notifications: The notification model the shell follows events with, or `nil` for one
+    ///     that never posts and follows nothing.
     ///   - activity: Keeps the app out of App Nap while it runs; the process's own by default.
     public init(
         model: DaemonModel, closeNotice: CloseNotice = CloseNotice(),
@@ -41,11 +45,13 @@ public final class ShellRuntime {
         onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore(),
         preferences: AppPreferences = AppPreferences(apply: { _ in }),
         loginItem: LoginItemModel = LoginItemModel(),
+        notifications: NotificationModel? = nil,
         activity: ShellActivity = .process
     ) {
         self.model = model
         self.preferences = preferences
         self.loginItem = loginItem
+        self.notifications = notifications ?? .inert(preferences: preferences)
         self.closeNotice = closeNotice
         self.commandLineTool = commandLineTool
         onboarding = OnboardingModel(store: onboardingStore)
@@ -54,6 +60,9 @@ public final class ShellRuntime {
         // and applies events tens of seconds late, past the waits of spec 0013.
         activityToken = activity.begin()
         model.start()
+        if let notifications {
+            attach(notifications)
+        }
         observers.append(
             NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -74,11 +83,35 @@ public final class ShellRuntime {
             })
     }
 
+    /// Connects `notifications` to the model's events, snapshots, and connection, and to the
+    /// main window a click opens.
+    private func attach(_ notifications: NotificationModel) {
+        let model = self.model
+        notifications.attach(
+            sync: model.sync, instances: model.instances,
+            titleOf: { operation in
+                OperationTitle.title(
+                    for: operation,
+                    instanceNames: Dictionary(
+                        model.instances.instances.map { ($0.id, $0.name) },
+                        uniquingKeysWith: { first, _ in first }),
+                    runtimes: OperationTitle.RuntimeNames(store: model.runtimes))
+            },
+            isReachable: { model.presentation.hasConnection },
+            open: { [weak self] _ in
+                NSApplication.shared.activate()
+                self?.windowOpener.openMain()
+            })
+    }
+
     /// The app became active: retry now when not connected, and read the background
-    /// agent's status again (spec 0015). Neither changes the registration.
+    /// agent's status again (spec 0015). Neither changes the registration. The login item and
+    /// the notification permission are read again too, since the person may have changed them
+    /// in System Settings.
     public func didBecomeActive() {
         model.systemRetry()
         Task { await loginItem.refresh() }
+        Task { await notifications.refreshPermission() }
         if let agent = model.agent {
             agent.resumePolling()
             Task { await agent.refresh() }
@@ -165,7 +198,7 @@ public enum ShellBootstrap {
         assemble(
             rootOverride: rootOverride, clientVersion: clientVersion, now: now,
             agentController: SMAppServiceAgent(), commandLineTool: CommandLineTool.live(),
-            onboardingStore: onboardingStore
+            onboardingStore: onboardingStore, notificationPoster: UserNotificationPoster()
         ).runtime
     }
 
@@ -179,6 +212,8 @@ public enum ShellBootstrap {
     ///   - agentController: The OS side of the background agent, or `nil` for a shell     without an agent (the banner then is the one of spec 0013). `live` gives     ``SMAppServiceAgent``.
     ///   - commandLineTool: The command line tool, or `nil` for a shell without one. `live`     gives ``CommandLineTool``.
     ///   - onboardingStore: Where the finished record of the onboarding lives.
+    ///   - notificationPoster: The macOS side of notifications, or `nil` for a shell that never
+    ///     posts (every test). `live` gives ``UserNotificationPoster``.
     static func assemble(
         rootOverride: String?,
         clientVersion: String,
@@ -187,7 +222,8 @@ public enum ShellBootstrap {
         closeNotice: CloseNotice = CloseNotice(),
         agentController: (any BackgroundAgentControlling)? = nil,
         commandLineTool: (any CommandLineToolControlling)? = nil,
-        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore()
+        onboardingStore: any OnboardingRecordStore = UserDefaultsOnboardingRecordStore(),
+        notificationPoster: (any NotificationPosting)? = nil
     ) -> LiveShellParts {
         let endpoint = Result { () throws(RootOverrideProblem) -> SocketEndpoint in
             try SocketPathResolver.current(rootOverride: rootOverride)
@@ -214,11 +250,15 @@ public enum ShellBootstrap {
 
             agent: agent)
         model.rootOverrideActive = rootOverrideActive
+        let preferences = AppPreferences()
         return LiveShellParts(
             runtime: ShellRuntime(
                 model: model, closeNotice: closeNotice,
                 commandLineTool: commandLineTool.map { CommandLineToolModel(controller: $0) },
-                onboardingStore: onboardingStore, preferences: AppPreferences()),
+                onboardingStore: onboardingStore, preferences: preferences,
+                notifications: notificationPoster.map {
+                    NotificationModel(poster: $0, preferences: preferences)
+                }),
             link: link,
             engine: engine)
     }
