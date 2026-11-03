@@ -80,11 +80,11 @@ pub fn is_launchd(core: &DaemonCore) -> bool {
 
 /// Whether `signal` starts *Akhir sesi* (spec 0031, *Sinyal per konteks*):
 /// a `SIGTERM` at a launchd daemon with no `daemon.shutdown` accepted
-/// before it. Every other signal, and every signal at a manual daemon, is
+/// before it and no restart plan committed in `stopping`. Every other signal, and every signal at a manual daemon, is
 /// the ordinary stop of spec 0006 and 0010.
 #[must_use]
 pub fn ends_session(core: &DaemonCore, signal: &str) -> bool {
-    signal == "SIGTERM" && is_launchd(core) && !core.shutdown_pending()
+    signal == "SIGTERM" && is_launchd(core) && !core.shutdown_pending() && !core.plan_stopping()
 }
 
 /// Steps 1 to 5 of *Akhir sesi*, counted from `t0`, the instant the

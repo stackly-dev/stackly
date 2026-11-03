@@ -265,6 +265,50 @@ async fn a_cancel_while_the_plan_stops_aborts_it_and_the_daemon_takes_requests_a
     ev.pass();
 }
 
+// Spec 0031, *Sinyal per konteks*: a SIGTERM while the plan is `stopping` is
+// part of the restart and not the end of a login session.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sigterm_while_the_plan_stops_follows_the_restart_and_not_the_end_of_the_session() {
+    let (_scratch, package) = short_stop_package();
+    let mut harness = RestartHarness::on(Site::with_package(&package), Vec::new());
+    let api = harness.start().await;
+    let stuck = create_at(&api, "stuck", "0.4.0", json!({ "ignoreTerm": true })).await;
+    let stuck_pid = pid_of(&api.start_ready(stuck).await);
+    assert!(
+        harness.daemon().signal_ends_session("SIGTERM"),
+        "before the restart a SIGTERM at a launchd daemon is a logout"
+    );
+    api.confirmed_restart()
+        .await
+        .expect("the restart is accepted");
+    let operation = restart_operation(&api).await;
+    api.wait_plan(PlanState::Stopping).await;
+
+    assert!(
+        !harness.daemon().signal_ends_session("SIGTERM"),
+        "a SIGTERM while the plan is stopping follows the plan"
+    );
+    assert!(
+        harness
+            .stop_requested_within(Duration::from_millis(300))
+            .await
+            .is_none(),
+        "nothing ended the plan or asked the daemon to stop"
+    );
+    assert!(alive(stuck_pid), "the stuck process is left alone");
+
+    // An aborted plan leaves the daemon up, and a SIGTERM is a logout again.
+    api.client
+        .call(Call::OperationCancel(CancelOperationParams {
+            operation_id: operation,
+        }))
+        .await
+        .expect("the cancel is accepted");
+    api.wait_plan(PlanState::Aborted).await;
+    assert!(harness.daemon().signal_ends_session("SIGTERM"));
+    harness.stop().await;
+}
+
 // covers: AC-11, AC-14
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stopping_plan_whose_operation_ended_is_closed_aborted_by_the_next_daemon() {

@@ -43,6 +43,15 @@ pub trait RestartHandover: Send + Sync + 'static {
     /// Every instance the plan stops has stopped, and the `daemon_restart`
     /// operation is final.
     fn handed_over(&self);
+
+    /// The plan was committed in `stopping` (spec 0031, *Sinyal per
+    /// konteks*): from here a `SIGTERM` is part of the restart, not the end
+    /// of a login session.
+    fn plan_stopping(&self) {}
+
+    /// The plan closed as aborted and the daemon stays up, so a `SIGTERM`
+    /// is the end of a session again.
+    fn plan_aborted(&self) {}
 }
 
 /// How the plan fared when the operation tried to write it.
@@ -370,6 +379,7 @@ async fn write_plan(
     spec: PlanSpec,
     prepared: oneshot::Sender<PlanPrepared>,
     ctx: &mut OperationContext,
+    handover: &dyn RestartHandover,
 ) -> Result<RestartPlan, WorkError> {
     let unwritten = |prepared: oneshot::Sender<PlanPrepared>, text: String| {
         let _ = prepared.send(PlanPrepared::Failed(text.clone()));
@@ -399,6 +409,7 @@ async fn write_plan(
     );
     match ctx.commit_guarded(guard).await {
         Ok(Guarded::Committed(_)) => {
+            handover.plan_stopping();
             let _ = prepared.send(PlanPrepared::Written(Box::new(plan.clone())));
             Ok(plan)
         }
@@ -458,17 +469,19 @@ async fn restart_steps(
         digest,
         server_instance_id,
     };
-    let mut plan = write_plan(sup, spec, prepared, &mut ctx).await?;
+    let mut plan = write_plan(sup, spec, prepared, &mut ctx, &*handover).await?;
     sup.deps().events.restart_plan(&plan);
 
     // From here on the plan is stored, so a step that ends early, whether
     // by a cancel or an error, closes it as aborted and starts again what
     // it stopped (AC-11). Only a shutdown leaves the plan to the next
     // daemon (AC-14).
+    let closing = Arc::clone(&handover);
     match stop_and_hand_over(sup, &mut plan, &mut ctx, handover).await {
         Err(WorkError::Abandoned) => Err(WorkError::Abandoned),
         Err(error) => {
             abort_plan(sup, &mut plan, ctx.id()).await;
+            closing.plan_aborted();
             Err(error)
         }
         Ok(()) => Ok(WorkOutcome {
