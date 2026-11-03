@@ -17,12 +17,12 @@ struct SettingsAvailabilityTests {
         #expect(SettingsAvailability.isShown(.cleanUpCache) == false)
         #expect(SettingsAvailability.isShown(.communitySources) == false)
         #expect(SettingsAvailability.isShown(.importProviders) == false)
-        #expect(SettingsAvailability.isShown(.notifications) == false)
     }
 
     @Test func theRowsOfThisMilestoneShow() {
         #expect(SettingsAvailability.rows(in: .updates) == [.updateChannel, .telemetry])
-        #expect(SettingsAvailability.rows(in: .instances) == [.autostartNewInstances])
+        #expect(
+            SettingsAvailability.rows(in: .instances) == [.autostartNewInstances, .notifications])
         #expect(SettingsAvailability.rows(in: .sources) == [.catalogSource, .providers])
         #expect(
             SettingsAvailability.rows(in: .storage)

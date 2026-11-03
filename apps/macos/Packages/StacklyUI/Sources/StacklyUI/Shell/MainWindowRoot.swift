@@ -49,6 +49,7 @@ public struct MainWindowRoot: View {
             .frame(minWidth: AppShell.minimumSize.width, minHeight: AppShell.minimumSize.height)
             .environment(runtime.model)
             .environment(runtime.commandLineTool)
+            .environment(runtime.notifications)
             .environment(\.feedbackCenter, feedbackCenter)
             .environment(\.mainWindowKey, windowKey)
             .environment(\.shellDestinationQueue, runtime.destinations)

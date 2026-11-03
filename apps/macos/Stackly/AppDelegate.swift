@@ -62,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The click that launched the app is delivered once the delegate is set, so it goes
+        // before the first event is handled (spec 0032, *Notifikasi*).
+        runtime.notifications.begin()
         runtime.activation.start()
         // A login item launch lives in the menu bar with no window; any other launch, and a
         // launch that cannot be recognized, opens the main window as usual (spec 0032, AC-12).

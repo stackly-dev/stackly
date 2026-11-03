@@ -77,7 +77,7 @@ enum SettingsAvailability {
         Entry(row: .daemon, tab: .general, owner: "features 13 and 30", isBuilt: true),
         Entry(row: .autostartNewInstances, tab: .instances, owner: "feature 32", isBuilt: true),
         Entry(
-            row: .notifications, tab: .instances, owner: "feature 32 milestone 4", isBuilt: false),
+            row: .notifications, tab: .instances, owner: "feature 32", isBuilt: true),
         Entry(row: .catalogSource, tab: .sources, owner: "feature 17", isBuilt: true),
         Entry(row: .providers, tab: .sources, owner: "feature 17", isBuilt: true),
         Entry(row: .dataLocation, tab: .storage, owner: "feature 32", isBuilt: true),
