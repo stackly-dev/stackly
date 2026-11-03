@@ -10,17 +10,21 @@ struct MainWindowAccessor: NSViewRepresentable {
     let windowKey: MainWindowKey
     /// Called with the window right before it closes.
     let windowWillClose: (NSWindow) -> Void
+    /// Called with the window when it is known.
+    var windowDidAttach: (NSWindow) -> Void = { _ in }
 
     func makeNSView(context: Context) -> WindowCloseReportingView {
         let view = WindowCloseReportingView()
         view.windowKey = windowKey
         view.windowWillClose = windowWillClose
+        view.windowDidAttach = windowDidAttach
         return view
     }
 
     func updateNSView(_ view: WindowCloseReportingView, context: Context) {
         view.windowKey = windowKey
         view.windowWillClose = windowWillClose
+        view.windowDidAttach = windowDidAttach
     }
 }
 
@@ -30,6 +34,8 @@ final class WindowCloseReportingView: NSView {
     var windowKey: MainWindowKey?
     /// Called with the window right before it closes.
     var windowWillClose: ((NSWindow) -> Void)?
+    /// Called with the window when it is known.
+    var windowDidAttach: ((NSWindow) -> Void)?
 
     private var observation: (any NSObjectProtocol)?
 
@@ -38,6 +44,7 @@ final class WindowCloseReportingView: NSView {
         stopObserving()
         guard let window else { return }
         windowKey?.track(window)
+        windowDidAttach?(window)
         observation = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,

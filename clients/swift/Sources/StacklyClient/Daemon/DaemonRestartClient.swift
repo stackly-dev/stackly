@@ -86,6 +86,35 @@ public struct DaemonRestartClient: Sendable {
         return accepted
     }
 
+    /// `instance.preview_stop_all`: the instances Stop All would stop, the ones already
+    /// stopping, and the ones the daemon leaves alone. The menu bar shows it before it asks
+    /// to stop (spec 0032, AC-6); it is the same read as ``previewTurnOff()``.
+    ///
+    /// - Throws: ``ClientError``.
+    public func previewStopAll() async throws(ClientError) -> StopAllPreview {
+        try await previewTurnOff()
+    }
+
+    /// `instance.stop_all { expectedInstanceIds }`: stops exactly the instances of the preview
+    /// the person confirmed. The daemon refuses with `instance.stop_all_changed`, before it
+    /// stops anything, when the instances it would stop are not exactly `expectedInstanceIds`
+    /// (spec 0032, AC-7 and AC-8). The answer comes after the operation ended, so it uses the
+    /// long limit; a retry after a lost answer reuses the key and gets the same answer.
+    ///
+    /// - Parameters:
+    ///   - expectedInstanceIds: The IDs of ``StopAllPreview/items``.
+    ///   - idempotencyKey: The key of the action.
+    /// - Throws: ``ClientError``, such as `instance.stop_all_changed`.
+    public func stopAll(
+        expectedInstanceIds: [UUID], idempotencyKey: String
+    ) async throws(ClientError) -> StopAllResult {
+        let params = StopAllParams(expectedInstanceIds: expectedInstanceIds)
+        let reply = try await send(
+            .instanceStopAll(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
+        guard case .instanceStopAll(let result) = reply else { throw Self.unexpectedReply() }
+        return result
+    }
+
     /// A reply of another kind than the call asked for is a broken contract, which the
     /// caller treats as an unknown outcome.
     private static func unexpectedReply() -> ClientError {

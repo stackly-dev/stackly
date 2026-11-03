@@ -126,7 +126,7 @@ struct ShellStructureTests {
         #expect(CloseNotice.title == "Stackly is still running")
         #expect(
             CloseNotice.message
-                == "Closing the window doesn’t stop stacklyd or your instances. Click Stackly in the Dock to reopen it."
+                == "Closing the window doesn’t stop stacklyd or your instances. Use the menu bar icon to reopen it."
         )
         #expect(CloseNotice.displayDuration == .seconds(4))
     }

@@ -24,6 +24,20 @@ struct StacklyApp: App {
         // The app menu bar (spec 0069).
         .commands { StacklyCommands(runtime: appDelegate.runtime) }
 
+        // The menu bar item (spec 0032): a `window` style popover, always inserted while the
+        // app lives, so it keeps the app reachable with no Dock icon.
+        MenuBarExtra {
+            MenuBarPopover(
+                model: appDelegate.runtime.menuBar, actions: appDelegate.menuBarActions
+            )
+            .environment(appDelegate.runtime.model)
+        } label: {
+            MenuBarLabel(
+                model: appDelegate.runtime.menuBar,
+                windowOpener: appDelegate.runtime.windowOpener)
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             SettingsRoot(
                 model: appDelegate.runtime.model, preferences: appDelegate.runtime.preferences,

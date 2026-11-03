@@ -20,6 +20,13 @@ public final class ShellRuntime {
     public let preferences: AppPreferences
     /// Open Stackly at login, read from the OS (spec 0032).
     public let loginItem: LoginItemModel
+    /// Moves the app between `regular` and `accessory` as its windows open and close
+    /// (spec 0032, AC-11). The app delegate starts it at launch.
+    public let activation: ActivationPolicyController
+    /// What the menu bar popover asks the main window to show (spec 0032, AC-3).
+    public let destinations: ShellDestinationQueue
+    /// The menu bar item and its popover (spec 0032).
+    public let menuBar: MenuBarModel
     private var observers: [any NSObjectProtocol] = []
     private let activity: ShellActivity
     private var activityToken: (any NSObjectProtocol)?
@@ -46,6 +53,9 @@ public final class ShellRuntime {
         self.model = model
         self.preferences = preferences
         self.loginItem = loginItem
+        activation = ActivationPolicyController()
+        destinations = ShellDestinationQueue()
+        menuBar = MenuBarModel(daemon: model)
         self.closeNotice = closeNotice
         self.commandLineTool = commandLineTool
         onboarding = OnboardingModel(store: onboardingStore)
@@ -112,6 +122,8 @@ public final class ShellRuntime {
     /// The main window is about to close: show the notice the first time,
     /// unless the app quits.
     public func mainWindowWillClose(isTerminating: Bool, screen: NSScreen?) {
+        // The windows a login item launch closes are not the person's doing.
+        guard activation.isClosingForLaunch == false else { return }
         closeNotice.mainWindowWillClose(isTerminating: isTerminating, screen: screen)
     }
 }
