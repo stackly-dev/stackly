@@ -31,6 +31,20 @@ struct FixtureShellTests {
         .agentEnabled: "Can’t connect to stacklyd.",
         .agentNotFound: "Can’t connect to stacklyd.",
         .agentUnavailable: "Can’t connect to stacklyd.",
+        .menubarNormal: nil,
+        .menubarFailed: nil,
+        .menubarOfflineLastKnown: "Can’t connect to stacklyd.",
+        .menubarMany: nil,
+        .menubarEmpty: nil,
+        .menubarStopPreview: nil,
+        .menubarStopPartial: nil,
+        .settingsGeneral: nil,
+        .settingsInstancesDenied: nil,
+        .settingsSources: nil,
+        .settingsStorageCustom: nil,
+        .settingsUpdates: nil,
+        .settingsOffline: "Can’t connect to stacklyd.",
+        .settingsConflict: nil,
     ]
 
     /// The window banner of each unreachable scenario at `FixtureClock.now`: the row of the

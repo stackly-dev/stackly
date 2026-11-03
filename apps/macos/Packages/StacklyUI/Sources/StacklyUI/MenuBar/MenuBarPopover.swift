@@ -49,6 +49,7 @@ public struct MenuBarPopover: View {
 
     private let model: MenuBarModel
     private let actions: MenuBarActions
+    private let clearsFinishedStopAll: Bool
     @Environment(\.openSettings) private var openSettings
     @State private var mainWindowIsOpen = false
 
@@ -57,8 +58,15 @@ public struct MenuBarPopover: View {
     ///   - model: The menu bar model.
     ///   - actions: What the popover asks of the windows.
     public init(model: MenuBarModel, actions: MenuBarActions) {
+        self.init(model: model, actions: actions, clearsFinishedStopAll: true)
+    }
+
+    /// Creates the popover. A snapshot passes `false` to draw a finished Stop All, which the
+    /// popover otherwise drops when it opens again.
+    init(model: MenuBarModel, actions: MenuBarActions, clearsFinishedStopAll: Bool) {
         self.model = model
         self.actions = actions
+        self.clearsFinishedStopAll = clearsFinishedStopAll
     }
 
     /// The popover.
@@ -75,7 +83,7 @@ public struct MenuBarPopover: View {
         .frame(width: Self.width)
         .onAppear {
             mainWindowIsOpen = actions.isMainWindowOpen()
-            model.clearFinishedStopAll()
+            if clearsFinishedStopAll { model.clearFinishedStopAll() }
         }
     }
 

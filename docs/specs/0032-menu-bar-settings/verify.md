@@ -211,3 +211,36 @@ Langkah build 12. Bagian AC yang belum: izin notifikasi sungguhan di macOS (dan 
 - **Klik dan jendela.** Klik memanggil `WindowOpener.openMain()` dan `NSApplication.activate()`. Sesudah penggabungan dengan milestone 3, klik memanggil `ActivationPolicyController.prepareToShowWindow()` sebelum `openMain()`, jadi app kembali `regular` dan aktif walau jendela terakhir sudah ditutup (AC-11).
 - **Pemakaian bersama dengan milestone 3.** `ShellRuntime`, `AppDelegate`, `AppShell`, dan `MainWindowRoot` mendapat diff kecil (parameter `notifications`, `applicationDidFinishLaunching`, `.onChange` untuk `pending`, `.environment`). Kalau `dev-f32-m3-s9` atau sesi menu bar menyentuh file yang sama, gabungkan keduanya.
 - **Fixture.** Runtime fixture tidak memasang model notifikasi (`notifications: nil` memakai model inert yang tidak pernah mengirim), jadi tidak ada notifikasi saat scenario berjalan.
+
+## Milestone 5: Tampilan dan bukti
+
+Langkah build 13 (fixture dan snapshot) dikerjakan. Langkah 14 (bukti manual di Mac ini) dicatat saja dan tidak dijalankan: user melewati langkah manual GUI, dan Open Stackly at login `BLOCKED`.
+
+### UI / manual
+
+- [x] Buka `Sources/StacklyUI/Fixtures/FixtureScenario+MenuBarSettings.swift` → empat belas scenario *Fixture* spec dengan nama tetap: `menubar-normal`, `menubar-failed`, `menubar-offline-last-known`, `menubar-many` (12 instance), `menubar-empty`, `menubar-stop-preview` (dengan already stopping dan dua yang dilewati), `menubar-stop-partial` (dua gagal), `settings-general`, `settings-instances-denied`, `settings-sources`, `settings-storage-custom` (lokasi kustom, lokasi lama, satu tidak terjangkau), `settings-updates`, `settings-offline`, dan `settings-conflict` → AC-26
+- [x] Buka `Fixtures/ShellBootstrap+Fixture.swift` → scenario memakai suite `UserDefaults` sendiri dan `FakeNotificationPoster`, jadi tidak membaca atau menulis defaults app dan tidak meminta izin ke macOS → AC-26, AC-22
+- [x] Buka `Tests/StacklyUITests/SnapshotTests/__Snapshots__/MenuBarSnapshotTests/` dan `SettingsSnapshotTests/` → 28 PNG, satu light dan satu dark per scenario, sudah ditinjau satu per satu bentuknya (popover 340 pt, tab Settings 560 × 440 pt) → AC-26
+- [ ] Izin notifikasi sungguhan (izinkan lalu tolak) → `BLOCKED` untuk sesi ini: langkah manual dilewati user, dialog izin sistem tidak dipicu. Perilaku izin dibuktikan oleh `FakeNotificationPoster` di milestone 4 dan snapshot `settings-instances-denied` → AC-22
+- [ ] Menu bar light dan dark di bar sungguhan, termasuk item yang dilarang di System Settings > Menu Bar (jendela utama tetap terbuka dari Finder atau Launchpad lewat `applicationShouldHandleReopen`) → dilewati user (app tidak dibuka) → AC-1
+- [ ] Quit Stackly saat instance berjalan (daemon, instance, dan operasi tetap hidup, `stackly daemon status` sehat, tidak ada request saat Quit) → dilewati user (app tidak dibuka) → AC-10
+- [ ] Open Stackly at login sungguhan, dan peluncuran login item tanpa jendela → `BLOCKED`, reason `no code signing identity on this Mac (OQ-012)` → AC-11, AC-12
+
+### Commands
+
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "MenuBarSnapshotTests|SettingsSnapshotTests"` → 14 test, 28 gambar light dan dark cocok dengan referensi, dijalankan dua kali berturut turut tanpa beda → AC-26
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → katalog 35 scenario dengan nama tetap, setiap scenario baru berhenti di presence yang diharapkan (offline di dua scenario, terhubung di sisanya), dan setiap DTO round trip → AC-26
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` penuh, `xcrun swift-format lint --strict`, dan `cargo xtask build-app` → lihat laporan untuk angka dan test yang dikenal flaky
+
+### Acceptance-criteria coverage
+
+- AC-26 · empat belas scenario dan 28 snapshot light dan dark; popover dan tab Settings mengikuti spec dan mockup kecuali *Selisih mockup yang disengaja*
+- AC-1, AC-10, AC-11, AC-12, AC-22 · sisi manual dicatat (dilewati atau `BLOCKED`) di atas; sisi kodenya dibuktikan di milestone 3 dan 4
+
+### Catatan
+
+- **Bentuk scenario.** Scenario Settings menjawab `settings.get` dan `storage.list_locations` lewat `replies`; `settings-conflict` menjawab `settings.update` dengan `resource.revision_mismatch`, dan snapshot nya diambil sesudah `SettingsStore.apply`. `settings-instances-denied` memakai izin `denied` dengan toggle menyala lewat dua field baru di `FixtureScenario` (`notificationPermission`, `notificationsEnabled`).
+- **Popover.** `MenuBarPopover` mendapat init internal dengan `clearsFinishedStopAll`, supaya snapshot hasil Stop All tidak dihapus oleh `onAppear` yang membersihkan hasil lama saat popover dibuka lagi.
+- **Tinggi snapshot Settings.** Tab digambar dalam ukuran jendela (560 × 440), jadi tab Storage yang lebih panjang terpotong di bawah seperti pada jendela sebelum di-scroll.
+- **Perubahan di luar Fixtures.** `FixtureScenarioTests` dan `FixtureShellTests` menambah nama dan judul banner scenario baru (katalog spec 0068 dipin di sana).
+
