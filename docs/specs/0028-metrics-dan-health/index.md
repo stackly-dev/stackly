@@ -236,10 +236,10 @@ Semua bisa diperpendek lewat `SupervisorConfig` dan `DataUsageConfig` untuk test
 | 10 instance fake idle 5 menit, dengan dan tanpa client, dan dengan satu PostgreSQL, pada `stacklyd` build release (`cargo test --release`) | evidence run, `apps/daemon/tests/metrics_nfr003.rs` | **AC-14** |
 | PostgreSQL 17 dan NATS native | `apps/daemon/tests/` native | **AC-4**, **AC-15** |
 
-Dua cara ukur yang dipakai saat build, tanpa mengubah teks AC:
+Dua cara ukur yang dipakai saat build, sebagaimana diputuskan lead; teks AC sendiri tidak diubah:
 
-- **AC-14** diukur pada `stacklyd` build release, karena build itu yang dikirim. `cargo test` tanpa `--release` memakai `target/debug/stacklyd` tanpa optimasi, dan run 2 di build itu (1,02 sampai 1,14 persen) gagal hanya karena profil build; build release lulus ketiga run. Harness menulis `profile=debug|release` di baris hasil dan catatan record (keputusan lead 2026-11-02).
-- **AC-15**, bagian wake: test wake menjalankan supervisor core di dalam proses dengan clock palsu, bukan `stacklyd` in process, karena `DaemonConfig` belum punya seam clock. Logika wake ada di core, dan daemon hanya menyambungkan clock asli, jadi lead menilai bagian ini terpenuhi (2026-11-02). Seam clock ada di Follow-up.
+- Cara ukur AC-14: diukur pada `stacklyd` build release, karena build itu yang dikirim. `cargo test` tanpa `--release` memakai `target/debug/stacklyd` tanpa optimasi, dan run 2 di build itu (1,02 sampai 1,14 persen) gagal hanya karena profil build; build release lulus ketiga run. Harness menulis `profile=debug|release` di baris hasil dan catatan record (keputusan lead 2026-11-02).
+- Bagian wake AC-15: test wake menjalankan supervisor core di dalam proses dengan clock palsu, bukan `stacklyd` in process, karena `DaemonConfig` belum punya seam clock. Logika wake ada di core, dan daemon hanya menyambungkan clock asli, jadi lead menilai bagian ini terpenuhi (2026-11-02). Seam clock ada di Follow-up.
 
 ### Usulan update untuk spec lain
 
