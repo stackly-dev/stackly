@@ -9,16 +9,22 @@ public struct SettingsRoot: View {
     private let model: DaemonModel
     private let preferences: AppPreferences
     private let loginItem: LoginItemModel
+    private let notifications: NotificationModel
 
     /// Creates the Settings content.
     /// - Parameters:
     ///   - model: The daemon model the app holds for the whole launch.
     ///   - preferences: The choices that belong to this Mac, such as Appearance.
     ///   - loginItem: Open Stackly at login, read from the OS.
-    public init(model: DaemonModel, preferences: AppPreferences, loginItem: LoginItemModel) {
+    ///   - notifications: The notification model, for the Notifications row.
+    public init(
+        model: DaemonModel, preferences: AppPreferences, loginItem: LoginItemModel,
+        notifications: NotificationModel
+    ) {
         self.model = model
         self.preferences = preferences
         self.loginItem = loginItem
+        self.notifications = notifications
     }
 
     /// The Settings content.
@@ -28,7 +34,8 @@ public struct SettingsRoot: View {
                 GeneralSettingsTab(loginItem: loginItem)
             }
             Tab(SettingsTab.instances.title, systemImage: SettingsTab.instances.symbol) {
-                InstancesSettingsTab(model: model)
+                InstancesSettingsTab(
+                    model: model, notifications: notifications, preferences: preferences)
             }
             Tab(SettingsTab.sources.title, systemImage: SettingsTab.sources.symbol) {
                 SourcesSettingsTab(model: model)

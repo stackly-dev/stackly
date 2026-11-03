@@ -25,6 +25,7 @@ public struct AppShell: View {
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
+    @Environment(NotificationModel.self) private var notifications: NotificationModel?
 
     private let presentation: ShellPresentation
     private let diagnostics: ConnectionDiagnostics
@@ -161,6 +162,12 @@ public struct AppShell: View {
         }
         .onAppear {
             connectNewInstance()
+        }
+        // A click on a notification asks for a page; the window shows it (spec 0032 AC-22).
+        .onChange(of: notifications?.pending?.id, initial: true) {
+            if let destination = notifications?.takePending() {
+                navigator.show(destination)
+            }
         }
         .task(id: runtimes.map(ObjectIdentifier.init)) {
             await showFinishedInstalls()

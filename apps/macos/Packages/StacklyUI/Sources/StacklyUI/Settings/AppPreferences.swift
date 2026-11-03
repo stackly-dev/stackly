@@ -32,6 +32,18 @@ public final class AppPreferences {
     /// The `UserDefaults` key of ``appearance``.
     public static let appearanceKey = "stackly.appearance"
 
+    /// The `UserDefaults` key of ``notificationsEnabled``.
+    public static let notificationsKey = "stackly.notificationsEnabled"
+
+    /// Whether Stackly may send notifications (spec 0032 AC-22). Off until the person turns it
+    /// on; macOS permission is a separate question the notification model asks.
+    public var notificationsEnabled: Bool {
+        didSet {
+            guard notificationsEnabled != oldValue else { return }
+            defaults.set(notificationsEnabled, forKey: Self.notificationsKey)
+        }
+    }
+
     /// The chosen appearance. Setting it saves it and applies it to every window of the app.
     public var appearance: Appearance {
         didSet {
@@ -56,6 +68,7 @@ public final class AppPreferences {
         self.defaults = defaults
         self.apply = apply
         appearance = saved ?? .system
+        notificationsEnabled = defaults.bool(forKey: Self.notificationsKey)
         apply(appearance)
     }
 

@@ -191,6 +191,19 @@ import Testing
             ]
         ),
         Rule(
+            name: "UserNotifications outside the Notifications folder (spec 0032 AC-22)",
+            patterns: [#"\bimport UserNotifications\b"#, #"\bUNUserNotificationCenter\b"#],
+            allowed: [stacklyUI + "Notifications/"],
+            forbiddenExamples: [
+                "import UserNotifications",
+                "let center = UNUserNotificationCenter.current()",
+            ],
+            allowedExamples: [
+                "let poster = UserNotificationPoster()",
+                "await notifications.refreshPermission()",
+            ]
+        ),
+        Rule(
             name: "registering or relaunching the agent outside the Agent folder (spec 0015 AC-11)",
             patterns: [#"\.(register|unregister|relaunch)\(\)"#],
             allowed: [stacklyUI + "Agent/"],
