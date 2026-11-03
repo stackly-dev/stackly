@@ -415,6 +415,10 @@ async fn layout(
 ) -> Result<(jiff::Timestamp, InstancePaths), WorkError> {
     let now = ctx.platform().clock().now();
     let handle = ctx.claim_resource().await?;
+    // From here on the paths of the instance resolve in the locations it is
+    // created in, also when the default changes before the commit.
+    let (data, logs) = resolved.locations;
+    ctx.layout().locations().note_instance(id, data, logs);
     let manifest = manifest_of(resolved, id, ctx.id(), now);
     let platform = Arc::clone(ctx.platform());
     let prepared = Arc::clone(ctx.layout());
@@ -426,7 +430,7 @@ async fn layout(
                 .known_instance_ids()
                 .map(|known| known.value)
                 .map_err(|error| failed(SupervisorError::Registry(error)))?;
-            let planned = prepared.layout().instance_paths(id);
+            let planned = prepared.instance_paths(id);
             check_owned_path(&platform, &prepared, &planned.root)
                 .map_err(|error| failed(unavailable(&prepared, &planned.root, &error)))?;
             let paths = match create_instance_layout(&platform, &prepared, &manifest, &known) {
@@ -507,11 +511,10 @@ fn overlap(
     id: InstanceId,
     paths: &InstancePaths,
 ) -> Option<LayoutFault> {
-    let layout = prepared.layout();
     for other in known.iter().copied().filter(|other| *other != id) {
         for root in [
-            layout.instance_paths(other).data,
-            layout.retained_instance_paths(other).data,
+            prepared.instance_paths(other).data,
+            prepared.retained_instance_paths(other).data,
         ] {
             if platform
                 .fs()
@@ -576,21 +579,31 @@ async fn register(
     let handle = ctx
         .record_custom_intent(INSTANCE_REGISTRATION, registration_key(id), None)
         .await?;
-    let instance = Instance::new(NewInstance {
-        id,
-        name: resolved.name.clone(),
-        display_name: resolved.display_name.clone(),
-        provider_revision: resolved.package.key().clone(),
-        software: resolved.runtime.software().clone(),
-        runtime_id: resolved.runtime.id(),
-        data_line: resolved.runtime.line().clone(),
-        data_version: resolved.runtime.version().clone(),
-        endpoints: resolved.endpoints.clone(),
-        startup: resolved.startup,
-        created_at: now,
-        created_by: ctx.id(),
-    })
-    .map_err(|error| internal(&error.to_string()))?;
+    // The startup policy is the default setting unless the draft names one,
+    // and the setting is read inside the guarded commit, so the instance is
+    // built there (spec 0032, AC-18).
+    let operation = ctx.id();
+    let build = {
+        let resolved = resolved.clone();
+        move |startup| {
+            Instance::new(NewInstance {
+                id,
+                name: resolved.name.clone(),
+                display_name: resolved.display_name.clone(),
+                provider_revision: resolved.package.key().clone(),
+                software: resolved.runtime.software().clone(),
+                runtime_id: resolved.runtime.id(),
+                data_line: resolved.runtime.line().clone(),
+                data_version: resolved.runtime.version().clone(),
+                endpoints: resolved.endpoints.clone(),
+                startup,
+                created_at: now,
+                created_by: operation,
+            })
+        }
+    };
+    let instance = build(resolved.startup.unwrap_or(StartupPolicy::Manual))
+        .map_err(|error| internal(&error.to_string()))?;
     let values = ConfigValuesJson::new(resolved.settings.to_json().to_string())
         .map_err(|error| internal(&error.to_string()))?;
     let config = ConfigRevisionRecord::first(
@@ -607,16 +620,35 @@ async fn register(
         .map(|plan| (plan.field.clone(), plan.reference.clone()))
         .collect::<std::collections::BTreeMap<SecretFieldName, SecretRef>>();
 
+    let created: Arc<std::sync::Mutex<Option<Instance>>> = Arc::default();
     let guard: CommitGuard = {
         let resolved = resolved.clone();
-        let instance = instance.clone();
+        let created = Arc::clone(&created);
         Box::new(move |view| {
             Ok(match recheck(view, &resolved, id, pinned) {
                 Err(error) => GuardDecision::Refuse(Box::new(error)),
                 Ok(record) => {
+                    let startup = match resolved.startup {
+                        Some(startup) => startup,
+                        None => view.daemon_settings()?.default_startup,
+                    };
+                    let Ok(instance) = build(startup) else {
+                        return Ok(GuardDecision::Refuse(Box::new(
+                            CreateError::SettingsInvalid,
+                        )));
+                    };
+                    *created
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some(instance.clone());
+                    let (data, logs) = resolved.locations;
                     let mut ops = Vec::new();
                     ops.extend(record.map(WriteOp::InsertProviderRevision));
-                    ops.push(WriteOp::InsertInstance(instance));
+                    ops.push(WriteOp::InsertInstanceAt {
+                        instance,
+                        data,
+                        logs,
+                    });
                     ops.push(WriteOp::InsertConfigRevision(config));
                     ops.push(WriteOp::ReplaceSecretUses {
                         user: SecretUser::Instance(id),
@@ -640,6 +672,11 @@ async fn register(
         }
         Err(other) => return Err(other),
     }
+    let instance = created
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+        .unwrap_or(instance);
     deps.supervisor.note_created(&instance);
     ctx.confirm_created(handle).await?;
     Ok(instance)
@@ -837,7 +874,7 @@ pub fn encode_input(
             "settings": settings,
             "secrets": secrets,
             "start": draft.start,
-            "startup": draft.startup.as_code(),
+            "startup": draft.startup.map(StartupPolicy::as_code),
         })
         .to_string()
     };
@@ -964,7 +1001,6 @@ fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
         startup: value
             .get("startup")
             .and_then(serde_json::Value::as_str)
-            .and_then(|code| code.parse().ok())
-            .unwrap_or(StartupPolicy::Manual),
+            .and_then(|code| code.parse().ok()),
     })
 }

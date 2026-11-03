@@ -5,8 +5,9 @@ use std::fmt;
 
 use crate::id::{
     EnvironmentId, InstanceId, LeaseId, OperationId, ProviderSourceId, RestartPlanId, RuntimeId,
-    ShortKey,
+    ShortKey, StorageLocationId,
 };
+use crate::location::LocationKind;
 use crate::operation::StepSeq;
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::Generation;
@@ -57,6 +58,11 @@ pub enum ResourceRef {
     Session(SessionId),
     /// The session table as a whole, which a prune writes (spec 0031).
     Sessions,
+    /// The one row of daemon settings (spec 0032). It has no resource kind
+    /// on the wire.
+    DaemonSettings,
+    /// A storage location (spec 0032). It has no resource kind on the wire.
+    StorageLocation(StorageLocationId),
 }
 
 /// Why a resource cannot be deleted by the op that tried.
@@ -112,6 +118,8 @@ impl fmt::Display for ResourceRef {
             Self::RestartPlan(id) => write!(f, "restart plan {id}"),
             Self::Session(id) => write!(f, "session {id}"),
             Self::Sessions => f.write_str("the session table"),
+            Self::DaemonSettings => f.write_str("the daemon settings"),
+            Self::StorageLocation(id) => write!(f, "storage location {id}"),
         }
     }
 }
@@ -191,6 +199,15 @@ pub enum RegistryError {
         name: InstanceName,
         /// The instance that has it.
         existing: InstanceId,
+    },
+    /// A default location, or the location of an instance, has another kind
+    /// than the one it is used for (spec 0032).
+    #[error("{location} does not hold {expected}")]
+    WrongLocationKind {
+        /// The location.
+        location: ResourceRef,
+        /// The kind it should have.
+        expected: LocationKind,
     },
     /// A secret reference still has uses, so it cannot be deleted (spec
     /// 0011). `used_by` lists every one, environments before instances,

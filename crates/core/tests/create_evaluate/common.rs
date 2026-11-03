@@ -238,7 +238,7 @@ impl Site {
             secrets: Vec::new(),
             secret_values: Vec::new(),
             start: false,
-            startup: stackly_domain::StartupPolicy::Manual,
+            startup: Some(stackly_domain::StartupPolicy::Manual),
         }
     }
 

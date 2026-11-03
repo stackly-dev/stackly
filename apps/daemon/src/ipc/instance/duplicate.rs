@@ -48,10 +48,21 @@ pub fn get_duplicate_form(
         let registry = registry_of(core)?;
         let runtime = crate::ipc::runtime::summary_of_runtime(core, &registry, &runtime).await?;
         let capabilities = map::create::capabilities(&built.form.capabilities);
+        let locations = {
+            let registry = registry.clone();
+            let prepared = core.prepared().clone();
+            tokio::task::spawn_blocking(move || {
+                stackly_core::instance::create::form_locations(&registry, &prepared)
+            })
+            .await
+            .map_err(|_| unexpected("the duplicate form task failed"))?
+            .map_err(|error| Box::new(map::registry_error(&error)))?
+        };
         Ok::<_, Box<ErrorBody>>(Box::new(map::duplicate::duplicate_form(
             &built,
             runtime,
             capabilities,
+            &locations,
         )))
     })
 }

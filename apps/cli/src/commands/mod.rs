@@ -12,6 +12,8 @@ pub mod operation;
 pub mod provider;
 pub mod runtime;
 pub mod secret;
+pub mod settings;
+pub mod storage;
 
 use std::future::Future;
 

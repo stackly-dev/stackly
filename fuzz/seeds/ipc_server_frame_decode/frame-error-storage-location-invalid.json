@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000d12",
+    "error": {
+      "code": "storage.location_invalid",
+      "category": "invalid_input",
+      "message": "Choose a folder on a disk inside this Mac. External disks aren’t supported yet.",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": null,
+      "details": [
+        {
+          "key": "rule",
+          "value": "not_internal_volume"
+        },
+        {
+          "key": "path",
+          "value": "/Volumes/Backup"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

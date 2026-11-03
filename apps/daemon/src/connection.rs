@@ -1323,6 +1323,34 @@ async fn dispatch(
                 .map(Reply::StorageGetCapacity),
             None,
         ),
+        Call::SettingsGet => (
+            guarded(core, handlers, context, |h, c, x| h.get_settings(c, x))
+                .await
+                .map(Reply::SettingsGet),
+            None,
+        ),
+        Call::SettingsUpdate(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.update_settings(c, x, p)
+            })
+            .await
+            .map(Reply::SettingsUpdate),
+            None,
+        ),
+        Call::StorageListLocations => (
+            guarded(core, handlers, context, |h, c, x| h.list_locations(c, x))
+                .await
+                .map(Reply::StorageListLocations),
+            None,
+        ),
+        Call::StorageSetLocation(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.set_location(c, x, p)
+            })
+            .await
+            .map(Reply::StorageSetLocation),
+            None,
+        ),
         Call::RuntimeInstall(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.install_runtime(c, x, p)

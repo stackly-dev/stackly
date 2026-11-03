@@ -78,7 +78,7 @@ pub fn prepare_terminal(
             &action.title,
             &map::detail::open_command(command),
         );
-        let temp = core.prepared().layout().instance_paths(instance.id()).temp;
+        let temp = core.prepared().instance_paths(instance.id()).temp;
         let path = temp.join(format!("open-{}.command", params.action));
         let target = path.clone();
         tokio::task::spawn_blocking(move || write_script(&target, script.as_bytes()))

@@ -83,7 +83,11 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .instanceLogsFollow = $0 { true } else { false } })
         #expect(methods.contains { if case .instanceLogsUnfollow = $0 { true } else { false } })
         #expect(methods.contains(.daemonRestartPreview))
-        #expect(Set(methods.map(\.methodName)).count == 53)
+        #expect(methods.contains(.settingsGet))
+        #expect(methods.contains { if case .settingsUpdate = $0 { true } else { false } })
+        #expect(methods.contains(.storageListLocations))
+        #expect(methods.contains { if case .storageSetLocation = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 57)
     }
 
     private func check<Value: Codable & Equatable>(

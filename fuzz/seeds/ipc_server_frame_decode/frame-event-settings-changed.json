@@ -1,0 +1,16 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 140,
+    "at": "2026-11-03T08:00:00.000Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "settings.changed",
+      "content": {
+        "revision": 4
+      }
+    }
+  }
+}

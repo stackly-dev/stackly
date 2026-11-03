@@ -26,7 +26,7 @@ use crate::provider::ValidatedPackage;
 /// entry is already there.
 fn fill_cache(env: &Env, plan: &Plan, cache_file: &Path) -> Result<(), InstallError> {
     let fs = env.platform.fs();
-    let paths = CachePaths::new(&env.layout.layout().downloads_dir(), &plan.sha256);
+    let paths = CachePaths::new(&env.downloads, &plan.sha256);
     let io = |op: &'static str| InstallError::Io { op, root: "cache" };
     if fs
         .symlink_metadata(&paths.entry)
@@ -97,6 +97,7 @@ pub fn install_cached_artifact(
         Plan::from_input(&input).map_err(|error| InstallError::Internal(error.to_string()))?;
     let env = Env {
         platform: Arc::new(platform.clone()),
+        downloads: layout.downloads_dir(),
         layout: Arc::new(layout.clone()),
         policy: DownloadPolicy::default(),
     };

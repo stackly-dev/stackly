@@ -4,8 +4,8 @@
 
 use stackly_domain::Os;
 use stackly_domain::{
-    DetailKey, ErrorCodeName, FailureItem, InstanceId, InstanceLifecycle, Pid, RegistryError,
-    ResourceRevision,
+    DetailKey, ErrorCodeName, FailureItem, InstanceId, InstanceLifecycle, LocationKind,
+    LocationRule, Pid, RegistryError, ResourceRevision,
 };
 use stackly_platform::ProcessError;
 
@@ -176,6 +176,24 @@ pub enum SupervisorError {
         path: String,
         /// Why.
         reason: String,
+    },
+    /// The folder of the data or log location the instance lives in is gone
+    /// (spec 0032, AC-20).
+    #[error("the folder of the {} location is missing", kind.as_code())]
+    StorageLocationMissing {
+        /// Which location.
+        kind: LocationKind,
+        /// Its folder.
+        path: String,
+    },
+    /// The daemon cannot write to the folder of a storage location (spec
+    /// 0032, AC-20).
+    #[error("{}", rule.sentence())]
+    LocationUnusable {
+        /// The rule it breaks.
+        rule: LocationRule,
+        /// Its folder.
+        path: String,
     },
     /// `preflight` answered anything but `Compatible`.
     #[error("the data does not fit the runtime: {outcome}")]
@@ -404,6 +422,8 @@ impl OperationError for SupervisorError {
             Self::ConfigInvalid { .. } => codes::CONFIG_INVALID,
             Self::ExecutableInvalid { .. } => codes::EXECUTABLE_INVALID,
             Self::DataUnavailable { .. } => codes::DATA_UNAVAILABLE,
+            Self::StorageLocationMissing { .. } => crate::settings::STORAGE_LOCATION_MISSING,
+            Self::LocationUnusable { .. } => crate::settings::LOCATION_INVALID,
             Self::DataIncompatible { .. } => codes::DATA_INCOMPATIBLE,
             Self::ReadinessTimeout { .. } => codes::READINESS_TIMEOUT,
             Self::RetryBudgetExhausted { .. } => codes::RETRY_BUDGET_EXHAUSTED,
@@ -500,6 +520,14 @@ impl OperationError for SupervisorError {
             Self::DataUnavailable { path, reason } => {
                 vec![(key("path"), path.clone()), (key("reason"), reason.clone())]
             }
+            Self::StorageLocationMissing { kind, path } => vec![
+                (key("kind"), kind.as_code().to_owned()),
+                (key("path"), path.clone()),
+            ],
+            Self::LocationUnusable { rule, path } => vec![
+                (key("rule"), rule.as_code().to_owned()),
+                (key("path"), path.clone()),
+            ],
             Self::DataIncompatible {
                 outcome,
                 data,

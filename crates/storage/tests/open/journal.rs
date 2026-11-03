@@ -65,6 +65,8 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
             && table != "compatibility_records"
             && !table.starts_with("daemon_restart_plan")
             && table != "daemon_sessions"
+            && table != "daemon_settings"
+            && table != "storage_locations"
             && !table.starts_with("secret_")
     };
     let mut before = row_counts(&harness.connect());

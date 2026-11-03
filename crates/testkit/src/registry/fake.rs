@@ -12,18 +12,18 @@ use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
     ConfigRevisionId, ConfigRevisionRecord, ConfigRevisionStatus, CreatedRecord, CreatedSeq,
-    DaemonSession, EndpointRequests, Environment, EnvironmentId, Generation, GuardDecision,
-    GuardView, Guarded, IdempotencyKey, InstallMode, Instance, InstanceFilter, InstanceId,
-    InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep, JournalView, Lease,
-    LeaseFilter, LeaseHolder, LeaseId, LeaseState, LockKey, NotDeletableReason, Operation,
-    OperationCursor, OperationId, OperationJournal, OperationPage, OperationQuery,
-    OperationResource, OperationState, Ownership, PlatformStoreKey, ProcessObservation,
-    ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind,
-    ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision,
-    RestartPlan, RestartPlanId, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences,
-    SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView,
-    SecretStatus, SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq, Versioned, WriteBatch,
-    WriteOp,
+    DaemonSession, DaemonSettings, EndpointRequests, Environment, EnvironmentId, Generation,
+    GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance, InstanceFilter,
+    InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep, JournalView,
+    Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind, LockKey,
+    NotDeletableReason, Operation, OperationCursor, OperationId, OperationJournal, OperationPage,
+    OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
+    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId,
+    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef,
+    ResourceRevision, RestartPlan, RestartPlanId, RetentionPolicy, Runtime, RuntimeId,
+    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
+    SecretReferenceView, SecretStatus, SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq,
+    StorageLocation, StorageLocationId, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -228,6 +228,14 @@ impl GuardView for StateView<'_> {
 
     fn latest_session(&self) -> Result<Option<DaemonSession>, RegistryError> {
         Ok(self.state.recent_sessions(1).into_iter().next())
+    }
+
+    fn daemon_settings(&self) -> Result<DaemonSettings, RegistryError> {
+        Ok(self.state.settings.clone())
+    }
+
+    fn storage_locations(&self) -> Result<Vec<StorageLocation>, RegistryError> {
+        Ok(self.state.ordered_locations())
     }
 }
 
@@ -487,6 +495,18 @@ impl Registry for FakeRegistry {
 
     fn recent_sessions(&self, limit: u32) -> Result<Versioned<Vec<DaemonSession>>, RegistryError> {
         self.read(|state| Ok(state.recent_sessions(limit)))
+    }
+
+    fn daemon_settings(&self) -> Result<Versioned<DaemonSettings>, RegistryError> {
+        self.read(|state| Ok(state.settings.clone()))
+    }
+
+    fn storage_locations(&self) -> Result<Versioned<Vec<StorageLocation>>, RegistryError> {
+        self.read(|state| Ok(state.ordered_locations()))
+    }
+
+    fn location_usage(&self) -> Result<Versioned<Vec<(StorageLocationId, u64)>>, RegistryError> {
+        self.read(|state| Ok(state.location_usage()))
     }
 
     fn latest_restart_plan(&self) -> Result<Versioned<Option<RestartPlan>>, RegistryError> {
@@ -754,6 +774,8 @@ struct State {
     secret_uses: BTreeSet<SecretUse>,
     restart_plans: BTreeMap<RestartPlanId, RestartPlan>,
     sessions: BTreeMap<SessionId, DaemonSession>,
+    settings: DaemonSettings,
+    locations: BTreeMap<StorageLocationId, StorageLocation>,
     written: HashMap<ResourceRef, WrittenAt>,
 }
 
@@ -784,6 +806,14 @@ impl State {
             secret_uses: BTreeSet::new(),
             restart_plans: BTreeMap::new(),
             sessions: BTreeMap::new(),
+            settings: DaemonSettings::initial(Timestamp::UNIX_EPOCH),
+            locations: LocationKind::ALL
+                .iter()
+                .map(|kind| {
+                    let location = StorageLocation::built_in(*kind, Timestamp::UNIX_EPOCH);
+                    (location.id(), location)
+                })
+                .collect(),
             written: HashMap::new(),
         }
     }
@@ -799,9 +829,46 @@ impl State {
             WriteOp::UpdateRuntime { runtime, expected } => {
                 self.write_runtime(runtime, Some(expected), now)
             }
-            WriteOp::InsertInstance(instance) => self.write_instance(instance, None, now),
+            WriteOp::InsertInstance(instance) => {
+                let pair = (self.settings.data_location, self.settings.logs_location);
+                self.write_instance(instance, None, Some(pair), now)
+            }
+            WriteOp::InsertInstanceAt {
+                instance,
+                data,
+                logs,
+            } => {
+                self.check_kind(data, LocationKind::Data)?;
+                self.check_kind(logs, LocationKind::Logs)?;
+                self.write_instance(instance, None, Some((data, logs)), now)
+            }
             WriteOp::UpdateInstance { instance, expected } => {
-                self.write_instance(instance, Some(expected), now)
+                self.write_instance(instance, Some(expected), None, now)
+            }
+            WriteOp::UpdateDaemonSettings {
+                patch,
+                expected,
+                at,
+            } => {
+                self.expect_settings_revision(expected)?;
+                if let Some(next) = self.settings.patched(&patch, at) {
+                    self.settings = next;
+                }
+                Ok(())
+            }
+            WriteOp::InsertStorageLocation(location) => self.insert_location(location),
+            WriteOp::SetDefaultLocation {
+                kind,
+                id,
+                expected,
+                at,
+            } => {
+                self.expect_settings_revision(expected)?;
+                self.check_kind(id, kind)?;
+                if let Some(next) = self.settings.with_location(kind, id, at) {
+                    self.settings = next;
+                }
+                Ok(())
             }
             WriteOp::InsertEnvironment(environment) => {
                 self.write_environment(environment, None, now)
@@ -874,7 +941,7 @@ impl State {
                 expected,
                 record,
             } => {
-                self.write_instance(instance.clone(), Some(expected), now)?;
+                self.write_instance(instance.clone(), Some(expected), None, now)?;
                 self.activate_config_revision(&instance, *record)
             }
             WriteOp::MarkConfigRevisionReady { revision, at } => {
@@ -1077,6 +1144,7 @@ impl State {
         &mut self,
         instance: Instance,
         expected: Option<ResourceRevision>,
+        locations: Option<(StorageLocationId, StorageLocationId)>,
         now: Timestamp,
     ) -> Result<(), RegistryError> {
         let id = instance.id();
@@ -1115,7 +1183,11 @@ impl State {
                 existing: existing.id(),
             });
         }
-        let entries = instance_path_entries(id);
+        let (data, logs) = locations.unwrap_or((
+            LocationKind::Data.built_in_id(),
+            LocationKind::Logs.built_in_id(),
+        ));
+        let entries = instance_path_entries(id, data, logs);
         if expected.is_none() {
             let key = id.short_key();
             if let Some(existing) = self.instances.keys().find(|other| other.short_key() == key) {
@@ -1154,7 +1226,11 @@ impl State {
         self.paths.iter().find_map(|(owner, stored)| {
             stored
                 .iter()
-                .any(|other| other.root() == entry.root() && other.path() == entry.path())
+                .any(|other| {
+                    other.path() == entry.path()
+                        && other.location() == entry.location()
+                        && (entry.location().is_some() || other.root() == entry.root())
+                })
                 .then_some(*owner)
         })
     }
@@ -1217,6 +1293,88 @@ impl State {
             .collect();
         leases.sort_by_key(|lease| (lease.acquired_at(), lease.id()));
         leases
+    }
+
+    /// Every location, built in ones first in kind order, then by creation
+    /// time and ID, as the SQLite registry orders them.
+    fn ordered_locations(&self) -> Vec<StorageLocation> {
+        let mut all: Vec<StorageLocation> = self.locations.values().cloned().collect();
+        all.sort_by_key(|location| {
+            (
+                !location.is_built_in(),
+                location.created_at(),
+                location.id(),
+            )
+        });
+        all
+    }
+
+    /// How many instances each location holds, ordered by ID.
+    fn location_usage(&self) -> Vec<(StorageLocationId, u64)> {
+        let mut counts: BTreeMap<StorageLocationId, BTreeSet<InstanceId>> = BTreeMap::new();
+        for (instance, entries) in &self.paths {
+            for location in entries.iter().filter_map(InstancePathEntry::location) {
+                counts.entry(location).or_default().insert(*instance);
+            }
+        }
+        counts
+            .into_iter()
+            .map(|(location, users)| (location, users.len() as u64))
+            .collect()
+    }
+
+    /// The settings must be at `expected`.
+    fn expect_settings_revision(&self, expected: ResourceRevision) -> Result<(), RegistryError> {
+        let actual = self.settings.revision;
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(RegistryError::RevisionConflict {
+                resource: ResourceRef::DaemonSettings,
+                expected,
+                actual,
+            })
+        }
+    }
+
+    /// The location exists and holds `expected`.
+    fn check_kind(
+        &self,
+        id: StorageLocationId,
+        expected: LocationKind,
+    ) -> Result<(), RegistryError> {
+        match self.locations.get(&id) {
+            None => Err(RegistryError::MissingReference {
+                resource: ResourceRef::StorageLocation(id),
+            }),
+            Some(location) if location.kind() != expected => {
+                Err(RegistryError::WrongLocationKind {
+                    location: ResourceRef::StorageLocation(id),
+                    expected,
+                })
+            }
+            Some(_) => Ok(()),
+        }
+    }
+
+    /// `InsertStorageLocation`: a new ID, then a new kind and path.
+    fn insert_location(&mut self, location: StorageLocation) -> Result<(), RegistryError> {
+        if self.locations.contains_key(&location.id()) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::StorageLocation(location.id()),
+            });
+        }
+        if let Some(existing) = self.locations.values().find(|other| {
+            other.kind() == location.kind()
+                && other.path().is_some()
+                && other.path() == location.path()
+        }) {
+            return Err(RegistryError::DuplicateResource {
+                resource: ResourceRef::StorageLocation(existing.id()),
+            });
+        }
+        self.locations.insert(location.id(), location);
+        Ok(())
     }
 
     /// The newest `limit` sessions, newest first.

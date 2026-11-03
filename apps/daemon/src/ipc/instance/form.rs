@@ -9,8 +9,8 @@
 use stackly_core::catalog::{CatalogEntry, CatalogState};
 use stackly_core::instance::create::{
     CreateDeps, CreateError, CreateFormModel, FormError, ProviderProblem, build_form,
-    build_form_from_package, evaluate, gather, names_of, resolve_package, select_provider,
-    suggested_name,
+    build_form_from_package, evaluate, form_locations, gather, names_of, resolve_package,
+    select_provider, suggested_name,
 };
 use stackly_domain::{
     Instance, InstanceFilter, ProviderName, Registry, Runtime, RuntimeId, RuntimeState,
@@ -91,10 +91,19 @@ pub fn get_create_form(
         };
         let summary = crate::ipc::runtime::summary_of_runtime(core, &registry, &runtime).await?;
         let capabilities = map::create::capabilities(&model.capabilities);
+        let locations = {
+            let registry = registry.clone();
+            let prepared = core.prepared().clone();
+            tokio::task::spawn_blocking(move || form_locations(&registry, &prepared))
+                .await
+                .map_err(|_| unexpected("the create form task failed"))?
+                .map_err(|error| Box::new(map::registry_error(&error)))?
+        };
         Ok(Box::new(map::create::create_form(
             &model,
             summary,
             capabilities,
+            &locations,
         )))
     })
 }

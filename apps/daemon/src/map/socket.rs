@@ -54,7 +54,7 @@ impl SocketPaths {
             return BTreeMap::new();
         }
         let templates = self.templates_of(instance.provider_revision());
-        let run = self.prepared.layout().instance_paths(instance.id()).run;
+        let run = self.prepared.instance_paths(instance.id()).run;
         let port_of = |name: &str| {
             instance
                 .endpoints()
@@ -203,7 +203,7 @@ mod pinned {
 
         let paths = sockets.of(&instance);
 
-        let run = sockets.prepared.layout().instance_paths(instance.id()).run;
+        let run = sockets.prepared.instance_paths(instance.id()).run;
         assert_eq!(
             paths.get("socket").map(String::as_str),
             Some(run.join(".s.PGSQL.5432").to_string_lossy().as_ref())
@@ -216,7 +216,7 @@ mod pinned {
         assert!(sockets.of(&unbound).is_empty());
 
         let (_root, sockets, bound) = instance(PortRequest::Auto, Some(49_152));
-        let run = sockets.prepared.layout().instance_paths(bound.id()).run;
+        let run = sockets.prepared.instance_paths(bound.id()).run;
         assert_eq!(
             sockets.of(&bound).get("socket").map(String::as_str),
             Some(run.join(".s.PGSQL.49152").to_string_lossy().as_ref())

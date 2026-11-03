@@ -23,6 +23,7 @@ pub mod provider;
 pub mod runtime;
 pub mod secret;
 pub mod session;
+pub mod settings;
 pub mod storage;
 pub mod supervisor;
 #[cfg(all(test, unix))]
@@ -36,7 +37,7 @@ pub use instance_dir::{
 };
 pub use inventory::{InstanceLocation, Inventory, InventoryEntry, inventory_instances};
 pub use layout::{
-    PreparedLayout, ensure_instance_run_dir, ensure_private_dir, ensure_runtime_root,
+    LocationBook, PreparedLayout, ensure_instance_run_dir, ensure_private_dir, ensure_runtime_root,
     prepare_layout,
 };
 pub use observation::READINESS_MAX_AGE;

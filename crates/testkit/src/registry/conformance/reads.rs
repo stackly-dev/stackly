@@ -9,10 +9,10 @@ use std::path::PathBuf;
 use stackly_domain::{
     Capability, DesiredState, Endpoint, EnvironmentId, HealthState, Instance, InstanceFilter,
     InstanceId, InstanceLifecycle, InstancePathKind, IpEndpoint, LeaseFilter, LineCompatibility,
-    LogicalRoot, Operation, OperationCursor, OperationId, OperationKind, OperationQuery,
-    OperationResource, OperationState, Ownership, Port, PortRequest, Progress, ReadinessState,
-    ReasonCode, RecoveryHint, RegistryError, ResourceRef, Runtime, RuntimeId, RuntimeState,
-    StartupPolicy, Transport, UnixEndpoint, WriteOp,
+    LocationKind, LogicalRoot, Operation, OperationCursor, OperationId, OperationKind,
+    OperationQuery, OperationResource, OperationState, Ownership, Port, PortRequest, Progress,
+    ReadinessState, ReasonCode, RecoveryHint, RegistryError, ResourceRef, Runtime, RuntimeId,
+    RuntimeState, StartupPolicy, Transport, UnixEndpoint, WriteOp,
 };
 use stackly_platform::{DirectoryLayout, RootSet, instance_path_entries};
 
@@ -523,7 +523,12 @@ pub(super) fn stored_paths(suite: &Suite<'_>) {
         expect_eq(
             &format!("{CHECK}: the stored paths are the ones derived from the ID"),
             &stored,
-            &instance_path_entries(id).to_vec(),
+            &instance_path_entries(
+                id,
+                LocationKind::Data.built_in_id(),
+                LocationKind::Logs.built_in_id(),
+            )
+            .to_vec(),
         );
         let paths = layout.instance_paths(id);
         for entry in &stored {

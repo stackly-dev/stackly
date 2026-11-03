@@ -992,6 +992,10 @@ pub struct Env {
     pub layout: Arc<PreparedLayout>,
     /// The retry settings of the download.
     pub policy: DownloadPolicy,
+    /// The folder downloads go to, read when the operation began, so a
+    /// change of the cache location in between does not split it (spec
+    /// 0032).
+    pub downloads: PathBuf,
 }
 
 impl std::fmt::Debug for Env {
@@ -1097,10 +1101,9 @@ pub fn download_stage(
     stop: &StopFlag,
     progress: &dyn Fn(u64, u64),
 ) -> Result<DownloadCheckpoint, InstallError> {
-    let downloads = env.layout.layout().downloads_dir();
     let context = DownloadContext {
         platform: &env.platform,
-        downloads_dir: &downloads,
+        downloads_dir: &env.downloads,
         stop,
         policy: &env.policy,
     };
@@ -1127,7 +1130,7 @@ pub fn download_stage(
 
 /// Reads the URL of `<sha256>.json`, if the note is there.
 fn cache_source(env: &Env, plan: &Plan) -> Option<String> {
-    let paths = CachePaths::new(&env.layout.layout().downloads_dir(), &plan.sha256);
+    let paths = CachePaths::new(&env.downloads, &plan.sha256);
     let bytes = env
         .platform
         .fs()
@@ -1204,7 +1207,7 @@ pub fn verify_stage(
     stop: &StopFlag,
     progress: &dyn Fn(u64, u64),
 ) -> Result<(), InstallError> {
-    let paths = CachePaths::new(&env.layout.layout().downloads_dir(), &plan.sha256);
+    let paths = CachePaths::new(&env.downloads, &plan.sha256);
     let mut file = env
         .platform
         .fs()
@@ -1370,7 +1373,7 @@ pub fn extract_stage(
         fs.create_dir_private(dir)
             .map_err(|error| platform_error("create the stage folder", "data", &error))?;
     }
-    let paths = CachePaths::new(&env.layout.layout().downloads_dir(), &plan.sha256);
+    let paths = CachePaths::new(&env.downloads, &plan.sha256);
     let mut file = fs
         .open_read(&paths.entry)
         .map_err(|error| platform_error("open the cache entry", "cache", &error))?;
@@ -1797,6 +1800,7 @@ pub fn install_runtime_work(
     Ok(Box::new(InstallRuntimeWork {
         env: Env {
             platform: deps.platform,
+            downloads: deps.layout.downloads_dir(),
             layout: deps.layout,
             policy: deps.policy,
         },

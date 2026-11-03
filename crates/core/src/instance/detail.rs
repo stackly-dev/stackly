@@ -13,7 +13,7 @@ use stackly_domain::{
     ProviderRevisionKey, ResourceRevision, Runtime, RuntimeId, SecretFieldName, SecretRef,
     SecretStatus, SecretUse, SecretUser, Sha256Digest, StartupPolicy, Target,
 };
-use stackly_platform::DirectoryLayout;
+use stackly_platform::{DirectoryLayout, InstancePaths, LocationSet};
 
 use crate::instance::connection::{RenderedConnection, render};
 use crate::instance::open_with::{self, RenderedOpenAction};
@@ -48,6 +48,10 @@ pub struct DetailSnapshot<'a> {
     pub package: Option<&'a ValidatedPackage>,
     /// The layout, for the run folder of the instance and its roots.
     pub layout: &'a DirectoryLayout,
+    /// The folders of the storage locations, for an instance that lives in
+    /// a folder the person chose (spec 0032). Without it, every path
+    /// resolves in the built in locations.
+    pub locations: Option<&'a LocationSet>,
 }
 
 impl<'a> DetailSnapshot<'a> {
@@ -75,7 +79,43 @@ impl<'a> DetailSnapshot<'a> {
             leases,
             package,
             layout,
+            locations: None,
         }
+    }
+
+    /// This snapshot with the folders of the storage locations.
+    #[must_use]
+    pub const fn with_locations(mut self, locations: &'a LocationSet) -> Self {
+        self.locations = Some(locations);
+        self
+    }
+
+    /// Resolves a stored path of the instance.
+    fn resolve(&self, entry: &InstancePathEntry) -> PathBuf {
+        match self.locations {
+            Some(locations) => locations
+                .resolve(entry)
+                .unwrap_or_else(|_| self.layout.roots().resolve(entry.root(), entry.path())),
+            None => self.layout.roots().resolve(entry.root(), entry.path()),
+        }
+    }
+
+    /// The paths of the instance in the locations its stored paths name.
+    fn instance_paths(&self) -> InstancePaths {
+        let base = |kind: InstancePathKind, fallback: &std::path::Path| {
+            self.paths
+                .iter()
+                .find(|entry| entry.kind() == kind)
+                .and_then(InstancePathEntry::location)
+                .and_then(|location| self.locations.and_then(|set| set.base(location)))
+                .unwrap_or_else(|| fallback.to_path_buf())
+        };
+        let roots = self.layout.roots();
+        self.layout.instance_paths_in(
+            self.instance.id(),
+            &base(InstancePathKind::Data, roots.data()),
+            &base(InstancePathKind::Logs, roots.logs()),
+        )
     }
 }
 
@@ -190,7 +230,7 @@ pub fn build(snapshot: &DetailSnapshot<'_>) -> Result<InstanceDetailData, Detail
         .iter()
         .find(|entry| entry.kind() == InstancePathKind::Data)
         .ok_or(DetailError::MissingDataPath)?;
-    let data_path = snapshot.layout.roots().resolve(data.root(), data.path());
+    let data_path = snapshot.resolve(data);
     let package = snapshot
         .package
         .filter(|package| package.key() == instance.provider_revision());
@@ -324,7 +364,7 @@ fn plan_context(snapshot: &DetailSnapshot<'_>) -> PlanContext {
     PlanContext {
         instance_id: instance.id(),
         instance_name: instance.name().clone(),
-        paths: snapshot.layout.instance_paths(instance.id()),
+        paths: snapshot.instance_paths(),
         runtime: RuntimeContext {
             root,
             version: runtime.version().clone(),

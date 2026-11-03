@@ -1,0 +1,18 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000d11",
+    "reply": {
+      "type": "storage.set_location",
+      "content": {
+        "id": "0192f3a9-0000-7000-8000-000000000001",
+        "kind": "data",
+        "path": "/Volumes/Work/Stackly",
+        "builtIn": false,
+        "isDefault": true,
+        "instanceCount": 0,
+        "reachable": true
+      }
+    }
+  }
+}

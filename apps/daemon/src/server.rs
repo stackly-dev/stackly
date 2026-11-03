@@ -806,6 +806,21 @@ async fn start_slot(
                     },
                     Some(registry.clone()),
                 );
+                // The paths of every instance resolve in the storage
+                // locations the registry names (spec 0032).
+                let prepared = core.prepared().clone();
+                let locations = registry.clone();
+                match tokio::task::spawn_blocking(move || prepared.locations().load(&locations))
+                    .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        tracing::error!(error = %error, "cannot read the storage locations");
+                    }
+                    Err(error) => {
+                        tracing::error!(error = %error, "the storage locations task failed");
+                    }
+                }
                 let prune = tokio::spawn(prune_loop(Arc::clone(&core), config.prune_interval));
                 *tasks.prune.lock().unwrap_or_else(PoisonError::into_inner) = Some(prune);
                 // The secret service comes first: it probes every reference

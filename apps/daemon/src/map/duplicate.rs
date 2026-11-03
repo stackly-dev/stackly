@@ -4,7 +4,7 @@
 //! client sends back unchanged to `instance.preflight`.
 
 use stackly_core::instance::create::{
-    CreateDraft, CreateError, PortRequestDraft, SecretSourceKind,
+    CreateDraft, CreateError, FormLocations, PortRequestDraft, SecretSourceKind,
 };
 use stackly_core::instance::duplicate::{DuplicateError, DuplicateModel};
 use stackly_core::supervisor::SupervisorError;
@@ -27,13 +27,14 @@ pub fn duplicate_form(
     model: &DuplicateModel,
     runtime: RuntimeSummary,
     capabilities: Vec<CapabilityStatus>,
+    locations: &FormLocations,
 ) -> DuplicateForm {
     DuplicateForm {
         source: DuplicateSource {
             instance_id: model.source.0.as_uuid(),
             name: model.source.1.to_string(),
         },
-        form: create::create_form(&model.form, runtime, capabilities),
+        form: create::create_form(&model.form, runtime, capabilities, locations),
         draft: draft_params(&model.draft),
         secrets: model
             .secret_sources

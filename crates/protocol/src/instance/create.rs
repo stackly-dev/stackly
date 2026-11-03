@@ -428,9 +428,18 @@ pub struct CreateForm {
     /// The name the form starts with; absent when every candidate is taken.
     #[serde(default)]
     pub suggested_name: Option<String>,
-    /// Where the data lives, relative to the data root:
+    /// Where the data lives, relative to the data location:
     /// `instances/<new instance id>/data`.
     pub data_path: String,
+    /// The startup policy the Start at login toggle begins with: the daemon
+    /// setting `defaultStartup` (spec 0032).
+    pub startup_default: StartupPolicyKind,
+    /// The folder the data of the new instance goes in: the default data
+    /// location, resolved (spec 0032).
+    pub data_location: String,
+    /// The folder the logs of the new instance go in: the default log
+    /// location, resolved (spec 0032).
+    pub logs_location: String,
     /// The endpoints of the package: purpose `client`, `admin`,
     /// `monitoring`, then name.
     pub endpoints: Vec<CreateEndpoint>,
@@ -571,6 +580,8 @@ pub enum PreflightCheckKind {
     Settings,
     /// The data folder.
     Data,
+    /// The default data and log locations (spec 0032).
+    StorageLocation,
     /// The free disk space.
     Disk,
     /// One secret field.

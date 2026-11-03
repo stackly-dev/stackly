@@ -29,8 +29,9 @@ pub use error::PinFailure;
 pub use evaluate::{Evaluation, ResolvedCreate, SecretPlan, evaluate, evaluate_for};
 pub(crate) use evaluate::{field_code, settings_path};
 pub use facts::{
-    CreateDeps, CreateFacts, DataFacts, DirFact, GatherError, PackageSource, ProbeFact,
-    ProgramCheck, ProviderFound, ProviderProblem, SecretFacts, SourceFact, gather, resolve_package,
+    CreateDeps, CreateFacts, CreateLocations, DataFacts, DirFact, FormLocations, GatherError,
+    LocationFact, LocationState, PackageSource, ProbeFact, ProgramCheck, ProviderFound,
+    ProviderProblem, SecretFacts, SourceFact, form_locations, gather, resolve_package,
 };
 pub use form::{
     CreateFormModel, DATA_PATH_TEXT, FormEndpoint, FormError, FormProvider, build_form,

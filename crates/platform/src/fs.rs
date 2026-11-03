@@ -385,16 +385,29 @@ pub struct VolumeFacts {
     /// True when the volume is attached to this machine, not a network
     /// share.
     pub local: bool,
+    /// True when the volume is inside this Mac: not removable and not an
+    /// external disk, an external SSD included (spec 0032).
+    pub internal: bool,
 }
 
 impl VolumeFacts {
-    /// Bundles the two facts an adapter read.
+    /// Bundles the facts an adapter read. A local volume counts as internal
+    /// until [`with_internal`](Self::with_internal) says otherwise.
     #[must_use]
     pub fn new(fs_type: impl Into<String>, local: bool) -> Self {
         Self {
             fs_type: fs_type.into(),
             local,
+            internal: local,
         }
+    }
+
+    /// These facts with another answer to whether the volume is inside this
+    /// Mac.
+    #[must_use]
+    pub const fn with_internal(mut self, internal: bool) -> Self {
+        self.internal = internal;
+        self
     }
 }
 
