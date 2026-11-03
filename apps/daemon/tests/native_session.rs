@@ -76,8 +76,10 @@ impl Rig {
                 .expect("plutil writes JSON");
         assert_eq!(json["Label"], self.agent.label());
         self.agent.bootstrap().expect("the agent loads");
-        self.wait_launchd(FIRST_START, |_| true)
-            .expect("the agent's daemon answers")
+        // `session` stays `None` until the rotation has committed, so waiting
+        // for it keeps the test from racing the first rotation.
+        self.wait_launchd(FIRST_START, |info| info.session.is_some())
+            .expect("the agent's daemon answers with its session")
     }
 
     /// Waits up to `bound` for a launchd started daemon of this agent that
@@ -340,7 +342,7 @@ fn kickstart_ends_the_session_and_the_next_daemon_starts_the_instance_again() {
     rig.agent.kickstart_kill().expect("kickstart -k runs");
     let next = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
         })
         .expect("the job runs a new daemon after kickstart -k");
     let again = next
