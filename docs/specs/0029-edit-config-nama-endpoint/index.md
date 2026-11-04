@@ -1,7 +1,7 @@
 # 0029. Edit config, nama, dan endpoint
 
 **Date**: 2026-11-02
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
@@ -114,10 +114,10 @@ Satu migrasi registry dengan nomor bebas berikutnya saat build (spec 0028 dan 00
 | `config_revisions` | `rendered_sha256` | `sha256` | ya | tidak berubah; spec ini tidak menulis atau membacanya |
 
 - Migrasi tidak membuat baris untuk instance tanpa revision (create yang gagal setelah `InsertInstance`, atau retained); `instance.config.get` pada instance itu ditolak `instance.provider_unavailable` dengan detail `reason: no_config_revision`.
-- Tidak ada tabel baru. `instances.config_revision_id` dan `instances.revision` sudah ada. `instance_endpoints` tetap bagian aggregate `Instance`: endpoint berubah lewat aggregate (method domain baru `Instance::set_port_request(name, PortRequest)`, yang juga mengosongkan `bound_port` endpoint itu dan menaikkan revision), tidak pernah lewat tulisan kolom langsung.
+- Tidak ada tabel baru. `instances.config_revision_id` dan `instances.revision` sudah ada. `instance_endpoints` tetap bagian aggregate `Instance`: endpoint berubah lewat aggregate (method domain baru `Instance::set_port_requests(&EndpointRequests)`, yang menerima permintaan port untuk setiap endpoint IP sekaligus dan menaikkan revision tepat satu, juga bila tidak ada permintaan yang berubah), tidak pernah lewat tulisan kolom langsung. Endpoint yang permintaannya berubah lewat `IpEndpoint::set_request`: permintaan baru `Fixed` mengosongkan `bound_port`, sedangkan permintaan baru `Auto` menyimpan port yang sedang dipegang proses (bound, atau fixed lama) sebagai `bound_port`, supaya stop proses lama masih punya alamat dan start berikutnya memakai ulang port itu bila bebas (fix `4bd9c15e`).
 - Relasi tidak berubah: instance 1:N `config_revisions` (cascade), revision N:1 `previous_id` (set null), instance 1:1 revision aktif (FK komposit deferred).
 - Domain (`stackly-domain`, modul `registry`): `ConfigRevisionRecord` mendapat `number: ConfigRevisionNumber` (newtype `u64`), `endpoints: EndpointRequests` (peta nama ke `PortRequest`), dan `ready_at: Option<Timestamp>`. `ConfigRevisionStatus` mendapat `Superseded`.
-- `WriteOp` baru: `ActivateConfigRevision { instance: Instance, expected: ResourceRevision, record }`, yaitu `UpdateInstance` plus baris revision dalam satu op: aggregate yang sudah diubah (`set_port_request` kalau endpoint berubah, selain itu hanya revision naik) ditulis dengan pemeriksaan `expected` yang sama dengan `UpdateInstance`, lalu revision di insert dengan nomor aktif + 1, `previous` = aktif, aktif lama jadi `superseded`, dan pointer pindah. Op menolak `record.endpoints` yang tidak sama dengan permintaan port di aggregate (`Integrity`). `MarkConfigRevisionReady { revision, at }` (hanya kalau `ready_at` masih null; idempoten), dan `PruneConfigRevisions { instance, keep: 20 }` (hapus yang tertua di luar 20 terbaru, tidak pernah aktif atau last known good). Histori selalu diurutkan menurut `number`, bukan dengan mengikuti `previous_id` (yang menjadi null setelah prune). Aturan `InsertConfigRevision` yang menolak revision kedua tetap untuk create.
+- `WriteOp` baru: `ActivateConfigRevision { instance: Instance, expected: ResourceRevision, record }`, yaitu `UpdateInstance` plus baris revision dalam satu op: aggregate yang sudah diubah (`set_port_requests` dengan permintaan port revision baru, dipanggil guard commit di `crates/core/src/supervisor/change_guard.rs`; tanpa endpoint yang berubah hanya revision yang naik) ditulis dengan pemeriksaan `expected` yang sama dengan `UpdateInstance`, lalu revision di insert dengan nomor aktif + 1, `previous` = aktif, aktif lama jadi `superseded`, dan pointer pindah. Op menolak `record.endpoints` yang tidak sama dengan permintaan port di aggregate (`Integrity`). `MarkConfigRevisionReady { revision, at }` (hanya kalau `ready_at` masih null; idempoten), dan `PruneConfigRevisions { instance, keep: 20 }` (hapus yang tertua di luar 20 terbaru, tidak pernah aktif atau last known good). Histori selalu diurutkan menurut `number`, bukan dengan mengikuti `previous_id` (yang menjadi null setelah prune). Aturan `InsertConfigRevision` yang menolak revision kedua tetap untuk create.
 - `Registry::config_revisions(InstanceId, limit)` dan `Registry::last_known_good(InstanceId)`.
 - File: `instances/<id>/config-history/<revision-id>/<path relatif config>` berisi salinan file tidak sensitif dari render terakhir revision itu. Ditulis atomik sebelum file di `config/`, dihapus bersama baris revision saat prune.
 
@@ -373,7 +373,7 @@ Pendekatan Journey: journey "ubah instance yang sudah ada" diselesaikan lengkap 
 
 **Milestone 1: Domain, registry, dan core**
 
-1. Domain: `ConfigRevisionNumber`, `EndpointRequests`, `ConfigRevisionOrigin`, field baru `ConfigRevisionRecord`, `ConfigRevisionStatus::Superseded`, `Instance::set_port_request`, `OperationKind::ApplyConfig`, `ChangeEndpoints`, `ResolveConfigDrift` dengan interrupt policy di *State transitions* (test himpunan `CloseInterrupted` diperbarui), `InstanceBlocker::ConfigDrift`, `apply_allowed` dan `rename_allowed`; unit test domain. Memenuhi **AC-6**, **AC-7**, **AC-10**, **AC-12**, **AC-13**.
+1. Domain: `ConfigRevisionNumber`, `EndpointRequests`, `ConfigRevisionOrigin`, field baru `ConfigRevisionRecord`, `ConfigRevisionStatus::Superseded`, `Instance::set_port_requests`, `OperationKind::ApplyConfig`, `ChangeEndpoints`, `ResolveConfigDrift` dengan interrupt policy di *State transitions* (test himpunan `CloseInterrupted` diperbarui), `InstanceBlocker::ConfigDrift`, `apply_allowed` dan `rename_allowed`; unit test domain. Memenuhi **AC-6**, **AC-7**, **AC-10**, **AC-12**, **AC-13**.
 2. Migrasi `NNNN_config_revision_history.sql` (nomor bebas berikutnya), backfill, mapping storage, `ActivateConfigRevision`, `MarkConfigRevisionReady`, `PruneConfigRevisions`, `config_revisions`, `last_known_good`, `FakeRegistry`, `registry_conformance`, fixture registry versi sebelumnya, dan test migrasi. Memenuhi **AC-7**, **AC-12**, **AC-14**.
 3. Fake provider `0.4.0` dengan `fake.conf` di `config/` (*Fake provider*), golden, dan seed fuzz. Memenuhi **AC-10**, **AC-16**.
 4. Evaluator `crates/core/src/instance/config/` (`gather_config`, `evaluate_change`, `preview`, `diff_settings`) dan pemetaan `field_code` ke dua varian `FieldCode` baru, dengan table test pada fake, PostgreSQL, NATS, dan Traefik. Memenuhi **AC-1**, **AC-2**, **AC-15**, **AC-16**.
@@ -400,7 +400,7 @@ Pendekatan Journey: journey "ubah instance yang sudah ada" diselesaikan lengkap 
 16. Native PostgreSQL 18: apply reload dan apply restart, last known good, rollback setelah setting yang membuat start gagal, change endpoints fixed dengan restart dan konflik dari proses luar, drift pada `postgresql.conf`. Memenuhi **AC-4**, **AC-7**, **AC-8**, **AC-11**, **AC-14**.
 17. Native NATS: apply restart (tanpa reload), last known good. Memenuhi **AC-5**, **AC-7**, **AC-16**.
 18. Native Traefik: apply `routes` lewat reload di instance A, B tetap; last known good. Memenuhi **AC-4**, **AC-16**.
-19. Run dengan jaringan mati lewat GUI dan CLI setelah persetujuan user; `BLOCKED` sampai disetujui. Memenuhi **AC-21**.
+19. Run dengan jaringan mati lewat GUI dan CLI. User mengizinkannya (2026-11-02), tetapi run ini dipindah ke langkah manual milik user: mematikan Wi-Fi dan Ethernet mengubah setelan sistem, di luar wewenang sesi Claude, dan memutus semua sesi Claude termasuk Remote Control. AC-21 dibuktikan oleh harness offline di dalam proses (langkah 10, Milestone 2), mengikuti preseden fitur 26 dan spec 0021. Memenuhi **AC-21**.
 
 ## Consequences
 

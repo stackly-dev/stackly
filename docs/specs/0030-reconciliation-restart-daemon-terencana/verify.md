@@ -1,4 +1,4 @@
-# Verify: Rekonsiliasi dan restart daemon terencana · spec 0030 · updated 2026-11-02
+# Verify: Rekonsiliasi dan restart daemon terencana · spec 0030 · updated 2026-11-03
 
 _Langkah diturunkan dari acceptance criteria spec 0030. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah._
 
@@ -211,6 +211,6 @@ Build steps 13 dan 14 (kotak scope milestone 5; di spec milestone 6). Dua test n
 
 ### Catatan untuk checker
 
-- `daemonGap` 9,4 sampai 10,3 detik kemungkinan besar bukan daemon yang lambat. Dugaan, belum diperiksa lewat log launchd: plist produksi memakai `ThrottleInterval` 10, sehingga launchd menunggu sekitar 10 detik sebelum memulai daemon baru, sedangkan rekonsiliasi sesudah handshake butuh sekitar 160 ms (run AC-17). Angkanya hanya diamati; kode produksi tidak diubah, dan belum ada percobaan dengan jumlah instance lain untuk memisahkan pengaruh sepuluh instance
+- `daemonGap` 9,4 sampai 10,3 detik kemungkinan besar bukan daemon yang lambat. Dugaan, belum diperiksa lewat log launchd: plist produksi memakai `ThrottleInterval` 10, sehingga launchd menunggu sekitar 10 detik sebelum memulai daemon baru, sedangkan rekonsiliasi sesudah handshake butuh sekitar 160 ms (run AC-17). Angkanya hanya diamati; kode produksi tidak diubah, dan belum ada percobaan dengan jumlah instance lain untuk memisahkan pengaruh sepuluh instance. Sesudahnya review GA (2026-11-02, catatan a) mencocokkan angka ini dengan aturan relaunch launchd yang dicatat spike spec 0015: job yang belum jalan 10 detik dinyalakan lagi sekitar 10 detik sesudah launch nya, dan test native mengirim restart beberapa detik sesudah `rig.bootstrap()`. Spec kini memakai penjelasan ini di *Value sourcing* `durations.daemonGap`
 - Dua run pertama (`01a19b2e-…` dan `01a19b30-…`) berjalan sebelum commit (`sourceDirty` true); catat dua run `01a19b31-…` dan `01a19b32-…` sebagai bukti
 - Sepuluh instance memakai `sharedBuffersMb` 16 dan `maxConnections` 20, dan dihentikan di akhir test; `ReapGuard` mengambil sisa proses bila test gagal di tengah

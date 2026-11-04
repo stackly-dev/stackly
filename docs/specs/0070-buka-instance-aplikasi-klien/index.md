@@ -1,7 +1,7 @@
 # 0070. Buka instance di aplikasi klien
 
 **Date**: 2026-11-02
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
@@ -153,7 +153,7 @@ pub struct EnvPair { pub name: String, pub value: String }
 - Enum terbuka dengan `Unrecognized` dan `tag = "type"`, `content = "content"` (aturan wire spec 0006). `env` berupa daftar pasangan, bukan map.
 - `state` dan `reason` memakai ulang `ConnectionAvailability` dan `ConnectionUnavailableReason` spec 0021 (bentuk yang sama dengan `ConnectionString`), jadi teks alasannya sama.
 - Kode baru di `codes.rs` dengan format yang ada: `instance.open_action_not_found` (NotFound, details `["action", "available"]`, retryable false), `instance.open_action_unavailable` (Conflict, details `["action", "reason"]`, retryable true), `instance.open_script_unwritable` (Internal, details `["reason"]`, retryable true). `PrepareTerminalParams` implement `Validate` (pola `action`). `OpenActionKind` masuk `OpenEnums.swift`, `InstanceDetail.openActions` memakai `#[serde(default)]`, dan semua tipe baru derive `JsonSchema` dan `#[typeshare]`.
-- Kontrak berubah: `ProtocolVersion::CURRENT` naik minor dari 1.18 ke 1.19 di commit yang sama, bersama `protocols/contract-versions.json`, `cargo xtask codegen` menulis Swift, JSON Schema, dan digest, dan fixture baru `protocols/fixtures/instance/detail-open-actions.json` serta `prepare-terminal.json`.
+- Kontrak berubah: `ProtocolVersion::CURRENT` naik minor dari 1.18 ke 1.19 di commit yang sama (di `main` kontrak ini masuk 2.1 lewat konsolidasi branch 2026-11-02, merge `36b33e6e`; `main` kini 3.1), bersama `protocols/contract-versions.json`, `cargo xtask codegen` menulis Swift, JSON Schema, dan digest, dan fixture baru `protocols/fixtures/instance/detail-open-actions.json` serta `prepare-terminal.json`.
 
 ### CLI
 
@@ -269,7 +269,7 @@ Approach Journey: satu jalur pengguna (buka instance di aplikasi lain) dibangun 
 
 **Neutral**:
 
-- `InstanceDetail` bertambah satu field, kontrak naik ke 1.19.
+- `InstanceDetail` bertambah satu field; kontrak direncanakan 1.19 dan masuk `main` sebagai bagian 2.1.
 - Folder `temp` instance mulai berisi skrip `open-*.command`.
 - Halaman Environments (fitur 44) memakai `OpenInMenu` yang sama nanti; mockup menaruh menu di sana.
 

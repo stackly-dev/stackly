@@ -202,14 +202,14 @@ Fungsi murni `stackly_core::storage::location::check_location(facts, roots, exis
 
 ### Method IPC
 
-Protocol naik satu minor dari versi saat langkah 1 dibangun (tambahan saja); fixture dan digest dibuat ulang lewat `cargo xtask codegen`. Semua method baru `recovery refused`.
+Protocol naik mayor ke 3.0 di langkah 1, bukan satu minor seperti rencana awal: event `settings.changed` menambah varian ke `EventKind`, yang tertutup (doc di `crates/protocol/src/events.rs`, preseden spec 0030 AC-18), jadi client 2.x gagal decode event itu, dan aturan AGENTS.md untuk perubahan yang memutus berlaku (keputusan lead 2026-11-03). Sesudahnya F31 milestone 4 menambah satu minor, jadi `main` kini 3.1. Fixture dan digest dibuat ulang lewat `cargo xtask codegen`. Semua method baru `recovery refused`.
 
 | Method | Jenis | Input | Output | Error |
 |---|---|---|---|---|
 | `settings.get` | baca | none | `DaemonSettingsView` | `ipc.*` |
-| `settings.update` | operasi `update_daemon_settings` (`replay_operation`, precheck revision, `start_operation`) | `idempotencyKey`, `expectedRevision: Revision`, `patch: SettingsPatch` | `OperationView`, hasil `DaemonSettingsView`; atau `DaemonSettingsView` tanpa operasi untuk patch tanpa perubahan | `resource.revision_mismatch`, `request.invalid_params` |
+| `settings.update` | operasi `update_daemon_settings` (`replay_operation`, precheck revision, `start_operation`) | `idempotencyKey`, `expectedRevision: Revision`, `patch: SettingsPatch` | `DaemonSettingsView` sesudah operasi selesai, bukan `OperationView` (pola `instance.set_startup`); `DaemonSettingsView` tanpa operasi untuk patch tanpa perubahan (`SettingsCheck::Unchanged`) | `resource.revision_mismatch`, `request.invalid_params` |
 | `storage.list_locations` | baca | none | `LocationList { items: [StorageLocationView] }` | |
-| `storage.set_location` | operasi `set_storage_location` | `idempotencyKey`, `kind: LocationKind`, `target: LocationTarget`, `expectedRevision` | `OperationView`, hasil `StorageLocationView` | `resource.revision_mismatch`, `storage.location_invalid` |
+| `storage.set_location` | operasi `set_storage_location` | `idempotencyKey`, `kind: LocationKind`, `target: LocationTarget`, `expectedRevision` | `StorageLocationView` lokasi default jenis itu sesudah operasi selesai, bukan `OperationView` | `resource.revision_mismatch`, `storage.location_invalid` |
 | `instance.preview_stop_all` (spec 0031, dibangun fitur 31 langkah 9) | baca | none | `StopAllPreview` | |
 | `instance.stop_all` (spec 0031, diperluas) | operasi `stop_all_instances` | `idempotencyKey`, `expectedInstanceIds` opsional | `StopAllResult`, setelah operasi selesai (spec 0031 *Operasi `stop_all_instances`*); progres lewat event operasi | `instance.stop_all_changed` |
 
@@ -244,7 +244,7 @@ Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah comm
 | `stackly settings set <key> <value>` | key `default-autostart` (`on`/`off`), `update-channel` (`stable`/`beta`), `telemetry` (`on`/`off`); mengambil revision lewat `settings.get`, mengirim update, dan keluar 3 pada konflik (AC-17) |
 | `stackly storage locations [--json]` | setiap lokasi dengan jenis, path, default atau bukan, jumlah instance, terjangkau atau tidak |
 | `stackly storage set-location <data\|logs\|cache> <path\|--default>` | path relatif diubah menjadi absolut dari cwd sebelum dikirim; error menulis kalimat aturan |
-| `stackly instance stop --all [--yes] [--json]` | AC-9 |
+| `stackly instance stop --all [--yes] [--json]` | AC-9. Keputusan lokal saat build: preview tanpa `items` menulis "Nothing is running.", tidak bertanya, dan tidak mengirim `instance.stop_all` (`outcome` null); sesudah sebagian gagal, exit mengikuti kategori kode instance pertama di `failed` (misalnya `supervisor.stop_timeout`), atau `operation.cancelled` kalau Stop All dibatalkan; `--all` dan `--wait` saling menolak, karena balasan `instance.stop_all` baru datang setelah operasi selesai |
 | `stackly instance create … [--autostart\|--no-autostart]` | tanpa keduanya, `startup` tidak dikirim (AC-18) |
 
 ### Baris Settings
@@ -297,7 +297,7 @@ Urutan dari atas: header (AC-2), Services (AC-3, AC-4), baris operasi (AC-5), pr
 | kaki | `atLoginCount` 0 | "None of them start at your next login." |
 | kaki | `atLoginCount` 1 | "1 of them starts again at your next login." |
 | kaki | `atLoginCount` k > 1 | "{k} of them start again at your next login." |
-| tombol | | Cancel (default), Stop All |
+| tombol | | Cancel (default), Stop All. Cancel menjadi tombol default lewat gaya `borderedProminent`, bukan `keyboardShortcut`, karena kebijakan interaksi user 2026-10-24 melarang shortcut |
 | kosong | `items` kosong | "Nothing is running." |
 | hasil | semua berhenti | "Stopped {n} services. Data is kept." |
 | hasil | satu gagal | "Stopped {a} of {b}. {name} didn’t stop." dengan Open Stackly |
@@ -307,7 +307,7 @@ Urutan dari atas: header (AC-2), Services (AC-3, AC-4), baris operasi (AC-5), pr
 
 ### Activation policy dan login
 
-`ActivationPolicyController` di `StacklyUI/Shell/` menghitung jendela app yang terbuka (terlihat, diminimalkan, atau di Space lain) dari `NSWindow.willCloseNotification` dan `didBecomeKeyNotification` untuk jendela utama, Settings, dan galeri Debug, dan memanggil `NSApp.setActivationPolicy`. Setiap jalur yang membuka jendela (popover, notifikasi, `applicationShouldHandleReopen`) memanggil `prepareToShowWindow()` (policy `regular` lalu `NSApp.activate()`) dulu. Peluncuran sebagai login item dikenali dari Apple event peluncuran (`keyAELaunchedAsLogInItem`); langkah build 11 memeriksa di macOS 27 apakah `SMAppService.mainApp` masih mengirimnya dan mencatat hasilnya di `apps/macos/design.md`. Kalau tidak bisa dikenali, app membuka jendela utama (AC-12). `SMAppServiceMainApp.swift` ditaruh di `StacklyUI/Agent/`, folder yang menurut spec 0015 satu satunya pemakai ServiceManagement. Pendaftaran `mainApp` nyata butuh app yang ditandatangani di `~/Applications` atau `/Applications`; tanpa identity, buktinya `BLOCKED` (langkah 14).
+`ActivationPolicyController` di `StacklyUI/Shell/` menghitung jendela app yang terbuka (terlihat, diminimalkan, atau di Space lain) dari `NSWindow.willCloseNotification` dan `didBecomeKeyNotification` untuk jendela utama, Settings, dan galeri Debug, dan memanggil `NSApp.setActivationPolicy`. Setiap jalur yang membuka jendela (popover, notifikasi, `applicationShouldHandleReopen`) memanggil `prepareToShowWindow()` (policy `regular` lalu `NSApp.activate()`) dulu. Peluncuran sebagai login item dikenali dari Apple event peluncuran (`keyAELaunchedAsLogInItem`); langkah build 11 memeriksa di macOS 27 apakah `SMAppService.mainApp` masih mengirimnya dan mencatat hasilnya di `apps/macos/design.md`. Kalau tidak bisa dikenali, app membuka jendela utama (AC-12). Hasil langkah 11: SDK macOS 27 masih mendeklarasikan `keyAELaunchedAsLogInItem` tanpa deprecation, tetapi apakah macOS 27 benar mengirimnya untuk peluncuran `SMAppService.mainApp` belum terbukti, karena itu butuh app yang ditandatangani (OQ-012). Jadi fallback jendela utama menjamin perilaku AC-12 sampai bukti langkah 14 ada. `SMAppServiceMainApp.swift` ditaruh di `StacklyUI/Agent/`, folder yang menurut spec 0015 satu satunya pemakai ServiceManagement. Pendaftaran `mainApp` nyata butuh app yang ditandatangani di `~/Applications` atau `/Applications`; tanpa identity, buktinya `BLOCKED` (langkah 14).
 
 ### Notifikasi
 
@@ -319,10 +319,10 @@ Urutan dari atas: header (AC-2), Services (AC-3, AC-4), baris operasi (AC-5), pr
 |---|---|---|---|---|---|
 | instance gagal | `instance.state_changed` ke lifecycle `failed` dari lifecycle lain | satu per transisi | "{name} failed" | "Open Stackly to see what happened." | detail instance |
 | readiness hilang | `instance.health_changed` dari siap ke tidak siap selagi lifecycle `running` | paling banyak satu per instance per 5 menit | "{name} isn’t ready" | "It stopped accepting connections." | detail instance |
-| operasi panjang selesai | `operation.state_changed` ke `succeeded`, `failed`, atau `cancelled` untuk kind di *Operasi di popover*, dengan `finishedAt − startedAt` > 10 detik | satu per operasi | "{judul operasi} finished" atau "… failed" atau "… was cancelled" | ringkasan hasil operasi | halaman Operations |
+| operasi panjang selesai | `operation.state_changed` ke `succeeded`, `failed`, atau `cancelled` untuk kind di *Operasi di popover*, dengan `updatedAt − startedAt` > 10 detik (`OperationSummary` tidak punya `finishedAt`; `updatedAt` event final adalah waktu operasi selesai) | satu per operasi | "{judul operasi} finished" atau "… failed" atau "… was cancelled" | kalimat tetap tanpa teks error daemon, supaya path dan secret tidak ikut: "Took {durasi}.", "Open Stackly to see what happened.", atau "It was cancelled after {durasi}." | halaman Operations |
 | daemon tidak terjangkau | presence keluar dari `connected` dan tidak kembali `connected` dalam 15 detik (reconnecting dihitung tidak terjangkau) | satu per gangguan | "stacklyd isn’t reachable" | "Your instances keep running if stacklyd comes back." | halaman Diagnostics |
 
-Identifier notifikasi: `instance-failed-<id>-<revision>`, `instance-unready-<id>-<revision>`, `operation-<id>`, `daemon-unreachable-<since>`, jadi pengiriman ulang tidak menggandakan. Tidak ada notifikasi saat fixture scenario berjalan.
+Identifier notifikasi: `instance-failed-<id>-<revision>`, `instance-unready-<id>-<statusSeq>` (event health membawa `statusSeq`, bukan revision), `operation-<id>`, `daemon-unreachable-<since>` (detik epoch awal gangguan), jadi pengiriman ulang tidak menggandakan. Tidak ada notifikasi saat fixture scenario berjalan.
 
 ### Fixture
 
@@ -356,7 +356,7 @@ Scenario spec 0068 baru: `menubar-normal`, `menubar-failed`, `menubar-offline-la
 | `instance.create` | lokasi, `startup` bila tidak dikirim | baris `daemon_settings` dibaca di dalam guard `InsertInstance` |
 | `runtime.install` | folder download | `cache_location_id` dibaca saat operasi mulai |
 | start | lokasi instance | `instance_paths.location_id` milik instance |
-| notifikasi | durasi, kind | `startedAt`, `finishedAt`, `kind` di `OperationView` |
+| notifikasi | durasi, kind | `updatedAt − startedAt` dan `kind` di `OperationSummary` event `operation.state_changed` yang final |
 | notifikasi | app aktif atau tidak | `NSApplication.isActive` |
 
 ### Key invariants
@@ -425,7 +425,7 @@ Pendekatan Journey: setiap milestone menyelesaikan satu jalur pengguna lengkap (
 
 **Milestone 1: setting daemon dan lokasi, sampai CLI**
 
-1. Domain dan protocol: tipe settings dan lokasi, `BUILT_IN_LOCATION_IDS`, `instance_path_entries` dengan lokasi, `VolumeFacts.internal`, DTO, method, event, kode error (termasuk `expectedInstanceIds` dan `instance.stop_all_changed`; DTO preview sudah ada dari spec 0031), kenaikan minor `ProtocolVersion`, `cargo xtask codegen`, fixture, dan `cargo xtask fuzz seed`, satisfies **AC-16**, **AC-17**, **AC-19**.
+1. Domain dan protocol: tipe settings dan lokasi, `BUILT_IN_LOCATION_IDS`, `instance_path_entries` dengan lokasi, `VolumeFacts.internal`, DTO, method, event, kode error (termasuk `expectedInstanceIds` dan `instance.stop_all_changed`; DTO preview sudah ada dari spec 0031), kenaikan `ProtocolVersion` (dibangun sebagai mayor ke 3.0, lihat *Method IPC*), `cargo xtask codegen`, fixture, dan `cargo xtask fuzz seed`, satisfies **AC-16**, **AC-17**, **AC-19**.
 2. Storage: migration `NNNN_settings_locations.sql` (bangun ulang `instance_paths` dengan salinan baris, `PRAGMA foreign_key_check`, cek jumlah baris, trigger), WriteOp dan baca baru, `FakeRegistry` setara, test migration dari registry di versi skema tepat sebelum migration ini (versi terakhir di `main` saat build) berisi instance, test migration yang gagal di tengah, dan test *AC-10 per lokasi*, satisfies **AC-25**, **AC-16**, **AC-19**.
 3. Core: `settings::update`, `storage::set_location` dengan `check_location` (table test per `rule` dan urutan di `FakePlatform`), `LocationSet`, `instance_paths_in`, `downloads_dir_in`, pindahkan setiap pemakai path instance di *Perubahan domain dan platform* ke `LocationSet` (grep, daftar di commit), create memakai lokasi dan `default_startup` dari guard, `inventory_instances` per lokasi, precheck start dan baris preflight `storage_location`, satisfies **AC-18**, **AC-19**, **AC-20**.
 4. Daemon: handler `settings.*` dan `storage.*`, event `settings.changed`, form create dan duplicate dengan `startupDefault` dan lokasi, `logRetention` dari konstanta spec 0027, integration test `apps/daemon/tests/settings.rs` dan `storage_locations.rs` di filesystem asli, satisfies **AC-16**, **AC-17**, **AC-18**, **AC-19**, **AC-20**, **AC-21**.
@@ -440,7 +440,7 @@ Pendekatan Journey: setiap milestone menyelesaikan satu jalur pengguna lengkap (
 **Milestone 3: menu bar dan Stop All**
 
 9. Stop All di daemon dan CLI, di atas `stop_all::select`, `instance.preview_stop_all`, dan cancel yang sudah dibangun fitur 31 langkah 9: precheck `expectedInstanceIds` di `instance.stop_all` (field dan kode `instance.stop_all_changed` sudah masuk kontrak di langkah 1) sesudah `replay_operation`, irisan langkah, dan sidik jari yang mencakup field itu, test core di fake dan integration test `apps/daemon/tests/stop_all.rs` termasuk perubahan di antara preview dan konfirmasi; `stackly instance stop --all`, satisfies **AC-7**, **AC-8**, **AC-9**.
-10. Scene `MenuBarExtra` di `StacklyApp`, aset ikon tiga varian, `MenuBarModel` dan view popover (header, Services dengan tabel *Tombol baris*, operasi, preview dan hasil dengan *Copy Stop All*, aksi), satisfies **AC-1**, **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-6**, **AC-10**.
+10. Scene `MenuBarExtra` di `StacklyApp`, ikon tiga varian (dibangun sebagai template image yang digambar di kode, `MenuBarIcon`, bukan aset katalog), `MenuBarModel` dan view popover (header, Services dengan tabel *Tombol baris*, operasi, preview dan hasil dengan *Copy Stop All*, aksi), satisfies **AC-1**, **AC-2**, **AC-3**, **AC-4**, **AC-5**, **AC-6**, **AC-10**.
 11. `ActivationPolicyController`, copy notice baru, deteksi peluncuran login item dengan fallback jendela utama (periksa di macOS 27, catat di `design.md`), satisfies **AC-11**, **AC-12**.
 
 **Milestone 4: notifikasi**
@@ -475,7 +475,7 @@ Langkah 1 sampai 5 berurutan. Setelah langkah 4, milestone 2 dan langkah 9 bisa 
 
 **Neutral**:
 
-- Protocol naik satu minor.
+- Protocol naik mayor (3.0), karena `EventKind` tertutup.
 - Dua folder baru di `StacklyUI` (`MenuBar/`, `Notifications/`) tunduk pada test aturan sumber spec 0012.
 
 ## Follow-up

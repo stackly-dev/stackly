@@ -1,10 +1,30 @@
-# Verify: Metrics dan health · spec 0028 · updated 2026-11-02
+# Verify: Metrics dan health · spec 0028 · updated 2026-11-03
 
 _Langkah diturunkan dari acceptance criteria spec 0028. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27._
 
+## Milestone 1: Spike, domain, registry, and platform
+
+_Langkah 0 sampai 3 dibangun di `5ddedd61` (2026-11-02): spike di `rationale.md` *Hasil spike*, tipe metrik dan hitungan pohon di `crates/domain/src/metrics.rs`, migrasi `0007_instance_restart_total.sql` dengan penanda crash di `StartRequest`, dan port `list_pids` serta `counters` dengan adapter macOS, fake, dan conformance. Build milestone ini tidak menulis bagian verify, jadi bagian ini ditambahkan belakangan (2026-11-03) saat spec diselaraskan dengan kode. Langkahnya sengaja tanpa kotak centang: milestone ini sudah dicentang di scope dari build dan verify penuh `chk-f28-verify`, dan daftar di bawah gunanya untuk menjalankannya ulang._
+
+### Commands
+
+- `cargo test -p stackly-domain --lib metrics` → `Metric` tanpa nilai default, selisih CPU dan Disk I/O, `measure`, jumlah dan urutan pohon, ring 60 → AC-1, AC-2, AC-3, AC-4
+- `cargo test -p stackly-storage --test open migrate` → termasuk `ac_6_a_version_6_registry_migrates_to_restart_total_0_and_the_check_refuses_a_negative` → AC-6
+- `cargo test -p stackly-core --test supervisor_start` → `restart_total` naik satu per respawn setelah crash (`restart.rs`, lima untuk crash loop enam spawn) dan tetap 0 untuk start pengguna (`start.rs`) → AC-6
+- `cargo test -p stackly-testkit --test fake_process the_fake_passes_the_process_metrics_conformance` → fake lolos conformance `list_pids` dan `counters` → AC-2, AC-5
+- `cargo test -p stackly-platform-macos --test process_metrics` → adapter macOS lolos conformance yang sama, dan waktu CPU dikonversi dari satuan mach → AC-2, AC-5
+- `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → exit 0, tipe metrik di domain tanpa API macOS
+
+### Acceptance-criteria coverage
+
+- AC-1 sampai AC-4 · bagian domain: tipe dan fungsi murni; sampler, kontrak, CLI, dan layar ada di milestone 2 dan 3
+- AC-5 · bagian port: `list_pids` dan `counters` di adapter macOS dan fake, dibuktikan oleh satu conformance
+- AC-6 · kolom `instances.restart_total` (migrasi 7) dan kenaikan di commit spawn yang mengikuti crash
+- Hasil spike: waktu CPU dalam satuan mach (125/3), dan shared buffers tidak masuk footprint child mana pun, jadi keputusan memori tetap; perilaku jam saat Mac benar benar sleep menunggu cek manual langkah 9
+
 ## Milestone 2: Sampler, contract, daemon, and CLI
 
-_Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) sudah dibangun. Tab Metrics di app (langkah 7), latensi probe dan wake (langkah 8), dan evidence native (langkah 9) belum._
+_Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) sudah dibangun. Tab Metrics di app (langkah 7), latensi probe dan wake (langkah 8), dan evidence native (langkah 9) belum saat itu; ketiganya kini ada di milestone 3 sampai 5. Versi protokol dan hitungan test di bawah adalah keadaan saat milestone ini dicek; keadaan di `main` ditulis dalam kurung._
 
 ### UI / manual
 
@@ -20,11 +40,11 @@ _Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) s
 - [x] `cargo clippy -p stackly-core --all-targets --locked -- -D warnings` → tanpa peringatan; setiap item publik di `stackly_core::metrics` punya doc comment, tidak ada `unwrap()` di luar test → AC-1
 - [x] `cargo xtask check-deps` → lulus; `stackly_core::metrics` tidak memanggil API spawn, tidak menyebut `SIGKILL`, dan tidak menulis registry; sampler dan pemindaian terjadwal di daemon tidak mengirim probe atau sinyal → AC-1
 - [x] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → exit 0 (modul `metrics` tidak memakai API macOS) → AC-1
-- [x] `cargo xtask codegen --check` → "up to date"; `ProtocolVersion::CURRENT` 2.2 dan `protocols/contract-versions.json` mencatat digestnya → AC-11
-- [x] `cargo test -p stackly-protocol` → termasuk `metrics_fixtures` (6 test: live, not running, reset, nilai tidak dikenal, request dan penolakan kursor, balasan terbesar 60 sampel dan 200 baris di bawah 1 MiB) dan `ipc_fixtures` yang membaca `frame-response-instance-get-metrics-*.json` dan `request-instance-get-metrics*.json` → AC-3, AC-11
+- [x] `cargo xtask codegen --check` → "up to date"; `ProtocolVersion::CURRENT` 2.2 dan `protocols/contract-versions.json` mencatat digestnya (kini 3.1, setelah F32 naik mayor ke 3.0 dan F31 milestone 4 menambah minor) → AC-11
+- [x] `cargo test -p stackly-protocol` → termasuk `metrics_fixtures` (6 test: live, not running, reset, nilai tidak dikenal, request dan penolakan kursor, balasan terbesar 60 sampel dan 200 baris di bawah 1 MiB; kini 7, dengan test terpisah untuk `type` metrik yang tidak dikenal) dan `ipc_fixtures` yang membaca `frame-response-instance-get-metrics-*.json` dan `request-instance-get-metrics*.json` → AC-3, AC-11
 - [x] `cargo test -p stacklyd --test supervisor metrics` → 7 test lulus lewat socket pada proses fake server asli: sampel tanpa client yang meminta (sampel pertama `warming_up`, memori terisi, pohon dan daftar proses), aturan kursor (`afterSeq` baru, `historyId` lain mereset, `afterSeq` di luar tanpa reset), `not_running` tanpa history dan tanpa pemindaian oleh `get_metrics`, `resource.not_found`, history dibuang saat instance berhenti, pemindaian terjadwal mengisi `last_scan` dan pemindaian on demand ikut mengisinya, dan `restartTotal` naik satu setelah proses dibunuh dan di-respawn → AC-1, AC-3, AC-5, AC-6, AC-10, AC-11
-- [x] `cargo test -p stackly-cli --test instance` → termasuk `metrics` (5 test: dua cakupan dengan label dan golden `instance_metrics.txt`, `unavailable (reason)`, `--json` sama dengan balasan, "not running (stopped)" keluar 0, nama tidak dikenal keluar 10 `cli.instance_not_found`, dan `--watch` dengan kursor, "history reset", Ctrl+C keluar 0) dan golden `instance_*` yang kini memuat `restartTotal` dan "since created"; `a_bad_draft_gets_the_same_error_through_the_client_and_through_the_cli` kadang gagal saat mesin sibuk dan lulus kalau dijalankan sendiri → AC-6, AC-12
-- [x] `swift test --package-path clients/swift` → lulus (hitungan method 44 dan protokol 2.2, semua fixture indeks) → AC-3, AC-11
+- [x] `cargo test -p stackly-cli --test instance` → termasuk `metrics` (5 test: dua cakupan dengan label dan golden `instance_metrics.txt`, `unavailable (reason)`, `--json` sama dengan balasan, "not running (stopped)" keluar 0, nama tidak dikenal keluar 10 `cli.instance_not_found`, dan `--watch` dengan kursor, "history reset", Ctrl+C keluar 0; kini 9 di `apps/cli/tests/instance/metrics.rs`, ditambah Uptime pada `sampledAt` sampel terbaru, tanpa baris Uptime sebelum sampel pertama, nama dan UUID meminta instance yang sama, dan "history reset" saat proses baru belum punya sampel) dan golden `instance_*` yang kini memuat `restartTotal` dan "since created"; `a_bad_draft_gets_the_same_error_through_the_client_and_through_the_cli` kadang gagal saat mesin sibuk dan lulus kalau dijalankan sendiri → AC-6, AC-12
+- [x] `swift test --package-path clients/swift` → lulus (hitungan method 44 dan protokol 2.2 saat itu, semua fixture indeks) → AC-3, AC-11
 - [x] `swift build --package-path apps/macos/Packages/StacklyUI --build-tests` → hijau setelah init `InstanceSummary`, `InstanceReadiness`, dan `InstanceHealth` mendapat `restartTotal` dan `latencyMs` netral; tampilan Restarts dan latensi menunggu langkah 7 → AC-6, AC-7
 
 ### Acceptance-criteria coverage
@@ -36,38 +56,10 @@ _Langkah 4 (sampler di core, atas fake), 5 (protokol 2.2, daemon), dan 6 (CLI) s
 - AC-4, AC-6 · bagian restart: `restartTotal`, label cakupan di CLI dan layar menunggu langkah 5 sampai 7 (label data `processCount` dan `measuredCount` sudah dihasilkan sampler)
 - AC-6 · `restartTotal` di `InstanceSummary`, `instance.get_metrics`, dan baris Restarts `stackly instance inspect` ("{n} since created"), naik setelah respawn pasca crash (test daemon); kartu Restarts di app menunggu langkah 7
 - AC-10 · slot `last_scan` diisi oleh setiap pemindaian (on demand dan terjadwal, `DATA_USAGE_SCHEDULE_INTERVAL` 15 menit, dipendekkan lewat `DataUsageConfig` di test); `get_metrics` hanya membaca slot
-- AC-11 · method, kursor, `historyReset`, `not_running`, `instance.not_found`, ukuran balasan terbesar, fixture Rust dan Swift, dan `ProtocolVersion::CURRENT` 2.2; jenis metrik yang tidak dikenal hanya dites di Rust (typeshare Swift tidak memetakan `type` asing ke `unrecognized`, nilai enum asing ya)
+- AC-11 · method, kursor, `historyReset`, `not_running`, `instance.not_found`, ukuran balasan terbesar, fixture Rust dan Swift, dan `ProtocolVersion::CURRENT` 2.2 (kini 3.1); jenis metrik yang tidak dikenal hanya dites di Rust (typeshare Swift tidak memetakan `type` asing ke `unrecognized`, nilai enum asing ya)
 - AC-12 · CLI `stackly instance metrics` dengan `--json` dan `--watch`
 - AC-7 · `latencyMs` ada di DTO tetapi selalu null sampai langkah 8 mengisinya dari probe
 - AC-8, AC-9, AC-13 sampai AC-15 · milik langkah lain (7, 8, 9)
-
-## Milestone 4: Probe latency and wake
-
-_Langkah 8 sudah dibangun: latensi di `ProbeOutcome` dan observasi domain, `latencyMs` di DTO daemon, `WakeWatch` dengan masa tenggang, perpanjangan deadline start, dan penanda `// provisional: F28` sudah dihapus. Tampilan latensi di app (langkah 7) dan evidence native di Mac yang benar benar sleep (langkah 9) belum._
-
-### UI / manual
-
-- [ ] Di Mac asli: jalankan instance PostgreSQL 17 sampai `ready`, tutup layar sampai Mac sleep beberapa menit, lalu bangunkan → readiness dan health sebentar `unknown` reason `waking` (satu `instance.health_changed`), lalu kembali `ready` dan `healthy` dengan `probe_ok` dalam beberapa detik, `restartTotal` tidak naik, port tidak berubah. Dicatat sebagai evidence manual `native`, `BLOCKED` kalau tidak dijalankan (langkah 9) → AC-9, AC-15
-- [x] Dengan daemon jalan dan satu instance fake `ready`: `stackly instance get <nama> --json` → `readiness.latencyMs` dan `health.latencyMs` terisi bilangan bulat (bukan null) dan tidak lebih dari timeout probe dalam milidetik → AC-7
-
-### Commands
-
-- [x] `cargo test -p stackly-core --test supervisor_start wake:: -- --test-threads=1` → 4 test lulus pada fake clock yang melompat satu jam sementara jam tokio tidak: wake pada instance `running` membuat readiness dan health `unknown` reason `waking` detail `rechecking after sleep` dengan `observed_at` waktu wake dan tanpa latensi, probe langsung jalan (pause rutin 60 detik, kembali `probe_ok` dalam hitungan detik), tidak ada sinyal, spawn kedua, atau perubahan port; kegagalan dalam grace tidak mengubah observasi dan tidak naik hitungannya (readiness dan health tetap `waking` sampai grace habis, lalu readiness `not_ready` reason `connect_failed` dengan latensi); sukses pertama mengakhiri grace sehingga kegagalan berikutnya langsung dihitung; wake saat start dengan `readinessSeconds: 1` menggeser deadline sehingga start tetap `succeeded` dan tidak ada observasi `waking` → AC-9
-- [x] `cargo test -p stackly-core --test supervisor_start status:: -- --test-threads=1` → termasuk `readiness_and_health_carry_the_latency_of_the_attempt_that_made_them` (sukses dan gagal membawa latensi, perubahan latensi saja tidak menjadi event) dan `an_observation_that_goes_stale_...` yang kini mematikan deteksi wake lewat `wake_gap_threshold` → AC-7, AC-8
-- [x] `cargo test -p stackly-core --lib wake` → unit test `slept` (selisih sama, tepat di ambang, lebih besar, jam dinding mundur diabaikan), `Track` (kegagalan dalam grace tidak dihitung, setelah grace dihitung, sukses mengakhiri grace), observasi `waking`, dan nilai konstanta (2 detik, 5 detik, 30 detik) → AC-9
-- [x] `cargo test -p stackly-core --lib supervisor::status supervisor::probe observation` dan `cargo test -p stackly-domain --lib observation` → `differs_visibly` mengabaikan latensi, `timed` memotong latensi pada timeout probe, `with_latency` bertahan lewat `effective` sampai stale → AC-7, AC-8
-- [x] `cargo test -p stackly-core` (semua, `--test-threads=1`) → hijau
-- [x] `cargo test -p stacklyd --lib latency_tests` → `latencyMs` dibulatkan ke atas ke milidetik penuh, null tanpa probe, menjenuh di `u32::MAX` → AC-7
-- [x] `cargo test -p stacklyd --test supervisor -- --test-threads=1` → 104 test lulus (261 detik) → AC-9
-- [x] `grep -rn "provisional: F28" crates apps clients` → tanpa hasil → AC-8
-- [x] `cargo clippy -p stackly-domain -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
-
-### Acceptance-criteria coverage
-
-- AC-7 · latensi satu percobaan probe (sukses maupun gagal, dibulatkan ke atas, dipotong pada timeout probe) di `ProbeOutcome`, observasi domain, dan `latencyMs` DTO; null untuk observasi tanpa probe (`waking`, `not_running`, `daemon_restarted`); tidak ikut `differs_visibly`. Baris Readiness di Summary dan header Metrics di app menunggu langkah 7
-- AC-8 · `READINESS_REFRESH_INTERVAL` 10 detik dan `READINESS_MAX_AGE` 30 detik tetap, penanda provisional dihapus; sampler tidak mengirim probe (milestone 2)
-- AC-9 · `WakeWatch` (`crates/core/src/supervisor/wake.rs`), grace terpisah untuk readiness dan health, perpanjangan deadline start; test pakai fake clock tanpa sleep sungguhan. Evidence Mac yang benar benar sleep menunggu langkah 9
-- AC-13 sampai AC-15 · milik langkah lain (7, 9)
 
 ## Milestone 3: GUI
 
@@ -105,6 +97,34 @@ _Langkah 7 sudah dibangun: `getMetrics` di `StacklyClient`, tab Metrics (kartu, 
 - Header health: pesan `MetricsReply` tidak membawa tanda "provider tidak punya health plan", jadi tab memakai health, dan memakai readiness hanya selama health `unknown` sementara readiness sudah punya nilai.
 - Batas typeshare: `NumberMetric`, `CountMetric`, dan `DataUsageMetric` dengan `type` asing melempar `typeMismatch` saat didecode, bukan `.unrecognized`. Pada daemon yang lebih baru dari app, balasan `instance.get_metrics` seperti itu tidak terbaca dan tab menampilkan "Couldn’t Load Metrics" (atau menahan data lama dengan banner "Couldn’t refresh metrics"), tidak pernah angka nol.
 - Jumlah "{n} more processes not shown" dihitung dari `tree.processCount` sampel terbaru dikurangi baris yang tampil, karena balasan hanya membawa `processesTruncated`.
+
+## Milestone 4: Probe latency and wake
+
+_Langkah 8 sudah dibangun: latensi di `ProbeOutcome` dan observasi domain, `latencyMs` di DTO daemon, `WakeWatch` dengan masa tenggang, perpanjangan deadline start, dan penanda `// provisional: F28` sudah dihapus. Tampilan latensi di app (langkah 7) dan evidence native di Mac yang benar benar sleep (langkah 9) belum._
+
+### UI / manual
+
+- [ ] Di Mac asli: jalankan instance PostgreSQL 17 sampai `ready`, tutup layar sampai Mac sleep beberapa menit, lalu bangunkan → readiness dan health sebentar `unknown` reason `waking` (satu `instance.health_changed`), lalu kembali `ready` dan `healthy` dengan `probe_ok` dalam beberapa detik, `restartTotal` tidak naik, port tidak berubah. Dicatat sebagai evidence manual `native`, `BLOCKED` kalau tidak dijalankan (langkah 9) → AC-9, AC-15
+- [x] Dengan daemon jalan dan satu instance fake `ready`: `stackly instance get <nama> --json` → `readiness.latencyMs` dan `health.latencyMs` terisi bilangan bulat (bukan null) dan tidak lebih dari timeout probe dalam milidetik → AC-7
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test supervisor_start wake:: -- --test-threads=1` → 4 test lulus pada fake clock yang melompat satu jam sementara jam tokio tidak: wake pada instance `running` membuat readiness dan health `unknown` reason `waking` detail `rechecking after sleep` dengan `observed_at` waktu wake dan tanpa latensi, probe langsung jalan (pause rutin 60 detik, kembali `probe_ok` dalam hitungan detik), tidak ada sinyal, spawn kedua, atau perubahan port; kegagalan dalam grace tidak mengubah observasi dan tidak naik hitungannya (readiness dan health tetap `waking` sampai grace habis, lalu readiness `not_ready` reason `connect_failed` dengan latensi); sukses pertama mengakhiri grace sehingga kegagalan berikutnya langsung dihitung; wake saat start dengan `readinessSeconds: 1` menggeser deadline sehingga start tetap `succeeded` dan tidak ada observasi `waking` → AC-9
+- [x] `cargo test -p stackly-core --test supervisor_start status:: -- --test-threads=1` → termasuk `readiness_and_health_carry_the_latency_of_the_attempt_that_made_them` (sukses dan gagal membawa latensi, perubahan latensi saja tidak menjadi event) dan `an_observation_that_goes_stale_...` yang kini mematikan deteksi wake lewat `wake_gap_threshold` → AC-7, AC-8
+- [x] `cargo test -p stackly-core --lib wake` → unit test `slept` (selisih sama, tepat di ambang, lebih besar, jam dinding mundur diabaikan), `Track` (kegagalan dalam grace tidak dihitung, setelah grace dihitung, sukses mengakhiri grace), observasi `waking`, dan nilai konstanta (2 detik, 5 detik, 30 detik) → AC-9
+- [x] `cargo test -p stackly-core --lib supervisor::status supervisor::probe observation` dan `cargo test -p stackly-domain --lib observation` → `differs_visibly` mengabaikan latensi, `timed` memotong latensi pada timeout probe, `with_latency` bertahan lewat `effective` sampai stale → AC-7, AC-8
+- [x] `cargo test -p stackly-core` (semua, `--test-threads=1`) → hijau
+- [x] `cargo test -p stacklyd --lib latency_tests` → `latencyMs` dibulatkan ke atas ke milidetik penuh, null tanpa probe, menjenuh di `u32::MAX` → AC-7
+- [x] `cargo test -p stacklyd --test supervisor -- --test-threads=1` → 104 test lulus (261 detik) → AC-9
+- [x] `grep -rn "provisional: F28" crates apps clients` → tanpa hasil → AC-8
+- [x] `cargo clippy -p stackly-domain -p stackly-core -p stacklyd --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-7 · latensi satu percobaan probe (sukses maupun gagal, dibulatkan ke atas, dipotong pada timeout probe) di `ProbeOutcome`, observasi domain, dan `latencyMs` DTO; null untuk observasi tanpa probe (`waking`, `not_running`, `daemon_restarted`); tidak ikut `differs_visibly`. Baris Readiness di Summary dan header Metrics di app menunggu langkah 7
+- AC-8 · `READINESS_REFRESH_INTERVAL` 10 detik dan `READINESS_MAX_AGE` 30 detik tetap, penanda provisional dihapus; sampler tidak mengirim probe (milestone 2)
+- AC-9 · `WakeWatch` (`crates/core/src/supervisor/wake.rs`), grace terpisah untuk readiness dan health, perpanjangan deadline start; test pakai fake clock tanpa sleep sungguhan. Evidence Mac yang benar benar sleep menunggu langkah 9
+- AC-13 sampai AC-15 · milik langkah lain (7, 9)
 
 ## Milestone 5: Evidence on this Mac
 

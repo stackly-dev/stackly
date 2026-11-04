@@ -1,7 +1,7 @@
 # 0028. Metrics dan health
 
 **Date**: 2026-11-02
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
@@ -171,9 +171,10 @@ Byte dan byte per detik dikirim sebagai `Count`; CPU sebagai number satu desimal
 | `instance.get_metrics` | `lastFailure` | `Instance::last_failure` dan detail actor, seperti `instance.get` |
 | `instance.get_metrics` | readiness, health, `latencyMs` | observasi actor lewat `effective(now, READINESS_MAX_AGE)` |
 | `instance.get_metrics` | `dataUsage`, `scannedAt` | slot `last_scan` `DataUsageService`, tanpa memindai |
-| CLI dan GUI | uptime | `now - process.startedAt` di client (fungsi `uptime` yang sudah ada di `DetailFormat.swift`) |
+| CLI | uptime | `sampledAt` sampel terbaru dikurangi `process.startedAt`, jadi umur pada sampel itu, bukan pada saat perintah berjalan; sebelum sampel pertama tidak ada baris Uptime (`apps/cli/src/commands/instance/metrics.rs`) |
+| GUI | uptime | `now - process.startedAt` di client (fungsi `uptime` yang sudah ada di `DetailFormat.swift`) |
 | GUI | "sampled every {n} s" | `intervalSeconds` balasan |
-| GUI | header health | `health` kalau provider punya health plan, selain itu `readiness` |
+| GUI | header health | `health`; selama health `unknown` dan readiness tidak, `readiness` yang tampil (`MetricsFormat.swift`). `MetricsReply` tidak membawa tanda "provider tanpa health plan", jadi ini cara client membaca bagian "atau readiness" di AC-7; diterima lead tanpa perubahan kontrak (2026-11-02) |
 | GUI | teks unavailable | tabel teks tetap di AC-13 |
 | wake | `slept_for` | selisih `Clock::now` dikurangi selisih jam monotonic di `WakeWatch` |
 
@@ -227,13 +228,18 @@ Semua bisa diperpendek lewat `SupervisorConfig` dan `DataUsageConfig` untuk test
 | sampler atas `FakeProcessSupervision`: pohon, siklus parent, uid lain, `EPERM`, proses hilang, PID dipakai ulang, cache `inspect`, history baru saat proses berganti, potongan 200 baris | `crates/core/tests/metrics/` | **AC-1**, **AC-3**, **AC-5** |
 | conformance `list_pids` dan `counters` pada child proses test asli (fork tiga level) | `crates/testkit` conformance, `stackly-platform-macos` tests | **AC-2**, **AC-5** |
 | `restart_total`: respawn dan percobaan ulang setelah crash naik, spawn gagal, start dan restart pengguna tidak; migrasi registry | core supervisor tests, storage tests | **AC-6** |
-| wake dengan clock palsu dan tokio paused: `unknown` `waking`, probe langsung, kegagalan dalam grace tidak dihitung, grace terpisah readiness dan health, wake saat `starting`, port tetap | `crates/core/tests/supervisor_start/` | **AC-9** |
+| wake dengan clock palsu dan tokio paused: `unknown` `waking`, probe langsung, kegagalan dalam grace tidak dihitung, grace terpisah readiness dan health, wake saat `starting`, port tetap | `crates/core/tests/supervisor_start/wake.rs` dan unit test `crates/core/src/supervisor/wake.rs` | **AC-9**, bagian wake **AC-15** |
 | latensi sukses dan gagal di observasi, perubahan latensi saja tanpa event | core supervisor tests | **AC-7** |
 | `instance.get_metrics`: live, not running per lifecycle, aturan cursor, `historyReset`, not found, ukuran balasan terbesar di bawah 1 MiB; `last_scan` setelah TTL cache lewat; fixture kontrak | `apps/daemon/tests/`, test kontrak Swift | **AC-10**, **AC-11** |
 | CLI teks, `--json`, `--watch` dengan reset, target tidak dikenal | `apps/cli/tests/` | **AC-12** |
 | snapshot tab Metrics: live main, live tree, sebagian terukur, unavailable, daftar terpotong, not running (spec 0068) | StacklyUI snapshot | **AC-13** |
-| 10 instance fake idle 5 menit, dengan dan tanpa client, dan dengan satu PostgreSQL | evidence run | **AC-14** |
+| 10 instance fake idle 5 menit, dengan dan tanpa client, dan dengan satu PostgreSQL, pada `stacklyd` build release (`cargo test --release`) | evidence run, `apps/daemon/tests/metrics_nfr003.rs` | **AC-14** |
 | PostgreSQL 17 dan NATS native | `apps/daemon/tests/` native | **AC-4**, **AC-15** |
+
+Dua cara ukur yang dipakai saat build, sebagaimana diputuskan lead; teks AC sendiri tidak diubah:
+
+- Cara ukur AC-14: diukur pada `stacklyd` build release, karena build itu yang dikirim. `cargo test` tanpa `--release` memakai `target/debug/stacklyd` tanpa optimasi, dan run 2 di build itu (1,02 sampai 1,14 persen) gagal hanya karena profil build; build release lulus ketiga run. Harness menulis `profile=debug|release` di baris hasil dan catatan record (keputusan lead 2026-11-02).
+- Bagian wake AC-15: test wake menjalankan supervisor core di dalam proses dengan clock palsu, bukan `stacklyd` in process, karena `DaemonConfig` belum punya seam clock. Logika wake ada di core, dan daemon hanya menyambungkan clock asli, jadi lead menilai bagian ini terpenuhi (2026-11-02). Seam clock ada di Follow-up.
 
 ### Usulan update untuk spec lain
 
@@ -290,6 +296,8 @@ Langkah 3 bisa dimulai bersamaan dengan langkah 1 dan 2 (file berbeda). Langkah 
 - [ ] Terapkan *Usulan update untuk spec lain* di spec 0005, 0010, dan 0021 saat langkah yang terkait selesai.
 - [ ] `/scope`: catat selisih Metrics di `docs/scope/ui-macos.md`.
 - [ ] `/sync` setelah build: catat `instance.get_metrics`, `restart_total`, sampler, dan `WakeWatch` di root `AGENTS.md`.
+- [ ] Seam clock di `DaemonConfig`, supaya test wake AC-15 bisa berjalan di `stacklyd` in process, bukan hanya di supervisor core.
+- [ ] Usulan debugger NFR-003 (`dbg-f28-nfr003`, 2026-11-02), bukan syarat AC-14 yang sudah lulus di build release: (a) satu daftar registry per tick yang dipakai bersama sampler dan `start_data_scans` (`apps/daemon/src/ipc/instance/metrics.rs`, dimulai di `server.rs`), karena kini keduanya membaca `MainProcesses::running` sendiri sendiri; (b) cadence pompa spool (`SPOOL_DRAIN_INTERVAL`) di build debug. Fix kecil yang sudah masuk: daftar parent proses dibangun sekali per tick (`8122ef3f`).
 
 ## Rationale
 

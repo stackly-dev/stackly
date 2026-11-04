@@ -1,6 +1,28 @@
-# Verify: Buka instance di aplikasi klien · spec 0070 · updated 2026-11-02
+# Verify: Buka instance di aplikasi klien · spec 0070 · updated 2026-11-03
 
-_Langkah diturunkan dari acceptance criteria spec 0070. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri. Milestone 3 (bukti native, AC-15) menambah bagiannya sendiri; jangan ubah bagian milestone lain._
+_Langkah diturunkan dari acceptance criteria spec 0070. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri. Milestone 3 (bukti native, AC-15) menambah bagiannya sendiri; jangan ubah bagian milestone lain. Bagian Milestone 1 ditambahkan belakangan, tanpa kotak centang._
+
+## Milestone 1: Manifest, daemon, and CLI
+
+_Langkah 1 sampai 6 dibangun di commit WIP `2f26d789` dan masuk `main` lewat konsolidasi branch 2026-11-02 (merge `36b33e6e`), dalam kontrak 2.1. Build milestone ini tidak menulis bagian verify, jadi bagian ini ditambahkan belakangan (2026-11-03) saat spec diselaraskan dengan kode. Langkahnya sengaja tanpa kotak centang: milestone ini sudah dicentang di scope dan dicek oleh verify penuh `chk-f70-verify` di `3b44e475`, dan daftar di bawah gunanya untuk menjalankannya ulang._
+
+### Commands
+
+- `cargo test -p stackly-core --test provider_open_with` → 19 test aturan loader: blok `openWith` dimuat dalam urutan manifest, paket tanpa blok tidak punya entri, blok ikut digest manifest, blok kosong atau terlalu besar `invalid_value`, nama di luar pola dan nama ganda ditolak, dan token secret di aksi ditolak → AC-1
+- `cargo test -p stackly-core --test open_with_render` → 7 test render: golden paket di repo, urutan manifest tanpa nilai secret, executable runtime absolut dan nilai mentah di `command`, `retained` untuk semua kind termasuk `reveal`, `package_unavailable`, `port_not_assigned` hanya untuk entri yang menyebut endpoint → AC-2
+- `cargo test -p stackly-protocol --test open_with_fixtures` → 5 test fixture kontrak: label per kind, kind tidak dikenal menjadi `unrecognized`, aksi di fixture konsisten dan tanpa nilai secret, detail tanpa `openActions` menjadi daftar kosong, fixture `prepare_terminal` cocok dengan aturan params dan kode error → AC-3, AC-4
+- `cargo test -p stacklyd --test supervisor open_with` → 9 test lewat socket: `openActions` di `instance.get_detail` dalam urutan manifest, skrip privat di folder temp instance tanpa secret, aksi tidak dikenal atau bukan terminal `not_found`, instance berhenti atau belum ready `unavailable` dengan alasannya, folder temp yang tidak bisa ditulis atau hilang `unwritable` tanpa file setengah jadi, dan credential fixture tidak ada di balasan, skrip, maupun log → AC-3, AC-4, AC-14
+- `cargo test -p stackly-cli --test instance open` → 6 test `stackly instance open <instance> --list`: satu baris per aksi, `--json` tanpa nilai secret, aksi tidak tersedia dengan tanda dan alasan, provider tanpa aksi keluar 0, `--list` wajib, dan daemon yang akan membuka password tidak pernah ditanya → AC-12, AC-14
+- `cargo xtask provider check` dan `cargo test -p stackly-core --test provider_packages` → entri `openWith` paket PostgreSQL, NATS, Traefik, dan fake lolos, golden render cocok → AC-13
+- `cargo xtask codegen --check` → kontrak `OpenAction`, `OpenCommand`, `EnvPair`, dan `prepare_terminal` tidak drift
+
+### Acceptance-criteria coverage
+
+- AC-1, AC-2 · loader dan render di core, termasuk penolakan token secret di aksi Open In
+- AC-3, AC-4 · `openActions` di detail dan `instance.prepare_terminal` dengan skrip `.command`, lewat fixture kontrak dan daemon
+- AC-12 · CLI `--list` dan `--json`
+- AC-13 · entri `openWith` di empat paket dengan golden. Digest manifest yang baru membuat PostgreSQL dan NATS sementara `experimental` (`runtime_tested`) sampai run kompatibilitas di milestone 3
+- AC-14 · bagian daemon dan CLI dari suite sentinel; bagian Swift ada di milestone 2
 
 ## Milestone 2: GUI
 
