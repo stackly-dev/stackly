@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/04-kerja-harian.md` (fitur 28 sampai 32 dan 70, atas permintaan user "mulai dari no 28")
 - **Hash awal:** `36b33e6e` · **Hash awal wave aktif:** `36b33e6e`
 - **Wave aktif:** `1`, mulai `2026-11-02`
-- **Diperbarui:** `2026-11-04 01:30`
+- **Diperbarui:** `2026-11-04 03:30`
 
 ## Sub sesi wave `1`
 
@@ -68,7 +68,8 @@
 | `tst-f31-test` | tester | F31 `Test it`, AC-1 sampai AC-21; race `Rig::bootstrap` diperbaiki (tunggu sesi hasil rotasi), tag AC-16 dan AC-10 | `04-kerja-harian.md` | test F31 | `claude/dev-f29-m1-6a7d0b` (sesi `local_581eb039`) | `sonnet-5-5 · high` | dipakai ulang; done `0a2eb4a4`, merged `3f9eef09` |
 | `tst-f32-test` | tester | F32 `Test it`, AC-1 sampai AC-26; tiga test menu bar baru, tag AC, flaky `CreateInstanceModelTests` diperbaiki | `04-kerja-harian.md` | test F32 | `claude/dev-f28-m2-s4-a40135` (sesi `local_387469b1`) | `sonnet-5-5 · high` | dipakai ulang; done `3963478d`, merged `7a65d080` |
 | `arc-sync` | architect (update) | penyelarasan teks spec 0006, 0010, 0011, 0019, 0025, 0028 sampai 0032, 0070 dengan kode; cross check Sonnet; Status 0028, 0029, 0030, 0070 menjadi Accepted; empat teks AC disetujui user (0025 AC-6, AC-8; 0031 AC-11, AC-15) | `04-kerja-harian.md` | spec terkait | `claude/dev-f70-m2-100be9` (sesi `local_c6d827bc`) | `opus-5-5 · xhigh` | dipakai ulang tanpa `clear_session`; done `9f7a35c1`, `6b8b956f`, merged `547598bd`; sisa: spec 0019 AC-11 `marker_missing` menunggu user |
-| `chk-f27-verify` | checker (verify penuh) | F27 seluruh fitur, menutup `Verify it`; langkah GUI dilewati | `04-kerja-harian.md` | centang `verify.md` 0027 | `claude/dev-f29-m1-6a7d0b` (sesi `local_581eb039`) | `opus-5-5 · high` | dipakai ulang; aktif |
+| `chk-f27-verify` | checker (verify penuh) | F27 seluruh fitur PASS di `4b46bb76`; native PostgreSQL 17, `level`, `truncated`, subscription ke-9, health `instance_logs` dicentang; `ended` `BLOCKED` (belum ada method hapus instance) | `04-kerja-harian.md` | centang `verify.md` 0027 | `claude/dev-f29-m1-6a7d0b` (sesi `local_581eb039`) | `opus-5-5 · high` | dipakai ulang; done `2e4d8d42`, merged `b4e5e6e1` |
+| `tst-f27-test` | tester | F27 `Test it`: dua test log flaky menunggu kondisi (5 dari 5 lulus di bawah 40 loop sibuk), AC-3, 4, 7, 8, 13, 14 diberi test bernama | `04-kerja-harian.md` | test F27 | `claude/dev-f28-m2-s4-a40135` (sesi `local_387469b1`) | `sonnet-5-5 · high` | dipakai ulang; done `006669b4`, merged `ae10faca` |
 | `dev-f28-m2-s5` | developer | F28 milestone 2 langkah 5 dan 6, pemilik kontrak · Langkah Build plan selesai: 5, 6 · Pointer code in `crates/protocol/src/instance/metrics.rs`, `apps/daemon/src/ipc/instance/metrics.rs`, `apps/daemon/src/map/metrics.rs`, `apps/cli/src/commands/instance/metrics.rs` · protokol 2.2 · `latencyMs` selalu `null` dengan `// provisional: F28 step 8`; typeshare Swift tidak memetakan `type` asing pada enum bermuatan ke `.unrecognized` (fixture `metrics-unknown-types` hanya Rust) | `04-kerja-harian.md` | kontrak, metrics core, daemon, CLI, pemanggil Swift mekanis | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | merged `0c67ad07` |
 | `chk-f28-m2` | checker (verify) | F28 milestone 2: 12 dari 13 langkah PASS; FAIL AC-12 `--watch`: setelah stop lalu start, baris "history reset" tidak tercetak karena balasan reset dengan `samples` kosong disaring `!last.samples.is_empty()` di `apps/cli/src/commands/instance/metrics.rs`; temuan rendah: open enum Swift untuk `NumberMetric`, `CountMetric`, `DataUsageMetric` tidak jatuh ke `.unrecognized` (batas typeshare yang sudah ada) | `04-kerja-harian.md` | centang `verify.md` 0028 Milestone 2 | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; failed; centang merged `afc6c29a` |
 | `dev-f29-m2` | developer | F29 milestone 2, langkah 8 sampai 11 · Pointer code in `crates/protocol/src/instance/config.rs`, `apps/daemon/src/ipc/instance/config.rs`, `apps/daemon/src/map/config.rs`, `apps/cli/src/commands/instance/{config,rename,endpoint}.rs` · protokol 2.3 · plus refresh fixture katalog NATS (`72204f10`) · defect: Fixed ke Auto pada instance running gagal di langkah stop (`supervisor.config_invalid`), test `a_running_instance_can_change_a_fixed_port_to_automatic` di-`#[ignore]` · penyimpangan dicatat: `OperationTitle.swift` 3 baris, nama idempotency `instance.config_apply`, `ConfigApplyAccepted`, `validate` membalas `valid` dan `fieldErrors`, `suggestedPort` di tiga kode endpoint | `04-kerja-harian.md` | kontrak, handler config, CLI config | `claude/dev-f28-m2-s4-a40135` | `sonnet-5-5 · high` | dipakai ulang; merged setelah `ca555726` (status NATS diselaraskan) dan `4bd9c15e` (domain Fixed ke Auto) |
@@ -230,8 +231,13 @@
 
 ## Riwayat wave
 
-- Wave `1` (`2026-11-02`, hash awal `36b33e6e`): berjalan
+- Wave `1` (`2026-11-02` sampai `2026-11-04`, hash awal `36b33e6e`): selesai. Fitur 27 sampai 32 dan 70 `done`; main di-push ke origin, semua worktree dan branch sub sesi dihapus.
 
 ## Penutupan
 
-- belum
+- `2026-11-04`: semua kotak fitur 27, 28, 29, 30, 31, 32, dan 70 tercentang; heading scope dan `docs/scope/index.md` ditandai `done` atas persetujuan user; Status spec 0027, 0031, 0032 menjadi Accepted (0028, 0029, 0030, 0070 sudah Accepted lewat `arc-sync`).
+- Sisa terbuka di scope 04: fitur 26 `Verify it` dan `Test it` (dilewati user 2026-11-01).
+- Langkah manual dan `BLOCKED` yang dicatat di kotak (milik user): langkah GUI semua fitur, sesi sleep sungguhan F28, run jaringan mati F29, spike sleep dan logout F31 serta login, logout, reboot, dan Login Items asli, Open Stackly at login (OQ-012), Postico dan Traefik F70, volume eksternal F32, `ended` F27.
+- Follow-up yang menunggu: Minor dan Nit review F30 (`docs/reviews/2026-11-02-f30-reconciliation-restart.md`), seam clock `DaemonConfig` F28, blocker `store_locked` basi dan timer `secret_retry` (spec 0011 dan 0031, butuh persetujuan teks AC), dua konstanta exit timeout yang tidak terhubung, usulan debugger NFR-003.
+- LaunchAgent spike `com.stackly.spike.asid` tetap dimuat sampai user memutuskan (spike F31 `BLOCKED`).
+- User meminta: commit dan merge semua worktree dan branch ke `main`, push ke origin, lalu hapus semua branch dan worktree kecuali `main`.

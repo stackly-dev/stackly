@@ -24,7 +24,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [ui-macos.md](ui-macos.md) | UI & desain macOS (jalur paralel SwiftUI) | 12, 13, 67 sampai 69 | 5 done |
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 1 in-progress, 8 done |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 done |
-| [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 1 done, 7 in-progress |
+| [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 done |
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 planned |
 | [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 3 planned |
 | [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 5 planned |
@@ -64,12 +64,12 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 24 | Instance kedua dari runtime yang sama | Multi versi & instance | done |
 | 25 | PostgreSQL 17 & 18 berdampingan | Multi versi & instance | done |
 | 26 | Stop, restart & reload | Kerja harian | done |
-| 27 | Log per instance | Kerja harian | in-progress |
-| 28 | Metrics & health | Kerja harian | in-progress |
-| 29 | Edit config, nama & endpoint | Kerja harian | in-progress |
-| 30 | Reconciliation & restart daemon terencana | Kerja harian | in-progress |
-| 31 | Demand, autostart & login | Kerja harian | in-progress |
-| 32 | Menu bar & Settings | Kerja harian | in-progress |
+| 27 | Log per instance | Kerja harian | done |
+| 28 | Metrics & health | Kerja harian | done |
+| 29 | Edit config, nama & endpoint | Kerja harian | done |
+| 30 | Reconciliation & restart daemon terencana | Kerja harian | done |
+| 31 | Demand, autostart & login | Kerja harian | done |
+| 32 | Menu bar & Settings | Kerja harian | done |
 | 33 | Crash loop & error start yang aman | Saat instance gagal | planned |
 | 34 | Doctor & diagnostic bundle | Saat instance gagal | planned |
 | 35 | Operations, activity & audit | Saat instance gagal | planned |
@@ -107,7 +107,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 67 | Komponen dasar Stackly | Foundation | done |
 | 68 | Fixture tampilan & cek visual | Foundation | done |
 | 69 | Menu aplikasi, perintah & shortcut keyboard | Foundation | done |
-| 70 | Buka instance di aplikasi klien | Kerja harian | in-progress |
+| 70 | Buka instance di aplikasi klien | Kerja harian | done |
 
 ## Catatan urutan
 

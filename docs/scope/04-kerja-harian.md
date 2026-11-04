@@ -23,7 +23,7 @@ Lifecycle lengkap sesuai capability provider: stop graceful dengan timeout, rest
 - [ ] Verify it: `/check verify stop, restart & reload` · skipped for this session by the user (2026-11-01)
 - [ ] Test it: `/test stop, restart & reload` · skipped for this session by the user (2026-11-01)
 
-### 27. Log per instance · in-progress
+### 27. Log per instance · done
 
 Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp, pemisahan stdout dan stderr, batas ukuran, dan rotasi. Subscriber yang lambat tidak boleh menahan pipe proses.
 
@@ -40,10 +40,10 @@ Log terpisah untuk tiap instance dengan follow, cursor, filter dasar, timestamp,
   - [x] CLI: `stackly instance logs` with tail, follow, stream, grep, cursors, text and JSON output, Ctrl+C exit 0 (spec 0027 AC-9, AC-10; build step 7; after milestone 2) · code in `apps/cli/src/commands/instance/logs.rs`, test in `apps/cli/tests/instance/logs_real.rs`
   - [x] GUI: `StacklyClient` log methods and the `log` frame, then the Logs tab with `InstanceLogsModel`, Copy Shown Lines, every state, and the spec 0068 view fixtures (spec 0027 AC-7, AC-9, AC-11; build steps 8 and 9; after milestone 2; can run in parallel with milestone 3) · client in `clients/swift/Sources/StacklyClient/Link/` (`DaemonLink.followLogs`, `LogFollowSession`), tab in `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Instances/Logs/`, fixtures in `Fixtures/FixtureLogs.swift`, tests in `Tests/StacklyUITests/Instances/Logs/` and `SnapshotTests/InstanceLogsSnapshotTests.swift`
   - [x] Evidence on this Mac: the slow client evidence run, the PostgreSQL 17 native test after your approval, and a manual GUI session comparing the Logs tab with `stackly instance logs --follow` (spec 0027 AC-3, AC-6, AC-8, AC-11; build step 10; after milestones 3 and 4; without the PostgreSQL artifact in the xtask runtime cache the native test ends `BLOCKED`) · slow client run PASS on 2026-11-02 against the `stacklyd` binary (get_info p99 1 ms, daemon footprint +15 MiB, fake at 100 percent, silent follower closed by `ipc.write_timeout`), test in `apps/daemon/tests/supervisor/slow_logs.rs` with the fake setting `logLineBytes`; PostgreSQL 17.11 native PASS on 2026-11-02, test in `apps/daemon/tests/postgresql/logs.rs`; manual GUI session PASS on 2026-11-02 against the fake provider (2 lines per second) in a temporary root: the Logs tab and `stackly instance logs --follow` showed the same lines, sources, and local times, and the stream filter, search, Follow, and Load Earlier to the `process started` marker matched, as reported by the user; the daemon offline and reconnect step was not run
-- [ ] Verify it: `/check verify log per instance`
-- [ ] Test it: `/test log per instance`
+- [x] Verify it: `/check verify log per instance` · automated and native PASS in chk-f27-verify on `4b46bb76` (all automated steps again, native PostgreSQL 17, `level`, `truncated`, the 9th subscription, `instance_logs` health), merge `b4e5e6e1`; `ended` `BLOCKED` (no instance delete method yet), UI steps and the GUI time zone skipped by you (2026-11-04)
+- [x] Test it: `/test log per instance` · tst-f27-test (merge `ae10faca`): every AC has a test naming it; the two load flaky log tests now wait on conditions and passed 5 of 5 under 40 busy loops; the Swift Logs tab flake did not reproduce
 
-### 28. Metrics & health · in-progress
+### 28. Metrics & health · done
 
 Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU, memori, dan pemakaian disk terjadwal, dengan label cakupan yang jelas antara proses utama dan agregat child.
 
@@ -63,7 +63,7 @@ Status, readiness, process tree, uptime, restart count, kegagalan terakhir, CPU,
 - [x] Verify it: `/check verify metrics & health` · automated and native PASS in chk-f28-verify on main `a54afaf3` (native run `01a19c04-6b58-…`, live CLI run on a test root), AC-1 to AC-15 met on the automated and native side; manual GUI steps skipped by you and the real sleep session `BLOCKED` by your choice (2026-11-02)
 - [x] Test it: `/test metrics & health` · tst-f28-test (merge `96588e3e`): every AC-1 to AC-15 has a test naming it, six tests added for the CLI uptime reference and the AC-7 health fallback, suite green; the AC-15 wake test runs on the core supervisor with a fake clock, not on the daemon (no clock seam in `DaemonConfig`, follow-up)
 
-### 29. Edit config, nama & endpoint · in-progress
+### 29. Edit config, nama & endpoint · done
 
 Form typed dan advanced view dari schema provider, memakai renderer form yang sama dengan fitur 20, dengan diff, validasi, revision, dampak reload atau restart, histori minimal last known good, dan deteksi drift. Termasuk ganti nama (label saja; ID, runtime, credential reference, dan storage path tetap) dan ganti endpoint atau port dengan validasi yang sama seperti create.
 
@@ -82,7 +82,7 @@ Form typed dan advanced view dari schema provider, memakai renderer form yang sa
 - [x] Verify it: `/check verify edit config, nama & endpoint` · automated and native PASS in chk-f29-verify on `421f8e20` (native run `01a19c10-d3da-…`: PostgreSQL 18, NATS, Traefik 6 of 6; workspace clippy, full StacklyUI suite with only the known flaky test, `build-app`, a CLI run on a fake instance), AC-21 met by the in process offline harness; manual GUI steps skipped by you and the network off run moved to your manual steps (2026-11-02)
 - [x] Test it: `/test edit config, nama & endpoint` · tst-f29-test (merge `2950e9f8`): every AC-1 to AC-21 has a test naming it; new tests for a name or an ID on every CLI verb, an unknown name exiting 10 before any change, and a create racing a rename to one name with one winner; suite green
 
-### 30. Reconciliation & restart daemon terencana · GA · in-progress
+### 30. Reconciliation & restart daemon terencana · GA · done
 
 Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon restart atau crash, rekonsiliasi proses, runtime, endpoint, storage, operasi, dan desired state, plus restart daemon terencana dengan jendela disruption yang terlihat.
 
@@ -104,7 +104,7 @@ Hardening rekonsiliasi dasar dari fitur 10 untuk instance nyata: setelah daemon 
 - [x] Review it (fresh model): `/check review reconciliation & restart daemon terencana` · chk-f30-review (Opus xhigh, cross family subagents) on range `84d767f9..657d2687`: 1 Blocker and 9 Major fixed in two rounds (merges `5144380b`, `9e649990`, `33967577`, `e4e8d9a2`), confirmed with no Blocker or Major left (`eb418357`, merge `7ab3cbff`); Minor and Nit findings are follow ups in `docs/reviews/2026-11-02-f30-reconciliation-restart.md`
 - [x] Document it: `/document reconciliation & restart daemon terencana` · 2026-11-02, `CHANGELOG.md` (Added, Changed, and Security; range `9a6bf944^..7ab3cbff`, F30 files)
 
-### 31. Demand, autostart & login · in-progress
+### 31. Demand, autostart & login · done
 
 Autostart daemon dan autostart instance sebagai dua setting berbeda, di atas model demand dengan tiga sumber (environment, manual, startup) dan suppression. Aturan evaluasi stop manual terhadap seluruh demand aktif diputuskan di sini; lease environment hanya menjadi sumber demand baru di fitur 46 dan 47.
 
@@ -124,7 +124,7 @@ Autostart daemon dan autostart instance sebagai dua setting berbeda, di atas mod
 - [x] Verify it: `/check verify demand, autostart & login` · automated and native PASS in chk-f31-verify on `51c3884f` (Rust and Swift suites, `native_launchd` 10 of 10 run `01a19fec-825e-…`, `native_session` 2 of 2 after one serial rerun of a test race), every changed AC of specs 0004 to 0030 matched; manual GUI steps skipped by you, the spikes and real login, logout, reboot, and Login Items `BLOCKED` by your choice (2026-11-03)
 - [x] Test it: `/test demand, autostart & login` · tst-f31-test (merge `3f9eef09`): every AC-1 to AC-21 has a test naming it; the native session tests now wait for the rotated session (no more race), `native_session` 2 of 2 and `native_launchd` 10 of 10 PASS; suite green
 
-### 32. Menu bar & Settings · in-progress
+### 32. Menu bar & Settings · done
 
 Status ringkas di menu bar dengan aksi buka aplikasi, **Quit App** yang hanya menutup GUI, dan **Stop Services** sebagai aksi terpisah dengan impact preview. Halaman Settings untuk background startup, default autostart, sumber catalog dan daftar trust provider (import lokal hadir di fitur 37), path data, cache, dan log, retention, update channel (disimpan sebagai preferensi sampai fitur 61), dan privasi, plus notifikasi opsional yang mengikuti izin.
 
@@ -144,7 +144,7 @@ Status ringkas di menu bar dengan aksi buka aplikasi, **Quit App** yang hanya me
 - [x] Verify it: `/check verify menu bar & Settings` · automated PASS in chk-f32-verify on `16beee95` (Rust and Swift suites, snapshots twice with no difference, `build-app`, a live CLI run of settings, storage locations, create defaults, and `stop --all`); manual GUI steps skipped by you, external and network volumes, Open Stackly at login, and the login item launch `BLOCKED`
 - [x] Test it: `/test menu bar & Settings` · tst-f32-test (merge `7a65d080`): every AC-1 to AC-26 has a test naming it; new tests for the menu bar header, operation rows, and Quit, and the flaky `CreateInstanceModelTests` pair fixed; full StacklyUI suite green (1848)
 
-### 70. Buka instance di aplikasi klien · in-progress
+### 70. Buka instance di aplikasi klien · done
 
 Menu "Open In" untuk membuka instance di aplikasi lain: klien database (mockup mencontohkan TablePlus, Postico, Sequel Ace, Redis Insight), CLI provider di Terminal, monitoring atau dashboard di browser, dan file routes Traefik di Finder. Sebelum halaman Environments ada (fitur 44), menu ini tampil di toolbar detail instance, inspector Instances, dan menu Instance di menu bar; mockup menaruhnya di menu aksi per service halaman Environments, yang nanti memakai komponen yang sama. Tambahan dari mockup UI, belum ada di PRD.
 

@@ -1,7 +1,7 @@
 # 0031. Demand, autostart, dan login
 
 **Date**: 2026-11-02
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
