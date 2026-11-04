@@ -949,8 +949,9 @@ impl OperationEngine {
                         | OperationState::CancelRequested
                 )
             })
-            .map(|view| view.operation.kind())
-            .zip(page.items.iter().map(|view| view.operation.id()))
+            // Kind and id come from the same view, so an operation the state
+            // filter drops (needs_recovery) never lends its id to another.
+            .map(|view| (view.operation.kind(), view.operation.id()))
             .filter(|(kind, _)| {
                 *kind != OperationKind::DaemonRestart
                     && (!holds_up_only

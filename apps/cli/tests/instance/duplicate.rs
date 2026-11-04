@@ -129,7 +129,7 @@ fn the_flags_go_over_the_draft_and_copy_takes_the_reference_the_source_uses() {
         json!({
             "name": "pg17-test",
             "displayName": "Test",
-            "provider": { "name": "official/postgresql", "revision": "1.0.0" },
+            "provider": { "name": "official/postgresql", "revision": "1.0.1" },
             "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
             "endpoints": [{ "name": "client", "port": { "type": "fixed", "content": 5555 } }],
             "settings": {

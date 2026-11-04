@@ -61,8 +61,12 @@ impl TemplateFormat {
                     match c {
                         '\\' => out.push_str("\\\\"),
                         '"' => out.push_str("\\\""),
+                        // Braces are escaped too: a consumer such as Traefik's
+                        // file provider runs the raw file through Go
+                        // text/template before it parses the YAML, and must
+                        // never see a `{{` delimiter a value brought in.
                         c if c.is_control()
-                            || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}') =>
+                            || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}' | '{' | '}') =>
                         {
                             out.push_str(&format!("\\u{:04X}", u32::from(c)));
                         }
@@ -72,7 +76,15 @@ impl TemplateFormat {
                 out.push('"');
                 Some(out)
             }
-            Self::Json => Some(serde_json::Value::String(text.to_owned()).to_string()),
+            // The output is one JSON string literal, so every brace in it
+            // belongs to the value; escaping them keeps template delimiters
+            // out of the raw text, as for YAML.
+            Self::Json => Some(
+                serde_json::Value::String(text.to_owned())
+                    .to_string()
+                    .replace('{', "\\u007B")
+                    .replace('}', "\\u007D"),
+            ),
             Self::NatsConf => {
                 if text
                     .chars()
@@ -1080,6 +1092,26 @@ mod tests {
             .unwrap();
 
         assert_eq!(back, nasty);
+    }
+
+    #[test]
+    fn yaml_and_json_escaping_leave_no_template_delimiter_in_the_raw_text() {
+        let rule = "Host(`a.localhost`) && Path(`/{{ printf `%c` 65 }}`) {{";
+        for format in [TemplateFormat::Yaml, TemplateFormat::Json] {
+            let escaped = format.escape_text(rule).unwrap();
+            assert!(
+                !escaped.contains('{') && !escaped.contains('}'),
+                "{format:?}: {escaped}"
+            );
+        }
+
+        let yaml = TemplateFormat::Yaml.escape_text(rule).unwrap();
+        let back: String = serde_yaml_ng::from_str(&format!("v: {yaml}"))
+            .map(|value: serde_yaml_ng::Value| value["v"].as_str().unwrap().to_owned())
+            .unwrap();
+        assert_eq!(back, rule);
+        let json = TemplateFormat::Json.escape_text(rule).unwrap();
+        assert_eq!(serde_json::from_str::<String>(&json).unwrap(), rule);
     }
 
     #[test]

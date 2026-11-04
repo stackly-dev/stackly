@@ -193,9 +193,9 @@
         "provider": {
           "category": "database",
           "displayName": "PostgreSQL",
-          "manifestSha256": "c8287f007b07fb77dd13f3c8a3880abe9a5e7d018ac5b45b8ae0e1e6cd934d5a",
+          "manifestSha256": "e6399840ce02751b405796f577f9cbb42c59275bbf32d0f737dc8f4693442765",
           "name": "official/postgresql",
-          "revision": "1.0.0",
+          "revision": "1.0.1",
           "source": "bundled_catalog"
         },
         "runtime": {

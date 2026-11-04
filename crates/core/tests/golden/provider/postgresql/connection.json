@@ -1,6 +1,6 @@
 [
   {
-    "masked": "postgresql://postgres:****@127.0.0.1:14000/postgres",
+    "masked": "postgresql://postgres:****@127.0.0.1:14000/postgres?require_auth=scram-sha-256",
     "name": "uri",
     "parts": [
       {
@@ -16,14 +16,14 @@
       },
       {
         "kind": "text",
-        "text": "@127.0.0.1:14000/postgres"
+        "text": "@127.0.0.1:14000/postgres?require_auth=scram-sha-256"
       }
     ],
     "portMayChange": true,
     "title": "Connection string"
   },
   {
-    "masked": "postgresql://postgres:****@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000",
+    "masked": "postgresql://postgres:****@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000&require_auth=scram-sha-256",
     "name": "socket",
     "parts": [
       {
@@ -39,7 +39,7 @@
       },
       {
         "kind": "text",
-        "text": "@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000"
+        "text": "@/postgres?host=%2Fprivate%2Ftmp%2Fskt-golden%2Fstackly-0000000a%2Fi%2F0000000a&port=14000&require_auth=scram-sha-256"
       }
     ],
     "portMayChange": true,
