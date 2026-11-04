@@ -261,6 +261,49 @@ struct DaemonLinkTests {
         await link.stop()
     }
 
+    @Test func aLogFollowDeliversThePushedFramesInOrderAndTheEndOfTheFollow() async throws {
+        // covers: spec 0027 AC-7
+        let pushed = [
+            try Fixture.data("ipc/frame-log.json"),
+            try Fixture.data("ipc/frame-log-ended.json"),
+        ]
+        let server = try FakeDaemonServer(path: root.endpoint.socketPath)
+        server.serve { session in
+            try session.startAsDaemon()
+            let request = try session.readRequest()
+            guard case .instanceLogsFollow = request.call else {
+                throw FakeServerError.unexpected(
+                    "expected a follow, got \(request.call.methodName)")
+            }
+            try session.reply(
+                to: request,
+                with: .instanceLogsFollow(
+                    LogsFollowing(subscriptionId: 3, storeId: nil, head: nil)))
+            for frame in pushed { try session.sendPayload(Array(frame)) }
+            _ = try? session.readPayload()
+        }
+        let link = makeLink()
+        var states = StateWatcher(link)
+        await link.start()
+        _ = await states.next { if case .connected = $0 { true } else { false } }
+
+        let follow = try await link.followLogs(
+            LogsFollowParams(instance: UUID(), streams: nil, contains: nil, after: nil))
+        var frames: [LogFrame] = []
+        for try await frame in follow.frames {
+            guard case .log(let log) = frame else { continue }
+            frames.append(log)
+            if log.ended != nil { break }
+        }
+
+        #expect(follow.following.subscriptionId == 3)
+        #expect(frames.count == 2)
+        #expect(frames.first?.entries?.map(\.seq) == [4811, 4812])
+        #expect(frames.first?.gap?.reason == .storeReset)
+        #expect(frames.last?.ended?.reason == .instanceRemoved)
+        await link.stop()
+    }
+
     @Test func aHeartbeatTimeoutMakesTheDaemonUnreachable() async throws {
         let server = try FakeDaemonServer(path: root.endpoint.socketPath)
         server.serve { session in

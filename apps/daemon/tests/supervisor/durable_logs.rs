@@ -461,3 +461,59 @@ async fn an_unknown_instance_is_not_found_and_an_empty_store_reads_empty() {
         )
         .await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_three_log_methods_are_refused_while_the_registry_is_in_recovery_mode() {
+    // covers: AC-14
+    let site = Site::new();
+    let first = site.start_with(fast()).await;
+    first
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    // A schema version newer than the app puts the next start in recovery mode.
+    let db = site.prepared.layout().registry_db();
+    let mut bytes = std::fs::read(&db).expect("the registry file can be read");
+    bytes[60..64].copy_from_slice(&999_u32.to_be_bytes());
+    std::fs::write(&db, &bytes).expect("the registry file can be written");
+
+    let daemon = site.start_with(fast()).await;
+    let api = site.api().await;
+    let id = Uuid::now_v7();
+
+    for call in [
+        Call::InstanceLogsRead(params(id)),
+        Call::InstanceLogsFollow(LogsFollowParams {
+            instance: id,
+            streams: Vec::new(),
+            contains: None,
+            after: None,
+        }),
+        Call::InstanceLogsUnfollow(LogsUnfollowParams { subscription_id: 1 }),
+    ] {
+        let method = call.method();
+        assert!(
+            !call.allowed_in_recovery(),
+            "{method} is marked recovery refused"
+        );
+        let error = api
+            .client
+            .call(call)
+            .await
+            .expect_err("a refused method gets an error");
+        assert!(
+            error.is(&stackly_protocol::codes::registry::RECOVERY_MODE),
+            "{method}: {error:?}"
+        );
+    }
+
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+}

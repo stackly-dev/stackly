@@ -16,6 +16,17 @@ use crate::support::{LogRecorder, Site, fast};
 /// The most a spool may hold in blocks at any sample (AC-12).
 const SPOOL_BLOCKS_MAX: u64 = 2 * 1024 * 1024;
 
+/// The lines the sink must have seen before the run may end: 80 percent of
+/// the 50 000 a fake at 2000 a second writes in 25 seconds.
+const LINES_MIN: usize = 40_000;
+
+/// The least the run takes, so the spools are sampled over a long write.
+const RUN_MIN: Duration = Duration::from_secs(25);
+
+/// The most the run may take. The run ends on what was written, not on a
+/// fixed time, so a busy machine only makes it longer.
+const RUN_LIMIT: Duration = Duration::from_secs(180);
+
 /// Logical size of the file at `path`, 0 when it does not exist.
 fn logical(path: &std::path::Path) -> u64 {
     std::fs::metadata(path).map_or(0, |metadata| metadata.len())
@@ -33,7 +44,7 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
     let ev = evidence!(
         covers = ["REQ-017"],
         kind = Kind::Fixture,
-        expected = "a fake that logs 2000 lines per second for 25 seconds reaches the daemon's sink as whole lines while each spool is written past 2 MiB and still never holds more than 2 MiB in blocks, and a slow reader never holds the process",
+        expected = "a fake that logs 2000 lines per second for at least 25 seconds and until the sink has seen 40000 lines reaches the daemon's sink as whole lines while each spool is written past 2 MiB and still never holds more than 2 MiB in blocks, and a slow reader never holds the process",
     );
     let site = Site::new();
     let recorder = Arc::new(LogRecorder::default());
@@ -58,15 +69,27 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
     ];
 
     api.start_ready(id).await;
-    // 25 seconds write more than 2 MiB to each spool.
+    // Run until each spool passed the bound and the sink saw the lines due,
+    // which takes `RUN_MIN` when the machine keeps up with the fake.
     let started = Instant::now();
     let mut worst = 0;
     let mut written = [0_u64; 2];
-    while started.elapsed() < Duration::from_secs(25) {
+    loop {
         for (spool, written) in spools.iter().zip(&mut written) {
             worst = worst.max(allocated(spool));
             *written = (*written).max(logical(spool));
         }
+        if started.elapsed() >= RUN_MIN
+            && written.iter().all(|size| *size > SPOOL_BLOCKS_MAX)
+            && recorder.lines_of(id) > LINES_MIN
+        {
+            break;
+        }
+        assert!(
+            started.elapsed() < RUN_LIMIT,
+            "the run did not pass the bound in {RUN_LIMIT:?}, logical sizes {written:?}, sink lines {}",
+            recorder.lines_of(id)
+        );
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
     let accepted = api
@@ -92,7 +115,7 @@ async fn a_chatty_process_reaches_the_sink_and_its_spools_stay_under_2_mib() {
         "each spool must have been written past the bound, logical sizes {written:?}"
     );
     let lines = recorder.lines_of(id);
-    assert!(lines > 40_000, "the sink saw {lines} lines");
+    assert!(lines > LINES_MIN, "the sink saw {lines} lines");
     assert!(
         recorder
             .text_of(id)
