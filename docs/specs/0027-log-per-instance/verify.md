@@ -31,22 +31,22 @@ _Steps derived from spec 0027 acceptance criteria and its Value sourcing table. 
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstanceLogs"` → model tests and the six Logs snapshots pass → AC-7, AC-11
 - [x] `swift test --package-path clients/swift --filter aLogFollowWhileNotConnectedIsNotSent` → passes → AC-7
 - [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test supervisor slow_logs -- --nocapture` → against the `stacklyd` binary, `daemon.get_info` p99 under 100 ms, the daemon's footprint within 64 MiB of baseline, the fake at 95 percent or more of the lines due, one connection closed by `ipc.write_timeout`, the slow follower in `seq` order; plus the in process test that a follow behind a rotation gets `gap rotated` then ordered entries → AC-3, AC-7 (run 2026-11-02: PASS, p99 1 ms, +15 MiB)
-- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql postgresql_17_writes_ready -- --ignored` → `database system is ready to accept connections` on stderr as `normal`, the `FATAL` line of a wrong login as `error`, read through `stackly instance logs --json`; `BLOCKED` without the artifact in the xtask cache → AC-6, AC-8 (run 2026-11-02: PASS on 17.11)
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test postgresql postgresql_17_writes_ready -- --ignored` → `database system is ready to accept connections` on stderr as `normal`, the `FATAL` line of a wrong login as `error`, read through `stackly instance logs --json`; `BLOCKED` without the artifact in the xtask cache → AC-6, AC-8 (run 2026-11-02: PASS on 17.11)
 
 ## Value sourcing
 
 - [x] `seq`: restart the daemon mid write → the next record's `seq` follows the last whole record, never repeats → AC-1, AC-13
 - [x] `at`: compare a record's `at` with the daemon clock, not the process clock → read time in UTC to the millisecond → AC-1
-- [ ] `level`: lines `ERROR:`, `[FTL]`, `WARNING:`, `[WRN]` on stdout and a plain line on stderr → error, error, warning, warning, normal → AC-8
+- [x] `level`: lines `ERROR:`, `[FTL]`, `WARNING:`, `[WRN]` on stdout and a plain line on stderr → error, error, warning, warning, normal → AC-8
 - [x] `src.pid`, `src.startedAt`, `src.end`: SIGKILL the daemon while the fake writes, restart, adopt → no line stored twice, none lost from the spool → AC-4
-- [ ] `truncated.bytes`: overflow the spool → a `truncated` row whose size matches the dropped bytes → AC-5
+- [x] `truncated.bytes`: overflow the spool → a `truncated` row whose size matches the dropped bytes → AC-5
 - [x] `started.pid`, `exited.code`, `exited.signal`: kill the process with a signal → `process exited with signal N` in red → AC-5
 - [x] `storeId`: delete `captured/` → next read has a new `storeId`; an old cursor gets the `store_reset` gap → AC-5, AC-13
 - [x] `retention`: footer numbers match `LOG_SEGMENTS_PER_STREAM` and `LOG_SEGMENT_MAX_BYTES` from the page, not a literal → AC-11
 - [x] `storedBytes`: compare with the sizes of the segment files on disk → equal → AC-6
-- [ ] `subscriptionId`: open 8 event subscriptions plus log follows on one connection → the 9th is refused `events.too_many_subscriptions`; the tab turns Follow off and shows the reason as help → AC-7
+- [x] `subscriptionId`: open 8 event subscriptions plus log follows on one connection → the 9th is refused `events.too_many_subscriptions`; the tab turns Follow off and shows the reason as help → AC-7
 - [ ] `ended`: delete the instance while following → the CLI exits 10 with `cli.instance_not_found`; the tab's page shows Instance Not Found → AC-7, AC-10
-- [ ] `instance_logs` health: make writes fail → `daemon.get_health` shows `degraded`, then `ok` 60 s after writes recover → AC-12
+- [x] `instance_logs` health: make writes fail → `daemon.get_health` shows `degraded`, then `ok` 60 s after writes recover → AC-12
 - [x] CLI local time: run with `TZ=Asia/Jakarta` and `TZ=UTC` → times shift by the zone → AC-10
 - [ ] GUI local time and date: change the Mac time zone with the tab open → rows loaded afterwards use the new zone; a day separator appears where the local date changes → AC-11
 
