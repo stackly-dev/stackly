@@ -5,8 +5,8 @@ import Testing
 
 @testable import StacklyUI
 
-/// The Stop All flow and the Services section of the menu bar model (spec 0032 AC-3, AC-6 to
-/// AC-8): the model sends exactly the IDs of the preview it showed, reads the preview again
+/// The header, the Services section, the operations and the Stop All flow of the menu bar model
+/// (spec 0032 AC-2, AC-3, AC-5, AC-6 to AC-8, AC-10): the model sends exactly the IDs of the preview it showed, reads the preview again
 /// when the daemon says the list changed, and never asks while the daemon is away.
 @MainActor
 struct MenuBarModelTests {
@@ -175,5 +175,87 @@ struct MenuBarModelTests {
         #expect(menuBar.hiddenCount == 4)
         #expect(menuBar.totalCount == 12)
         #expect(MenuBarCopy.showAll(menuBar.totalCount) == "Show all 12 in Stackly…")
+    }
+
+    // covers: AC-2
+    @Test func theHeaderCountsRunningByTheReadyRuleAndFailedByTheLifecycle() {
+        let rig = DaemonModelTests.Fixture()
+        let menuBar = MenuBarModel(daemon: rig.model, connected: { true })
+        let ready = InstanceReadiness.fixture(.ready, reason: "accepting_connections")
+        rig.model.instances.offer(
+            .fixture(number: 1, name: "a", lifecycle: .running, readiness: ready))
+        rig.model.instances.offer(
+            .fixture(number: 2, name: "b", lifecycle: .running, readiness: ready))
+        rig.model.instances.offer(.fixture(number: 3, name: "c", lifecycle: .running))
+        rig.model.instances.offer(.fixture(number: 4, name: "d", lifecycle: .failed))
+        rig.model.instances.offer(.fixture(number: 5, name: "e", lifecycle: .stopped))
+
+        #expect(menuBar.runningCount == 2)
+        #expect(menuBar.failedCount == 1)
+        #expect(menuBar.statusText == rig.model.presentation.footer.label)
+    }
+
+    // covers: AC-5
+    @Test func anOperationRowHasATitleAndAPercentOrNoneAndLeavesWhenItEnds() {
+        let rig = DaemonModelTests.Fixture()
+        let menuBar = MenuBarModel(daemon: rig.model, connected: { true })
+        let instance = InstanceSummary.fixture(number: 1, name: "orders-db")
+        rig.model.instances.offer(instance)
+        let ref = ResourceRef(kind: .instance, id: instance.id.uuidString.lowercased())
+        let counted = OperationSummary.fixture(
+            number: 1, kind: .startInstance, resource: ref, state: .running,
+            progress: .counted(CountedProgress(done: 1, total: 4)))
+        let unknown = OperationSummary.fixture(
+            number: 2, kind: .stopInstance, resource: ref, state: .running)
+        rig.model.operations.store.offer(counted)
+        rig.model.operations.store.offer(unknown)
+
+        let rows = Dictionary(
+            uniqueKeysWithValues: menuBar.operationRows.map { ($0.title, $0.percent) })
+        #expect(rows == ["Start orders-db": 25, "Stop orders-db": nil])
+
+        rig.model.operations.store.offer(counted.with(state: .succeeded, revision: 2))
+        #expect(menuBar.operationRows.map(\.title) == ["Stop orders-db"])
+    }
+
+    // covers: AC-5
+    @Test func onlyTheListedOperationKindsAppearInThePopover() {
+        let rig = DaemonModelTests.Fixture()
+        let menuBar = MenuBarModel(daemon: rig.model, connected: { true })
+        rig.model.operations.store.offer(
+            .fixture(number: 1, kind: .backupInstance, state: .running))
+        rig.model.operations.store.offer(
+            .fixture(number: 2, kind: .stopAllInstances, state: .running))
+
+        #expect(menuBar.operationRows.count == 1)
+        #expect(
+            menuBar.operationRows.first?.title
+                == OperationTitle.title(
+                    for: .fixture(number: 2, kind: .stopAllInstances, state: .running),
+                    instanceNames: [:], runtimes: .none))
+    }
+
+    // covers: AC-10
+    @Test func readingTheModelAndClosingThePopoverSendsNothingToTheDaemon() {
+        let sent = Mutex(0)
+        let rig = DaemonModelTests.Fixture()
+        let menuBar = MenuBarModel(
+            daemon: rig.model, connected: { true },
+            previewStopAll: { () throws(ClientError) in
+                sent.withLock { $0 += 1 }
+                return self.preview([])
+            },
+            stopAll: { _, _ throws(ClientError) in
+                sent.withLock { $0 += 1 }
+                return StopAllResult(stopped: [], failed: [], skipped: [])
+            })
+        rig.model.instances.offer(.fixture(number: 1, name: "a", lifecycle: .running))
+
+        _ = (menuBar.rows, menuBar.operationRows, menuBar.runningCount, menuBar.statusText)
+        menuBar.dismissStopAll()
+        menuBar.clearFinishedStopAll()
+
+        #expect(sent.withLock { $0 } == 0)
+        #expect(menuBar.phase == .idle)
     }
 }

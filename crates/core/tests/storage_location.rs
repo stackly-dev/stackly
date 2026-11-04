@@ -1,7 +1,7 @@
 //! The location rules (spec 0032, *Aturan lokasi*): each rule is refused
 //! with its own code, a folder that breaks several reports the first in the
 //! order of the table, and the folders of a location are made private with a
-//! marker.
+//! marker (covers: AC-19, AC-20).
 #![cfg(unix)]
 
 use std::fs;

@@ -29,6 +29,7 @@ fn paths(conn: &Connection) -> Vec<(String, String, String, String)> {
         .expect("every path row reads")
 }
 
+// covers: AC-25
 #[test]
 fn a_version_10_registry_migrates_every_path_to_the_built_in_location_of_its_kind() {
     let harness = Harness::new();
@@ -87,6 +88,7 @@ fn a_version_10_registry_migrates_every_path_to_the_built_in_location_of_its_kin
     }
 }
 
+// covers: AC-25
 #[test]
 fn migration_11_adds_the_built_in_locations_and_one_settings_row() {
     let harness = Harness::new();
@@ -147,6 +149,7 @@ fn failing_set() -> MigrationSet {
     MigrationSet::new(migrations, fingerprints)
 }
 
+// covers: AC-25
 #[test]
 fn a_migration_11_that_fails_after_the_copy_leaves_the_registry_as_it_was() {
     let harness = Harness::new();
@@ -175,6 +178,7 @@ fn migrated() -> (Harness, Connection) {
     (harness, conn)
 }
 
+// covers: AC-25
 #[test]
 fn the_tables_refuse_what_the_data_model_forbids() {
     let (_harness, conn) = migrated();
