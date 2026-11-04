@@ -416,7 +416,14 @@ async fn a_follower_that_rotation_passed_gets_the_gap_and_then_entries_in_order(
         seqs.windows(2).all(|pair| pair[0] < pair[1]),
         "seq only rises"
     );
-    assert!(frames[1..].iter().all(|frame| frame.gap.is_none()));
+    // A follower that reads slower than the rotation can be passed again, so a
+    // later frame may carry a gap, but only a rotated one, and seq still rises.
+    assert!(
+        frames[1..].iter().all(|frame| frame
+            .gap
+            .is_none_or(|gap| gap.reason == LogGapReason::Rotated)),
+        "a later gap is a rotated gap"
+    );
 
     drop(stream);
     let stop = api

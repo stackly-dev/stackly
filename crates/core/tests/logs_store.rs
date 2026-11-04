@@ -119,6 +119,7 @@ fn idle(log: &DurableLog) {
 
 #[test]
 fn lines_of_both_streams_are_stored_with_one_rising_seq_and_merged_on_read() {
+    // covers: spec 0027 AC-1, AC-6
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     log.run_event(
@@ -205,6 +206,7 @@ fn lines_of_both_streams_are_stored_with_one_rising_seq_and_merged_on_read() {
 
 #[test]
 fn rotation_keeps_at_most_the_segment_limit_per_stream_and_spares_the_other_stream() {
+    // covers: spec 0027 AC-2
     let rig = Rig::new();
     let mut config = DurableLogConfig::default();
     config.segment_max_bytes = 2048;
@@ -260,6 +262,7 @@ fn rotation_keeps_at_most_the_segment_limit_per_stream_and_spares_the_other_stre
 
 #[test]
 fn lines_seen_again_after_a_crash_are_dropped_and_lost_bytes_leave_a_truncated_marker() {
+    // covers: spec 0027 AC-4, AC-5
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     log.accept(
@@ -300,6 +303,7 @@ fn lines_seen_again_after_a_crash_are_dropped_and_lost_bytes_leave_a_truncated_m
 
 #[test]
 fn the_pieces_of_one_long_line_are_kept_whole_and_a_new_run_is_never_dropped() {
+    // covers: spec 0027 AC-4
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     log.accept(
@@ -331,6 +335,7 @@ fn the_pieces_of_one_long_line_are_kept_whole_and_a_new_run_is_never_dropped() {
 
 #[test]
 fn recovery_trims_a_cut_line_skips_bad_records_ignores_strangers_and_survives_a_lost_header() {
+    // covers: spec 0027 AC-13
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     log.accept(
@@ -370,6 +375,7 @@ fn recovery_trims_a_cut_line_skips_bad_records_ignores_strangers_and_survives_a_
 
 #[test]
 fn a_full_queue_answers_busy_and_a_failing_store_parks_only_its_instance() {
+    // covers: spec 0027 AC-3, AC-12
     let rig = Rig::new();
     let other = InstanceId::generate();
     rig.instance_dir(other);
@@ -457,6 +463,7 @@ fn a_full_queue_answers_busy_and_a_failing_store_parks_only_its_instance() {
 
 #[test]
 fn pages_walk_back_and_forth_by_cursor_and_stop_at_the_scan_budget() {
+    // covers: spec 0027 AC-6
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     let lines: Vec<(String, u64)> = (1..=50).map(|n| (format!("line {n}"), n * 10)).collect();
@@ -536,6 +543,7 @@ fn pages_walk_back_and_forth_by_cursor_and_stop_at_the_scan_budget() {
 
 #[test]
 fn a_follower_adopts_a_new_store_and_reads_only_what_comes_after_it() {
+    // covers: spec 0027 AC-7
     let rig = Rig::new();
     let log = rig.start(DurableLogConfig::default());
     let dir = log.dir(rig.id);
@@ -578,4 +586,73 @@ fn a_follower_adopts_a_new_store_and_reads_only_what_comes_after_it() {
         SinkOutcome::Accepted
     );
     log.shutdown();
+}
+
+#[test]
+fn a_line_gets_its_level_from_its_words_and_never_from_its_stream() {
+    // covers: spec 0027 AC-8
+    let rig = Rig::new();
+    let log = rig.start(DurableLogConfig::default());
+    log.accept(
+        rig.id,
+        spooled(
+            OutputStream::Stdout,
+            &[
+                (
+                    "2026-11-01 07:03:22.118 UTC [4130] ERROR:  relation \"x\" does not exist",
+                    80,
+                ),
+                (
+                    "[4123] 2026/11/01 07:03:22.118765 [FTL] Error listening on port",
+                    160,
+                ),
+                (
+                    "2026-11-01 07:03:22.118 UTC [4130] WARNING:  no transaction in progress",
+                    240,
+                ),
+                (
+                    "[4123] 2026/11/01 07:03:22.118765 [WRN] Plaintext passwords detected",
+                    320,
+                ),
+                ("checkpoint complete: 0 errors, 0 warnings", 400),
+            ],
+        ),
+    );
+    log.accept(
+        rig.id,
+        spooled(
+            OutputStream::Stderr,
+            &[("listening on a plain stderr line", 40)],
+        ),
+    );
+    idle(&log);
+
+    let page = rig.newest(&log);
+
+    let levels: Vec<(String, stackly_core::logs::LogLevel)> = page
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.kind {
+            RecordKind::Line(line) => Some((line.text.clone(), line.level)),
+            _ => None,
+        })
+        .collect();
+    let level_of = |needle: &str| {
+        levels
+            .iter()
+            .find(|(text, _)| text.contains(needle))
+            .map(|(_, level)| *level)
+            .unwrap_or_else(|| panic!("no line holds {needle}: {levels:?}"))
+    };
+    use stackly_core::logs::LogLevel;
+    assert_eq!(level_of("ERROR:"), LogLevel::Error);
+    assert_eq!(level_of("[FTL]"), LogLevel::Error);
+    assert_eq!(level_of("WARNING:"), LogLevel::Warning);
+    assert_eq!(level_of("[WRN]"), LogLevel::Warning);
+    assert_eq!(level_of("0 errors"), LogLevel::Normal);
+    assert_eq!(
+        level_of("plain stderr line"),
+        LogLevel::Normal,
+        "stderr alone never makes a warning or an error"
+    );
 }

@@ -67,8 +67,30 @@ fn logs_read_pages_filter_and_follow_until_sigint_against_a_real_daemon() {
         .as_str()
         .expect("an id")
         .to_owned();
-    // Enough lines for two pages of 1000.
-    std::thread::sleep(Duration::from_secs(3));
+    // Enough lines for two pages of 1000: wait for what is stored, not for a
+    // time, so a busy machine only makes the wait longer.
+    let waiting = Instant::now();
+    loop {
+        let head = run(
+            root.path(),
+            &["instance", "logs", "chatty", "--tail", "1", "--json"],
+        );
+        let stored = if head.code == Some(0) {
+            records(&head.stdout).1["result"]["last"]["seq"]
+                .as_u64()
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        if stored >= 1600 {
+            break;
+        }
+        assert!(
+            waiting.elapsed() < Duration::from_secs(120),
+            "the fake stored {stored} records in 120 seconds"
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
 
     let tail = run(
         root.path(),
