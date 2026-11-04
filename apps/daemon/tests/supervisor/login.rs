@@ -1,5 +1,5 @@
 //! The login session through the real daemon server (spec 0031 AC-3, AC-4,
-//! AC-7, AC-8, AC-12): a launchd daemon with a scripted session starts the
+//! AC-7, AC-8, AC-10, AC-12, AC-16): a launchd daemon with a scripted session starts the
 //! instances that start at login once per session, a daemon outside launchd
 //! never rotates, and a stop holds across a restart in the same session.
 
@@ -206,6 +206,7 @@ async fn set_startup(
     }
 }
 
+// covers: AC-16
 #[tokio::test(flavor = "multi_thread")]
 async fn the_policy_is_set_apart_from_the_process_and_the_same_value_changes_nothing() {
     let site = Site::new();
@@ -242,6 +243,7 @@ async fn the_policy_is_set_apart_from_the_process_and_the_same_value_changes_not
     stop(daemon).await;
 }
 
+// covers: AC-16
 #[tokio::test(flavor = "multi_thread")]
 async fn an_instance_created_with_startup_at_login_carries_the_policy() {
     let site = Site::new();
@@ -272,6 +274,7 @@ async fn an_instance_created_with_startup_at_login_carries_the_policy() {
     stop(daemon).await;
 }
 
+// covers: AC-16
 #[tokio::test(flavor = "multi_thread")]
 async fn turning_the_policy_off_releases_the_lease_of_this_session() {
     let site = Site::new();
@@ -331,6 +334,7 @@ fn set_desired_running(site: &Site, id: Uuid) {
         .expect("the desired state is written");
 }
 
+// covers: AC-7
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_that_cannot_be_read_leaves_the_start_queue_to_the_run_again_list() {
     let site = Site::new();
@@ -366,6 +370,7 @@ async fn a_session_that_cannot_be_read_leaves_the_start_queue_to_the_run_again_l
     stop(sighted).await;
 }
 
+// covers: AC-8, AC-10
 #[tokio::test(flavor = "multi_thread")]
 async fn stop_all_holds_the_startup_lease_back_for_the_rest_of_the_session() {
     let site = Site::new();

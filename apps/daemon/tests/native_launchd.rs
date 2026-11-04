@@ -99,8 +99,8 @@ impl Rig {
         assert_eq!(json["ProgramArguments"], serde_json::json!([STACKLYD]));
         assert!(json.get("AbandonProcessGroup").is_none(), "{json}");
         self.agent.bootstrap().expect("the agent loads");
-        self.wait_launchd(FIRST_START, |_| true)
-            .expect("the agent's daemon answers")
+        self.wait_launchd(FIRST_START, |info| info.session.is_some())
+            .expect("the agent's daemon answers with its session")
     }
 
     /// Waits up to `bound` for a launchd started daemon of this agent that
@@ -247,7 +247,7 @@ fn a_restart_request_to_the_agent_brings_a_new_launchd_daemon_within_30_seconds(
     shutdown(&rig.socket, ShutdownMode::Restart);
     let next = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
         })
         .expect("a new daemon answers within 30 seconds");
     assert_ne!(next.pid, first.pid);
@@ -332,7 +332,7 @@ fn sigkill_of_the_agents_daemon_brings_a_new_one_within_20_seconds() {
     assert!(status.success());
     let next = rig
         .wait_launchd(RESPAWN_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
         })
         .expect("a new daemon answers within 20 seconds");
     assert_ne!(next.pid, first.pid);
@@ -538,7 +538,7 @@ fn a_fake_instance_survives_sigkill_and_returns_after_kickstart_and_bootout() {
     assert!(status.success());
     let second = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
         })
         .expect("the job runs a new daemon after SIGKILL");
     get_until(&cli, &id, same_process);
@@ -548,7 +548,7 @@ fn a_fake_instance_survives_sigkill_and_returns_after_kickstart_and_bootout() {
     // daemon starts it again.
     rig.agent.kickstart_kill().expect("kickstart -k runs");
     rig.wait_launchd(RESTART_BOUND, |info| {
-        info.server_instance_id != second.server_instance_id
+        info.server_instance_id != second.server_instance_id && info.session.is_some()
     })
     .expect("the job runs a new daemon after kickstart -k");
     let restarted = get_until(&cli, &id, other_process(pid));
@@ -760,7 +760,7 @@ fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, see
     );
     let second = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != first.server_instance_id
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
         })
         .expect("the job runs a new daemon after the planned restart");
     wait_same(rig, runtime_id, id, seen, "after the planned restart");
@@ -788,14 +788,14 @@ fn survives_every_end(rig: &mut Rig, runtime_id: uuid::Uuid, id: uuid::Uuid, see
     assert!(status.success());
     let third = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != second.server_instance_id
+            info.server_instance_id != second.server_instance_id && info.session.is_some()
         })
         .expect("the job runs a new daemon after SIGKILL");
     wait_same(rig, runtime_id, id, seen, "after SIGKILL of the daemon");
 
     rig.agent.kickstart_kill().expect("kickstart -k runs");
     rig.wait_launchd(RESTART_BOUND, |info| {
-        info.server_instance_id != third.server_instance_id
+        info.server_instance_id != third.server_instance_id && info.session.is_some()
     })
     .expect("the job runs a new daemon after kickstart -k");
     let restarted = wait_restarted(rig, runtime_id, id, seen, "after kickstart -k");
@@ -971,7 +971,7 @@ fn restart_to_a_finished_plan(
     );
     let after = rig
         .wait_launchd(RESTART_BOUND, |info| {
-            info.server_instance_id != before.server_instance_id
+            info.server_instance_id != before.server_instance_id && info.session.is_some()
         })
         .expect("the job runs a new daemon after the restart");
     let settled = wait_info(&rig.socket, SLOW, |info| {
@@ -1084,7 +1084,7 @@ fn ten_postgresql_instances_all_kept_record_the_daemon_gap_of_a_planned_restart(
         .as_u64()
         .unwrap_or_else(|| panic!("a daemonGap in {restarted}"));
     rig.wait_launchd(RESTART_BOUND, |info| {
-        info.server_instance_id != first.server_instance_id
+        info.server_instance_id != first.server_instance_id && info.session.is_some()
     })
     .expect("the job runs a new daemon after the restart");
     for (id, seen) in &seen {
