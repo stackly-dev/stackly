@@ -184,7 +184,8 @@ impl Output {
                 }
                 if !self.quiet {
                     for hint in &output.hints {
-                        self.stderr.line(&format!("hint: {hint}"));
+                        self.stderr
+                            .line(&format!("hint: {}", escape::escape_display(hint)));
                     }
                 }
             }
@@ -312,6 +313,13 @@ mod tests {
             stderr.text(),
             "warning: drift\nerror: not confirmed, so nothing was done\n  code: cli.confirmation_declined\nhint: h\n"
         );
+    }
+
+    #[test]
+    fn hints_are_escaped_before_they_reach_stderr() {
+        let (mut out, _, stderr) = output(OutputMode::Human);
+        out.emit(CommandOutput::ok(Text("body")).with_hint("run \u{1b}[2J\u{202e}x"));
+        assert_eq!(stderr.text(), "hint: run \\u{1b}[2J\\u{202e}x\n");
     }
 
     #[test]

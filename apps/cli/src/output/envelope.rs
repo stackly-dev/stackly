@@ -120,14 +120,43 @@ impl Warning {
 
 /// `record` as one compact JSON line ending in `\n`.
 ///
+/// Beside the C0 controls `serde_json` always escapes, DEL, the C1 controls,
+/// and the bidi overrides and isolates inside a string are written as
+/// `\uXXXX` (spec 0008, AC-3), so a line printed straight to a terminal
+/// carries none of them raw. The JSON value is the same either way.
+///
 /// # Errors
 ///
 /// Returns the serializer's error, which a result of plain structs, strings,
 /// and numbers never produces.
 pub fn to_line<T: Serialize>(record: &T) -> serde_json::Result<Vec<u8>> {
-    let mut line = serde_json::to_vec(record)?;
+    let mut line = Vec::with_capacity(128);
+    let mut serializer = serde_json::Serializer::with_formatter(&mut line, TerminalSafe);
+    record.serialize(&mut serializer)?;
     line.push(b'\n');
     Ok(line)
+}
+
+/// The compact formatter, with the characters of
+/// [`super::escape::needs_json_escape`] written as `\uXXXX`.
+struct TerminalSafe;
+
+impl serde_json::ser::Formatter for TerminalSafe {
+    fn write_string_fragment<W: ?Sized + Write>(
+        &mut self,
+        writer: &mut W,
+        fragment: &str,
+    ) -> io::Result<()> {
+        let mut start = 0;
+        for (index, c) in fragment.char_indices() {
+            if super::escape::needs_json_escape(c) {
+                writer.write_all(&fragment.as_bytes()[start..index])?;
+                write!(writer, "\\u{:04x}", u32::from(c))?;
+                start = index + c.len_utf8();
+            }
+        }
+        writer.write_all(&fragment.as_bytes()[start..])
+    }
 }
 
 /// What happened when writing to stdout.
@@ -194,6 +223,57 @@ mod tests {
             !line[..line.len() - 1]
                 .iter()
                 .any(|b| matches!(b, 0x1b | b'\r' | b'\n'))
+        );
+    }
+
+    #[test]
+    fn del_c1_and_bidi_overrides_in_a_value_are_written_as_json_escapes() {
+        let error = ErrorBody::new(&cli::PANIC, "a\u{7f}b\u{9b}31mc\u{202e}d\u{2069}e");
+        let line = to_line(&Envelope::<Sample>::new("", None, Some(&error), None, &[])).unwrap();
+        let text = String::from_utf8(line).unwrap();
+        assert!(
+            text.contains(r#""a\u007fb\u009b31mc\u202ed\u2069e""#),
+            "{text}"
+        );
+        assert!(!text.contains(['\u{7f}', '\u{9b}', '\u{202e}', '\u{2069}']));
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            value["error"]["message"],
+            "a\u{7f}b\u{9b}31mc\u{202e}d\u{2069}e"
+        );
+    }
+
+    #[test]
+    fn bidi_marks_zero_width_characters_and_separators_in_a_value_are_written_as_json_escapes() {
+        let message =
+            "a\u{61c}b\u{200e}\u{200f}\u{200b}\u{200c}\u{200d}\u{2060}\u{feff}c\u{2028}\u{2029}d";
+        let error = ErrorBody::new(&cli::PANIC, message);
+        let line = to_line(&Envelope::<Sample>::new("", None, Some(&error), None, &[])).unwrap();
+        let text = String::from_utf8(line).unwrap();
+        assert!(
+            text.contains(r#""a\u061cb\u200e\u200f\u200b\u200c\u200d\u2060\ufeffc\u2028\u2029d""#),
+            "{text}"
+        );
+        assert!(!text.contains([
+            '\u{61c}', '\u{200b}', '\u{200c}', '\u{200d}', '\u{200e}', '\u{200f}', '\u{2028}',
+            '\u{2029}', '\u{2060}', '\u{feff}'
+        ]));
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["error"]["message"], message);
+    }
+
+    #[test]
+    fn printable_and_wide_text_stays_raw_in_the_line() {
+        let item = StreamItem {
+            schema_version: CLI_SCHEMA_VERSION,
+            record: "item",
+            command: "instance logs",
+            item: &"café 数据 \u{a0}\"q\"",
+        };
+        assert_eq!(
+            String::from_utf8(to_line(&item).unwrap()).unwrap(),
+            "{\"schemaVersion\":2,\"type\":\"item\",\"command\":\"instance logs\",\
+             \"item\":\"café 数据 \u{a0}\\\"q\\\"\"}\n"
         );
     }
 

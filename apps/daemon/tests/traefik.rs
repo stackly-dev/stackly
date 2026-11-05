@@ -14,5 +14,7 @@ mod config;
 mod config_calls;
 #[path = "traefik/harness.rs"]
 mod harness;
+#[path = "traefik/readiness.rs"]
+mod readiness;
 #[path = "supervisor/support.rs"]
 mod support;

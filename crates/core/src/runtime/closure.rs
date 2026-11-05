@@ -9,10 +9,12 @@
 //! filesystem: `@executable_path` is the folder of each main executable
 //! (`MH_EXECUTE`) in the tree, `@loader_path` the folder of the loading
 //! file, and `@rpath` tries the `LC_RPATH` entries of the loading file and
-//! then of every main executable, in order. Symlinks resolve as the
-//! extractor checked them, at most [`SYMLINK_CHAIN_MAX`] of them per path.
-//! Install names under `/usr/lib/` and `/System/Library/` pass without an
-//! existence check, since they live in the dyld shared cache.
+//! then of every main executable, in order, as dyld does. Symlinks resolve
+//! as the extractor checked them, at most [`SYMLINK_CHAIN_MAX`] of them per
+//! path. Install names under `/usr/lib/` and `/System/Library/` pass
+//! without an existence check, since they live in the dyld shared cache.
+//! A relative `LC_RPATH` resolves against the working directory, so it
+//! counts as outside the runtime, like an absolute one outside the system.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -161,18 +163,41 @@ pub fn check(input: &ClosureInput<'_>) -> Result<ClosureReport, ClosureError> {
         .filter(|(_, slice)| slice.is_executable())
         .collect();
     let mut found = BTreeSet::new();
+    // Shadowing candidates by loading file and outside folder, so one stray
+    // rpath gives one warning however many libraries go through it.
+    let mut shadowed: Vec<Shadowed> = Vec::new();
     for entry in input.machos {
         let Some(slice) = &entry.macho.arm64 else {
             continue;
         };
         check_rpaths(input, entry, slice, &mut report)?;
         for library in &slice.libraries {
-            if slice.install_name.as_deref() == Some(library.name.as_str())
+            // Only a library may name itself; an executable that loads its
+            // own `LC_ID_DYLIB` name loads another file.
+            if (slice.is_dylib() && slice.install_name.as_deref() == Some(library.name.as_str()))
                 || is_system(&library.name)
             {
                 continue;
             }
-            match resolve(&tree, &entry.path, slice, &library.name, &mains) {
+            let (resolved, shadowing) = resolve(&tree, &entry.path, slice, &library.name, &mains);
+            if let Some(outside) = shadowing {
+                let loader = entry.path.to_string();
+                match shadowed
+                    .iter_mut()
+                    .find(|seen| seen.loader == loader && seen.dir == outside.dir)
+                {
+                    Some(seen) => seen.more += 1,
+                    None => shadowed.push(Shadowed {
+                        loader,
+                        dir: outside.dir,
+                        path: outside.path,
+                        library: library.name.clone(),
+                        inside: resolved == Resolved::Inside,
+                        more: 0,
+                    }),
+                }
+            }
+            match resolved {
                 Resolved::Inside => {
                     let file_name = library.name.rsplit('/').next().unwrap_or(&library.name);
                     found.insert(file_name.to_owned());
@@ -209,10 +234,54 @@ pub fn check(input: &ClosureInput<'_>) -> Result<ClosureReport, ClosureError> {
             .warnings
             .push("dependencies not declared; the library set was not compared".to_owned()),
     }
+    report
+        .warnings
+        .extend(shadowed.iter().map(Shadowed::warning));
     report.libraries = found.into_iter().collect();
     report.warnings.sort();
     report.warnings.dedup();
     Ok(report)
+}
+
+/// The first reference of one loading file that dyld would look up in a
+/// folder outside the runtime and the system before the place it resolves
+/// to, and how many more references go through the same folder.
+struct Shadowed {
+    /// The loading file.
+    loader: String,
+    /// The outside folder (the rpath, or the path itself).
+    dir: String,
+    /// The outside candidate of the first reference.
+    path: String,
+    /// The first reference.
+    library: String,
+    /// Whether that reference resolves inside the runtime, not the system.
+    inside: bool,
+    /// The number of further references through `dir`.
+    more: usize,
+}
+
+impl Shadowed {
+    fn warning(&self) -> String {
+        let target = if self.inside {
+            "the copy inside the runtime"
+        } else {
+            "the system library"
+        };
+        let mut warning = format!(
+            "{}: dyld tries {} for {} before {target}",
+            self.loader, self.path, self.library
+        );
+        if self.more > 0 {
+            let noun = if self.more == 1 {
+                "library"
+            } else {
+                "libraries"
+            };
+            warning.push_str(&format!(", and {} for {} more {noun}", self.dir, self.more));
+        }
+        warning
+    }
 }
 
 /// Every executable is Mach-O with an arm64 slice that runs on the host;
@@ -259,8 +328,8 @@ fn check_executables(
     Ok(())
 }
 
-/// An absolute `LC_RPATH` outside the system fails a maintainer artifact
-/// and warns for an upstream one.
+/// An absolute `LC_RPATH` outside the system, or a relative one, fails a
+/// maintainer artifact and warns for an upstream one.
 fn check_rpaths(
     input: &ClosureInput<'_>,
     entry: &MachOEntry,
@@ -268,20 +337,31 @@ fn check_rpaths(
     report: &mut ClosureReport,
 ) -> Result<(), ClosureError> {
     for rpath in &slice.rpaths {
-        if rpath.starts_with('/') && !is_system(&format!("{}/", rpath.trim_end_matches('/'))) {
-            if input.maintainer {
-                return Err(ClosureError::DependencyOutsideRuntime {
-                    path: entry.path.to_string(),
-                    library: rpath.clone(),
-                });
-            }
-            report.warnings.push(format!(
-                "{}: LC_RPATH {rpath} is absolute outside the system",
-                entry.path
-            ));
+        let finding = if is_relative(rpath) {
+            "is relative to the working directory"
+        } else if rpath.starts_with('/') && !is_system(&format!("{}/", rpath.trim_end_matches('/')))
+        {
+            "is absolute outside the system"
+        } else {
+            continue;
+        };
+        if input.maintainer {
+            return Err(ClosureError::DependencyOutsideRuntime {
+                path: entry.path.to_string(),
+                library: rpath.clone(),
+            });
         }
+        report
+            .warnings
+            .push(format!("{}: LC_RPATH {rpath} {finding}", entry.path));
     }
     Ok(())
+}
+
+/// True for a path dyld resolves against the working directory: neither
+/// absolute nor starting with an `@` token.
+fn is_relative(path: &str) -> bool {
+    !path.starts_with('/') && !path.starts_with('@')
 }
 
 /// True for a path under a system prefix with no `..` component.
@@ -306,15 +386,24 @@ enum Resolved {
 }
 
 /// Resolves one reference the way dyld would: the loading file's own
-/// rpaths first, then those of every main executable, with the paths
-/// inside the tree checked before the system ones.
+/// rpaths first, then those of every main executable, in order.
+///
+/// The first candidate inside the tree that exists wins. A system candidate
+/// passes without an existence check, so it never stops the search: a
+/// library the tree bundles behind it still counts as inside. A candidate
+/// outside the tree and the system (an absolute path, or a relative one,
+/// which dyld resolves against the working directory) cannot be checked
+/// either; it is returned beside the result only when it really comes
+/// before the match in dyld order: before the tree file for
+/// [`Resolved::Inside`], before the first system candidate for
+/// [`Resolved::System`].
 fn resolve(
     tree: &Tree<'_>,
     loader: &EntryPath,
     slice: &Slice,
     name: &str,
     mains: &[(&EntryPath, &Slice)],
-) -> Resolved {
+) -> (Resolved, Option<Outside>) {
     let loader_dir = parent_of(loader);
     let exe_dirs: Vec<Vec<&str>> = if slice.is_executable() {
         vec![loader_dir.clone()]
@@ -340,28 +429,40 @@ fn resolve(
     } else if name.starts_with('@') {
         candidates.extend(expand(name, &loader_dir, &exe_dirs, ""));
     } else {
-        candidates.push(Candidate::Absolute(name.to_owned()));
+        candidates.push(Candidate::Absolute(Outside {
+            dir: name.to_owned(),
+            path: name.to_owned(),
+        }));
     }
-    // The tree is tried first: a system candidate passes without an
-    // existence check, so it must not shadow a library the tree bundles.
-    let in_tree = candidates.iter().any(|candidate| match candidate {
-        Candidate::Tree(dir, rest) => tree.is_file(dir, rest),
-        Candidate::Absolute(_) => false,
-    });
-    let absolute = || {
-        candidates.iter().filter_map(|candidate| match candidate {
-            Candidate::Absolute(path) => Some(path),
-            Candidate::Tree(..) => None,
-        })
-    };
-    if in_tree {
-        Resolved::Inside
-    } else if absolute().any(|path| is_system(path)) {
-        Resolved::System
-    } else if absolute().any(|path| path.starts_with('/')) {
-        Resolved::Outside
+    // The first outside candidate seen so far, and the one seen before the
+    // first system candidate, which is the one that precedes a system match.
+    let mut first_outside: Option<Outside> = None;
+    let mut before_system: Option<Option<Outside>> = None;
+    for candidate in candidates {
+        match candidate {
+            Candidate::Tree(dir, rest) => {
+                if tree.is_file(&dir, &rest) {
+                    return (Resolved::Inside, first_outside);
+                }
+            }
+            Candidate::Absolute(outside) if is_system(&outside.path) => {
+                before_system.get_or_insert_with(|| first_outside.clone());
+            }
+            Candidate::Absolute(outside) if outside.path.starts_with('/') => {
+                first_outside.get_or_insert(outside);
+            }
+            Candidate::Relative(outside) => {
+                first_outside.get_or_insert(outside);
+            }
+            Candidate::Absolute(_) => {}
+        }
+    }
+    if let Some(before_system) = before_system {
+        (Resolved::System, before_system)
+    } else if first_outside.is_some() {
+        (Resolved::Outside, None)
     } else {
-        Resolved::Missing
+        (Resolved::Missing, None)
     }
 }
 
@@ -370,7 +471,32 @@ enum Candidate<'a> {
     /// A folder of the tree and the path below it.
     Tree(Vec<&'a str>, String),
     /// An absolute path outside the tree.
-    Absolute(String),
+    Absolute(Outside),
+    /// A path relative to the working directory, which is never inside the
+    /// runtime.
+    Relative(Outside),
+}
+
+/// A candidate path outside the tree, with the folder it came from.
+#[derive(Debug, Clone)]
+struct Outside {
+    /// The rpath the candidate expands, or the path itself.
+    dir: String,
+    /// The full candidate path.
+    path: String,
+}
+
+impl Outside {
+    /// `base` joined with `rest`, keeping `base` as the folder.
+    fn join(base: &str, rest: &str) -> Self {
+        let dir = base.trim_end_matches('/').to_owned();
+        let path = if rest.is_empty() {
+            dir.clone()
+        } else {
+            format!("{dir}/{rest}")
+        };
+        Self { dir, path }
+    }
 }
 
 /// Expands `@loader_path` and `@executable_path` in `path`, joined with
@@ -397,15 +523,12 @@ fn expand<'a>(
             .map(|dir| Candidate::Tree(dir.clone(), join(tail)))
             .collect()
     } else if path.starts_with('/') {
-        let base = path.trim_end_matches('/');
-        vec![Candidate::Absolute(if rest.is_empty() {
-            base.to_owned()
-        } else {
-            format!("{base}/{rest}")
-        })]
-    } else {
+        vec![Candidate::Absolute(Outside::join(path, rest))]
+    } else if is_relative(path) {
         // A relative rpath resolves against the working directory, which
         // is never inside the runtime.
+        vec![Candidate::Relative(Outside::join(path, rest))]
+    } else {
         Vec::new()
     }
 }

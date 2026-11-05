@@ -7,10 +7,10 @@
 use std::time::Duration;
 
 use stackly_core::session::{RotationKind, rotate_session};
-use stackly_core::supervisor::RegistryMode;
+use stackly_core::supervisor::{RegistryMode, StartRequest};
 use stackly_domain::{
     DesiredState, InstanceId, InstanceLifecycle, Lease, LeaseFilter, LeaseHolder, LeaseId,
-    OperationState, Registry, SessionEndReason, SessionId, WriteBatch, WriteOp,
+    OperationKind, OperationState, Registry, SessionEndReason, SessionId, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, ExitStatus, LoginSession, ProviderSignal};
 use tokio::time::Instant;
@@ -38,7 +38,11 @@ fn spec(desired: DesiredState) -> Spec {
 
 /// A rig in the session, whose registry holds the row of that session.
 async fn rig_in_session() -> Rig {
-    let rig = Rig::new().await;
+    in_session(Rig::new().await)
+}
+
+/// Puts `rig` in the session and stores the row of that session.
+fn in_session(rig: Rig) -> Rig {
     rig.sup.set_session(Some(session()));
     let outcome =
         rotate_session(&*rig.registry, &login(), rig.fake.clock().now()).expect("the first row");
@@ -74,6 +78,14 @@ async fn exit_on_term(rig: &Rig, spawn: &stackly_testkit::FakeSpawn) {
     }
     rig.kill_servers();
     rig.processes().exit(spawn.pid, Some(ExitStatus::Exited(0)));
+}
+
+fn main_spawns(rig: &Rig) -> usize {
+    rig.processes()
+        .spawns()
+        .into_iter()
+        .filter(|spawn| spawn.role == stackly_platform::ChildRole::Main)
+        .count()
 }
 
 fn latest_row(rig: &Rig) -> stackly_domain::DaemonSession {
@@ -233,4 +245,99 @@ async fn coming_back_in_the_same_session_reopens_the_row_and_starts_only_what_th
         InstanceLifecycle::Stopped,
         "an instance whose desired state is stopped does not start"
     );
+}
+
+#[tokio::test]
+async fn a_queued_start_that_waits_for_a_permit_never_begins_once_the_session_ends() {
+    let rig = in_session(Rig::with_config(|config| config.reconcile_start_concurrency = 1).await);
+    let a = rig.instance(&spec(DesiredState::Running));
+    let b = rig.instance(&spec(DesiredState::Running));
+    rig.sup
+        .reconcile_in_session(RegistryMode::Ready, false)
+        .await
+        .expect("reconcile");
+    let queue = rig.sup.queue_login_starts(false).await.expect("queue");
+    assert_eq!(queue.added, 2);
+    rig.sup.start_reconciled();
+    // The first start holds the only permit: nothing serves its port, so it
+    // waits for readiness while the second one waits for the permit.
+    let first = rig.main_spawn(1).await;
+    let mut begun = Vec::new();
+    for id in [a, b] {
+        if !rig
+            .operations_of(id, OperationKind::StartInstance)
+            .await
+            .is_empty()
+        {
+            begun.push(id);
+        }
+    }
+    assert_eq!(begun.len(), 1, "only one start holds the permit");
+    let queued = if begun[0] == a { b } else { a };
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let (report, ()) = tokio::join!(rig.sup.end_session(deadline), exit_on_term(&rig, &first));
+    assert_eq!(report.reason, SessionEndReason::Clean);
+    // The cancelled start gave its permit back; give the queue time to act
+    // on it.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    assert!(
+        rig.operations_of(queued, OperationKind::StartInstance)
+            .await
+            .is_empty(),
+        "no start begins after the session end took its snapshot"
+    );
+    assert_eq!(
+        main_spawns(&rig),
+        1,
+        "nothing spawned after the session end"
+    );
+    let row = rig.instance_row(queued);
+    assert_eq!(row.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(
+        row.desired(),
+        DesiredState::Running,
+        "the next start queue of the same session starts it"
+    );
+}
+
+#[tokio::test]
+async fn a_background_start_begun_as_the_session_ends_does_not_spawn() {
+    let rig = rig_in_session().await;
+    let id = rig.instance(&spec(DesiredState::Running));
+    // Nothing is live, so the session end only raises its flag.
+    let report = rig
+        .sup
+        .end_session(Instant::now() + Duration::from_secs(10))
+        .await;
+    assert_eq!(report.stops, 0);
+
+    // A start the engine took just before the flag rose reads it under the
+    // operation's lock and ends without a spawn.
+    let work = rig.sup.start_work(StartRequest::background(id));
+    let operation = rig.begin(OperationKind::StartInstance, id, work).await;
+    rig.wait_state(operation, OperationState::Succeeded).await;
+
+    assert_eq!(main_spawns(&rig), 0);
+    let row = rig.instance_row(id);
+    assert_eq!(row.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(row.desired(), DesiredState::Running, "desired is untouched");
+}
+
+#[tokio::test]
+async fn a_start_of_the_person_is_not_held_back_by_the_session_end_flag() {
+    let rig = rig_in_session().await;
+    let id = rig.instance(&spec(DesiredState::Stopped));
+    rig.sup
+        .end_session(Instant::now() + Duration::from_secs(10))
+        .await;
+
+    // The IPC server refuses every new request during a session end; the
+    // flag itself only holds back what the daemon starts on its own.
+    let operation = rig.start(id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(operation, OperationState::Succeeded).await;
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Running);
 }

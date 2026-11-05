@@ -40,7 +40,11 @@ static URI_SCHEME: LazyLock<Regex> = LazyLock::new(|| {
 ///    [`SCRUB_ANYWHERE_LEN`] bytes or more is replaced wherever it appears.
 ///    A value of [`SCRUB_MIN_LEN`] up to 15 bytes is replaced only as a
 ///    whole token, with no letter or digit right before or after it, so
-///    `postgres` inside `postgresql` stays. The longest value wins.
+///    `postgres` inside `postgresql` stays. The longest value wins. A value
+///    with a `"`, a `\`, or a control character is also matched in the
+///    form a JSON string writes it (`\"`, `\\`, `\n`, `\u0001`), since
+///    the daemon log writer redacts a line after the JSON formatter escaped
+///    it; whole token or anywhere follows the length of the value itself.
 /// 2. The password in the userinfo of a URI: `<scheme>://<user>:****@<host>`.
 ///    The password runs from the first `:` after `://` to the last `@`
 ///    before `/`, `?`, `#`, whitespace, or the end of the line.
@@ -78,18 +82,49 @@ pub struct Redactor {
 }
 
 /// The learned values, longest first, with the first byte of each for a
-/// quick skip while scanning.
+/// quick skip while scanning, and the JSON escaped form of each value that
+/// differs from it.
 struct Known {
     values: Vec<SecretValue>,
     first_bytes: [bool; 256],
+    escaped: Vec<Escaped>,
+    escaped_first_bytes: [bool; 256],
+}
+
+/// The JSON escaped form of a learned value, kept only when it differs
+/// from the value.
+struct Escaped {
+    form: SecretValue,
+    /// Whether the value itself is [`SCRUB_ANYWHERE_LEN`] bytes or more, so
+    /// its escaped form is matched anywhere rather than as a whole token.
+    anywhere: bool,
+}
+
+/// Returns `value` as the inside of a JSON string, the way `serde_json`
+/// (and so the `tracing` JSON formatter) writes it, or `None` when that is
+/// the value unchanged.
+fn json_escaped(value: &SecretValue) -> Option<SecretValue> {
+    let text = value.expose();
+    if !text
+        .chars()
+        .any(|c| c == '"' || c == '\\' || c.is_ascii_control())
+    {
+        return None;
+    }
+    let mut quoted = serde_json::to_string(text).ok()?;
+    // `to_string` of a `str` is the escaped text between two quotes.
+    quoted.pop();
+    quoted.remove(0);
+    let form = SecretValue::new(quoted).ok()?;
+    (form.expose() != text).then_some(form)
 }
 
 /// Returns a second value equal to `value`, wiped from memory when it
 /// drops like the first. The redactor keeps such a copy of every value it
 /// learns, and the secret worker keeps one for a write it runs after its
-/// caller may have stopped waiting. These two copies, [`char_count`], and
-/// [`has_control_character`] are the only places outside matching and
-/// delivery that read a value.
+/// caller may have stopped waiting. These two copies, the JSON escaped
+/// form of a learned value, [`char_count`], and [`has_control_character`]
+/// are the only places outside matching and delivery that read a value.
 pub(crate) fn copy_value(value: &SecretValue) -> SecretValue {
     SecretValue::new(value.expose().to_owned())
         .expect("a secret value stays valid when it is copied")
@@ -136,6 +171,8 @@ impl Redactor {
             known: RwLock::new(Known {
                 values: Vec::new(),
                 first_bytes: [false; 256],
+                escaped: Vec::new(),
+                escaped_first_bytes: [false; 256],
             }),
         }
     }
@@ -143,8 +180,9 @@ impl Redactor {
     /// Learns a value, so every later [`redact`](Self::redact) hides it.
     /// The daemon calls it as soon as a value is in its memory, before it
     /// is written anywhere. A value shorter than [`SCRUB_MIN_LEN`] is not
-    /// learned, and learning a value twice keeps one copy. The copy is
-    /// wiped from memory when the redactor drops.
+    /// learned, and learning a value twice keeps one copy. The copy, and
+    /// the JSON escaped form of a value that holds a `"`, a `\\`, or a
+    /// control character, are wiped from memory when the redactor drops.
     pub fn learn(&self, value: &SecretValue) {
         if value.len() < SCRUB_MIN_LEN {
             return;
@@ -162,6 +200,21 @@ impl Redactor {
             .values
             .partition_point(|seen| seen.len() >= copy.len());
         known.values.insert(at, copy);
+        if let Some(form) = json_escaped(value) {
+            if let Some(&first) = form.expose().as_bytes().first() {
+                known.escaped_first_bytes[usize::from(first)] = true;
+            }
+            let at = known
+                .escaped
+                .partition_point(|seen| seen.form.len() >= form.len());
+            known.escaped.insert(
+                at,
+                Escaped {
+                    form,
+                    anywhere: value.len() >= SCRUB_ANYWHERE_LEN,
+                },
+            );
+        }
     }
 
     /// Returns `text` with every known value, URI password, and value after
@@ -241,35 +294,61 @@ impl Redactor {
         cut
     }
 
-    /// Layer 2: where each known value appears, the longest first at each
-    /// position.
+    /// Layer 2: where each known value, or the JSON escaped form of one,
+    /// appears, the longest first at each position.
     fn known_values(&self, text: &str) -> Vec<Range<usize>> {
         let known = self.known.read().unwrap_or_else(PoisonError::into_inner);
-        let mut found = Vec::new();
-        if known.values.is_empty() {
-            return found;
-        }
-        let bytes = text.as_bytes();
-        let mut at = 0;
-        while at < bytes.len() {
-            if known.first_bytes[usize::from(bytes[at])] {
-                // A value starts with the first byte of a character, so a
-                // match always starts and ends on a character boundary.
-                let matched = known.values.iter().map(SecretValue::expose).find(|value| {
-                    bytes[at..].starts_with(value.as_bytes())
-                        && (value.len() >= SCRUB_ANYWHERE_LEN
-                            || is_whole_token(text, at, at + value.len()))
-                });
-                if let Some(value) = matched {
-                    found.push(at..at + value.len());
-                    at += value.len();
-                    continue;
-                }
-            }
-            at += 1;
+        let mut found = scan(
+            text,
+            &known.first_bytes,
+            known
+                .values
+                .iter()
+                .map(|value| (value.expose(), value.len() >= SCRUB_ANYWHERE_LEN)),
+        );
+        if !known.escaped.is_empty() {
+            found.extend(scan(
+                text,
+                &known.escaped_first_bytes,
+                known
+                    .escaped
+                    .iter()
+                    .map(|escaped| (escaped.form.expose(), escaped.anywhere)),
+            ));
         }
         found
     }
+}
+
+/// Where each of `candidates`, given longest first with whether it matches
+/// anywhere rather than as a whole token, appears in `text`.
+fn scan<'v, I>(text: &str, first_bytes: &[bool; 256], candidates: I) -> Vec<Range<usize>>
+where
+    I: Iterator<Item = (&'v str, bool)> + Clone,
+{
+    let mut found = Vec::new();
+    if candidates.clone().next().is_none() {
+        return found;
+    }
+    let bytes = text.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        if first_bytes[usize::from(bytes[at])] {
+            // A value starts with the first byte of a character, so a
+            // match always starts and ends on a character boundary.
+            let matched = candidates.clone().find(|(value, anywhere)| {
+                bytes[at..].starts_with(value.as_bytes())
+                    && (*anywhere || is_whole_token(text, at, at + value.len()))
+            });
+            if let Some((value, _)) = matched {
+                found.push(at..at + value.len());
+                at += value.len();
+                continue;
+            }
+        }
+        at += 1;
+    }
+    found
 }
 
 impl Default for Redactor {
@@ -522,6 +601,49 @@ mod tests {
 
         assert_eq!(format!("{redactor:?}"), "Redactor { known: 0 }");
         assert_eq!(redactor.redact("hunter2"), "hunter2");
+    }
+
+    #[test]
+    fn a_value_with_a_quote_or_backslash_hides_after_the_json_formatter_escaped_it() {
+        let secret = r#"pa"ss\word123"#;
+        let redactor = knowing(&[secret]);
+        let line =
+            serde_json::json!({ "message": format!("login with {secret} failed") }).to_string();
+        assert!(line.contains(r#"pa\"ss\\word123"#), "{line}");
+
+        let redacted = redactor.redact(&line);
+
+        assert_eq!(redacted, r#"{"message":"login with **** failed"}"#);
+        assert_eq!(redactor.redact(secret), MASK, "the raw form still hides");
+    }
+
+    #[test]
+    fn a_value_with_a_control_character_hides_in_its_json_escaped_form_anywhere_when_long() {
+        let secret = "line-one\nline-two\u{1}tail";
+        let redactor = knowing(&[secret]);
+        let escaped = serde_json::to_string(secret).unwrap();
+        let line = format!("{{\"message\":\"x{}y\"}}", &escaped[1..escaped.len() - 1]);
+
+        let redacted = redactor.redact(&line);
+
+        assert_eq!(redacted, r#"{"message":"x****y"}"#);
+    }
+
+    #[test]
+    fn a_short_escaped_value_hides_only_as_a_whole_token_and_debug_counts_one_value() {
+        let redactor = knowing(&["ab\"cd\\ef"]);
+
+        assert_eq!(redactor.redact(r#"saw ab\"cd\\ef here"#), "saw **** here");
+        assert_eq!(
+            redactor.redact(r#"saw xab\"cd\\efx here"#),
+            r#"saw xab\"cd\\efx here"#
+        );
+        assert_eq!(format!("{redactor:?}"), "Redactor { known: 1 }");
+        assert_eq!(
+            redactor.max_secret_len(),
+            8,
+            "the escaped form is not a learned value"
+        );
     }
 
     #[test]

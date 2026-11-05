@@ -277,7 +277,7 @@ Approach Journey: satu jalur pengguna (buka instance di aplikasi lain) dibangun 
 
 - [ ] `/scope`: ubah Done when fitur 70 dari "alurnya meminta aksi eksplisit dengan peringatan" menjadi "aplikasi yang hanya menerima secret lewat URL, argumen, atau daftar proses tidak bisa dideklarasikan (loader menolak token secret)", dan catat bahwa menu juga ada di detail, inspector, dan menu Instance.
 - [ ] `/scope`: catat di fitur 44 bahwa menu aksi per service di halaman Environments memakai `OpenInMenu` spec 0070, ditambah item Copy Connection URL, Show Instance, Show Logs, dan Start atau Stop dari mockup.
-- [ ] Fitur 41: dashboard Traefik (endpoint `dashboard` di loopback, `api.dashboard`) dan entri `browser` nya diputuskan di spec provider Traefik.
+- [ ] Fitur 41: dashboard Traefik (endpoint `dashboard` di loopback, `api.dashboard`) dan entri `browser` nya diputuskan di spec provider Traefik. Sejak 2026-11-05 API Traefik read only sudah ada di entry point loopback `traefik` (endpoint `ping`) untuk probe `traefik-routes` spec 0009 AC-22, dengan `api.dashboard: false`; fitur 41 tinggal memutuskan dashboard dan entri `browser` nya.
 - [ ] Fitur 40, 42, 43: entri `openWith` untuk Valkey (Redis Insight, `valkey-cli`), MySQL (TablePlus, Sequel Ace, `mysql`), dan ClickHouse (Play UI, `clickhouse-client`) ditulis di spec provider masing masing.
 - [ ] `docs/scope/ui-macos.md` bagian selisih: Open In ada di detail, inspector, dan menu Instance sebelum Environments ada; NATS tidak punya "Subscribe in Terminal" karena runtime nats-server tidak membawa CLI `nats`.
 - [ ] Kalau kelak pengguna minta terminal selain Terminal.app, buat keputusan baru (handler default `.command` atau daftar bundle terminal).

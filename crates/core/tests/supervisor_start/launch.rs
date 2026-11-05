@@ -1,10 +1,11 @@
 //! The launch checks of spec 0018 in the start of an instance (spec 0010,
-//! K7): a quarantined executable is refused before the spawn, and a child
+//! K7): a quarantined executable, or one whose quarantine cannot be read, is
+//! refused before the spawn, and a child
 //! that macOS kills before it is ready is a binary the OS rejected, with no
 //! restart.
 
 use stackly_domain::{InstanceLifecycle, OperationState};
-use stackly_platform::{ChildRole, ExitStatus};
+use stackly_platform::{ChildRole, ExitStatus, PlatformError};
 use stackly_testkit::ProcessOp;
 
 use crate::common::{Rig, Spec};
@@ -36,6 +37,58 @@ async fn a_quarantined_executable_refuses_the_start_before_the_spool_and_the_spa
         instance.last_failure().map(|code| code.as_str()),
         Some("quarantined")
     );
+}
+
+#[tokio::test]
+async fn an_unreadable_quarantine_attribute_refuses_the_start_as_an_invalid_executable() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+    rig.fake.code_signing().fail_quarantine(
+        "stackly-fake-server",
+        PlatformError::PermissionDenied {
+            path: "stackly-fake-server".into(),
+        },
+    );
+
+    let op = rig.start(id).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        Rig::failure_code(&detail),
+        stackly_core::supervisor::codes::EXECUTABLE_INVALID.to_string()
+    );
+    assert_eq!(main_spawns(&rig), 0, "nothing was spawned");
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Failed);
+    assert_eq!(
+        instance.last_failure().map(|code| code.as_str()),
+        Some("executable_invalid")
+    );
+}
+
+#[tokio::test]
+async fn a_quarantine_check_whose_task_fails_refuses_the_start_as_a_spawn_failure() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+    rig.fake
+        .code_signing()
+        .panic_on_quarantine("stackly-fake-server");
+
+    let op = rig.start(id).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        main_spawns(&rig),
+        0,
+        "a failed check never counts as launchable"
+    );
+    let instance = rig.instance_row(id);
+    assert_eq!(instance.lifecycle(), InstanceLifecycle::Failed);
+    assert_eq!(
+        instance.last_failure().map(|code| code.as_str()),
+        Some("spawn_failed")
+    );
+    assert_ne!(Rig::failure_code(&detail), "runtime.quarantined");
 }
 
 #[tokio::test]

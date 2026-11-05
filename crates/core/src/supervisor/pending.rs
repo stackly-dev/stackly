@@ -250,7 +250,10 @@ pub(super) async fn begin(
     let engine = sup.operations()?;
     let input = JournalPayload::new(trigger, crate::operation::limits::INPUT_MAX).ok()?;
     loop {
-        if sup.is_shutdown() {
+        // A session end stops what it saw live; a start that began after it
+        // would outlive the clean stop (spec 0031, *Akhir sesi*). Its own
+        // stops still begin here.
+        if sup.is_shutdown() || (kind != OperationKind::StopInstance && sup.is_session_ending()) {
             return None;
         }
         let request = BeginRequest {

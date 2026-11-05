@@ -2835,6 +2835,103 @@ fn a_native_text_param_that_renders_empty_or_too_long_fails_the_plan() {
     ev.pass();
 }
 
+// covers: AC-22
+#[test]
+fn a_traefik_routes_file_param_is_a_file_inside_the_config_folder_only() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "routesFile of traefik-routes passes as ${instance.config}/<file>; another folder, the secrets folder, a literal, a setting or a secret token, a .. component, the bare folder, or a non text value are refused with the param path",
+    );
+    let with = |value: &str| {
+        native_fake(&format!(
+            r#"{{ type: native, name: traefik-routes, endpoint: http, params: {{ routesFile: {value} }} }}"#
+        ))
+    };
+    let at = "readiness.probe.params.routesFile";
+    assert!(
+        with(r#""${instance.config}/dynamic/routes.yaml""#)
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        with(r#""${instance.config}/routes.yaml""#)
+            .validate()
+            .is_ok()
+    );
+    for (value, code) in [
+        (
+            r#""${instance.data}/routes.yaml""#,
+            IssueCode::TokenNotAllowedHere,
+        ),
+        (
+            r#""${instance.secrets}/routes.yaml""#,
+            IssueCode::TokenNotAllowedHere,
+        ),
+        (r#""${settings.label}""#, IssueCode::TokenNotAllowedHere),
+        (r#""${secret.authToken}""#, IssueCode::TokenNotAllowedHere),
+        (
+            r#""${instance.config}/${settings.label}""#,
+            IssueCode::TokenNotAllowedHere,
+        ),
+        ("/etc/passwd", IssueCode::PathEscapesScope),
+        (
+            r#""${instance.config}/../routes.yaml""#,
+            IssueCode::PathEscapesScope,
+        ),
+        (r#""${instance.config}""#, IssueCode::InvalidValue),
+        ("true", IssueCode::InvalidValue),
+        ("7", IssueCode::InvalidValue),
+    ] {
+        assert_manifest_issue(with(value), at, code);
+    }
+    assert_manifest_issue(
+        native_fake("{ type: native, name: traefik-routes, endpoint: http }"),
+        at,
+        IssueCode::MissingField,
+    );
+    ev.pass();
+}
+
+// covers: AC-22
+#[test]
+fn a_traefik_routes_probe_reaches_the_plan_with_the_absolute_routes_file() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "run_plan builds a traefik-routes probe whose routesFile is the absolute path in the instance config folder",
+    );
+    let package = native_fake(
+        r#"{ type: native, name: traefik-routes, endpoint: http, params: { routesFile: "${instance.config}/dynamic/routes.yaml" } }"#,
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let context = context_for(
+        &package,
+        serde_json::json!({ "label": "golden", "authToken": SECRET_REF }),
+        "/private/tmp/skt-rules-native",
+    );
+
+    let run = package.run_plan(&context).expect("the run plan builds");
+
+    let json = serde_json::to_value(&run.readiness.probe).expect("the probe serializes");
+    let routes_file = context.paths.config.join("dynamic").join("routes.yaml");
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "type": "native",
+            "content": {
+                "target": { "type": "ip", "content": { "host": "127.0.0.1", "port": 18080 } },
+                "probe": {
+                    "name": "traefik-routes",
+                    "params": { "routesFile": routes_file }
+                }
+            }
+        })
+    );
+    ev.pass();
+}
+
 /// The init port issues of a package as `(file, location, message)`.
 fn init_port_issues(package: &ValidatedPackage) -> Vec<(String, String, String)> {
     package

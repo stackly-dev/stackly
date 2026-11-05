@@ -7,13 +7,13 @@ log:
 entryPoints:
   web:
     address: {{ endpoint.web.address }}
-  ping:
+  traefik:
     address: {{ endpoint.ping.address }}
 ping:
-  entryPoint: ping
+  entryPoint: traefik
 api:
   dashboard: false
-  insecure: false
+  insecure: true
 providers:
   file:
     directory: {{ settings.dynamicDir }}

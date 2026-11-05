@@ -226,6 +226,10 @@ pub(crate) enum PathPosition {
         sensitive: bool,
     },
     LogFile,
+    /// A file a `native` probe reads (spec 0009 AC-22, `routesFile` of
+    /// `traefik-routes`): a file inside `${instance.config}`, the only folder
+    /// whose files Stackly renders itself.
+    ProbeFile,
 }
 
 /// Where a value string appears.
@@ -681,6 +685,7 @@ pub(crate) fn check_path(
     };
     let refusal = match (position, base) {
         (PathPosition::LogFile, PathBase::Dir(InstanceDir::Logs))
+        | (PathPosition::ProbeFile, PathBase::Dir(InstanceDir::Config))
         | (
             PathPosition::Cwd | PathPosition::ConfigDestination { sensitive: false },
             PathBase::Dir(_),
@@ -696,9 +701,14 @@ pub(crate) fn check_path(
         (PathPosition::ConfigDestination { sensitive: false }, PathBase::Secrets) => Some(
             "instance.secrets holds only sensitive config files; set sensitive: true".to_owned(),
         ),
-        (PathPosition::Cwd | PathPosition::LogFile, PathBase::Secrets) => {
-            Some("instance.secrets cannot start this path".to_owned())
-        }
+        (PathPosition::ProbeFile, PathBase::Dir(dir)) => Some(format!(
+            "a probe reads only a file in ${{instance.config}}, not ${{instance.{}}}",
+            dir.as_code()
+        )),
+        (
+            PathPosition::Cwd | PathPosition::LogFile | PathPosition::ProbeFile,
+            PathBase::Secrets,
+        ) => Some("instance.secrets cannot start this path".to_owned()),
     };
     if let Some(message) = refusal {
         issues.at(path, IssueCode::TokenNotAllowedHere, message);
@@ -748,13 +758,14 @@ pub(crate) fn check_path(
     let count_ok = match position {
         PathPosition::Cwd => true,
         PathPosition::ConfigDestination { .. } => (1..=2).contains(&components.len()),
-        PathPosition::LogFile => !components.is_empty(),
+        PathPosition::LogFile | PathPosition::ProbeFile => !components.is_empty(),
     };
     if !count_ok {
         let rule = match position {
             PathPosition::ConfigDestination { .. } => {
                 "a config destination needs one or two components after the folder token"
             }
+            PathPosition::ProbeFile => "a probe file needs a file name after ${instance.config}",
             _ => "a log file needs a file name after ${instance.logs}",
         };
         issues.at(path, IssueCode::InvalidValue, rule);

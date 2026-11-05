@@ -13,6 +13,7 @@ mod exec;
 mod http;
 mod native;
 mod tcp;
+mod traefik;
 
 pub use native::{Connecting, NativeConnect, NativeStream, TcpConnect};
 

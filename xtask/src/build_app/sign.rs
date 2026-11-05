@@ -9,7 +9,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use stackly_platform::bundle::{
-    CLI_EXECUTABLE, CLI_SIGNING_ID, DAEMON_EXECUTABLE, DAEMON_SIGNING_ID, MACOS_DIR,
+    APP_BUNDLE_ID, CLI_EXECUTABLE, CLI_SIGNING_ID, DAEMON_EXECUTABLE, DAEMON_SIGNING_ID, MACOS_DIR,
 };
 
 use super::capture;
@@ -111,14 +111,17 @@ fn is_mach_o(path: &Path) -> Result<bool> {
     ))
 }
 
-/// Checks the signature with `codesign --verify --strict --deep` and prints,
-/// for the bundle and the two executables, the identifier, the Team ID
-/// (`ad hoc` without one), and the designated requirement.
+/// Checks the signature with `codesign --verify --strict --deep`, then
+/// checks the bundle and the two executables against the requirement they
+/// must meet (their expected identifier, and the Team ID of a Developer ID
+/// `identity`), and prints, for each, the identifier, the Team ID (`ad hoc`
+/// without one), and the designated requirement.
 ///
 /// # Errors
 ///
-/// A failed verification.
-pub fn verify(bundle: &Path) -> Result<()> {
+/// A failed verification, or a signature that does not meet its
+/// requirement.
+pub fn verify(bundle: &Path, identity: &str) -> Result<()> {
     capture(
         Command::new("codesign")
             .args(["--verify", "--strict", "--deep"])
@@ -126,11 +129,15 @@ pub fn verify(bundle: &Path) -> Result<()> {
     )
     .with_context(|| format!("{} does not verify", bundle.display()))?;
     let macos = bundle.join(MACOS_DIR);
-    for path in [
-        macos.join(DAEMON_EXECUTABLE),
-        macos.join(CLI_EXECUTABLE),
-        bundle.to_path_buf(),
-    ] {
+    let signed = [
+        (macos.join(DAEMON_EXECUTABLE), DAEMON_SIGNING_ID),
+        (macos.join(CLI_EXECUTABLE), CLI_SIGNING_ID),
+        (bundle.to_path_buf(), APP_BUNDLE_ID),
+    ];
+    for (path, identifier) in &signed {
+        meets(path, &requirement(identifier, identity))?;
+    }
+    for (path, _) in signed {
         let details = describe(&path)?;
         println!(
             "signed {}: identifier {}, team {}\n  {}",
@@ -140,6 +147,50 @@ pub fn verify(bundle: &Path) -> Result<()> {
             details.requirement
         );
     }
+    Ok(())
+}
+
+/// The requirement a file signed by `identity` must meet: its expected
+/// `identifier` and, for a `Developer ID Application: <name> (<Team ID>)`
+/// identity, an Apple issued leaf certificate of that Team ID. An ad hoc or
+/// any other identity is held to the identifier only, since its certificate
+/// subject does not name the Team ID reliably.
+fn requirement(identifier: &str, identity: &str) -> String {
+    let mut requirement = format!("identifier \"{identifier}\"");
+    if let Some(team) = developer_id_team(identity) {
+        requirement.push_str(&format!(
+            " and anchor apple generic and certificate leaf[subject.OU] = \"{team}\""
+        ));
+    }
+    requirement
+}
+
+/// The Team ID a `Developer ID Application: <name> (<Team ID>)` identity
+/// names, when it is one.
+fn developer_id_team(identity: &str) -> Option<&str> {
+    let rest = identity.strip_prefix("Developer ID Application: ")?;
+    let team = rest.strip_suffix(')')?.rsplit_once(" (")?.1;
+    (team.len() == 10
+        && team
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()))
+    .then_some(team)
+}
+
+/// Checks that the signature of `path` satisfies `requirement`.
+fn meets(path: &Path, requirement: &str) -> Result<()> {
+    capture(
+        Command::new("codesign")
+            .args(["--verify", "--strict"])
+            .arg(format!("-R={requirement}"))
+            .arg(path),
+    )
+    .with_context(|| {
+        format!(
+            "{} does not meet the requirement `{requirement}`",
+            path.display()
+        )
+    })?;
     Ok(())
 }
 
@@ -229,6 +280,67 @@ mod tests {
         let details = parse_details("Identifier=x\nTeamIdentifier=ABCDE12345\n", "");
         assert_eq!(details.team, "ABCDE12345");
         assert_eq!(details.requirement, "no designated requirement");
+    }
+
+    #[test]
+    fn an_ad_hoc_or_development_identity_is_held_to_the_identifier_only() {
+        assert_eq!(
+            requirement(DAEMON_SIGNING_ID, "-"),
+            "identifier \"com.ojiepermana.stackly.daemon\""
+        );
+        assert_eq!(
+            requirement(CLI_SIGNING_ID, "Apple Development: A Person (ABCDE12345)"),
+            "identifier \"com.ojiepermana.stackly.cli\""
+        );
+    }
+
+    #[test]
+    fn a_developer_id_identity_also_requires_its_team_id() {
+        assert_eq!(
+            requirement(
+                APP_BUNDLE_ID,
+                "Developer ID Application: A Person (ABCDE12345)"
+            ),
+            "identifier \"com.ojiepermana.stackly\" and anchor apple generic and certificate leaf[subject.OU] = \"ABCDE12345\""
+        );
+        assert_eq!(
+            developer_id_team("Developer ID Application: A (abcde12345)"),
+            None
+        );
+        assert_eq!(
+            developer_id_team("Developer ID Application: A (ABCDE1234)"),
+            None
+        );
+        assert_eq!(developer_id_team("Developer ID Application: A"), None);
+        assert_eq!(
+            developer_id_team("Developer ID Installer: A (ABCDE12345)"),
+            None
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn an_ad_hoc_signature_meets_only_its_own_identifier() {
+        let dir = tempfile::tempdir().unwrap();
+        let tool = dir.path().join("stacklyd");
+        std::fs::copy("/usr/bin/true", &tool).unwrap();
+        codesign(AD_HOC, Some(DAEMON_SIGNING_ID), &tool).unwrap();
+
+        meets(&tool, &requirement(DAEMON_SIGNING_ID, AD_HOC)).unwrap();
+        let err = meets(&tool, &requirement(CLI_SIGNING_ID, AD_HOC))
+            .err()
+            .unwrap();
+        assert!(
+            err.to_string().ends_with(
+                "does not meet the requirement `identifier \"com.ojiepermana.stackly.cli\"`"
+            ),
+            "{err}"
+        );
+        let team = requirement(
+            DAEMON_SIGNING_ID,
+            "Developer ID Application: A Person (ABCDE12345)",
+        );
+        assert!(meets(&tool, &team).is_err(), "ad hoc has no Team ID");
     }
 
     #[test]

@@ -283,11 +283,39 @@ pub fn render_agent_rows(
             (LaunchContextKind::Manual, _) => "by hand".to_owned(),
             (LaunchContextKind::Unrecognized, _) => "unknown".to_owned(),
         };
-        rows.push(("Launched", Cell::fixed(text)));
+        rows.push(("Launched", Cell::text(&text)));
     }
     rows.push(("App", Cell::optional(agent.bundle_path.as_deref())));
     if let Some(next) = recovery_text(agent.recovery) {
         rows.push(("Next", Cell::fixed(next)));
     }
     rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_launchd_label_from_the_daemon_is_escaped() {
+        let agent = AgentReport {
+            state: "enabled",
+            reason: None,
+            recovery: "none",
+            label: "dev.stackly.daemon",
+            bundle_path: None,
+            last_launched_at: None,
+        };
+        let launch = DaemonLaunch {
+            context: LaunchContextKind::Launchd,
+            label: Some("dev\u{1b}[2J\u{202e}".to_owned()),
+            bundle_path: None,
+        };
+        let rows = render_agent_rows(&agent, Some(&launch));
+        let launched = rows
+            .iter()
+            .find(|(label, _)| *label == "Launched")
+            .expect("a launched row");
+        assert_eq!(launched.1, Cell::fixed("launchd (dev\\u{1b}[2J\\u{202e})"));
+    }
 }

@@ -10,7 +10,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use stackly_domain::{LocationKind, LocationRule, StorageLocationId};
-use stackly_platform::{FileKind, Filesystem, Platform, PlatformError, VolumeFacts};
+use stackly_platform::{
+    FileKind, Filesystem, Platform, PlatformError, VolumeFacts, check_private_dir,
+    is_same_or_inside,
+};
+
+use crate::layout::ensure_private_dir;
 
 /// The folder a location keeps inside the one the person chose.
 pub const LOCATION_DIR: &str = "Stackly";
@@ -67,12 +72,21 @@ pub struct LocationFacts {
     pub owned: bool,
     /// Whether group or others can write to it.
     pub open_to_write: bool,
+    /// Whether a folder above it, once resolved, lets group or others write
+    /// to it without the sticky bit, so another user could rename or
+    /// replace the chosen folder.
+    pub ancestor_open_to_write: bool,
     /// The path with every symlink resolved, when it exists.
     pub canonical: Option<PathBuf>,
     /// The volume that holds it.
     pub volume: Result<VolumeFacts, String>,
     /// What `<folder>/Stackly` is.
     pub folder: FolderFact,
+    /// The roots and location folders of the context that `<folder>/Stackly`
+    /// overlaps by file identity along the ancestors (another letter case on
+    /// APFS, another Unicode normalization, or a firmlink), which a
+    /// comparison of the text misses.
+    pub identity_overlaps: Vec<PathBuf>,
 }
 
 /// What the rules compare a folder with.
@@ -114,7 +128,8 @@ pub enum LocationVerdict {
     Reuse(StorageLocationId),
 }
 
-/// Reads the facts of `path` for a location of `kind`. It only reads.
+/// Reads the facts of `path` for a location, compared with the roots and
+/// locations of `context`. It only reads.
 ///
 /// # Errors
 ///
@@ -123,6 +138,7 @@ pub enum LocationVerdict {
 pub fn gather_location_facts(
     platform: &Platform,
     path: &Path,
+    context: &LocationContext,
 ) -> Result<LocationFacts, PlatformError> {
     let fs = platform.fs();
     let absolute = path.is_absolute();
@@ -157,6 +173,13 @@ pub fn gather_location_facts(
         _ => (false, false, false),
     };
     let symlink_on_path = absolute && symlink_on_path(fs, path);
+    let ancestor_open_to_write = canonical
+        .as_deref()
+        .is_some_and(|canonical| ancestor_open_to_write(fs, canonical));
+    let identity_overlaps = match &canonical {
+        Some(canonical) if is_dir => identity_overlaps(fs, &canonical.join(LOCATION_DIR), context)?,
+        _ => Vec::new(),
+    };
     let volume = match &canonical {
         Some(canonical) => fs
             .volume_facts(canonical)
@@ -175,10 +198,46 @@ pub fn gather_location_facts(
         symlink_on_path,
         owned,
         open_to_write,
+        ancestor_open_to_write,
         canonical,
         volume,
         folder,
+        identity_overlaps,
     })
+}
+
+/// Whether a folder above `canonical` lets group or others write to it and
+/// has no sticky bit. A folder above that cannot be inspected is skipped:
+/// the folder itself was read, so the way to it is open.
+fn ancestor_open_to_write(fs: &dyn Filesystem, canonical: &Path) -> bool {
+    canonical.ancestors().skip(1).any(|ancestor| {
+        let Ok(Some(info)) = fs.symlink_metadata(ancestor) else {
+            return false;
+        };
+        info.mode
+            .is_none_or(|mode| mode & 0o022 != 0 && mode & 0o1000 == 0)
+    })
+}
+
+/// The roots and location folders of `context` that `target` is, is inside,
+/// or holds, compared by path and by file identity like the data root
+/// overlap check of `crate::ownership`.
+fn identity_overlaps(
+    fs: &dyn Filesystem,
+    target: &Path,
+    context: &LocationContext,
+) -> Result<Vec<PathBuf>, PlatformError> {
+    let mut overlaps = Vec::new();
+    let others = context
+        .roots
+        .iter()
+        .chain(context.existing.iter().map(|(_, _, path)| path));
+    for other in others {
+        if is_same_or_inside(fs, target, other)? || is_same_or_inside(fs, other, target)? {
+            overlaps.push(other.clone());
+        }
+    }
+    Ok(overlaps)
 }
 
 /// Whether `path` or one of its ancestors is a symlink, other than a
@@ -228,15 +287,20 @@ pub enum LocationState {
 }
 
 /// Whether the `Stackly` folder of a custom location and its `instances/`
-/// folder are there, and the user can write to them.
+/// folder are there, are private folders of the user, and the user can
+/// write to them. A folder that is there but is not private is
+/// [`LocationState::NotWritable`].
 pub fn probe_location(platform: &Platform, base: &Path) -> LocationState {
     let fs = platform.fs();
     let user = platform.identity().current_user().ok();
+    // The same privacy rule as the built in roots (a folder of the user, no
+    // group or other access, not a symlink), plus write access for the user.
     let usable = |path: &Path| match fs.symlink_metadata(path) {
-        Ok(Some(info)) if info.kind == FileKind::Dir => Some(
-            user.is_some() && info.owner == user && info.mode.is_some_and(|mode| mode & 0o200 != 0),
-        ),
-        Ok(Some(_)) | Err(_) => Some(false),
+        Ok(Some(info)) => Some(user.as_ref().is_some_and(|user| {
+            check_private_dir(&info, user).is_ok()
+                && info.mode.is_some_and(|mode| mode & 0o200 != 0)
+        })),
+        Err(_) => Some(false),
         Ok(None) => None,
     };
     match (usable(base), usable(&base.join("instances"))) {
@@ -273,7 +337,7 @@ pub fn check_location(
     if !facts.owned {
         return Err(LocationRule::NotOwned);
     }
-    if facts.open_to_write {
+    if facts.open_to_write || facts.ancestor_open_to_write {
         return Err(LocationRule::TooOpen);
     }
     let resolved = facts.canonical.as_deref().unwrap_or(&facts.path);
@@ -305,7 +369,11 @@ pub fn check_location(
             .map(|(id, _, _)| *id),
         FolderFact::Absent | FolderFact::Unmarked => None,
     };
-    let overlaps = |other: &Path| target.starts_with(other) || other.starts_with(&target);
+    let overlaps = |other: &Path| {
+        target.starts_with(other)
+            || other.starts_with(&target)
+            || facts.identity_overlaps.iter().any(|path| path == other)
+    };
     if context.roots.iter().any(|root| overlaps(root))
         || context
             .existing
@@ -337,26 +405,34 @@ fn in_protected_folder(path: &Path, home: Option<&Path>) -> bool {
 /// Creates the folders of a location for `kind` inside `folder`: `Stackly`
 /// with mode 0700, the subfolders of its layout, and the marker file. It
 /// does nothing for what exists already, so a location that is used again
-/// keeps its content.
+/// keeps its content, but a folder that exists must pass the privacy rule
+/// of the built in roots (`check_private_dir`): a folder of the user with
+/// no group or other access. One that fails is rejected, never repaired.
 ///
 /// # Errors
 ///
 /// Returns [`LocationRule::NotWritable`] when a folder or the marker cannot
-/// be created.
+/// be created, or a folder that exists is not a private folder of the user.
 pub fn prepare_location(
-    fs: &dyn Filesystem,
+    platform: &Platform,
     folder: &Path,
     kind: LocationKind,
     id: StorageLocationId,
 ) -> Result<PathBuf, LocationRule> {
+    let fs = platform.fs();
+    let user = platform
+        .identity()
+        .current_user()
+        .map_err(|_| LocationRule::NotWritable)?;
     let location = folder.join(LOCATION_DIR);
-    ensure_dir(fs, &location)?;
+    ensure_private_dir(fs, &location, &user).map_err(|_| LocationRule::NotWritable)?;
     let subfolders: &[&str] = match kind {
         LocationKind::Data | LocationKind::Logs => &["instances"],
         LocationKind::Cache => &["downloads"],
     };
     for subfolder in subfolders {
-        ensure_dir(fs, &location.join(subfolder))?;
+        ensure_private_dir(fs, &location.join(subfolder), &user)
+            .map_err(|_| LocationRule::NotWritable)?;
     }
     let marker_path = location.join(MARKER_FILE);
     if fs
@@ -373,15 +449,4 @@ pub fn prepare_location(
             .map_err(|_| LocationRule::NotWritable)?;
     }
     Ok(location)
-}
-
-fn ensure_dir(fs: &dyn Filesystem, dir: &Path) -> Result<(), LocationRule> {
-    match fs.symlink_metadata(dir) {
-        Ok(Some(info)) if info.kind == FileKind::Dir => Ok(()),
-        Ok(Some(_)) => Err(LocationRule::NotWritable),
-        Ok(None) => fs
-            .create_dir_private(dir)
-            .map_err(|_| LocationRule::NotWritable),
-        Err(_) => Err(LocationRule::NotWritable),
-    }
 }

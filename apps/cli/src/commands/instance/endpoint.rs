@@ -169,7 +169,7 @@ impl Render for SetOutput {
                         out.line(&format!(
                             "  {}: {}{suggestion}",
                             escape_display(&problem.endpoint),
-                            problem.code
+                            escape_display(&problem.code)
                         ));
                     }
                     return;
@@ -189,5 +189,31 @@ impl Render for SetOutput {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(result: &impl Render) -> String {
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        result.render(&mut out);
+        out.into_string()
+    }
+
+    #[test]
+    fn an_endpoint_problem_code_is_escaped_like_its_endpoint() {
+        let verdict: EndpointValidation = serde_json::from_value(serde_json::json!({
+            "valid": false,
+            "problems": [{"endpoint": "pg\u{1b}", "code": "in_use\u{1b}[2J", "suggestedPort": 5433}],
+            "changes": [],
+            "impact": "none",
+        }))
+        .unwrap();
+        assert_eq!(
+            render(&SetOutput::DryRun(verdict)),
+            "not applicable\n  pg\\u{1b}: in_use\\u{1b}[2J, try port 5433\n"
+        );
     }
 }

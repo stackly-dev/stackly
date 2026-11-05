@@ -326,6 +326,34 @@ struct InstanceLogsModelTests {
         #expect(model.copyText(of: model.lines[1]) == nil)
         #expect(model.copyText(of: model.lines[2]) == "2026-10-19 00:00:00.000 stderr after")
     }
+
+    @Test func copiedLinesWriteControlsAndBidiOverridesAsEscapesButKeepTabs() async {
+        let at = Date(timeIntervalSince1970: 1_792_368_000)
+        let script = LogsScript(
+            LogsScript.page([
+                LogsScript.line(1, "red \u{1B}[31mtext\u{1B}[0m\tcol", at: at),
+                LogsScript.line(2, "a\nb\r\u{0}\u{7F}\u{85}\u{9B} x\u{202E}y\u{2066}z", at: at),
+                LogsScript.line(3, "数据库 café \u{202F}", at: at),
+            ]))
+        let model = model(script, follow: false)
+        model.open()
+        await until { model.rows.count == 3 }
+
+        #expect(
+            model.copyText(of: model.lines[0])
+                == "2026-10-19 00:00:00.000 stdout red \\u{1b}[31mtext\\u{1b}[0m\tcol")
+        #expect(
+            model.copyText(of: model.lines[1])
+                == "2026-10-19 00:00:00.000 stdout a\\u{a}b\\u{d}\\u{0}\\u{7f}\\u{85}\\u{9b} x\\u{202e}y\\u{2066}z"
+        )
+        #expect(
+            model.copyText(of: model.lines[2]) == "2026-10-19 00:00:00.000 stdout 数据库 café \u{202F}"
+        )
+        #expect(model.shownText.split(separator: "\n").count == 3)
+        #expect(model.shownText.unicodeScalars.contains("\u{1B}") == false)
+        // The view still shows the line text as the daemon sent it.
+        #expect(model.lines[0].text == "red \u{1B}[31mtext\u{1B}[0m\tcol")
+    }
 }
 
 extension InstanceLogsTab.Display {

@@ -1,10 +1,11 @@
-//! `cargo xtask runtime verify [--id <id>]`: downloads every `available`
+//! `cargo xtask runtime verify [--id <id>] [--allow-missing-gpg]`: downloads every `available`
 //! artifact again from each of its URLs and checks that the bytes still
 //! have the pinned `sha256` and `size` and the magic number its `format`
 //! names and, measured with the extractor's scan, the pinned
-//! `unpacked_size` and `entry_count`, then checks the upstream checksum file by its kind and, when
-//! `gpg` is on PATH, the upstream signature (spec 0003). Prints `OK`,
-//! `FAIL <reason>`, or `SKIP gpg` per artifact.
+//! `unpacked_size` and `entry_count`, then checks the upstream checksum file by its kind and
+//! the upstream signature (spec 0003). Prints `OK` or `FAIL <reason>` per
+//! artifact. A gpg-signed artifact without `gpg` on PATH fails, unless
+//! `--allow-missing-gpg` turns it into `SKIP gpg`.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -23,21 +24,66 @@ enum Outcome {
     /// Digest, size, checksum, and signature all match.
     Ok,
     /// Everything that could be checked matches, but the GPG signature was
-    /// not checked because `gpg` is not on PATH.
+    /// not checked because `gpg` is not on PATH and `--allow-missing-gpg`
+    /// was given.
     SkipGpg,
     /// Something does not match or cannot be reached.
     Fail(String),
 }
 
-pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
-    let only = match args {
-        [] => None,
-        ["--id", id] => Some(*id),
-        _ => bail!(
-            "unexpected arguments `{}`; use `cargo xtask runtime verify [--id <id>]`",
+/// What `verify` reads from its arguments.
+#[derive(Debug, PartialEq, Eq)]
+struct Options<'a> {
+    /// The one artifact to verify; every available one when absent.
+    only: Option<&'a str>,
+    /// Turns a missing `gpg` into `SKIP gpg` instead of `FAIL`.
+    allow_missing_gpg: bool,
+}
+
+/// The `FAIL` reason of a gpg-signed artifact when `gpg` is not on PATH.
+const GPG_MISSING: &str = "gpg is not on PATH; install GnuPG (`brew install gnupg`), or pass --allow-missing-gpg to skip the signature check";
+
+fn parse<'a>(args: &[&'a str]) -> Result<Options<'a>> {
+    let usage = || {
+        anyhow::anyhow!(
+            "unexpected arguments `{}`; use `cargo xtask runtime verify [--id <id>] [--allow-missing-gpg]`",
             args.join(" ")
-        ),
+        )
     };
+    let mut options = Options {
+        only: None,
+        allow_missing_gpg: false,
+    };
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match *arg {
+            "--id" if options.only.is_none() => {
+                options.only = Some(*rest.next().ok_or_else(usage)?);
+            }
+            "--allow-missing-gpg" if !options.allow_missing_gpg => {
+                options.allow_missing_gpg = true;
+            }
+            _ => return Err(usage()),
+        }
+    }
+    Ok(options)
+}
+
+/// The outcome of a gpg-signed artifact when `gpg` is not on PATH, or
+/// `None` when it is and the signature must be checked.
+fn missing_gpg(available: bool, allow_missing_gpg: bool) -> Option<Outcome> {
+    match (available, allow_missing_gpg) {
+        (true, _) => None,
+        (false, true) => Some(Outcome::SkipGpg),
+        (false, false) => Some(Outcome::Fail(GPG_MISSING.to_owned())),
+    }
+}
+
+pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
+    let Options {
+        only,
+        allow_missing_gpg,
+    } = parse(args)?;
     let inventory = Inventory::load(root)?;
     let violations = inventory.violations(root);
     if !violations.is_empty() {
@@ -73,12 +119,14 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     let mut failed = 0;
     for artifact in &artifacts {
         let id = artifact.id.as_deref().unwrap_or_default();
-        let outcome = verify(root, &cache, artifact, &mut gpg)
+        let outcome = verify(root, &cache, artifact, &mut gpg, allow_missing_gpg)
             .unwrap_or_else(|err| Outcome::Fail(format!("{err:#}")));
         match &outcome {
             Outcome::Ok => println!("{id}: OK"),
             Outcome::SkipGpg => {
-                println!("{id}: SKIP gpg (digest, size, and checksum match; gpg is not on PATH)")
+                println!(
+                    "{id}: SKIP gpg (digest, size, and checksum match; gpg is not on PATH and --allow-missing-gpg was given)"
+                )
             }
             Outcome::Fail(reason) => {
                 failed += 1;
@@ -100,6 +148,7 @@ fn verify(
     cache: &Cache,
     artifact: &Artifact,
     gpg: &mut Option<bool>,
+    allow_missing_gpg: bool,
 ) -> Result<Outcome> {
     let sha256 = artifact
         .sha256
@@ -180,8 +229,10 @@ fn verify(
     if let Some(signature) = &artifact.upstream_signature
         && signature.kind.as_deref() == Some("gpg")
     {
-        if !*gpg.get_or_insert_with(gpg_available) {
-            return Ok(Outcome::SkipGpg);
+        if let Some(outcome) =
+            missing_gpg(*gpg.get_or_insert_with(gpg_available), allow_missing_gpg)
+        {
+            return Ok(outcome);
         }
         let url = signature
             .url
@@ -306,6 +357,50 @@ upstream_signature = { kind = "none" }
             "clickhouse-26.9.1.1-macos-aarch64 is blocked, so there is nothing to download"
         );
         assert!(run(root.path(), &["--id"]).is_err());
+    }
+
+    #[test]
+    fn parse_reads_the_id_and_the_allow_missing_gpg_flag_in_any_order() {
+        assert_eq!(
+            parse(&[]).unwrap(),
+            Options {
+                only: None,
+                allow_missing_gpg: false
+            }
+        );
+        let both = Options {
+            only: Some("mysql-8.4.11-macos-aarch64"),
+            allow_missing_gpg: true,
+        };
+        assert_eq!(
+            parse(&["--id", "mysql-8.4.11-macos-aarch64", "--allow-missing-gpg"]).unwrap(),
+            both
+        );
+        assert_eq!(
+            parse(&["--allow-missing-gpg", "--id", "mysql-8.4.11-macos-aarch64"]).unwrap(),
+            both
+        );
+        for bad in [
+            &["--id"][..],
+            &["--allow-missing-gpg", "--allow-missing-gpg"],
+            &["--id", "a", "--id", "b"],
+            &["--verbose"],
+        ] {
+            let err = parse(bad).err().unwrap().to_string();
+            assert!(err.ends_with("[--id <id>] [--allow-missing-gpg]`"), "{err}");
+        }
+    }
+
+    #[test]
+    fn a_gpg_signed_artifact_without_gpg_fails_unless_the_flag_allows_it() {
+        let Some(Outcome::Fail(reason)) = missing_gpg(false, false) else {
+            panic!("a missing gpg fails without the flag");
+        };
+        assert!(reason.starts_with("gpg is not on PATH"), "{reason}");
+        assert!(reason.contains("--allow-missing-gpg"), "{reason}");
+        assert_eq!(missing_gpg(false, true), Some(Outcome::SkipGpg));
+        assert_eq!(missing_gpg(true, false), None);
+        assert_eq!(missing_gpg(true, true), None);
     }
 
     /// The artifact of an inventory entry that holds only what the scan

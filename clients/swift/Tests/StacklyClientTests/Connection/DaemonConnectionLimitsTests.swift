@@ -128,28 +128,93 @@ extension DaemonConnectionTests {
         #expect(await reasons.next() == ClientErrorCatalog.frame(.tooLarge(length: 256, max: 64)))
     }
 
-    @Test func aFrameReadWithTheHandshakeReplyMayUseALargerDaemonLimit() async throws {
+    @Test func aLargerDaemonFrameLimitIsClampedToTheContractLimitForIncomingAndOutgoingFrames()
+        async throws
+    {
         let limit: UInt32 = 2 * ContractLimits.controlFrameMax
-        let padding = String(repeating: "x", count: Int(ContractLimits.controlFrameMax))
-        let event = Array(
-            #"{"type":"event","content":{"subscriptionId":99,"sequence":1,"at":"2026-10-18T03:04:05.123Z","kind":{"type":"instance.future_kind","content":{"pad":"\#(padding)"}}}}"#
-                .utf8)
+        let length = ContractLimits.controlFrameMax + 1
         server.serve { session in
             let request = try session.readRequest()
-            // The reply and the header of a frame above 1 MiB, but within the
-            // daemon's limit, in one write; the payload follows.
-            let frame = try FrameEncoder.encode(event, maxLength: UInt32.max)
             try session.sendRaw(
-                Self.handshakeReply(to: request, limits: Samples.limits.withFrameBytes(limit))
-                    + frame.prefix(FrameDecoder.headerLength))
-            try session.sendRaw(Array(frame.dropFirst(FrameDecoder.headerLength)))
+                Self.handshakeReply(to: request, limits: Samples.limits.withFrameBytes(limit)))
+            // Only once the oversized call was refused without a write: the
+            // header of a frame above 1 MiB, within the daemon's announced
+            // limit.
+            let call = try session.readRequest()
+            try session.reply(to: call, with: .eventsUnsubscribe)
+            try session.sendRaw(Array(withUnsafeBytes(of: length.bigEndian) { Array($0) }))
+            session.drainUntilClosed()
+        }
+        let (connection, _) = try await open()
+        let provider = String(repeating: "x", count: Int(ContractLimits.controlFrameMax))
+        do {
+            _ = try await connection.call(
+                .catalogGetProvider(GetProviderParams(provider: provider)))
+            Issue.record("a request above 1 MiB was sent")
+        } catch {
+            guard case .notSent(let body) = error else {
+                Issue.record("expected notSent, got \(error)")
+                return
+            }
+            #expect(body.code == "ipc.frame_too_large")
+            #expect(body.detail("max") == String(ContractLimits.controlFrameMax))
+        }
+        #expect(try await connection.call(Samples.unsubscribe(1)) == .eventsUnsubscribe)
+        var reasons = connection.termination.makeAsyncIterator()
+        #expect(
+            await reasons.next()
+                == ClientErrorCatalog.frame(
+                    .tooLarge(length: UInt64(length), max: ContractLimits.controlFrameMax)))
+    }
+
+    @Test func aSmallerDaemonFrameLimitIsUsedAsIsForOutgoingFrames() async throws {
+        server.serve { session in
+            try session.acceptHandshake(limits: Samples.limits.withFrameBytes(256))
             let call = try session.readRequest()
             try session.reply(to: call, with: .eventsUnsubscribe)
         }
         let (connection, _) = try await open()
-        #expect(event.count > Int(ContractLimits.controlFrameMax))
+        let provider = String(repeating: "x", count: 256)
+        do {
+            _ = try await connection.call(
+                .catalogGetProvider(GetProviderParams(provider: provider)))
+            Issue.record("a request above the daemon's limit was sent")
+        } catch {
+            guard case .notSent(let body) = error else {
+                Issue.record("expected notSent, got \(error)")
+                return
+            }
+            #expect(body.code == "ipc.frame_too_large")
+            #expect(body.detail("max") == "256")
+        }
         #expect(try await connection.call(Samples.unsubscribe(1)) == .eventsUnsubscribe)
         await connection.close()
+    }
+
+    @Test func aDeeperDaemonJsonDepthIsClampedToTheContractDepth() async throws {
+        // 33 levels in all: three objects around 30 arrays, in an event of a
+        // kind this client does not know, which would be skipped under the
+        // daemon's announced 64.
+        let deep = String(repeating: "[", count: 30) + String(repeating: "]", count: 30)
+        let event = Array(
+            #"{"type":"event","content":{"subscriptionId":99,"sequence":1,"at":"2026-10-18T03:04:05.123Z","kind":{"type":"instance.future_kind","content":\#(deep)}}}"#
+                .utf8)
+        #expect(JSONDepth.exceeds(event, 33) == false)
+        #expect(JSONDepth.exceeds(event, ContractLimits.maxJsonDepth))
+        server.serve { session in
+            try session.acceptHandshake(limits: Samples.limits.withJsonDepth(64))
+            let call = try session.readRequest()
+            try session.sendRaw(FrameEncoder.encode(event, maxLength: UInt32.max))
+            // The client may have closed already.
+            try? session.reply(to: call, with: .eventsUnsubscribe)
+            session.drainUntilClosed()
+        }
+        let (connection, _) = try await open()
+        await #expect(throws: ClientError.self) {
+            try await connection.call(Samples.unsubscribe(1))
+        }
+        var reasons = connection.termination.makeAsyncIterator()
+        #expect(await reasons.next() == ClientErrorCatalog.protocolViolation())
     }
 
     /// The framed handshake reply to `request` with `limits`.

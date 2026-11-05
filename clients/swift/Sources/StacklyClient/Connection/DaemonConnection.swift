@@ -274,11 +274,17 @@ public actor DaemonConnection {
     /// `HandshakeAccepted` is read, before ``open(endpoint:policy:client:options:)``
     /// resumes: frames read right behind it, and a close, then find the
     /// connection open.
+    ///
+    /// The daemon's frame and depth limits only ever tighten the contract's:
+    /// a smaller value is used as is, a larger one is clamped to
+    /// ``ContractLimits/controlFrameMax`` and ``ContractLimits/maxJsonDepth``
+    /// (spec 0013 AC-3).
     private func accept(_ accepted: HandshakeAccepted) {
         phase = .open
-        decoder.setMaxLength(accepted.limits.maxFrameBytes)
-        maxDepth = accepted.limits.maxJsonDepth
-        maxOutgoing = accepted.limits.maxFrameBytes
+        let frameMax = min(accepted.limits.maxFrameBytes, ContractLimits.controlFrameMax)
+        decoder.setMaxLength(frameMax)
+        maxDepth = min(accepted.limits.maxJsonDepth, ContractLimits.maxJsonDepth)
+        maxOutgoing = frameMax
         slotLimit = max(1, Int(accepted.limits.maxInFlightRequests))
         if accepted.contractDrift {
             logger.warning("stacklyd has the same protocol but another contract digest")

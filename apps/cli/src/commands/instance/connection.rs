@@ -26,6 +26,7 @@ use super::resolve::TargetArg;
 use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
+use crate::output::escape::escape_display;
 use crate::output::human::{Cell, HumanWriter, Render, wire_name};
 use crate::output::{CommandOutput, OutputMode};
 use crate::session::{CallSpec, RequestTimeout};
@@ -218,7 +219,7 @@ async fn reveal(cx: &mut Context, connection: &ConnectionString) -> Result<Strin
 impl Render for ConnectionOutput {
     fn render(&self, out: &mut HumanWriter) {
         match self {
-            Self::One { text, .. } => out.line(text),
+            Self::One { text, .. } => out.line(&escape_display(text)),
             Self::All { connections, .. } => {
                 let rows: Vec<(&str, Cell)> = connections
                     .iter()
@@ -233,5 +234,51 @@ impl Render for ConnectionOutput {
                 out.kv(&rows);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(result: &impl Render) -> String {
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        result.render(&mut out);
+        out.into_string()
+    }
+
+    fn fixture(path: &str) -> serde_json::Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../protocols/fixtures")
+            .join(path);
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn one(text: &str) -> ConnectionOutput {
+        let connection =
+            fixture("instance/detail-postgresql.json")["detail"]["connections"][0].clone();
+        ConnectionOutput::One {
+            instance: InstanceRef {
+                id: Uuid::nil(),
+                name: "db".to_owned(),
+            },
+            connection: Box::new(serde_json::from_value(connection).unwrap()),
+            value: None,
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_printable_connection_string_is_written_byte_for_byte() {
+        let text = "postgresql://postgres:p@ss w0rd!%2F@127.0.0.1:5432/数据?x=1&y='2'";
+        assert_eq!(render(&one(text)), format!("{text}\n"));
+    }
+
+    #[test]
+    fn controls_and_bidi_overrides_in_a_connection_string_are_escaped() {
+        assert_eq!(
+            render(&one("postgresql://a\u{1b}]0;x\u{7}@h\u{202e}/d")),
+            "postgresql://a\\u{1b}]0;x\\u{7}@h\\u{202e}/d\n"
+        );
     }
 }

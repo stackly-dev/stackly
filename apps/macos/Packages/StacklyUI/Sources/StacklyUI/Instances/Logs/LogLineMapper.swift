@@ -64,7 +64,7 @@ struct LogLineMapper {
                 text: text, level: level),
             seq: entry.seq, day: dayKey.string(from: entry.at),
             dayTitle: entry.at.formatted(dayTitle),
-            copyText: "\(stamp.string(from: entry.at)) \(source) \(text)")
+            copyText: "\(stamp.string(from: entry.at)) \(source) \(Self.pasteSafe(text))")
     }
 
     /// The row of a gap before the entry `next`, or before the head when no entry follows.
@@ -89,6 +89,33 @@ struct LogLineMapper {
         }
         rows.append(contentsOf: entries.map(shown))
         return rows
+    }
+
+    /// `text` with every C0 control but tab, DEL, C1 control, and bidi override or isolate
+    /// (U+202A to U+202E, U+2066 to U+2069) written as `\u{..}` in lowercase hex, the format
+    /// of the CLI's `escape_display`, so copied lines never carry a terminal escape or a
+    /// newline that fakes another line into a paste.
+    static func pasteSafe(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: needsEscape) else { return text }
+        var out = ""
+        out.reserveCapacity(text.utf8.count + 8)
+        for scalar in text.unicodeScalars {
+            if needsEscape(scalar) {
+                out += "\\u{\(String(scalar.value, radix: 16))}"
+            } else {
+                out.unicodeScalars.append(scalar)
+            }
+        }
+        return out
+    }
+
+    /// Whether `scalar` must not reach the pasteboard raw.
+    private static func needsEscape(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x09: false
+        case 0x00...0x1F, 0x7F...0x9F, 0x202A...0x202E, 0x2066...0x2069: true
+        default: false
+        }
     }
 
     /// The source column: the stream of a line, `stackly` for a marker.

@@ -909,7 +909,7 @@ fn the_traefik_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "official/traefik");
-    assert_eq!(key.revision().as_str(), "1.0.1");
+    assert_eq!(key.revision().as_str(), "1.0.0");
     assert_eq!(package.software().as_str(), "traefik");
     assert_eq!(
         package

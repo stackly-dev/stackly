@@ -9,8 +9,8 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
 use stackly_core::storage::{
-    FolderFact, LOCATION_DIR, LocationContext, LocationVerdict, MARKER_FILE, Marker,
-    check_location, gather_location_facts, prepare_location,
+    FolderFact, LOCATION_DIR, LocationContext, LocationState, LocationVerdict, MARKER_FILE, Marker,
+    check_location, gather_location_facts, prepare_location, probe_location,
 };
 use stackly_domain::{LocationKind, LocationRule, StorageLocationId};
 use stackly_platform::{Platform, UserId};
@@ -59,7 +59,8 @@ impl Site {
         path: &Path,
         context: &LocationContext,
     ) -> Result<LocationVerdict, LocationRule> {
-        let facts = gather_location_facts(&self.platform, path).expect("the facts can be read");
+        let facts =
+            gather_location_facts(&self.platform, path, context).expect("the facts can be read");
         check_location(kind, &facts, context)
     }
 
@@ -276,10 +277,11 @@ fn a_folder_that_breaks_several_rules_reports_the_first_in_the_table_order() {
 fn the_facts_of_a_missing_stackly_folder_say_absent() {
     let site = Site::new();
     let folder = site.folder("work");
-    let facts = gather_location_facts(&site.platform, &folder).unwrap();
+    let facts = gather_location_facts(&site.platform, &folder, &site.context()).unwrap();
 
     assert_eq!(facts.folder, FolderFact::Absent);
     assert!(facts.exists && facts.is_dir && facts.owned && !facts.open_to_write);
+    assert!(!facts.ancestor_open_to_write && facts.identity_overlaps.is_empty());
 }
 
 #[test]
@@ -287,7 +289,7 @@ fn preparing_a_location_makes_private_folders_and_a_marker_and_leaves_content_al
     let site = Site::new();
     let folder = site.folder("work");
     let id = StorageLocationId::generate();
-    let fs_port = site.platform.fs();
+    let fs_port = &site.platform;
 
     let location = prepare_location(fs_port, &folder, LocationKind::Data, id).unwrap();
 
@@ -329,7 +331,7 @@ fn a_folder_the_daemon_cannot_write_to_is_not_writable() {
     let writable = fs::File::create(folder.join("probe")).is_ok();
 
     let result = prepare_location(
-        site.platform.fs(),
+        &site.platform,
         &folder,
         LocationKind::Logs,
         StorageLocationId::generate(),
@@ -341,4 +343,185 @@ fn a_folder_the_daemon_cannot_write_to_is_not_writable() {
         return;
     }
     assert_eq!(result, Err(LocationRule::NotWritable));
+}
+
+#[test]
+fn a_folder_inside_a_folder_others_can_write_to_without_the_sticky_bit_is_too_open() {
+    let site = Site::new();
+    let folder = site.folder("work");
+    fs::set_permissions(&site.base, fs::Permissions::from_mode(0o777)).unwrap();
+    let open = site.rule(&folder);
+    fs::set_permissions(&site.base, fs::Permissions::from_mode(0o775)).unwrap();
+    let group = site.rule(&folder);
+    fs::set_permissions(&site.base, fs::Permissions::from_mode(0o1777)).unwrap();
+    let sticky = site.judge(LocationKind::Data, &folder, &site.context());
+    fs::set_permissions(&site.base, fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert_eq!(open, LocationRule::TooOpen);
+    assert_eq!(group, LocationRule::TooOpen);
+    assert_eq!(sticky, Ok(LocationVerdict::New));
+    assert_eq!(
+        site.judge(LocationKind::Data, &folder, &site.context()),
+        Ok(LocationVerdict::New)
+    );
+}
+
+#[test]
+fn a_stackly_folder_that_is_another_name_of_a_root_by_file_identity_overlaps() {
+    let site = Site::new();
+    let folder = site.folder("work");
+    let canonical = fs::canonicalize(&folder).unwrap();
+    let target = canonical.join(LOCATION_DIR);
+    fs::create_dir(&target).unwrap();
+    // The same folders spelled in another letter case: on a case
+    // insensitive APFS volume the text differs and the file identity does
+    // not. A case sensitive volume has no such alias, so there is nothing
+    // to check.
+    let upper = canonical.with_file_name("WORK");
+    let identity = |path: &Path| {
+        site.platform
+            .fs()
+            .symlink_metadata(path)
+            .unwrap()
+            .map(|info| info.identity)
+    };
+    if identity(&upper) != identity(&canonical) {
+        return;
+    }
+    let contexts = [
+        // A root that holds the Stackly folder.
+        LocationContext::new(None, vec![upper.clone()], Vec::new()),
+        // A root inside the Stackly folder.
+        LocationContext::new(
+            None,
+            vec![upper.join(LOCATION_DIR).join("deeper")],
+            Vec::new(),
+        ),
+        // Another location that is the same folder.
+        LocationContext::new(
+            None,
+            Vec::new(),
+            vec![(
+                StorageLocationId::generate(),
+                LocationKind::Logs,
+                upper.join(LOCATION_DIR),
+            )],
+        ),
+    ];
+
+    for context in &contexts {
+        assert_eq!(
+            site.judge(LocationKind::Data, &folder, context),
+            Err(LocationRule::OverlapsRoot),
+            "{:?}",
+            context
+        );
+    }
+    let sibling = LocationContext::new(
+        None,
+        vec![canonical.with_file_name("WORK-other")],
+        Vec::new(),
+    );
+    fs::remove_dir(&target).unwrap();
+    assert_eq!(
+        site.judge(LocationKind::Data, &folder, &sibling),
+        Ok(LocationVerdict::New)
+    );
+}
+
+#[test]
+fn preparing_a_location_rejects_a_stackly_folder_or_subfolder_others_can_reach() {
+    let site = Site::new();
+    for (kind, subfolder) in [
+        (LocationKind::Data, None),
+        (LocationKind::Data, Some("instances")),
+        (LocationKind::Cache, Some("downloads")),
+    ] {
+        let folder = site.folder(&format!("open-{kind:?}-{subfolder:?}"));
+        let location = folder.join(LOCATION_DIR);
+        fs::create_dir(&location).unwrap();
+        let open = match subfolder {
+            Some(name) => {
+                fs::set_permissions(&location, fs::Permissions::from_mode(0o700)).unwrap();
+                let sub = location.join(name);
+                fs::create_dir(&sub).unwrap();
+                sub
+            }
+            None => location.clone(),
+        };
+        fs::set_permissions(&open, fs::Permissions::from_mode(0o750)).unwrap();
+
+        let result = prepare_location(&site.platform, &folder, kind, StorageLocationId::generate());
+
+        assert_eq!(
+            result,
+            Err(LocationRule::NotWritable),
+            "{kind:?} {subfolder:?}"
+        );
+        assert!(
+            !location.join(MARKER_FILE).exists(),
+            "{kind:?} {subfolder:?}"
+        );
+    }
+}
+
+#[test]
+fn preparing_a_location_rejects_a_stackly_folder_of_another_user() {
+    let site = Site::new();
+    let folder = site.folder("theirs");
+    prepare_location(
+        &site.platform,
+        &folder,
+        LocationKind::Data,
+        StorageLocationId::generate(),
+    )
+    .unwrap();
+    site.fake.identity().set_current(UserId::Unix(1));
+
+    let result = prepare_location(
+        &site.platform,
+        &folder,
+        LocationKind::Data,
+        StorageLocationId::generate(),
+    );
+
+    assert_eq!(result, Err(LocationRule::NotWritable));
+}
+
+#[test]
+fn probing_a_location_whose_folders_others_can_reach_is_not_writable() {
+    let site = Site::new();
+    let folder = site.folder("probe");
+    let location = prepare_location(
+        &site.platform,
+        &folder,
+        LocationKind::Data,
+        StorageLocationId::generate(),
+    )
+    .unwrap();
+    assert_eq!(
+        probe_location(&site.platform, &location),
+        LocationState::Ready
+    );
+
+    for (path, mode) in [
+        (location.clone(), 0o750),
+        (location.clone(), 0o701),
+        (location.join("instances"), 0o770),
+    ] {
+        fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        let state = probe_location(&site.platform, &location);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert_eq!(
+            state,
+            LocationState::NotWritable,
+            "{} {mode:o}",
+            path.display()
+        );
+    }
+    assert_eq!(
+        probe_location(&site.platform, &location),
+        LocationState::Ready
+    );
 }

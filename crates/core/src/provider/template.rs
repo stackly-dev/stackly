@@ -17,6 +17,33 @@ const MAX_DEPTH: usize = 4;
 /// Largest rendered file, in bytes.
 pub const OUTPUT_MAX_LEN: usize = 1024 * 1024;
 
+/// Returns whether `c` is in the YAML 1.2 printable set (`c-printable`):
+/// tab, line feed, carriage return, `#x20` to `#x7E`, `#x85`, `#xA0` to
+/// `#xD7FF`, `#xE000` to `#xFFFD`, and `#x10000` to `#x10FFFF`. A Rust `char`
+/// is never a surrogate, so the gap at `#xD800` to `#xDFFF` needs no arm.
+fn is_yaml_printable(c: char) -> bool {
+    matches!(
+        u32::from(c),
+        0x9 | 0xA | 0xD
+            | 0x20..=0x7E
+            | 0x85
+            | 0xA0..=0xD7FF
+            | 0xE000..=0xFFFD
+            | 0x1_0000..=0x10_FFFF
+    )
+}
+
+/// Writes `c` as a YAML double quoted escape: `\uXXXX` inside the basic
+/// multilingual plane, `\UXXXXXXXX` above it.
+fn push_yaml_escape(out: &mut String, c: char) {
+    let code = u32::from(c);
+    if code > 0xFFFF {
+        out.push_str(&format!("\\U{code:08X}"));
+    } else {
+        out.push_str(&format!("\\u{code:04X}"));
+    }
+}
+
 /// The format of a config file, which picks the escaper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,10 +92,16 @@ impl TemplateFormat {
                         // file provider runs the raw file through Go
                         // text/template before it parses the YAML, and must
                         // never see a `{{` delimiter a value brought in.
+                        // Control characters (tab, line feed, and U+0085
+                        // included) and every character outside the YAML 1.2
+                        // printable set, such as U+FFFE and U+FFFF, are
+                        // escaped, so the rendered file is always a valid
+                        // YAML stream.
                         c if c.is_control()
+                            || !is_yaml_printable(c)
                             || matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}' | '{' | '}') =>
                         {
-                            out.push_str(&format!("\\u{:04X}", u32::from(c)));
+                            push_yaml_escape(&mut out, c);
                         }
                         c => out.push(c),
                     }
@@ -1092,6 +1125,38 @@ mod tests {
             .unwrap();
 
         assert_eq!(back, nasty);
+    }
+
+    #[test]
+    fn yaml_escaping_escapes_every_character_outside_the_yaml_printable_set() {
+        assert_eq!(
+            TemplateFormat::Yaml
+                .escape_text("a\u{fffe}b\u{ffff}c\u{fffd}\u{1f600}")
+                .unwrap(),
+            "\"a\\uFFFEb\\uFFFFc\u{fffd}\u{1f600}\""
+        );
+        for code in (0..=0x10_FFFF_u32).filter(|code| !(0xD800..=0xDFFF).contains(code)) {
+            let c = char::from_u32(code).expect("every non surrogate code point is a char");
+            let escaped = TemplateFormat::Yaml.escape_text(&c.to_string()).unwrap();
+            assert!(
+                escaped.chars().all(is_yaml_printable),
+                "U+{code:04X} left a non printable character: {escaped:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn yaml_escaped_noncharacters_parse_back_to_the_same_text() {
+        let nasty = "rule \u{fffe}\u{ffff}\u{1}\u{9f}\u{85}\u{feff}\u{10ffff}\u{1fffe} {{ x }}";
+        let escaped = TemplateFormat::Yaml.escape_text(nasty).unwrap();
+        assert!(!escaped.contains('\u{fffe}') && !escaped.contains('\u{ffff}'));
+
+        let back: String = serde_yaml_ng::from_str(&format!("v: {escaped}"))
+            .map(|value: serde_yaml_ng::Value| value["v"].as_str().unwrap().to_owned())
+            .unwrap();
+
+        assert_eq!(back, nasty);
+        assert!(super::super::raw::yaml_value(&format!("v: {escaped}\n")).is_ok());
     }
 
     #[test]

@@ -22,6 +22,7 @@ use crate::confirm::{
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
+use crate::output::escape::escape_display;
 use crate::output::human::{Cell, HumanWriter, Render, wire_name};
 use crate::output::style::Tone;
 use crate::secret_input::{self, SourceArgs, Tty};
@@ -219,6 +220,22 @@ impl RunCommand for SetArgs {
     }
 }
 
+/// One line per use the daemon named in `body`, its fields escaped.
+fn stored_only_lines(body: &ErrorBody) -> Vec<String> {
+    body.items()
+        .iter()
+        .map(|item| {
+            let field = |key: &str| item.field(key).unwrap_or("?");
+            format!(
+                "  {} {}, field {}: only the stored copy changes",
+                escape_display(field("resourceKind")),
+                escape_display(field("resourceId")),
+                escape_display(field("field"))
+            )
+        })
+        .collect()
+}
+
 /// Lists the effects the daemon named and asks whether to go on. A
 /// noninteractive CLI leaves the daemon's own
 /// `secret.confirmation_required` as the answer.
@@ -230,14 +247,8 @@ fn ask_stored_only(
 ) -> Result<Confirmation, CliFailure> {
     if cx.prompt_allowed() {
         let sink = &mut cx.output.stderr;
-        for item in body.items() {
-            let field = |key: &str| item.field(key).unwrap_or("?");
-            sink.line(&format!(
-                "  {} {}, field {}: only the stored copy changes",
-                field("resourceKind"),
-                field("resourceId"),
-                field("field")
-            ));
+        for line in stored_only_lines(body) {
+            sink.line(&line);
         }
     }
     Confirm::ask(
@@ -448,5 +459,31 @@ impl Render for RevealSecretReply {
 impl Render for DeleteSecretReply {
     fn render(&self, out: &mut HumanWriter) {
         out.kv(&[("Deleted", Cell::text(&self.reference))]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use stackly_protocol::ErrorItem;
+    use stackly_protocol::codes::secret;
+
+    use super::*;
+
+    #[test]
+    fn the_stored_only_lines_escape_every_field_of_an_item() {
+        let body = ErrorBody::new(&secret::CONFIRMATION_REQUIRED, "confirm").with_items([
+            ErrorItem::new("effect")
+                .with_field("resourceKind", "instance\u{1b}[2J")
+                .with_field("resourceId", "db\u{202e}")
+                .with_field("field", "pass\u{9b}word"),
+            ErrorItem::new("effect"),
+        ]);
+        assert_eq!(
+            stored_only_lines(&body),
+            [
+                "  instance\\u{1b}[2J db\\u{202e}, field pass\\u{9b}word: only the stored copy changes",
+                "  ? ?, field ?: only the stored copy changes",
+            ]
+        );
     }
 }
