@@ -70,7 +70,7 @@ $ bin/spikectl-copy status   # plain copy outside any bundle
 $ Contents/MacOS/spikectl register
 {"op": "register", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 23, "name": "notFound", "raw": 3}, "steps": [{"call": "register", "endMs": 1792462908857, "ms": 141, "ok": true, "startMs": 1792462908716, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 5, "name": "enabled", "raw": 1}}
 $ cat logs/agent.log
-{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"\/Users\/ojiepermana","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"\/var\/folders\/sx\/35k0wvh13dg0cgpr19hnkjb80000gp\/T\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
+{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"$HOME","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"$TMPDIR\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
 {"event":"children","groupChild":93383,"ms":1792462910124,"ownSessionChild":93382,"pid":93330,"time":"2026-10-20T02:21:50.124Z"}
 $ launchctl list | grep dev.stackly.test
 93330	0	dev.stackly.test.agent.spike
@@ -119,7 +119,7 @@ gui/502/dev.stackly.test.agent.spike = {
 $ Contents/MacOS/spikectl unregister
 {"op": "unregister", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 13, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792462934367, "ms": 20, "ok": true, "startMs": 1792462934347, "statusAfter": {"name": "notRegistered", "raw": 0}}], "statusFinal": {"ms": 9, "name": "notRegistered", "raw": 0}}
 $ tail -n 3 logs/agent.log
-{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"\/Users\/ojiepermana","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"\/var\/folders\/sx\/35k0wvh13dg0cgpr19hnkjb80000gp\/T\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
+{"bundleMainPath":"<spike>\/build\/StacklyTestAgentSpike.app","cwd":"\/","envKeys":["HOME","LOGNAME","OSLogRateLimit","PATH","SHELL","SSH_AUTH_SOCK","TMPDIR","USER","XPC_FLAGS","XPC_SERVICE_NAME","__CF_USER_TEXT_ENCODING"],"event":"start","executable":"<spike>\/build\/StacklyTestAgentSpike.app\/Contents\/MacOS\/spike-agent","HOME":"$HOME","isatty0":false,"ms":1792462909357,"PATH":"\/usr\/bin:\/bin:\/usr\/sbin:\/sbin","pgid":93330,"pid":93330,"ppid":1,"sid":1,"time":"2026-10-20T02:21:49.357Z","TMPDIR":"$TMPDIR\/","uid":502,"XPC_FLAGS":"0x0","XPC_SERVICE_NAME":"dev.stackly.test.agent.spike"}
 {"event":"children","groupChild":93383,"ms":1792462910124,"ownSessionChild":93382,"pid":93330,"time":"2026-10-20T02:21:50.124Z"}
 {"event":"sigterm","ms":1792462934366,"pid":93330,"time":"2026-10-20T02:22:14.366Z"}
 $ launchctl list | grep dev.stackly.test
@@ -146,10 +146,10 @@ $ Contents/MacOS/spikectl relaunch
 {"op": "relaunch", "isMainThread": true, "bundleMainIdentifier": "dev.stackly.test.agent.spikeapp", "statusBefore": {"ms": 11, "name": "enabled", "raw": 1}, "steps": [{"call": "unregister", "endMs": 1792462967420, "ms": 27, "ok": true, "startMs": 1792462967393, "statusAfter": {"name": "notRegistered", "raw": 0}}, {"call": "register", "endMs": 1792462967490, "ms": 49, "ok": true, "startMs": 1792462967441, "statusAfter": {"name": "enabled", "raw": 1}}], "statusFinal": {"ms": 12, "name": "enabled", "raw": 1}}
 new start pid 97929 at 2026-10-20T02:22:47.970Z, 668 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
 {"event": "sigterm", "ms": 1792462934366, "pid": 93330, "time": "2026-10-20T02:22:14.366Z"}
-{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792462965154, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97660, "pid": 97660, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:45.154Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+{"cwd": "/", "event": "start", "HOME": "$HOME", "isatty0": false, "ms": 1792462965154, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97660, "pid": 97660, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:45.154Z", "TMPDIR": "$TMPDIR/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
 {"event": "children", "groupChild": 97665, "ms": 1792462965206, "ownSessionChild": 97664, "pid": 97660, "time": "2026-10-20T02:22:45.206Z"}
 {"event": "sigterm", "ms": 1792462967417, "pid": 97660, "time": "2026-10-20T02:22:47.417Z"}
-{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792462967970, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97929, "pid": 97929, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:47.970Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+{"cwd": "/", "event": "start", "HOME": "$HOME", "isatty0": false, "ms": 1792462967970, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 97929, "pid": 97929, "ppid": 1, "sid": 1, "time": "2026-10-20T02:22:47.970Z", "TMPDIR": "$TMPDIR/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
 97929	0	dev.stackly.test.agent.spike
 =================== 06-stop-exit75.log
 ### 2026-10-20T02:23:02Z check 3c: job exits 0 (stop); KeepAlive SuccessfulExit false keeps it dead; then relaunch
@@ -180,7 +180,7 @@ new start pid 944 at 2026-10-20T02:23:22.299Z, 476 ms after reference; ppid 1 XP
 new start pid 1762 at 2026-10-20T02:23:32.078Z, 8278 ms after reference; ppid 1 XPC_SERVICE_NAME dev.stackly.test.agent.spike
 {"event": "children", "groupChild": 952, "ms": 1792463002600, "ownSessionChild": 951, "pid": 944, "time": "2026-10-20T02:23:22.600Z"}
 {"code": 75, "event": "exit", "ms": 1792463003898, "pid": 944, "time": "2026-10-20T02:23:23.898Z", "why": "control exit75"}
-{"cwd": "/", "event": "start", "HOME": "/Users/ojiepermana", "isatty0": false, "ms": 1792463012078, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 1762, "pid": 1762, "ppid": 1, "sid": 1, "time": "2026-10-20T02:23:32.078Z", "TMPDIR": "/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
+{"cwd": "/", "event": "start", "HOME": "$HOME", "isatty0": false, "ms": 1792463012078, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "pgid": 1762, "pid": 1762, "ppid": 1, "sid": 1, "time": "2026-10-20T02:23:32.078Z", "TMPDIR": "$TMPDIR/", "uid": 502, "XPC_FLAGS": "0x0", "XPC_SERVICE_NAME": "dev.stackly.test.agent.spike"}
 $ launchctl print (state lines)
 	state = running
 	runs = 2

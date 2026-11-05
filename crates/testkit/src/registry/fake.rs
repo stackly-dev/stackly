@@ -12,10 +12,10 @@ use stackly_domain::{
     ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
     ConfigRevisionId, ConfigRevisionRecord, ConfigRevisionStatus, CreatedRecord, CreatedSeq,
-    DaemonSession, DaemonSettings, EndpointRequests, Environment, EnvironmentId, Generation,
-    GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance, InstanceFilter,
-    InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep, JournalView,
-    Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind, LockKey,
+    CreatedState, DaemonSession, DaemonSettings, EndpointRequests, Environment, EnvironmentId,
+    Generation, GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance,
+    InstanceFilter, InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep,
+    JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind, LockKey,
     NotDeletableReason, Operation, OperationCursor, OperationId, OperationJournal, OperationPage,
     OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
     ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId,
@@ -2092,6 +2092,16 @@ impl State {
                 .restart_plans
                 .values()
                 .any(|plan| plan.stored().operation == *id)
+        })
+        // A created item that is unsettled or whose compensation failed may
+        // still exist, and its row is the only record of it (spec 0007
+        // AC-17), so its operation stays.
+        .filter(|id| {
+            !self.created.iter().any(|((owner, _), record)| {
+                owner == id
+                    && (!record.state().is_settled()
+                        || record.state() == CreatedState::CompensationFailed)
+            })
         })
         .collect();
         for id in &doomed {

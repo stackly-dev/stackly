@@ -8,7 +8,7 @@ use stackly_domain::{
 };
 use stackly_platform::{SCRUB_MIN_LEN, SecretPresence, SecretValue, WriteMode};
 
-use super::audit::SET;
+use super::audit::{AuditDetail, SET};
 use super::{SecretCaller, SecretChange, SecretService};
 use crate::secret::error::{ConflictReason, SecretError};
 use crate::secret::generate::{GENERATED_LEN, generate_password};
@@ -77,6 +77,16 @@ pub enum SecretInput {
     /// the target's field, the bound value is read once and checked against
     /// the field's rules (AC-23); without one, the store is not touched.
     Bind(SecretRef),
+}
+
+impl SecretInput {
+    /// The source reference of a copy, which its audit rows name.
+    const fn copy_source(&self) -> Option<&SecretRef> {
+        match self {
+            Self::CopyFrom(source) => Some(source),
+            Self::Value(_) | Self::Generate | Self::Bind(_) => None,
+        }
+    }
 }
 
 /// One request to [`SecretService::put`].
@@ -215,6 +225,8 @@ impl SecretService {
         caller: &SecretCaller,
     ) -> Result<PutOutcome, SecretError> {
         let reference = request.reference().clone();
+        // A copy names its source in every `secret.set` row (note 112).
+        let copied_from = request.input.copy_source().cloned();
         let guard = self.locks.lock(&reference);
         let result = self.put_held(request, caller);
         drop(guard);
@@ -227,7 +239,8 @@ impl SecretService {
             }
             Err(failed) => {
                 if failed.audited {
-                    self.audit_failure(SET, caller, &reference, None, &failed.error);
+                    let detail = copied_from.as_ref().map(AuditDetail::CopiedFrom);
+                    self.audit_failure(SET, caller, &reference, detail, &failed.error);
                 }
                 Err(failed.error)
             }
@@ -258,6 +271,7 @@ impl SecretService {
             Row::New(record) => record.reference.clone(),
         };
         // Step 3: the value.
+        let copied_from = input.copy_source().cloned();
         let (value, origin) = self.prepare(input, &bounds, caller)?;
         // Step 4: the store and the mode.
         let interaction = caller.interaction;
@@ -337,7 +351,8 @@ impl SecretService {
                 (record, Vec::new(), op, None)
             }
         };
-        let audit = self.audit_row(SET, caller, &reference, Some(record.id), None, None);
+        let detail = copied_from.as_ref().map(AuditDetail::CopiedFrom);
+        let audit = self.audit_row(SET, caller, &reference, Some(record.id), detail, None);
         let ops = vec![op, WriteOp::InsertAuditEvent(audit)];
         let committed = match read {
             Some((expected, read_uses)) => {

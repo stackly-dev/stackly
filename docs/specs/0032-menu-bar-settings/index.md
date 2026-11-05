@@ -377,6 +377,8 @@ Scenario spec 0068 baru: `menubar-normal`, `menubar-failed`, `menubar-offline-la
 
 Satu pengguna macOS. Semua method baru memakai pemeriksaan peer socket spec 0006 (uid yang sama dengan daemon); tidak ada role. Folder lokasi harus milik user itu dan tidak bisa ditulis user lain, dan subfolder `Stackly` dibuat 0700. Registry dan notifikasi tidak memuat secret. Path lokasi adalah data privat dan tidak masuk log level info atau di atasnya kecuali sebagai bagian error yang ditujukan ke pengguna. Tidak ada compliance scope.
 
+- Catatan audit keamanan 2026-11 nomor 123 (`locations_of` memakai lokasi bawaan untuk instance yang tidak dikenal, juga saat `LocationBook::load` gagal) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+
 ### Configuration required
 
 Tidak ada variabel environment atau credential baru. `STACKLY_ROOT` tetap menggeser lokasi bawaan.

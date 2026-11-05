@@ -15,7 +15,7 @@
 [suspend] PASS discard: waitpid reaps signaled(9): Some("signaled(9)")
 [suspend] PASS discard: child never ran (user time 0, no argv file, no output): user_time 0 argv exists false
 [orphan] NOTE daemon-a (running) pid 17320 exited Some("exited(0)"): daemon-a: spawned 17321 (running), exiting without reaping
-[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
+[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
 [orphan] PASS orphan keeps serving after its parent died: 
 [orphan] PASS launchd reaps the orphan (bsdinfo -> ESRCH): Some("errno 3 (No such process (os error 3))")
 [orphan] NOTE daemon-a (suspended) pid 17379 exited Some("exited(0)"): daemon-a: spawned 17380 (suspended), exiting without reaping

@@ -694,6 +694,33 @@ Diputuskan setelah spike. `PROC_PIDTBSDINFO` dan `PROC_PIDLISTFDS` ditolak `EPER
 
 - AC-10 harus diubah, dan instance menjadi `unknown` sampai proses asing itu keluar, yang untuk daemon sistem bisa berarti sampai reboot. Pengguna harus bertindak di luar Stackly padahal bukti bahwa proses itu bukan milik kita tersedia.
 
+### Keputusan 22: exit yang gagal dicatat actor
+
+Ditambahkan 2026-11-05 dari catatan audit keamanan 100. Saat `read_instance_actor` atau `commit_exit` menyerah (error registry yang tidak sembuh dengan menunggu), exit hanya ditulis ke log, lalu `finish_process` mengosongkan slot proses. Registry bisa tetap `running` tanpa proses yang diawasi sampai daemon berikutnya merekonsiliasi. Registry yang menolak tidak bisa memegang perbaikannya, jadi jawabannya harus di memori.
+
+#### Option 1: tanda di memori `exit_unrecorded`, tampil `unknown`, diselesaikan pemeriksaan ulang (dipilih)
+
+**Pros**:
+
+- Memakai lifecycle `unknown` yang sudah ada di wire, jadi kontrak protokol tidak berubah; `stacklyd` hanya mengganti lifecycle yang ditampilkan saat tanda menyala, tidak ada proses, dan lifecycle tersimpan masih berjalan.
+- Pemeriksaan ulang yang sudah ada menyelesaikannya: ia meng commit `identity_lost` (pasangan yang sah dari setiap lifecycle berjalan di tabel spec 0004), lalu instance `unknown` diperiksa dengan bukti yang sama. Proses yang hilang menjadi `confirmed_stopped` tanpa start otomatis, sama seperti `unknown` lain.
+- Tanda hilang dengan sendirinya saat commit exit mana pun berhasil (stop pengguna, rekonsiliasi, pemeriksaan ulang).
+
+**Cons**:
+
+- Lifecycle yang ditampilkan berbeda dari registry sampai pemeriksaan ulang berhasil, dan event `instance.state_changed` baru dikirim saat commit itu; selama itu event `instance.health_changed` sudah menunjukkan proses null dan readiness `unknown` `not_running`.
+- Penolakan sinkron (AC-23) tetap membaca registry, jadi start menjawab `alreadyInState` dan stop berjalan normal sampai tanda hilang.
+
+#### Option 2: blocker baru di status (`exitUnrecorded`)
+
+**Pros**:
+
+- Lebih eksplisit untuk client.
+
+**Cons**:
+
+- Varian baru `InstanceBlocker` mengubah kontrak protokol dan Swift, padahal `unknown` sudah berarti "status proses tidak diketahui".
+
 ## Rationale
 
 Kekuatan yang paling menentukan adalah keselamatan data dan larangan salah bunuh. Karena PRD sudah menerima bahwa proses bisa selamat dari crash daemon, kode adopsi dan `unknown` wajib ada apa pun pilihannya; maka pilihan yang tersisa adalah apakah proses yang selamat itu dipertahankan atau dikorbankan. Mempertahankannya (Keputusan 1) memberi nilai terbesar bagi pengguna dengan biaya yang memang sudah harus dibayar, dan membuka update daemon tanpa downtime. Keputusan itu langsung menyingkirkan pipe (Keputusan 2), karena runtime Go mati saat pipe putus; spool di runtime root adalah satu satunya bentuk yang tetap hidup tanpa daemon sekaligus memenuhi aturan spec 0011 bahwa log disamarkan sebelum disimpan.

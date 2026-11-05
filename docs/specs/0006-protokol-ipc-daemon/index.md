@@ -326,6 +326,7 @@ Batas yang dikirim ke client ada di `stackly-protocol::limits` dan di `Handshake
 | `operationListLimitDefault`, `operationListLimitMin`, `operationListLimitMax` | `operation::OPERATION_LIST_LIMIT_DEFAULT`, `_MIN`, `_MAX` | 50, 1, 200 |
 | `maxSecretLen`, `secretReferenceMax` | `secret::MAX_SECRET_LEN`, `SECRET_REFERENCE_MAX` | 65 536, 255 |
 | `secretSegmentMax`, `secretSegmentsMin`, `secretSegmentsMax` | `secret::SEGMENT_MAX`, `SEGMENTS_MIN`, `SEGMENTS_MAX` | 64, 2, 8 |
+| `stopAllExpectedIdsMax` | `stop_all::STOP_ALL_EXPECTED_IDS_MAX` | 1024 (ditambah protokol 3.2, spec 0031 *Tambahan dari spec 0032*, audit keamanan catatan 121) |
 | `subscribeKindsMax` | `events::SUBSCRIBE_KINDS_MAX` | 32 |
 
 Batas milik transport dan daemon saja: `READ_CHUNK` 65 536 byte (di `stackly-ipc`), dan konstanta di `stacklyd`: `MAX_CONNECTIONS` 64, `HANDSHAKE_TIMEOUT` 5 detik, `FRAME_STALL_TIMEOUT` 30 detik, `WRITE_TIMEOUT` 30 detik, `REJECT_WRITE_TIMEOUT` 1 detik, `SHUTDOWN_DRAIN` 5 detik, `SHUTDOWN_FLUSH` 1 detik, `SOCKET_CHECK_INTERVAL` 10 detik, `ACCEPT_BACKOFF` 100 ms sampai 1 detik, `OUTBOUND_QUEUE_LEN` 64 frame per koneksi, `LOG_FILE_MAX` 20 MiB, `LOG_FILES_KEPT` 5, `LOG_QUEUE_LEN` 8192 baris, `LOCK_INFO_MAX` 4 KiB. Benchmark fitur 64 boleh menyetel ulang angka ini lewat update spec ini.

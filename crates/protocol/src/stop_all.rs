@@ -11,9 +11,15 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use crate::error::FieldError;
 use crate::instance::{InstanceAutostart, InstanceLifecycle};
-use crate::json::Validate;
+use crate::json::{FieldCode, Validate};
 use crate::wire::Count;
+
+/// Most entries `expectedInstanceIds` of `instance.stop_all` may hold (spec
+/// 0031 *Tambahan dari spec 0032*, audit note 121). The operation journal
+/// holds far fewer instances, so the cap only bounds a hostile list.
+pub const STOP_ALL_EXPECTED_IDS_MAX: usize = 1024;
 
 /// Why an instance is wanted running, from its active lease. Open.
 #[typeshare]
@@ -101,7 +107,18 @@ pub struct StopAllParams {
     pub expected_instance_ids: Option<Vec<Uuid>>,
 }
 
-impl Validate for StopAllParams {}
+impl Validate for StopAllParams {
+    /// `expectedInstanceIds`, when present, holds at most
+    /// [`STOP_ALL_EXPECTED_IDS_MAX`] entries.
+    fn validate(&self) -> Vec<FieldError> {
+        match &self.expected_instance_ids {
+            Some(ids) if ids.len() > STOP_ALL_EXPECTED_IDS_MAX => {
+                vec![FieldError::new("expectedInstanceIds", FieldCode::TooMany)]
+            }
+            _ => Vec::new(),
+        }
+    }
+}
 
 /// One instance that did not stop, with the error code that says why.
 #[typeshare]
@@ -125,4 +142,23 @@ pub struct StopAllResult {
     pub failed: Vec<StopAllEntry>,
     /// The instances left alone, including the ones a cancel reached.
     pub skipped: Vec<StopAllEntry>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_all_refuses_more_expected_instance_ids_than_the_contract_limit() {
+        let ids = |len: usize| StopAllParams {
+            expected_instance_ids: Some((0..len).map(|_| Uuid::nil()).collect()),
+        };
+        assert!(StopAllParams::default().validate().is_empty());
+        assert!(ids(STOP_ALL_EXPECTED_IDS_MAX).validate().is_empty());
+        let fields = ids(STOP_ALL_EXPECTED_IDS_MAX + 1).validate();
+        assert_eq!(
+            fields,
+            vec![FieldError::new("expectedInstanceIds", FieldCode::TooMany)]
+        );
+    }
 }

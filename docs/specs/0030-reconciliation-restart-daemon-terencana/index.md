@@ -211,6 +211,8 @@ Keluaran rencana `aborted` (CLI dan GUI): `durations` null (hanya rencana `finis
 
 Semua method baru mengikuti cek peer uid BR-012 yang sama dengan `daemon.shutdown`; tidak ada peran lain. Rencana dan event tidak membawa secret; `failure_code` dan `findings` hanya kode. Pemeriksaan data dan runtime hanya membaca path milik instance dari `InstancePaths` dan folder install runtime dari registry.
 
+- Catatan audit keamanan 2026-11 nomor 108 (`daemon.shutdown { mode: restart }` tanpa `expectedPlanDigest` menghentikan instance `stop_restore`) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+
 ### Configuration required
 
 Tidak ada env var baru.

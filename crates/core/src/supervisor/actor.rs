@@ -94,6 +94,11 @@ pub(crate) struct ActorState {
     pub(crate) logs_unavailable: bool,
     /// An actor commit waits for the registry.
     pub(crate) pending_commit: bool,
+    /// An actor gave up recording how a process ended (a registry error no
+    /// wait cures), so the registry may still read a live lifecycle with no
+    /// process. Cleared by the next exit commit that succeeds (spec 0010,
+    /// *Commit*, audit note 100).
+    pub(crate) exit_unrecorded: bool,
     /// A stop of the current process is under way, so its exit is the
     /// expected one.
     pub(crate) stopping: bool,
@@ -127,6 +132,7 @@ impl ActorState {
             ports_final: self.ports_final,
             logs_unavailable: self.logs_unavailable,
             pending_commit: self.pending_commit,
+            exit_unrecorded: self.exit_unrecorded && self.process.is_none(),
         }
     }
 
@@ -269,6 +275,7 @@ impl InstanceActor {
             ports_final: false,
             logs_unavailable: false,
             pending_commit: false,
+            exit_unrecorded: false,
             stopping: false,
             op_owns_exit: false,
             next_generation: 1,
@@ -405,6 +412,7 @@ fn placeholder(now: Timestamp) -> InstanceStatus {
         ports_final: false,
         logs_unavailable: false,
         pending_commit: false,
+        exit_unrecorded: false,
     }
 }
 

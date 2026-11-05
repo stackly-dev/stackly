@@ -755,3 +755,55 @@ fn a_put_whose_reference_gains_a_use_before_its_commit_fails_and_puts_the_old_va
     assert_eq!(view.record.revision, revision(1));
     assert_eq!(view.used_by.len(), 1);
 }
+
+#[test]
+fn a_copy_names_its_source_reference_as_copied_from_in_every_secret_set_row_and_never_the_value() {
+    // Audit note 112: the internal read of a copy is traceable from its
+    // secret.set row, success or failure.
+    let harness = Harness::new();
+    let credential = FixtureCredential::new();
+    let source = reference("local:shared/source");
+    harness.set(&source, credential.value());
+    let seeded = harness.audit().len();
+    let target = reference("local:copied/target");
+
+    harness
+        .put(PutRequest::new(
+            PutTarget::Existing(target.clone()),
+            SecretInput::CopyFrom(source.clone()),
+            WriteMode::Create,
+        ))
+        .unwrap();
+    let again = harness.put(PutRequest::new(
+        PutTarget::Existing(target.clone()),
+        SecretInput::CopyFrom(source.clone()),
+        WriteMode::Create,
+    ));
+    assert!(
+        matches!(again, Err(SecretError::Conflict { .. })),
+        "{again:?}"
+    );
+    harness
+        .put(PutRequest::new(
+            PutTarget::Existing(reference("local:entered/target")),
+            SecretInput::Value(value(credential.value())),
+            WriteMode::Create,
+        ))
+        .unwrap();
+
+    let rows: Vec<_> = harness
+        .audit()
+        .into_iter()
+        .skip(seeded)
+        .filter(|row| row.action.as_str() == "secret.set")
+        .collect();
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    assert_eq!(rows[0].result, AuditResult::Succeeded);
+    assert_eq!(rows[1].result, AuditResult::Failed);
+    for row in &rows[..2] {
+        assert_eq!(row.safe_details.get("reference"), Some(target.as_str()));
+        assert_eq!(row.safe_details.get("copiedFrom"), Some(source.as_str()));
+    }
+    assert_eq!(rows[2].safe_details.get("copiedFrom"), None);
+    credential.assert_absent(&format!("{rows:?}"), "the secret.set audit rows");
+}

@@ -1,7 +1,8 @@
 //! Retention: deleting history beyond a [`RetentionPolicy`] (NFR-011),
 //! at most [`PRUNE_BATCH_ROWS`] rows per transaction, and at most
 //! [`OPERATION_PRUNE_BATCH_ROWS`] operations, whose journal rows go with
-//! them by cascade (spec 0007).
+//! them by cascade (spec 0007). A final operation with a created item
+//! that is unsettled or whose compensation failed is never pruned.
 //!
 //! Each batch recomputes which rows lie beyond the limits. The set is
 //! stable while batches delete it: a row past an age limit is older than
@@ -22,10 +23,17 @@ pub(super) const PRUNE_BATCH_ROWS: usize = 5_000;
 /// its journal, steps, created items, and lock keys.
 pub(super) const OPERATION_PRUNE_BATCH_ROWS: usize = 500;
 
+/// The `operation_created` states that keep a final operation from being
+/// pruned: an item never settled, or one whose compensation failed, may
+/// still exist on disk or in the Keychain, and its row is the only record
+/// of it (spec 0007 AC-17, audit note 145).
+pub(super) const UNRESOLVED_CREATED_STATES: &str = "('intended', 'created', 'compensation_failed')";
+
 /// One kind of history a prune deletes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum History {
-    /// Operations in a final state.
+    /// Operations in a final state, except those a restart plan refers to
+    /// or with a created item in [`UNRESOLVED_CREATED_STATES`].
     Operations,
     /// Audit events.
     AuditEvents,
@@ -119,7 +127,9 @@ pub(super) fn delete_batch(
                  row_number() OVER (ORDER BY updated_at DESC, id DESC) AS rank \
                  FROM operations WHERE state IN {FINAL_OPERATION_STATES}) \
                  WHERE (updated_at < ?1 OR rank > ?2) \
-                 AND id NOT IN (SELECT operation_id FROM daemon_restart_plan) LIMIT ?3)"
+                 AND id NOT IN (SELECT operation_id FROM daemon_restart_plan) \
+                 AND id NOT IN (SELECT operation_id FROM operation_created \
+                 WHERE state IN {UNRESOLVED_CREATED_STATES}) LIMIT ?3)"
             ),
             (&limits.operation_cutoff, limits.operation_max_rows, batch),
         ),

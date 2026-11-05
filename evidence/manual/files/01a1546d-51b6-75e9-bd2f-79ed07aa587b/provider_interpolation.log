@@ -1,4 +1,4 @@
-   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
+   Compiling stackly-fuzz v0.0.0 ($REPO/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
     Finished `release` profile [optimized + debuginfo] target(s) in 2.07s
     Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
      Running `fuzz/target/aarch64-apple-darwin/release/provider_interpolation -artifact_prefix=fuzz/artifacts/provider_interpolation/ -max_len=4096 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_interpolation fuzz/seeds/provider_interpolation`

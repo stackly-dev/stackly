@@ -2,6 +2,7 @@
 //! runs a test command as evidence and writes `report.json`.
 
 mod leak;
+mod scrub;
 
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -77,6 +78,10 @@ pub fn run(args: &[&str]) -> Result<ExitCode> {
     write_json_atomic(&run_dir.join("run.json"), &context).context("cannot write run.json")?;
 
     let outcome = execute(&run_dir, options.kind, &options.command)?;
+    // Before the leak scan, so the scan reads the log that is kept.
+    scrub::PathScrub::from_env(&workspace_root)
+        .apply_to_file(&run_dir.join("output.log"))
+        .context("cannot replace host paths in output.log")?;
     let collected = collect::collect(
         &run_dir.join("records"),
         &context,

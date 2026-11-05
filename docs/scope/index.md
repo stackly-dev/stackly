@@ -32,7 +32,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [09-backup-dan-restore.md](09-backup-dan-restore.md) | Backup & restore (JOURNEY-06) | 48 sampai 53 | 6 planned |
 | [10-merawat-runtime-dan-data.md](10-merawat-runtime-dan-data.md) | Merawat runtime & data | 54 sampai 59 | 6 planned |
 | [11-distribusi-aplikasi.md](11-distribusi-aplikasi.md) | Distribusi aplikasi | 60 sampai 62 | 3 planned |
-| [12-siap-rilis-stabil.md](12-siap-rilis-stabil.md) | Siap rilis stabil | 63 sampai 66 | 4 planned |
+| [12-siap-rilis-stabil.md](12-siap-rilis-stabil.md) | Siap rilis stabil | 63 sampai 66, 71 | 5 planned |
 
 ## At a glance
 
@@ -108,6 +108,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 68 | Fixture tampilan & cek visual | Foundation | done |
 | 69 | Menu aplikasi, perintah & shortcut keyboard | Foundation | done |
 | 70 | Buka instance di aplikasi klien | Kerja harian | done |
+| 71 | Pengerasan terhadap proses user yang sama | Siap rilis stabil | planned |
 
 ## Catatan urutan
 

@@ -201,7 +201,7 @@ Setiap daftar urut nama, lalu ID. Aturan 3 dan 5 menghitung start dan restart ya
 
 Spec 0032 (*Tambahan pada kontrak spec 0031*) memperluas kontrak ini. Fitur 31 membangun `stop_all::select` dengan `already_stopping`, cancel pada `stop_all_instances`, dan `instance.preview_stop_all` (baca saja, `recovery refused`, balasan `StopAllPreview` persis seperti *Method IPC* spec 0032), karena ketiganya bagian dari operasi yang dibangun di sini dan konfirmasi Turn Off membutuhkan preview yang sama. Fitur 32 membangun sisanya, karena butuh popover atau tabel `daemon_settings` spec 0032:
 
-- `instance.stop_all` mendapat `expectedInstanceIds: [Uuid]` opsional (`#[serde(default)]`). Kalau ada, precheck (sesudah `replay_operation`) membandingkan himpunan `stop` dengan himpunan itu dan menolak `instance.stop_all_changed` kalau berbeda; operasi hanya membuat langkah untuk irisan keduanya. Tanpa field itu, perilaku tetap AC-10 (dipakai `agent_off`). Sidik jari idempotency spec 0007 ikut mencakup field ini.
+- `instance.stop_all` mendapat `expectedInstanceIds: [Uuid]` opsional (`#[serde(default)]`). Kalau ada, precheck (sesudah `replay_operation`) membandingkan himpunan `stop` dengan himpunan itu dan menolak `instance.stop_all_changed` kalau berbeda; operasi hanya membuat langkah untuk irisan keduanya. Tanpa field itu, perilaku tetap AC-10 (dipakai `agent_off`). Sidik jari idempotency spec 0007 ikut mencakup field ini. Daftar itu berisi paling banyak `STOP_ALL_EXPECTED_IDS_MAX` (1024, `stop_all::STOP_ALL_EXPECTED_IDS_MAX`, nama kontrak `stopAllExpectedIdsMax` di `limits::CONTRACT_LIMITS`); `Validate` menolak daftar yang lebih panjang dengan `request.invalid_params` (field `expectedInstanceIds`, kode `too_many`) sebelum precheck. Journal operasi hanya memuat sekitar 300 instance, jadi batas ini hanya membatasi daftar yang tidak wajar. Protokol 3.2 *(keputusan 2026-11-05 dari audit keamanan, catatan 121)*.
 - `instance.create` tanpa `startup` memakai `daemon_settings.default_startup` (default nya `manual`), bukan `manual` tetap (spec 0032 AC-18). Sampai tabel itu ada, default AC-16 berlaku.
 - `stackly instance create` mendapat `--no-autostart`.
 
@@ -359,6 +359,8 @@ Nilai DTO baru:
 ### Security model
 
 Semua method lewat handshake dan peer user yang sama (spec 0006), dan mutasi wajib `idempotencyKey`. `SessionId` bukan rahasia; tidak ada secret yang masuk ke lease, baris sesi, log, atau event. Interaksi secret mengikuti spec 0011.
+
+- Catatan audit keamanan 2026-11 nomor 120 (`stop_all` tetap melepas lease instance terkonfirmasi yang sudah berhenti) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

@@ -4,7 +4,7 @@
 //! run.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -84,6 +84,46 @@ fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
 }
 
 #[test]
+fn output_log_names_the_repo_tmpdir_and_home_only_by_placeholder() {
+    let root = TestRoot::new().unwrap();
+    let out = root.path().join("run");
+    let home = root.path().join("home");
+    fs::create_dir(&home).unwrap();
+    let repo = repo_root().canonicalize().unwrap();
+    // `cargo metadata` in the wrapper still needs the real toolchain homes.
+    let real_home = PathBuf::from(std::env::var_os("HOME").unwrap());
+    let rustup_home =
+        std::env::var_os("RUSTUP_HOME").map_or_else(|| real_home.join(".rustup"), PathBuf::from);
+    let cargo_home =
+        std::env::var_os("CARGO_HOME").map_or_else(|| real_home.join(".cargo"), PathBuf::from);
+
+    let output = wrapper(
+        "fixture",
+        &out,
+        &[
+            "sh",
+            "-c",
+            "echo \"repo=$PWD/xtask tmp=$TMPDIR/x home=$HOME/.cargo\"",
+        ],
+    )
+    .env("TMPDIR", root.path())
+    .env("HOME", &home)
+    .env("RUSTUP_HOME", rustup_home)
+    .env("CARGO_HOME", cargo_home)
+    .current_dir(&repo)
+    .output()
+    .expect("the xtask binary runs");
+
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let log = output_log(&out);
+    assert!(
+        log.contains("repo=$REPO/xtask tmp=$TMPDIR/x home=$HOME/.cargo"),
+        "{log}"
+    );
+    assert!(!log.contains(&repo.display().to_string()), "{log}");
+}
+
+#[test]
 fn a_run_hands_the_command_its_folder_and_kind_and_names_the_report_last() {
     let root = TestRoot::new().unwrap();
     let out = root.path().join("run");
@@ -99,7 +139,15 @@ fn a_run_hands_the_command_its_folder_and_kind_and_names_the_report_last() {
     );
 
     assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
-    assert!(output_log(&out).contains(&format!("dir={} kind=fixture", out.display())));
+    // The test root lives under TMPDIR, which output.log names as $TMPDIR.
+    let temp = std::env::temp_dir().canonicalize().unwrap();
+    let inside = out.canonicalize().unwrap();
+    let inside = inside.strip_prefix(&temp).unwrap();
+    assert!(
+        output_log(&out).contains(&format!("dir=$TMPDIR/{} kind=fixture", inside.display())),
+        "{}",
+        output_log(&out)
+    );
     for entry in ["run.json", "records", "artifacts", "report.json"] {
         assert!(out.join(entry).exists(), "{entry} is missing");
     }

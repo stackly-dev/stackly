@@ -225,11 +225,14 @@ fn replace_spike_roots(text: &str) -> String {
             .map_or(0, |i| {
                 i + before[i..].chars().next().map_or(1, char::len_utf8)
             });
-        let path_start = if before[start..].starts_with('/') {
-            start
-        } else {
-            at
-        };
+        // `evidence run` already turned the temporary folder into `$TMPDIR`
+        // (spec 0002), so a root may start with that placeholder too.
+        let path_start =
+            if before[start..].starts_with('/') || before[start..].starts_with("$TMPDIR/") {
+                start
+            } else {
+                at
+            };
         out.push_str(&before[..path_start]);
         let after = &rest[at + ROOT_PREFIX.len()..];
         let id_len = after
@@ -494,11 +497,11 @@ mod tests {
         let run = Run::new(&report(vec![record(PASS_ID, "PASS")]), "");
         let workspace = run.dir.path().to_string_lossy().into_owned();
         let log = format!(
-            "Compiling xtask ({workspace}/xtask)\nrustc at /Users/dev/.rustup\nspike: /var/folders/x/T/stackly-runtime-spike-019a0000-0000-7000-8000-00000000000a/Stackly Spike Ü/run\n"
+            "Compiling xtask ({workspace}/xtask)\nrustc at /Users/dev/.rustup\nspike: /var/folders/x/T/stackly-runtime-spike-019a0000-0000-7000-8000-00000000000a/Stackly Spike Ü/run\nscrubbed: $TMPDIR/stackly-runtime-spike-019a0000-0000-7000-8000-00000000000b/data\n"
         );
         assert_eq!(
             run.sanitizer().clean(&log).unwrap(),
-            "Compiling xtask ($WORKSPACE/xtask)\nrustc at ~/.rustup\nspike: $ROOT/Stackly Spike Ü/run\n"
+            "Compiling xtask ($WORKSPACE/xtask)\nrustc at ~/.rustup\nspike: $ROOT/Stackly Spike Ü/run\nscrubbed: $ROOT/data\n"
         );
         let leaking = Sanitizer {
             home: "/home/other".to_owned(),

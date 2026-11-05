@@ -170,6 +170,10 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     ("secretSegmentsMin", crate::secret::SEGMENTS_MIN as u64),
     ("selectorMax", crate::runtime::SELECTOR_MAX as u64),
     (
+        "stopAllExpectedIdsMax",
+        crate::stop_all::STOP_ALL_EXPECTED_IDS_MAX as u64,
+    ),
+    (
         "subscribeKindsMax",
         crate::events::SUBSCRIBE_KINDS_MAX as u64,
     ),

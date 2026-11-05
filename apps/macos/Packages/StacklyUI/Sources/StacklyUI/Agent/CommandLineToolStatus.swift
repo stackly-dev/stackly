@@ -56,6 +56,10 @@ nonisolated public struct CommandLineToolStatus: Sendable, Equatable {
 nonisolated public enum CommandLineToolError: Error, Sendable, Equatable {
     /// The running app has no `Contents/MacOS/stackly-cli`.
     case noBundledTool
+    /// The running app is not installed: it runs from an App Translocation copy, a read
+    /// only volume such as a disk image, or a folder other users can change, so Install and
+    /// Repair refuse to link to it (audit note 149). `path` is the running bundle.
+    case bundleNotInstalled(path: String)
     /// A folder is not owned by the user, or others can write to it.
     case folderNotSafe(path: String)
     /// `path` holds something Stackly did not make.
@@ -68,6 +72,10 @@ nonisolated public enum CommandLineToolError: Error, Sendable, Equatable {
         switch self {
         case .noBundledTool:
             "This build doesn’t include the stackly command."
+        case .bundleNotInstalled(let path):
+            "Stackly is running from \(path), which isn’t a safe place to link the stackly "
+                + "command to. Move Stackly.app to /Applications or ~/Applications, open it "
+                + "from there, and try again."
         case .folderNotSafe(let path):
             "\(path) must belong to you, and other users must not be able to write to it."
         case .conflict(let path):

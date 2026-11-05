@@ -43,3 +43,13 @@ Runbook untuk kondisi di PRD bagian 35.3 (daemon tidak terhubung, konflik port, 
 **Trace:** gate G6, AC-061, PRD bagian 35.3, 36, dan 39
 
 - [ ] Build it: `/develop runbook & dokumentasi pengguna`
+
+### 71. Pengerasan terhadap proses user yang sama · needs a decision
+
+Menutup 14 catatan hardening audit keamanan 2026-11 yang dicatat sebagai residual: celah yang hanya bisa dipicu proses milik user OS yang sama (atau soal performa), tetapi menutupnya butuh perubahan desain lintas modul. Catatan 25 dan 111 (install dan commit runtime), 40, 41, dan 76 (tulis dan hapus berbasis descriptor), 46 (test bind dengan uid kedua), 78 dan 152 (readiness yang terikat ke pemilik socket), 95 (pembacaan paket provider), 104 dan 105 (gerbang begin dan tabel lock di operation engine), 123 (lokasi instance yang gagal tertutup), 126 (buffer stream di Swift client), dan 127 (antrian keluar per koneksi). Rincian tiap catatan, alasannya, dan perubahan desain yang dibutuhkan ada di spec 0019 *Residual audit keamanan 2026-11*.
+
+**Done when:** tiap catatan dari 14 itu punya keputusan di spec (ditutup dengan perubahan desain yang tercatat, atau dipindah ke risiko yang diterima dengan alasan); yang ditutup punya test yang menunjukkan celahnya hilang; catatan 46 punya test native dengan uid kedua atau tetap `BLOCKED` dengan alasan dan owner; tabel residual di spec 0019 dan pointer di spec pemiliknya diperbarui.
+
+**Trace:** BR-012, NFR-009, catatan audit keamanan 2026-11 nomor 25, 40, 41, 46, 76, 78, 95, 104, 105, 111, 123, 126, 127, 152
+
+- [ ] Design it (spec): `/architect pengerasan terhadap proses user yang sama`

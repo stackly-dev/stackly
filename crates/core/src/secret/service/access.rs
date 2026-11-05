@@ -5,7 +5,7 @@
 use stackly_domain::{ResourceRevision, SecretOwner, SecretRef, WriteBatch, WriteOp};
 use stackly_platform::{SecretStoreError, SecretValue};
 
-use super::audit::{DELETE, REVEAL};
+use super::audit::{AuditDetail, DELETE, REVEAL};
 use super::{ChangeStatus, SecretCaller, SecretChange, SecretService};
 use crate::secret::error::SecretError;
 
@@ -96,7 +96,7 @@ impl SecretService {
         purpose: RevealPurpose,
         caller: &SecretCaller,
     ) -> Result<SecretValue, SecretError> {
-        let purpose = Some(purpose.as_code());
+        let purpose = Some(AuditDetail::Purpose(purpose.as_code()));
         let fail = |error: SecretError| {
             self.audit_failure(REVEAL, caller, reference, purpose, &error);
             Err(error)

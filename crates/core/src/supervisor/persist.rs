@@ -233,7 +233,29 @@ async fn commit_with(
     if degraded {
         degrade(deps, &actor, &mut degraded, false, "");
     }
+    if force_aware {
+        // Audit note 100: an exit an actor could not record leaves the
+        // registry with a lifecycle that may be stale, so the actor says so
+        // until an exit commit lands.
+        match (&result, mode) {
+            (Ok(()), _) => mark_exit_unrecorded(deps, &actor, false),
+            (Err(_), CommitMode::Actor) if !sup.is_shutdown() => {
+                mark_exit_unrecorded(deps, &actor, true);
+            }
+            (Err(_), _) => {}
+        }
+    }
     result
+}
+
+/// Records whether the actor gave up recording how a process ended (spec
+/// 0010, *Commit*, audit note 100).
+pub(crate) fn mark_exit_unrecorded(
+    deps: &SupervisorDeps,
+    actor: &super::actor::InstanceActor,
+    unrecorded: bool,
+) {
+    actor.update(deps, |state| state.exit_unrecorded = unrecorded);
 }
 
 /// Reads the newest force stop of `id` and the operations after it.

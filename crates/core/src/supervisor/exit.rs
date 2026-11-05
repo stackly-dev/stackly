@@ -21,7 +21,8 @@ use super::Supervisor;
 use super::actor::InstanceActor;
 use super::error::SupervisorError;
 use super::persist::{
-    CommitMode, ExitSeen, apply_exit, blocking, commit_exit, read_instance_actor,
+    CommitMode, ExitSeen, apply_exit, blocking, commit_exit, mark_exit_unrecorded,
+    read_instance_actor,
 };
 use super::respawn::schedule_respawn;
 use super::startup::{Next, after_unrequested_exit};
@@ -143,6 +144,9 @@ async fn settle(
         Err(SupervisorError::NotFound(_)) => return None,
         Err(error) => {
             tracing::warn!(instance = %id, %error, "the exit of a process could not be recorded");
+            if !sup.is_shutdown() {
+                mark_exit_unrecorded(deps, &sup.actor(id), true);
+            }
             return Some(Next::Final(error));
         }
     };

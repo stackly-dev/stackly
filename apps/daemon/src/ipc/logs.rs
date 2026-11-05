@@ -20,8 +20,9 @@ use stackly_core::logs::{
 };
 use stackly_domain::InstanceId;
 use stackly_platform::OutputStream;
-use stackly_protocol::codes::{instance, internal};
+use stackly_protocol::codes::{instance, internal, request};
 use stackly_protocol::daemon::{SubsystemHealth, SubsystemStatus, subsystem};
+use stackly_protocol::json::FieldCode;
 use stackly_protocol::limits::LOG_BATCH_MAX;
 use stackly_protocol::logs::{
     LOG_READ_LIMIT_DEFAULT, LogCursor, LogEntry, LogEntryKind, LogExited, LogFollowEnd,
@@ -29,7 +30,7 @@ use stackly_protocol::logs::{
     LogPosition, LogRetention, LogStarted, LogStream, LogStreamBytes, LogTruncated,
     LogsFollowParams, LogsFollowing, LogsReadParams,
 };
-use stackly_protocol::{Count, ErrorBody, LogSeq, Timestamp};
+use stackly_protocol::{Count, ErrorBody, FieldError, LogSeq, Timestamp};
 use tokio::sync::{Semaphore, watch};
 use tokio::time::Instant;
 
@@ -168,7 +169,9 @@ pub enum FollowNext {
 ///
 /// # Errors
 ///
-/// The errors of [`read`].
+/// The errors of [`read`], and `request.invalid_params` (field `after.seq`,
+/// code `out_of_range`) for an `after` cursor of the current store beyond
+/// its head, like `events.subscribe` (spec 0027 AC-7, audit note 124).
 pub async fn follow(
     core: &DaemonCore,
     subscription_id: u32,
@@ -186,6 +189,15 @@ pub async fn follow(
         (Some(store), Some(seq)) => Some(CoreCursor { store, seq }),
         _ => None,
     };
+    if let (Some(after), Some(store)) = (params.after, page.store)
+        && after.store_id == store.as_uuid()
+        && after.seq.get() > page.head.unwrap_or(0)
+    {
+        let error = ErrorBody::new(&request::INVALID_PARAMS, "params do not match the method")
+            .with_detail("method", "instance.logs_follow")
+            .with_field(FieldError::new("after.seq", FieldCode::OutOfRange));
+        return Err(Box::new(error));
+    }
     let after = params.after.map(core_cursor).or(head);
     let following = LogsFollowing {
         subscription_id,

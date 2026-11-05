@@ -10,6 +10,8 @@ use stackly_domain::{
 };
 use stackly_platform::{ChildRole, ExitStatus};
 
+use stackly_core::supervisor::RegistryMode;
+
 use crate::common::{Rig, Spec};
 
 async fn wait_for(what: &str, mut ready: impl FnMut() -> bool) {
@@ -201,4 +203,79 @@ async fn a_crash_between_the_validate_and_the_lock_of_a_stop_cancels_the_respawn
         .count();
     assert_eq!(mains, 1, "the pending respawn was cancelled by the stop");
     assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Stopped);
+}
+
+/// Starts a rig whose recheck runs every second, with one running instance.
+async fn rechecked_running() -> (Rig, InstanceId, stackly_testkit::FakeSpawn) {
+    let rig = Rig::with_config(|config| {
+        config.unknown_recheck_interval = Duration::from_secs(1);
+    })
+    .await;
+    let id = rig.instance(&Spec::default());
+    // Reconciliation starts the recheck task.
+    rig.sup
+        .reconcile(RegistryMode::Ready)
+        .await
+        .expect("reconciliation of a stopped instance succeeds");
+    let first = running(&rig, id).await;
+    (rig, id, first)
+}
+
+/// Checks what an exit the registry never took leaves (audit note 100):
+/// `unknown` until the recheck settles it, then `stopped`, and no respawn.
+async fn an_unrecorded_exit_reads_unknown_until_the_recheck_settles_it(rig: &Rig, id: InstanceId) {
+    wait_for("the exit is marked unrecorded", || {
+        let status = rig.sup.status(id);
+        status.exit_unrecorded && status.process.is_none()
+    })
+    .await;
+    assert_eq!(
+        rig.instance_row(id).lifecycle(),
+        InstanceLifecycle::Running,
+        "the registry still holds the state from before the exit"
+    );
+
+    wait_for("the recheck settles the instance", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Stopped
+    })
+    .await;
+    assert!(!rig.sup.status(id).exit_unrecorded);
+    let names = rig.events.lifecycle_names(id);
+    assert!(names.contains(&"unknown"), "{names:?}");
+    let spawns = rig
+        .processes()
+        .spawns()
+        .into_iter()
+        .filter(|spawn| spawn.role == ChildRole::Main)
+        .count();
+    assert_eq!(spawns, 1, "nothing starts on its own after a lost exit");
+}
+
+#[tokio::test]
+async fn an_exit_commit_the_registry_refuses_for_good_shows_unknown_until_the_recheck_confirms_it_stopped()
+ {
+    let (rig, id, first) = rechecked_running().await;
+
+    rig.registry.fail_commits(vec![RegistryError::Integrity {
+        detail: "a constraint the test breaks".to_owned(),
+    }]);
+    rig.processes().exit(first.pid, Some(ExitStatus::Exited(1)));
+
+    an_unrecorded_exit_reads_unknown_until_the_recheck_settles_it(&rig, id).await;
+}
+
+#[tokio::test]
+async fn an_exit_whose_registry_read_fails_for_good_shows_unknown_until_the_recheck_confirms_it_stopped()
+ {
+    let (rig, id, first) = rechecked_running().await;
+
+    rig.registry
+        .fail_instance_reads(vec![RegistryError::Corrupt {
+            table: "instances",
+            column: "lifecycle",
+            detail: "a value the test breaks".to_owned(),
+        }]);
+    rig.processes().exit(first.pid, Some(ExitStatus::Exited(1)));
+
+    an_unrecorded_exit_reads_unknown_until_the_recheck_settles_it(&rig, id).await;
 }

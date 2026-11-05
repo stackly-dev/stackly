@@ -1,8 +1,8 @@
 == spike0010 on this Mac ==
-darwin user temp: /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/
-test root: /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé
-runtime exe (as created): /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
-runtime exe (canonical):  /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+darwin user temp: $TMPDIR/
+test root: $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé
+runtime exe (as created): $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+runtime exe (canonical):  $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
 spike pid 17276 sid Ok(17275) uid 502
 struct sizes: proc_bsdinfo 136 vnode_fdinfowithpath 1200 proc_fdinfo 8 (SDK: 136, 1200, 8)
 [setup] NOTE parent contamination: leaked fd 3 without CLOEXEC; parent p_sigignore 0x18489001 (SIGPIPE bit 0x1000, SIGHUP bit 0x1); SIGUSR1 blocked in the spawning thread
@@ -15,20 +15,20 @@ struct sizes: proc_bsdinfo 136 vnode_fdinfowithpath 1200 proc_fdinfo 8 (SDK: 136
 [suspend] PASS user time still 0 after 400 ms: Ok((0, 2701))
 [pidinfo] PASS child pbi_pid/ppid/pgid/uid: pid 17282 ppid 17276 pgid 17282 uid 502 (me 17276)
 [pidinfo] PASS start time has seconds and microseconds near now: start 1792315325.267546 (0.408 s before now)
-[exe] PASS proc_pidpath of suspended child equals canonical path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server") vs /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
-[exe] NOTE path as created was /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server (the /var -> /private/var symlink makes it differ)
+[exe] PASS proc_pidpath of suspended child equals canonical path: Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server") vs $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server
+[exe] NOTE path as created was $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server (the /var -> /private/var symlink makes it differ)
 [session] PASS getsid(child) == pid (SETSID): getsid Ok(17282), parent sid Ok(17275)
 [boot] PASS boot id readable while child suspended: 5E52ED28-4032-431E-9E64-B599BA083C49
 [spawn] PASS suspended child holds exactly fds 0,1,2,3: fds [(0, 1), (1, 1), (2, 1), (3, 1)] (type 1 = vnode)
 [spawn] PASS fd 0 is /dev/null: (549339365, 336, "/dev/null")
-[spawn] PASS fd 1 is stdout spool (dev+ino): (16777229, 43636849, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/a/stdout.spool")
-[spawn] PASS fd 2 is stderr spool (dev+ino): (16777229, 43636850, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/a/stderr.spool")
-[spawn] PASS fd 3 is instance.lock (dev+ino): (16777229, 43636848, "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/instance.lock")
+[spawn] PASS fd 1 is stdout spool (dev+ino): (16777229, 43636849, "$TMPDIR/stackly-spike0010-17276/run/i/a/stdout.spool")
+[spawn] PASS fd 2 is stderr spool (dev+ino): (16777229, 43636850, "$TMPDIR/stackly-spike0010-17276/run/i/a/stderr.spool")
+[spawn] PASS fd 3 is instance.lock (dev+ino): (16777229, 43636848, "$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/instance.lock")
 [fds] PASS holds_file(suspended child, lock) == Yes: PROC_PIDLISTFDS + PROC_PIDFDVNODEPATHINFO
-[spawn] PASS KERN_PROCARGS2 argv equals plan exactly (argv[0] canonical): argv ["/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "serve", "--config=/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/config.json", "--data=/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/data", "--port=54734", "--host=127.0.0.1", "--label=$(touch pwned); touch pwned2 `touch pwned3` \"q\" 'q' | & > ü 空 * ~"]
-[spawn] NOTE KERN_PROCARGS2 exec path "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server"; strings after argv: ["PATH=/usr/bin:/bin", "STACKLY_PLAN_VALUE=sp ace ü 空 $(touch pwned-env) `id`", "", "", "", "", "", "", "", "pfz=0xfffe20000", "stack_guard=0x3e904b9d933400d8", "malloc_entropy=0x1ce1cb60143e9ae2,0x14a446d70981402f", "ptr_munge=0xbc6a0e7960ea50b5", "main_stack=0x16ee04000,0x7fc000,0x16ae04000,0x4000000", "executable_file=0x1a0100000d,0x299d861", "dyld_file=0x1a0100000d,0xfffffff000b21c0", "executable_cdhash=6f1837ecb9f14aad20db3f86f227a546b8d03cbc", "executable_boothash=c83eba56b40c88b84d6cd240494479838e9222d3", "th_port=0x103", "security_config=0x0", "", "", "", "", "", "", ""]
+[spawn] PASS KERN_PROCARGS2 argv equals plan exactly (argv[0] canonical): argv ["$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "serve", "--config=$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/config.json", "--data=$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a/data", "--port=54734", "--host=127.0.0.1", "--label=$(touch pwned); touch pwned2 `touch pwned3` \"q\" 'q' | & > ü 空 * ~"]
+[spawn] NOTE KERN_PROCARGS2 exec path "$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server"; strings after argv: ["PATH=/usr/bin:/bin", "STACKLY_PLAN_VALUE=sp ace ü 空 $(touch pwned-env) `id`", "", "", "", "", "", "", "", "pfz=0xfffe20000", "stack_guard=0x3e904b9d933400d8", "malloc_entropy=0x1ce1cb60143e9ae2,0x14a446d70981402f", "ptr_munge=0xbc6a0e7960ea50b5", "main_stack=0x16ee04000,0x7fc000,0x16ae04000,0x4000000", "executable_file=0x1a0100000d,0x299d861", "dyld_file=0x1a0100000d,0xfffffff000b21c0", "executable_cdhash=6f1837ecb9f14aad20db3f86f227a546b8d03cbc", "executable_boothash=c83eba56b40c88b84d6cd240494479838e9222d3", "th_port=0x103", "security_config=0x0", "", "", "", "", "", "", ""]
 [spawn] PASS env equals plan exactly, nothing inherited: env part ["PATH=/usr/bin:/bin", "STACKLY_PLAN_VALUE=sp ace ü 空 $(touch pwned-env) `id`"]
-[spawn] PASS cwd is the plan cwd (addchdir_np): Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a")
+[spawn] PASS cwd is the plan cwd (addchdir_np): Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/a")
 [spawn] PASS signal mask empty (SETSIGMASK): p_sigmask 0x0
 [spawn] PASS SETSIGDEF: child ignores only the kernel default-ignore set (SIGPIPE, SIGHUP back to default): child p_sigignore 0x18488000 == default-ignore set 0x18488000 (SIGURG|SIGCHLD|SIGIO|SIGWINCH|SIGINFO); parent 0x18489001
 [spawn] PASS no caught signal before exec runs: p_sigcatch 0x0
@@ -51,22 +51,22 @@ struct sizes: proc_bsdinfo 136 vnode_fdinfowithpath 1200 proc_fdinfo 8 (SDK: 136
 [suspend] PASS discard: waitpid reaps signaled(9): Some("signaled(9)")
 [suspend] PASS discard: child never ran (user time 0, no argv file, no output): user_time 0 argv exists false
 [lock] PASS lock Free after discard: Free
-[spawn] NOTE daemon with fds 0,1,2 closed (with dup to fd >= 10), exit Some("exited(0)"): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
-[spawn] PASS daemon with closed fds 0-2: child fds 0..3 are /dev/null, spools, lock: daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
+[spawn] NOTE daemon with fds 0,1,2 closed (with dup to fd >= 10), exit Some("exited(0)"): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 $TMPDIR/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 $TMPDIR/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
+[spawn] PASS daemon with closed fds 0-2: child fds 0..3 are /dev/null, spools, lock: daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 1, 2, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: dev 16777229 ino 43637024 $TMPDIR/stackly-spike0010-17276/run/i/cf0/stdout.spool; child fd 2: dev 16777229 ino 43637025 $TMPDIR/stackly-spike0010-17276/run/i/cf0/stderr.spool; child fd 3: dev 16777229 ino 43637023 $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/cf0/instance.lock; verdict=ok
 [spawn] NOTE daemon with fds 0,1,2 closed (naive, no dup), exit Some("exited(0)"): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: missing; child fd 2: missing; child fd 3: dev 549339365 ino 336 /dev/null; verdict=wrong
 [spawn] PASS naive mapping without dup to >= 10 is wrong (hazard shown): daemon fds: lock=0 stdout=1 stderr=2; child fds [0, 3]; child fd 0: dev 549339365 ino 336 /dev/null; child fd 1: missing; child fd 2: missing; child fd 3: dev 549339365 ino 336 /dev/null; verdict=wrong
 [spawn] PASS missing executable: posix_spawn returns ENOENT, no child: Err("errno 2 (No such file or directory (os error 2))")
 [spawn] PASS non-executable file: posix_spawn returns EACCES, no child: Err("errno 13 (Permission denied (os error 13))")
 [spawn] PASS missing cwd: posix_spawn returns ENOENT from addchdir_np, no child: Err("errno 2 (No such file or directory (os error 2))")
-[spawn] PASS helper: stdin pipe written then closed, helper reads to EOF and exits 0: Some("exited(0)") stdout "initialized /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/init/fresh-data\n" stderr ""
+[spawn] PASS helper: stdin pipe written then closed, helper reads to EOF and exits 0: Some("exited(0)") stdout "initialized $TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/init/fresh-data\n" stderr ""
 [spawn] PASS helper: token.sha256 equals SHA-256 of the stdin bytes: 35bb65be849f09ce0e6d308e7010dbfcc895bceec7ef4a0e050219acd7617846 vs 35bb65be849f09ce0e6d308e7010dbfcc895bceec7ef4a0e050219acd7617846
 [spawn] NOTE helper (InitStep) held the lock on fd 3 while running: Yes
 [orphan] NOTE daemon-a (running) pid 17320 exited Some("exited(0)"): daemon-a: spawned 17321 (running), exiting without reaping
-[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
+[orphan] NOTE identity recorded by daemon-a while suspended: {"start": "1792315326.054120", "pid": "17321", "status": "4", "lockdev": "16777229", "sid": "17321", "exe": "$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server", "boot": "5E52ED28-4032-431E-9E64-B599BA083C49", "lockino": "43637055", "ppid": "17320"}
 [pidinfo] PASS non-child: bsdinfo readable, ppid 1 (launchd), not our child: ppid 1 pgid 17321 uid 502 status 2
 [pidinfo] PASS non-child: start time equals the one recorded at spawn by the old daemon: 1792315326.054120 vs 1792315326.054120
 [pidinfo] PASS non-child: uid matches current user, pgid == pid: 
-[exe] PASS non-child: proc_pidpath equals canonical path recorded at spawn: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] PASS non-child: proc_pidpath equals canonical path recorded at spawn: Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
 [session] PASS non-child in another session: getsid works and equals recorded sid: getsid Ok(17321), our sid 17275
 [boot] PASS boot id read by old daemon equals ours: 5E52ED28-4032-431E-9E64-B599BA083C49 vs 5E52ED28-4032-431E-9E64-B599BA083C49
 [fds] PASS non-child: holds_file(lock inode) == Yes after old daemon exited: fds Ok([(0, 1), (1, 1), (2, 1), (3, 1), (4, 2), (5, 2), (6, 2)])
@@ -114,12 +114,12 @@ struct sizes: proc_bsdinfo 136 vnode_fdinfowithpath 1200 proc_fdinfo 8 (SDK: 136
 [pidinfo] PASS other users' processes: PROC_PIDTBSDINFO refused with EPERM for all of them: 168 of 168 refused
 [pidinfo] PASS other users' processes: sysctl KERN_PROC_PID still gives uid and start time: 168 of 168 readable
 [pidinfo] PASS kinfo_proc start time and uid equal PROC_PIDTBSDINFO for our own process: kinfo 1792315324.946766 uid 502, bsdinfo 1792315324.946766 uid 502
-[exe] NOTE darwin user temp /var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/ canonicalizes to /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T
-[exe] PASS spawn via /var/... spelling: proc_pidpath returns the canonical /private/var/... path: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
-[exe] PASS spawn via a symlink: proc_pidpath returns the target, not the link: Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
-[exe] NOTE via symlink argv[0] stays Some("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/fake-link")
+[exe] NOTE darwin user temp $TMPDIR/ canonicalizes to $TMPDIR
+[exe] PASS spawn via /var/... spelling: proc_pidpath returns the canonical /private/var/... path: Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] PASS spawn via a symlink: proc_pidpath returns the target, not the link: Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/runtime/fake/0.1.0/aarch64-apple-darwin/0f1e2d3c/bin/stackly-fake-server")
+[exe] NOTE via symlink argv[0] stays Some("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/fake-link")
 [exe] PASS spawn via NFD spelling of an NFC path: proc_pidpath returns the stored (NFC) name: Ok(176) (nfd bytes 180, nfc bytes 176)
-[exe] NOTE executable renamed while process lives: proc_pidpath Ok("/private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/renamed-fake"); after unlink: Err("errno 2 (No such file or directory (os error 2))")
+[exe] NOTE executable renamed while process lives: proc_pidpath Ok("$TMPDIR/stackly-spike0010-17276/Test Root Ünï cödé/data/instances/paths/renamed-fake"); after unlink: Err("errno 2 (No such file or directory (os error 2))")
 [exe] PASS rename/unlink of the executable never yields the original recorded path by accident: 
 [boot] PASS sysctlbyname(kern.bootsessionuuid) is a UUID, stable across reads, equals sysctl(8): 5E52ED28-4032-431E-9E64-B599BA083C49 (case: upper)
 [boot] NOTE stored form (lowercase) 5e52ed28-4032-431e-9e64-b599ba083c49

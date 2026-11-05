@@ -405,6 +405,7 @@ Hasil copy diumumkan "{title} copied." atau "Address copied.", dan "{name} is re
 - Template connection divalidasi saat paket dimuat (token, panjang, dan render sentinel sebagai URI); setiap nilai token di percent encode, sehingga nilai pengguna tidak bisa mengubah struktur URI.
 - Scan ukuran data tidak mengikuti symlink, tidak menyeberang device, dibatasi entri, waktu, kedalaman (jadi paling banyak `TREE_USAGE_MAX_DEPTH` file descriptor per scan), dan jumlah scan bersamaan, dan hanya dimulai atas permintaan.
 - Daemon tidak mencatat isi detail ke log.
+- Catatan audit keamanan 2026-11 nomor 75 (subfolder yang tidak terbaca membuat scan ukuran data instance itu `not_private`) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

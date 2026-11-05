@@ -191,6 +191,8 @@ Byte dan byte per detik dikirim sebagai `Count`; CPU sebagai number satu desimal
 
 Socket privat milik user yang sama (spec 0006) adalah satu satunya akses; tidak ada aturan baru. Pohon hanya berisi proses dengan uid efektif yang sama dengan daemon. Nama proses diambil dari path executable yang terverifikasi, tidak pernah dari argv atau judul proses, jadi nilai yang diketik di command line tidak pernah tampil. Sampel tidak memuat secret dan tidak ditulis ke log.
 
+- Catatan audit keamanan 2026-11 nomor 117 (nama dan parent proses tetap dari `inspect` pertama walau proses exec atau pindah parent) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+
 ### Configuration required
 
 Tidak ada env var baru. Konstanta:

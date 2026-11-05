@@ -690,6 +690,9 @@ Selain tabel BR:
 - File manifest 0600, tanpa secret. Pembacaan manifest tidak mengikuti symlink dan tidak membuka FIFO atau device.
 - Operasi hapus *(fitur 7)* menghapus symlink itu sendiri, tidak pernah targetnya, tidak pernah mengikuti symlink di komponen mana pun, dan tidak menyeberang device, jadi symlink atau mount yang ditanam di folder instance tidak bisa membelokkan penghapusan ke luar owned root.
 - `unsafe` baru hanya di `stackly-platform-macos`: `getuid`, `getpwuid_r`, dan `confstr`, masing masing dengan komentar `// SAFETY:`. Fitur 18, 20, 21, dan 22 menambah `statfs`, `renamex_np`, `openat`, `fstatat`, `mkdirat`, `symlinkat`, `fchmodat`, `getxattr`, dan `sysctlbyname`, dengan aturan komentar yang sama; helper codesign tidak menambah `posix_spawn` sendiri, karena ia memakai ulang helper `pub(crate)` modul `process` (spec 0010).
+- Catatan audit keamanan 2026-11 nomor 40 (`check_owned_path` membatasi ke owned root mana pun, bukan ke instance pemiliknya) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+- Catatan audit keamanan 2026-11 nomor 41 (`write_file_atomic` menulis dan me rename lewat path setelah cek kepemilikan) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+- Catatan audit keamanan 2026-11 nomor 76 (`remove_tree` hanya memasang `O_NOFOLLOW` di komponen terakhir root, dan tiga pemanggil memberi root yang bukan canonical) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

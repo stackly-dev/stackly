@@ -710,6 +710,8 @@ Semua fungsi sync dan tanpa IO kecuali `read_package` (yang hanya membaca lewat 
 - Probe `http` hanya ke endpoint loopback milik instance, tanpa redirect. Probe native (fase 02) juga hanya ke endpoint loopback milik instance yang dirujuk manifest, dengan batas baca dan satu deadline per percobaan (spec 0023).
 - Namespace `testing/` (fake provider) tidak pernah masuk catalog bawaan app; fitur 15 dan 17 menegakkannya saat bundling dan memuat catalog.
 - Tidak ada `unsafe` baru. Dummy server memakai API aman `signal-hook`.
+- Catatan audit keamanan 2026-11 nomor 44 (`backendUrl` Traefik menerima `localhost`, yang bisa di dial ke `[::1]` milik user OS lain) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+- Catatan audit keamanan 2026-11 nomor 95 (`read_package` membuka file lewat path setelah memeriksa jenis folder, `O_NOFOLLOW` hanya di daun) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

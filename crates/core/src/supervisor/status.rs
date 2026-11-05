@@ -70,6 +70,11 @@ pub struct InstanceStatus {
     /// True while an actor commit waits for the registry; the state in
     /// memory is then what is shown.
     pub pending_commit: bool,
+    /// True while no process runs and an actor gave up recording how the
+    /// last one ended: the lifecycle the registry holds may be stale, so a
+    /// live one is shown `unknown` until a commit or the recheck settles it
+    /// (spec 0010, *Commit*, audit note 100).
+    pub exit_unrecorded: bool,
 }
 
 impl InstanceStatus {
@@ -97,6 +102,7 @@ impl InstanceStatus {
             || self.ports_final != other.ports_final
             || self.logs_unavailable != other.logs_unavailable
             || self.pending_commit != other.pending_commit
+            || self.exit_unrecorded != other.exit_unrecorded
     }
 }
 
@@ -119,6 +125,7 @@ mod tests {
             ports_final: true,
             logs_unavailable: false,
             pending_commit: false,
+            exit_unrecorded: false,
         }
     }
 

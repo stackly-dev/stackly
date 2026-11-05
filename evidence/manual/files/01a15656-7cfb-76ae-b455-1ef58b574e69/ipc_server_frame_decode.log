@@ -1,6 +1,6 @@
-   Compiling stackly-protocol v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/crates/protocol)
-   Compiling stackly-core v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/crates/core)
-   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/contract-1-4-b6151e/fuzz)
+   Compiling stackly-protocol v0.1.0 ($REPO/.claude/worktrees/contract-1-4-b6151e/crates/protocol)
+   Compiling stackly-core v0.1.0 ($REPO/.claude/worktrees/contract-1-4-b6151e/crates/core)
+   Compiling stackly-fuzz v0.0.0 ($REPO/.claude/worktrees/contract-1-4-b6151e/fuzz)
     Finished `release` profile [optimized + debuginfo] target(s) in 3m 17s
     Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
      Running `fuzz/target/aarch64-apple-darwin/release/ipc_server_frame_decode -artifact_prefix=fuzz/artifacts/ipc_server_frame_decode/ -max_len=65536 -max_total_time=300 -print_final_stats=1 fuzz/corpus/ipc_server_frame_decode fuzz/seeds/ipc_server_frame_decode`

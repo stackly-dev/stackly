@@ -151,7 +151,7 @@ target/evidence/<runId>/            # STACKLY_EVIDENCE_DIR, tidak masuk git
 ├── run.json                        # RunContext, ditulis wrapper sebelum perintah jalan
 ├── records/<id>.json               # record mentah per fungsi test, ditulis guard atau trait, tanpa context
 ├── artifacts/<id>/                 # log dan file bukti yang sengaja disimpan test
-├── output.log                      # salinan stdout dan stderr perintah
+├── output.log                      # salinan stdout dan stderr perintah, path host diganti placeholder
 └── report.json                     # RunReport, stackly.evidence-report/v1
 evidence/                           # masuk git
 ├── baseline-host.json              # BaselineHost, stackly.evidence-baseline/v1
@@ -175,6 +175,10 @@ schemas/evidence/                   # hasil codegen, plus contoh bersama yang di
 ```
 
 Setiap file ditulis atomik (tulis ke `<nama>.tmp` di folder yang sama, lalu rename), jadi pembaca tidak pernah melihat file setengah jadi. Wrapper mengabaikan file `*.tmp` di `records/`.
+
+*Ditambah 2026-11-05 (audit keamanan, catatan 91):* `output.log` bukan lagi salinan byte demi byte. Setelah perintah selesai dan sebelum pindaian credential, wrapper mengganti path host di `output.log` dengan placeholder yang tetap: root workspace (dari `cargo metadata`) menjadi `$REPO`, folder `TMPDIR` menjadi `$TMPDIR`, dan folder `HOME` menjadi `$HOME`. Setiap folder dicocokkan dalam bentuk yang diberikan dan bentuk yang sudah di-resolve (`/var/folders/...` dan `/private/var/folders/...`), prefix terpanjang menang (jadi root workspace di dalam home menjadi `$REPO`, bukan `$HOME/...`), dan prefix hanya cocok sebagai path utuh (`/Users/dev` tidak cocok di dalam `/Users/developer`). Byte yang bukan UTF-8 tetap apa adanya, dan file ditulis ulang secara atomik. Tujuannya supaya log yang masuk git tidak membawa nama user, nama folder worktree, atau id folder temporary per user. Record, `run.json`, dan `artifacts/` tidak disentuh. File evidence yang sudah di-commit sebelum aturan ini (`output.log` di `evidence/` dan file bukti di `evidence/manual/files/`) ditulis ulang sekali dengan placeholder yang sama; record manual JSON tetap tidak diubah, sesuai invariant record final. Ini juga menjadi AC baru:
+
+- **AC-1** (spec ini, catatan audit 91): `output.log` sebuah run tidak memuat root workspace, `TMPDIR`, atau `HOME` dari host dalam bentuk path; ketiganya muncul sebagai `$REPO`, `$TMPDIR`, dan `$HOME`. Dibuktikan oleh test `output_log_replaces_repo_tmpdir_and_home_with_placeholders` di `xtask/src/evidence/run/scrub.rs`.
 
 `evidence/runtime/` dan `evidence/compatibility/` adalah satu satunya evidence otomatis di git, ditulis hanya oleh `runtime record` (`runtime/`) dan `runtime compat-record` (`compatibility/`), divalidasi `runtime check` (spec 0003; folder kedua ditambah fase 02, 2026-10-20, spec 0018). `evidence/runtime/` berisi bukti G0 untuk spec 0003, dan `evidence/compatibility/` berisi compatibility record per provider (BR-025); keduanya bukan bukti rilis. `cargo xtask evidence check` tidak membaca kedua folder ini.
 
@@ -358,7 +362,7 @@ Argumen diparse dengan tangan seperti task `xtask` lain, tanpa clap.
 
 | Perintah | Yang dikerjakan |
 | --- | --- |
-| `cargo xtask evidence run --kind <fixture\|native> [--out <folder>] -- <perintah>` | menolak jalan kalau `STACKLY_EVIDENCE_DIR` sudah terisi (tidak ada run bersarang); membuat folder run (default `<target directory dari cargo metadata>/evidence/<runId>/`); menulis `run.json`; menjalankan perintah dengan kedua variabel environment, sambil menyalin stdout dan stderr ke terminal dan `output.log`; mengumpulkan `records/`; melengkapi `context` dan path file; memvalidasi; memindai fixture credential; menulis `report.json` lalu mencetak `evidence report: <path absolut report.json>` sebagai baris terakhir stderr |
+| `cargo xtask evidence run --kind <fixture\|native> [--out <folder>] -- <perintah>` | menolak jalan kalau `STACKLY_EVIDENCE_DIR` sudah terisi (tidak ada run bersarang); membuat folder run (default `<target directory dari cargo metadata>/evidence/<runId>/`); menulis `run.json`; menjalankan perintah dengan kedua variabel environment, sambil menyalin stdout dan stderr ke terminal dan `output.log`; mengganti path host di `output.log` dengan `$REPO`, `$TMPDIR`, dan `$HOME` (lihat Folder dan file); mengumpulkan `records/`; melengkapi `context` dan path file; memvalidasi; memindai fixture credential; menulis `report.json` lalu mencetak `evidence report: <path absolut report.json>` sebagai baris terakhir stderr |
 | `cargo xtask evidence check` | memvalidasi `evidence/manual/*.json` dan `evidence/baseline-host.json`; memindai source Rust dan Swift dengan aturan di bawah; tidak membaca `evidence/runtime/` dan `evidence/compatibility/`, yang keduanya divalidasi `cargo xtask runtime check` (spec 0003, spec 0018) |
 | `cargo xtask evidence new ...` | membuat record manual `NOT_RUN` (lihat Record manual) |
 | `cargo xtask evidence baseline` | menulis `evidence/baseline-host.json` dari Mac tempat perintah dijalankan (lihat Baseline benchmark) |
@@ -404,6 +408,7 @@ Aturan pindaian `evidence check`:
 - Record fixture tidak pernah dihitung sebagai bukti native.
 - Hasil yang tidak teramati tetap `NOT_RUN`, tidak pernah `PASS`.
 - Evidence tidak pernah berisi credential asli, dan run gagal kalau prefix fixture credential muncul di outputnya.
+- `output.log` tidak pernah memuat root workspace, `TMPDIR`, atau `HOME` host; yang tersisa hanya placeholder `$REPO`, `$TMPDIR`, dan `$HOME` (catatan audit 91).
 
 **Replaces**:
 

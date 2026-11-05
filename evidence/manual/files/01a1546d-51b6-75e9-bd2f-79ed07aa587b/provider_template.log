@@ -1,5 +1,5 @@
-   Compiling stackly-core v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/crates/core)
-   Compiling stackly-fuzz v0.0.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
+   Compiling stackly-core v0.1.0 ($REPO/.claude/worktrees/f9-closeout-c0a0a3/crates/core)
+   Compiling stackly-fuzz v0.0.0 ($REPO/.claude/worktrees/f9-closeout-c0a0a3/fuzz)
     Finished `release` profile [optimized + debuginfo] target(s) in 1m 16s
     Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
      Running `fuzz/target/aarch64-apple-darwin/release/provider_template -artifact_prefix=fuzz/artifacts/provider_template/ -max_len=262144 -max_total_time=600 -print_final_stats=1 fuzz/corpus/provider_template fuzz/seeds/provider_template`

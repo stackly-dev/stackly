@@ -463,6 +463,70 @@ async fn an_unknown_instance_is_not_found_and_an_empty_store_reads_empty() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_follow_after_a_seq_beyond_the_head_of_the_current_store_is_out_of_range() {
+    // covers: AC-7 (audit note 124)
+    let site = Site::new();
+    let daemon = site.start_with(fast()).await;
+    let api = site.api().await;
+    let id = api.create_ready("ahead", json!({})).await;
+    api.start_ready(id).await;
+    let page = wait_page(&api, params(id), |page| page.head.is_some()).await;
+    let head = page.head.expect("the store has a head");
+    let follow = |after: LogCursor| LogsFollowParams {
+        instance: id,
+        streams: Vec::new(),
+        contains: None,
+        after: Some(after),
+    };
+
+    let ahead = LogCursor {
+        store_id: head.store_id,
+        seq: LogSeq::saturating(head.seq.get() + 1_000_000),
+    };
+    let refused = api
+        .client
+        .follow_logs(follow(ahead))
+        .await
+        .expect_err("a cursor beyond the head is refused");
+    assert!(refused.is(&stackly_protocol::codes::request::INVALID_PARAMS));
+    let field = &refused.fields()[0];
+    assert_eq!((field.path(), field.code()), ("after.seq", "out_of_range"));
+
+    let (_at_head, at_head) = api
+        .client
+        .follow_logs(follow(head))
+        .await
+        .expect("a follow at the head starts");
+    let other = LogCursor {
+        store_id: Uuid::now_v7(),
+        seq: LogSeq::saturating(head.seq.get() + 1_000_000),
+    };
+    let (_reset, reset) = api
+        .client
+        .follow_logs(follow(other))
+        .await
+        .expect("a cursor of another store is not out of range");
+
+    drop(at_head);
+    drop(reset);
+    let stop = api
+        .stop(id)
+        .await
+        .expect("the stop")
+        .accepted
+        .expect("an operation");
+    api.wait_state(stop.operation.id, OperationState::Succeeded)
+        .await;
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_three_log_methods_are_refused_while_the_registry_is_in_recovery_mode() {
     // covers: AC-14
     let site = Site::new();

@@ -3,8 +3,8 @@
    Compiling rustls-webpki v0.103.16
    Compiling rustls-platform-verifier v0.7.1
    Compiling ureq v3.4.2
-   Compiling stackly-platform-macos v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/crates/platform-macos)
-   Compiling stacklyd v0.1.0 (/Users/ojiepermana/Development/ojiepermana/Stackly/apps/daemon)
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 7.50s
      Running tests/native_launchd.rs (target/debug/deps/native_launchd-602dc170c6cfc201)
 

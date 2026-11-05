@@ -65,7 +65,7 @@ pub fn summary(
         },
         runtime_id: instance.runtime_id().as_uuid(),
         runtime_version: instance.data_version().to_string(),
-        lifecycle: lifecycle(instance.lifecycle()),
+        lifecycle: shown_lifecycle(instance.lifecycle(), status),
         desired: desired(instance.desired()),
         readiness: readiness(&status.readiness),
         health: health(&status.health),
@@ -122,6 +122,29 @@ pub fn health_changed(id: InstanceId, status: &InstanceStatus) -> InstanceHealth
 #[must_use]
 pub fn excerpt_line(line: &str) -> String {
     line.chars().take(FAILURE_EXCERPT_LINE_CHARS).collect()
+}
+
+/// The lifecycle a snapshot shows: a live lifecycle reads `unknown` while
+/// no process runs and the supervisor gave up recording how the last one
+/// ended, because the registry may still hold the state from before the
+/// exit (spec 0010, *Commit*, audit note 100).
+#[must_use]
+pub const fn shown_lifecycle(
+    stored: DomainLifecycle,
+    status: &InstanceStatus,
+) -> InstanceLifecycle {
+    let live = matches!(
+        stored,
+        DomainLifecycle::Starting
+            | DomainLifecycle::Running
+            | DomainLifecycle::Recovering
+            | DomainLifecycle::Stopping
+    );
+    if live && status.exit_unrecorded {
+        InstanceLifecycle::Unknown
+    } else {
+        lifecycle(stored)
+    }
 }
 
 /// The lifecycle on the wire.
@@ -345,6 +368,52 @@ mod latency_tests {
         assert_eq!(
             latency_ms(Some(Duration::from_secs(u64::MAX / 2))),
             Some(u32::MAX)
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use stackly_core::supervisor::RestartStatus;
+    use stackly_domain::{Health, HealthState, Readiness, ReadinessState, ReasonCode};
+
+    use super::*;
+
+    fn status(exit_unrecorded: bool) -> InstanceStatus {
+        let at: jiff::Timestamp = "2026-11-05T00:00:00Z".parse().unwrap();
+        InstanceStatus {
+            status_seq: 1,
+            readiness: Readiness::new(ReadinessState::Unknown, at, ReasonCode::NOT_RUNNING, None),
+            health: Health::new(HealthState::Unknown, at, ReasonCode::NOT_RUNNING, None),
+            process: None,
+            restart: RestartStatus::default(),
+            blocker: None,
+            leftover: Vec::new(),
+            ports_final: false,
+            logs_unavailable: false,
+            pending_commit: false,
+            exit_unrecorded,
+        }
+    }
+
+    #[test]
+    fn a_live_lifecycle_whose_exit_went_unrecorded_is_shown_unknown() {
+        for stored in [
+            DomainLifecycle::Starting,
+            DomainLifecycle::Running,
+            DomainLifecycle::Recovering,
+            DomainLifecycle::Stopping,
+        ] {
+            assert_eq!(
+                shown_lifecycle(stored, &status(true)),
+                InstanceLifecycle::Unknown
+            );
+            assert_eq!(shown_lifecycle(stored, &status(false)), lifecycle(stored));
+        }
+        assert_eq!(
+            shown_lifecycle(DomainLifecycle::Stopped, &status(true)),
+            InstanceLifecycle::Stopped,
+            "a lifecycle that is not live is shown as stored"
         );
     }
 }

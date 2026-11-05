@@ -687,6 +687,7 @@ Ditulis daemon (`title`, `detail`), sama di GUI dan CLI. Ukuran memakai satuan d
 - Pin dan layout menolak symlink dan entri asing tanpa menimpa atau menghapus (K-1, spec 0004); kompensasi baris registry dan pohon instance menolak menghapus selama lock instance dipegang (K10).
 - Ukuran params dibatasi `Validate` dan `CONTROL_FRAME_MAX`; settings paling banyak 256 KiB (spec 0009); preflight hanya membaca, jadi pemanggilan berulang tidak mengubah state, dan `gather` berjalan di luar gerbang `begin` sehingga preflight yang lambat tidak menahan operasi lain.
 - Log daemon untuk create memuat ID operasi, ID instance, nama, provider, runtime, dan tahap, tidak pernah nilai settings atau secret; preflight hanya dicatat di level debug dengan jumlah baris per status.
+- Catatan audit keamanan 2026-11 nomor 46 (bind percobaan terhadap listener milik user OS lain belum diuji dengan uid kedua (`BLOCKED`)) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

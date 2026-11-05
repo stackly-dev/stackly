@@ -263,6 +263,39 @@ struct CommandLineToolTests {
         #expect(await tool.status().command == .notInstalled)
     }
 
+    @Test func installAndRepairRefuseABundleInAFolderOtherUsersCanWrite() async throws {
+        let rig = try Home()
+        let bundle = try rig.bundle("shared")
+        let shared = bundle.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: shared.path)
+        let tool = rig.tool(for: bundle)
+        let before = rig.paths()
+        let refused = CommandLineToolError.bundleNotInstalled(path: bundle.path)
+        await #expect(throws: refused) { try await tool.install() }
+        await #expect(throws: refused) { try await tool.repair() }
+        #expect(rig.paths() == before)
+        #expect(refused.message.contains("Move Stackly.app to /Applications"))
+    }
+
+    @Test func installRefusesABundleRunningFromAppTranslocation() async throws {
+        let rig = try Home()
+        let bundle = try rig.bundle("AppTranslocation/0A1B/d")
+        let tool = rig.tool(for: bundle)
+        let before = rig.paths()
+        await #expect(throws: CommandLineToolError.bundleNotInstalled(path: bundle.path)) {
+            try await tool.install()
+        }
+        #expect(rig.paths() == before)
+    }
+
+    @Test func removeStillWorksFromABundleThatIsNotInstalled() async throws {
+        let rig = try Home()
+        try await rig.tool(for: try rig.bundle("a")).install()
+        let translocated = rig.tool(for: try rig.bundle("AppTranslocation/0A1B/d"))
+        try await translocated.remove()
+        #expect(await translocated.status().command == .notInstalled)
+    }
+
     @Test func aBuildWithoutTheCommandCannotInstallButCanRemove() async throws {
         let rig = try Home()
         let full = try rig.bundle("a")

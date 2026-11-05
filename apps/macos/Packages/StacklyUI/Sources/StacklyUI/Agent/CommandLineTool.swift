@@ -116,6 +116,7 @@ nonisolated final class CommandLineTool: CommandLineToolControlling {
 
     private func link() throws(CommandLineToolError) {
         guard let tool = bundledTool else { throw .noBundledTool }
+        try checkBundleLocation()
         let pages = bundleManPages()
         // Everything that can fail without writing fails first.
         try checkFolder(binFolder)
@@ -170,6 +171,32 @@ nonisolated final class CommandLineTool: CommandLineToolControlling {
 
     private static func target(of path: URL) -> String {
         (try? FileManager.default.destinationOfSymbolicLink(atPath: path.path)) ?? ""
+    }
+
+    /// The running bundle must sit where a link to it stays valid and trusted (spec 0015,
+    /// *Instalasi CLI*, audit note 149): not in an App Translocation copy, not on a read only
+    /// volume such as a mounted disk image, and the bundle and every folder above it must
+    /// belong to the user or to root, never be writable by others, and be writable by the
+    /// group only when root owns them (so `/Applications` passes and `/Users/Shared` does
+    /// not).
+    private func checkBundleLocation() throws(CommandLineToolError) {
+        let refused = CommandLineToolError.bundleNotInstalled(path: display(bundle))
+        if bundle.pathComponents.contains("AppTranslocation") { throw refused }
+        var volume = statfs()
+        guard statfs(bundle.path, &volume) == 0 else { throw refused }
+        if volume.f_flags & UInt32(MNT_RDONLY) != 0 { throw refused }
+        var current = bundle
+        while true {
+            var info = stat()
+            guard lstat(current.path, &info) == 0 else { throw refused }
+            let owner = info.st_uid
+            guard owner == getuid() || owner == 0 else { throw refused }
+            if info.st_mode & mode_t(S_IWOTH) != 0 { throw refused }
+            if info.st_mode & mode_t(S_IWGRP) != 0, owner != 0 { throw refused }
+            let parent = current.deletingLastPathComponent()
+            if parent.path == current.path || current.path == "/" { return }
+            current = parent
+        }
     }
 
     /// Every folder from below the home down to `folder` that exists (or is a link to one)

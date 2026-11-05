@@ -610,6 +610,8 @@ Tahap install memakai label kolom kedua tabel *Alur install*. `RuntimeStore` tid
 - **Residual**: proses lain milik user yang sama bisa mengubah cache, scratch, atau folder runtime (PRD bagian 23 tidak melindungi dari itu); digest dihitung ulang setiap kali cache dipakai, dan drift folder terpasang ditangkap fitur 34 dan 55.
 - **Privasi**: log dan detail error memuat host URL dan ID artefak, tidak pernah path home penuh di `message` wire (path runtime ada di `RuntimeDetail.path` untuk pemiliknya sendiri). `User-Agent` tidak memuat nama user, host, atau ID mesin. Tidak ada telemetry.
 - **Otorisasi**: semua method mengikuti handshake dan peer check spec 0006 (uid yang sama).
+- Catatan audit keamanan 2026-11 nomor 25 (resume dengan `extract` yang sudah selesai memakai pohon scratch tanpa diturunkan ulang dari archive) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
+- Catatan audit keamanan 2026-11 nomor 111 (`make_parents` dan `rename_no_replace` di commit runtime bekerja di path penuh, bukan descriptor) adalah residual untuk fitur 71 (keputusan user 2026-11-05); alasan dan perubahan desain yang dibutuhkan di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

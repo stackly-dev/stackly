@@ -2,8 +2,9 @@
 //! journals, steps, created items, and lock keys, the check order of the
 //! journal write ops and of `IdempotencyKeyTaken`, upserts that keep their
 //! children, the four journal reads, and prune deleting journal rows with
-//! their operation. Its prune deletes every finished operation older than
-//! 30 days in the registry.
+//! their operation, except a final operation whose created item is
+//! unsettled or `compensation_failed` (audit note 145). Its prune deletes
+//! every other finished operation older than 30 days in the registry.
 
 use std::time::Duration;
 
@@ -766,6 +767,8 @@ fn force_history(suite: &Suite<'_>) {
 
 fn prune(suite: &Suite<'_>) {
     const CHECK: &str = "prune_deletes_journal_rows_with_their_operation";
+    const KEEPS: &str =
+        "prune_keeps_a_final_operation_whose_created_item_is_unsettled_or_compensation_failed";
     let now = suite.clock.now();
     let old = shifted(now, -40 * DAY);
     let key = format!("req-{}", suffix(OperationId::generate()));
@@ -774,17 +777,40 @@ fn prune(suite: &Suite<'_>) {
         .idempotency_key(&key)
         .created_at(old)
         .build();
+    let not_owned = OperationBuilder::new()
+        .state(OperationState::Failed)
+        .created_at(old)
+        .build();
     let stuck = OperationBuilder::new()
         .state(OperationState::NeedsRecovery)
         .created_at(old)
         .build();
-    for operation in [&finished, &stuck] {
+    let unsettled = OperationBuilder::new()
+        .state(OperationState::Failed)
+        .created_at(old)
+        .build();
+    let compensation_failed = OperationBuilder::new()
+        .state(OperationState::Failed)
+        .created_at(old)
+        .build();
+    let settled_as = [
+        (&finished, Some(CreatedState::Compensated)),
+        (&not_owned, Some(CreatedState::NotOwned)),
+        (&stuck, None),
+        (&unsettled, None),
+        (&compensation_failed, Some(CreatedState::CompensationFailed)),
+    ];
+    for (operation, settle) in settled_as {
         store(
             suite,
             "store an old operation with a journal",
             operation,
             true,
         );
+        let mut record = instance_record(CHECK, 1, 1, old);
+        if let Some(state) = settle {
+            domain(CHECK, record.settle(state, None, old));
+        }
         suite.commit(
             "store its step, record, and lock",
             vec![
@@ -794,7 +820,7 @@ fn prune(suite: &Suite<'_>) {
                 },
                 WriteOp::UpsertCreated {
                     operation: operation.id(),
-                    record: instance_record(CHECK, 1, 1, old),
+                    record,
                 },
                 WriteOp::InsertLocks {
                     operation: operation.id(),
@@ -813,11 +839,13 @@ fn prune(suite: &Suite<'_>) {
         .prune(&policy, now)
         .unwrap_or_else(|err| fail(CHECK, &err.to_string()));
 
-    expect_eq(
-        &format!("{CHECK}: a pruned operation leaves no journal"),
-        view(suite, "read a pruned journal", finished.id()),
-        None,
-    );
+    for (operation, what) in [(&finished, "compensated"), (&not_owned, "not_owned")] {
+        expect_eq(
+            &format!("{CHECK}: a pruned operation with a {what} item leaves no journal"),
+            view(suite, "read a pruned journal", operation.id()),
+            None,
+        );
+    }
     let kept = view(suite, "read a kept journal", stuck.id())
         .unwrap_or_else(|| fail(CHECK, "the needs_recovery operation lost its journal"));
     expect_eq(
@@ -825,6 +853,29 @@ fn prune(suite: &Suite<'_>) {
         (kept.steps.len(), kept.created.len(), kept.locks.len()),
         (1, 1, 1),
     );
+    for (operation, what) in [
+        (&unsettled, "intended"),
+        (&compensation_failed, "compensation_failed"),
+    ] {
+        let kept = view(suite, "read a kept journal", operation.id()).unwrap_or_else(|| {
+            fail(
+                KEEPS,
+                &format!("a final operation with a {what} item lost its journal"),
+            )
+        });
+        expect_eq(
+            &format!("{KEEPS}: the {what} item is still recorded"),
+            kept.created.len(),
+            1,
+        );
+        expect(
+            &format!("{KEEPS}: the operation with a {what} item stays"),
+            suite
+                .value(KEEPS, suite.registry.operation(operation.id()))
+                .is_some(),
+            || format!("the final operation with a {what} item was pruned"),
+        );
+    }
     let reused = OperationBuilder::new().idempotency_key(&key).build();
     store(
         suite,

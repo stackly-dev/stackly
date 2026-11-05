@@ -210,6 +210,7 @@ Tidak ada tabel registry baru dan tidak ada migrasi. Data baru:
 - `psql` lewat Unix socket 0700 instance. Password diketik atau di paste ke prompt `psql`, jadi tidak ada di argv atau env.
 - Salin password memakai `ConcealedPasteboard` (penanda concealed dan kedaluwarsa spec 0011) dan audit `secret.reveal`.
 - Browser hanya ke URL loopback dari endpoint instance; loader membatasi skema ke `http` atau `https`.
+- Catatan audit keamanan 2026-11 nomor 12 (skrip `open-<action>.command` ditulis di folder temp instance yang bisa ditulis runtime) adalah risiko yang diterima (keputusan user 2026-11-05); alasannya di [spec 0019](../0019-provider-postgresql/index.md#residual-audit-keamanan-2026-11).
 
 ### Configuration required
 

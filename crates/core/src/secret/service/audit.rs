@@ -16,6 +16,17 @@ pub(super) const REVEAL: AuditAction = AuditAction::from_static("secret.reveal")
 /// Deleting a reference.
 pub(super) const DELETE: AuditAction = AuditAction::from_static("secret.delete");
 
+/// The one action specific entry an audit row may carry beside the
+/// common ones.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum AuditDetail<'a> {
+    /// The reveal purpose, `show` or `copy`, as `purpose`.
+    Purpose(&'a str),
+    /// The source reference of a `copyFrom` put, as `copiedFrom`: the
+    /// reference whose value was read, never the value (audit note 112).
+    CopiedFrom(&'a SecretRef),
+}
+
 fn key(text: &str) -> DetailKey {
     text.parse()
         .expect("the audit detail keys of spec 0011 are camelCase constants")
@@ -23,21 +34,27 @@ fn key(text: &str) -> DetailKey {
 
 impl SecretService {
     /// One audit row about `reference`. `resource` is the row's ID while
-    /// the row exists; `purpose` is the reveal purpose; `error` makes the
-    /// result `failed` with its code as `errorCode`. Every value goes
-    /// through the redactor first.
+    /// the row exists; `detail` is the reveal purpose or the copy source;
+    /// `error` makes the result `failed` with its code as `errorCode`.
+    /// Every value goes through the redactor first.
     pub(super) fn audit_row(
         &self,
         action: AuditAction,
         caller: &SecretCaller,
         reference: &SecretRef,
         resource: Option<SecretReferenceId>,
-        purpose: Option<&str>,
+        detail: Option<AuditDetail<'_>>,
         error: Option<&SecretError>,
     ) -> AuditEventRecord {
         let mut entries = vec![(key("reference"), reference.to_string())];
-        if let Some(purpose) = purpose {
-            entries.push((key("purpose"), purpose.to_owned()));
+        match detail {
+            Some(AuditDetail::Purpose(purpose)) => {
+                entries.push((key("purpose"), purpose.to_owned()));
+            }
+            Some(AuditDetail::CopiedFrom(source)) => {
+                entries.push((key("copiedFrom"), source.to_string()));
+            }
+            None => {}
         }
         if let Some(client) = &caller.client {
             entries.push((key("clientKind"), client.to_string()));
@@ -66,7 +83,7 @@ impl SecretService {
         );
         record.resource = resource.map(AuditResource::SecretReference);
         record.operation = caller.operation;
-        // At most five short entries, so the limits of SafeDetails hold.
+        // At most six short entries, so the limits of SafeDetails hold.
         record.safe_details = SafeDetails::new(redacted).unwrap_or_default();
         record
     }
@@ -78,7 +95,7 @@ impl SecretService {
         action: AuditAction,
         caller: &SecretCaller,
         reference: &SecretRef,
-        purpose: Option<&str>,
+        detail: Option<AuditDetail<'_>>,
         error: &SecretError,
     ) {
         let resource = self
@@ -87,7 +104,7 @@ impl SecretService {
             .ok()
             .and_then(|read| read.value)
             .map(|view| view.record.id);
-        let row = self.audit_row(action, caller, reference, resource, purpose, Some(error));
+        let row = self.audit_row(action, caller, reference, resource, detail, Some(error));
         if let Err(written) = self
             .registry()
             .commit(WriteBatch::new(vec![WriteOp::InsertAuditEvent(row)]))
