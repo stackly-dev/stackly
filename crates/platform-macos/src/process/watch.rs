@@ -17,11 +17,13 @@
 //! [`Watcher::watch`] hands it to a listener. Listeners run on the watcher
 //! thread, or on the caller's thread when the process had already exited.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Read};
 use std::mem;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -634,10 +636,30 @@ impl Shared {
     }
 }
 
+/// Hands `delivery` to its listener. A listener that panics is logged and
+/// otherwise ignored, so it can never end the `stackly-proc-watch` or
+/// capture thread that delivers it, and reaping goes on for every other
+/// child.
 fn deliver(delivery: Delivery) {
     if let Some((listener, notice)) = delivery {
-        listener.exited(notice);
+        let pid = notice.pid;
+        if let Err(payload) = panic::catch_unwind(AssertUnwindSafe(|| listener.exited(notice))) {
+            tracing::error!(
+                pid = pid.as_i32(),
+                panic = panic_message(payload.as_ref()),
+                "an exit listener panicked; the watcher goes on"
+            );
+        }
     }
+}
+
+/// The text of a panic payload, when it is a string.
+fn panic_message(payload: &(dyn Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("a non string panic payload")
 }
 
 /// Kills and reaps a suspended child that is not tracked yet, after its

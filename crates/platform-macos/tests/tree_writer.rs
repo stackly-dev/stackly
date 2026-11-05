@@ -271,3 +271,33 @@ fn rename_no_replace_and_volume_space_see_another_device() {
     drop(image);
     ev.pass();
 }
+
+#[test]
+fn tree_writer_refuses_a_root_that_holds_any_entry_and_accepts_an_empty_one() {
+    let root = TestRoot::new().unwrap();
+    let hidden = root.path().join("hidden");
+    tree_root(&hidden);
+    fs::write(hidden.join(".DS_Store"), b"x").unwrap();
+    let folder = root.path().join("folder");
+    tree_root(&folder);
+    fs::create_dir(folder.join("inner")).unwrap();
+    let empty = root.path().join("empty");
+    tree_root(&empty);
+
+    for stage in [&hidden, &folder] {
+        let result = MacosFilesystem.open_tree_writer(stage).map(drop);
+        assert!(
+            matches!(
+                result,
+                Err(PlatformError::Io {
+                    kind: std::io::ErrorKind::DirectoryNotEmpty,
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+    }
+    let mut writer = MacosFilesystem.open_tree_writer(&empty).unwrap();
+    writer.create_dir(&entry("made")).unwrap();
+    assert!(empty.join("made").is_dir());
+}

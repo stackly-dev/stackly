@@ -15,8 +15,10 @@ use crate::registry::batch::{Committed, WriteOp};
 use crate::registry::error::RegistryError;
 use crate::registry::query::{InstanceFilter, LeaseFilter};
 use crate::registry::record::ProviderRevisionRecord;
+use crate::registry::secret::SecretReferenceView;
 use crate::restart::RestartPlan;
 use crate::runtime::Runtime;
+use crate::secret::SecretRef;
 use crate::session::DaemonSession;
 
 /// What a commit guard may read: the registry inside the guarded commit's
@@ -103,6 +105,19 @@ pub trait GuardView {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn storage_locations(&self) -> Result<Vec<StorageLocation>, RegistryError>;
+
+    /// Returns a secret reference row with every use of it, read inside the
+    /// guarded commit, as
+    /// [`Registry::secret_reference`](crate::Registry::secret_reference)
+    /// returns it (spec 0011).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn secret_reference(
+        &self,
+        reference: &SecretRef,
+    ) -> Result<Option<SecretReferenceView>, RegistryError>;
 }
 
 /// What a guard decided after reading.

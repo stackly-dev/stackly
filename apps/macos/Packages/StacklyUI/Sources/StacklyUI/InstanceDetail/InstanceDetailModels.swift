@@ -54,7 +54,8 @@ public final class InstanceDetailModels {
         self.configService = config
         self.openIn = OpenInModel(
             locator: openIn.locator, opener: openIn.opener, fileExists: openIn.fileExists,
-            prepareTerminal: service.prepareTerminal, secrets: service.secrets)
+            isRegularFile: openIn.isRegularFile, prepareTerminal: service.prepareTerminal,
+            secrets: service.secrets)
         self.reload = reload
         self.sleep = sleep
     }

@@ -280,8 +280,8 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         return .success(all)
     }
 
-    /// Replaces the items with `snapshot`, keeps deletes newer than it, then
-    /// applies the held events in order.
+    /// Replaces the items with `snapshot`, keeps deletes newer than it and the tombstones
+    /// of items it does not have, then applies the held events in order.
     private func complete(_ snapshot: [Item]) {
         var fresh: [Item.ID: Item] = [:]
         var freshRevisions: [Item.ID: UInt64] = [:]
@@ -293,12 +293,15 @@ public final class ResourceStore<Item: Identifiable & Sendable> where Item.ID: S
         }
         items = fresh
         revisions = freshRevisions
+        // A tombstone of an item the snapshot brought is spent. One of an item it does not
+        // have stays, and so does every one a held delete writes next, so a refetch still in
+        // flight that answers with the item from before its delete cannot bring it back.
+        tombstones = tombstones.filter { fresh[$0.key] == nil }
         let held = buffer ?? []
         buffer = nil
         for event in held {
             apply(event)
         }
-        tombstones.removeAll()
         itemFailures.removeAll()
         loadedAt = now()
         error = nil

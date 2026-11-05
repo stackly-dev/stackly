@@ -26,7 +26,7 @@ use stackly_protocol::instance::{
     SettingsDocument,
 };
 use stackly_protocol::operation::{ListOperationsParams, OperationState};
-use stackly_protocol::{Call, ConfigRevisionNumber, ErrorBody, Reply};
+use stackly_protocol::{Call, ConfigRevisionNumber, ErrorBody, Reply, Revision};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{FakeCodeSigning, FakeFetcher, SigningCall, allocate_port};
 use stacklyd::log_sink::{LogSink, LogSinkConfig};
@@ -83,6 +83,19 @@ impl Api {
         change: ConfigChangeRequest,
         key: &str,
     ) -> Result<ConfigApplyAccepted, Box<ErrorBody>> {
+        self.apply_expecting(id, base, change, None, key).await
+    }
+
+    /// Applies `change` with `expected` as the instance revision the
+    /// request expects.
+    async fn apply_expecting(
+        &self,
+        id: Uuid,
+        base: u64,
+        change: ConfigChangeRequest,
+        expected: Option<Revision>,
+        key: &str,
+    ) -> Result<ConfigApplyAccepted, Box<ErrorBody>> {
         match self
             .client
             .call_detailed(
@@ -90,7 +103,7 @@ impl Api {
                     instance_id: id,
                     base_revision: number(base),
                     change,
-                    expected_revision: None,
+                    expected_revision: expected,
                 }),
                 CallOptions::default().with_idempotency_key(key),
             )
@@ -414,6 +427,30 @@ async fn an_invalid_change_makes_no_operation_a_stale_base_conflicts_and_an_equa
         .await
         .expect("an equal change is answered");
     assert!(same.unchanged && same.accepted.is_none());
+    let current = api.detail(id).await.expect("detail").revision;
+    let stale_expected = Revision::saturating(current.get() + 7);
+    let mismatch = api
+        .apply_expecting(
+            id,
+            1,
+            settings_with(&view, json!({})),
+            Some(stale_expected),
+            &key(),
+        )
+        .await
+        .expect_err("an equal change with a stale expectedRevision is refused");
+    assert_eq!(mismatch.code(), "resource.revision_mismatch");
+    let fresh = api
+        .apply_expecting(
+            id,
+            1,
+            settings_with(&view, json!({})),
+            Some(current),
+            &key(),
+        )
+        .await
+        .expect("an equal change at the current revision is answered");
+    assert!(fresh.unchanged && fresh.accepted.is_none());
     assert_eq!(api.operations().await, before);
     let after = api.config(id).await.expect("config");
     assert_eq!(after.revision.number.get(), 1);

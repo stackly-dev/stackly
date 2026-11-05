@@ -29,6 +29,11 @@ struct ResourceStoreTests {
         /// Fetches that returned or threw, held ones included.
         var fetchesEnded = 0
         var sleeps: [Duration] = []
+        /// Whether the next `fetchOne` waits until ``openOne()``.
+        var holdNextOne = false
+        var oneGate: CheckedContinuation<Void, Never>?
+        /// The `fetchOne` calls that returned or threw.
+        var oneEnded = 0
 
         func fetch(_ token: PageToken?) async throws(ClientError) -> Page<Thing> {
             fetchCount += 1
@@ -48,6 +53,11 @@ struct ResourceStoreTests {
             gate?.resume()
             gate = nil
         }
+
+        func openOne() {
+            oneGate?.resume()
+            oneGate = nil
+        }
     }
 
     let script = Script()
@@ -59,6 +69,11 @@ struct ResourceStoreTests {
             fetchPage: { token throws(ClientError) in try await script.fetch(token) },
             fetchOne: { id throws(ClientError) in
                 script.fetchedOne.append(id)
+                defer { script.oneEnded += 1 }
+                if script.holdNextOne {
+                    script.holdNextOne = false
+                    await withCheckedContinuation { script.oneGate = $0 }
+                }
                 if script.oneFailures.isEmpty == false { throw script.oneFailures.removeFirst() }
                 return script.one[id]
             },
@@ -142,7 +157,37 @@ struct ResourceStoreTests {
         script.open()
         _ = await running.value
         #expect(store.items["a"] == nil)
-        #expect(store.tombstones.isEmpty)
+        #expect(store.tombstones["a"] == 5)
+    }
+
+    @Test func aRefetchThatAnswersAfterADeleteHeldBySnapshotDoesNotBringTheItemBack()
+        async throws
+    {
+        script.pages = [[Thing(id: "a", revision: 4, name: "a")]]
+        let store = makeStore()
+        await store.resnapshot()
+        // A refetch starts; its answer, read before the delete, waits.
+        script.one["a"] = Thing(id: "a", revision: 5, name: "before the delete")
+        script.holdNextOne = true
+        script.effects[1] = .refetch("a", revision: 5)
+        store.receive(Self.event(1))
+        while script.oneGate == nil { await Task.yield() }
+
+        // A snapshot runs, the delete arrives during it, and the snapshot still has the item.
+        script.holdNextFetch = true
+        let running = Task { await store.resnapshot() }
+        while script.gate == nil { await Task.yield() }
+        script.effects[2] = .delete("a", revision: 6)
+        store.receive(Self.event(2))
+        script.open()
+        _ = await running.value
+        #expect(store.items["a"] == nil)
+
+        script.openOne()
+        while script.oneEnded == 0 { await Task.yield() }
+        for _ in 0..<20 { await Task.yield() }
+        #expect(store.items["a"] == nil)
+        #expect(store.tombstones["a"] == 6)
     }
 
     @Test func aPatchForAnUnknownItemFetchesIt() async throws {

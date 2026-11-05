@@ -64,6 +64,29 @@ fn enqueue(inner: &Inner, handle: &OpHandle, keys: Vec<stackly_domain::LockKey>,
     });
 }
 
+/// Takes the recorded keys of an operation whose recovery could not be
+/// written, under its recorded state, so no other operation mutates its
+/// resource while the registry still shows it unfinished. The next restart
+/// recovers it again.
+fn keep_keys_unrecovered(inner: &Inner, record: &OpRecord) {
+    let id = record.operation.id();
+    tracing::error!(
+        operation_id = %id,
+        "the recovery of an operation could not be written; its keys stay held until restart"
+    );
+    let holder = LockHolder::Operation {
+        id,
+        state: record.operation.state(),
+    };
+    if let Err(busy) = inner.locks.try_take(&record.locks, holder) {
+        tracing::warn!(
+            operation_id = %id,
+            key = %busy.key,
+            "a key of an operation whose recovery failed is held twice"
+        );
+    }
+}
+
 /// Takes the keys of an operation in `needs_recovery`.
 fn hold_keys(inner: &Inner, record: &OpRecord) {
     let holder = LockHolder::Operation {
@@ -239,6 +262,8 @@ async fn recover_running(
         if parked {
             enqueue(inner, handle, record.locks.clone(), Job::Work(work));
             report.resumed += 1;
+        } else {
+            keep_keys_unrecovered(inner, record);
         }
         return;
     }
@@ -263,6 +288,8 @@ async fn recover_running(
     .await;
     if entered {
         settle_needs_recovery(inner, handle, record, report);
+    } else {
+        keep_keys_unrecovered(inner, record);
     }
 }
 
@@ -332,6 +359,7 @@ async fn close_interrupted(
     .await;
     if !closed {
         tracing::error!(operation_id = %id, "an interrupted operation could not be closed");
+        keep_keys_unrecovered(inner, record);
         return;
     }
     for ((other, guard), next) in waiters.iter_mut().zip(cleared) {
@@ -383,6 +411,8 @@ async fn recover_cancel_requested(
     .await;
     if entered {
         settle_needs_recovery(inner, handle, record, report);
+    } else {
+        keep_keys_unrecovered(inner, record);
     }
 }
 
@@ -414,6 +444,8 @@ async fn recover_queued(
         .await;
         if closed {
             inner.ops().remove(&id);
+        } else {
+            keep_keys_unrecovered(inner, record);
         }
         return;
     }
@@ -436,6 +468,8 @@ async fn recover_queued(
     if entered {
         hold_keys(inner, record);
         report.needs_recovery += 1;
+    } else {
+        keep_keys_unrecovered(inner, record);
     }
 }
 

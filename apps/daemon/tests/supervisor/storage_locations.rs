@@ -17,7 +17,7 @@ use stackly_protocol::settings::{
 use stackly_protocol::{Call, ErrorBody, Reply, Revision};
 
 use super::settings::{settings_of, stop_daemon};
-use crate::support::{Api, Site, fast_with_catalog, key};
+use crate::support::{Api, Site, fast, fast_with_catalog, key};
 
 async fn set_location(
     api: &Api,
@@ -240,6 +240,37 @@ async fn every_rule_that_a_real_folder_can_break_is_refused_with_its_code_and_no
     );
 
     assert_eq!(settings_of(&api).await, before, "nothing was written");
+    drop(api);
+    stop_daemon(daemon).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_in_a_protected_folder_of_the_home_the_daemon_was_given_is_refused() {
+    // covers: AC-19
+    let site = Site::new();
+    let home = folder(&site, "home");
+    let mut config = fast();
+    config.home = Some(home.clone());
+    let daemon = site.start_with(config).await;
+    let api = site.api().await;
+    let documents = folder(&site, "home/Documents");
+    let inside = folder(&site, "home/Documents/stackly");
+    let outside = folder(&site, "home/Work");
+    assert!(documents.is_dir());
+
+    let refused = set_location(&api, LocationKind::Data, path_target(&inside), &key())
+        .await
+        .expect_err("a folder inside Documents is refused");
+    assert_eq!(refused.code(), "storage.location_invalid");
+    let rule = refused
+        .details()
+        .iter()
+        .find(|detail| detail.key() == "rule")
+        .map(|detail| detail.value().to_owned());
+    assert_eq!(rule.as_deref(), Some("protected_folder"));
+    set_location(&api, LocationKind::Data, path_target(&outside), &key())
+        .await
+        .expect("a folder elsewhere in the home is taken");
     drop(api);
     stop_daemon(daemon).await;
 }

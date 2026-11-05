@@ -133,7 +133,7 @@ fn render_artifact(out: &mut HumanWriter, artifact: &ArtifactInfo) {
             "Artifact",
             Cell::text(artifact.catalog_id.as_deref().unwrap_or_default()),
         ),
-        ("Digest", Cell::fixed(format!("sha256:{}", artifact.sha256))),
+        ("Digest", Cell::text(&format!("sha256:{}", artifact.sha256))),
         ("Download", Cell::fixed(size(artifact.size))),
         ("Unpacked", Cell::fixed(size(artifact.unpacked_size))),
         (
@@ -211,7 +211,7 @@ fn render_compatibility(out: &mut HumanWriter, records: &[CompatibilityRecordVie
             vec![
                 Cell::fixed(wire_name(&record.scope)),
                 Cell::fixed(wire_name(&record.result)),
-                Cell::fixed(format!(
+                Cell::text(&format!(
                     "macOS {} {}",
                     record.os_version,
                     wire_name(&record.arch)

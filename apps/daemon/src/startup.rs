@@ -301,6 +301,15 @@ mod imp {
                 return EXIT_START_FAILED;
             }
         };
+        // The home folder for the protected folder rule of storage
+        // locations, from the user database like the roots, never `HOME`.
+        let home = match MacosPlatform::home_dir() {
+            Ok(home) => home,
+            Err(error) => {
+                tracing::error!(error = %error, "cannot resolve the home directory");
+                return EXIT_START_FAILED;
+            }
+        };
         // Who started the daemon, and the app bundle it runs from. The
         // executable path is made canonical so a symlink into the bundle
         // still finds it; a path that cannot be resolved is no bundle.
@@ -446,7 +455,11 @@ mod imp {
             .with_catalog_location(catalog)
             .with_redactor(Arc::clone(redactor))
             .with_secret_target(Some(secret_target))
-            .with_secret_worker(worker);
+            .with_secret_worker(worker)
+            .with_config(server::DaemonConfig {
+                home: Some(home),
+                ..server::DaemonConfig::default()
+            });
         let code = runtime.block_on(serve(deps, &mut signals));
         // Blocking tasks (a registry close, a prune) get a moment to end.
         runtime.shutdown_timeout(RUNTIME_SHUTDOWN);

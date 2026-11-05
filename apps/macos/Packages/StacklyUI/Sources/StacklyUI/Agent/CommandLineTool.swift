@@ -139,6 +139,8 @@ nonisolated final class CommandLineTool: CommandLineToolControlling {
     }
 
     @concurrent func remove() async throws(CommandLineToolError) {
+        try checkFolder(binFolder)
+        try checkFolder(manFolder)
         if Self.isLink(commandLink), Self.isManagedCommand(Self.target(of: commandLink)) {
             try delete(commandLink)
         }
@@ -170,15 +172,38 @@ nonisolated final class CommandLineTool: CommandLineToolControlling {
         (try? FileManager.default.destinationOfSymbolicLink(atPath: path.path)) ?? ""
     }
 
-    /// A folder that exists (or is a link to one) must belong to the user and not be writable
-    /// by the group or others; a folder that does not exist is fine.
+    /// Every folder from below the home down to `folder` that exists (or is a link to one)
+    /// must belong to the user and not be writable by the group or others, and a link must
+    /// belong to the user too, so nobody else can swap a folder on the way to the links; a
+    /// folder that does not exist is fine, and so is everything under it.
     private func checkFolder(_ folder: URL) throws(CommandLineToolError) {
-        var info = stat()
-        guard stat(folder.path, &info) == 0 else { return }
-        let others = mode_t(S_IWGRP | S_IWOTH)
-        guard info.st_uid == getuid(), info.st_mode & others == 0 else {
+        let root = home.pathComponents
+        let parts = folder.pathComponents
+        guard parts.count > root.count, Array(parts.prefix(root.count)) == root else {
             throw .folderNotSafe(path: display(folder))
         }
+        var current = home
+        for part in parts.dropFirst(root.count) {
+            current = current.appending(path: part)
+            guard try checkComponent(current) else { return }
+        }
+    }
+
+    /// Checks one folder of ``checkFolder(_:)``, and says whether it exists.
+    private func checkComponent(_ path: URL) throws(CommandLineToolError) -> Bool {
+        var info = stat()
+        guard lstat(path.path, &info) == 0 else { return false }
+        let others = mode_t(S_IWGRP | S_IWOTH)
+        if info.st_mode & S_IFMT == S_IFLNK {
+            // A link to a folder is allowed, but the link and the folder must both be the
+            // user's. A dangling link is a folder that does not exist.
+            guard info.st_uid == getuid() else { throw .folderNotSafe(path: display(path)) }
+            guard stat(path.path, &info) == 0 else { return false }
+        }
+        guard info.st_uid == getuid(), info.st_mode & others == 0 else {
+            throw .folderNotSafe(path: display(path))
+        }
+        return true
     }
 
     private func makeFolder(_ folder: URL) throws(CommandLineToolError) {
@@ -209,11 +234,11 @@ nonisolated final class CommandLineTool: CommandLineToolControlling {
         }
     }
 
+    /// Deletes the link at `path` with `unlink(2)`, which never removes a folder, so a link
+    /// swapped for a folder is never deleted with its contents.
     private func delete(_ path: URL) throws(CommandLineToolError) {
-        do {
-            try FileManager.default.removeItem(at: path)
-        } catch {
-            throw .io(path: display(path), reason: error.localizedDescription)
+        guard unlink(path.path) == 0 || errno == ENOENT else {
+            throw .io(path: display(path), reason: String(cString: strerror(errno)))
         }
     }
 

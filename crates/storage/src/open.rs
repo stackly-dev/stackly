@@ -685,7 +685,7 @@ impl Opener<'_> {
             snapshot = %snapshot.path.display(),
             "registry migrated"
         );
-        self.prune_snapshots();
+        self.prune_snapshots(&snapshot.path);
         Ok((conn, snapshot.path))
     }
 
@@ -745,6 +745,12 @@ impl Opener<'_> {
         if snapshot.schema_version != from {
             return None;
         }
+        // Only a file this code could have taken counts as a snapshot.
+        let snapshots_dir = self.layout.registry_snapshots_dir();
+        if snapshot.path.parent() != Some(snapshots_dir.as_path()) {
+            return None;
+        }
+        snapshot::SnapshotName::parse(snapshot.path.file_name()?.to_str()?)?;
         let current = context.registry_files().ok()?;
         if !same_contents(&latest.files, &current) {
             return None;
@@ -753,7 +759,10 @@ impl Opener<'_> {
         (sha256 == snapshot.sha256).then_some(snapshot)
     }
 
-    fn prune_snapshots(&self) {
+    /// Deletes old snapshots, keeping every one a recovery report names and
+    /// `current`, the snapshot of this open, even when a clock that moved
+    /// back makes it sort oldest.
+    fn prune_snapshots(&self, current: &Path) {
         let reports = match self.report_context().reports() {
             Ok(reports) => reports,
             Err(err) => {
@@ -761,7 +770,7 @@ impl Opener<'_> {
                 return;
             }
         };
-        let mut protected = HashSet::new();
+        let mut protected = HashSet::from([current.to_path_buf()]);
         for (path, report) in reports {
             let Some(report) = report else {
                 tracing::warn!(

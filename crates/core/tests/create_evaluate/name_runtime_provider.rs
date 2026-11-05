@@ -182,6 +182,37 @@ fn provider_problems_are_one_error_row_and_hide_the_rows_that_depend_on_the_pack
 }
 
 #[test]
+fn a_pinned_revision_of_a_dot_dot_dot_or_a_nul_is_provider_not_found() {
+    let site = Site::new();
+    for revision in [".", "..", "", "a\0b", "a/b"] {
+        let mut draft = site.draft("orders");
+        draft.provider = ProviderChoice {
+            name: site.package.key().provider().to_string(),
+            revision: Some(revision.to_owned()),
+        };
+        let evaluation = site.evaluate(&draft);
+        assert_eq!(
+            error_codes(&evaluation),
+            ["instance.provider_not_found"],
+            "{revision:?}"
+        );
+    }
+    for provider in ["./fake", "official/."] {
+        let mut draft = site.draft("orders");
+        draft.provider = ProviderChoice {
+            name: provider.to_owned(),
+            revision: Some(site.package.key().revision().to_string()),
+        };
+        let evaluation = site.evaluate(&draft);
+        assert_eq!(
+            error_codes(&evaluation),
+            ["instance.provider_not_found"],
+            "{provider:?}"
+        );
+    }
+}
+
+#[test]
 fn a_catalog_that_is_not_loaded_is_catalog_unavailable_without_a_field_issue() {
     let mut site = Site::new();
     site.catalog = CatalogState::NotConfigured;

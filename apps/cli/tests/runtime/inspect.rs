@@ -88,3 +88,46 @@ fn an_unknown_runtime_exits_10_and_a_bad_id_exits_2() {
     );
     ev.pass();
 }
+
+/// Spec 0008 AC-3: daemon strings are escaped on a terminal.
+#[test]
+fn the_artifact_digest_and_the_tested_macos_version_are_escaped() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "runtime inspect escapes control characters in the artifact digest and in the macOS version of a compatibility record",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let mut detail = data::detail();
+    detail
+        .artifact
+        .as_mut()
+        .expect("the fixture holds an artifact")
+        .sha256 = "ab\u{1b}[2Jcd".to_owned();
+    let record = detail
+        .compatibility
+        .first_mut()
+        .expect("the fixture holds a compatibility record");
+    record.os_version = "27.0\u{1b}]0;x\u{7}".to_owned();
+    let daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+        Call::RuntimeGet(_) => vec![Step::Reply(Reply::RuntimeGet(Box::new(detail.clone())))],
+        _ => Vec::new(),
+    });
+
+    let text = run(root.path(), &["runtime", "inspect", ID]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    assert!(!text.stdout.contains('\u{1b}'), "{}", text.stdout);
+    assert!(
+        text.stdout.contains("sha256:ab\\u{1b}[2Jcd"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout.contains("macOS 27.0\\u{1b}]0;x\\u{7}"),
+        "{}",
+        text.stdout
+    );
+    drop(daemon);
+    ev.pass();
+}

@@ -56,6 +56,7 @@ public final class OpenInModel {
     @ObservationIgnored private let locator: AppLocator
     @ObservationIgnored private let opener: WorkspaceOpener
     @ObservationIgnored private let fileExists: (String) -> Bool
+    @ObservationIgnored private let isRegularFile: (String) -> Bool
     @ObservationIgnored private let prepareTerminal:
         @Sendable (UUID, String) async throws(ClientError) -> String
     @ObservationIgnored private let secrets: SecretsClient
@@ -66,6 +67,8 @@ public final class OpenInModel {
     ///   - locator: Finds installed applications.
     ///   - opener: Opens URLs and files.
     ///   - fileExists: Whether a path exists, for `reveal`.
+    ///   - isRegularFile: Whether a path is a regular file and not a symlink, for the script
+    ///     of a `terminal` action.
     ///   - prepareTerminal: `instance.prepare_terminal`, returning the script path.
     ///   - secrets: The secret methods, for `secret.reveal { purpose: copy }`.
     ///   - pasteboard: Where a password goes.
@@ -73,6 +76,7 @@ public final class OpenInModel {
         locator: AppLocator = WorkspaceAppLocator(),
         opener: WorkspaceOpener = SystemWorkspaceOpener(),
         fileExists: @escaping (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        isRegularFile: @escaping (String) -> Bool = OpenInPorts.isRegularFile,
         prepareTerminal: @escaping @Sendable (UUID, String) async throws(ClientError) -> String,
         secrets: SecretsClient,
         pasteboard: ConcealedPasteboard = .shared
@@ -80,6 +84,7 @@ public final class OpenInModel {
         self.locator = locator
         self.opener = opener
         self.fileExists = fileExists
+        self.isRegularFile = isRegularFile
         self.prepareTerminal = prepareTerminal
         self.secrets = secrets
         self.pasteboard = pasteboard
@@ -210,7 +215,9 @@ public final class OpenInModel {
             return await openTerminal(
                 action, summary: summary, detail: detail, enterSecret: enterSecret, reload: reload)
         case .browser:
-            guard let text = action.url, let url = URL(string: text) else {
+            guard let text = action.url, let url = URL(string: text),
+                let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https"
+            else {
                 return couldNotOpen(action, OpenInFailure.invalidTarget)
             }
             do {
@@ -261,19 +268,35 @@ public final class OpenInModel {
             reload()
             return prepareFailure(action, error.body)
         }
+        guard let file = terminalScript(script) else {
+            return couldNotOpen(action, OpenInFailure.invalidTarget)
+        }
         guard let terminal = locator.applicationURL(forBundleIdentifier: Self.terminalBundleID)
         else {
             return couldNotOpen(action, OpenInFailure.applicationMissing)
         }
         let copied = await copyPassword(action, detail: detail)
         do {
-            try await opener.open(URL(fileURLWithPath: script), withApplicationAt: terminal)
+            try await opener.open(file, withApplicationAt: terminal)
         } catch {
             return couldNotOpen(action, error)
         }
         return opened(
             "Opening \(action.title) for “\(summary.name)” in Terminal.", title: action.title,
             copied: copied, enterSecret: enterSecret)
+    }
+
+    /// The script `instance.prepare_terminal` returned, or `nil` when it is not one the daemon
+    /// writes: an absolute path to a regular file (not a symlink) named `open-<action>.command`.
+    /// A buggy or impersonated daemon cannot make Terminal open anything else.
+    func terminalScript(_ path: String) -> URL? {
+        guard path.hasPrefix("/") else { return nil }
+        let file = URL(fileURLWithPath: path)
+        let name = file.lastPathComponent
+        guard name.hasPrefix("open-"), name.hasSuffix(".command"),
+            name.count > "open-.command".count, isRegularFile(file.path)
+        else { return nil }
+        return file
     }
 
     /// How the copy of the password went.
@@ -295,10 +318,13 @@ public final class OpenInModel {
         if detail.secrets.first(where: { $0.reference == secret.reference })?.status == .missing {
             return .unavailable(Self.need(secret.reference, reason: .missing))
         }
+        let asked = pasteboard.changeCount
         do throws(ClientError) {
             let revealed = try await secrets.revealSecret(
                 reference: secret.reference, purpose: .copy)
-            pasteboard.copy(revealed.value)
+            guard pasteboard.copy(revealed.value, unlessChangedSince: asked) else {
+                return .failed("Not copied because the clipboard changed.")
+            }
             return .copied
         } catch {
             switch error.body.code {

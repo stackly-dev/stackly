@@ -85,6 +85,40 @@ async fn an_operation_interrupted_in_a_repeatable_step_resumes_after_a_restart()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_recovery_the_registry_refuses_to_record_keeps_the_keys_of_the_operation() {
+    let harness = Harness::new().await;
+    let runtime = RuntimeId::generate();
+    let stuck = HoldHandle::new();
+    let mut begin = request(
+        OperationKind::InstallRuntime,
+        OperationResource::Runtime(runtime),
+        ScriptedWork::new().step("download").hold(&stuck).boxed(),
+    );
+    begin.creates_resource = true;
+    let id = harness.begin(begin).await;
+    stuck.started().await;
+
+    let (engine, _) = harness.restarted(fast());
+    harness
+        .registry
+        .fail_next_commit(stackly_domain::RegistryError::InvalidQuery {
+            reason: "a test refuses the recovery write",
+        });
+    engine.recover().await.unwrap();
+
+    assert_eq!(
+        engine
+            .locks()
+            .holder(&LockKey::for_resource(OperationResource::Runtime(runtime))),
+        Some(stackly_core::operation::LockHolder::Operation {
+            id,
+            state: OperationState::Running,
+        }),
+        "the resource stays locked while the registry still shows the operation running"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_interrupted_operation_that_cannot_resume_is_compensated_or_needs_recovery() {
     let harness = Harness::new().await;
     let before = HoldHandle::new();

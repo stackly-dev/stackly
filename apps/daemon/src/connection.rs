@@ -168,6 +168,9 @@ impl std::fmt::Debug for Conn {
 struct SubscriptionTable {
     next_id: u32,
     active: HashMap<u32, Slot>,
+    /// Set once the connection ended its subscriptions: a request still
+    /// running gets no new one, so nothing outlives the connection.
+    closing: bool,
 }
 
 /// A subscription whose reply is being queued, or whose forwarder runs.
@@ -227,6 +230,7 @@ impl Conn {
             subscriptions: Mutex::new(SubscriptionTable {
                 next_id: 1,
                 active: HashMap::new(),
+                closing: false,
             }),
         }
     }
@@ -321,19 +325,29 @@ impl Conn {
     }
 
     /// Takes the next subscription ID for `kind`, under the one limit
-    /// event subscriptions and log follows share.
+    /// event subscriptions and log follows share. A closing connection,
+    /// and one that used every ID, get no new subscription, so a running
+    /// slot is never overwritten.
     fn reserve(&self, kind: Kind) -> Result<u32, Box<ErrorBody>> {
         let mut table = lock(&self.subscriptions);
-        if table.active.len() >= MAX_SUBSCRIPTIONS as usize {
-            let error = ErrorBody::new(
-                &events::TOO_MANY_SUBSCRIPTIONS,
-                "the connection holds the most subscriptions it may",
-            )
-            .with_detail("max", MAX_SUBSCRIPTIONS.to_string());
+        // No new error code: a closing connection, and one past the last
+        // ID, are refused like a full one, each with its own message.
+        let refusal = if table.closing {
+            Some("the connection is closing, so it takes no new subscription")
+        } else if table.active.len() >= MAX_SUBSCRIPTIONS as usize {
+            Some("the connection holds the most subscriptions it may")
+        } else {
+            None
+        };
+        let next = table.next_id.checked_add(1);
+        let (None, Some(next)) = (refusal, next) else {
+            let message = refusal.unwrap_or("the connection used every subscription id");
+            let error = ErrorBody::new(&events::TOO_MANY_SUBSCRIPTIONS, message)
+                .with_detail("max", MAX_SUBSCRIPTIONS.to_string());
             return Err(Box::new(error));
-        }
+        };
         let id = table.next_id;
-        table.next_id = table.next_id.saturating_add(1);
+        table.next_id = next;
         table.active.insert(id, Slot::Reserved(kind));
         Ok(id)
     }
@@ -419,12 +433,60 @@ impl Conn {
         }
     }
 
+    /// Ends every subscription and refuses new ones from requests that
+    /// still run.
     fn end_subscriptions(&self) {
-        for (_, slot) in lock(&self.subscriptions).active.drain() {
+        let mut table = lock(&self.subscriptions);
+        table.closing = true;
+        for (_, slot) in table.active.drain() {
             if let Slot::Running(task, _) | Slot::Log(task) = slot {
                 task.abort();
             }
         }
+    }
+}
+
+/// Frees a reserved `requestId` when it drops, so a panic while a request
+/// runs never leaves the ID taken for the life of the connection.
+struct ReleaseId {
+    conn: Arc<Conn>,
+    request_id: String,
+}
+
+impl ReleaseId {
+    fn new(conn: &Arc<Conn>, request_id: &str) -> Self {
+        Self {
+            conn: Arc::clone(conn),
+            request_id: request_id.to_owned(),
+        }
+    }
+}
+
+impl Drop for ReleaseId {
+    fn drop(&mut self) {
+        self.conn.release_id(&self.request_id);
+    }
+}
+
+/// What an admitted request holds until it ends: its `requestId`, its
+/// place under the in flight limit, and its place in the drain, freed in
+/// that order.
+struct Admitted {
+    release: ReleaseId,
+    permit: OwnedSemaphorePermit,
+    guard: DrainGuard,
+}
+
+impl Admitted {
+    fn finish(self) {
+        let Self {
+            release,
+            permit,
+            guard,
+        } = self;
+        drop(release);
+        drop(permit);
+        drop(guard);
     }
 }
 
@@ -736,8 +798,7 @@ async fn on_frame(
     };
     let method = request.call.method();
     let repeated = matches!(request.call, Call::DaemonHandshake(_));
-    let Some((permit, guard)) =
-        admit(conn, core, &request.request_id, method, repeated, received).await
+    let Some(admitted) = admit(conn, core, &request.request_id, method, repeated, received).await
     else {
         return;
     };
@@ -746,8 +807,7 @@ async fn on_frame(
         Arc::clone(core),
         Arc::clone(handlers),
         request,
-        permit,
-        guard,
+        admitted,
         received,
     ));
 }
@@ -763,7 +823,7 @@ async fn admit(
     method: &'static str,
     repeated_handshake: bool,
     received: Instant,
-) -> Option<(OwnedSemaphorePermit, DrainGuard)> {
+) -> Option<Admitted> {
     // Counted before the stop check, so a stop either sees this request in
     // the drain or this request sees the stop (spec 0006, *Berhenti*).
     let guard = core.drain().enter();
@@ -790,9 +850,11 @@ async fn admit(
         reply_error(conn, request_id.to_owned(), method, received, error).await;
         return None;
     }
+    // From here on the reserved ID is freed however the request ends.
+    let release = ReleaseId::new(conn, request_id);
     let Ok(permit) = Arc::clone(&conn.permits).try_acquire_owned() else {
         drop(guard);
-        conn.release_id(request_id);
+        drop(release);
         let error = ErrorBody::new(
             &request::TOO_MANY_IN_FLIGHT,
             "the connection runs the most requests it may at once",
@@ -801,7 +863,11 @@ async fn admit(
         reply_error(conn, request_id.to_owned(), method, received, error).await;
         return None;
     };
-    Some((permit, guard))
+    Some(Admitted {
+        release,
+        permit,
+        guard,
+    })
 }
 
 async fn reply_error(
@@ -831,8 +897,7 @@ async fn run_request(
     core: Arc<DaemonCore>,
     handlers: Arc<dyn Handlers>,
     request: Request,
-    permit: OwnedSemaphorePermit,
-    guard: DrainGuard,
+    admitted: Admitted,
     received: Instant,
 ) {
     let Request {
@@ -911,9 +976,7 @@ async fn run_request(
             "the reply was dropped: the connection is gone",
         );
     }
-    conn.release_id(&request_id);
-    drop(permit);
-    drop(guard);
+    admitted.finish();
 }
 
 /// The answer to a method the daemon does not serve right now: while the
@@ -1517,8 +1580,7 @@ async fn on_starting(
             .await;
         return;
     }
-    let Some((permit, guard)) = admit(conn, core, &frame.request_id, method, false, received).await
-    else {
+    let Some(admitted) = admit(conn, core, &frame.request_id, method, false, received).await else {
         return;
     };
     tokio::spawn(run_starting(
@@ -1526,8 +1588,7 @@ async fn on_starting(
         Arc::clone(core),
         starting,
         frame,
-        permit,
-        guard,
+        admitted,
         received,
     ));
 }
@@ -1542,8 +1603,7 @@ async fn run_starting(
     core: Arc<DaemonCore>,
     starting: Arc<dyn TestStartingMethod>,
     frame: StartingFrame,
-    permit: OwnedSemaphorePermit,
-    guard: DrainGuard,
+    admitted: Admitted,
     received: Instant,
 ) {
     let method = starting.method();
@@ -1608,16 +1668,21 @@ async fn run_starting(
         operation_id,
     );
     let _ = conn.enqueue_bytes(bytes).await;
-    conn.release_id(&request_id);
-    drop(permit);
-    drop(guard);
+    admitted.finish();
 }
 
 /// Forwards one subscription's events to the outbound queue, recording
 /// the last sequence queued so the flush at stop can wait for
 /// `daemon.shutting_down` to be queued.
 async fn forward(conn: Arc<Conn>, mut subscription: BusSubscription, queued: Arc<AtomicU64>) {
-    while let Some(event) = subscription.next().await {
+    loop {
+        let next = tokio::select! {
+            () = conn.closed() => break,
+            next = subscription.next() => next,
+        };
+        let Some(event) = next else {
+            break;
+        };
         let sequence = event.sequence.get();
         if conn.enqueue(&ServerFrame::Event(event)).await.is_err() {
             break;
@@ -1633,7 +1698,13 @@ async fn forward(conn: Arc<Conn>, mut subscription: BusSubscription, queued: Arc
 async fn forward_log(conn: Arc<Conn>, mut follow: LogFollow) {
     let id = follow.subscription_id();
     loop {
-        let (frame, last) = match follow.next().await {
+        // An idle instance may give no frame for a long time, so the
+        // wait ends with the connection.
+        let next = tokio::select! {
+            () = conn.closed() => break,
+            next = follow.next() => next,
+        };
+        let (frame, last) = match next {
             FollowNext::Frame(frame) => (frame, false),
             FollowNext::Ended(frame) => (frame, true),
         };
@@ -1815,6 +1886,57 @@ mod tests {
 
         assert_eq!(read.idempotency_key, None);
         assert_eq!(read.params, None);
+    }
+
+    fn conn() -> Arc<Conn> {
+        let (tx, _rx) = mpsc::channel(1);
+        Arc::new(Conn::new(1, PeerCred::new(501, None), tx))
+    }
+
+    #[test]
+    fn the_last_subscription_id_is_refused_instead_of_overwriting_a_running_slot() {
+        let conn = conn();
+        lock(&conn.subscriptions).next_id = u32::MAX - 1;
+
+        let last = conn.reserve(Kind::Events).unwrap();
+        let refused = conn.reserve(Kind::Log).unwrap_err();
+
+        assert_eq!(last, u32::MAX - 1);
+        assert!(refused.is(&events::TOO_MANY_SUBSCRIPTIONS));
+        let table = lock(&conn.subscriptions);
+        assert_eq!(table.active.len(), 1);
+        assert!(matches!(
+            table.active.get(&last),
+            Some(Slot::Reserved(Kind::Events))
+        ));
+    }
+
+    #[test]
+    fn a_connection_that_ended_its_subscriptions_takes_no_new_one() {
+        let conn = conn();
+        let before = conn.reserve(Kind::Log).unwrap();
+
+        conn.end_subscriptions();
+        let refused = conn.reserve(Kind::Events).unwrap_err();
+
+        assert!(refused.is(&events::TOO_MANY_SUBSCRIPTIONS));
+        assert!(lock(&conn.subscriptions).active.is_empty());
+        assert!(conn.unsubscribe(before, Kind::Log).is_err());
+    }
+
+    #[test]
+    fn a_dropped_release_guard_frees_the_request_id_even_on_a_panic() {
+        let conn = conn();
+        assert!(conn.reserve_id("r-1"));
+        let guard = ReleaseId::new(&conn, "r-1");
+
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let _guard = guard;
+            panic!("a handler step panics");
+        }));
+
+        assert!(unwound.is_err());
+        assert!(conn.reserve_id("r-1"), "the id is free again");
     }
 
     #[test]

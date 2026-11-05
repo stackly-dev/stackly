@@ -101,6 +101,14 @@ pub(crate) async fn adopt_process(sup: &Supervisor, adoption: Adoption) -> bool 
         lose_identity(sup, id, &identity).await;
         return false;
     }
+    if !still_proven(sup, &identity).await {
+        // The PID was reused between the proof and the watch, so the exit
+        // watcher may follow another process.
+        tracing::warn!(instance = %id, "a proven process changed before its exit was watched");
+        finish_process(sup, &actor, generation, Vec::new());
+        lose_identity(sup, id, &identity).await;
+        return false;
+    }
     spawn_exit_task(sup, Arc::clone(&actor), generation, exit_rx);
     match probe_plans(sup, id).await {
         Some((readiness, health)) => {
@@ -119,6 +127,20 @@ pub(crate) async fn adopt_process(sup: &Supervisor, adoption: Adoption) -> bool 
         }
     }
     true
+}
+
+/// Reads the process at the PID of `identity` again once its exit is
+/// watched. Returns false when a process with another start time now holds
+/// the PID or the read fails. A process that is gone is still proven: the
+/// watch was armed on it, so its exit is on the way.
+async fn still_proven(sup: &Supervisor, identity: &ProcessIdentity) -> bool {
+    let platform = sup.deps().platform.clone();
+    let pid = identity.pid;
+    match blocking(move || platform.processes().inspect(pid)).await {
+        Ok(Ok(Some(facts))) => facts.start == identity.start,
+        Ok(Ok(None)) => true,
+        _ => false,
+    }
 }
 
 /// Builds the readiness and health plans of the instance's pinned package

@@ -554,3 +554,86 @@ fn a_version_8_registry_migrates_to_empty_restart_plan_tables_that_hold_one_open
         .unwrap();
     assert_eq!(left, 0, "the instance rows go with their plan");
 }
+
+#[test]
+fn a_snapshot_taken_after_the_clock_moved_back_survives_pruning() {
+    let harness = Harness::new();
+    harness.create();
+    let base = latest();
+    for step in 1..=3_u32 {
+        harness.fake.clock().advance(SignedDuration::from_hours(1));
+        let set = extended_set(&chain(step));
+        let (registry, _) = ready(harness.open_with(&OpenOptions::new().with_migrations(set)));
+        drop(registry);
+    }
+    harness
+        .fake
+        .clock()
+        .advance(SignedDuration::from_hours(-10));
+
+    let set = extended_set(&chain(4));
+    let (registry, summary) = ready(harness.open_with(&OpenOptions::new().with_migrations(set)));
+    drop(registry);
+
+    assert_eq!(summary.migrated_from, Some(base + 3));
+    let snapshot = summary.snapshot.expect("a migration takes a snapshot");
+    assert!(
+        snapshot.exists(),
+        "the snapshot of this migration is kept: {}",
+        snapshot.display()
+    );
+    assert_eq!(harness.snapshots().len(), 4);
+}
+
+/// Leaves a failed migration's report behind, then rewrites the report so
+/// it names a verified copy of its snapshot at `forged`.
+fn forge_report_snapshot(harness: &Harness, forged: &std::path::Path) {
+    let report = recovery(harness.open_with(&OpenOptions::new().with_migrations(failing_set())));
+    let snapshot = report.snapshot.expect("the report names the snapshot");
+    fs::copy(&snapshot.path, forged).expect("the snapshot can be copied");
+    let bytes = fs::read(&report.path).expect("the report can be read");
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).expect("the report is JSON");
+    let forged = forged.to_str().expect("the test root path is UTF-8");
+    json["snapshot"]["path"] = serde_json::Value::from(forged);
+    let bytes = serde_json::to_vec_pretty(&json).expect("the report encodes");
+    fs::write(&report.path, bytes).expect("the report can be rewritten");
+}
+
+#[test]
+fn a_report_naming_a_snapshot_outside_the_snapshot_folder_is_not_reused() {
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(latest()));
+    let forged = harness.layout.registry_dir().join("forged.sqlite");
+    forge_report_snapshot(&harness, &forged);
+    harness.fake.clock().advance(SignedDuration::from_hours(1));
+
+    let options = OpenOptions::new().with_migrations(extended_set(&[rebuild()]));
+    let (registry, summary) = ready(harness.open_with(&options));
+    drop(registry);
+
+    let snapshot = summary.snapshot.expect("a migration takes a snapshot");
+    assert_ne!(snapshot, forged);
+    assert_eq!(
+        snapshot.parent(),
+        Some(harness.layout.registry_snapshots_dir().as_path())
+    );
+}
+
+#[test]
+fn a_report_naming_a_snapshot_with_a_foreign_file_name_is_not_reused() {
+    let harness = Harness::new();
+    harness.load_fixture(&fixture(latest()));
+    let forged = harness
+        .layout
+        .registry_snapshots_dir()
+        .join("not-a-snapshot.sqlite");
+    forge_report_snapshot(&harness, &forged);
+    harness.fake.clock().advance(SignedDuration::from_hours(1));
+
+    let options = OpenOptions::new().with_migrations(extended_set(&[rebuild()]));
+    let (registry, summary) = ready(harness.open_with(&options));
+    drop(registry);
+
+    let snapshot = summary.snapshot.expect("a migration takes a snapshot");
+    assert_ne!(snapshot, forged);
+}

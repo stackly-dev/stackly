@@ -40,6 +40,13 @@ public actor DaemonConnection {
     /// The type of every event stream.
     public typealias EventStream = AsyncThrowingStream<DecodedFrame, any Error>
 
+    /// The live end of one event stream, and the token that tells it apart
+    /// from a later subscription under the same ID.
+    private struct Subscription {
+        let continuation: EventStream.Continuation
+        let token: UInt64
+    }
+
     private let channel: SocketChannel
     private let logger = Logger(subsystem: "com.ojiepermana.stackly", category: "client")
     private var phase = Phase.handshaking
@@ -55,7 +62,10 @@ public actor DaemonConnection {
     private var abandoned: [String] = []
     /// Request IDs whose time ran out before they reached a slot.
     private var expired: Set<String> = []
-    private var subscriptions: [UInt32: EventStream.Continuation] = [:]
+    private var subscriptions: [UInt32: Subscription] = [:]
+    /// The token the next subscription takes, so a stream that ends removes
+    /// only its own entry and never a later one under the same ID.
+    private var nextSubscriptionToken: UInt64 = 0
     /// Streams made when a subscribe reply arrived, before the caller takes
     /// them, so no event can arrive without a stream.
     private var newStreams: [UInt32: EventStream] = [:]
@@ -209,7 +219,7 @@ public actor DaemonConnection {
         _ subscriptionId: UInt32,
         options: CallOptions = .standard
     ) async throws(ClientError) {
-        subscriptions.removeValue(forKey: subscriptionId)?.finish()
+        subscriptions.removeValue(forKey: subscriptionId)?.continuation.finish()
         _ = try await call(
             .instanceLogsUnfollow(LogsUnfollowParams(subscriptionId: subscriptionId)),
             options: options)
@@ -454,11 +464,11 @@ public actor DaemonConnection {
         case .error(let errorFrame):
             resolve(errorFrame)
         case .event(let event):
-            subscriptions[event.subscriptionId]?.yield(frame)
+            subscriptions[event.subscriptionId]?.continuation.yield(frame)
         case .skipped(let subscriptionId, _, _):
-            subscriptions[subscriptionId]?.yield(frame)
+            subscriptions[subscriptionId]?.continuation.yield(frame)
         case .log(let log):
-            subscriptions[log.subscriptionId]?.yield(frame)
+            subscriptions[log.subscriptionId]?.continuation.yield(frame)
         }
     }
 
@@ -485,7 +495,18 @@ public actor DaemonConnection {
             }
         if let subscriptionId {
             let (stream, continuation) = EventStream.makeStream()
-            subscriptions[subscriptionId] = continuation
+            let token = nextSubscriptionToken
+            nextSubscriptionToken &+= 1
+            // A stream its consumer dropped or cancelled stops buffering
+            // frames; the daemon's subscription stays until the connection
+            // ends or the caller unsubscribes.
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.dropSubscription(subscriptionId, token: token) }
+            }
+            // A reused ID ends the earlier stream rather than leaving its
+            // consumer waiting until the connection closes.
+            subscriptions[subscriptionId]?.continuation.finish()
+            subscriptions[subscriptionId] = Subscription(continuation: continuation, token: token)
             newStreams[subscriptionId] = stream
         }
         if phase == .handshaking, case .daemonHandshake(let accepted) = response.reply {
@@ -493,6 +514,17 @@ public actor DaemonConnection {
         }
         entry.continuation.resume(returning: .success(response.reply))
     }
+
+    /// Forgets the subscription `subscriptionId` if it is still the one that
+    /// took `token`, after its stream ended.
+    private func dropSubscription(_ subscriptionId: UInt32, token: UInt64) {
+        guard subscriptions[subscriptionId]?.token == token else { return }
+        subscriptions[subscriptionId] = nil
+        newStreams[subscriptionId] = nil
+    }
+
+    /// The number of subscriptions still delivering frames, for tests.
+    var activeSubscriptionCount: Int { subscriptions.count }
 
     private func resolve(_ errorFrame: ErrorFrame) {
         guard let requestId = errorFrame.requestId else {
@@ -539,8 +571,8 @@ public actor DaemonConnection {
             waiter.continuation.resume(returning: .failure(.notSent(body)))
         }
         slotWaiters.removeAll()
-        for continuation in subscriptions.values {
-            continuation.finish(throwing: ClientError.outcomeUnknown(reason))
+        for subscription in subscriptions.values {
+            subscription.continuation.finish(throwing: ClientError.outcomeUnknown(reason))
         }
         subscriptions.removeAll()
         newStreams.removeAll()

@@ -354,13 +354,17 @@ impl SettingField {
     }
 
     /// Whether the value comes straight from the user and could start with
-    /// `-`: text without `enum`, or an integer that may be negative.
+    /// `-`: text without `enum` or with an `enum` value that starts with
+    /// `-`, or an integer that may be negative.
     pub(crate) fn is_free_user_value(&self) -> bool {
         if self.managed.is_some() {
             return false;
         }
         match &self.kind {
-            FieldKind::Scalar(ScalarKind::Text(rules)) => rules.enum_values.is_none(),
+            FieldKind::Scalar(ScalarKind::Text(rules)) => rules
+                .enum_values
+                .as_ref()
+                .is_none_or(|values| values.iter().any(|value| value.starts_with('-'))),
             FieldKind::Scalar(ScalarKind::Integer(rules)) => rules.minimum < 0,
             _ => false,
         }
@@ -1655,4 +1659,38 @@ fn parse_item_field(
         kind,
         required,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text_field(enum_values: Option<&[&str]>) -> SettingField {
+        SettingField {
+            name: "label".parse().unwrap(),
+            title: "Label".to_owned(),
+            description: None,
+            kind: FieldKind::Scalar(ScalarKind::Text(TextRules {
+                min_length: 0,
+                max_length: Some(16),
+                pattern: None,
+                enum_values: enum_values
+                    .map(|values| values.iter().map(|&value| value.to_owned()).collect()),
+                default: None,
+            })),
+            required: false,
+            apply: None,
+            visibility: Visibility::Basic,
+            secret: false,
+            printable_only: false,
+            managed: None,
+        }
+    }
+
+    #[test]
+    fn text_is_a_free_user_value_without_an_enum_or_with_an_enum_value_that_starts_with_a_dash() {
+        assert!(text_field(None).is_free_user_value());
+        assert!(text_field(Some(&["fast", "-v"])).is_free_user_value());
+        assert!(!text_field(Some(&["fast", "slow"])).is_free_user_value());
+    }
 }

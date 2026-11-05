@@ -2,6 +2,7 @@
 //! *Kesehatan*): its phase, its subsystems, its counters, and the facts
 //! `daemon.get_info` reports.
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Instant;
@@ -171,6 +172,7 @@ pub struct DaemonCore {
     sampler_config: OnceLock<SamplerConfig>,
     create_hooks: OnceLock<CreateHooks>,
     session: OnceLock<SessionStatus>,
+    home: OnceLock<PathBuf>,
     ipc_problem: Mutex<Option<String>>,
     counters: Counters,
     drain: Drain,
@@ -235,6 +237,7 @@ impl DaemonCore {
             sampler_config: OnceLock::new(),
             create_hooks: OnceLock::new(),
             session: OnceLock::new(),
+            home: OnceLock::new(),
             ipc_problem: Mutex::new(None),
             counters: Counters::default(),
             drain: Drain::default(),
@@ -542,6 +545,19 @@ impl DaemonCore {
     /// Records the create hooks of this run. The first call wins.
     pub fn set_create_hooks(&self, hooks: CreateHooks) {
         let _ = self.create_hooks.set(hooks);
+    }
+
+    /// Records the home folder of the user for this run, which the start
+    /// resolved once from the user database. The first call wins.
+    pub fn set_home(&self, home: PathBuf) {
+        let _ = self.home.set(home);
+    }
+
+    /// The home folder of the user, for the protected folders a storage
+    /// location must stay out of; `None` when the start recorded none.
+    #[must_use]
+    pub fn home(&self) -> Option<&Path> {
+        self.home.get().map(PathBuf::as_path)
     }
 
     /// Records the login session of this run (spec 0031); the start slot

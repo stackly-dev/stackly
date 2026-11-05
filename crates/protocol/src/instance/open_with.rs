@@ -183,10 +183,23 @@ pub fn shell_quote(value: &str) -> String {
 /// variable is dropped by `env -i`.
 const PASSED_ENV: [&str; 5] = ["HOME", "USER", "LOGNAME", "TERM", "LANG"];
 
+/// Whether `name` matches `^[A-Za-z_][A-Za-z0-9_]*$`, so it stands in the
+/// script unquoted as the name of an `env` assignment and nothing else.
+fn is_env_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
 /// The `.command` script of a terminal action (spec 0070, *Skrip
 /// Terminal*): `env -i` with the user's `HOME`, `USER`, `LOGNAME`, `TERM`,
 /// and `LANG` and the manifest env, then the absolute executable with its
-/// args, every value through [`shell_quote`]. A non zero exit prints the
+/// args, every value through [`shell_quote`]. An env pair whose name is
+/// not `^[A-Za-z_][A-Za-z0-9_]*$` is left out, because a name is written
+/// unquoted; the package loader refuses such a name already, so this only
+/// guards a caller that builds the [`OpenCommand`] another way. A non zero exit prints the
 /// status and waits for Return, so the window stays open. The script holds
 /// the instance ID, never its name or a secret.
 #[must_use]
@@ -201,9 +214,14 @@ pub fn terminal_script(instance_id: Uuid, title: &str, command: &OpenCommand) ->
         out.push_str(&format!(" {name}=\"${name}\""));
     }
     out.push_str(" \\\n");
-    if !command.env.is_empty() {
+    let env: Vec<&EnvPair> = command
+        .env
+        .iter()
+        .filter(|pair| is_env_name(&pair.name))
+        .collect();
+    if !env.is_empty() {
         out.push(' ');
-        for pair in &command.env {
+        for pair in env {
             out.push_str(&format!(" {}={}", pair.name, shell_quote(&pair.value)));
         }
         out.push_str(" \\\n");
@@ -318,5 +336,67 @@ mod tests {
              fi\n\
              exit \"$status\"\n"
         );
+    }
+
+    #[test]
+    fn an_env_name_outside_the_shell_name_rule_is_left_out_of_the_script() {
+        let command = OpenCommand {
+            executable: "/abs/bin/tool".to_owned(),
+            args: Vec::new(),
+            env: vec![
+                EnvPair {
+                    name: "X;touch /tmp/pwned;Y".to_owned(),
+                    value: "a".to_owned(),
+                },
+                EnvPair {
+                    name: "_OK_1".to_owned(),
+                    value: "b".to_owned(),
+                },
+                EnvPair {
+                    name: "1BAD".to_owned(),
+                    value: "c".to_owned(),
+                },
+                EnvPair {
+                    name: String::new(),
+                    value: "d".to_owned(),
+                },
+                EnvPair {
+                    name: "$(id)".to_owned(),
+                    value: "e".to_owned(),
+                },
+            ],
+        };
+        let script = terminal_script(Uuid::nil(), "tool", &command);
+        assert!(script.contains(" _OK_1='b' \\\n"), "{script}");
+        for bad in ["touch", "1BAD", "$(id)", "='d'"] {
+            assert!(!script.contains(bad), "{bad} in {script}");
+        }
+    }
+
+    #[test]
+    fn a_script_whose_env_names_are_all_invalid_has_no_env_line() {
+        let command = OpenCommand {
+            executable: "/abs/bin/tool".to_owned(),
+            args: Vec::new(),
+            env: vec![EnvPair {
+                name: "A B".to_owned(),
+                value: "x".to_owned(),
+            }],
+        };
+        let script = terminal_script(Uuid::nil(), "tool", &command);
+        assert!(
+            script.contains("LANG=\"$LANG\" \\\n  '/abs/bin/tool'\n"),
+            "{script}"
+        );
+    }
+
+    #[test]
+    fn the_env_name_rule_accepts_a_letter_or_underscore_then_word_characters() {
+        for good in ["A", "_", "PGAPPNAME", "lower_case9", "_9"] {
+            assert!(is_env_name(good), "{good}");
+        }
+        for bad in ["", "9A", "A-B", "A B", "A=B", "\u{e9}", "A\n"] {
+            assert!(!is_env_name(bad), "{bad:?}");
+        }
     }
 }

@@ -237,7 +237,7 @@ async fn start_again(sup: &Supervisor, id: InstanceId, trigger: &'static str) ->
 
 /// Begins a system operation of reconciliation. It queues behind a user
 /// operation that already holds the instance, and tries again while the
-/// engine is not ready. `make` builds the work again each time the engine
+/// engine is not ready or its queue is full. `make` builds the work again each time the engine
 /// takes the request back.
 pub(super) async fn begin(
     sup: &Supervisor,
@@ -270,7 +270,9 @@ pub(super) async fn begin(
         };
         match engine.begin(request).await {
             Ok(outcome) => return outcome.view().map(|view| view.operation.id()),
-            Err(BeginError::NotReady)
+            // A full queue drains as operations end, so it is waited out
+            // like an engine that is not ready, never skipped.
+            Err(BeginError::NotReady | BeginError::QueueFull { .. })
                 if deadline.is_none_or(|deadline| tokio::time::Instant::now() < deadline) =>
             {
                 tokio::time::sleep(POLL).await;

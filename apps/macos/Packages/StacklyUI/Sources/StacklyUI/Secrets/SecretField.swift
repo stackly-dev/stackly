@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The input for one secret field: Generate (when the field allows it), Enter, or Copy
@@ -86,6 +87,12 @@ public struct SecretField: View {
             showsTypedText = false
         }
         .onDisappear {
+            showsTypedText = false
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+        ) { _ in
+            // Shown text is a plain text field, so it hides when another app comes forward.
             showsTypedText = false
         }
     }

@@ -176,7 +176,9 @@ impl<'a> Extraction<'a> {
                 .ok_or_else(|| reject(RejectReason::UnexpectedTopLevel))?,
         };
         let path = names::entry_path(relative).map_err(reject)?;
-        if path.as_str() == MARKER_NAME {
+        // APFS compares names case-insensitively, so `.STACKLY-RUNTIME.json`
+        // would land on the marker the finish step creates.
+        if path.as_str().to_lowercase() == MARKER_NAME {
             return Err(reject(RejectReason::ReservedName));
         }
         self.ensure_parents(&path, raw)?;

@@ -144,11 +144,16 @@ pub use stop_all::StopAllRequest;
 /// Longest [`ObservationDetail`], in characters.
 const DETAIL_MAX_CHARS: usize = 256;
 
-/// Cuts `text` to the first 256 characters and wraps it as an
+/// Maps every control character (U+0000 to U+001F and U+007F to U+009F) to
+/// `?`, cuts `text` to the first 256 characters, and wraps it as an
 /// [`ObservationDetail`], or `None` when it is empty. Text that may hold a
 /// secret is redacted before this cut, never after.
 fn observation_detail(text: &str) -> Option<ObservationDetail> {
-    let cut: String = text.chars().take(DETAIL_MAX_CHARS).collect();
+    let cut: String = text
+        .chars()
+        .map(|c| if c.is_control() { '?' } else { c })
+        .take(DETAIL_MAX_CHARS)
+        .collect();
     cut.parse().ok()
 }
 
@@ -163,6 +168,13 @@ mod tests {
         let detail = observation_detail(&long).unwrap();
 
         assert_eq!(detail.as_str().chars().count(), 256);
+    }
+
+    #[test]
+    fn control_characters_in_a_detail_become_question_marks() {
+        let detail = observation_detail("a\u{1b}[31mb\u{7f}c\u{9b}d\te").unwrap();
+
+        assert_eq!(detail.as_str(), "a?[31mb?c?d?e");
     }
 
     #[test]

@@ -389,10 +389,9 @@ fn find_pinned(
     let Some((namespace, name)) = provider.split_once('/') else {
         return not_found;
     };
-    if [namespace, name, revision]
-        .iter()
-        .any(|part| part.is_empty() || part.contains(['/', '\\']) || *part == "..")
-    {
+    if [namespace, name, revision].iter().any(|part| {
+        part.is_empty() || part.contains(['/', '\\', '\0']) || *part == ".." || *part == "."
+    }) {
         return not_found;
     }
     let base = layout

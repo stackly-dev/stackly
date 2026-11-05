@@ -124,6 +124,13 @@ impl GuardView for TransactionView<'_> {
     fn storage_locations(&self) -> Result<Vec<stackly_domain::StorageLocation>, RegistryError> {
         settings::locations(self.tx)
     }
+
+    fn secret_reference(
+        &self,
+        reference: &stackly_domain::SecretRef,
+    ) -> Result<Option<stackly_domain::SecretReferenceView>, RegistryError> {
+        secret::reference(self.tx, reference)
+    }
 }
 
 fn begin(conn: &mut Connection) -> Result<Transaction<'_>, BatchError> {

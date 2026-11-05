@@ -450,6 +450,34 @@ async fn inspect_runs_once_per_process_and_not_once_per_tick() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_process_whose_inspect_is_refused_is_not_inspected_again_while_it_lives() {
+    let mut rig = Rig::new();
+    rig.add(5, Some(1), 1);
+    rig.add(10, None, 1);
+    rig.add(11, Some(10), 1);
+    rig.run_main(10);
+    rig.fake.processes().fail_next(
+        ProcessOp::Inspect,
+        ProcessError::PermissionDenied { pid: pid(5) },
+    );
+
+    rig.tick().await;
+    let after_first = rig.fake.processes().count(ProcessOp::Inspect);
+    assert_eq!(after_first, 3);
+    for _ in 0..3 {
+        tokio::time::advance(INTERVAL).await;
+        rig.tick().await;
+    }
+
+    assert_eq!(
+        rig.fake.processes().count(ProcessOp::Inspect),
+        after_first,
+        "the refused pid is remembered, not asked every tick"
+    );
+    assert_eq!(rig.newest().tree.process_count, 2);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_new_main_process_starts_a_new_history_numbered_from_one() {
     let mut rig = Rig::new();
     rig.add(10, None, 1);

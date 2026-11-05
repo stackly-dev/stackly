@@ -32,15 +32,26 @@ public struct OpenInPorts {
     public var opener: any WorkspaceOpener
     /// Whether a path exists, for `reveal`.
     public var fileExists: (String) -> Bool
+    /// Whether a path is a regular file and not a symlink, for the script of a `terminal`
+    /// action.
+    public var isRegularFile: (String) -> Bool
 
     /// Creates the ports.
     public init(
         locator: any AppLocator, opener: any WorkspaceOpener,
-        fileExists: @escaping (String) -> Bool
+        fileExists: @escaping (String) -> Bool,
+        isRegularFile: @escaping (String) -> Bool = OpenInPorts.isRegularFile
     ) {
         self.locator = locator
         self.opener = opener
         self.fileExists = fileExists
+        self.isRegularFile = isRegularFile
+    }
+
+    /// Whether `path` is a regular file itself, read with `lstat(2)` so a symlink never counts.
+    public nonisolated static func isRegularFile(_ path: String) -> Bool {
+        var info = stat()
+        return lstat(path, &info) == 0 && info.st_mode & S_IFMT == S_IFREG
     }
 
     /// The ports of the running app: NSWorkspace and the file manager.

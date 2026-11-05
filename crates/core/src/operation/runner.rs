@@ -321,6 +321,8 @@ async fn precondition_failed(
     if closed {
         inner.forget(id);
     } else {
+        // Spec 0007: a failed `fail` commit releases the keys and the slot,
+        // and the operation stays queued.
         inner.locks.release_operation(id);
     }
 }

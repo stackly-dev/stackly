@@ -108,8 +108,9 @@ fn read_marker(platform: &Platform, folder: &Path) -> Option<MarkerFacts> {
 
 /// Moves the staged tree to `runtime_dir(software, version, target, sha256)`.
 ///
-/// 1. A target with the marker of this operation is the rename that
-///    happened before a restart.
+/// 1. A target with the marker of this operation, while the staged tree is
+///    gone, is the rename that happened before a restart; with the staged
+///    tree still in place it is a conflict.
 /// 2. A target with the marker of the same artifact, while the registry has
 ///    no runtime for it and the operation named in the marker is final or
 ///    unknown, is an orphan: it moves to `scratch/orphan/`.
@@ -138,7 +139,13 @@ pub fn commit_tree(request: &CommitRequest<'_>) -> Result<CommitOutcome, CommitE
             return Err(CommitError::Conflict { path: target });
         };
         if marker.operation_id == request.operation_id {
-            return Ok(CommitOutcome::AlreadyMoved);
+            // The rename that happened before a restart took the staged tree
+            // with it; a staged tree still in place means this folder is
+            // not that rename.
+            if fs.symlink_metadata(request.stage_tree)?.is_none() {
+                return Ok(CommitOutcome::AlreadyMoved);
+            }
+            return Err(CommitError::Conflict { path: target });
         }
         if marker.sha256 == request.sha256.to_string()
             && !has_runtime(request.registry, request.sha256)?

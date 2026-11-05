@@ -258,6 +258,33 @@ fn a_binary_artifact_is_written_to_its_executable() {
 }
 
 #[test]
+fn a_member_named_like_the_marker_in_another_case_is_a_reserved_name() {
+    for name in [".STACKLY-RUNTIME.json", ".Stackly-Runtime.JSON"] {
+        let bytes = TarBuilder::new()
+            .file("bin/tool", 0o755, b"x")
+            .file(name, 0o644, b"{}")
+            .finish_gz();
+        let spec = spec(None, &["bin/tool"]);
+
+        assert_eq!(
+            reason_of(scan_bytes(ArtifactFormat::TarGz, bytes.clone(), &spec)),
+            RejectReason::ReservedName,
+            "{name}"
+        );
+        let stage = Stage::new();
+        let mut writer = stage.fs.open_tree_writer(&stage.stage).unwrap();
+        let result = extract(
+            ArtifactFormat::TarGz,
+            &mut MemoryFile::new(bytes),
+            &spec,
+            writer.as_mut(),
+            &StopFlag::new(),
+        );
+        assert_eq!(reason_of(result), RejectReason::ReservedName, "{name}");
+    }
+}
+
+#[test]
 fn a_tar_gz_executable_keeps_the_mode_the_archive_gives_it() {
     let bytes = TarBuilder::new().file("bin/tool", 0o644, b"x").finish_gz();
 

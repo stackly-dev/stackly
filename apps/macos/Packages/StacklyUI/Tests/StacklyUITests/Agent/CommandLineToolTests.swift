@@ -204,6 +204,65 @@ struct CommandLineToolTests {
         #expect(rig.paths() == before)
     }
 
+    @Test func aGroupWritableFolderAboveTheLinksIsRefusedToo() async throws {
+        let rig = try Home()
+        let local = rig.home.appending(path: ".local")
+        try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: local.path)
+        let tool = rig.tool(for: try rig.bundle("a"))
+        let before = rig.paths()
+        await #expect(throws: CommandLineToolError.folderNotSafe(path: "~/.local")) {
+            try await tool.install()
+        }
+        #expect(rig.paths() == before)
+    }
+
+    @Test func aSymlinkedFolderOfTheUserThatIsSafeIsAccepted() async throws {
+        let rig = try Home()
+        let elsewhere = rig.folder.url.appending(path: "dotfiles/bin")
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: elsewhere.path)
+        let local = rig.home.appending(path: ".local")
+        try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: local.appending(path: "bin"), withDestinationURL: elsewhere)
+        let tool = rig.tool(for: try rig.bundle("a"))
+        try await tool.install()
+        #expect(await tool.status().command == .installed)
+    }
+
+    @Test func aSymlinkToAGroupWritableFolderIsRefused() async throws {
+        let rig = try Home()
+        let elsewhere = rig.folder.url.appending(path: "shared/bin")
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o775], ofItemAtPath: elsewhere.path)
+        let local = rig.home.appending(path: ".local")
+        try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: local.appending(path: "bin"), withDestinationURL: elsewhere)
+        let tool = rig.tool(for: try rig.bundle("a"))
+        await #expect(throws: CommandLineToolError.folderNotSafe(path: "~/.local/bin")) {
+            try await tool.install()
+        }
+    }
+
+    @Test func removeRefusesAnUnsafeFolderAndDeletesNothing() async throws {
+        let rig = try Home()
+        let tool = rig.tool(for: try rig.bundle("a"))
+        try await tool.install()
+        let bin = rig.commandLink.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o775], ofItemAtPath: bin.path)
+        await #expect(throws: CommandLineToolError.folderNotSafe(path: "~/.local/bin")) {
+            try await tool.remove()
+        }
+        #expect(await tool.status().command == .installed)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: bin.path)
+        try await tool.remove()
+        #expect(await tool.status().command == .notInstalled)
+    }
+
     @Test func aBuildWithoutTheCommandCannotInstallButCanRemove() async throws {
         let rig = try Home()
         let full = try rig.bundle("a")

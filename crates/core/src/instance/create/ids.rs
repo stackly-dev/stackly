@@ -21,25 +21,20 @@ impl IdSource for SystemIds {
     }
 }
 
+/// How many IDs [`fresh_instance_id`] draws before it gives up.
+const MAX_DRAWS: usize = 1024;
+
 /// Draws from `source` until the short key of the ID is none of `known`,
-/// so the folder of the run (`i/<short key>`) is never shared.
-///
-/// # Panics
-///
-/// Panics when `source` keeps returning IDs whose short key is taken,
-/// after 1024 draws; with real IDs the chance is nil.
+/// so the folder of the run (`i/<short key>`) is never shared. Returns
+/// `None` when `source` keeps returning IDs whose short key is taken, after
+/// 1024 draws; with real IDs the chance is nil.
 #[must_use]
-pub fn fresh_instance_id(source: &dyn IdSource, known: &[InstanceId]) -> InstanceId {
-    for _ in 0..1024 {
-        let id = source.next();
-        if known
+pub fn fresh_instance_id(source: &dyn IdSource, known: &[InstanceId]) -> Option<InstanceId> {
+    (0..MAX_DRAWS).map(|_| source.next()).find(|id| {
+        known
             .iter()
             .all(|other| other.short_key() != id.short_key())
-        {
-            return id;
-        }
-    }
-    panic!("the ID source kept returning IDs whose short key is taken");
+    })
 }
 
 /// An ID source that returns scripted IDs first, then real ones, for
@@ -94,7 +89,20 @@ mod tests {
 
         let drawn = fresh_instance_id(&source, &[known]);
 
-        assert_eq!(drawn, free);
+        assert_eq!(drawn, Some(free));
+    }
+
+    #[test]
+    fn a_source_that_only_returns_taken_short_keys_gives_no_id() {
+        struct Clashing(InstanceId);
+        impl IdSource for Clashing {
+            fn next(&self) -> InstanceId {
+                same_short_key(self.0)
+            }
+        }
+        let known = InstanceId::generate();
+
+        assert_eq!(fresh_instance_id(&Clashing(known), &[known]), None);
     }
 
     #[test]
@@ -104,6 +112,7 @@ mod tests {
 
         assert_eq!(source.next(), first);
         assert_ne!(source.next(), first);
-        assert_eq!(fresh_instance_id(&SystemIds, &[]).to_string().len(), 36);
+        let drawn = fresh_instance_id(&SystemIds, &[]).unwrap();
+        assert_eq!(drawn.to_string().len(), 36);
     }
 }

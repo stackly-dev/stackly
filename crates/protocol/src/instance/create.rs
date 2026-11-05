@@ -509,8 +509,9 @@ pub struct PreflightCreateParams {
 }
 
 impl Validate for PreflightCreateParams {
-    /// The same sizes and counts as [`CreateInstanceParams`](super::CreateInstanceParams),
-    /// and the reference format of `copyFrom` and `bind`, so a draft that
+    /// The same sizes, counts, and `startup` check as
+    /// [`CreateInstanceParams`](super::CreateInstanceParams), and the
+    /// reference format of `copyFrom` and `bind`, so a draft that
     /// preflight accepts is never refused by `instance.create` for its
     /// shape.
     fn validate(&self) -> Vec<FieldError> {
@@ -533,6 +534,9 @@ impl Validate for PreflightCreateParams {
         }
         if settings_has_unsafe_integer(self.settings.as_map()) {
             fields.push(FieldError::new("settings", FieldCode::OutOfRange));
+        }
+        if self.startup == Some(StartupPolicyKind::Unrecognized) {
+            fields.push(FieldError::new("startup", FieldCode::InvalidValue));
         }
         if self.endpoints.len() > CREATE_ENDPOINTS_MAX {
             fields.push(FieldError::new("endpoints", FieldCode::TooMany));

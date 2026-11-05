@@ -23,6 +23,7 @@ security-framework.workspace = true
 stackly-domain.workspace = true
 stackly-platform.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 ureq.workspace = true
 
 [dev-dependencies]

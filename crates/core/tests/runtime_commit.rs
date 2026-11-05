@@ -137,11 +137,33 @@ fn a_clean_commit_moves_the_tree_with_one_rename_and_makes_the_parent_folders() 
 fn a_target_with_the_marker_of_this_operation_is_a_rename_that_already_happened() {
     let rig = Rig::new(OP);
     rig.plant(Some(&marker(OP, &rig.sha256.to_string())));
+    // The rename before the restart took the staged tree with it.
+    std::fs::remove_dir_all(&rig.stage_tree).expect("the staged tree is removed");
 
     let outcome = rig.commit(OP);
 
     assert_eq!(outcome, Ok(CommitOutcome::AlreadyMoved));
-    assert!(exists(&rig.stage_tree), "no second rename");
+    assert!(
+        exists(&rig.target.join(".stackly-runtime.json")),
+        "the folder stays"
+    );
+}
+
+#[test]
+fn a_target_with_the_marker_of_this_operation_while_the_staged_tree_remains_is_a_conflict() {
+    let rig = Rig::new(OP);
+    rig.plant(Some(&marker(OP, &rig.sha256.to_string())));
+
+    let outcome = rig.commit(OP);
+
+    assert_eq!(
+        outcome,
+        Err(CommitError::Conflict {
+            path: rig.target.clone()
+        })
+    );
+    assert!(exists(&rig.stage_tree), "no rename happened");
+    assert!(!exists(&rig.target.join("nats-server")));
 }
 
 #[test]
@@ -200,19 +222,16 @@ fn a_folder_without_a_marker_or_with_another_artifact_is_a_conflict() {
     ] {
         let rig = Rig::new(OP);
         rig.plant(text.as_deref());
-        // The marker of this operation but another artifact is still ours
-        // by the operation, so only the others conflict.
+        // The staged tree is still in place, so even the marker of this
+        // operation names no rename that happened: every case conflicts.
         let outcome = rig.commit(OP);
-        match &text {
-            Some(text) if text.contains(OP) => assert_eq!(outcome, Ok(CommitOutcome::AlreadyMoved)),
-            _ => assert_eq!(
-                outcome,
-                Err(CommitError::Conflict {
-                    path: rig.target.clone()
-                })
-            ),
-        }
-        assert!(exists(&rig.stage_tree) || matches!(outcome, Ok(CommitOutcome::MovedAfterOrphan)));
+        assert_eq!(
+            outcome,
+            Err(CommitError::Conflict {
+                path: rig.target.clone()
+            })
+        );
+        assert!(exists(&rig.stage_tree));
     }
     ev.pass();
 }

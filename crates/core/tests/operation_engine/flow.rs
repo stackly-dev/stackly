@@ -20,7 +20,7 @@ use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{
     Harness, counted, fast, instance, manager_request, record_no_op, request, request_origin, user,
-    wait_event, wait_state, wait_until,
+    wait_event, wait_idle, wait_state, wait_until,
 };
 
 fn revision(number: u64) -> ResourceRevision {
@@ -506,6 +506,59 @@ async fn a_burst_of_progress_commits_at_most_twice_and_keeps_the_last_value() {
             total: 100
         })
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_failed_precondition_the_registry_refuses_to_record_releases_the_keys() {
+    let harness = Harness::idle(fast());
+    harness.engine.recover().await.unwrap();
+    let (env, builder) = environment(&harness);
+    let effects = EffectCounter::new();
+    let mut stale = on_environment(env, ScriptedWork::new().step("drain").effects(&effects));
+    stale.expected_revision = Some(revision(1));
+    let queued = harness.begin(stale).await;
+    harness
+        .registry
+        .commit(WriteBatch::new(vec![WriteOp::UpdateEnvironment {
+            environment: builder.clone().revision(2).build(),
+            expected: revision(1),
+        }]))
+        .unwrap();
+
+    harness
+        .registry
+        .fail_next_commit(stackly_domain::RegistryError::InvalidQuery {
+            reason: "a test refuses the precondition write",
+        });
+    harness.engine.start();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_idle(&harness.engine).await;
+
+    assert!(
+        !matches!(
+            harness.engine.locks().holder(&LockKey::Environment(env)),
+            Some(LockHolder::Operation { id, .. }) if id == queued
+        ),
+        "spec 0007: a failed commit releases the keys of the operation"
+    );
+    assert_ne!(
+        harness
+            .engine
+            .get(queued)
+            .await
+            .unwrap()
+            .unwrap()
+            .view
+            .operation
+            .state(),
+        OperationState::Running,
+        "the operation never starts on a stale revision"
+    );
+    let next = harness
+        .begin(on_environment(env, ScriptedWork::new().step("drain")))
+        .await;
+    wait_state(&harness.engine, next, OperationState::Succeeded).await;
+    assert_eq!(effects.get(), 0, "the stale work never ran");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

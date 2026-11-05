@@ -84,8 +84,9 @@ pub struct CommandSecret {
 /// --runtime <runtime>`, then `--provider` and `--revision` when set,
 /// `--display-name`, a `--port` per endpoint, a `--set` or `--set-json` per
 /// changed setting, a `--secret` per secret field, and `--start`. A word with
-/// a character outside `[A-Za-z0-9._/:@%+=,-]` is single quoted the POSIX
-/// way. A `value` secret is written as `prompt`, because the command can
+/// a character outside `[A-Za-z0-9._/:@%+=,-]`, or one that starts with
+/// `=`, is single quoted the POSIX way, after each control character became
+/// U+FFFD. A `value` secret is written as `prompt`, because the command can
 /// not carry the value.
 #[must_use]
 pub fn equivalent_command(draft: &CommandDraft) -> String {
@@ -149,19 +150,36 @@ pub fn equivalent_command(draft: &CommandDraft) -> String {
     words.join(" ")
 }
 
-/// Whether `word` can stand in a shell command without quotes.
+/// Whether `word` can stand in a shell command without quotes. A word that
+/// starts with `=` is never plain: zsh, the macOS default shell, expands a
+/// leading `=word` to the path of the command `word` (its `EQUALS` option).
 fn is_plain(word: &str) -> bool {
     !word.is_empty()
+        && !word.starts_with('=')
         && word
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"._/:@%+=,-".contains(&b))
 }
 
 /// `word` as one POSIX shell word: unchanged when plain, else in single
-/// quotes with each `'` written as `'\''`.
+/// quotes with each `'` written as `'\''`. Every control character becomes
+/// U+FFFD first, so text a draft could never be created with (preflight
+/// renders drafts that are not ready yet) never puts an escape sequence or
+/// a line break on the pasteboard. A valid draft holds no control
+/// character, so its command does not change.
 fn quote(word: &str) -> String {
-    if is_plain(word) {
-        word.to_owned()
+    let word: String = word
+        .chars()
+        .map(|c| {
+            if c.is_control() {
+                char::REPLACEMENT_CHARACTER
+            } else {
+                c
+            }
+        })
+        .collect();
+    if is_plain(&word) {
+        word
     } else {
         format!("'{}'", word.replace('\'', "'\\''"))
     }
@@ -288,6 +306,33 @@ mod tests {
         assert_eq!(quote("a b"), "'a b'");
         assert_eq!(quote("it's"), "'it'\\''s'");
         assert_eq!(quote("$HOME;rm"), "'$HOME;rm'");
+    }
+
+    #[test]
+    fn a_word_that_starts_with_an_equals_sign_is_quoted_so_zsh_does_not_expand_it() {
+        assert_eq!(quote("=python"), "'=python'");
+        assert_eq!(quote("="), "'='");
+        assert_eq!(quote("a=b"), "a=b");
+        let draft = CommandDraft {
+            display_name: Some("=python".to_owned()),
+            ..base()
+        };
+        assert!(equivalent_command(&draft).contains("--display-name '=python'"));
+    }
+
+    #[test]
+    fn a_control_character_in_a_word_is_replaced_before_quoting() {
+        assert_eq!(quote("a\u{1b}[201~b"), "'a\u{fffd}[201~b'");
+        assert_eq!(quote("line\nnext"), "'line\u{fffd}next'");
+        assert_eq!(quote("tab\there"), "'tab\u{fffd}here'");
+        assert_eq!(quote("c1\u{9b}x"), "'c1\u{fffd}x'");
+        assert_eq!(quote("ok\u{7f}"), "'ok\u{fffd}'");
+        let draft = CommandDraft {
+            display_name: Some("Orders\r\u{1b}]0;x\u{7}".to_owned()),
+            ..base()
+        };
+        let command = equivalent_command(&draft);
+        assert!(!command.chars().any(char::is_control), "{command:?}");
     }
 
     #[test]

@@ -73,6 +73,23 @@ impl ExitListener for Notices {
     }
 }
 
+/// A listener that records which thread called it, then panics.
+#[derive(Default)]
+struct Panics {
+    thread: Mutex<Option<String>>,
+}
+
+impl ExitListener for Panics {
+    fn exited(&self, _notice: ExitNotice) {
+        *self
+            .thread
+            .lock()
+            .expect("the lock is only held to store a name") =
+            thread::current().name().map(str::to_owned);
+        panic!("this listener panics on purpose");
+    }
+}
+
 /// A test root with a folder whose name has spaces and Unicode, the
 /// adapter, and the children to clean up.
 struct Setup {
@@ -760,6 +777,35 @@ fn a_process_that_is_not_a_child_is_watched_but_never_reaped() {
     );
     let gone = setup.watch(sleeper_pid).wait();
     assert_eq!(gone.status, None, "a gone PID is reported at once");
+}
+
+#[test]
+fn a_listener_that_panics_on_the_watcher_thread_never_stops_later_reaping() {
+    let setup = Setup::new();
+    let mut sleeper = Command::new("/bin/sleep").arg("0.5").spawn().unwrap();
+    let panics = Arc::new(Panics::default());
+    setup
+        .adapter
+        .watch_exit(pid(sleeper.id()), panics.clone())
+        .unwrap();
+    wait_for("the panicking listener to be called", || {
+        panics.thread.lock().unwrap().is_some()
+    });
+    assert_eq!(
+        panics.thread.lock().unwrap().as_deref(),
+        Some("stackly-proc-watch"),
+        "the panic happened on the watcher thread"
+    );
+    assert!(sleeper.wait().unwrap().success());
+
+    let helper = setup.spawn_helper("/bin/sh", &["-c", "exit 7"], StdinSource::Null);
+    let notice = setup.watch(helper.pid()).wait();
+
+    assert_eq!(
+        notice.status,
+        Some(ExitStatus::Exited(7)),
+        "the watcher still reaps a child after a listener panicked"
+    );
 }
 
 #[test]

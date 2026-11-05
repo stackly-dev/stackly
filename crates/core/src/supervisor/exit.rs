@@ -47,10 +47,16 @@ pub(crate) fn spawn_exit_task(
         };
         let Some(notice) = notice else { return };
         loop {
+            // Registered before the check, so a release between the check
+            // and the wait is never lost; every waiter hears it, so the exit
+            // task of an older generation cannot take the wakeup.
+            let notified = actor.released.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
             if !actor.read(|state| state.op_owns_exit) {
                 break;
             }
-            actor.released.notified().await;
+            notified.await;
         }
         // A shut down daemon leaves the registry as it is: the next daemon
         // finds the process gone or adopts it.
@@ -224,5 +230,5 @@ pub(crate) fn finish_process(
         state.leftover = leftover;
         state.not_running(now);
     });
-    actor.released.notify_one();
+    actor.released.notify_waiters();
 }

@@ -218,7 +218,7 @@ import Testing
             name: "file changes outside the command line tool (spec 0015 AC-14)",
             patterns: [
                 #"\bcreateSymbolicLink\("#, #"\bcreateDirectory\("#, #"\bremoveItem\("#,
-                #"\bmoveItem\("#, #"\breplaceItem"#, #"\brename\("#,
+                #"\bmoveItem\("#, #"\breplaceItem"#, #"\brename\("#, #"\bunlink\("#,
             ],
             allowed: [stacklyUI + "Agent/CommandLineTool.swift"],
             forbiddenExamples: [
@@ -226,6 +226,7 @@ import Testing
                 "try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)",
                 "try FileManager.default.removeItem(at: url)",
                 "rename(from, to)",
+                "unlink(path.path)",
             ],
             allowedExamples: [
                 "FileManager.default.fileExists(atPath: path)",

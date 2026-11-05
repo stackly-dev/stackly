@@ -83,6 +83,11 @@ fn default_roots_come_from_the_user_database_and_the_user_temp_dir() {
 }
 
 #[test]
+fn the_home_dir_comes_from_the_user_database() {
+    assert_eq!(MacosPlatform::home_dir().unwrap(), user_home_dir());
+}
+
+#[test]
 fn an_override_moves_every_root_and_keeps_the_runtime_root_in_the_user_temp_dir() {
     let root = TestRoot::new().unwrap();
 

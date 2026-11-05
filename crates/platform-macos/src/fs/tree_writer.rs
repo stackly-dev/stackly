@@ -9,6 +9,7 @@ use stackly_platform::{EntryPath, FileMode, PlatformError, TreeFile, TreeWriter}
 use super::fd::{
     DIR_FLAGS, c_name, c_path, fstat, fsync, full_fsync, is_dir, is_symlink, open_dir_at, stat_at,
 };
+use super::remove_tree::DirStream;
 
 /// Flags for creating a file: write only, never an existing entry, never
 /// through a symlink, close on exec.
@@ -51,10 +52,14 @@ pub(super) fn open_tree_writer(root: &Path) -> Result<Box<dyn TreeWriter>, Platf
             ),
         });
     }
-    // The listing goes through the path; the writer itself only ever uses
-    // the descriptor opened above.
-    let mut listing = fs::read_dir(root).map_err(|err| PlatformError::from_io(OP, root, &err))?;
-    if listing.next().is_some() {
+    // The listing goes through a second descriptor opened from `root_fd`
+    // itself, so the emptiness check sees the same inode the writer uses
+    // and the writer's own descriptor keeps its offset.
+    let names = open_dir_at(root_fd.as_fd(), c".")
+        .and_then(DirStream::new)
+        .and_then(|mut stream| stream.names())
+        .map_err(|err| PlatformError::from_io(OP, root, &err))?;
+    if !names.is_empty() {
         return Err(PlatformError::Io {
             op: OP,
             path: root.to_path_buf(),

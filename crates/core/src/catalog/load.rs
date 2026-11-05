@@ -13,7 +13,8 @@ use crate::provider::{
 };
 
 use super::index::{
-    CATALOG_INDEX_FILE, CatalogIndex, IndexError, IndexProvider, package_dir, versions_sha256,
+    CATALOG_INDEX_FILE, CatalogIndex, IndexError, IndexProvider, content_sha256, package_dir,
+    versions_sha256,
 };
 use super::model::{
     Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState,
@@ -102,12 +103,20 @@ fn load_with_budget(
     if let Some(problem) = index_problems(&index).into_iter().next() {
         return unavailable(UnavailableReason::IndexInvalid, problem);
     }
-    let Ok(content_sha256) = index.content_sha256.parse::<Sha256Digest>() else {
+    let Ok(digest) = index.content_sha256.parse::<Sha256Digest>() else {
         return unavailable(
             UnavailableReason::IndexInvalid,
             "contentSha256 is not 64 lowercase hex characters".into(),
         );
     };
+    // The digest is shown by `catalog.info` and logged, so it has to be the
+    // digest of what was read, not only what the index claims.
+    if index.content_sha256 != content_sha256(&index.providers, &index.planned) {
+        return unavailable(
+            UnavailableReason::IndexInvalid,
+            "contentSha256 does not match the catalog content".into(),
+        );
+    }
     let mut entries = Vec::new();
     let mut budget = Budget {
         max: budget,
@@ -148,7 +157,7 @@ fn load_with_budget(
         CatalogMeta {
             revision: index.revision,
             published_at: index.published_at,
-            content_sha256,
+            content_sha256: digest,
             location,
             loaded_at: clock.now(),
         },
@@ -323,7 +332,6 @@ mod tests {
     use jiff::{SignedDuration, Timestamp};
     use stackly_testkit::{FakePlatform, TestRoot};
 
-    use super::super::index::content_sha256;
     use super::super::model::CATALOG_OUTDATED_AFTER;
     use super::super::testing::{CatalogBuilder, CatalogFixture};
     use super::*;
@@ -675,6 +683,34 @@ mod tests {
             )
         );
         std::fs::create_dir(&index).unwrap();
+        assert_eq!(
+            unavailable(load(&setup, CatalogOptions::default())).0,
+            UnavailableReason::IndexInvalid
+        );
+    }
+
+    #[test]
+    fn a_content_digest_that_does_not_match_the_index_makes_the_catalog_unavailable() {
+        let setup = setup(&base());
+        let index = setup.dir.join("catalog.json");
+        let text = std::fs::read_to_string(&index).unwrap();
+        let parsed = CatalogIndex::from_json(text.as_bytes()).unwrap();
+        // A well formed digest of other content: only the comparison can
+        // catch it.
+        let other = content_sha256(&[], &[]);
+        assert_ne!(parsed.content_sha256, other);
+        std::fs::write(&index, text.replace(&parsed.content_sha256, &other)).unwrap();
+
+        assert_eq!(
+            unavailable(load(&setup, CatalogOptions::default())),
+            (
+                UnavailableReason::IndexInvalid,
+                "contentSha256 does not match the catalog content".to_owned()
+            )
+        );
+
+        // A changed planned entry with the old digest is caught the same way.
+        std::fs::write(&index, text.replace("Relational server.", "Changed.")).unwrap();
         assert_eq!(
             unavailable(load(&setup, CatalogOptions::default())).0,
             UnavailableReason::IndexInvalid

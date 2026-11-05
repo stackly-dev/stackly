@@ -112,10 +112,13 @@ where
 
     let mut head = Vec::with_capacity(header_max.min(1024));
     let mut chunk = [0_u8; 1024];
+    // Only the bytes read since the last search are searched again.
+    let mut scanned = 0;
     loop {
-        if let Some(end) = head.iter().position(|byte| *byte == b'\n') {
-            return parse_status_line(&head[..end]);
+        if let Some(found) = head[scanned..].iter().position(|byte| *byte == b'\n') {
+            return parse_status_line(&head[..scanned + found]);
         }
+        scanned = head.len();
         if head.len() >= header_max {
             return Err(HttpError::TooLong { limit: header_max });
         }
@@ -429,6 +432,26 @@ mod tests {
             200
         );
         assert_eq!(exchange(b"HTTP/1.1 204 \n", 8192).await.0.unwrap(), 204);
+    }
+
+    #[tokio::test]
+    async fn a_status_line_that_arrives_one_byte_at_a_time_is_read() {
+        let (mut client, mut server) = duplex(64 * 1024);
+        let peer = tokio::spawn(async move {
+            let mut seen = vec![0_u8; 1024];
+            let _ = server.read(&mut seen).await.unwrap();
+            for byte in b"HTTP/1.1 418 Teapot\r\nX: y\r\n\r\n" {
+                server.write_all(&[*byte]).await.unwrap();
+                server.flush().await.unwrap();
+                tokio::task::yield_now().await;
+            }
+        });
+        let request = request(IpAddr::V4(Ipv4Addr::LOCALHOST), port(8080), "/ready");
+
+        let result = status(&mut client, &request, 8192).await;
+
+        assert_eq!(result.unwrap(), 418);
+        peer.await.unwrap();
     }
 
     #[tokio::test]

@@ -131,6 +131,16 @@ pub(crate) fn launch(launch: &Launch<'_>) -> Result<Pid, ProcessError> {
 /// Creates a pipe, both ends close on exec, and returns the read end and
 /// the write end.
 ///
+/// `pipe` followed by `fcntl(F_SETFD, FD_CLOEXEC)` is not atomic: a child
+/// that another thread starts between the two calls inherits both ends.
+/// That is safe only because every spawn in this process goes through this
+/// module with `POSIX_SPAWN_CLOEXEC_DEFAULT`, which closes every descriptor
+/// the file actions do not name, and `cargo xtask check-deps` keeps
+/// spawning out of `stackly-core` and `stacklyd` and inside the `process`
+/// and `codesign` modules here. A `fork` or a `std::process::Command`
+/// anywhere in the daemon would leak a secret stdin pipe through this
+/// window.
+///
 /// # Errors
 ///
 /// Returns [`ProcessError::Io`] when the pipe cannot be created.

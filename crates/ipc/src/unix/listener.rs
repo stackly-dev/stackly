@@ -175,6 +175,11 @@ impl Listener {
     }
 
     /// Reads peer credentials from `source` instead of [`TokioPeerCred`].
+    ///
+    /// For tests only: the source decides what the uid check sees, so a
+    /// source other than [`TokioPeerCred`] can let any peer through. No
+    /// daemon code calls it.
+    #[doc(hidden)]
     #[must_use]
     pub fn with_peer_cred_source(mut self, source: impl PeerCredSource) -> Self {
         self.peer_source = Arc::new(source);

@@ -122,6 +122,11 @@ pub struct DaemonConfig {
     /// The constants of the metrics sampler and the scheduled data folder
     /// scan; tests shorten the interval (spec 0028).
     pub metrics: SamplerConfig,
+    /// The home folder of the user, for the protected folders a storage
+    /// location must stay out of (spec 0032). The binary sets it from the
+    /// user database (spec 0004 AC-6); `None`, the default, skips that
+    /// rule, so an in process test never reads the real home.
+    pub home: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -154,6 +159,7 @@ impl Default for DaemonConfig {
             data_usage: DataUsageConfig::default(),
             durable_logs: DurableLogConfig::default(),
             metrics: SamplerConfig::default(),
+            home: None,
         }
     }
 }
@@ -377,6 +383,9 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
     ));
     core.storage()
         .set_read_timeout(config.capacity_read_timeout);
+    if let Some(home) = config.home.clone() {
+        core.set_home(home);
+    }
 
     // The launch record comes after the lock and before the socket, so a
     // client that connects has a record to read (spec 0015). A failure is

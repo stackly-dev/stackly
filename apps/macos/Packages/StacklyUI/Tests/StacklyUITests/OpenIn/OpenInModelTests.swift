@@ -73,10 +73,47 @@ struct OpenInModelTests {
     private func model(
         _ script: SecretsScript, prepared: Prepared = Prepared { _ in .success(Self.script) }
     ) -> OpenInModel {
+        model(script.client, prepared: prepared)
+    }
+
+    private func model(
+        _ secrets: SecretsClient, prepared: Prepared = Prepared { _ in .success(Self.script) }
+    ) -> OpenInModel {
         let ports = fixture.ports
         return OpenInModel(
             locator: ports.locator, opener: ports.opener, fileExists: ports.fileExists,
-            prepareTerminal: prepared.call, secrets: script.client, pasteboard: concealed)
+            isRegularFile: ports.isRegularFile, prepareTerminal: prepared.call, secrets: secrets,
+            pasteboard: concealed)
+    }
+
+    /// A `secret.reveal` that waits until the test lets it answer, like a daemon behind a
+    /// Keychain dialog.
+    private final class RevealGate: Sendable {
+        private let continuation = Mutex<CheckedContinuation<Void, Never>?>(nil)
+
+        func client(value: String) -> SecretsClient {
+            SecretsClient { [self] call, _ throws(ClientError) in
+                guard case .secretReveal(let params) = call else {
+                    throw SecretsScript.rejection("request.unknown_method")
+                }
+                await withCheckedContinuation { waiting in
+                    continuation.withLock { $0 = waiting }
+                }
+                return SecretsScript.revealReply(params.reference, value)
+            }
+        }
+
+        func waitUntilWaiting() async {
+            while continuation.withLock({ $0 == nil }) { await Task.yield() }
+        }
+
+        func open() {
+            let waiting = continuation.withLock { current in
+                defer { current = nil }
+                return current
+            }
+            waiting?.resume()
+        }
     }
 
     private func actions() throws -> [ActionCase] {
@@ -274,6 +311,28 @@ struct OpenInModelTests {
         #expect(url.absoluteString.contains(credential.value) == false)
     }
 
+    @Test func aPasswordThatArrivesAfterTheClipboardChangedLeavesItAlone() async throws {
+        let gate = RevealGate()
+        let model = model(gate.client(value: credential.value))
+        let detail = detail(for: postgres)
+        let action = try #require(detail.openActions?.first { $0.name == "tableplus" })
+
+        let opening = Task { await model.open(action, summary: postgres, detail: detail) }
+        await gate.waitUntilWaiting()
+        // The person copies something else while the Keychain dialog is still open.
+        _ = pasteboard.clearContents()
+        _ = pasteboard.setString("something else", forType: .string)
+        gate.open()
+        let feedback = try #require(await opening.value)
+
+        #expect(pasteboard.strings[.string] == "something else")
+        #expect(pasteboard.holds(credential.value) == false)
+        #expect(fixture.opened.count == 1)
+        #expect(feedback.tone == .caution)
+        #expect(feedback.message == "Opened without copying the password.")
+        #expect(feedback.detail == "Not copied because the clipboard changed.")
+    }
+
     @Test func anAppFallsBackToTheNextBundleIDWhenTheFirstIsNotInstalled() async throws {
         fixture.bundles = ["at.eggerapps.Postico"]
         let model = model(secrets())
@@ -383,6 +442,43 @@ struct OpenInModelTests {
         #expect(feedback.detail == "Password copied. Paste it when psql asks.")
     }
 
+    @Test func aScriptPathTheDaemonDoesNotWriteIsNeverOpened() async throws {
+        let symlink = "/Users/stackly-fixture/instances/temp/open-link.command"
+        fixture.notRegularFiles = [symlink]
+        let paths = [
+            "relative/open-psql.command", "/Users/stackly-fixture/instances/temp/psql.command",
+            "/Users/stackly-fixture/instances/temp/open-psql.sh",
+            "/Users/stackly-fixture/instances/temp/open-.command", "/Applications/Calculator.app",
+            symlink,
+        ]
+        for path in paths {
+            let script = secrets()
+            let model = model(script, prepared: Prepared { _ in .success(path) })
+            let detail = detail(for: postgres)
+            let action = try #require(detail.openActions?.first { $0.name == "psql" })
+
+            let feedback = try #require(await model.open(action, summary: postgres, detail: detail))
+
+            #expect(feedback.tone == .critical, "\(path)")
+            #expect(feedback.detail == OpenInFailure.invalidTarget.errorDescription, "\(path)")
+            #expect(script.made.isEmpty, "nothing is copied for \(path)")
+        }
+        #expect(fixture.opened.isEmpty)
+    }
+
+    @Test func theSystemCheckCountsOnlyARegularFileAndNeverASymlinkOrAFolder() throws {
+        let folder = try TemporaryFolder()
+        let file = folder.url.appending(path: "open-psql.command")
+        try Data("#!/bin/sh\n".utf8).write(to: file)
+        let link = folder.url.appending(path: "open-link.command")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
+
+        #expect(OpenInPorts.isRegularFile(file.path))
+        #expect(OpenInPorts.isRegularFile(link.path) == false)
+        #expect(OpenInPorts.isRegularFile(folder.url.path) == false)
+        #expect(OpenInPorts.isRegularFile(folder.url.appending(path: "missing").path) == false)
+    }
+
     @Test func aRefusedPrepareCopiesNothingOpensNothingAndReloadsTheDetail() async throws {
         let cases: [(code: String, detail: [ErrorDetail], text: String)] = [
             (
@@ -457,6 +553,39 @@ struct OpenInModelTests {
         #expect(fixture.browsed == [url])
         #expect(fixture.opened.isEmpty)
         #expect(feedback.message == "Opening Monitoring for “queue” in your browser.")
+    }
+
+    @Test func aBrowserActionWithAnotherSchemeIsNeverOpened() async throws {
+        let nats = FixtureScenario.instanceCases[4].testing(
+            lifecycle: .running, readiness: .fixture(.ready, reason: "probe_ok"))
+        let model = model(secrets())
+        for text in ["file:///etc/passwd", "javascript:alert(1)", "ssh://host", "localhost:8222"] {
+            let action = OpenAction(
+                name: "monitoring", title: "Monitoring", kind: .browser, state: .available,
+                reason: nil, appBundleIds: nil, url: text, command: nil, path: nil,
+                copySecret: nil)
+            let detail = detail(for: nats, actions: [action])
+
+            let feedback = try #require(await model.open(action, summary: nats, detail: detail))
+
+            #expect(feedback.tone == .critical, "\(text)")
+            #expect(feedback.detail == OpenInFailure.invalidTarget.errorDescription, "\(text)")
+        }
+        #expect(fixture.browsed.isEmpty)
+    }
+
+    @Test func anUppercaseHttpsSchemeStillOpensInTheBrowser() async throws {
+        let nats = FixtureScenario.instanceCases[4].testing(
+            lifecycle: .running, readiness: .fixture(.ready, reason: "probe_ok"))
+        let action = OpenAction(
+            name: "monitoring", title: "Monitoring", kind: .browser, state: .available,
+            reason: nil, appBundleIds: nil, url: "HTTPS://127.0.0.1:8222/", command: nil,
+            path: nil, copySecret: nil)
+
+        _ = await model(secrets()).open(
+            action, summary: nats, detail: detail(for: nats, actions: [action]))
+
+        #expect(fixture.browsed.map(\.absoluteString) == ["HTTPS://127.0.0.1:8222/"])
     }
 
     @Test func aRevealActionShowsTheFileInFinderWithoutACard() async throws {

@@ -2,9 +2,9 @@
 //! 0011, *Use case isi atau ganti nilai*, AC-5, AC-6).
 
 use stackly_domain::{
-    ResourceRevision, SecretFieldName, SecretOrigin, SecretOwner, SecretPurpose, SecretRef,
-    SecretReferenceId, SecretReferenceRecord, SecretReferenceView, SecretStatus, WriteBatch,
-    WriteOp,
+    BatchError, CommitGuard, GuardDecision, Guarded, RegistryError, ResourceRef, ResourceRevision,
+    SecretFieldName, SecretOrigin, SecretOwner, SecretPurpose, SecretRef, SecretReferenceId,
+    SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse, WriteBatch, WriteOp,
 };
 use stackly_platform::{SCRUB_MIN_LEN, SecretPresence, SecretValue, WriteMode};
 
@@ -308,7 +308,7 @@ impl SecretService {
         // Step 7: one registry commit for the row and its audit row.
         let now = self.now();
         let store_key = self.store_key(&reference)?;
-        let (record, uses, op) = match row {
+        let (record, uses, op, read) = match row {
             Row::Registered(view) => {
                 let mut record = view.record.clone();
                 record.revision = view.record.revision.next();
@@ -322,7 +322,8 @@ impl SecretService {
                     record: record.clone(),
                     expected: view.record.revision,
                 };
-                (record, view.used_by, op)
+                let read = Some((view.record.revision, view.used_by.clone()));
+                (record, view.used_by, op, read)
             }
             Row::New(mut record) => {
                 record.platform_store_key = store_key;
@@ -333,13 +334,17 @@ impl SecretService {
                 record.created_at = now;
                 record.updated_at = now;
                 let op = WriteOp::InsertSecretReference(record.clone());
-                (record, Vec::new(), op)
+                (record, Vec::new(), op, None)
             }
         };
         let audit = self.audit_row(SET, caller, &reference, Some(record.id), None, None);
-        let committed = self
-            .registry()
-            .commit(WriteBatch::new(vec![op, WriteOp::InsertAuditEvent(audit)]));
+        let ops = vec![op, WriteOp::InsertAuditEvent(audit)];
+        let committed = match read {
+            Some((expected, read_uses)) => {
+                self.commit_unless_uses_changed(&reference, expected, read_uses, ops)
+            }
+            None => self.registry().commit(WriteBatch::new(ops)).map(|_| ()),
+        };
         if let Err(failed) = committed {
             let undone = match &old {
                 Some(old) => self
@@ -377,6 +382,44 @@ impl SecretService {
             },
             Some(change),
         ))
+    }
+
+    /// Step 7 for a registered row: commits `ops` only while the row still
+    /// has the uses steps 1 and 2 read. A create that binds the reference
+    /// records its use without the reference lock and without a new
+    /// revision, so the bounds and the `stored_only` effects this put
+    /// checked would miss the new use; such a put fails with a revision
+    /// conflict instead, and its store write is undone.
+    fn commit_unless_uses_changed(
+        &self,
+        reference: &SecretRef,
+        expected: ResourceRevision,
+        read_uses: Vec<SecretUse>,
+        ops: Vec<WriteOp>,
+    ) -> Result<(), BatchError> {
+        let reference = reference.clone();
+        let mut read_uses = read_uses;
+        read_uses.sort();
+        let guard: CommitGuard = Box::new(move |view| {
+            if let Some(stored) = view.secret_reference(&reference)? {
+                let mut uses = stored.used_by;
+                uses.sort();
+                if uses != read_uses {
+                    return Err(RegistryError::RevisionConflict {
+                        resource: ResourceRef::SecretReference(reference),
+                        expected,
+                        actual: stored.record.revision,
+                    });
+                }
+            }
+            Ok(GuardDecision::Write(ops))
+        });
+        match self.registry().commit_guarded(guard)? {
+            Guarded::Committed(_) => Ok(()),
+            Guarded::Refused(_) => Err(BatchError::batch(RegistryError::Io {
+                detail: "the secret put guard never refuses".to_owned(),
+            })),
+        }
     }
 
     /// Steps 1 and 2: the row to write, the bounds of the fields that use

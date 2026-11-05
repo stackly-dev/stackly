@@ -1,5 +1,5 @@
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use stackly_platform::{
@@ -73,6 +73,18 @@ impl MacosPlatform {
             }
         };
         Self::with_roots(roots)
+    }
+
+    /// The home directory of the user this process runs as, from the user
+    /// database (`getpwuid_r(getuid())`), never from `HOME`: the folder
+    /// [`new`](Self::new) puts the default roots under (spec 0004 AC-6).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::HomeDirUnavailable`] when the user database
+    /// has no absolute home directory for the current uid.
+    pub fn home_dir() -> Result<PathBuf, PlatformError> {
+        home_dir()
     }
 
     /// Assembles the platform with roots the caller chose, without the

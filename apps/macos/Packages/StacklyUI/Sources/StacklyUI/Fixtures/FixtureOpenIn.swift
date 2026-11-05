@@ -26,6 +26,9 @@
         var bundles: Set<String>
         /// The paths `reveal` finds.
         var existingPaths: Set<String> = []
+        /// The paths that are not a regular file (a symlink, a folder, or nothing); every other
+        /// path is one, so a fixture terminal script opens.
+        var notRegularFiles: Set<String> = []
         /// What `open(_:withApplicationAt:)` throws, or `nil`.
         var openFailure: (any Error)?
         /// What the browser open throws, or `nil`.
@@ -46,7 +49,10 @@
         var ports: OpenInPorts {
             OpenInPorts(
                 locator: Locator(owner: self), opener: Opener(owner: self),
-                fileExists: { [weak self] in self?.existingPaths.contains($0) ?? false })
+                fileExists: { [weak self] in self?.existingPaths.contains($0) ?? false },
+                isRegularFile: { [weak self] path in
+                    self.map { $0.notRegularFiles.contains(path) == false } ?? false
+                })
         }
 
         fileprivate func record(_ url: URL, with application: URL) throws {

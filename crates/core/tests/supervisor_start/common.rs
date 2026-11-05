@@ -661,7 +661,7 @@ impl Rig {
         connector: Arc<dyn NativeConnect>,
         patch: impl Fn(&str) -> String,
     ) -> Self {
-        Self::build_full(|_| {}, patch, |text| text.to_owned(), Some(connector)).await
+        Self::build_full(|_| {}, patch, |text| text.to_owned(), Some(connector), None).await
     }
 
     pub async fn build_with(
@@ -669,7 +669,20 @@ impl Rig {
         patch: impl Fn(&str) -> String,
         schema_patch: impl Fn(&str) -> String,
     ) -> Self {
-        Self::build_full(tweak, patch, schema_patch, None).await
+        Self::build_full(tweak, patch, schema_patch, None, None).await
+    }
+
+    /// A rig whose engine runs at most `max_running` operations at once and
+    /// queues at most `max_queued`.
+    pub async fn with_slots(max_running: u32, max_queued: u32) -> Self {
+        Self::build_full(
+            |_| {},
+            |text| text.to_owned(),
+            |text| text.to_owned(),
+            None,
+            Some((max_running, max_queued)),
+        )
+        .await
     }
 
     async fn build_full(
@@ -677,6 +690,7 @@ impl Rig {
         patch: impl Fn(&str) -> String,
         schema_patch: impl Fn(&str) -> String,
         connector: Option<Arc<dyn NativeConnect>>,
+        slots: Option<(u32, u32)>,
     ) -> Self {
         let root = TestRoot::new().expect("a test root can be created");
         let fake = FakePlatform::new(&root);
@@ -728,6 +742,11 @@ impl Rig {
         fast_config(&mut deps.config);
         tweak(&mut deps.config);
         let sup = Supervisor::new(deps.clone());
+        let mut limits = EngineLimits::default()
+            .with_intervals(Duration::from_millis(100), Duration::from_millis(20));
+        if let Some((max_running, max_queued)) = slots {
+            limits = limits.with_slots(max_running, max_queued);
+        }
         let engine = OperationEngine::new(
             EngineDeps {
                 registry: Arc::clone(&registry) as Arc<dyn Registry>,
@@ -736,8 +755,7 @@ impl Rig {
                 events: Arc::new(RecordingEvents::new()),
                 redactor: Arc::clone(&redactor) as Arc<dyn stackly_core::operation::Redact>,
             },
-            EngineLimits::default()
-                .with_intervals(Duration::from_millis(100), Duration::from_millis(20)),
+            limits,
         );
         engine.recover().await.expect("an empty registry recovers");
         engine.start();

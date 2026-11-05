@@ -284,6 +284,38 @@ async fn a_starting_instance_that_was_interrupted_fails_and_starts_again_when_wa
 }
 
 #[tokio::test]
+async fn a_system_start_that_meets_a_full_queue_waits_for_room_and_is_never_skipped() {
+    let rig = Rig::with_slots(1, 1).await;
+    let id = rig.instance(&spec(InstanceLifecycle::Starting, DesiredState::Running));
+    let identity = rig.plant(id, Plant::live());
+    rig.processes().exit(identity.pid, None);
+    let running = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+    let queued = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+    rig.sup.reconcile(RegistryMode::Ready).await.unwrap();
+    let first = rig.start(running).await;
+    let first_spawn = rig.main_spawn(1).await;
+    let second = rig.start(queued).await;
+
+    rig.sup.start_reconciled();
+    wait_for("the system start meets the full queue", || {
+        rig.engine.stats().rejected_queue_full >= 1
+    })
+    .await;
+    rig.serve(&first_spawn);
+    rig.wait_state(first, OperationState::Succeeded).await;
+    let second_spawn = rig.main_spawn(2).await;
+    rig.serve(&second_spawn);
+    rig.wait_state(second, OperationState::Succeeded).await;
+    let third_spawn = rig.main_spawn(3).await;
+    rig.serve(&third_spawn);
+
+    wait_for("the system start ends ready", || {
+        rig.instance_row(id).lifecycle() == InstanceLifecycle::Running
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn an_initializing_instance_always_fails_as_interrupted() {
     let rig = Rig::new().await;
     let id = rig.instance(&spec(
@@ -331,6 +363,28 @@ async fn a_pid_reused_by_another_process_is_gone_and_never_signalled() {
         Some(FakeProcessState::Running),
         "the other process is untouched"
     );
+}
+
+#[tokio::test]
+async fn a_pid_reused_between_the_proof_and_the_exit_watch_is_unproven_and_not_adopted() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec(InstanceLifecycle::Running, DesiredState::Running));
+    let identity = rig.plant(id, Plant::live());
+    rig.processes()
+        .change_facts_on_next_watch(identity.pid, |facts| {
+            facts.start = stackly_domain::ProcessStart::new(1_800_000_000, 5).unwrap();
+        });
+
+    let report = rig.sup.reconcile(RegistryMode::Ready).await.unwrap();
+
+    assert_eq!(report.adopted, 0);
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Unknown);
+    assert!(matches!(
+        rig.sup.status(id).blocker,
+        Some(InstanceBlocker::IdentityUnproven { .. })
+    ));
+    assert!(rig.sup.status(id).process.is_none(), "it is not adopted");
+    assert_eq!(rig.processes().count(ProcessOp::Signal), 0);
 }
 
 #[tokio::test]

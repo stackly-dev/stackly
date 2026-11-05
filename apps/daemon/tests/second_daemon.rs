@@ -31,7 +31,20 @@ fn a_second_daemon_for_the_same_root_exits_3_names_the_owner_and_changes_nothing
     let lock = paths.layout.daemon_lock();
     let log = paths.layout.daemon_log_dir().join("stacklyd.log");
     let lock_before = std::fs::read(&lock).unwrap();
-    let log_before = std::fs::read(&log).unwrap();
+    // The first daemon logs the end of its start steps after the socket is
+    // up; wait for that line so the snapshot is not racing its own writes.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let log_before = loop {
+        let bytes = std::fs::read(&log).unwrap();
+        if String::from_utf8_lossy(&bytes).contains("stacklyd finished its start steps") {
+            break bytes;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the first daemon never finished its start steps"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    };
     let log_inode = std::fs::metadata(&log).unwrap().ino();
     let socket_inode = std::fs::symlink_metadata(&paths.socket).unwrap().ino();
 

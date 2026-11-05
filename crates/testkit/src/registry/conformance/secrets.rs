@@ -24,6 +24,7 @@ pub(super) fn secrets(suite: &Suite<'_>) {
     uses_and_delete(suite);
     lists(suite);
     audit(suite);
+    guard_reads(suite);
 }
 
 /// A reference no other scenario or stored row uses.
@@ -819,3 +820,57 @@ fn audit(suite: &Suite<'_>) {
         }
     }
 }
+
+/// A commit guard reads a reference row with its uses as a plain read
+/// returns it, and an unknown reference as absent (spec 0011, the bind
+/// recheck of a create).
+fn guard_reads(suite: &Suite<'_>) {
+    const CHECK: &str = "a_guard_reads_a_secret_reference_with_its_uses";
+    let stack = suite.stack("store a runtime for the guarded secret read");
+    let instance = Suite::instance(&stack).build();
+    let shared = fresh_reference("guarded");
+    suite.commit(
+        "store a reference and an instance that uses it",
+        vec![
+            WriteOp::InsertInstance(instance.clone()),
+            WriteOp::InsertSecretReference(user_record(suite, &shared)),
+            WriteOp::ReplaceSecretUses {
+                user: SecretUser::Instance(instance.id()),
+                uses: BTreeMap::from([(field("adminPassword"), shared.clone())]),
+            },
+        ],
+    );
+    let expected = view(suite, "read the used reference", &shared);
+    let unknown = fresh_reference("guarded-unknown");
+    let seen: std::sync::Arc<std::sync::Mutex<Option<GuardSeen>>> = std::sync::Arc::default();
+    let guard: stackly_domain::CommitGuard = {
+        let seen = std::sync::Arc::clone(&seen);
+        let shared = shared.clone();
+        Box::new(move |view| {
+            let known = view.secret_reference(&shared)?;
+            let missing = view.secret_reference(&unknown)?;
+            *seen
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((known, missing));
+            Ok(stackly_domain::GuardDecision::Write(Vec::new()))
+        })
+    };
+
+    match suite.registry.commit_guarded(guard) {
+        Ok(stackly_domain::Guarded::Committed(_)) => {}
+        Ok(stackly_domain::Guarded::Refused(_)) => fail(CHECK, "the guard refused"),
+        Err(err) => fail(CHECK, &err.to_string()),
+    }
+
+    let (known, missing) = seen
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+        .unwrap_or_else(|| fail(CHECK, "the guard did not run"));
+    expect_eq(CHECK, known, Some(expected));
+    expect_eq(&format!("{CHECK}: an unknown reference"), missing, None);
+}
+
+/// What the guard of [`guard_reads`] read: the used reference and an
+/// unknown one.
+type GuardSeen = (Option<SecretReferenceView>, Option<SecretReferenceView>);

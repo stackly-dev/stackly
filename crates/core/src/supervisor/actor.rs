@@ -234,7 +234,9 @@ impl ActorState {
 pub(crate) struct InstanceActor {
     pub(crate) id: InstanceId,
     state: Mutex<ActorState>,
-    /// Wakes the exit task when a start operation hands the exit back.
+    /// Wakes every exit task when a start operation hands the exit back or
+    /// a process is finished. Waiters register before they check
+    /// `op_owns_exit`, so `notify_waiters` loses no wakeup.
     pub(crate) released: Notify,
 }
 
@@ -342,7 +344,7 @@ impl InstanceActor {
     /// operation calls it when it stops watching the process itself.
     pub(crate) fn release_exit(&self, deps: &SupervisorDeps) {
         self.update(deps, |state| state.op_owns_exit = false);
-        self.released.notify_one();
+        self.released.notify_waiters();
     }
 
     /// Cancels the pause before a respawn, if one is pending, and clears

@@ -7,7 +7,7 @@
 //! with the settings or the location as they are then. `settings.changed`
 //! goes out once per accepted change, after the commit.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use stackly_core::logs::{LOG_SEGMENT_MAX_BYTES, LOG_SEGMENTS_PER_STREAM};
@@ -396,7 +396,7 @@ pub fn set_location<'a>(
         );
         let avoid = bundle_roots();
         let work_request = SetLocationRequest::new(kind, target, expected)
-            .with_home(std::env::var_os("HOME").map(PathBuf::from))
+            .with_home(core.home().map(Path::to_path_buf))
             .with_avoid(avoid);
         let check = {
             let registry = registry.clone();

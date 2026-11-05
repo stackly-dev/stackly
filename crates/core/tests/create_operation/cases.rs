@@ -534,6 +534,67 @@ async fn a_value_a_copy_and_a_bind_each_reach_the_instance_without_a_value_in_th
 }
 
 #[tokio::test]
+async fn a_bind_whose_reference_is_set_again_before_the_register_step_fails_the_create() {
+    let ev = evidence!(
+        covers = ["AC-007"],
+        kind = Kind::Fixture,
+        expected = "a secret.set on the bound reference between the bind check and the register step moves its revision, so the guarded register refuses with resource.revision_mismatch, no instance is registered, and no use of the bound reference is recorded",
+    );
+    use stackly_core::secret::{PutRequest, PutTarget, SecretCaller, SecretInput};
+    use stackly_platform::WriteMode;
+
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let bound = register_reference(rig, "local:shared/fake/raced", "bound-secret-value-5");
+    let id = InstanceId::generate();
+    let mut draft = cr.draft("with-raced-bind");
+    draft.secrets = vec![(
+        "authToken".to_owned(),
+        SecretSourceKind::Bind(bound.to_string()),
+    )];
+    let service = Arc::clone(&rig.secrets);
+    let target = bound.clone();
+    let hooks = CreateHooks {
+        after_layout: Some(Arc::new(move |_| {
+            let caller = SecretCaller::client("cli".parse().expect("a client code"), 501, true);
+            let value =
+                SecretValue::new("a-value-the-bind-never-checked".to_owned()).expect("a value");
+            service
+                .put(
+                    PutRequest::new(
+                        PutTarget::Existing(target.clone()),
+                        SecretInput::Value(value),
+                        WriteMode::Replace,
+                    ),
+                    &caller,
+                )
+                .expect("the concurrent set stores its value");
+        })),
+        before_init: None,
+    };
+
+    let op = cr
+        .begin(id, draft, Vec::new(), hooks)
+        .await
+        .expect("accepted");
+    let failed = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(Rig::failure_code(&failed), "resource.revision_mismatch");
+    assert!(
+        rig.registry.instance(id).expect("it reads").value.is_none(),
+        "no instance is registered"
+    );
+    let uses = rig
+        .registry
+        .secret_uses_by(SecretUser::Instance(id))
+        .expect("it reads")
+        .value;
+    assert!(uses.is_empty(), "no use of the bound reference");
+    assert!(rig.processes().spawns().is_empty());
+    ev.pass();
+}
+
+#[tokio::test]
 async fn a_copy_from_a_locked_store_needs_the_source_and_nothing_else_is_made() {
     let cr = CreateRig::new().await;
     let rig = &cr.rig;

@@ -23,7 +23,7 @@ use stackly_core::operation::{
     BeginRequest, BusyPolicy, NoOpReply, Origin, Precheck, PrecheckOutcome,
 };
 use stackly_core::supervisor::drift::{self, ResolveDriftRequest};
-use stackly_core::supervisor::{ChangeRequest, RenameRequest};
+use stackly_core::supervisor::{ChangeRequest, RenameRequest, SupervisorError};
 use stackly_domain::{
     ConfigRevisionNumber as DomainNumber, EndpointName, InstanceFilter, InstanceId,
     InstanceLifecycle, InstanceName, JournalPayload, LockKey, OperationJournal, OperationKind,
@@ -409,7 +409,24 @@ pub fn apply_config<'a>(
             .await
             .map_err(rejection)?
         {
-            Planned::Unchanged => return Ok(Box::new(unchanged(base))),
+            Planned::Unchanged => {
+                // Nothing queues, so the precheck never runs: a stale
+                // `expectedRevision` is refused here instead of answered
+                // `unchanged`.
+                if let Some(expected) = expected {
+                    let actual = read_instance(core, id).await?.revision();
+                    if expected != actual {
+                        return Err(Box::new(supervisor_error(
+                            &SupervisorError::RevisionMismatch {
+                                instance: id,
+                                expected,
+                                actual,
+                            },
+                        )));
+                    }
+                }
+                return Ok(Box::new(unchanged(base)));
+            }
             Planned::Change(plan) => plan,
             _ => return Err(unexpected("a config plan this daemon cannot read")),
         };

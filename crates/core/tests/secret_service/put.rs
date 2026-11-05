@@ -15,7 +15,7 @@ use stackly_testkit::SecretOp;
 use stackly_testkit::evidence::{FixtureCredential, Kind, evidence};
 
 use crate::common::{
-    Harness, ScriptedStore, field_name, instance_reference, reference, user, value,
+    Harness, OnWrite, ScriptedStore, field_name, instance_reference, reference, user, value,
 };
 
 fn revision(number: u64) -> ResourceRevision {
@@ -705,4 +705,53 @@ fn a_store_failure_stops_the_put_and_is_audited() {
         user().interaction,
         stackly_platform::Interaction::AllowPrompt
     );
+}
+
+#[test]
+fn a_put_whose_reference_gains_a_use_before_its_commit_fails_and_puts_the_old_value_back() {
+    let (harness, store) = ScriptedStore::harness();
+    let shared = reference("local:shared/admin");
+    harness.set(&shared, "the-value-before-the-bind");
+    let instance = harness.instance(true);
+    harness.rule(instance, "password", 16, None, None);
+    // A create binds the reference between this put's reads and its
+    // commit: the new use, whose rule the value below breaks, lands
+    // without a new revision.
+    let registry = std::sync::Arc::clone(&harness.registry);
+    let bound = shared.clone();
+    *store.on_write.lock().unwrap() = Some(OnWrite(Box::new(move || {
+        let uses = std::collections::BTreeMap::from([(field_name("password"), bound)]);
+        stackly_domain::Registry::commit(
+            &*registry,
+            stackly_domain::WriteBatch::new(vec![stackly_domain::WriteOp::ReplaceSecretUses {
+                user: SecretUser::Instance(instance),
+                uses,
+            }]),
+        )
+        .expect("the bind commits");
+    })));
+
+    let err = harness
+        .put(PutRequest::new(
+            PutTarget::Existing(shared.clone()),
+            SecretInput::Value(value("short")),
+            WriteMode::Replace,
+        ))
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            err,
+            SecretError::Registry(RegistryError::RevisionConflict { .. })
+        ),
+        "{err:?}"
+    );
+    assert_eq!(err.code().as_str(), "resource.revision_mismatch");
+    assert_eq!(
+        harness.store().stored_value(&shared).as_deref(),
+        Some("the-value-before-the-bind")
+    );
+    let view = harness.view(&shared).unwrap();
+    assert_eq!(view.record.revision, revision(1));
+    assert_eq!(view.used_by.len(), 1);
 }

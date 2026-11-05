@@ -11,8 +11,8 @@ use stackly_domain::{
     CommitGuard, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, EndpointRequests,
     GuardDecision, GuardView, Guarded, InstallMode, Instance, InstanceId, InstanceManifest,
     JournalPayload, ManifestRuntime, NewInstance, NewInstanceManifest, Operation, OperationId,
-    OperationResource, ProviderSourceId, ReasonCode, RegistryError, ResourceRef, SecretFieldName,
-    SecretOwner, SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
+    OperationResource, ProviderSourceId, ReasonCode, RegistryError, ResourceRef, ResourceRevision,
+    SecretFieldName, SecretOwner, SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
 };
 use stackly_platform::{InstancePaths, Platform, SecretValue, WriteMode, check_private_dir};
 
@@ -30,7 +30,7 @@ use crate::operation::{
     StepSpec, WorkError, WorkFactory, WorkOutcome, WorkResult,
 };
 use crate::secret::{
-    FieldContext, PutRequest, PutTarget, SecretCaller, SecretInput, SecretService,
+    FieldContext, PutRequest, PutTarget, SecretCaller, SecretError, SecretInput, SecretService,
     classify_create_failure, value_shape,
 };
 use crate::supervisor::{InitRequest, PortProbe, Supervisor, SupervisorError, SupervisorEvents};
@@ -181,7 +181,7 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
 
     // secrets: each reference is recorded before its value is stored.
     enter(&mut ctx, StageName::SECRETS, false).await?;
-    secrets(&mut ctx, &deps, &caller, id, &resolved, values).await?;
+    let bound = secrets(&mut ctx, &deps, &caller, id, &resolved, values).await?;
 
     // layout: the folders, claimed before the first write.
     enter(&mut ctx, StageName::LAYOUT, false).await?;
@@ -189,7 +189,7 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
 
     // register: re-check and write in one registry transaction.
     enter(&mut ctx, StageName::REGISTER, false).await?;
-    let instance = register(&mut ctx, &deps, id, &resolved, pinned, now).await?;
+    let instance = register(&mut ctx, &deps, id, &resolved, pinned, bound, now).await?;
     deps.events.instance_changed(&instance);
 
     // init: the provider's init plan, under the instance lock.
@@ -294,6 +294,9 @@ async fn pin(
     Ok((!known).then_some(pinned.record))
 }
 
+/// The `secrets` step: stores or binds every secret of the draft. Returns
+/// each bound reference with the revision its value was checked at, which
+/// the `register` step checks again (spec 0011, AC-23).
 async fn secrets(
     ctx: &mut OperationContext,
     deps: &Arc<CreateWorkDeps>,
@@ -301,8 +304,9 @@ async fn secrets(
     id: InstanceId,
     resolved: &ResolvedCreate,
     values: Vec<(String, SecretValue)>,
-) -> Result<(), WorkError> {
+) -> Result<Vec<(SecretRef, ResourceRevision)>, WorkError> {
     let mut values = values;
+    let mut bound = Vec::new();
     for plan in &resolved.secrets {
         let is_bind = matches!(plan.source, SecretSourceKind::Bind(_));
         let handle = if is_bind {
@@ -321,24 +325,31 @@ async fn secrets(
         let service = Arc::clone(&deps.secrets);
         let who = caller.clone();
         let put = blocking(move || service.put(request, &who)).await?;
-        if let Err(error) = put {
-            // A `bind` writes nothing, so a failure on its reference is
-            // always one on the source: the reference this create would have
-            // written stands as the target (AC-7).
-            let target = if is_bind {
-                SecretRef::for_instance(id, &plan.purpose)
-            } else {
-                plan.reference.clone()
-            };
-            return Err(failed(SupervisorError::Secret(classify_create_failure(
-                error, &target,
-            ))));
+        let outcome = match put {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                // A `bind` writes nothing, so a failure on its reference is
+                // always one on the source: the reference this create would have
+                // written stands as the target (AC-7).
+                let target = if is_bind {
+                    SecretRef::for_instance(id, &plan.purpose)
+                } else {
+                    plan.reference.clone()
+                };
+                return Err(failed(SupervisorError::Secret(classify_create_failure(
+                    error, &target,
+                ))));
+            }
+        };
+        if is_bind {
+            let record = &outcome.reference.record;
+            bound.push((record.reference.clone(), record.revision));
         }
         if let Some(handle) = handle {
             ctx.confirm_created(handle).await?;
         }
     }
-    Ok(())
+    Ok(bound)
 }
 
 fn secret_input(
@@ -574,6 +585,7 @@ async fn register(
     id: InstanceId,
     resolved: &ResolvedCreate,
     pinned: Option<stackly_domain::ProviderRevisionRecord>,
+    bound: Vec<(SecretRef, ResourceRevision)>,
     now: jiff::Timestamp,
 ) -> Result<Instance, WorkError> {
     let handle = ctx
@@ -625,6 +637,9 @@ async fn register(
         let resolved = resolved.clone();
         let created = Arc::clone(&created);
         Box::new(move |view| {
+            if let Some(error) = recheck_bound(view, &bound)? {
+                return Ok(GuardDecision::Refuse(Box::new(error)));
+            }
             Ok(match recheck(view, &resolved, id, pinned) {
                 Err(error) => GuardDecision::Refuse(Box::new(error)),
                 Ok(record) => {
@@ -662,8 +677,12 @@ async fn register(
     match ctx.commit_guarded(guard).await {
         Ok(Guarded::Committed(_)) => {}
         Ok(Guarded::Refused(reason)) => {
-            return Err(match reason.downcast::<CreateError>() {
-                Ok(error) => failed(*error),
+            let reason = match reason.downcast::<CreateError>() {
+                Ok(error) => return Err(failed(*error)),
+                Err(reason) => reason,
+            };
+            return Err(match reason.downcast::<SecretError>() {
+                Ok(error) => failed(SupervisorError::Secret(*error)),
                 Err(_) => internal("the register guard refused with an unknown reason"),
             });
         }
@@ -680,6 +699,33 @@ async fn register(
     deps.supervisor.note_created(&instance);
     ctx.confirm_created(handle).await?;
     Ok(instance)
+}
+
+/// Reads every bound reference through the guarded commit's own
+/// transaction: its value was checked against the new field's rules in the
+/// `secrets` step at the revision recorded there, but its use is written
+/// only here and without the reference lock. A reference that is gone, or
+/// whose revision moved since, so a `secret.set` stored a value the check
+/// never saw, refuses the commit (spec 0011, AC-23).
+fn recheck_bound(
+    view: &dyn GuardView,
+    bound: &[(SecretRef, ResourceRevision)],
+) -> Result<Option<SecretError>, RegistryError> {
+    for (reference, checked) in bound {
+        let Some(stored) = view.secret_reference(reference)? else {
+            return Ok(Some(SecretError::NotFound {
+                reference: reference.clone(),
+            }));
+        };
+        if stored.record.revision != *checked {
+            return Ok(Some(SecretError::RevisionMismatch {
+                reference: reference.clone(),
+                expected: *checked,
+                actual: stored.record.revision,
+            }));
+        }
+    }
+    Ok(None)
 }
 
 /// Reads the registry through the guarded commit's own transaction and

@@ -256,12 +256,24 @@ pub fn instance_reference(instance: InstanceId, purpose: &str) -> SecretRef {
 }
 
 /// The fake store with failures a test scripts: every read of one
-/// reference, or every write after the first `writes_ok`.
+/// reference, or every write after the first `writes_ok`. `on_write` runs
+/// once, just before the next write reaches the store, as another caller
+/// would between a put's reads and its commit.
 #[derive(Debug, Default)]
 pub struct ScriptedStore {
     pub inner: FakeSecretStore,
     pub fail_reads_of: Mutex<Option<(SecretRef, SecretStoreError)>>,
     pub writes_ok: Mutex<Option<usize>>,
+    pub on_write: Mutex<Option<OnWrite>>,
+}
+
+/// Work a test runs once inside the next store write.
+pub struct OnWrite(pub Box<dyn FnOnce() + Send>);
+
+impl std::fmt::Debug for OnWrite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OnWrite(..)")
+    }
 }
 
 impl ScriptedStore {
@@ -331,6 +343,14 @@ impl SecretStore for ScriptedStore {
             None => {}
         }
         drop(writes_ok);
+        let on_write = self
+            .on_write
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(OnWrite(work)) = on_write {
+            work();
+        }
         self.inner.write(reference, value, mode, interaction)
     }
 

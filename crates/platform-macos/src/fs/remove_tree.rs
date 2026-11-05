@@ -232,11 +232,13 @@ fn read_names(dir: BorrowedFd<'_>, path: &Path) -> Result<Vec<CString>, Platform
     stream.names().map_err(|err| io_error(path, &err))
 }
 
-/// A `DIR` stream from `fdopendir`, closed on drop.
-struct DirStream(NonNull<libc::DIR>);
+/// A `DIR` stream from `fdopendir`, closed on drop. Also used by
+/// `tree_writer` to check that a tree root it holds open is empty.
+pub(super) struct DirStream(NonNull<libc::DIR>);
 
 impl DirStream {
-    fn new(dir: OwnedFd) -> io::Result<Self> {
+    /// Takes over the open directory descriptor `dir` as a stream.
+    pub(super) fn new(dir: OwnedFd) -> io::Result<Self> {
         let raw = dir.into_raw_fd();
         // SAFETY: `raw` is an open directory descriptor this function owns;
         // on success `fdopendir` takes it over and `closedir` releases it.
@@ -253,7 +255,8 @@ impl DirStream {
         }
     }
 
-    fn names(&mut self) -> io::Result<Vec<CString>> {
+    /// Reads every name left in the stream, without `.` and `..`.
+    pub(super) fn names(&mut self) -> io::Result<Vec<CString>> {
         let mut names = Vec::new();
         loop {
             // SAFETY: `__error` returns the address of this thread's errno,

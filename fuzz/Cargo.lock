@@ -1137,6 +1137,7 @@ dependencies = [
  "stackly-domain",
  "stackly-platform",
  "thiserror",
+ "tracing",
  "ureq",
 ]
 

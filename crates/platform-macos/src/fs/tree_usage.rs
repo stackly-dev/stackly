@@ -238,7 +238,6 @@ impl DirStream {
                 let err = io::Error::last_os_error();
                 return match err.raw_os_error() {
                     Some(0) => Ok(None),
-                    Some(libc::EINTR) => continue,
                     _ => Err(err),
                 };
             }

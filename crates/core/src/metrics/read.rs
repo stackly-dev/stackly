@@ -18,24 +18,40 @@ use super::RunningMain;
 /// The facts of every process seen so far, so `inspect` runs once per
 /// process and not once per tick. An entry goes when its PID leaves the
 /// process list, and is replaced when `counters` finds another process
-/// behind the PID.
+/// behind the PID. A PID `inspect` refused with `EPERM` is remembered in
+/// `denied` until it leaves the list, so it is not asked again every tick.
 #[derive(Debug, Default)]
 pub(super) struct FactsCache {
     facts: HashMap<Pid, ProcessFacts>,
+    denied: HashSet<Pid>,
 }
 
 impl FactsCache {
     /// Reads and keeps the facts of `pid`; `None` when it has none now.
+    /// Only a refusal (`EPERM`) is remembered; a process that is gone or
+    /// caught mid-exec is asked again next tick.
     fn refresh(&mut self, processes: &dyn ProcessSupervision, pid: Pid) -> Option<&ProcessFacts> {
         match processes.inspect(pid) {
             Ok(Some(facts)) => {
+                self.denied.remove(&pid);
                 self.facts.insert(pid, facts);
+            }
+            Err(ProcessError::PermissionDenied { .. }) => {
+                self.facts.remove(&pid);
+                self.denied.insert(pid);
             }
             Ok(None) | Err(_) => {
                 self.facts.remove(&pid);
+                self.denied.remove(&pid);
             }
         }
         self.facts.get(&pid)
+    }
+
+    /// Forgets every PID that is not in `alive`.
+    fn retain(&mut self, alive: &HashSet<Pid>) {
+        self.facts.retain(|pid, _| alive.contains(pid));
+        self.denied.retain(|pid| alive.contains(pid));
     }
 }
 
@@ -89,9 +105,9 @@ pub(super) fn read_tick(
         Err(error) => return Err(error),
     };
     let alive: HashSet<Pid> = pids.iter().copied().collect();
-    cache.facts.retain(|pid, _| alive.contains(pid));
+    cache.retain(&alive);
     for pid in &pids {
-        if !cache.facts.contains_key(pid) {
+        if !cache.facts.contains_key(pid) && !cache.denied.contains(pid) {
             cache.refresh(processes, *pid);
         }
     }
@@ -301,7 +317,10 @@ mod tests {
                 (pid(*n), facts)
             })
             .collect();
-        FactsCache { facts }
+        FactsCache {
+            facts,
+            denied: HashSet::new(),
+        }
     }
 
     fn main_process(n: u32) -> RunningMain {

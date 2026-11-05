@@ -166,7 +166,8 @@ pub fn create<'a>(
                 unexpected("the facts of the create could not be read")
             })?
         };
-        let id = fresh_instance_id(&SystemIds, &facts.known_ids);
+        let id = fresh_instance_id(&SystemIds, &facts.known_ids)
+            .ok_or_else(|| unexpected("no free instance ID could be drawn"))?;
         let input = encode_input(id, &draft)
             .map_err(|_| unexpected("the create input does not fit the journal"))?;
 

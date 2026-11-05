@@ -405,6 +405,37 @@ fn capabilities_that_cannot_be_fulfilled_are_rejected() {
     );
 }
 
+/// The fake package with `label` limited to `values` and passed as a bare
+/// argument, so the argument starts with the setting.
+fn label_enum_at_argument_start(values: &str) -> Edit {
+    Edit::fake()
+        .replace(
+            "schemas/settings.schema.json",
+            "\"default\": \"fake\",",
+            &format!("\"enum\": {values},\n      \"default\": \"fake\","),
+        )
+        .replace(
+            "provider.yaml",
+            "      - serve\n",
+            "      - serve\n      - \"${settings.label}\"\n",
+        )
+}
+
+#[test]
+fn an_argument_may_start_with_an_enum_setting_whose_values_never_start_with_a_dash() {
+    assert!(
+        label_enum_at_argument_start(r#"["fake", "other"]"#)
+            .validate()
+            .is_ok()
+    );
+    assert_issue(
+        &label_enum_at_argument_start(r#"["fake", "-v"]"#).issues(),
+        "settings.schema.json",
+        "properties.label.enum[1]",
+        IssueCode::SettingsSchemaRule,
+    );
+}
+
 #[test]
 fn interpolation_rejects_shells_secrets_flags_escapes_and_unpermitted_folders() {
     let ev = evidence!(

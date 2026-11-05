@@ -229,8 +229,13 @@ struct State {
     die_suspended: Option<ExitStatus>,
     /// Processes a `force_kill` leaves alive.
     survive_force_kill: Vec<Pid>,
+    /// Fact changes the next `watch_exit` of a PID applies once it is armed.
+    on_watch: Vec<(Pid, FactsChange)>,
     violations: usize,
 }
+
+/// A change to the facts of a process that a later call applies.
+type FactsChange = Box<dyn FnOnce(&mut ProcessFacts) + Send>;
 
 struct FakeProcess {
     facts: ProcessFacts,
@@ -292,6 +297,7 @@ impl FakeProcessSupervision {
             always_faults: Vec::new(),
             die_suspended: None,
             survive_force_kill: Vec::new(),
+            on_watch: Vec::new(),
             violations: 0,
         };
         Self {
@@ -393,6 +399,17 @@ impl FakeProcessSupervision {
         if let Some(process) = self.lock_state().processes.get_mut(&pid) {
             process.holds_override = Some(answer);
         }
+    }
+
+    /// Changes the facts of `pid` right after the next
+    /// [`watch_exit`](ProcessSupervision::watch_exit) of it is armed, to act
+    /// out a PID that another process takes between a proof and the watch.
+    pub fn change_facts_on_next_watch(
+        &self,
+        pid: Pid,
+        change: impl FnOnce(&mut ProcessFacts) + Send + 'static,
+    ) {
+        self.lock_state().on_watch.push((pid, Box::new(change)));
     }
 
     /// Sets what [`counters`](ProcessSupervision::counters) answers for
@@ -1100,6 +1117,12 @@ impl ProcessSupervision for FakeProcessSupervision {
         let result = self.call(call, |state| {
             if state.live_mut(pid).is_ok() {
                 state.listeners.insert(pid, listener);
+                if let Some(index) = state.on_watch.iter().position(|(at, _)| *at == pid) {
+                    let (_, change) = state.on_watch.remove(index);
+                    if let Some(process) = state.processes.get_mut(&pid) {
+                        change(&mut process.facts);
+                    }
+                }
             } else {
                 let notice = state.pending.remove(&pid).unwrap_or(ExitNotice {
                     pid,

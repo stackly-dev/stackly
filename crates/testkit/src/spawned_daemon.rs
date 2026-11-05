@@ -16,8 +16,8 @@ pub const DAEMON_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(10);
 
 /// A valid catalog with no entries (spec 0017): what a spawned daemon loads
-/// by default, so its `catalog` subsystem is `ok`. The loader does not
-/// check `contentSha256`, but this one is the real digest of empty lists.
+/// by default, so its `catalog` subsystem is `ok`. Its `contentSha256` is
+/// the real digest of empty lists, which the loader checks.
 pub const EMPTY_CATALOG_JSON: &str = include_str!("empty_catalog.json");
 
 /// Which catalog a spawned daemon gets through `STACKLY_CATALOG_DIR`.

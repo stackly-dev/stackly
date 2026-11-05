@@ -265,6 +265,25 @@ fn a_preflight_request_carries_no_secret_value_and_a_draft_is_checked_for_shape(
     }
 }
 
+#[test]
+fn a_preflight_with_a_startup_policy_this_build_does_not_know_is_refused_like_create() {
+    let mut request: serde_json::Value =
+        serde_json::from_slice(&read("ipc/request-instance-preflight-without-fields.json"))
+            .expect("the fixture is JSON");
+    request["call"]["content"]["startup"] = serde_json::Value::from("on_mondays");
+    let bytes = serde_json::to_vec(&request).expect("the request encodes");
+    let rejection = decode_request(&bytes).expect_err("an unknown startup policy is refused");
+    assert_eq!(rejection.error.code(), "request.invalid_params");
+    assert_eq!(rejection.error.fields()[0].path(), "startup");
+    assert_eq!(rejection.error.fields()[0].code(), "invalid_value");
+
+    for known in ["manual", "at_login"] {
+        request["call"]["content"]["startup"] = serde_json::Value::from(known);
+        let bytes = serde_json::to_vec(&request).expect("the request encodes");
+        assert!(decode_request(&bytes).is_ok(), "{known}");
+    }
+}
+
 // covers: AC-1
 #[test]
 fn a_form_request_may_name_a_revision_and_a_request_without_one_still_decodes() {

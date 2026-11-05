@@ -403,21 +403,37 @@ fn same_problem(old: &RecoveryReport, new: &RecoveryReport) -> bool {
         && same_contents(&old.files, &new.files)
 }
 
-/// Whether the registry and WAL contents in two file lists are the same.
+/// Whether the registry and WAL contents in two file lists are the same. A
+/// non empty file that could not be hashed on either side never matches.
 pub(crate) fn same_contents(recorded: &[ReportFile], current: &[ReportFile]) -> bool {
-    content_digest(recorded, "") == content_digest(current, "")
-        && content_digest(recorded, WAL_SUFFIX) == content_digest(current, WAL_SUFFIX)
+    ["", WAL_SUFFIX].into_iter().all(|suffix| {
+        match (
+            content_digest(recorded, suffix),
+            content_digest(current, suffix),
+        ) {
+            (Ok(recorded), Ok(current)) => recorded == current,
+            _ => false,
+        }
+    })
 }
+
+/// A non empty registry file whose contents could not be hashed.
+#[derive(Debug)]
+struct Unreadable;
 
 /// The digest of one registry file in a file list, where an absent file and
 /// an empty one count as the same content: a read only connection may leave
-/// an empty WAL behind.
-fn content_digest(files: &[ReportFile], suffix: &str) -> Option<String> {
+/// an empty WAL behind. A non empty file without a hash is [`Unreadable`].
+fn content_digest<'a>(
+    files: &'a [ReportFile],
+    suffix: &str,
+) -> Result<Option<&'a str>, Unreadable> {
     let name = format!("stackly.sqlite{suffix}");
     files
         .iter()
         .find(|file| file.name == name && file.len > 0)
-        .map(|file| file.sha256.clone().unwrap_or_default())
+        .map(|file| file.sha256.as_deref().ok_or(Unreadable))
+        .transpose()
 }
 
 /// The name of a report file: `<stamp>.json` or `<stamp>-<n>.json`, ordered
@@ -467,6 +483,43 @@ pub(crate) fn platform_io(path: &Path) -> impl Fn(stackly_platform::PlatformErro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn file(name: &str, len: u64, sha256: Option<&str>) -> ReportFile {
+        ReportFile {
+            name: name.to_owned(),
+            len,
+            sha256: sha256.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn unreadable_registry_files_never_count_as_the_same_contents() {
+        let unreadable = [file("stackly.sqlite", 4096, None)];
+        let readable = [file("stackly.sqlite", 4096, Some("ab"))];
+        let unreadable_wal = [
+            file("stackly.sqlite", 4096, Some("ab")),
+            file("stackly.sqlite-wal", 512, None),
+        ];
+
+        assert!(!same_contents(&unreadable, &unreadable));
+        assert!(!same_contents(&unreadable, &readable));
+        assert!(!same_contents(&readable, &unreadable));
+        assert!(!same_contents(&unreadable_wal, &unreadable_wal));
+    }
+
+    #[test]
+    fn hashed_registry_files_match_and_an_empty_wal_counts_as_absent() {
+        let without_wal = [file("stackly.sqlite", 4096, Some("ab"))];
+        let empty_wal = [
+            file("stackly.sqlite", 4096, Some("ab")),
+            file("stackly.sqlite-wal", 0, None),
+        ];
+        let changed = [file("stackly.sqlite", 4096, Some("cd"))];
+
+        assert!(same_contents(&without_wal, &empty_wal));
+        assert!(same_contents(&empty_wal, &without_wal));
+        assert!(!same_contents(&without_wal, &changed));
+    }
 
     #[test]
     fn report_names_sort_by_stamp_then_suffix() {

@@ -126,6 +126,9 @@ const SPAWN_NAMES: [&str; 13] = [
 ];
 /// The macOS adapter modules that may spawn (spec 0010, step 15): the
 /// `process` module, and `codesign` as the one named exception (K9).
+/// `process::spawn::pipe` relies on this rule: its pipe is close on exec
+/// only after a second call, which is safe only while every spawn uses
+/// `POSIX_SPAWN_CLOEXEC_DEFAULT` there.
 const PROCESS_ALLOWED_MODULES: [&str; 2] = ["process", "codesign"];
 /// The process rule's message.
 const PROCESS_RULE: &str = "only stackly-platform-macos process and codesign start programs; core and the daemon never spawn (spec 0010, step 15)";

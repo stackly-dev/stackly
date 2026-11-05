@@ -237,6 +237,17 @@ impl GuardView for StateView<'_> {
     fn storage_locations(&self) -> Result<Vec<StorageLocation>, RegistryError> {
         Ok(self.state.ordered_locations())
     }
+
+    fn secret_reference(
+        &self,
+        reference: &SecretRef,
+    ) -> Result<Option<SecretReferenceView>, RegistryError> {
+        Ok(self
+            .state
+            .secret_references
+            .get(reference)
+            .map(|record| self.state.secret_view(record)))
+    }
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
