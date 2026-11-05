@@ -362,6 +362,34 @@ fn an_outside_rpath_after_a_system_one_does_not_shadow_the_system_library() {
 }
 
 #[test]
+fn an_outside_rpath_after_a_system_one_does_not_shadow_the_copy_inside_the_runtime() {
+    let system_then_outside_then_tree = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .rpath("/usr/lib/swift")
+                .rpath("/opt/local/lib")
+                .rpath("@executable_path/../lib")
+                .build(),
+        )
+        .macho(
+            "lib/libz.1.dylib",
+            MachOBuilder::dylib("@rpath/libz.1.dylib").build(),
+        );
+
+    let report = system_then_outside_then_tree
+        .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+        .unwrap();
+
+    assert_eq!(report.libraries, ["libz.1.dylib"]);
+    assert_eq!(
+        report.warnings,
+        ["bin/tool: LC_RPATH /opt/local/lib is absolute outside the system"]
+    );
+}
+
+#[test]
 fn one_stray_rpath_gives_one_shadowing_warning_however_many_libraries_use_it() {
     let lib = |name: &str| MachOBuilder::dylib(&format!("@rpath/{name}")).build();
     let sample = Sample::default()

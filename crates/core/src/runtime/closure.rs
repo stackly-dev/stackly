@@ -442,7 +442,10 @@ fn resolve(
         match candidate {
             Candidate::Tree(dir, rest) => {
                 if tree.is_file(&dir, &rest) {
-                    return (Resolved::Inside, first_outside);
+                    // Once a system candidate came first, only an outside
+                    // candidate before it can be what dyld tries ahead.
+                    let shadow = before_system.unwrap_or(first_outside);
+                    return (Resolved::Inside, shadow);
                 }
             }
             Candidate::Absolute(outside) if is_system(&outside.path) => {

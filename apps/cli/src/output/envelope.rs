@@ -121,7 +121,8 @@ impl Warning {
 /// `record` as one compact JSON line ending in `\n`.
 ///
 /// Beside the C0 controls `serde_json` always escapes, DEL, the C1 controls,
-/// and the bidi overrides and isolates inside a string are written as
+/// the bidi overrides, isolates, and marks, the zero-width characters, and
+/// the line and paragraph separators inside a string are written as
 /// `\uXXXX` (spec 0008, AC-3), so a line printed straight to a terminal
 /// carries none of them raw. The JSON value is the same either way.
 ///
