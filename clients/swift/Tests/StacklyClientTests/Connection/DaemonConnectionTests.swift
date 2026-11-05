@@ -405,4 +405,13 @@ extension Limits {
             maxSubscriptions: maxSubscriptions, eventBufferLen: eventBufferLen,
             eventReplayLen: eventReplayLen)
     }
+
+    /// These limits with another JSON depth limit.
+    func withJsonDepth(_ value: UInt32) -> Limits {
+        Limits(
+            maxFrameBytes: maxFrameBytes, maxLogBatchBytes: maxLogBatchBytes,
+            maxJsonDepth: value, maxInFlightRequests: maxInFlightRequests,
+            maxSubscriptions: maxSubscriptions, eventBufferLen: eventBufferLen,
+            eventReplayLen: eventReplayLen)
+    }
 }

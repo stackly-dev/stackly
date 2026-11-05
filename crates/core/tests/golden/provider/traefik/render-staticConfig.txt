@@ -7,13 +7,13 @@ log:
 entryPoints:
   web:
     address: "127.0.0.1:14001"
-  ping:
+  traefik:
     address: "127.0.0.1:14000"
 ping:
-  entryPoint: ping
+  entryPoint: traefik
 api:
   dashboard: false
-  insecure: false
+  insecure: true
 providers:
   file:
     directory: "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic"

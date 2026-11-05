@@ -10,6 +10,13 @@
 //! this Mac, without the network: the file is checked against the
 //! `.sha256` beside it and copied into the cache, and `urls` are the
 //! release URLs it will be uploaded to (AC-19).
+//!
+//! A gpg-signed download is checked against its upstream signature before
+//! anything is printed, so the pin rests on the release key and not only on
+//! one HTTPS fetch (spec 0003, *Security model*). The signature comes from
+//! `--gpg-url <https> --gpg-key <path> --gpg-fingerprint <hex>`, or else from
+//! the `upstream_signature` of the inventory entry that already lists one of
+//! the `--url`s. Without `gpg` on PATH such a pin fails.
 
 use std::ffi::OsString;
 use std::fs;
@@ -21,8 +28,8 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use super::cache::{Cache, Download, PIN_MAX_SIZE, SIDE_FILE_MAX_SIZE};
-use super::checksum::{SumLine, base_name, expected_digest, parse_sums};
-use super::inventory::{is_https, is_inner_relative_path};
+use super::checksum::{SumLine, base_name, expected_digest, gpg_available, parse_sums, verify_gpg};
+use super::inventory::{Inventory, is_https, is_inner_relative_path};
 use super::macho::{self, FileKind};
 use super::scan;
 
@@ -37,6 +44,19 @@ struct Options {
     sha256_url: Option<String>,
     /// A local maintainer artifact; with it nothing is downloaded.
     file: Option<PathBuf>,
+    /// The upstream GPG signature given on the command line.
+    signature: Option<Signature>,
+}
+
+/// An upstream detached GPG signature the download must carry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Signature {
+    /// The `.asc` file.
+    url: String,
+    /// The public key file, relative to the repo root unless absolute.
+    key: PathBuf,
+    /// The fingerprint of that key.
+    fingerprint: String,
 }
 
 /// What `pin` prints for a download that is not a Mach-O file, a `.tar.gz`,
@@ -60,12 +80,21 @@ struct Pinned {
     min_os: Option<String>,
 }
 
-pub fn run(args: &[&str]) -> Result<()> {
+pub fn run(root: &Path, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
     let cache = Cache::open()?;
     let pinned = match &options.file {
         Some(file) => pin_file(&cache, file, &options)?,
-        None => pin_download(&cache, &options)?,
+        None => {
+            let (signature, note) = resolve_signature(root, &options)?;
+            if let Some(note) = note {
+                eprintln!("{note}");
+            }
+            if signature.is_some() {
+                require_gpg(gpg_available())?;
+            }
+            pin_download(&cache, &options, signature.as_ref(), root)?
+        }
     };
     print!(
         "{}",
@@ -74,8 +103,126 @@ pub fn run(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Downloads every candidate URL into the cache and pins the bytes.
-fn pin_download(cache: &Cache, options: &Options) -> Result<Pinned> {
+/// The error when a gpg-signed artifact is pinned without `gpg`.
+const GPG_MISSING: &str = "gpg is not on PATH, and this artifact has an upstream gpg signature that pin checks before printing the pin; install GnuPG (`brew install gnupg`) and run pin again";
+
+/// Refuses to go on when `gpg` is not available for a gpg-signed artifact.
+fn require_gpg(available: bool) -> Result<()> {
+    if available {
+        Ok(())
+    } else {
+        bail!("{GPG_MISSING}")
+    }
+}
+
+/// The note on stderr when no signature was checked because no inventory
+/// entry lists the `--url` and no `--gpg-*` flags were given.
+const NO_SIGNATURE_NOTE: &str = "pin: note: no upstream signature was checked: no entry in runtimes/inventory.toml lists the --url and no --gpg-* flags were given; if the artifact has a detached gpg signature, pass --gpg-url <https> --gpg-key <path> --gpg-fingerprint <hex>";
+
+/// What the inventory says about the signature of the `--url`s.
+#[derive(Debug, PartialEq, Eq)]
+enum Declared {
+    /// The entry that lists the URL has a gpg `upstream_signature`.
+    Signed(Signature),
+    /// The entry that lists the URL has no gpg signature.
+    Unsigned,
+    /// No entry lists the URL, or there is no inventory file.
+    NotListed,
+}
+
+/// The signature a download pin checks, plus a note for stderr when none is
+/// checked because nothing declares one. Explicit `--gpg-*` flags win and
+/// never read the inventory, so a broken inventory does not block them.
+fn resolve_signature(
+    root: &Path,
+    options: &Options,
+) -> Result<(Option<Signature>, Option<&'static str>)> {
+    if let Some(signature) = &options.signature {
+        return Ok((Some(signature.clone()), None));
+    }
+    Ok(match declared_signature(root, &options.urls)? {
+        Declared::Signed(signature) => (Some(signature), None),
+        Declared::Unsigned => (None, None),
+        Declared::NotListed => (None, Some(NO_SIGNATURE_NOTE)),
+    })
+}
+
+/// The `upstream_signature` the inventory declares for one of `urls`. No
+/// inventory file means no entry lists them.
+fn declared_signature(root: &Path, urls: &[String]) -> Result<Declared> {
+    if !root.join(super::inventory::INVENTORY_FILE).is_file() {
+        return Ok(Declared::NotListed);
+    }
+    let inventory = Inventory::load(root).context(
+        "cannot read runtimes/inventory.toml to find the upstream signature of the --url; fix it, or pass --gpg-url, --gpg-key, and --gpg-fingerprint to give the signature without reading the inventory",
+    )?;
+    signature_in(&inventory, urls)
+}
+
+/// The signature the first artifact in `inventory` that lists one of `urls`
+/// declares.
+fn signature_in(inventory: &Inventory, urls: &[String]) -> Result<Declared> {
+    let Some(artifact) = inventory.artifacts.iter().find(|artifact| {
+        artifact
+            .urls
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|listed| urls.contains(listed))
+    }) else {
+        return Ok(Declared::NotListed);
+    };
+    let Some(declared) = artifact
+        .upstream_signature
+        .as_ref()
+        .filter(|signature| signature.kind.as_deref() == Some("gpg"))
+    else {
+        return Ok(Declared::Unsigned);
+    };
+    let id = artifact.id.as_deref().unwrap_or("an inventory entry");
+    let field = |value: &Option<String>, name: &str| {
+        value
+            .clone()
+            .with_context(|| format!("{id} has a gpg upstream_signature without {name}"))
+    };
+    Ok(Declared::Signed(Signature {
+        url: field(&declared.url, "url")?,
+        key: PathBuf::from(field(&declared.key, "key")?),
+        fingerprint: field(&declared.fingerprint, "fingerprint")?,
+    }))
+}
+
+/// Checks the downloaded bytes against the detached upstream signature.
+fn check_signature(
+    cache: &Cache,
+    root: &Path,
+    download: &Path,
+    signature: &Signature,
+) -> Result<()> {
+    eprintln!("pin: downloading {}", signature.url);
+    let file = cache.download(&signature.url, SIDE_FILE_MAX_SIZE)?;
+    verify_gpg(
+        download,
+        file.path(),
+        &root.join(&signature.key),
+        &signature.fingerprint,
+    )
+    .with_context(|| {
+        format!(
+            "the download does not match the signature {}",
+            signature.url
+        )
+    })
+}
+
+/// Downloads every candidate URL into the cache and pins the bytes. A
+/// `signature` is checked before the bytes enter the cache.
+fn pin_download(
+    cache: &Cache,
+    options: &Options,
+    signature: Option<&Signature>,
+    root: &Path,
+) -> Result<Pinned> {
     let downloads = options
         .urls
         .iter()
@@ -88,6 +235,9 @@ fn pin_download(cache: &Cache, options: &Options) -> Result<Pinned> {
     let (sha256, size) = (first.sha256.clone(), first.size);
     if let Some(sha256_url) = &options.sha256_url {
         check_sha256_file(cache, sha256_url, &options.urls, &sha256)?;
+    }
+    if let Some(signature) = signature {
+        check_signature(cache, root, first.path(), signature)?;
     }
     let mut downloads = downloads.into_iter();
     let stored = cache.store(downloads.next().context("pin needs at least one --url")?)?;
@@ -212,13 +362,14 @@ fn measure(stored: &Path, format: &str, executable: Option<&str>) -> Result<scan
     Ok(measured)
 }
 
-const USAGE: &str = "use `cargo xtask runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]` or `cargo xtask runtime pin --file <tar.gz> --url <https>... [--executable <path>]`";
+const USAGE: &str = "use `cargo xtask runtime pin --url <https>... [--executable <path>] [--sha256-url <https>] [--gpg-url <https> --gpg-key <path> --gpg-fingerprint <hex>]` or `cargo xtask runtime pin --file <tar.gz> --url <https>... [--executable <path>]`";
 
 fn parse(args: &[&str]) -> Result<Options> {
     let mut urls = Vec::new();
     let mut executable = None;
     let mut sha256_url = None;
     let mut file = None;
+    let (mut gpg_url, mut gpg_key, mut gpg_fingerprint) = (None, None, None);
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match *arg {
@@ -242,6 +393,24 @@ fn parse(args: &[&str]) -> Result<Options> {
                     bail!("--file is given more than once");
                 }
             }
+            "--gpg-url" => {
+                gpg_url =
+                    Some((*rest.next().context("--gpg-url needs an https:// URL")?).to_owned());
+            }
+            "--gpg-key" => {
+                gpg_key = Some(PathBuf::from(
+                    rest.next()
+                        .context("--gpg-key needs the path of a public key")?,
+                ));
+            }
+            "--gpg-fingerprint" => {
+                gpg_fingerprint = Some(
+                    (*rest
+                        .next()
+                        .context("--gpg-fingerprint needs 40 or 64 hex characters")?)
+                    .to_owned(),
+                );
+            }
             other => bail!("unexpected argument `{other}`; {USAGE}"),
         }
     }
@@ -253,7 +422,25 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--file cannot go with --sha256-url: a maintainer artifact is checked against the .sha256 beside it"
         );
     }
-    for url in urls.iter().chain(&sha256_url) {
+    let signature = match (gpg_url, gpg_key, gpg_fingerprint) {
+        (None, None, None) => None,
+        (Some(url), Some(key), Some(fingerprint)) => Some(Signature {
+            url,
+            key,
+            fingerprint,
+        }),
+        _ => bail!("--gpg-url, --gpg-key, and --gpg-fingerprint go together"),
+    };
+    if file.is_some() && signature.is_some() {
+        bail!(
+            "--file cannot go with --gpg-url: a maintainer artifact is checked against the .sha256 beside it"
+        );
+    }
+    for url in urls
+        .iter()
+        .chain(&sha256_url)
+        .chain(signature.as_ref().map(|signature| &signature.url))
+    {
         if !is_https(url) {
             bail!("url must be an https:// URL, found `{url}`");
         }
@@ -263,6 +450,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         executable,
         sha256_url,
         file,
+        signature,
     })
 }
 
@@ -448,6 +636,7 @@ mod tests {
                 executable: Some("bin/mysqld".to_owned()),
                 sha256_url: Some("https://a.example/x.tar.gz.sha256".to_owned()),
                 file: None,
+                signature: None,
             }
         );
     }
@@ -510,6 +699,208 @@ mod tests {
         assert!(parse(&["--url", "https://a.example/x", "--verbose"]).is_err());
     }
 
+    #[test]
+    fn parse_reads_a_gpg_signature_only_as_a_whole_and_only_for_downloads() {
+        let options = parse(&[
+            "--url",
+            "https://a.example/x.tar.gz",
+            "--gpg-url",
+            "https://a.example/x.tar.gz.asc",
+            "--gpg-key",
+            "runtimes/keys/x.asc",
+            "--gpg-fingerprint",
+            "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C",
+        ])
+        .unwrap();
+        assert_eq!(
+            options.signature,
+            Some(Signature {
+                url: "https://a.example/x.tar.gz.asc".to_owned(),
+                key: PathBuf::from("runtimes/keys/x.asc"),
+                fingerprint: "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C".to_owned(),
+            })
+        );
+        let err = parse(&[
+            "--url",
+            "https://a.example/x.tar.gz",
+            "--gpg-url",
+            "https://a.example/x.tar.gz.asc",
+        ])
+        .err()
+        .unwrap();
+        assert_eq!(
+            err.to_string(),
+            "--gpg-url, --gpg-key, and --gpg-fingerprint go together"
+        );
+        let err = parse(&[
+            "--file",
+            "out/x.tar.gz",
+            "--url",
+            "https://a.example/x.tar.gz",
+            "--gpg-url",
+            "https://a.example/x.tar.gz.asc",
+            "--gpg-key",
+            "k.asc",
+            "--gpg-fingerprint",
+            "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C",
+        ])
+        .err()
+        .unwrap();
+        assert!(
+            err.to_string()
+                .starts_with("--file cannot go with --gpg-url"),
+            "{err}"
+        );
+        assert!(
+            parse(&[
+                "--url",
+                "https://a.example/x",
+                "--gpg-url",
+                "http://a.example/x.asc",
+                "--gpg-key",
+                "k.asc",
+                "--gpg-fingerprint",
+                "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C",
+            ])
+            .is_err()
+        );
+    }
+
+    /// An inventory with a gpg-signed MySQL entry and an unsigned NATS one.
+    const SIGNED_INVENTORY: &str = r#"schema_version = 1
+
+[[artifact]]
+id = "mysql-8.4.11-macos-aarch64"
+urls = ["https://cdn.example/mysql-8.4.11.tar.gz"]
+upstream_signature = { kind = "gpg", url = "https://cdn.example/mysql-8.4.11.tar.gz.asc", key = "runtimes/keys/mysql.asc", fingerprint = "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C" }
+
+[[artifact]]
+id = "nats-2.15.1-macos-aarch64"
+urls = ["https://github.example/nats.tar.gz"]
+upstream_signature = { kind = "none" }
+"#;
+
+    #[test]
+    fn the_inventory_entry_that_lists_the_url_gives_its_gpg_signature() {
+        let inventory = Inventory::parse(SIGNED_INVENTORY).unwrap();
+        let mysql = signature_in(
+            &inventory,
+            &["https://cdn.example/mysql-8.4.11.tar.gz".to_owned()],
+        )
+        .unwrap();
+        assert_eq!(
+            mysql,
+            Declared::Signed(Signature {
+                url: "https://cdn.example/mysql-8.4.11.tar.gz.asc".to_owned(),
+                key: PathBuf::from("runtimes/keys/mysql.asc"),
+                fingerprint: "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C".to_owned(),
+            })
+        );
+        let nats = signature_in(
+            &inventory,
+            &["https://github.example/nats.tar.gz".to_owned()],
+        );
+        assert_eq!(nats.unwrap(), Declared::Unsigned);
+        let unknown = signature_in(&inventory, &["https://new.example/x.tar.gz".to_owned()]);
+        assert_eq!(unknown.unwrap(), Declared::NotListed);
+    }
+
+    #[test]
+    fn a_root_without_an_inventory_declares_no_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let found = declared_signature(dir.path(), &["https://a.example/x".to_owned()]);
+        assert_eq!(found.unwrap(), Declared::NotListed);
+        std::fs::create_dir(dir.path().join("runtimes")).unwrap();
+        std::fs::write(dir.path().join("runtimes/inventory.toml"), SIGNED_INVENTORY).unwrap();
+        let found = declared_signature(
+            dir.path(),
+            &["https://cdn.example/mysql-8.4.11.tar.gz".to_owned()],
+        )
+        .unwrap();
+        assert!(matches!(found, Declared::Signed(_)), "{found:?}");
+    }
+
+    /// The `--gpg-*` flags of a MySQL pin.
+    const GPG_FLAGS: [&str; 6] = [
+        "--gpg-url",
+        "https://cdn.example/mysql-8.4.11.tar.gz.asc",
+        "--gpg-key",
+        "runtimes/keys/mysql.asc",
+        "--gpg-fingerprint",
+        "BCA43417C3B485DD128EC6D4B7B3B788A8D3785C",
+    ];
+
+    /// A root whose `runtimes/inventory.toml` holds `inventory`.
+    fn root_with(inventory: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("runtimes")).unwrap();
+        std::fs::write(dir.path().join("runtimes/inventory.toml"), inventory).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_pin_of_an_unlisted_url_without_gpg_flags_notes_that_no_signature_was_checked() {
+        let root = root_with(SIGNED_INVENTORY);
+        let options = parse(&["--url", "https://new.example/x.tar.gz"]).unwrap();
+        let (signature, note) = resolve_signature(root.path(), &options).unwrap();
+        assert_eq!(signature, None);
+        assert_eq!(note, Some(NO_SIGNATURE_NOTE));
+        assert!(NO_SIGNATURE_NOTE.contains("no upstream signature was checked"));
+        assert!(
+            NO_SIGNATURE_NOTE
+                .contains("--gpg-url <https> --gpg-key <path> --gpg-fingerprint <hex>")
+        );
+
+        let empty = tempfile::tempdir().unwrap();
+        let (signature, note) = resolve_signature(empty.path(), &options).unwrap();
+        assert_eq!((signature, note), (None, Some(NO_SIGNATURE_NOTE)));
+    }
+
+    #[test]
+    fn a_pin_of_a_url_the_inventory_lists_gives_no_note() {
+        let root = root_with(SIGNED_INVENTORY);
+        let unsigned = parse(&["--url", "https://github.example/nats.tar.gz"]).unwrap();
+        assert_eq!(
+            resolve_signature(root.path(), &unsigned).unwrap(),
+            (None, None)
+        );
+        let signed = parse(&["--url", "https://cdn.example/mysql-8.4.11.tar.gz"]).unwrap();
+        let (signature, note) = resolve_signature(root.path(), &signed).unwrap();
+        assert!(signature.is_some());
+        assert_eq!(note, None);
+    }
+
+    #[test]
+    fn explicit_gpg_flags_pin_even_when_the_inventory_does_not_parse() {
+        let root = root_with("this is not toml [[[");
+        let mut args = vec!["--url", "https://new.example/x.tar.gz"];
+        args.extend(GPG_FLAGS);
+        let options = parse(&args).unwrap();
+        let (signature, note) = resolve_signature(root.path(), &options).unwrap();
+        assert_eq!(signature, options.signature);
+        assert_eq!(note, None);
+
+        let bare = parse(&["--url", "https://new.example/x.tar.gz"]).unwrap();
+        let err = resolve_signature(root.path(), &bare)
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.starts_with("cannot read runtimes/inventory.toml"),
+            "{err}"
+        );
+        assert!(
+            err.contains("pass --gpg-url, --gpg-key, and --gpg-fingerprint"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_gpg_signed_pin_fails_without_gpg() {
+        require_gpg(true).unwrap();
+        assert_eq!(require_gpg(false).err().unwrap().to_string(), GPG_MISSING);
+    }
+
     /// The file name `build.sh` gives a maintainer artifact.
     const ARTIFACT: &str = "valkey-9.1.2-r1-macos-aarch64.tar.gz";
     /// Its release URL, on a host that never resolves: a network call would
@@ -550,6 +941,7 @@ mod tests {
             executable: None,
             sha256_url: None,
             file: Some(file.to_path_buf()),
+            signature: None,
         }
     }
 

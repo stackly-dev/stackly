@@ -269,6 +269,8 @@ pub(crate) enum NativeParamDef {
     Literal(bool),
     /// A boolean that is exactly one boolean token.
     Token(Interp),
+    /// A file in the instance's config folder.
+    Path(PathExpr),
 }
 
 /// A checked readiness block.

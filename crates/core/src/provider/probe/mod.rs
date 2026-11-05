@@ -11,6 +11,7 @@ use stackly_domain::ReasonCode;
 
 pub mod native;
 pub mod nats;
+pub mod traefik;
 
 /// Why one native probe attempt failed.
 ///

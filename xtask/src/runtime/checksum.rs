@@ -105,10 +105,10 @@ pub fn verify_gpg(file: &Path, signature: &Path, key: &Path, fingerprint: &str) 
             file.as_os_str(),
         ])?;
         let status = String::from_utf8_lossy(&verify.stdout);
-        if !verify.status.success() || !signed_by(&status, &expected) {
+        if !verify.status.success() {
             bail!("gpg signature does not verify with key {expected}");
         }
-        Ok(())
+        check_detached_status(&status, &expected)
     })();
     // gpg may have started helpers (keyboxd, gpg-agent) in the throwaway
     // home; stop them before the folder goes. Best effort.
@@ -122,26 +122,56 @@ pub fn verify_gpg(file: &Path, signature: &Path, key: &Path, fingerprint: &str) 
     result
 }
 
-/// True when the `--status-fd` output has a `VALIDSIG` line whose signing
-/// key or primary key fingerprint is `expected`.
-fn signed_by(status: &str, expected: &str) -> bool {
-    status.lines().any(|line| {
+/// The signature class of a detached signature over a binary file.
+const BINARY_SIGNATURE_CLASS: &str = "00";
+
+/// Checks the `--status-fd` output of `gpg --verify <sig> <file>` for one
+/// detached signature by `expected`: exactly one `VALIDSIG` line, of
+/// signature class `00`, whose signing key or primary key fingerprint is
+/// `expected`, and no `PLAINTEXT` line. A `PLAINTEXT` line means the
+/// signature file carries its own literal data (an inline or clearsigned
+/// message), and gpg then checks that data instead of the downloaded file.
+fn check_detached_status(status: &str, expected: &str) -> Result<()> {
+    let mut valid = Vec::new();
+    for line in status.lines() {
         let mut fields = line.split_whitespace();
-        if fields.next() != Some("[GNUPG:]") || fields.next() != Some("VALIDSIG") {
-            return false;
+        if fields.next() != Some("[GNUPG:]") {
+            continue;
         }
-        let fields: Vec<&str> = fields.collect();
-        let signing = fields.first().copied();
-        let primary = fields.get(9).copied();
-        [signing, primary]
-            .into_iter()
-            .flatten()
-            .any(|fpr| fpr.eq_ignore_ascii_case(expected))
-    })
+        match fields.next() {
+            Some("PLAINTEXT") => bail!(
+                "the gpg signature is not detached: it carries its own signed data, so it says nothing about the download"
+            ),
+            Some("VALIDSIG") => valid.push(fields.collect::<Vec<&str>>()),
+            _ => {}
+        }
+    }
+    let [fields] = valid.as_slice() else {
+        bail!(
+            "gpg reports {} valid signatures, expected exactly one by key {expected}",
+            valid.len()
+        );
+    };
+    let class = fields.get(8).copied().unwrap_or_default();
+    if class != BINARY_SIGNATURE_CLASS {
+        bail!(
+            "the gpg signature has class `{class}`, expected `{BINARY_SIGNATURE_CLASS}` (a detached signature over a binary file)"
+        );
+    }
+    let signed = [fields.first(), fields.get(9)]
+        .into_iter()
+        .flatten()
+        .any(|fpr| fpr.eq_ignore_ascii_case(expected));
+    if !signed {
+        bail!("gpg signature does not verify with key {expected}");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     const A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -204,17 +234,179 @@ mod tests {
         assert_eq!(base_name("x.tar.gz"), "x.tar.gz");
     }
 
+    const PRIMARY: &str = "A4A9406876FCBD3C456770C88C718D3B5072E1F5";
+    const SUBKEY: &str = "1111111111111111111111111111111111111111";
+
+    /// The `VALIDSIG` line gpg prints for a good signature of `class`.
+    fn validsig(class: &str) -> String {
+        format!("[GNUPG:] VALIDSIG {SUBKEY} 2026-10-01 1790000000 0 4 0 1 8 {class} {PRIMARY}\n")
+    }
+
+    /// The status output of a good detached signature.
+    fn detached() -> String {
+        format!(
+            "[GNUPG:] NEWSIG\n[GNUPG:] GOODSIG 8C718D3B5072E1F5 MySQL Release Engineering\n{}",
+            validsig("00")
+        )
+    }
+
     #[test]
     fn validsig_matches_the_signing_or_the_primary_fingerprint() {
-        let primary = "A4A9406876FCBD3C456770C88C718D3B5072E1F5";
-        let subkey = "1111111111111111111111111111111111111111";
-        let status = format!(
-            "[GNUPG:] NEWSIG\n[GNUPG:] GOODSIG 8C718D3B5072E1F5 MySQL Release Engineering\n\
-             [GNUPG:] VALIDSIG {subkey} 2026-10-01 1790000000 0 4 0 1 8 00 {primary}\n"
+        check_detached_status(&detached(), PRIMARY).unwrap();
+        check_detached_status(&detached(), SUBKEY).unwrap();
+        let err = check_detached_status(&detached(), &"2".repeat(40))
+            .err()
+            .unwrap();
+        assert_eq!(
+            err.to_string(),
+            format!("gpg signature does not verify with key {}", "2".repeat(40))
         );
-        assert!(signed_by(&status, primary));
-        assert!(signed_by(&status, subkey));
-        assert!(!signed_by(&status, &"2".repeat(40)));
-        assert!(!signed_by("[GNUPG:] BADSIG 8C718D3B5072E1F5 x\n", primary));
+    }
+
+    #[test]
+    fn a_status_without_validsig_is_refused() {
+        let err = check_detached_status("[GNUPG:] BADSIG 8C718D3B5072E1F5 x\n", PRIMARY)
+            .err()
+            .unwrap();
+        assert_eq!(
+            err.to_string(),
+            format!("gpg reports 0 valid signatures, expected exactly one by key {PRIMARY}")
+        );
+    }
+
+    #[test]
+    fn a_signature_that_carries_its_own_data_is_refused() {
+        // `gpg --verify` of an inline signed message: the literal data
+        // packet shows as PLAINTEXT, and VALIDSIG covers that data, not the
+        // downloaded file.
+        let inline = format!(
+            "[GNUPG:] PLAINTEXT 62 1790000000 other.tar.gz\n[GNUPG:] PLAINTEXT_LENGTH 5\n{}",
+            detached()
+        );
+        let err = check_detached_status(&inline, PRIMARY).err().unwrap();
+        assert!(
+            err.to_string()
+                .starts_with("the gpg signature is not detached"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_clearsigned_text_signature_is_refused_by_its_class() {
+        let clearsigned = format!("[GNUPG:] NEWSIG\n{}", validsig("01"));
+        let err = check_detached_status(&clearsigned, PRIMARY).err().unwrap();
+        assert_eq!(
+            err.to_string(),
+            "the gpg signature has class `01`, expected `00` (a detached signature over a binary file)"
+        );
+    }
+
+    #[test]
+    fn more_than_one_valid_signature_is_refused() {
+        let twice = format!("{}{}", detached(), detached());
+        let err = check_detached_status(&twice, PRIMARY).err().unwrap();
+        assert_eq!(
+            err.to_string(),
+            format!("gpg reports 2 valid signatures, expected exactly one by key {PRIMARY}")
+        );
+    }
+
+    /// A throwaway signing key: its GPG home, its exported public key, and
+    /// its fingerprint. `None` when `gpg` is not on PATH.
+    fn signing_key(dir: &Path) -> Option<(PathBuf, PathBuf, String)> {
+        if !gpg_available() {
+            eprintln!("gpg is not on PATH; the real gpg check is not run");
+            return None;
+        }
+        let home = dir.join("signer");
+        std::fs::create_dir(&home).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let gpg = |args: &[&str]| {
+            let output = Command::new("gpg")
+                .arg("--batch")
+                .arg("--homedir")
+                .arg(&home)
+                .args(args)
+                .stdin(Stdio::null())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "gpg {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output.stdout
+        };
+        gpg(&[
+            "--passphrase",
+            "",
+            "--quick-gen-key",
+            "Stackly Test <test@stackly.invalid>",
+            "ed25519",
+            "sign",
+            "never",
+        ]);
+        let listing = String::from_utf8(gpg(&["--with-colons", "--list-keys"])).unwrap();
+        let fingerprint = listing
+            .lines()
+            .find_map(|line| line.strip_prefix("fpr:"))
+            .and_then(|rest| rest.split(':').find(|field| field.len() == 40))
+            .unwrap()
+            .to_owned();
+        let key = dir.join("key.asc");
+        std::fs::write(&key, gpg(&["--armor", "--export", &fingerprint])).unwrap();
+        Some((home, key, fingerprint))
+    }
+
+    /// Signs `file` with the key in `home`, with `mode` (`--detach-sign`,
+    /// `--sign`, or `--clearsign`), into `out`.
+    fn sign(home: &Path, mode: &str, file: &Path, out: &Path) {
+        let status = Command::new("gpg")
+            .arg("--batch")
+            .arg("--homedir")
+            .arg(home)
+            .args(["--armor", mode, "--output"])
+            .arg(out)
+            .arg(file)
+            .stdin(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    #[test]
+    fn only_a_detached_signature_over_the_file_verifies_with_real_gpg() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some((home, key, fingerprint)) = signing_key(dir.path()) else {
+            return;
+        };
+        let file = dir.path().join("artifact.tar.gz");
+        std::fs::write(&file, b"the real artifact").unwrap();
+        let other = dir.path().join("other.tar.gz");
+        std::fs::write(&other, b"something else entirely").unwrap();
+
+        let detached = dir.path().join("detached.asc");
+        sign(&home, "--detach-sign", &file, &detached);
+        verify_gpg(&file, &detached, &key, &fingerprint).unwrap();
+        assert!(verify_gpg(&other, &detached, &key, &fingerprint).is_err());
+
+        // An inline signed message over other bytes must not pass as a
+        // signature of the artifact.
+        let inline = dir.path().join("inline.asc");
+        sign(&home, "--sign", &other, &inline);
+        assert!(verify_gpg(&file, &inline, &key, &fingerprint).is_err());
+        let clearsigned = dir.path().join("clearsigned.asc");
+        sign(&home, "--clearsign", &other, &clearsigned);
+        assert!(verify_gpg(&file, &clearsigned, &key, &fingerprint).is_err());
+
+        let _ = Command::new("gpgconf")
+            .arg("--homedir")
+            .arg(&home)
+            .args(["--kill", "all"])
+            .status();
     }
 }

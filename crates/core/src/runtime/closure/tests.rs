@@ -269,9 +269,229 @@ fn an_absolute_rpath_outside_the_system_warns_upstream_and_fails_a_maintainer_ar
 
     assert_eq!(
         upstream.warnings,
-        ["bin/tool: LC_RPATH /Volumes/build/lib is absolute outside the system"]
+        [
+            "bin/tool: LC_RPATH /Volumes/build/lib is absolute outside the system",
+            "bin/tool: dyld tries /Volumes/build/lib/libz.1.dylib for @rpath/libz.1.dylib before the copy inside the runtime",
+        ]
     );
     assert_eq!(maintainer, outside("bin/tool", "/Volumes/build/lib"));
+}
+
+#[test]
+fn rpath_resolution_follows_dyld_order_and_reports_an_earlier_outside_candidate() {
+    let lib = || MachOBuilder::dylib("@rpath/libz.1.dylib").build();
+    let tree_first = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .rpath("@executable_path/../lib")
+                .rpath("/Volumes/build/lib")
+                .build(),
+        )
+        .macho("lib/libz.1.dylib", lib());
+    let missing_tree_then_outside_then_tree = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .rpath("@executable_path/../nowhere")
+                .rpath("/opt/local/lib")
+                .rpath("@executable_path/../lib")
+                .build(),
+        )
+        .macho("lib/libz.1.dylib", lib());
+    let outside_then_system = Sample::default().macho(
+        "bin/tool",
+        MachOBuilder::executable()
+            .load("@rpath/libswiftCore.dylib")
+            .rpath("/opt/swift/lib")
+            .rpath("/usr/lib/swift")
+            .build(),
+    );
+
+    let report = tree_first
+        .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+        .unwrap();
+    assert_eq!(
+        report.warnings,
+        ["bin/tool: LC_RPATH /Volumes/build/lib is absolute outside the system"]
+    );
+    let report = missing_tree_then_outside_then_tree
+        .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+        .unwrap();
+    assert_eq!(report.libraries, ["libz.1.dylib"]);
+    assert_eq!(
+        report.warnings,
+        [
+            "bin/tool: LC_RPATH /opt/local/lib is absolute outside the system",
+            "bin/tool: dyld tries /opt/local/lib/libz.1.dylib for @rpath/libz.1.dylib before the copy inside the runtime",
+        ]
+    );
+    let report = outside_then_system
+        .check(&["bin/tool"], false, Some(&[]))
+        .unwrap();
+    assert_eq!(
+        report.warnings,
+        [
+            "bin/tool: LC_RPATH /opt/swift/lib is absolute outside the system",
+            "bin/tool: dyld tries /opt/swift/lib/libswiftCore.dylib for @rpath/libswiftCore.dylib before the system library",
+        ]
+    );
+}
+
+#[test]
+fn an_outside_rpath_after_a_system_one_does_not_shadow_the_system_library() {
+    let system_then_outside = Sample::default().macho(
+        "bin/tool",
+        MachOBuilder::executable()
+            .load("@rpath/libswiftCore.dylib")
+            .rpath("/usr/lib/swift")
+            .rpath("/opt/swift/lib")
+            .build(),
+    );
+
+    let report = system_then_outside
+        .check(&["bin/tool"], false, Some(&[]))
+        .unwrap();
+
+    assert_eq!(
+        report.warnings,
+        ["bin/tool: LC_RPATH /opt/swift/lib is absolute outside the system"]
+    );
+}
+
+#[test]
+fn an_outside_rpath_after_a_system_one_does_not_shadow_the_copy_inside_the_runtime() {
+    let system_then_outside_then_tree = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .rpath("/usr/lib/swift")
+                .rpath("/opt/local/lib")
+                .rpath("@executable_path/../lib")
+                .build(),
+        )
+        .macho(
+            "lib/libz.1.dylib",
+            MachOBuilder::dylib("@rpath/libz.1.dylib").build(),
+        );
+
+    let report = system_then_outside_then_tree
+        .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+        .unwrap();
+
+    assert_eq!(report.libraries, ["libz.1.dylib"]);
+    assert_eq!(
+        report.warnings,
+        ["bin/tool: LC_RPATH /opt/local/lib is absolute outside the system"]
+    );
+}
+
+#[test]
+fn one_stray_rpath_gives_one_shadowing_warning_however_many_libraries_use_it() {
+    let lib = |name: &str| MachOBuilder::dylib(&format!("@rpath/{name}")).build();
+    let sample = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .load("@rpath/libssl.3.dylib")
+                .load("@rpath/libcrypto.3.dylib")
+                .rpath("/opt/local/lib")
+                .rpath("@executable_path/../lib")
+                .build(),
+        )
+        .macho("lib/libz.1.dylib", lib("libz.1.dylib"))
+        .macho("lib/libssl.3.dylib", lib("libssl.3.dylib"))
+        .macho("lib/libcrypto.3.dylib", lib("libcrypto.3.dylib"));
+
+    let report = sample
+        .check(
+            &["bin/tool"],
+            false,
+            Some(&["libcrypto.3.dylib", "libssl.3.dylib", "libz.1.dylib"]),
+        )
+        .unwrap();
+
+    assert_eq!(
+        report.warnings,
+        [
+            "bin/tool: LC_RPATH /opt/local/lib is absolute outside the system",
+            "bin/tool: dyld tries /opt/local/lib/libz.1.dylib for @rpath/libz.1.dylib before the copy inside the runtime, and /opt/local/lib for 2 more libraries",
+        ]
+    );
+}
+
+#[test]
+fn a_relative_rpath_counts_as_outside_the_runtime() {
+    let only_relative = Sample::default().macho(
+        "bin/tool",
+        MachOBuilder::executable()
+            .load("@rpath/libz.1.dylib")
+            .rpath("lib")
+            .build(),
+    );
+    let relative_then_tree = Sample::default()
+        .macho(
+            "bin/tool",
+            MachOBuilder::executable()
+                .load("@rpath/libz.1.dylib")
+                .rpath("../lib")
+                .rpath("@executable_path/../lib")
+                .build(),
+        )
+        .macho(
+            "lib/libz.1.dylib",
+            MachOBuilder::dylib("@rpath/libz.1.dylib").build(),
+        );
+
+    assert_eq!(
+        only_relative.check(&["bin/tool"], false, Some(&[])),
+        outside("bin/tool", "@rpath/libz.1.dylib")
+    );
+    assert_eq!(
+        only_relative.check(&["bin/tool"], true, Some(&[])),
+        outside("bin/tool", "lib")
+    );
+    let upstream = relative_then_tree
+        .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+        .unwrap();
+    assert_eq!(
+        upstream.warnings,
+        [
+            "bin/tool: LC_RPATH ../lib is relative to the working directory",
+            "bin/tool: dyld tries ../lib/libz.1.dylib for @rpath/libz.1.dylib before the copy inside the runtime",
+        ]
+    );
+    assert_eq!(
+        relative_then_tree.check(&["bin/tool"], true, Some(&["libz.1.dylib"])),
+        outside("bin/tool", "../lib")
+    );
+}
+
+#[test]
+fn only_a_library_may_skip_a_load_of_its_own_install_name() {
+    let name = "/opt/homebrew/lib/libfoo.dylib";
+    let mut executable = MachOBuilder::dylib(name).load(name).build();
+    // The same load commands under an MH_EXECUTE header.
+    executable[12..16].copy_from_slice(&2_u32.to_le_bytes());
+    let as_executable = Sample::default().macho("server", executable);
+    let as_library = bundled().macho(
+        "lib/libfoo.dylib",
+        MachOBuilder::dylib(name).load(name).build(),
+    );
+
+    assert_eq!(
+        as_executable.check(&["server"], false, Some(&[])),
+        outside("server", name)
+    );
+    assert!(
+        as_library
+            .check(&["bin/tool"], false, Some(&["libz.1.dylib"]))
+            .is_ok()
+    );
 }
 
 #[test]

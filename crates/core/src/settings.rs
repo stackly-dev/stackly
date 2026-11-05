@@ -425,8 +425,6 @@ fn judge_and_prepare(
         rule,
         path: path.display().to_string(),
     };
-    let facts = gather_location_facts(platform, path)
-        .map_err(|error| SettingsError::Internal(error.to_string()))?;
     let known = registry.storage_locations()?.value;
     let existing = known
         .iter()
@@ -445,6 +443,8 @@ fn judge_and_prepare(
         .collect();
     roots.extend(avoid.iter().cloned());
     let context = LocationContext::new(home, roots, existing);
+    let facts = gather_location_facts(platform, path, &context)
+        .map_err(|error| SettingsError::Internal(error.to_string()))?;
     let verdict = check_location(kind, &facts, &context).map_err(invalid)?;
 
     let folder = facts.canonical.as_deref().unwrap_or(path);
@@ -452,7 +452,7 @@ fn judge_and_prepare(
         LocationVerdict::New => StorageLocationId::generate(),
         LocationVerdict::Reuse(id) => id,
     };
-    let location_folder = prepare_location(platform.fs(), folder, kind, id).map_err(invalid)?;
+    let location_folder = prepare_location(platform, folder, kind, id).map_err(invalid)?;
     let new = match verdict {
         LocationVerdict::New => {
             let text = location_folder.to_str().ok_or(RegistryError::NotUtf8Path {

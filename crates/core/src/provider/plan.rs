@@ -1001,6 +1001,16 @@ impl<'a> Resolver<'a> {
             (NativeParamDef::Literal(flag), NativeParamKind::Boolean) => {
                 Ok(NativeParamValue::Boolean(*flag))
             }
+            (NativeParamDef::Path(expr), NativeParamKind::ConfigFile { max_bytes }) => {
+                let path = self.path(expr)?;
+                let fits = path.to_str().is_some_and(|text| {
+                    text.len() <= max_bytes && !text.chars().any(char::is_control)
+                });
+                if !fits {
+                    return Err(PlanError::UnrepresentableValue { field });
+                }
+                Ok(NativeParamValue::Path(path))
+            }
             (NativeParamDef::Token(interp), NativeParamKind::Boolean) => {
                 match interp.pieces.as_slice() {
                     [Piece::Token(token)] => match self.value(token)? {

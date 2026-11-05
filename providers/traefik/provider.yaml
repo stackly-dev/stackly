@@ -47,7 +47,11 @@ lifecycle:
     action: none
     verify: readiness
 readiness:
-  probe: { type: http, endpoint: ping, path: /ping }
+  probe:
+    type: native
+    name: traefik-routes
+    endpoint: ping
+    params: { routesFile: "${instance.config}/dynamic/routes.yaml" }
 timeouts: { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }
 permissions:
   managedFilesystem: [data, config, logs, temp]

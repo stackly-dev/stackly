@@ -141,7 +141,7 @@ fn the_inventory_lists_the_instances_of_a_custom_data_location_and_skips_a_gone_
     let folder = root.path().join("disk");
     std::fs::create_dir_all(&folder).unwrap();
     let location = StorageLocationId::generate();
-    let made = prepare_location(platform.fs(), &folder, LocationKind::Data, location).unwrap();
+    let made = prepare_location(&platform, &folder, LocationKind::Data, location).unwrap();
     prepared
         .locations()
         .add_location(location, LocationKind::Data, made.clone());

@@ -19,10 +19,14 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::{Instant, timeout_at};
 
+use stackly_platform::{Platform, PlatformError};
+
+use super::traefik::{self, RoutesFile};
 use super::{ProbeContext, ProbeOutcome};
 use crate::provider::probe::NativeProbeFailure;
 use crate::provider::probe::native::NativeProbe;
 use crate::provider::probe::nats::{self, Exchange, Expectation};
+use crate::provider::probe::traefik::ROUTES_FILE_MAX;
 use crate::provider::{NativeProbeSpec, ProbeTarget};
 use crate::secret::Redactor;
 
@@ -60,17 +64,48 @@ impl NativeConnect for TcpConnect {
     }
 }
 
-/// Runs one attempt of `spec` within `attempt_timeout`.
+/// Runs one attempt of `spec` within `attempt_timeout`. This is the one
+/// `match` over the registry the supervisor needs.
 pub(super) async fn run(
     spec: &NativeProbeSpec,
     attempt_timeout: Duration,
     context: &ProbeContext<'_>,
 ) -> ProbeOutcome {
-    let result = attempt(spec, attempt_timeout, |address| {
-        context.native.connect(address)
-    })
-    .await;
+    let connect = |address| context.native.connect(address);
+    let result = match &spec.probe {
+        NativeProbe::NatsReadiness {
+            server_name,
+            jetstream,
+        } => {
+            let expectation = Expectation {
+                server_name: server_name.clone(),
+                jetstream: *jetstream,
+            };
+            nats_readiness(&spec.target, expectation, attempt_timeout, connect).await
+        }
+        NativeProbe::TraefikRoutes { routes_file } => {
+            traefik::attempt(
+                &spec.target,
+                routes_file,
+                attempt_timeout,
+                context.config.http_header_max,
+                |path| read_routes_file(context.platform, path),
+                connect,
+            )
+            .await
+        }
+    };
     outcome(result, context.redactor)
+}
+
+/// Reads the routes file of a `traefik-routes` probe through the
+/// filesystem port, without following a symlink.
+fn read_routes_file(platform: &Platform, path: &std::path::Path) -> RoutesFile {
+    match platform.fs().read_file_limited(path, ROUTES_FILE_MAX) {
+        Ok(bytes) => RoutesFile::Bytes(bytes),
+        Err(PlatformError::NotFound { .. }) => RoutesFile::Missing,
+        Err(_) => RoutesFile::Unreadable,
+    }
 }
 
 /// Turns a result into the outcome every runner reports: the detail is
@@ -82,8 +117,9 @@ fn outcome(result: Result<(), NativeProbeFailure>, redactor: &Redactor) -> Probe
     }
 }
 
-/// Picks the state machine of the probe, the one `match` the registry
-/// needs here, and runs it over the stream `connect` opens.
+/// Runs a `nats-readiness` spec over the stream `connect` opens; the
+/// tests drive the state machine through it.
+#[cfg(test)]
 async fn attempt<S, C, F>(
     spec: &NativeProbeSpec,
     limit: Duration,
@@ -105,6 +141,7 @@ where
             };
             nats_readiness(&spec.target, expectation, limit, connect).await
         }
+        other => panic!("the nats tests run only nats-readiness, not {other:?}"),
     }
 }
 

@@ -65,9 +65,11 @@ Tasks:
                        Automation Mode on and an unlocked screen; exit 2 otherwise)
   runtime check        Check runtimes/inventory.toml and evidence/runtime/
   runtime pin --url <https>... [--executable <path>] [--sha256-url <https>]
+          [--gpg-url <https> --gpg-key <path> --gpg-fingerprint <hex>]
                        Download a runtime and print its pinned inventory values
-  runtime verify [--id <id>]
-                       Download every available runtime again and check it
+  runtime verify [--id <id>] [--allow-missing-gpg]
+                       Download every available runtime again and check it; a
+                       gpg-signed runtime fails without gpg unless the flag is given
   runtime spike --id <id> --result <file>
                        Run one runtime under a LaunchAgent (macOS); exit 0 PASS,
                        1 FAIL, 2 BLOCKED

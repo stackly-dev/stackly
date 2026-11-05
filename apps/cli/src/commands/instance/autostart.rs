@@ -16,6 +16,7 @@ use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
 use crate::output::envelope::warning;
+use crate::output::escape::escape_display;
 use crate::output::human::{HumanWriter, Render};
 use crate::session::{CallSpec, RequestTimeout};
 
@@ -112,6 +113,40 @@ impl Render for AutostartResult {
             StartupPolicyKind::AtLogin => "at login",
             _ => "off",
         };
-        out.line(&format!("Autostart for “{}”: {state}", self.instance.name));
+        out.line(&format!(
+            "Autostart for “{}”: {state}",
+            escape_display(&self.instance.name)
+        ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(result: &impl Render) -> String {
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        result.render(&mut out);
+        out.into_string()
+    }
+
+    fn fixture(path: &str) -> serde_json::Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../protocols/fixtures")
+            .join(path);
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn the_instance_name_is_escaped_before_it_reaches_the_terminal() {
+        let mut instance = fixture("instance/list-mixed.json")["items"][0].clone();
+        instance["name"] = "db\u{1b}[2J\u{202e}".into();
+        let result = AutostartResult {
+            instance: serde_json::from_value(instance).unwrap(),
+        };
+        assert_eq!(
+            render(&result),
+            "Autostart for “db\\u{1b}[2J\\u{202e}”: off\n"
+        );
     }
 }

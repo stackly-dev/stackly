@@ -22,6 +22,7 @@ use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
 use crate::output::OutputMode;
+use crate::output::escape::escape_display;
 use crate::output::human::{Cell, HumanWriter, Render};
 
 /// The `daemon uninstall` result.
@@ -118,7 +119,7 @@ pub fn preview_lines(preview: &AgentOffPreview) -> Vec<String> {
         plural(preview.at_login, "instance", "instances"),
     )];
     for item in &preview.preview.items {
-        lines.push(format!("  stops: {}", item.name));
+        lines.push(format!("  stops: {}", escape_display(&item.name)));
     }
     lines
 }
@@ -576,5 +577,27 @@ mod tests {
         let result = output.result.expect("a result");
         assert!(!result.was_registered && !result.exiting);
         assert_eq!(rig.fake.calls(), [AgentOp::Status]);
+    }
+
+    #[test]
+    fn the_preview_escapes_the_names_of_the_instances_it_stops() {
+        let item: StopAllItem = serde_json::from_value(serde_json::json!({
+            "instanceId": uuid::Uuid::nil(),
+            "name": "db\u{1b}[2J",
+            "lifecycle": "running",
+            "demand": [],
+            "autostart": {"policy": "manual", "session": "none"},
+        }))
+        .unwrap();
+        let preview = AgentOffPreview {
+            preview: StopAllPreview {
+                items: vec![item],
+                already_stopping: Vec::new(),
+                skipped: Vec::new(),
+                at_login_count: Count::saturating(0),
+            },
+            at_login: 0,
+        };
+        assert_eq!(preview_lines(&preview)[1], "  stops: db\\u{1b}[2J");
     }
 }

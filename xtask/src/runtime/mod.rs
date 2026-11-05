@@ -33,7 +33,7 @@ use anyhow::{Result, bail};
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     match args {
         ["check"] => check::run(root),
-        ["pin", rest @ ..] => pin::run(rest).map(|()| ExitCode::SUCCESS),
+        ["pin", rest @ ..] => pin::run(root, rest).map(|()| ExitCode::SUCCESS),
         ["verify", rest @ ..] => verify::run(root, rest),
         ["spike", rest @ ..] => spike::run(root, rest),
         ["spike-worker", rest @ ..] => spike::run_worker(rest),

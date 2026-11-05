@@ -22,6 +22,11 @@ struct State {
     /// Answers by path suffix, first match wins.
     assessments: Vec<(PathBuf, CodeAssessment)>,
     quarantined: Vec<(PathBuf, QuarantineInfo)>,
+    /// Suffixes whose quarantine attribute cannot be read, with the error.
+    unreadable: Vec<(PathBuf, PlatformError)>,
+    /// Suffixes whose quarantine read panics, which fails the blocking task
+    /// that runs it.
+    panicking: Vec<PathBuf>,
     /// Suffixes that still fail strict verification after `sign_adhoc`.
     unsignable: Vec<PathBuf>,
     /// Paths `sign_adhoc` signed, so they assess as ad hoc and valid.
@@ -67,6 +72,8 @@ impl FakeCodeSigning {
             state: Arc::new(Mutex::new(State {
                 assessments: Vec::new(),
                 quarantined: Vec::new(),
+                unreadable: Vec::new(),
+                panicking: Vec::new(),
                 unsignable: Vec::new(),
                 signed: Vec::new(),
                 default: CodeAssessment {
@@ -111,6 +118,18 @@ impl FakeCodeSigning {
                 agent: agent.map(str::to_owned),
             },
         ));
+    }
+
+    /// Makes reading the quarantine attribute of the files ending with
+    /// `suffix` fail with `error`.
+    pub fn fail_quarantine(&self, suffix: impl Into<PathBuf>, error: PlatformError) {
+        self.lock().unreadable.push((suffix.into(), error));
+    }
+
+    /// Makes reading the quarantine attribute of the files ending with
+    /// `suffix` panic, so the blocking task around the read fails to join.
+    pub fn panic_on_quarantine(&self, suffix: impl Into<PathBuf>) {
+        self.lock().panicking.push(suffix.into());
     }
 
     /// Makes `sign_adhoc` fail with `error`.
@@ -164,6 +183,17 @@ impl CodeSigning for FakeCodeSigning {
         state
             .calls
             .push(SigningCall::Quarantine(path.to_path_buf()));
+        if state.panicking.iter().any(|suffix| path.ends_with(suffix)) {
+            drop(state);
+            panic!("the scripted quarantine read of {} panics", path.display());
+        }
+        if let Some((_, error)) = state
+            .unreadable
+            .iter()
+            .find(|(suffix, _)| path.ends_with(suffix))
+        {
+            return Err(error.clone());
+        }
         Ok(state
             .quarantined
             .iter()

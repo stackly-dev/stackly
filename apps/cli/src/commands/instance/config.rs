@@ -621,7 +621,7 @@ impl Render for ValidateOutput {
                 out.line(&format!(
                     "  {}: {}",
                     escape_display(field.path()),
-                    field.message()
+                    escape_display(field.message())
                 ));
             }
             return;
@@ -673,5 +673,37 @@ pub(super) fn mapped<T, U>(output: CommandOutput<T>, f: impl FnOnce(T) -> U) -> 
         failure: output.failure,
         warnings: output.warnings,
         hints: output.hints,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(result: &impl Render) -> String {
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        result.render(&mut out);
+        out.into_string()
+    }
+
+    #[test]
+    fn a_field_error_message_is_escaped_like_its_path() {
+        let verdict: ConfigValidation = serde_json::from_value(serde_json::json!({
+            "valid": false,
+            "fieldErrors": [{
+                "path": "max\u{1b}",
+                "code": "settings.invalid",
+                "message": "bad \u{1b}[2Jvalue\u{202e}",
+            }],
+            "changes": [],
+            "endpointChanges": [],
+            "impact": "none",
+            "preview": [],
+        }))
+        .unwrap();
+        assert_eq!(
+            render(&ValidateOutput(verdict)),
+            "invalid\n  max\\u{1b}: bad \\u{1b}[2Jvalue\\u{202e}\n"
+        );
     }
 }

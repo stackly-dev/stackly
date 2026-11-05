@@ -143,6 +143,29 @@ mod tests {
     }
 
     #[test]
+    fn a_known_value_with_a_quote_and_a_backslash_is_hidden_after_json_formatting() {
+        let secret = r#"pa"ss\word123"#;
+        let lines = Lines::default();
+        let writer = RedactingMakeWriter::new(lines.clone(), redactor_knowing(secret));
+        let subscriber = tracing_subscriber::fmt()
+            .json()
+            .with_writer(writer)
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(value = secret, "login with {secret} failed");
+        });
+
+        let kept = lines.0.lock().unwrap().concat();
+        assert!(!kept.is_empty(), "the event wrote a line");
+        assert!(
+            !kept.contains("pa\\\"ss") && !kept.contains("word123"),
+            "{kept}"
+        );
+        assert!(kept.contains("login with **** failed"), "{kept}");
+    }
+
+    #[test]
     fn the_patterns_hide_a_value_after_a_sensitive_key_without_a_known_value() {
         let lines = Lines::default();
         let writer = RedactingMakeWriter::new(lines.clone(), Arc::new(Redactor::new()));

@@ -2017,8 +2017,20 @@ impl Checker<'_> {
                 self.record_refs(&interp, at);
                 Some(NativeParamDef::Token(interp))
             }
+            (NativeParamKind::ConfigFile { .. }, RawParam::Text(text)) => {
+                let expr = check_path(text, PathPosition::ProbeFile, env, &mut self.yaml(), at)?;
+                Some(NativeParamDef::Path(expr))
+            }
             (NativeParamKind::Text { .. }, _) => {
                 self.at(at, IssueCode::InvalidValue, "this param is text");
+                None
+            }
+            (NativeParamKind::ConfigFile { .. }, _) => {
+                self.at(
+                    at,
+                    IssueCode::InvalidValue,
+                    "this param is a path that starts with ${instance.config}",
+                );
                 None
             }
             (NativeParamKind::Boolean, _) => {

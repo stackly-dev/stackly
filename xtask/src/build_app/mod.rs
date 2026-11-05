@@ -135,7 +135,7 @@ pub fn run(root: &Path, options: &Options) -> Result<()> {
         check::contents(&bundle, &version)?;
         // Steps 5 and 6: signing and its proof.
         sign::sign(&bundle, &identity)?;
-        sign::verify(&bundle)?;
+        sign::verify(&bundle, &identity)?;
         Ok(())
     })?;
     // Step 7 done: the path to print is ours, not Xcode's.

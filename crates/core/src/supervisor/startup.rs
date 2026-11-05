@@ -203,6 +203,15 @@ async fn run_start(
     .in_operation(ctx.id());
 
     enter(&mut ctx, StageName::VALIDATE, true, false).await?;
+    // Spec 0031, *Akhir sesi*: a start the daemon makes on its own does not
+    // run once a session end began, even when it was begun just before. It
+    // reads the flag under the operation's lock, after the engine stored the
+    // operation, so either the session end's cancel sees this operation or
+    // this check sees the flag. The desired state stays as it is, so the
+    // next start queue of the same session starts the instance (AC-13).
+    if matches!(request.trigger, StartTrigger::Background) && sup.is_session_ending() {
+        return Ok(success(id));
+    }
     let instance = read_instance(deps, id).await.map_err(failed)?;
     if request.respawn {
         return run_respawn(sup, request, ctx, &instance).await;
@@ -1010,21 +1019,32 @@ async fn run_attempt(
             return Ok(fail(sup, id, reason, error).await);
         }
     };
-    // A quarantined runtime is refused before the spool and the spawn.
+    // A quarantined runtime, or one whose quarantine cannot be read, is
+    // refused before the spool and the spawn: the check fails closed (spec
+    // 0010, `spawn` row).
     let launchable = {
         let platform = deps.platform.clone();
         let program = parts.program.clone();
         blocking(move || check_launchable(&platform, &program)).await
     };
     match launchable {
-        Ok(Ok(())) => {}
+        Ok(Ok(()) | Err(LaunchRefusal::BinaryRejectedByOs { .. })) => {}
         Ok(Err(LaunchRefusal::Quarantined { path, .. })) => {
             let error = SupervisorError::Quarantined {
                 path: path.display().to_string(),
             };
             return Ok(fail(sup, id, FailureCode::QUARANTINED, error).await);
         }
-        Ok(Err(LaunchRefusal::BinaryRejectedByOs { .. })) | Err(_) => {}
+        Ok(Err(LaunchRefusal::QuarantineUnreadable { path, detail })) => {
+            let error = SupervisorError::ExecutableInvalid {
+                reason: format!(
+                    "the quarantine attribute of {} cannot be read: {detail}",
+                    path.display()
+                ),
+            };
+            return Ok(fail(sup, id, FailureCode::EXECUTABLE_INVALID, error).await);
+        }
+        Err(error) => return Ok(fail(sup, id, FailureCode::SPAWN_FAILED, error).await),
     }
     let output = match fresh_spools(sup, &prepared).await {
         Ok(output) => output,

@@ -32,7 +32,7 @@
           "segments": [
             {
               "type": "text",
-              "content": "# Written by Stackly from the official/traefik provider; edits are replaced.\nglobal:\n  checkNewVersion: false\n  sendAnonymousUsage: false\nlog:\n  level: \"ERROR\"\nentryPoints:\n  web:\n    address: \"127.0.0.1:14001\"\n  ping:\n    address: \"127.0.0.1:14000\"\nping:\n  entryPoint: ping\napi:\n  dashboard: false\n  insecure: false\nproviders:\n  file:\n    directory: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic\"\n    watch: true\n"
+              "content": "# Written by Stackly from the official/traefik provider; edits are replaced.\nglobal:\n  checkNewVersion: false\n  sendAnonymousUsage: false\nlog:\n  level: \"ERROR\"\nentryPoints:\n  web:\n    address: \"127.0.0.1:14001\"\n  traefik:\n    address: \"127.0.0.1:14000\"\nping:\n  entryPoint: traefik\napi:\n  dashboard: false\n  insecure: true\nproviders:\n  file:\n    directory: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic\"\n    watch: true\n"
             }
           ]
         },
@@ -75,14 +75,20 @@
   },
   "readiness": {
     "probe": {
-      "type": "http",
+      "type": "native",
       "content": {
-        "host": "127.0.0.1",
-        "port": 14000,
-        "path": "/ping",
-        "expectStatus": {
-          "start": 200,
-          "end": 299
+        "target": {
+          "type": "ip",
+          "content": {
+            "host": "127.0.0.1",
+            "port": 14000
+          }
+        },
+        "probe": {
+          "name": "traefik-routes",
+          "params": {
+            "routesFile": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic/routes.yaml"
+          }
         }
       }
     },
@@ -93,14 +99,20 @@
   "recoveryDeadline": "30s",
   "health": {
     "probe": {
-      "type": "http",
+      "type": "native",
       "content": {
-        "host": "127.0.0.1",
-        "port": 14000,
-        "path": "/ping",
-        "expectStatus": {
-          "start": 200,
-          "end": 299
+        "target": {
+          "type": "ip",
+          "content": {
+            "host": "127.0.0.1",
+            "port": 14000
+          }
+        },
+        "probe": {
+          "name": "traefik-routes",
+          "params": {
+            "routesFile": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic/routes.yaml"
+          }
         }
       }
     },

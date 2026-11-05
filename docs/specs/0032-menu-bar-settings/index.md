@@ -190,13 +190,13 @@ Fungsi murni `stackly_core::storage::location::check_location(facts, roots, exis
 | 3 | `not_directory` | bukan folder | "Choose a folder, not a file." |
 | 4 | `symlink` | path atau leluhur mana pun di bawah `/` (kecuali `/private` milik sistem yang menjadi target `/var` dan `/tmp`) adalah symlink | "Choose the real folder, not an alias or link." |
 | 5 | `not_owned` | pemilik bukan user daemon | "This folder belongs to another user." |
-| 6 | `too_open` | group atau other bisa menulis | "Other users can write to this folder." |
+| 6 | `too_open` | folder itu, atau leluhurnya yang tidak sticky, bisa ditulis group atau other | "Other users can write to this folder." |
 | 7 | `protected_folder` | di dalam `~/Desktop`, `~/Documents`, `~/Downloads`, `~/Library/Mobile Documents`, atau `~/Library/CloudStorage` | "macOS may block stacklyd from this folder. Choose a folder in your home folder or on a disk inside this Mac." |
 | 8 | `not_local_volume` | `VolumeFacts.local` false | "Choose a folder on a disk in this Mac." |
 | 9 | `not_internal_volume` | `VolumeFacts.internal` false (disk external, termasuk SSD external) | "Choose a folder on a disk inside this Mac. External disks aren’t supported yet." |
 | 10 | `overlaps_root` | `<folder>/Stackly` sama dengan, di dalam, atau berisi root bawaan, runtime root, bundle app, atau lokasi lain jenis apa pun | "This folder overlaps another Stackly location." |
 | 11 | `foreign_marker` | `<folder>/Stackly` sudah ada, dan tidak berisi `.stackly-location` dengan ID dan `kind` lokasi yang dikenal registry | "This folder already has a Stackly folder that isn’t from this Mac’s Stackly." |
-| 12 | `not_writable` | daemon gagal membuat `Stackly/` atau subfolder nya | "stacklyd can’t write to this folder." |
+| 12 | `not_writable` | daemon gagal membuat `Stackly/` atau subfolder nya, atau folder itu sudah ada tetapi bukan folder privat user (mode & 0o077, pemilik lain, atau symlink) | "stacklyd can’t write to this folder." |
 
 `<folder>/Stackly` dengan `.stackly-location` yang ID dan `kind` nya cocok dengan baris registry berarti lokasi itu dipakai lagi. `target: builtIn` melewati aturan dan menunjuk lokasi bawaan.
 

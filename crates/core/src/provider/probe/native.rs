@@ -9,6 +9,8 @@
 //! `build` arm, and one runner arm in the supervisor, and the compiler
 //! rejects any of them missing.
 
+use std::path::PathBuf;
+
 use serde::Serialize;
 
 use crate::provider::EndpointTransport;
@@ -20,6 +22,10 @@ pub enum NativeProbeKind {
     /// `nats-readiness`: speaks the NATS client protocol to the `client`
     /// endpoint and checks identity, JetStream mode, and a PING.
     NatsReadiness,
+    /// `traefik-routes` (spec 0009 AC-22): asks the loopback API of Traefik
+    /// whether it loaded exactly the routers of the routes file Stackly
+    /// rendered.
+    TraefikRoutes,
 }
 
 /// What a native probe takes in a manifest.
@@ -55,6 +61,14 @@ pub enum NativeParamKind {
     },
     /// `true` or `false`.
     Boolean,
+    /// A file in `${instance.config}`, written as the folder token, `/`,
+    /// and literal path components with no `..` (spec 0009 AC-22). The
+    /// probe reads the file, so no other folder and no other token is
+    /// allowed.
+    ConfigFile {
+        /// The most bytes of the resolved path.
+        max_bytes: usize,
+    },
 }
 
 /// A param value after validation and interpolation.
@@ -64,6 +78,8 @@ pub enum NativeParamValue {
     Text(String),
     /// A [`NativeParamKind::Boolean`] value.
     Boolean(bool),
+    /// A [`NativeParamKind::ConfigFile`] value: the absolute path.
+    Path(PathBuf),
 }
 
 /// A native probe with its params, ready to run.
@@ -82,6 +98,13 @@ pub enum NativeProbe {
         /// Whether JetStream must be on.
         jetstream: bool,
     },
+    /// The `traefik-routes` probe.
+    #[serde(rename = "traefik-routes")]
+    TraefikRoutes {
+        /// The routes file Stackly renders, whose `http.routers` Traefik
+        /// must have loaded.
+        routes_file: PathBuf,
+    },
 }
 
 const NATS_READINESS: NativeProbeDescriptor = NativeProbeDescriptor {
@@ -99,15 +122,28 @@ const NATS_READINESS: NativeProbeDescriptor = NativeProbeDescriptor {
     ],
 };
 
+const TRAEFIK_ROUTES: NativeProbeDescriptor = NativeProbeDescriptor {
+    name: "traefik-routes",
+    endpoint_transports: &[EndpointTransport::Tcp],
+    params: &[NativeParamDescriptor {
+        name: "routesFile",
+        kind: NativeParamKind::ConfigFile { max_bytes: 1024 },
+    }],
+};
+
 impl NativeProbeKind {
     /// Every probe in the registry.
-    pub const ALL: &'static [NativeProbeKind] = &[NativeProbeKind::NatsReadiness];
+    pub const ALL: &'static [NativeProbeKind] = &[
+        NativeProbeKind::NatsReadiness,
+        NativeProbeKind::TraefikRoutes,
+    ];
 
     /// Returns what the probe takes.
     #[must_use]
     pub const fn descriptor(self) -> &'static NativeProbeDescriptor {
         match self {
             Self::NatsReadiness => &NATS_READINESS,
+            Self::TraefikRoutes => &TRAEFIK_ROUTES,
         }
     }
 
@@ -147,10 +183,17 @@ pub fn build(kind: NativeProbeKind, params: &[(&str, NativeParamValue)]) -> Nati
         Some(NativeParamValue::Boolean(flag)) => *flag,
         _ => panic!("a validated native probe has the boolean param {name}"),
     };
+    let path = |name: &str| match find(name) {
+        Some(NativeParamValue::Path(path)) => path.clone(),
+        _ => panic!("a validated native probe has the path param {name}"),
+    };
     match kind {
         NativeProbeKind::NatsReadiness => NativeProbe::NatsReadiness {
             server_name: text("serverName"),
             jetstream: boolean("jetstream"),
+        },
+        NativeProbeKind::TraefikRoutes => NativeProbe::TraefikRoutes {
+            routes_file: path("routesFile"),
         },
     }
 }
@@ -179,17 +222,27 @@ mod tests {
 
     // covers: AC-2
     #[test]
-    fn the_registry_holds_exactly_nats_readiness() {
-        assert_eq!(NativeProbeKind::ALL, [NativeProbeKind::NatsReadiness]);
+    fn the_registry_holds_nats_readiness_and_traefik_routes() {
+        assert_eq!(
+            NativeProbeKind::ALL,
+            [
+                NativeProbeKind::NatsReadiness,
+                NativeProbeKind::TraefikRoutes
+            ]
+        );
         assert_eq!(
             NativeProbeKind::from_name("nats-readiness"),
             Some(NativeProbeKind::NatsReadiness)
+        );
+        assert_eq!(
+            NativeProbeKind::from_name("traefik-routes"),
+            Some(NativeProbeKind::TraefikRoutes)
         );
     }
 
     // covers: AC-2
     #[test]
-    fn the_generic_provider_modules_never_name_the_nats_probe() {
+    fn the_generic_provider_modules_never_name_a_concrete_probe() {
         let modules = [
             ("validate.rs", include_str!("../validate.rs")),
             ("manifest.rs", include_str!("../manifest.rs")),
@@ -206,6 +259,10 @@ mod tests {
                 assert!(
                     !probe_mention,
                     "{file} names NATS, the probe registry belongs in native.rs: {line}"
+                );
+                assert!(
+                    !line.to_ascii_lowercase().contains("traefik"),
+                    "{file} names Traefik, the probe registry belongs in native.rs: {line}"
                 );
             }
         }
@@ -253,6 +310,50 @@ mod tests {
                 server_name: "golden".into(),
                 jetstream: true,
             }
+        );
+    }
+
+    // covers: AC-22
+    #[test]
+    fn traefik_routes_takes_one_config_file_on_a_tcp_endpoint() {
+        let descriptor = NativeProbeKind::TraefikRoutes.descriptor();
+
+        assert_eq!(descriptor.name, "traefik-routes");
+        assert_eq!(descriptor.endpoint_transports, [EndpointTransport::Tcp]);
+        let params: Vec<_> = descriptor
+            .params
+            .iter()
+            .map(|param| (param.name, param.kind))
+            .collect();
+        assert_eq!(
+            params,
+            [(
+                "routesFile",
+                NativeParamKind::ConfigFile { max_bytes: 1024 }
+            )]
+        );
+    }
+
+    // covers: AC-22
+    #[test]
+    fn build_maps_the_routes_file_to_a_traefik_routes_probe() {
+        let probe = build(
+            NativeProbeKind::TraefikRoutes,
+            &[(
+                "routesFile",
+                NativeParamValue::Path("/i/config/dynamic/routes.yaml".into()),
+            )],
+        );
+
+        assert_eq!(
+            probe,
+            NativeProbe::TraefikRoutes {
+                routes_file: "/i/config/dynamic/routes.yaml".into(),
+            }
+        );
+        assert_eq!(
+            serde_json::to_string(&probe).unwrap(),
+            r#"{"name":"traefik-routes","params":{"routesFile":"/i/config/dynamic/routes.yaml"}}"#
         );
     }
 

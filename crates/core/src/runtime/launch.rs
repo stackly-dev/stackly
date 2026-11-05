@@ -25,6 +25,15 @@ pub enum LaunchRefusal {
         /// The name of the agent that set the attribute, if it says one.
         agent: Option<String>,
     },
+    /// The quarantine attribute of the executable could not be read. The
+    /// check fails closed: an attribute nobody can read may be a quarantine
+    /// (spec 0018, decision of 2026-11-05 from the security audit).
+    QuarantineUnreadable {
+        /// The executable.
+        path: PathBuf,
+        /// What the platform said about the read.
+        detail: String,
+    },
     /// The OS killed a process of this daemon with `SIGKILL` that the
     /// daemon did not send, which is how macOS refuses a binary whose
     /// signature or origin it rejects.
@@ -34,15 +43,14 @@ pub enum LaunchRefusal {
     },
 }
 
-/// Refuses an executable that carries the quarantine attribute.
-///
-/// A quarantine attribute that cannot be read does not refuse the start: the
-/// spawn reports what is wrong with the file.
+/// Refuses an executable that carries the quarantine attribute, or whose
+/// attribute cannot be read.
 ///
 /// # Errors
 ///
 /// Returns [`LaunchRefusal::Quarantined`] when the executable has the
-/// attribute.
+/// attribute and [`LaunchRefusal::QuarantineUnreadable`] when the platform
+/// cannot read it.
 pub fn check_launchable(platform: &Platform, executable: &Path) -> Result<(), LaunchRefusal> {
     match platform.code_signing().quarantine(executable) {
         Ok(Some(info)) => Err(LaunchRefusal::Quarantined {
@@ -50,10 +58,10 @@ pub fn check_launchable(platform: &Platform, executable: &Path) -> Result<(), La
             agent: info.agent,
         }),
         Ok(None) => Ok(()),
-        Err(error) => {
-            tracing::warn!(%error, "the quarantine attribute of a runtime executable could not be read");
-            Ok(())
-        }
+        Err(error) => Err(LaunchRefusal::QuarantineUnreadable {
+            path: executable.to_path_buf(),
+            detail: error.to_string(),
+        }),
     }
 }
 

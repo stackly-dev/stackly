@@ -2,11 +2,14 @@
 //! read with the `object` crate from the header and load commands only.
 //!
 //! A thin 64 bit file and a universal file are both accepted. For a
-//! universal file the architecture of every slice is listed, and only the
-//! arm64 slice (or arm64e, when no arm64 slice exists) is parsed further:
-//! the file type, the macOS minimum from `LC_BUILD_VERSION` or
+//! universal file the architecture of every slice is listed, and the arm64
+//! slice (or arm64e, when no arm64 slice exists) is the one reported: the
+//! file type, the macOS minimum from `LC_BUILD_VERSION` or
 //! `LC_VERSION_MIN_MACOSX`, `LC_ID_DYLIB`, every library load command, and
-//! every `LC_RPATH`. The load commands of one slice may span at most
+//! every `LC_RPATH`. Every other arm64-family slice is parsed too and must
+//! agree with it on the file type, `LC_ID_DYLIB`, the libraries, and the
+//! rpaths, since the kernel may map any of them and the checks look at one.
+//! The load commands of one slice may span at most
 //! [`LOAD_COMMANDS_MAX_LEN`] bytes.
 
 use std::cell::RefCell;
@@ -33,6 +36,7 @@ const CPU_TYPE_X86_64: u32 = 0x0100_0007;
 const CPU_SUBTYPE_MASK: u32 = 0xff00_0000;
 const CPU_SUBTYPE_ARM64E: u32 = 2;
 const MH_EXECUTE: u32 = 2;
+const MH_DYLIB: u32 = 6;
 const PLATFORM_MACOS: u32 = 1;
 const LC_LOAD_DYLIB: u32 = 0xc;
 const LC_LOAD_WEAK_DYLIB: u32 = 0x8000_0018;
@@ -67,6 +71,31 @@ pub fn classify(head: &[u8]) -> Option<MachOKind> {
         }
         _ => None,
     }
+}
+
+/// Reads the first 8 bytes of a file, or all of a shorter one, and
+/// classifies them with [`classify`].
+///
+/// A short read is retried until the 8 bytes or the end of the file, so a
+/// Mach-O file is never taken for another kind because one read returned
+/// fewer bytes.
+///
+/// # Errors
+///
+/// Returns the I/O error of a read that failed, other than
+/// [`io::ErrorKind::Interrupted`], which is retried.
+pub fn read_kind(file: &mut dyn Read) -> io::Result<Option<MachOKind>> {
+    let mut head = [0_u8; 8];
+    let mut filled = 0;
+    while filled < head.len() {
+        match file.read(&mut head[filled..]) {
+            Ok(0) => break,
+            Ok(read) => filled += read,
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(classify(&head[..filled]))
 }
 
 /// The CPU of one slice.
@@ -169,6 +198,12 @@ impl Slice {
     pub const fn is_executable(&self) -> bool {
         self.file_type == MH_EXECUTE
     }
+
+    /// True for a dynamic library (`MH_DYLIB`).
+    #[must_use]
+    pub const fn is_dylib(&self) -> bool {
+        self.file_type == MH_DYLIB
+    }
 }
 
 /// One parsed Mach-O file.
@@ -258,28 +293,50 @@ fn parse_ref<'data, R: ReadRef<'data>>(data: R, len: u64) -> Result<MachO, MachO
             } else {
                 fat_arches(&MachOFatFile32::parse(data).map_err(malformed)?)
             };
-            let chosen = arches
+            let mut slices = Vec::new();
+            for (arch, offset) in arches.iter().filter(|(arch, _)| arch.is_arm64()) {
+                let slice = parse_slice(data, *offset)?;
+                if slice.arch != *arch {
+                    return Err(MachOError::Malformed {
+                        reason: format!("the {arch} slice holds a {} header", slice.arch),
+                    });
+                }
+                slices.push(slice);
+            }
+            let chosen = slices
                 .iter()
-                .find(|(arch, _)| *arch == CpuArch::Arm64)
-                .or_else(|| arches.iter().find(|(arch, _)| *arch == CpuArch::Arm64e));
-            let arm64 = chosen
-                .map(|(arch, offset)| {
-                    let slice = parse_slice(data, *offset)?;
-                    if slice.arch == *arch {
-                        Ok(slice)
-                    } else {
-                        Err(MachOError::Malformed {
-                            reason: format!("the {arch} slice holds a {} header", slice.arch),
-                        })
-                    }
-                })
-                .transpose()?;
+                .position(|slice| slice.arch == CpuArch::Arm64)
+                .or_else(|| {
+                    slices
+                        .iter()
+                        .position(|slice| slice.arch == CpuArch::Arm64e)
+                });
+            let arm64 = chosen.map(|index| slices.swap_remove(index));
+            if let Some(chosen) = &arm64
+                && let Some(other) = slices.iter().find(|other| !loads_alike(chosen, other))
+            {
+                return Err(MachOError::Malformed {
+                    reason: format!(
+                        "the {} and {} slices differ in their type, install name, libraries, or rpaths",
+                        chosen.arch, other.arch
+                    ),
+                });
+            }
             Ok(MachO {
                 arches: arches.into_iter().map(|(arch, _)| arch).collect(),
                 arm64,
             })
         }
     }
+}
+
+/// True when two slices load the same way: the same file type,
+/// `LC_ID_DYLIB`, libraries, and rpaths. The macOS minimum may differ.
+fn loads_alike(a: &Slice, b: &Slice) -> bool {
+    a.file_type == b.file_type
+        && a.install_name == b.install_name
+        && a.libraries == b.libraries
+        && a.rpaths == b.rpaths
 }
 
 fn fat_arches<Fat: FatArch>(
@@ -526,6 +583,106 @@ mod tests {
             (slice.arch, slice.min_os),
             (CpuArch::Arm64e, version("14.2"))
         );
+    }
+
+    #[test]
+    fn every_arm64_family_slice_of_a_universal_file_must_load_alike() {
+        let arm = MachOBuilder::executable()
+            .load("@rpath/libz.dylib")
+            .rpath("@executable_path/../lib")
+            .build();
+        let arm64e_alike = MachOBuilder::executable()
+            .arm64e()
+            .min_os(14, 0)
+            .load("@rpath/libz.dylib")
+            .rpath("@executable_path/../lib")
+            .build();
+        let arm64e_outside = MachOBuilder::executable()
+            .arm64e()
+            .load("/opt/homebrew/lib/libz.dylib")
+            .build();
+        let arm_other_rpath = MachOBuilder::executable()
+            .load("@rpath/libz.dylib")
+            .rpath("/tmp")
+            .build();
+
+        assert!(parse_bytes(&universal(&[arm.clone(), arm64e_alike])).is_ok());
+        assert!(matches!(
+            parse_bytes(&universal(&[arm.clone(), arm64e_outside.clone()])),
+            Err(MachOError::Malformed { .. })
+        ));
+        assert!(matches!(
+            parse_bytes(&universal(&[arm64e_outside, arm.clone()])),
+            Err(MachOError::Malformed { .. })
+        ));
+        assert!(matches!(
+            parse_bytes(&universal(&[arm, arm_other_rpath])),
+            Err(MachOError::Malformed { .. })
+        ));
+    }
+
+    #[test]
+    fn only_a_dylib_header_is_a_dylib() {
+        let library = parse_bytes(&MachOBuilder::dylib("@rpath/liba.dylib").build()).unwrap();
+        let executable = parse_bytes(&MachOBuilder::executable().build()).unwrap();
+
+        assert!(library.arm64.unwrap().is_dylib());
+        assert!(!executable.arm64.unwrap().is_dylib());
+    }
+
+    /// Hands out its bytes one at a time, after an interrupted read.
+    struct Trickle {
+        bytes: Vec<u8>,
+        at: usize,
+        interrupted: bool,
+    }
+
+    impl Read for Trickle {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            let Some(byte) = self.bytes.get(self.at) else {
+                return Ok(0);
+            };
+            buf[0] = *byte;
+            self.at += 1;
+            Ok(1)
+        }
+    }
+
+    /// Fails every read.
+    struct Broken;
+
+    impl Read for Broken {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::other("injected read failure"))
+        }
+    }
+
+    #[test]
+    fn the_kind_is_read_across_short_reads_and_a_failed_read_is_an_error() {
+        let trickle = |bytes: Vec<u8>| Trickle {
+            bytes,
+            at: 0,
+            interrupted: false,
+        };
+
+        assert_eq!(
+            read_kind(&mut trickle(MachOBuilder::executable().build())).unwrap(),
+            Some(MachOKind::Thin)
+        );
+        assert_eq!(
+            read_kind(&mut trickle(universal(&[
+                MachOBuilder::executable().build()
+            ])))
+            .unwrap(),
+            Some(MachOKind::Universal)
+        );
+        assert_eq!(read_kind(&mut trickle(vec![0xcf, 0xfa])).unwrap(), None);
+        assert_eq!(read_kind(&mut trickle(Vec::new())).unwrap(), None);
+        assert!(read_kind(&mut Broken).is_err());
     }
 
     #[test]

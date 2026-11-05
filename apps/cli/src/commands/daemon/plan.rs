@@ -14,6 +14,7 @@ use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::OutputMode;
 use crate::output::envelope::{Warning, warning};
+use crate::output::escape::escape_display;
 use crate::output::human::{Cell, HumanWriter, wire_name};
 use crate::output::style::Tone;
 
@@ -171,8 +172,8 @@ pub fn preview_lines(preview: &RestartPreview) -> Vec<String> {
         };
         lines.push(format!(
             "  {} ({}): {action}, {}",
-            instance.name,
-            instance.provider,
+            escape_display(&instance.name),
+            escape_display(&instance.provider),
             reason_text(instance.reason)
         ));
     }
@@ -552,5 +553,27 @@ mod tests {
 
         assert_eq!(failure.exit_code(), 7);
         assert_eq!(failure.body.detail("closeReason"), Some("stop_timeout"));
+    }
+
+    #[test]
+    fn the_preview_escapes_instance_names_and_providers() {
+        let preview: RestartPreview = serde_json::from_value(serde_json::json!({
+            "digest": "d",
+            "launchContext": "launchd",
+            "supervisorAvailable": true,
+            "instances": [{
+                "instanceId": Uuid::nil(),
+                "name": "db\u{1b}[2J",
+                "provider": "official/\u{202e}pg",
+                "lifecycle": "running",
+                "decision": "keep",
+                "reason": "handover_proven",
+            }],
+        }))
+        .unwrap();
+        assert_eq!(
+            preview_lines(&preview)[1],
+            "  db\\u{1b}[2J (official/\\u{202e}pg): keeps running, its process survives a restart"
+        );
     }
 }

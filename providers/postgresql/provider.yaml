@@ -4,7 +4,7 @@ metadata:
   id: official/postgresql
   software: postgresql
   displayName: PostgreSQL
-  revision: "1.0.0"
+  revision: "1.0.1"
   category: database
   description: PostgreSQL relational database. Each instance is its own cluster with a password protected superuser, a loopback port, and a private Unix socket.
 compatibility:
@@ -130,10 +130,10 @@ permissions:
 connection:
   - name: uri
     title: Connection string
-    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres"
+    template: "postgresql://postgres:${secret.superuserPassword}@${endpoint.client.address}/postgres?require_auth=scram-sha-256"
   - name: socket
     title: Unix socket
-    template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}"
+    template: "postgresql://postgres:${secret.superuserPassword}@/postgres?host=${endpoint.socket.socketDir}&port=${endpoint.client.port}&require_auth=scram-sha-256"
 openWith:
   - name: tableplus
     title: TablePlus

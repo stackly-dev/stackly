@@ -580,9 +580,11 @@ async fn scan_machos(
                 .fs()
                 .open_read(&full)
                 .map_err(|err| io_error("read a staged file", &err))?;
-            let mut head = [0_u8; 8];
-            let read = std::io::Read::read(&mut file, &mut head).unwrap_or(0);
-            if macho::classify(&head[..read]).is_some() {
+            let kind = macho::read_kind(&mut file).map_err(|err| ValidateError::Io {
+                op: "read a staged file",
+                detail: err.to_string(),
+            })?;
+            if kind.is_some() {
                 heads.push((path, full));
             }
         }

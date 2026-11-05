@@ -271,10 +271,16 @@ pub fn interpolation(data: &[u8]) {
         PathPosition::ConfigDestination { sensitive: false },
         PathPosition::ConfigDestination { sensitive: true },
         PathPosition::LogFile,
+        PathPosition::ProbeFile,
     ] {
         let Some(expr) = check_path(text, position, &env, &mut sink, "fuzz") else {
             continue;
         };
+        assert!(
+            position != PathPosition::ProbeFile
+                || (expr.base == PathBase::Dir(InstanceDir::Config) && !expr.components.is_empty()),
+            "a probe file is outside the config folder or names no file"
+        );
         assert!(
             expr.components
                 .iter()

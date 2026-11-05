@@ -936,3 +936,46 @@ async fn while_automatic_compensation_runs_resume_and_abandon_refuse_with_auto_c
         Some("interrupted")
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn in_flight_operations_name_the_running_operation_when_a_newer_one_needs_recovery() {
+    let harness = Harness::new().await;
+    let env = environment(&harness);
+    let blocker = HoldHandle::new();
+    let running = harness
+        .begin(request(
+            OperationKind::EnvironmentDown,
+            OperationResource::Environment(env),
+            ScriptedWork::new().step("drain").hold(&blocker).boxed(),
+        ))
+        .await;
+    blocker.started().await;
+    // Newer than the running one, so the active list puts it first.
+    let broken = harness
+        .begin(manager_request(
+            OperationKind::UpdateManager,
+            ScriptedWork::new()
+                .step("swap")
+                .irreversible()
+                .step("verify")
+                .fail("manager.verify_failed", false)
+                .boxed(),
+        ))
+        .await;
+    wait_state(&harness.engine, broken, OperationState::NeedsRecovery).await;
+
+    let in_flight = harness.engine.in_flight_operations().await.unwrap();
+    let ids: Vec<_> = in_flight.iter().map(|active| active.id).collect();
+    assert_eq!(
+        ids,
+        [running],
+        "the needs_recovery operation never lends its id"
+    );
+    assert_eq!(in_flight[0].kind, OperationKind::EnvironmentDown);
+    for active in harness.engine.active_operations().await.unwrap() {
+        assert_eq!(active.id, running);
+    }
+
+    blocker.release();
+    wait_state(&harness.engine, running, OperationState::Succeeded).await;
+}

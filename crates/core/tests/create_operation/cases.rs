@@ -1092,7 +1092,7 @@ fn use_new_data_location(
     let folder = rig.root.path().join(name);
     std::fs::create_dir_all(&folder).expect("the disk folder can be made");
     let id = StorageLocationId::generate();
-    let made = prepare_location(rig.platform.fs(), &folder, LocationKind::Data, id)
+    let made = prepare_location(&rig.platform, &folder, LocationKind::Data, id)
         .expect("the location folders can be made");
     let text = made.to_str().expect("the path is text").to_owned();
     let location =

@@ -10,3 +10,11 @@ xcuserdata/
 
 # graphify knowledge graph, rebuilt locally in each clone
 /graphify-out/
+
+# Secrets that must never be committed: env files, keys, certificates,
+# and file keychains (security audit note 71)
+*.env
+*.pem
+*.key
+*.p12
+*.keychain-db

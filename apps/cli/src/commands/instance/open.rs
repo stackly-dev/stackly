@@ -21,6 +21,7 @@ use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
+use crate::output::escape::escape_display;
 use crate::output::human::{HumanWriter, Render};
 
 /// The line for a provider without an `openWith` block.
@@ -166,7 +167,11 @@ impl Render for OpenOutput {
             out.line(NO_ACTIONS);
             return;
         }
-        let rows: Vec<[String; 4]> = self.open_actions.iter().map(row).collect();
+        let rows: Vec<[String; 4]> = self
+            .open_actions
+            .iter()
+            .map(|action| row(action).map(|cell| escape_display(&cell).into_owned()))
+            .collect();
         for line in lines(&rows) {
             out.line(&line);
         }
@@ -223,6 +228,25 @@ mod tests {
         assert_eq!(row(&terminal)[2], "'/rt/bin/psql' '--host=/a dir'");
         assert_eq!(row(&reveal)[1], "Reveal Routes File in Finder");
         assert_eq!(row(&reveal)[2], "/i/config/routes.yaml");
+    }
+
+    #[test]
+    fn the_rendered_rows_escape_names_titles_and_values() {
+        let mut app = action(OpenActionKind::App, "Table\u{1b}[31mPlus");
+        app.url = Some("x://h\u{202e}/d".to_owned());
+        let output = OpenOutput {
+            instance: InstanceRef {
+                id: uuid::Uuid::nil(),
+                name: "db".to_owned(),
+            },
+            open_actions: vec![app],
+        };
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        output.render(&mut out);
+        assert_eq!(
+            out.into_string(),
+            "table\\u{1b}[31mplus  Open in Table\\u{1b}[31mPlus  x://h\\u{202e}/d\n"
+        );
     }
 
     #[test]

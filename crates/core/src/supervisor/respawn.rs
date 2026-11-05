@@ -153,7 +153,9 @@ fn clear_pause(deps: &SupervisorDeps, actor: &InstanceActor) {
 /// looks again, because that operation may be the stop that makes the
 /// respawn unnecessary.
 async fn begin_respawn(sup: &Supervisor, id: InstanceId) -> Begun {
-    if sup.is_shutdown() {
+    // A session end leaves a `recovering` instance alone (spec 0031, *Akhir
+    // sesi*); the next daemon start reconciles it.
+    if sup.is_shutdown() || sup.is_session_ending() {
         return Begun::GaveUp;
     }
     let Some(engine) = sup.operations() else {

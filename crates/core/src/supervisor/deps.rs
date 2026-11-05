@@ -195,7 +195,8 @@ pub(crate) struct Shared {
     /// Set while a session end cancels and stops (spec 0031, *Akhir
     /// sesi*): a start or restart it cancels ends without writing desired
     /// `stopped`, because the end of a session is not a choice of the
-    /// person.
+    /// person, and no start the daemon makes on its own begins any more
+    /// ([`Supervisor::is_session_ending`]).
     pub(crate) session_ending: AtomicBool,
 }
 
@@ -332,6 +333,15 @@ impl Supervisor {
     /// Returns true once [`shutdown`](Self::shutdown) was called.
     pub(crate) fn is_shutdown(&self) -> bool {
         self.shared.shutdown.load(Ordering::SeqCst)
+    }
+
+    /// Returns true once [`end_session`](Self::end_session) began (spec
+    /// 0031, *Akhir sesi*). From then on no background start (a start of
+    /// the start queue, a crash respawn, a Keychain retry) begins: the
+    /// session end stops only what its snapshot saw, so a start that began
+    /// later would outlive the clean stop.
+    pub(crate) fn is_session_ending(&self) -> bool {
+        self.shared.session_ending.load(Ordering::SeqCst)
     }
 
     /// Returns the actors that exist now, in no order.
