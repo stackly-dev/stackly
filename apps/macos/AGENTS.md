@@ -15,6 +15,12 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 | `Packages/StacklyUI/Sources/StacklyUI/Onboarding/` | First run onboarding: `OnboardingModel`, `OnboardingFlow`, the five steps, and every user facing string in `OnboardingCopy.swift` (spec 0016) |
 | `Packages/StacklyUI/Sources/StacklyUI/InstanceDetail/` | Instance detail page and Summary tab: `InstanceDetailModel`, `InstanceDetailService`, `ConnectionComposer`, `DetailFormat`, and the cards (spec 0021) |
 | `Packages/StacklyUI/Sources/StacklyUI/CreateInstance/` | New Instance sheet in create and duplicate mode (`CreateMode`): `CreateInstanceModel`, `SchemaFormModel`, `NewInstanceSheet`, `NewInstancePresenter`, and `DuplicateInstanceAction` (specs 0020, 0024) |
+| `Packages/StacklyUI/Sources/StacklyUI/InstanceDetail/Configuration/` | Configuration tab (Form, Effective File, Pending Changes, History, drift banner), rename and ports sheets (spec 0029) |
+| `Packages/StacklyUI/Sources/StacklyUI/Instances/Logs/`, `Instances/Metrics/` | Logs tab with `InstanceLogsModel` (spec 0027) and Metrics tab with `InstanceMetricsModel`, Swift Charts graph, and process list (spec 0028) |
+| `Packages/StacklyUI/Sources/StacklyUI/Instances/InstanceLifecycleActions.swift` | Which start, stop, restart, reload, and force stop actions an instance offers, from its capabilities (spec 0026) |
+| `Packages/StacklyUI/Sources/StacklyUI/OpenIn/` | Open In menu from the provider's `openWith` actions, behind the `AppLocator` and `WorkspaceOpener` ports (spec 0070) |
+| `Packages/StacklyUI/Sources/StacklyUI/MenuBar/`, `Notifications/` | `MenuBarModel` and popover with Stop All (spec 0032), and notifications behind `NotificationPosting` (spec 0032 AC-22) |
+| `Packages/StacklyUI/Sources/StacklyUI/Settings/` | Settings window tabs, daemon settings and storage locations, startup rows, and the planned daemon restart (specs 0030, 0031, 0032) |
 | `Packages/StacklyUI/Sources/StacklyUI/Connection/` | `DaemonModel`, `ResourceStore`, `ShellSync`, `ShellRuntime`, and `MutationPath`, the only way a screen reads or mutates (spec 0013) |
 | `Packages/StacklyUI/Sources/StacklyUI/Tokens/`, `Status/`, `State/`, `Confirmation/` | Design tokens, status labels, state patterns, and confirmations (spec 0012) |
 | `Packages/StacklyUI/Sources/StacklyUI/Components/` | Shared components for every screen: tile, key value, copy and console, actions and menus, feedback, sheet, checklist, staged progress, inspector, log, diff (spec 0067) |
@@ -55,6 +61,7 @@ cargo xtask ui-test           # XCUITest; needs Automation Mode turned on by the
 - Accent appears only through native controls, native links, and `StacklyColor.selectionRing` for a custom selection ring; `controlAccentColor` or `accentColor` outside `Tokens/StacklyColor.swift` fails the source rule (spec 0012).
 - A page under `.stacklyInspector` takes the size the column offers, since the component sets its frame; the page never sets its own `minWidth` (spec 0067).
 - A screen retries a failed load only through `ResourceStore.refresh()`, which waits for a running snapshot, and never adds its own reload loop; `ShellSync` reloads failed stores once on `.caughtUp` (spec 0013).
+- The Metrics tab polls `instance.get_metrics` every `intervalSeconds` only while it is on screen (`onAppear` and `onDisappear`), sends its `historyId` and `afterSeq`, and replaces the whole history on `historyReset` (spec 0028). The menu bar reads the shell's `DaemonModel` and opens no connection of its own (spec 0032).
 - Tests never rely on wall clock deadlines the main actor can starve: waits use `ResponsiveTimer`, process watchdogs run off the main actor, and source rule suites are `@Suite(.serialized) nonisolated` so their scans leave the main actor free.
 
 ## Gotchas
@@ -81,6 +88,14 @@ MCP servers: XcodeBuildMCP (recommended)
 - [0067 Komponen dasar Stackly](../../docs/specs/0067-komponen-dasar-stackly/index.md)
 - [0068 Fixture tampilan dan cek visual](../../docs/specs/0068-fixture-tampilan-cek-visual/index.md)
 - [0069 Menu aplikasi, perintah, dan shortcut](../../docs/specs/0069-menu-aplikasi-perintah-shortcut/index.md)
+- [0026 Stop, restart, dan reload](../../docs/specs/0026-stop-restart-reload/index.md)
+- [0027 Log per instance](../../docs/specs/0027-log-per-instance/index.md)
+- [0028 Metrics dan health](../../docs/specs/0028-metrics-dan-health/index.md)
+- [0029 Edit config, nama, dan endpoint](../../docs/specs/0029-edit-config-nama-endpoint/index.md)
+- [0030 Rekonsiliasi dan restart daemon terencana](../../docs/specs/0030-reconciliation-restart-daemon-terencana/index.md)
+- [0031 Demand, autostart, dan login](../../docs/specs/0031-demand-autostart-login/index.md)
+- [0032 Menu bar dan Settings](../../docs/specs/0032-menu-bar-settings/index.md)
+- [0070 Buka instance di aplikasi klien](../../docs/specs/0070-buka-instance-aplikasi-klien/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
 

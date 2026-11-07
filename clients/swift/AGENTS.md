@@ -14,6 +14,7 @@ The Swift side of the IPC contract: DTOs generated from `stackly-protocol`, plus
 | `Sources/StacklyClient/Generated/ContractNames.swift` | Event kind and method names for the transport (spec 0013); written by codegen |
 | `Sources/StacklyClient/Endpoint/`, `Transport/`, `Wire/`, `Connection/` | Socket path and endpoint checks, framing over `DispatchIO`, three stage frame decode, and `DaemonConnection` with handshake, calls, and subscribe (spec 0013) |
 | `Sources/StacklyClient/Link/`, `Sync/` | `DaemonLink` with reconnect and heartbeat, and `SyncEngine` with snapshot plus cursor (spec 0013) |
+| `Sources/StacklyClient/Link/LogFollowSession.swift` | One `instance.logs_follow` on one connection (`DaemonLink.followLogs`): the stream of `log` frames ends with a throw when that connection closes, and the reader follows again from its own cursor (spec 0027) |
 | `Sources/StacklyTestSupport/` | Product for test targets only: the `.evidence` trait and records (spec 0002) and `FixtureCredential` (spec 0011) |
 | `Sources/StacklyEvidenceCore/` | Internal target (no product, `package` access) that writes evidence records for both helpers (spec 0068) |
 | `Sources/StacklyXCTestSupport/` | Product for XCTest targets: `XCTestCase.evidence(covers:expected:)`, `XCTEvidence.actual` and `.blocked` (spec 0068) |
