@@ -719,6 +719,7 @@ Sesi paralel: langkah 17 tidak bergantung pada milestone 2 sampai 4 dan bisa men
 - Entri cache tidak dibersihkan fitur ini; cache bisa membesar (ClickHouse 216 MB) sampai pembersihan fitur 55 ada.
 - Inspector di halaman Runtimes adalah selisih dari mockup yang harus dicatat untuk pembaruan mockup.
 - Exec check menjalankan kode artefak sekali saat install; binary yang punya efek samping saat `--version` (tidak ada di baseline) akan menjalankannya.
+- Tanda tangan ad hoc saat install (AC-11) tidak memakai hardened runtime (`--options runtime`), jadi `DYLD_*` dan debugger dari proses milik user yang sama tetap bisa masuk ke runtime. Diterima sebagai residual pada 2026-11-05 (tindak lanjut audit keamanan): hardened runtime bisa menolak plugin atau extension pihak ketiga yang tidak ditandatangani (misalnya extension PostgreSQL), dan celah ini tidak melewati batas antar user.
 
 **Neutral**:
 
