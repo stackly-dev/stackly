@@ -61,6 +61,7 @@ use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::audit;
+use crate::ipc::doctor;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -391,14 +392,8 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: DoctorParams,
     ) -> HandlerFuture<'a, DoctorReport> {
-        let _ = (core, context, params);
-        // provisional: F34 (spec 0034 step 5 replaces this with the handler)
-        Box::pin(async {
-            Err(Box::new(ErrorBody::new(
-                &stackly_protocol::codes::request::UNKNOWN_METHOD,
-                "doctor.run is not served by this build yet",
-            )))
-        })
+        let _ = context;
+        doctor::run(core, params)
     }
 
     /// `instance.get_data_usage`.

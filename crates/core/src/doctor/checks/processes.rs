@@ -45,10 +45,11 @@ pub(super) fn run(
             _ => None,
         };
         let recorded = if blocker.is_some() || claims_process(instance.lifecycle()) {
+            // An instance removed since the list was read has no record.
             registry
                 .latest_process_observation(instance.id())
-                .map_err(|error| CheckFailure::registry(&error))?
-                .value
+                .ok()
+                .and_then(|versioned| versioned.value)
                 .map(|observation| observation.identity)
         } else {
             None

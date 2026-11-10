@@ -3,6 +3,7 @@
 
 pub mod agent_off;
 pub mod audit;
+pub mod doctor;
 pub mod instance;
 pub mod logs;
 pub mod operation;

@@ -97,7 +97,7 @@ pub fn check_severity(findings: impl IntoIterator<Item = DoctorSeverity>) -> Doc
     findings.into_iter().max().unwrap_or(DoctorSeverity::Ok)
 }
 
-macro_rules! code_enum {
+macro_rules! doctor_codes {
     (
         $(#[$meta:meta])*
         pub enum $name:ident {
@@ -131,7 +131,7 @@ macro_rules! code_enum {
     };
 }
 
-code_enum! {
+doctor_codes! {
     /// One check of the doctor, in the order of the *Daftar check* table of
     /// spec 0034. The first three run in the client, the rest in the daemon.
     pub enum DoctorCheckId {
@@ -232,7 +232,7 @@ impl DoctorCheckId {
     }
 }
 
-code_enum! {
+doctor_codes! {
     /// What a finding is about, by check (spec 0034, *Daftar check*).
     pub enum DoctorFindingCode {
         /// `connection`: the client cannot reach the daemon; the `code`
@@ -307,7 +307,7 @@ code_enum! {
     }
 }
 
-code_enum! {
+doctor_codes! {
     /// Why a check reports `check_unavailable`.
     pub enum CheckUnavailableReason {
         /// The check ran past [`CHECK_TIME_LIMIT`] or [`RUN_TIME_LIMIT`].

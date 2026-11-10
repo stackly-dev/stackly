@@ -823,3 +823,71 @@ async fn degraded_subsystems_are_warnings_and_a_failed_reading_is_unavailable() 
         [DoctorFindingCode::CheckUnavailable]
     );
 }
+
+// covers: AC-7 (spec 0034)
+#[tokio::test]
+async fn a_pinned_package_that_does_not_load_is_one_error_with_every_instance_that_pins_it() {
+    let rig = Rig::new().await;
+    let first = rig.instance(&stopped_spec());
+    let second = rig.instance(&stopped_spec());
+    let manifest = rig
+        .layout
+        .layout()
+        .provider_revision_dir(rig.key())
+        .join("provider.yaml");
+    std::fs::write(&manifest, "apiVersion: nope\n").expect("the manifest is broken");
+    let report = run(&rig).await;
+    let packages = check(&report, DoctorCheckId::ProviderPackages);
+    assert_eq!(packages.findings.len(), 1);
+    let finding = &packages.findings[0];
+    assert_eq!(finding.code, DoctorFindingCode::PackageUnreadable);
+    assert_eq!(finding.severity, DoctorSeverity::Error);
+    let FindingFacts::Package { key, used_by, .. } = &finding.facts else {
+        panic!("package facts");
+    };
+    assert_eq!(key, rig.key());
+    assert_eq!(used_by.len(), 2);
+    let named: Vec<_> = [first, second]
+        .iter()
+        .map(|id| {
+            rig.registry
+                .instance(*id)
+                .expect("the instance reads")
+                .value
+                .expect("it exists")
+                .name()
+                .clone()
+        })
+        .collect();
+    assert!(named.iter().all(|name| used_by.contains(name)));
+    assert!(matches!(finding.action, Some(Action::ShowInstance(_))));
+}
+
+// covers: AC-9 (spec 0034)
+#[tokio::test]
+async fn a_rendered_file_that_differs_from_its_revision_copy_is_drift_with_review() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&stopped_spec());
+    let paths = rig.paths(id);
+    let history = paths.config_history.join(rig.active(id).id.to_string());
+    std::fs::create_dir_all(&history).expect("the copy folder");
+    std::fs::write(history.join("fake.conf"), "port = 1\n").expect("the copy");
+    std::fs::write(paths.config.join("fake.conf"), "port = 2\n").expect("the edited file");
+    let before = footprint(&rig);
+    let report = run(&rig).await;
+    let drift = check(&report, DoctorCheckId::ConfigDrift);
+    assert_eq!(drift.severity, DoctorSeverity::Warning);
+    let finding = &drift.findings[0];
+    assert_eq!(finding.code, DoctorFindingCode::ConfigDrift);
+    assert_eq!(finding.action, Some(Action::ReviewConfig(id)));
+    let FindingFacts::Drift { files } = &finding.facts else {
+        panic!("drift facts");
+    };
+    assert!(files.iter().any(|file| file == "fake.conf"), "{files:?}");
+    assert_eq!(
+        std::fs::read_to_string(paths.config.join("fake.conf")).expect("the file reads"),
+        "port = 2\n",
+        "the doctor keeps the edit"
+    );
+    assert_eq!(footprint(&rig), before);
+}

@@ -145,7 +145,13 @@ impl Doctor {
         .and_then(Result::ok);
         let started_at = sources.platform.clock().now();
         let begun = Instant::now();
-        let scope = resolve_scope(&sources, request.instance).await?;
+        // A registry read that hangs must not hold the reply: past the
+        // limit of one check the run goes on without the scope's name, and
+        // the instance checks still keep to the instance.
+        let scope = match timeout(limits.check, resolve_scope(&sources, request.instance)).await {
+            Ok(scope) => scope?,
+            Err(_) => None,
+        };
         let wanted: Vec<DoctorCheckId> = DAEMON_CHECKS
             .iter()
             .copied()

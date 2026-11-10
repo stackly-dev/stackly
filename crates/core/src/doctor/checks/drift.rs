@@ -36,8 +36,8 @@ pub(super) fn run(
             _ => {
                 let Some(revision) = registry
                     .active_config_revision(instance.id())
-                    .map_err(|error| CheckFailure::registry(&error))?
-                    .value
+                    .ok()
+                    .and_then(|versioned| versioned.value)
                 else {
                     continue;
                 };
