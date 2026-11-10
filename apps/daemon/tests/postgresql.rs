@@ -52,6 +52,8 @@ mod mismatch;
 mod open_with;
 #[path = "postgresql/phases.rs"]
 mod phases;
+#[path = "postgresql/port_in_use.rs"]
+mod port_in_use;
 #[path = "postgresql/readiness.rs"]
 mod readiness;
 #[path = "postgresql/reconcile.rs"]
