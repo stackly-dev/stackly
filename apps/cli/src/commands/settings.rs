@@ -1,12 +1,13 @@
-//! `stackly settings get` and `set` (spec 0032, AC-16, AC-17): the settings
-//! the daemon keeps for every client, so the GUI and the command line see the
-//! same values.
+//! `stackly settings get` and `set` (spec 0032, AC-16, AC-17; spec 0035,
+//! AC-6): the settings the daemon keeps for every client, so the GUI and the
+//! command line see the same values.
 //!
 //! `set` reads the revision first and sends the change with it. It does not
 //! try again when the revision went stale: it says so and exits 3.
 
 use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
+use stackly_protocol::audit::AUDIT_RETENTION_DAYS;
 use stackly_protocol::codes::resource;
 use stackly_protocol::instance::StartupPolicyKind;
 use stackly_protocol::settings::{
@@ -31,7 +32,7 @@ pub enum SettingsCommand {
     Get(GetArgs),
     /// Change one daemon setting
     #[command(
-        after_help = "Examples:\n  stackly settings set default-autostart on\n  stackly settings set update-channel beta\n  stackly settings set telemetry off"
+        after_help = "Examples:\n  stackly settings set default-autostart on\n  stackly settings set update-channel beta\n  stackly settings set telemetry off\n  stackly settings set audit-retention-days 90"
     )]
     Set(SetArgs),
 }
@@ -59,6 +60,8 @@ pub enum SettingKey {
     UpdateChannel,
     /// Whether you agree to share usage statistics (on or off); nothing is sent today
     Telemetry,
+    /// How many days the daemon keeps the audit trail (7, 30, or 90); older entries are removed right away
+    AuditRetentionDays,
 }
 
 /// `stackly settings set`.
@@ -67,7 +70,7 @@ pub struct SetArgs {
     /// The setting
     #[arg(value_enum)]
     pub key: SettingKey,
-    /// The value: on or off, or stable or beta
+    /// The value: on or off, stable or beta, or 7, 30, or 90
     #[arg(value_name = "VALUE")]
     pub value: String,
     /// Send this key so a repeated request gets the same answer; by default a new one is made
@@ -134,6 +137,20 @@ fn patch_of(key: SettingKey, value: &str) -> Result<SettingsPatch, CliFailure> {
                     ));
                 }
             }),
+            ..SettingsPatch::default()
+        },
+        SettingKey::AuditRetentionDays => SettingsPatch {
+            audit_retention_days: Some(
+                AUDIT_RETENTION_DAYS
+                    .into_iter()
+                    .find(|days| days.to_string() == value)
+                    .ok_or_else(|| {
+                        CliFailure::usage(
+                            "invalid_value",
+                            &format!("“{value}” is not 7, 30, or 90"),
+                        )
+                    })?,
+            ),
             ..SettingsPatch::default()
         },
     })
@@ -222,7 +239,7 @@ impl Render for SettingsResult {
             settings.log_retention.segments_per_stream.get(),
             mebibytes(settings.log_retention.segment_max_bytes.get())
         );
-        out.kv(&[
+        let mut rows = vec![
             ("default-autostart", Cell::fixed(autostart)),
             ("update-channel", Cell::fixed(channel)),
             ("telemetry", Cell::fixed(on_off(settings.telemetry))),
@@ -239,7 +256,37 @@ impl Render for SettingsResult {
                 Cell::text(&location_text(&settings.locations.cache)),
             ),
             ("log retention", Cell::fixed(retention)),
-            ("revision", Cell::fixed(settings.revision.get().to_string())),
-        ]);
+        ];
+        // An older daemon does not keep the setting, so there is no line.
+        if let Some(audit) = settings.audit_retention {
+            rows.push((
+                "audit retention",
+                Cell::fixed(format!(
+                    "{} days, up to {} entries",
+                    audit.days,
+                    audit.max_rows.get()
+                )),
+            ));
+        }
+        rows.push(("revision", Cell::fixed(settings.revision.get().to_string())));
+        out.kv(&rows);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_audit_retention_is_7_30_or_90_days_and_anything_else_is_a_usage_error() {
+        for days in [7, 30, 90] {
+            let patch = patch_of(SettingKey::AuditRetentionDays, &days.to_string()).unwrap();
+            assert_eq!(patch.audit_retention_days, Some(days));
+            assert_eq!(patch.telemetry, None, "only the one field is sent");
+        }
+        for value in ["14", "0", "+30", "30 ", "030", "thirty", "", "-7"] {
+            let failure = patch_of(SettingKey::AuditRetentionDays, value).unwrap_err();
+            assert_eq!(failure.body.code(), "cli.usage", "{value:?}");
+        }
     }
 }
