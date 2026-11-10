@@ -342,12 +342,13 @@ struct InstancesPageTests {
         let failure = InstanceLastFailure(
             code: "crash_loop", at: nil, exitCode: nil, signal: nil,
             excerpt: ["[ERR] one\n[ERR] two", "[FTL] three"])
-        #expect(InstanceInspector.excerpt(failure) == "[ERR] one\n[ERR] two\n[FTL] three")
-        #expect(InstanceInspector.excerpt(nil) == nil)
+        #expect(FailureBannerCopy.lines(of: failure) == ["[ERR] one", "[ERR] two", "[FTL] three"])
+        #expect(FailureBannerCopy.lines(of: nil).isEmpty)
         #expect(
-            InstanceInspector.excerpt(
-                InstanceLastFailure(code: "x", at: nil, exitCode: nil, signal: nil, excerpt: []))
-                == nil)
+            FailureBannerCopy.lines(
+                of: InstanceLastFailure(code: "x", at: nil, exitCode: nil, signal: nil, excerpt: [])
+            )
+            .isEmpty)
     }
 
     @Test func onlyStartAndRetryAreTheMainActionOfTheInspector() {

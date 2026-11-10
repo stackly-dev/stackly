@@ -194,12 +194,14 @@ nonisolated public enum AttentionRules {
         return false
     }
 
-    /// "It crashed. Restart {attempts + 1} of {budget} at {time}." while a restart is
-    /// planned inside the budget, else the plain sentence.
+    /// "It crashed. Restart {attempts} of {budget} at {time}." while a restart is planned
+    /// inside the budget, else the plain sentence. `attempts` already counts the crash that
+    /// started the pause, so it is the number of the respawn that waits (spec 0033, the
+    /// accepted change to spec 0022).
     private static func restartMessage(
         _ restart: InstanceRestart, now: Date, locale: Locale, timeZone: TimeZone
     ) -> String {
-        guard let next = restart.nextAttemptAt, restart.attempts + 1 <= restart.budget else {
+        guard let next = restart.nextAttemptAt, restart.attempts <= restart.budget else {
             return "It crashed and Stackly is starting it again."
         }
         var calendar = locale.calendar
@@ -208,7 +210,7 @@ nonisolated public enum AttentionRules {
             date: calendar.isDate(next, inSameDayAs: now) ? .omitted : .numeric,
             time: .shortened, locale: locale, calendar: calendar, timeZone: timeZone)
         return
-            "It crashed. Restart \(restart.attempts + 1) of \(restart.budget) at \(next.formatted(style))."
+            "It crashed. Restart \(restart.attempts) of \(restart.budget) at \(next.formatted(style))."
     }
 
     // MARK: - Operations

@@ -42,20 +42,26 @@ public final class EndpointsModel {
     @ObservationIgnored private var verdictRequests = 0
     @ObservationIgnored private var unknown: String?
     @ObservationIgnored private var didOpen = false
+    @ObservationIgnored private var prefill: [String: UInt16]
 
     /// Creates a model that has read nothing.
     /// - Parameters:
     ///   - source: The instance.
     ///   - service: The reads and the mutation path.
+    ///   - prefill: The ports to fill in by endpoint name once the first read arrives, such as
+    ///     the free port a failure banner suggested (spec 0033, AC-10); a name that is no
+    ///     endpoint the sheet can change is ignored.
     ///   - sleep: Waits for a duration and throws when cancelled; the pause before a verdict.
     public init(
         source: InstanceEditSource, service: InstanceConfigService,
+        prefill: [String: UInt16] = [:],
         sleep: @escaping @Sendable (Duration) async throws -> Void = {
             try await Task.sleep(for: $0)
         }
     ) {
         self.source = source
         self.service = service
+        self.prefill = prefill
         self.sleep = sleep
     }
 
@@ -67,7 +73,8 @@ public final class EndpointsModel {
         await load()
     }
 
-    /// Reads the endpoints of the instance again, dropping what was typed.
+    /// Reads the endpoints of the instance again, dropping what was typed. The first read that
+    /// succeeds fills in the prefill and judges it at once, without the pause.
     public func load() async {
         didOpen = true
         phase = .loading
@@ -80,7 +87,20 @@ public final class EndpointsModel {
             phase = .loaded
         } catch {
             phase = .failed(error.body)
+            return
         }
+        guard prefill.isEmpty == false else { return }
+        let ports = prefill
+        prefill = [:]
+        for index in endpoints.indices {
+            guard let port = ports[endpoints[index].name] else { continue }
+            endpoints[index].mode = .fixed
+            endpoints[index].portText = String(port)
+        }
+        guard changed.isEmpty == false, hasInvalidPort == false else { return }
+        task?.cancel()
+        isValidating = true
+        await validateNow()
     }
 
     private static func draft(_ endpoint: ConfigEndpoint) -> EndpointDraft {
@@ -283,9 +303,17 @@ struct EndpointsSheet: View {
     let context: InstanceActionContext
 
     /// The sheet of an instance, with a model of its own.
-    init(source: InstanceEditSource, service: InstanceConfigService, context: InstanceActionContext)
-    {
-        _model = State(initialValue: EndpointsModel(source: source, service: service))
+    /// - Parameters:
+    ///   - source: The instance.
+    ///   - service: The reads and the mutation path.
+    ///   - prefill: The ports to fill in by endpoint name (spec 0033, AC-10).
+    ///   - context: Where the cards go.
+    init(
+        source: InstanceEditSource, service: InstanceConfigService,
+        prefill: [String: UInt16] = [:], context: InstanceActionContext
+    ) {
+        _model = State(
+            initialValue: EndpointsModel(source: source, service: service, prefill: prefill))
         self.context = context
     }
 
