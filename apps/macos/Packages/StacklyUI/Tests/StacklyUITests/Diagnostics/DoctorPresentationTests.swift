@@ -138,6 +138,38 @@ struct DoctorPresentationTests {
         .evidence(
             covers: ["REQ-019"],
             expected:
+                "The meta line says today at the time on the same day, else the date and time, and a PID file names the process that holds its PID"
+        ))
+    func timesAndPidFilesReadPlainly() {
+        let utc = TimeZone(identifier: "UTC") ?? .current
+        let calendar = Calendar(identifier: .gregorian)
+        let locale = Locale(identifier: "en_US")
+        let finished = Date(timeIntervalSince1970: 1_794_297_600)  // 2026-11-10 08:00 UTC
+        #expect(
+            DoctorCopy.lastRun(
+                finished, now: finished.addingTimeInterval(3600), calendar: calendar,
+                locale: locale, timeZone: utc) == "today at 8:00\u{202F}AM")
+        #expect(
+            DoctorCopy.lastRun(
+                finished, now: finished.addingTimeInterval(86_400), calendar: calendar,
+                locale: locale, timeZone: utc
+            ).hasPrefix("Nov 10, 2026"))
+
+        let held = ProcessRef(pid: 4242, startedAt: nil, executable: "/bin/sleep", sameUser: true)
+        #expect(
+            DoctorCopy.pidFileState(
+                PidFileEvidence(path: "p", pid: 4242, state: .otherProcess, process: held))
+                == "PID 4242 · /bin/sleep")
+        #expect(
+            DoctorCopy.pidFileState(
+                PidFileEvidence(path: "p", pid: nil, state: .missing, process: nil))
+                == "The file is gone.")
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-019"],
+            expected:
                 "Every action kind maps to its label and place, and an action without what its route needs has no route"
         ))
     func actionsMapToTheirRoutes() {

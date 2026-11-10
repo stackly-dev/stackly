@@ -82,11 +82,13 @@ struct BundleSheetContent: View {
             } else if model.failure == nil {
                 VStack(spacing: Spacing.s8) {
                     DelayedProgress()
+                        .frame(height: 32)
                     Text(DoctorCopy.preparing)
                         .font(.callout)
                         .foregroundStyle(StacklyColor.textSecondary)
                 }
-                .frame(maxWidth: .infinity, minHeight: 160)
+                .padding(.vertical, Spacing.s22)
+                .frame(maxWidth: .infinity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

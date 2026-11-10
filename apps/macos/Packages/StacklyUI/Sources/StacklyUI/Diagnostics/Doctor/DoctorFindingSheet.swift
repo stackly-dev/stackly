@@ -51,14 +51,6 @@ struct DoctorFindingDetail: View {
             Text(finding.explanation)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
-            if let details = finding.details, !details.isEmpty {
-                CardSection {
-                    ForEach(Array(details.enumerated()), id: \.offset) { _, detail in
-                        LabeledContent(detail.key, value: detail.value)
-                    }
-                }
-                .labeledContentStyle(StacklyLabeledContentStyle())
-            }
             if let evidence = finding.evidence {
                 CardSection(DoctorCopy.evidence) {
                     ForEach(evidenceRows(evidence), id: \.label) { row in

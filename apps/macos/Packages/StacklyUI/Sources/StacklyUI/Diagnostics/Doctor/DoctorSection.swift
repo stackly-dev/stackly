@@ -19,6 +19,7 @@ struct DoctorSection: View {
     @Environment(\.calendar) private var calendar
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @Environment(\.fixtureNow) private var fixtureNow
     @State private var detail: FindingDetail?
 
     var body: some View {
@@ -69,11 +70,14 @@ struct DoctorSection: View {
         } else if doctor.running {
             VStack(spacing: Spacing.s8) {
                 DelayedProgress()
+                    .frame(height: 32)
                 Text(DoctorCopy.runningMeta)
                     .font(.callout)
                     .foregroundStyle(StacklyColor.textSecondary)
+                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, minHeight: 120)
+            .padding(Spacing.s22)
+            .frame(maxWidth: .infinity)
             .cardSurface()
         } else if !isConnected {
             StatePlaceholder(
@@ -109,8 +113,9 @@ struct DoctorSection: View {
             return doctor.report == nil ? nil : DoctorCopy.runningMeta
         }
         guard let report = doctor.report else { return nil }
-        let time = DiagnosticsTime.format(
-            report.finishedAt, calendar: calendar, locale: locale, timeZone: timeZone)
+        let time = DoctorCopy.lastRun(
+            report.finishedAt, now: fixtureNow ?? Date(), calendar: calendar, locale: locale,
+            timeZone: timeZone)
         return DoctorCopy.meta(
             lastRun: time, issues: DoctorPresentation.issueCount(report), connected: isConnected)
     }

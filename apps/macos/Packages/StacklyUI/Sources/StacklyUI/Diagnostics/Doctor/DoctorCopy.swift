@@ -29,8 +29,25 @@ nonisolated enum DoctorCopy {
         }
     }
 
+    /// When the last run finished, as the meta line says it: `today at 10:23 AM` on the day
+    /// of `now`, otherwise the date and time of the Diagnostics page.
+    static func lastRun(
+        _ date: Date, now: Date, calendar: Calendar, locale: Locale, timeZone: TimeZone
+    ) -> String {
+        var calendar = calendar
+        calendar.timeZone = timeZone
+        guard calendar.isDate(date, inSameDayAs: now) else {
+            return DiagnosticsTime.format(
+                date, calendar: calendar, locale: locale, timeZone: timeZone)
+        }
+        let time = date.formatted(
+            Date.FormatStyle(
+                date: .omitted, time: .shortened, locale: locale, calendar: calendar,
+                timeZone: timeZone))
+        return "today at \(time)"
+    }
+
     // The detail sheet.
-    static let explanation = "What the doctor found"
     static let evidence = "Evidence"
     static let recordedProcess = "Recorded process"
     static let currentProcess = "Current process"
@@ -82,7 +99,10 @@ nonisolated enum DoctorCopy {
         case .unreadable: return "The file can’t be read."
         case .notRunning: return "\(pid) · no process"
         case .runtimeProcess: return "\(pid) · a process of this instance’s runtime"
-        case .otherProcess: return "\(pid) · \(process(evidence.process))"
+        case .otherProcess:
+            guard let held = evidence.process else { return "\(pid) · another process" }
+            if held.sameUser == false { return "\(pid) · another user" }
+            return "\(pid) · \(held.executable ?? "another process")"
         case .unrecognized: return pid
         }
     }
