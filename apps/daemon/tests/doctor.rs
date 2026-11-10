@@ -427,6 +427,26 @@ async fn a_scratch_folder_without_an_operation_is_a_warning_and_stays() {
         .expect("the folder opens")
         .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
         .expect("the folder time is set");
+    // An hour old too, but a file and a symlink are not scratch folders.
+    let ds_store = site.prepared.layout().operations_dir().join(".DS_Store");
+    std::fs::write(&ds_store, b"finder").expect("a file in operations/");
+    std::fs::File::open(&ds_store)
+        .expect("the file opens")
+        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+        .expect("the file time is set");
+    let link = site.prepared.layout().operations_dir().join("a-link");
+    std::os::unix::fs::symlink(&folder, &link).expect("a symlink in operations/");
+    let hour_ago = jiff::Timestamp::now()
+        .checked_sub(jiff::SignedDuration::from_hours(1))
+        .expect("an hour ago is a time")
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        .to_string();
+    let touched = Command::new("/usr/bin/touch")
+        .args(["-h", "-d", &hour_ago])
+        .arg(&link)
+        .status()
+        .expect("touch runs");
+    assert!(touched.success(), "touch -h sets the symlink time");
     let report = doctor(
         &api,
         DoctorParams {
@@ -444,9 +464,20 @@ async fn a_scratch_folder_without_an_operation_is_a_warning_and_stays() {
         finding.subject.as_deref(),
         Some("operations/0190f000-0000-7000-8000-0000000000aa")
     );
-    assert_eq!(operations.findings.len(), 1, "the young folder is skipped");
+    assert_eq!(
+        operations.findings.len(),
+        1,
+        "the young folder, the file, and the symlink are skipped"
+    );
     assert!(folder.is_dir(), "the doctor removes nothing");
     assert!(young.is_dir());
+    assert!(ds_store.is_file());
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .expect("the symlink stays")
+            .file_type()
+            .is_symlink()
+    );
     stop(daemon).await;
 }
 

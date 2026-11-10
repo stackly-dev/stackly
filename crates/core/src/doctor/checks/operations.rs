@@ -1,6 +1,7 @@
 //! `operations`: one Error per operation that needs recovery (spec 0007),
 //! and one Warning per folder in `<data>/operations/` without an operation
-//! row (or whose name is not an operation ID). A folder modified less than
+//! row (or whose name is not an operation ID); a file or a symlink there is
+//! not a scratch folder and is never reported. A folder modified less than
 //! [`SCRATCH_MIN_AGE`] ago, or that names an operation active in the
 //! engine, is skipped, so an operation being created is not counted. The
 //! doctor removes nothing.
@@ -17,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use jiff::Timestamp;
 use stackly_domain::doctor::{DoctorFindingCode, DoctorSeverity, SCRATCH_MIN_AGE};
 use stackly_domain::{OperationId, OperationResource, OperationState};
+use stackly_platform::FileKind;
 use uuid::Uuid;
 
 use super::{CheckContext, CheckFailure, CheckFindings, stopped};
@@ -107,6 +109,11 @@ pub(super) fn run(
     for entry in entries {
         if stopped(stop) {
             break;
+        }
+        // Only folders are scratch; a file such as `.DS_Store` or a symlink
+        // (never followed) is not the engine's.
+        if entry.info.kind != FileKind::Dir {
+            continue;
         }
         let name = entry.name.to_string_lossy().into_owned();
         if young(entry.info.modified, now) {
