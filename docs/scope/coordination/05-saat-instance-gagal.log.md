@@ -9,10 +9,11 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `arc-f33-spec` | architect | F33 spec baru `0033-crash-loop-error-start` (kotak `Build it` tanpa Pointer diperlakukan sebagai `(spec)`) | `05-saat-instance-gagal.md` | `docs/specs/0033-crash-loop-error-start/` | `claude/arc-f33-spec-*` | `opus-5-5 · xhigh` | `aktif` |
+| `arc-f33-spec` | architect | F33 spec baru `0033-crash-loop-error-start` (kotak `Build it` tanpa Pointer diperlakukan sebagai `(spec)`) | `05-saat-instance-gagal.md` | `docs/specs/0033-crash-loop-error-start/` | `claude/arc-f33-spec-350b33` | `opus-5-5 · xhigh` (giliran pertama `medium`) | `merged` |
 | `arc-f34-spec` | architect | F34 `Design it (spec)`, spec `0034-doctor-diagnostic-bundle` | `05-saat-instance-gagal.md` | `docs/specs/0034-doctor-diagnostic-bundle/` | `claude/arc-f34-spec-*` | `opus-5-5 · xhigh` | `aktif` |
 | `arc-f35-spec` | architect | F35 `Design it (spec)`, spec `0035-operations-activity-audit` | `05-saat-instance-gagal.md` | `docs/specs/0035-operations-activity-audit/` | `claude/arc-f35-spec-2486d3` | `opus-5-5 · xhigh` (giliran pertama `medium`) | `merged` `747f9ba1` |
 | `dev-f35-m1` | developer | F35 milestone 1, langkah Build plan 1 sampai 4 (kontrak 3.3, migrasi `0012`, engine audit, daemon) | `05-saat-instance-gagal.md` | `crates/domain/`, `crates/storage/`, `crates/core/`, `crates/protocol/`, `crates/testkit/`, `apps/daemon/`, `protocols/`, `schemas/`, hasil codegen, `fuzz/seeds/`, `verify.md` 0035 | `claude/arc-f35-spec-2486d3` (sesi `local_818f334f`) | `opus-5-5 · xhigh` | `dipakai ulang` · `aktif` |
+| `dev-f33-m3` | developer | F33 milestone 3 dan 4, langkah Build plan 4 dan 5 (model dan banner GUI) | `05-saat-instance-gagal.md` | `apps/macos/Packages/StacklyUI/` (file banner, `InstanceEdit`, `EndpointsModel`, `AttentionRules`, fixture, snapshot), `verify.md` 0033 | `claude/arc-f33-spec-350b33` (sesi `local_41e40374`) | `opus-5-5 · xhigh` | `dipakai ulang` · `aktif` |
 
 ## Keputusan
 
@@ -37,6 +38,7 @@
 ## Dicentang pada wave ini
 
 - F35 · `Design it (spec)` · laporan `arc-f35-spec` · `claude/arc-f35-spec-2486d3` → `747f9ba1` · diff hanya `docs/specs/0035-operations-activity-audit/`, tanpa marker konflik · commit ini
+- F33 · spec 0033 ditautkan (Pointer dan lima milestone di bawah `Build it`, tanpa kotak `Design it` baru) · laporan `arc-f33-spec` · `claude/arc-f33-spec-350b33` di-merge · diff hanya `docs/specs/0033-crash-loop-error-start/`
 
 ## Riwayat wave
 

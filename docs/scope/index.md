@@ -25,7 +25,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [02-instalasi-pertama.md](02-instalasi-pertama.md) | Instalasi pertama (JOURNEY-01, PostgreSQL, plus NATS dasar) | 15 sampai 23 | 1 in-progress, 8 done |
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 done |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 done |
-| [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 1 in-progress, 2 planned |
+| [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 2 in-progress, 1 planned |
 | [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 3 planned |
 | [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 5 planned |
 | [08-environment-proyek.md](08-environment-proyek.md) | Environment proyek (JOURNEY-04) | 44 sampai 47 | 4 planned |
@@ -70,7 +70,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 30 | Reconciliation & restart daemon terencana | Kerja harian | done |
 | 31 | Demand, autostart & login | Kerja harian | done |
 | 32 | Menu bar & Settings | Kerja harian | done |
-| 33 | Crash loop & error start yang aman | Saat instance gagal | planned |
+| 33 | Crash loop & error start yang aman | Saat instance gagal | in-progress |
 | 34 | Doctor & diagnostic bundle | Saat instance gagal | planned |
 | 35 | Operations, activity & audit | Saat instance gagal | in-progress |
 | 36 | Provider SDK & test harness | Menambah provider | planned |
