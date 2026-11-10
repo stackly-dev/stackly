@@ -180,6 +180,7 @@ public struct InstancesPage: View {
                     openIn: models.openIn, logs: models.logsModel(for: route.id),
                     metrics: models.metricsModel(for: route.id),
                     configuration: models.configurationModel(for: route.id),
+                    failure: models.failureModel(for: route.id), operations: operations,
                     completedRounds: completedRounds,
                     tab: requestedTab ?? openingTab, back: { path.removeAll() }
                 )
@@ -479,7 +480,11 @@ public struct InstancesPage: View {
                 open: openAction(for: selected),
                 openIn: openInContent(for: selected),
                 model: models.model(for: selected.id),
-                secrets: models.detailService.secrets)
+                secrets: models.detailService.secrets,
+                failure: models.failureModel(for: selected.id),
+                center: (operations?.active ?? []) + (operations?.recent ?? []),
+                instanceNames: { [instances] in instances.store.items[$0]?.name },
+                edit: editAction)
         } else {
             InspectorPlaceholder(
                 title: "No Selection",

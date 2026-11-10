@@ -37,6 +37,8 @@ struct InstanceDetailPage: View {
     let logs: InstanceLogsModel
     let metrics: InstanceMetricsModel
     let configuration: ConfigurationModel
+    let failure: InstanceFailureModel
+    let operations: OperationCenter?
     let completedRounds: Int
     let back: @MainActor () -> Void
 
@@ -44,6 +46,7 @@ struct InstanceDetailPage: View {
         id: UUID, instances: InstanceStore, catalog: CatalogStore?, actions: InstanceActionModel,
         model: InstanceDetailModel, service: InstanceDetailService, openIn: OpenInModel,
         logs: InstanceLogsModel, metrics: InstanceMetricsModel, configuration: ConfigurationModel,
+        failure: InstanceFailureModel, operations: OperationCenter?,
         completedRounds: Int,
         tab: InstanceTab = .summary,
         back: @escaping @MainActor () -> Void
@@ -58,9 +61,22 @@ struct InstanceDetailPage: View {
         self.logs = logs
         self.metrics = metrics
         self.configuration = configuration
+        self.failure = failure
+        self.operations = operations
         self.completedRounds = completedRounds
         _tab = State(initialValue: tab)
         self.back = back
+    }
+
+    /// What the failure banner of the Summary tab reads (spec 0033): the operations of this
+    /// instance, the center's active and recent ones, the names of the other instances, and
+    /// Show Logs, which selects the Logs tab of this page.
+    private var failureInputs: InstanceDetailBanner.Failure {
+        InstanceDetailBanner.Failure(
+            model: failure,
+            center: (operations?.active ?? []) + (operations?.recent ?? []),
+            instanceNames: { [instances] in instances.store.items[$0]?.name },
+            showLogs: { tab = .logs })
     }
 
     private var context: InstanceActionContext {
@@ -100,6 +116,7 @@ struct InstanceDetailPage: View {
                             summary: summary, action: action, model: model,
                             secrets: service.secrets,
                             home: NSHomeDirectory(), enterSecrets: { secretNeeds = $0 },
+                            failure: failureInputs,
                             stopping: Self.stoppingActions(
                                 summary: summary, local: actions.localStatus(for: summary.id),
                                 stopAgain: {

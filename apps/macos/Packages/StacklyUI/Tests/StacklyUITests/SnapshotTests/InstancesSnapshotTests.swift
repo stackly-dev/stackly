@@ -69,6 +69,27 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["NFR-012", "AC-068", "AC-010"],
+                expected:
+                    "The inspector shows the compact failure banner of each state F1 to F7 with its title, its excerpt or code, and Use Port when there is one, in every variant"
+            ))
+        func instancesWithEachFailureBannerChosen() async throws {
+            let cases: [FixtureFailureBanner] = [
+                .restarting, .initFailed, .crashLoop, .portInUse, .dataInUse, .failed,
+                .startRefused,
+            ]
+            for fixture in cases {
+                let rig = await rig(
+                    instances: FixtureScenario.instanceCases + [fixture.instance],
+                    prepare: { $0.script.instanceOperations = fixture.operations })
+                try await assertSnapshot(
+                    framed(rig.instancesPage(selection: Self.id(fixture.number))),
+                    named: "instances-failure-\(fixture.snapshotName)", size: Self.withInspector)
+            }
+        }
+
+        @Test(
+            .evidence(
                 covers: ["NFR-012"],
                 expected:
                     "The Instances page with a blocked instance chosen renders in every variant"

@@ -3,12 +3,14 @@ import SwiftUI
 
 /// The inspector of the Instances page for one instance (spec 0022, *Inspector*): the
 /// header with the main action, the banner of a problem the person can fix, and the facts.
-/// It builds only from the ``InstanceRowModel`` and the main action it is given, so a
-/// preview or a snapshot shows it without a store.
+/// It builds only from the ``InstanceRowModel``, the main action, and the models it is given,
+/// so a preview or a snapshot shows it without a store. A failed, recovering, or refused
+/// instance gets the compact failure banner of spec 0033.
 struct InstanceInspector: View {
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @Environment(\.shellNavigator) private var navigator
 
     let row: InstanceRowModel
     let action: StacklyAction
@@ -17,6 +19,14 @@ struct InstanceInspector: View {
     let openIn: OpenInContent
     let model: InstanceDetailModel
     let secrets: SecretsClient
+    /// The operations the failure banner reads.
+    let failure: InstanceFailureModel
+    /// The active and the recent operations of the operation center.
+    let center: [OperationSummary]
+    /// The name of another instance by ID, for a port it owns.
+    let instanceNames: (UUID) -> String?
+    /// Opens the Ports sheet for Use Port, or `nil` where the page has none.
+    let edit: InstanceEditAction?
 
     var body: some View {
         let summary = row.summary
@@ -59,29 +69,34 @@ struct InstanceInspector: View {
         .labeledContentStyle(.stackly)
 
         .task(id: row.id) { await model.openForInspector() }
+        .task(id: row.id) { await failure.open() }
         .onChange(of: summary, initial: true) { _, new in
             model.observe(new)
+            failure.observe(new)
+        }
+        .onChange(of: center, initial: true) { _, new in
+            failure.observe(center: new)
         }
     }
 
     // MARK: - Banner
 
+    /// The compact failure banner (spec 0033, AC-12), else the banner of rules I2 to I4.
     @ViewBuilder private var banner: some View {
-        if let item = AttentionRules.banner(
-            for: row.summary, now: fixtureNow ?? Date(), locale: locale, timeZone: timeZone)
+        let now = fixtureNow ?? Date()
+        if let content = failure.content(
+            for: row.summary, center: center, instanceNames: instanceNames, now: now)
         {
-            StateBanner(
-                tone: item.tone, title: item.title, message: item.message,
-                code: item.rule == "I1" ? Self.excerpt(row.summary.lastFailure) : nil)
+            InstanceFailureBanner(
+                content: content, mode: .inspector,
+                actions: FailureBannerActions(
+                    summary: row.summary, main: action, edit: edit, navigator: navigator,
+                    showLogs: nil))
+        } else if let item = AttentionRules.banner(
+            for: row.summary, now: now, locale: locale, timeZone: timeZone)
+        {
+            StateBanner(tone: item.tone, title: item.title, message: item.message)
         }
-    }
-
-    /// The lines of the output of the failed process, one per line, or `nil` when empty.
-    static func excerpt(_ failure: InstanceLastFailure?) -> String? {
-        let lines = (failure?.excerpt ?? []).flatMap {
-            $0.split(whereSeparator: \.isNewline).map(String.init)
-        }
-        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     // MARK: - Rows

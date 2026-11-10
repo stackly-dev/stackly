@@ -34,3 +34,49 @@ Model GUI dibangun di atas fixture dan klien palsu: daemon baru mengisi `lastFai
 - AC-16 · aksi Show Logs dan Diagnose… ada di daftar tombol; navigasi menunggu Milestone 4
 - AC-17 · kasus fixture F1 sampai F7 (`FixtureFailureBanner`, perluasan `FixtureStartConflict`) dan `operation.list` di `PageRig`; snapshot menunggu Milestone 4
 - AC-1 sampai AC-8, AC-14, AC-15 · milik Milestone 1, 2, dan 5
+
+## Milestone 4: GUI banner
+
+`InstanceFailureBanner` dipasang di tab Summary (lewat `InstanceDetailBanner`, menggantikan I1 dan I7) dan di inspector Instances (versi ringkas). Tautan Show in Operations dan Diagnose… masih memakai tujuan provisional (`// provisional: F35` dan `// provisional: F34`): halaman Operations dan Diagnostics tanpa fokus, sampai `ShellNavigator.openOperation(_:)` dan `openDiagnostics(focus:)` ada di `main`.
+
+### UI / manual
+
+Langkah ini butuh app Debug di atas daemon nyata dengan fitur milestone 1 (fakta kegagalan dan `suggestedPort` terisi); sampai milestone 1 masuk, banner tampil tanpa waktu, exit code, dan saran port. Lead memindahkan langkah ini ke file manual.
+
+- [ ] Buat instance fake yang crash sebelum ready (`crashAfterMs` kecil), tekan Start, buka tab Summary → banner `caution` "Restarting after a crash" dengan "Restart {n} of 5 in {s} s." yang menghitung mundur tiap detik, cuplikan excerpt, dan Show Logs → AC-12
+- [ ] Tunggu sampai budget habis → banner `critical` "Crash loop. Automatic restarts paused.", isi "It crashed 6 times in 5 minutes, so Stackly stopped restarting it and is waiting for you." plus hint, blok kode "supervisor.retry_budget_exhausted · operation {uuid}" lalu excerpt, tombol Retry (utama), Show Logs, Diagnose…, dan tautan Show in Operations → AC-9
+- [ ] Seret pilih teks di blok kode lalu Copy → teksnya bisa dipilih dan disalin → AC-9
+- [ ] Tekan Show Logs → tab Logs instance itu terbuka → AC-16
+- [ ] Tekan Show in Operations → halaman Operations terbuka (provisional: tanpa fokus sampai fitur 35) → AC-16
+- [ ] Tekan Diagnose… → halaman Diagnostics terbuka (provisional: tanpa fokus sampai fitur 34) → AC-16
+- [ ] Pilih instance itu di tabel Instances dengan inspector terbuka → banner ringkas: judul crash loop dan excerpt, tanpa operation ID dan tanpa tombol lain → AC-12
+- [ ] Tekan Retry di banner → satu `instance.start` baru, tombol menjadi "Starting…" dengan spinner, lalu banner restart muncul lagi (budget baru) → AC-13
+- [ ] Hentikan `stacklyd` yang kamu jalankan untuk sesi ini sampai jendela menunjukkan daemon tidak terhubung → Retry dan Use Port nonaktif dengan alasan dari banner daemon jendela; banner kegagalan tetap tampil dengan isi terakhir yang dimuat → AC-13
+- [ ] Pegang port fixed instance PostgreSQL dengan `nc -l 127.0.0.1 <port>`, tekan Start → banner "Couldn’t start: port in use", isi "Port {port} of {endpoint} is held by another process." plus hint, tombol utama "Use Port {n}" → AC-10
+- [ ] Tekan Use Port {n} → sheet Edit Ports terbuka dengan endpoint itu terisi {n} dan verdict dry run langsung tampil; port di registry belum berubah (`stackly instance inspect`) → AC-10
+- [ ] Ketik port lain yang juga dipakai, atau biarkan `nc` kedua memegang {n} sebelum membuka sheet → verdict sheet menolak dan menawarkan saran barunya sendiri → AC-10
+- [ ] Tekan Change Ports di sheet → port berubah; banner menyembunyikan tombol port dan menambah "Its ports changed. Retry to start with them."; tekan Retry → instance start di port baru → AC-10, AC-13
+- [ ] Biarkan instance lain memegang port yang sama, tekan Start pada instance `stopped` → banner "Couldn’t start: port in use" dengan "Port {port} of {endpoint} belongs to {nama instance itu}." dan Use Port; lalu tekan Stop atau ubah nama instance → stop menyembunyikan banner, rename tidak → AC-10, AC-11
+- [ ] Bandingkan dengan `stackly instance inspect <name>` untuk instance yang sama → kode, operation ID, dan port saran sama dengan banner → AC-9, AC-10
+- [ ] Ulangi dengan app di mode gelap dan jendela sempit (lebar konten sekitar 640 pt) → tidak ada label tombol atau baris kode yang terpotong; tombol pindah ke dua baris bila tidak muat → AC-17
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstanceFailureBannerTests` → semua test lulus: Retry di banner adalah Retry utama (setiap klik satu `instance.start` dengan key baru, penolakan memberi kartu `critical`, label "Starting…" saat berjalan, alasan nonaktif dan gate offline tetap); Retry pada instance `stopped` adalah Start dengan judul "Retry"; urutan tombol Summary "Use Port 5439, Show Logs, Retry, Diagnose…" dan Use Port membuka `.editPorts(source, prefill: ["database": 5439])`; inspector hanya Use Port; tempat tanpa sheet Ports atau tab Logs tidak menampilkan tombol itu; Show Logs memanggil penutupnya, Diagnose… dan Show in Operations memindah navigator ke `.diagnostics` dan `.operations` (provisional) → AC-10, AC-13, AC-16
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstanceDetailSnapshotTests` → `detailOfEachFailureBanner` menulis 11 kasus `instance-detail-failure-*` (restarting, init-failed, crash-loop, port-in-use, port-without-operation, port-conflict, port-unavailable, ports-changed, data-in-use, failed, start-refused) dalam tiga varian light, dark, narrow; `instance-detail-failed` (crash loop tanpa operasi) dan `instance-detail-port-conflict` (Change Port… dari summary saja) diperbarui → AC-9, AC-10, AC-11, AC-12, AC-17
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstancesSnapshotTests` → `instancesWithEachFailureBannerChosen` menulis 7 kasus `instances-failure-*` (F1 sampai F7) di inspector; `instances-failed-chosen` diperbarui → AC-12, AC-17
+- [ ] `cargo xtask snapshot review` → `target/snapshot-review/index.html` menampilkan 9 PNG yang berubah dan 54 PNG baru; periksa banner di setiap varian: label tidak terpotong, blok kode terbungkus di lebar sempit → AC-17
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus → AC-17
+- [ ] `xcrun swift-format lint --strict` pada file Swift yang diubah → bersih
+- [ ] `cargo xtask build-app` → build Stackly berhasil
+
+### Acceptance-criteria coverage
+
+- AC-9 · banner crash loop di Summary dengan blok kode yang bisa dipilih, operation ID, dan Retry, Show Logs, Diagnose…; nilai `at` dan exit code dari daemon menunggu Milestone 1
+- AC-10 · Use Port dan Change Port… ke sheet Ports, kalimat setelah ganti port; `suggestedPort` dari daemon menunggu Milestone 1, langkah manual menunggu sesi GUI (langkah 7)
+- AC-11 · banner F6 dan F7 dan penyembunyiannya oleh operasi yang lebih baru
+- AC-12 · banner restart dengan hitung mundur `TimelineView` dan banner ringkas di inspector
+- AC-13 · Retry di banner adalah aksi utama spec 0022
+- AC-16 · Show Logs ke tab Logs; Show in Operations dan Diagnose… provisional sampai fitur 35 dan 34
+- AC-17 · snapshot F1 sampai F7, Use Port, Change Port, setelah ganti port, tanpa operasi, dan lebar sempit, dalam tiga varian spec 0068 (light, dark, narrow; varian aksesibilitas dihapus 2026-10-24)
+- AC-1 sampai AC-8, AC-14, AC-15 · milik Milestone 1, 2, dan 5
