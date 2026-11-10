@@ -13,7 +13,7 @@ use stackly_protocol::operation::{
     AbandonOperationParams, AbandonReply, CancelAvailability, CancelDisposition,
     CancelOperationParams, CancelReply, CreatedItemInfo, GetOperationParams, ListOperationsParams,
     OPERATION_LIST_LIMIT_DEFAULT, OPERATION_LIST_LIMIT_MAX, OperationDetail, OperationProgress,
-    OperationState, OperationSummary, ResumeOperationParams,
+    OperationState, OperationSummary, RecoveryAction, ResumeOperationParams,
 };
 use stackly_protocol::{Call, ResourceKind, ResourceRef, Revision};
 use uuid::Uuid;
@@ -449,7 +449,7 @@ impl Render for CancelReply {
             }
             CancelDisposition::RecoveryRequired => {
                 out.line(&format!("operation {id} needs recovery (state {state})"));
-                out.line("resume or abandon it instead");
+                out.line(recovery_sentence(&self.operation));
             }
             disposition => {
                 out.line(&format!(
@@ -479,11 +479,32 @@ fn disposition_sentence(disposition: CancelDisposition, operation: &OperationSum
         CancelDisposition::Requested => STOPS_AND_UNDOES.to_owned(),
         CancelDisposition::AlreadyFinal => "it had already ended, so nothing changed".to_owned(),
         CancelDisposition::RecoveryRequired => {
-            "it needs recovery, so resume or abandon it instead".to_owned()
+            format!("it needs recovery; {}", recovery_sentence(operation))
         }
         CancelDisposition::Unrecognized => {
             "the daemon answered with a disposition this stackly does not know".to_owned()
         }
+    }
+}
+
+/// What `operation`, which needs recovery, lets you do instead of a cancel,
+/// read only from its `recovery.actions` (spec 0035, AC-10): resume only
+/// when it offers `resume`, abandon only when it offers `abandon`, and no
+/// command at all when it offers neither or carries no recovery.
+fn recovery_sentence(operation: &OperationSummary) -> &'static str {
+    let actions = operation
+        .recovery
+        .as_ref()
+        .map(|recovery| recovery.actions.as_slice())
+        .unwrap_or_default();
+    match (
+        actions.contains(&RecoveryAction::Resume),
+        actions.contains(&RecoveryAction::Abandon),
+    ) {
+        (true, true) => "resume or abandon it instead",
+        (true, false) => "resume it instead",
+        (false, true) => "abandon it instead",
+        (false, false) => "it offers no recovery action now",
     }
 }
 
@@ -871,6 +892,41 @@ mod tests {
             disposition_sentence(CancelDisposition::Unrecognized, &running),
             "the daemon answered with a disposition this stackly does not know"
         );
+    }
+
+    #[test]
+    fn a_cancel_that_needs_recovery_suggests_only_the_actions_the_operation_offers() {
+        use RecoveryAction::{Abandon, Resume, Unrecognized};
+        let recovering = |actions: Option<Vec<RecoveryAction>>| {
+            let mut operation = operation(OperationState::NeedsRecovery, None);
+            operation.recovery = actions.map(|actions| {
+                serde_json::from_value(serde_json::json!({
+                    "hint": "abandon",
+                    "cause": "step_failed",
+                    "actions": actions,
+                }))
+                .unwrap()
+            });
+            operation
+        };
+        for (actions, sentence) in [
+            (Some(vec![Resume, Abandon]), "resume or abandon it instead"),
+            (Some(vec![Abandon, Resume]), "resume or abandon it instead"),
+            (Some(vec![Resume]), "resume it instead"),
+            (Some(vec![Abandon]), "abandon it instead"),
+            (Some(vec![Unrecognized, Abandon]), "abandon it instead"),
+            (Some(Vec::new()), "it offers no recovery action now"),
+            (Some(vec![Unrecognized]), "it offers no recovery action now"),
+            (None, "it offers no recovery action now"),
+        ] {
+            let operation = recovering(actions.clone());
+            assert_eq!(recovery_sentence(&operation), sentence, "{actions:?}");
+            assert_eq!(
+                disposition_sentence(CancelDisposition::RecoveryRequired, &operation),
+                format!("it needs recovery; {sentence}"),
+                "{actions:?}"
+            );
+        }
     }
 
     #[test]
