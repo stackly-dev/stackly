@@ -60,23 +60,38 @@ public struct InstanceRequest: Equatable, Sendable {
     }
 }
 
+/// What the Operations page is asked to open: an operation, selected with its inspector open
+/// (spec 0035, *Navigasi*). Every request is new even for the same operation, so the page
+/// opens it again.
+public struct OperationRequest: Equatable, Sendable {
+    /// Tells one request from another.
+    public let id = UUID()
+    /// The operation to select.
+    public let operation: UUID
+}
+
 /// The one way a page sends the person to another page of the window (spec 0022, *Navigasi*).
 /// ``AppShell`` creates one per window, puts it in the environment, and mirrors
 /// ``section`` with its `@SceneStorage` in both directions, since `@SceneStorage` only
 /// lives in a view. A destination that is the Instances page also leaves an
-/// ``InstancesRequest`` or an ``InstanceRequest`` the page applies. The request stays until
-/// the section changes: SwiftUI can build the Instances page a second time right after the
-/// first one applied it (the first visit of a window), and the second page applies it too.
+/// ``InstancesRequest`` or an ``InstanceRequest`` the page applies, and
+/// ``openOperation(_:)`` leaves an ``OperationRequest`` for the Operations page (spec 0035).
+/// A request stays until the section changes: SwiftUI can build a page a second time right
+/// after the first one applied it (the first visit of a window), and the second page applies
+/// it too.
 @MainActor
 @Observable
 public final class ShellNavigator {
     /// The section that shows. Showing another section drops the requests for the
-    /// Instances page.
+    /// Instances page and the Operations page.
     public var section: SidebarSection {
         didSet {
             if section != .instances {
                 instancesRequest = nil
                 instanceRequest = nil
+            }
+            if section != .operations {
+                operationRequest = nil
             }
         }
     }
@@ -84,6 +99,8 @@ public final class ShellNavigator {
     public private(set) var instancesRequest: InstancesRequest?
     /// The last detail page asked of the Instances page, while the Instances section shows.
     public private(set) var instanceRequest: InstanceRequest?
+    /// The last operation asked of the Operations page, while the Operations section shows.
+    public private(set) var operationRequest: OperationRequest?
     /// Counts the times the person asked for the table of Instances again, such as a second
     /// click on its sidebar row: the page closes the detail page when it changes.
     public private(set) var instancesResets = 0
@@ -122,6 +139,14 @@ public final class ShellNavigator {
     public func openInstance(_ id: UUID, tab: InstanceTab) {
         instanceRequest = InstanceRequest(instance: id, tab: tab)
         section = .instances
+    }
+
+    /// Opens the Operations page with an operation selected and its inspector open (spec 0035,
+    /// AC-13), also an operation that is not on the history page the window loaded.
+    /// - Parameter id: The operation.
+    public func openOperation(_ id: UUID) {
+        operationRequest = OperationRequest(operation: id)
+        section = .operations
     }
 
     /// Asks the Instances page to go back to its table.

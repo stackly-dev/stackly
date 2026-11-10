@@ -171,10 +171,12 @@ struct OverviewPageTests {
 
     // MARK: - Operation rows
 
-    @Test func anInstallHasStagesAndAStartDoesNot() {
+    @Test func anInstallAndAStartHaveStagesAndAReloadDoesNot() {
         #expect(OperationStages.definitions(for: .installRuntime)?.count == 5)
         #expect(OperationStages.definitions(for: .createInstance)?.count == 6)
-        #expect(OperationStages.definitions(for: .startInstance) == nil)
+        // Spec 0035 (*Definisi tahap*) gives a start its five stages.
+        #expect(OperationStages.definitions(for: .startInstance)?.count == 5)
+        #expect(OperationStages.definitions(for: .reloadInstance) == nil)
         #expect(OperationStages.definitions(for: .unrecognized) == nil)
     }
 

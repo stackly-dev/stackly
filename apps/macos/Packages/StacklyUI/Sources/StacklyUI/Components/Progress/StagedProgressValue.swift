@@ -3,20 +3,51 @@ import StacklyClient
 /// One stage of an operation: the `stage` value the daemon reports and the title the
 /// screen shows for it.
 /// The screen that owns the operation defines its stages: five for an install (spec
-/// 0018) and six for create (spec 0020).
+/// 0018) and six for create (spec 0020). A stage can count more `stage` values as itself
+/// (``also``), such as the `lock` and `journal` steps of Check (spec 0035, *Definisi tahap*).
 nonisolated public struct StageDefinition: Equatable, Sendable {
     /// The value of `OperationSummary.stage` for this stage.
     public var key: String
     /// The title shown for the stage.
     public var title: String
+    /// The other `stage` values that count as this stage, each with its own title.
+    public var also: [StageAlias]
 
     /// Creates a stage definition.
     /// - Parameters:
     ///   - key: The value of `OperationSummary.stage`.
     ///   - title: The title shown for the stage.
-    public init(key: String, title: String) {
+    ///   - also: The other `stage` values that count as this stage; none by default.
+    public init(key: String, title: String, also: [StageAlias] = []) {
         self.key = key
         self.title = title
+        self.also = also
+    }
+}
+
+/// A `stage` value that counts as a stage of its definition (spec 0035, *Definisi tahap*):
+/// the bar stays on that stage, and the text says the alias title while the operation is at
+/// it, such as "Waiting to restart" for `backoff` in Launch.
+nonisolated public struct StageAlias: Equatable, Sendable, ExpressibleByStringLiteral {
+    /// The value of `OperationSummary.stage`.
+    public var key: String
+    /// The title shown while the operation is at this value, or `nil` for the stage's title.
+    public var title: String?
+
+    /// Creates an alias.
+    /// - Parameters:
+    ///   - key: The value of `OperationSummary.stage`.
+    ///   - title: The title shown while the operation is at it, or `nil` for the title of
+    ///     the stage it counts as.
+    public init(key: String, title: String? = nil) {
+        self.key = key
+        self.title = title
+    }
+
+    /// An alias that shows the title of its stage.
+    /// - Parameter value: The value of `OperationSummary.stage`.
+    public init(stringLiteral value: String) {
+        self.init(key: value)
     }
 }
 
@@ -118,14 +149,13 @@ nonisolated public struct StagedProgressValue: Equatable, Sendable {
     public static func from(
         operation: OperationSummary, stages definitions: [StageDefinition]
     ) -> StagedProgressValue {
-        let known = operation.stage.flatMap { key in
-            definitions.firstIndex { $0.key == key }
-        }
+        let match = operation.stage.flatMap { stage(of: $0, in: definitions) }
+        let known = match?.index
         switch operation.state {
         case .queued:
             return value(definitions, index: nil, state: .pending, title: "Queued", .waiting)
         case .running, .cancelRequested:
-            return working(operation, definitions, known: known)
+            return working(operation, definitions, known: match)
         case .succeeded:
             return StagedProgressValue(
                 stages: stages(definitions, index: nil, state: .done, others: .done),
@@ -144,13 +174,34 @@ nonisolated public struct StagedProgressValue: Equatable, Sendable {
         }
     }
 
+    /// The stage a `stage` value counts as: the definition whose key it is, else the first
+    /// whose ``StageDefinition/also`` holds it, with the title to show while the operation is
+    /// there (the alias title when it has one). `nil` for a value no definition knows.
+    /// - Parameters:
+    ///   - key: The value of `OperationSummary.stage`.
+    ///   - definitions: The stages of the operation, in order.
+    public static func stage(of key: String, in definitions: [StageDefinition]) -> (
+        index: Int, title: String
+    )? {
+        if let index = definitions.firstIndex(where: { $0.key == key }) {
+            return (index, definitions[index].title)
+        }
+        for (index, definition) in definitions.enumerated() {
+            if let alias = definition.also.first(where: { $0.key == key }) {
+                return (index, alias.title ?? definition.title)
+            }
+        }
+        return nil
+    }
+
     /// The row of a running or cancelling operation.
     private static func working(
-        _ operation: OperationSummary, _ definitions: [StageDefinition], known: Int?
+        _ operation: OperationSummary, _ definitions: [StageDefinition],
+        known match: (index: Int, title: String)?
     ) -> StagedProgressValue {
         let isCancelling = operation.state == .cancelRequested
         let outcome: ProgressOutcome = isCancelling ? .cancelling : .running
-        let index = definitions.isEmpty ? nil : (operation.stage == nil ? 0 : known)
+        let index = definitions.isEmpty ? nil : (operation.stage == nil ? 0 : match?.index)
         guard let index else {
             return value(
                 definitions, index: nil, state: .pending,
@@ -163,7 +214,7 @@ nonisolated public struct StagedProgressValue: Equatable, Sendable {
         return StagedProgressValue(
             stages: stages(definitions, index: index, state: .running, others: .pending),
             runningIndex: index, fraction: fraction, percent: percent,
-            currentTitle: isCancelling ? "Cancelling…" : definitions[index].title,
+            currentTitle: isCancelling ? "Cancelling…" : (match?.title ?? definitions[index].title),
             outcome: outcome)
     }
 

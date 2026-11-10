@@ -56,8 +56,8 @@ public struct AppShell: View {
     ///     placeholder (previews).
     ///   - runtimes: The runtime store behind the Runtimes page and the Get column of the
     ///     Catalog, or `nil` to show the placeholder (previews).
-    ///   - operations: The operation center behind the Overview, or `nil` to show the
-    ///     placeholder (previews).
+    ///   - operations: The operation center behind the Overview and the Operations page, or
+    ///     `nil` to show the placeholder (previews).
     ///   - capacity: The disk reading behind the Overview, or `nil` for the placeholder.
     ///   - instanceActions: Start, Stop, and Retry for the Overview and Instances, or `nil`
     ///     for the placeholders.
@@ -360,11 +360,24 @@ public struct AppShell: View {
                 UnbuiltScrollPage(section: .runtimes)
             }
         case .operations:
-            // provisional: F35
-            UnbuiltScrollPage(
-                section: .operations,
-                subtitle: OperationCenter.subtitle(running: counts.runningOperations)
-            )
+            if let operations {
+                OperationsPage(
+                    operations: operations,
+                    instances: instances,
+                    runtimes: runtimes,
+                    actions: instanceActions,
+                    service: daemon.map(OperationsService.live) ?? .disconnected,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) }
+                )
+            } else {
+                UnbuiltScrollPage(
+                    section: .operations,
+                    subtitle: OperationCenter.subtitle(running: counts.runningOperations)
+                )
+            }
         case .diagnostics:
             DiagnosticsPage(
                 diagnostics: diagnostics,

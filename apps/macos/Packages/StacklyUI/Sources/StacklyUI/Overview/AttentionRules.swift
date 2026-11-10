@@ -222,24 +222,14 @@ nonisolated public enum AttentionRules {
         guard operation.state == .needsRecovery else { return nil }
         let hint = operation.recovery?.hint ?? .unrecognized
         if hint == .autoCompensate { return nil }
-        // provisional: F35 (the Operations page replaces these words with a link to it)
-        let message: String =
-            switch hint {
-            case .resume:
-                "It can continue. Resume or abandon it with stackly operation resume or abandon."
-            case .abandon:
-                "It can’t continue. Abandon it with stackly operation abandon."
-            case .manual:
-                "It needs manual cleanup. Check it with stackly operation inspect."
-            case .autoCompensate, .unrecognized:
-                "Check it with stackly operation inspect."
-            }
+        // The words of its row on the Operations page, which the item opens (spec 0035).
+        let message = OperationNote.recovery(hint)
         let title = OperationTitle.title(
             for: operation, instanceNames: instanceNames, runtimes: runtimes)
         return AttentionItem(
             id: "operation:\(operation.id.uuidString.lowercased())", rule: "O1", tone: .critical,
             category: .operation, title: "\(title) needs recovery", message: message,
-            destination: .operations, sortKey: title)
+            destination: .operation(operation.id), sortKey: title)
     }
 
     /// Rule O2: the operations cannot be read, so the ones that need recovery may be missing.

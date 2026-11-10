@@ -54,7 +54,11 @@ nonisolated public enum OperationTitle {
         let subject = instance ?? "instance"
         switch operation.kind {
         case .installRuntime:
-            return runtimes.installing[operation.id].map { "Install \($0)" } ?? "Install runtime"
+            // While it runs the install row names it; once it ended, the runtime it installed.
+            let name =
+                runtimes.installing[operation.id]
+                ?? resourceID(operation, kind: .runtime).flatMap { runtimes.installed[$0] }
+            return name.map { "Install \($0)" } ?? "Install runtime"
         case .startInstance: return "Start \(subject)"
         case .stopInstance: return "Stop \(subject)"
         case .restartInstance: return "Restart \(subject)"
