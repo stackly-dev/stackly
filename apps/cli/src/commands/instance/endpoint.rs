@@ -9,7 +9,7 @@ use stackly_protocol::instance::config::{
 };
 use stackly_protocol::{Call, ErrorBody, Reply};
 
-use super::config::{accepted_apply, mapped, read_view};
+use super::config::{accepted_apply, mapped, read_view, request_text};
 use super::resolve::TargetArg;
 use super::{InstanceAction, Verb, conclude};
 use crate::args::PortArg;
@@ -183,8 +183,8 @@ impl Render for SetOutput {
                     out.line(&format!(
                         "  {}: {} -> {}",
                         escape_display(&change.name),
-                        wire_name(&change.old),
-                        wire_name(&change.new)
+                        request_text(change.old),
+                        request_text(change.new)
                     ));
                 }
             }
@@ -214,6 +214,28 @@ mod tests {
         assert_eq!(
             render(&SetOutput::DryRun(verdict)),
             "not applicable\n  pg\\u{1b}: in_use\\u{1b}[2J, try port 5433\n"
+        );
+    }
+
+    #[test]
+    fn a_valid_dry_run_names_the_old_and_new_port_requests_like_port_takes_them() {
+        let verdict: EndpointValidation = serde_json::from_value(serde_json::json!({
+            "valid": true,
+            "problems": [],
+            "changes": [
+                {
+                    "name": "postgres",
+                    "old": {"type": "fixed", "content": 5432},
+                    "new": {"type": "fixed", "content": 5433},
+                },
+                {"name": "admin", "old": {"type": "fixed", "content": 8080}, "new": {"type": "auto"}},
+            ],
+            "impact": "next_start",
+        }))
+        .unwrap();
+        assert_eq!(
+            render(&SetOutput::DryRun(verdict)),
+            "valid, impact next_start\n  postgres: 5432 -> 5433\n  admin: 8080 -> auto\n"
         );
     }
 }
