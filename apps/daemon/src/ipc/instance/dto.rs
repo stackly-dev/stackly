@@ -71,15 +71,9 @@ pub fn summary(
         health: health(&status.health),
         status_seq: Sequence::saturating(status.status_seq),
         process: status.process.as_ref().map(process),
-        last_failure: instance.last_failure().map(|code| InstanceLastFailure {
-            code: code.as_str().to_owned(),
-            // The values of the failure in memory are not kept by the
-            // status yet; they are null here, as after a daemon restart.
-            at: None,
-            exit_code: None,
-            signal: None,
-            excerpt,
-        }),
+        last_failure: instance
+            .last_failure()
+            .map(|code| last_failure(code, status, excerpt)),
         restart: restart(status),
         restart_total: Count::saturating(instance.restart_total()),
         blocker: status.blocker.as_ref().and_then(blocker),
@@ -100,6 +94,28 @@ pub fn summary(
             policy: startup_kind(instance.startup()),
             session: autostart,
         },
+    }
+}
+
+/// The stored failure `code` with the facts this daemon run recorded for
+/// it (spec 0033, AC-3): its time and exit only while the facts name the
+/// same code, so after a daemon restart, or while the registry and the
+/// actor disagree for a moment, all three are null.
+fn last_failure(
+    code: &stackly_domain::FailureCode,
+    status: &InstanceStatus,
+    excerpt: Vec<String>,
+) -> InstanceLastFailure {
+    let facts = status
+        .last_failure
+        .as_ref()
+        .filter(|facts| &facts.code == code);
+    InstanceLastFailure {
+        code: code.as_str().to_owned(),
+        at: facts.map(|facts| Timestamp::from_jiff(facts.at)),
+        exit_code: facts.and_then(|facts| facts.exit_code),
+        signal: facts.and_then(|facts| facts.signal),
+        excerpt,
     }
 }
 
@@ -395,6 +411,52 @@ mod tests {
             exit_unrecorded,
             last_failure: None,
         }
+    }
+
+    #[test]
+    fn failure_facts_fill_the_last_failure_only_while_their_code_is_the_stored_one() {
+        // covers: spec 0033 AC-3 (facts of the same code, null otherwise)
+        use stackly_core::supervisor::FailureFacts;
+        use stackly_domain::FailureCode;
+        use stackly_platform::ExitStatus;
+
+        let at: jiff::Timestamp = "2026-11-10T08:00:00Z".parse().unwrap();
+        let mut known = status(false);
+        known.last_failure = Some(FailureFacts::new(
+            FailureCode::CRASH_LOOP,
+            at,
+            Some(ExitStatus::Exited(3)),
+        ));
+        let excerpt = vec!["boom".to_owned()];
+
+        let same = last_failure(&FailureCode::CRASH_LOOP, &known, excerpt.clone());
+        assert_eq!(same.code, "crash_loop");
+        assert_eq!(same.at, Some(Timestamp::from_jiff(at)));
+        assert_eq!((same.exit_code, same.signal), (Some(3), None));
+        assert_eq!(same.excerpt, excerpt);
+
+        let other = last_failure(&FailureCode::ENDPOINT_IN_USE, &known, Vec::new());
+        assert_eq!(other.code, "endpoint_in_use");
+        assert_eq!(
+            (other.at, other.exit_code, other.signal),
+            (None, None, None)
+        );
+
+        let restarted = last_failure(&FailureCode::CRASH_LOOP, &status(false), Vec::new());
+        assert_eq!(
+            (restarted.at, restarted.exit_code, restarted.signal),
+            (None, None, None),
+            "after a daemon restart the actor holds no facts"
+        );
+
+        let mut signaled = status(false);
+        signaled.last_failure = Some(FailureFacts::new(
+            FailureCode::PROCESS_SIGNALED,
+            at,
+            Some(ExitStatus::Signaled(11)),
+        ));
+        let by_signal = last_failure(&FailureCode::PROCESS_SIGNALED, &signaled, Vec::new());
+        assert_eq!((by_signal.exit_code, by_signal.signal), (None, Some(11)));
     }
 
     #[test]
