@@ -110,6 +110,22 @@ fn codes(report: &Report, id: DoctorCheckId) -> Vec<DoctorFindingCode> {
         .collect()
 }
 
+/// Sets the modification time of the symlink `path` itself, not its
+/// target, to `minutes` before `now`.
+fn link_modified_ago(path: &std::path::Path, now: jiff::Timestamp, minutes: i64) {
+    let when = now
+        .checked_sub(jiff::SignedDuration::from_mins(minutes))
+        .expect("a test time is in range")
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        .to_string();
+    let status = std::process::Command::new("/usr/bin/touch")
+        .args(["-h", "-d", &when])
+        .arg(path)
+        .status()
+        .expect("touch runs");
+    assert!(status.success(), "touch -h sets the symlink time");
+}
+
 /// Sets the modification time of the folder `path` to `minutes` before
 /// `now`.
 fn modified_ago(path: &std::path::Path, now: jiff::Timestamp, minutes: u64) {
@@ -452,6 +468,12 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
     for path in [&stray, &orphan, &young, &young_stray, &with_row] {
         std::fs::create_dir_all(path).expect("a scratch folder");
     }
+    // Neither a file such as `.DS_Store` nor a symlink is a scratch folder,
+    // however old.
+    let ds_store = folder.join(".DS_Store");
+    std::fs::write(&ds_store, b"finder").expect("a file in operations/");
+    let link = folder.join("a-link");
+    std::os::unix::fs::symlink(&stray, &link).expect("a symlink in operations/");
     // The age is the folder's own modification time, against the clock of
     // the platform: an hour for the old ones, a minute for the young ones.
     let now = rig.fake_now();
@@ -461,9 +483,11 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
         (&with_row, 60),
         (&young, 1),
         (&young_stray, 1),
+        (&ds_store, 60),
     ] {
         modified_ago(path, now, minutes);
     }
+    link_modified_ago(&link, now, 60);
     let before = footprint(&rig);
     let report = run(&rig).await;
     let operations = check(&report, DoctorCheckId::Operations);
@@ -500,6 +524,13 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
     for path in [&stray, &orphan, &young, &young_stray, &with_row] {
         assert!(path.is_dir(), "{} stays", path.display());
     }
+    assert!(ds_store.is_file(), "the file stays");
+    assert!(
+        std::fs::symlink_metadata(&link)
+            .expect("the symlink stays")
+            .file_type()
+            .is_symlink()
+    );
     assert_eq!(footprint(&rig), before);
 }
 
