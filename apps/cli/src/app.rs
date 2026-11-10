@@ -15,6 +15,7 @@ use stackly_protocol::ProtocolVersion;
 use crate::commands::audit::AuditCommand;
 use crate::commands::completion::CompletionArgs;
 use crate::commands::daemon::DaemonCommand;
+use crate::commands::diagnostics::DiagnosticsCommand;
 use crate::commands::doctor::DoctorArgs;
 use crate::commands::execute;
 use crate::commands::instance::InstanceCommand;
@@ -148,6 +149,9 @@ pub enum Command {
         after_help = "Examples:\n  stackly doctor\n  stackly doctor --instance orders-db\n  stackly doctor --check endpoints --check disk_space --json"
     )]
     Doctor(DoctorArgs),
+    /// Preview or save a diagnostic bundle for a maintainer; nothing is uploaded
+    #[command(subcommand, arg_required_else_help = true)]
+    Diagnostics(DiagnosticsCommand),
     /// Write the completion script of a shell
     #[command(after_help = "Examples:\n  stackly completion zsh\n  stackly completion bash --json")]
     Completion(CompletionArgs),
@@ -173,6 +177,7 @@ impl Command {
             Self::Settings(command) => command.run(cx).await,
             Self::Storage(command) => command.run(cx).await,
             Self::Doctor(args) => execute(args, cx).await,
+            Self::Diagnostics(command) => command.run(cx).await,
             Self::Completion(args) => execute(args, cx).await,
             Self::Manpage(args) => execute(args, cx).await,
         }
