@@ -78,10 +78,10 @@
 | `2026-11-10` | Gerbang F34 langkah 13 sampai 15 (`028e43d4`, merge commit `d8dda726`): StacklyUI 2048 test (6 known issues lama), `build-app`, `evidence check`, fmt hijau. `open_storage_settings` dibangun lewat `Settings/SettingsTabSelection.swift`; `Connection/ShellRuntime.swift` (satu baris) diterima. Manual A dan B (langkah 16) `BLOCKED`, owner user, masuk file manual. Untuk user (teks AC): AC-20 spec 0034 menyebut `ShellDestination.diagnostics(focus:)`, sedangkan kode membawa fokus lewat `ShellNavigator.diagnosticsRequest`. Untuk `/sync`: usulan update spec 0013, 0015, 0022, 0032, 0033, dan `ui-macos.md`. | `lead` |
 | `2026-11-10` | Verify F34: cek ulang AC-6 milestone 1 PASS (probe `stacklyd` nyata: hanya folder asing dilaporkan `scratch_leftover`, `.DS_Store`, symlink, dan folder tetap ada); milestone 2 PASS (23 langkah, native PostgreSQL 17 dan 18 dari cache, catatan gagal start ditulis saat exit 1 dan dihapus setelah bind); milestone 3 PASS (19 langkah; probe: kredensial fixture tidak ada di doctor, preview, export, maupun 9 entri zip; export sha256 sama dengan preview; tanpa `--force` ditolak; nol file partial; doctor dan preview tidak mengubah `data/`). Celah bukti yang dicatat, bukan FAIL: batas 64 MiB dan `truncated` hanya di unit test; detail readiness AC-14 tanpa skenario end to end; `postmaster.pid` di jalur preview dibuktikan lewat jalur kode yang sama. | `lead` |
 | `2026-11-10` | Gerbang F33 langkah 6 (`6877a932`): fmt, clippy workspace, `stacklyd --test supervisor` 162 (termasuk `crash_loop_real` dengan konstanta produksi, sekitar 35 detik), native `postgresql port_in_use::` lulus di `main` dari cache PostgreSQL 18.6, `check-deps`, `evidence check` hijau. Evidence developer: run fixture `01a1c5aa-532c-…` (jeda 828, 1530, 2581, 7601, 13112 ms; CPU daemon 2,2 persen; paling banyak satu proses fake) dan run native `01a1c5ab-edef-…` (port dipegang, saran port berikutnya, 972 file data tidak berubah), keduanya PASS; salinan folder run di catatan bersama sesi `dev-f33-m5-evidence`. Record crash loop berlabel `fixture` karena memakai provider fake (spec 0002). | `lead` |
+| `2026-11-10` | Cek ulang AC-8 F33 PASS (`3ed3cc8c`, commit `1e7453f5`): 11 run mode baris pada root baru, 4 di bawah build paralel (load 9 sampai 17), semuanya exit 7 dengan `restart 1 of 5` sampai `5 of 5` sekali dan berurutan. Milestone 2 F33 dicentang. | `lead` |
 
 ## Blocker terbuka
 
-- F33 milestone 2: fix AC-8 di `main` (`d8fa070d`); menunggu cek ulang dua langkah crash loop oleh sesi lain
 - Teks AC-20 spec 0034 (`diagnosticsRequest` sebagai ganti `ShellDestination.diagnostics(focus:)`): menunggu persetujuan user, tidak menahan centang
 - Teks AC-1 spec 0035 (SqliteRegistry lewat daemon dan conformance): menunggu persetujuan user, tidak menahan centang
 
@@ -94,6 +94,7 @@
 - F35 · `Audit in the daemon through the CLI` dan `Operations page` (milestone 1 dan 2) · laporan `dev-f35-m1`, `dev-f35-m1-s5`, `dev-f35-m2`, `chk-f35-m1` · merge kode `0a9dfb9c`, `f80aae03`, `c76f1cfa`; verify `0d3434fd` · gerbang `main`: 3574 test Rust, StacklyUI 1957, `clients/swift` 268, `build-app`
 - F33 · `Visible daemon` (milestone 1) · laporan `dev-f33-m1`, `chk-f33-m1` · merge kode `eceae4e6`; verify `927eca89` · gerbang `main`: 3296 test Rust, `codegen --check`, `clients/swift`
 - F34 · `Doctor contract and daemon checks`, `Provider remedies and the daemon start failure record`, `Diagnostic bundle preview and export` (milestone 1, 2, 3) · laporan `dev-f34-m1-s2`, `dev-f34-m1`, `dev-f34-m2`, `chk-f34-m1`, `chk-f34-m2` · merge kode `4eab71f3`, `80908d8a`, `5d90cedd`, `3cd13070`, `1ad0e689`, `ab80b010`; verify `b0024a40`, `f590e169` · gerbang `main`: 4124 test Rust, StacklyUI 2002, `clients/swift` 268
+- F33 · `CLI` (milestone 2) · laporan `dev-f33-m2`, `dev-f33-fix`, `chk-f33-m1`, `chk-f33-m2` · merge kode `5b262c41`, `d8fa070d`; verify `927eca89`, `3ed3cc8c` · gerbang `main`: `stackly-cli` 541 test
 
 ## Riwayat wave
 
