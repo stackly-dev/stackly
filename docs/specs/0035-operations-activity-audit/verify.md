@@ -213,6 +213,8 @@ _Ditulis `chk-f35-verify` 2026-11-10 di `main` `9812103e` (protokol 3.5, fitur 3
 - [x] Lihat PNG `operations-list.light` dan `activity-rows.dark` → tahap terlihat untuk start, install, dan apply; install di Commit dengan Cancel mati dan "can’t be cancelled"; "Finishing safely · Apply" dengan badge "Finishing…"; Retry di start gagal; footer Operations; tabel Time, By, Activity dengan teks setiap action dan kode gagal berwarna kritis → AC-11, AC-15, AC-19
 - [x] `grep -rn "provisional: F35" apps crates clients` → kosong; `UnbuiltPage(.operations)` tidak ada lagi; O1 memakai `OperationNote.recovery` dan `openOperation`, `OperationTitle` ada di `Operations/OperationTitle.swift`, `duplicateOf` dikirim sheet Duplicate dan ditulis catatan create; setiap teks yang spec sebut untuk placeholder, footer, dialog, dan baris catatan ada di sumber `StacklyUI` → AC-11 sampai AC-13, AC-15, AC-18, AC-20
 
+_Fix 2026-11-10 (`dev-f35-fix`, commit `fix(cli): spec 0035 AC-10, ...`): `recovery_sentence` di `apps/cli/src/commands/operation.rs` membangun kalimat cancel `recovery_required` dari `recovery.actions` ("resume or abandon it instead", "resume it instead", "abandon it instead", atau "it offers no recovery action now" tanpa perintah), dikunci `a_cancel_that_needs_recovery_suggests_only_the_actions_the_operation_offers` di unit test dan `apps/cli/tests/operation/commands.rs`; langkah hint CLI Resume di atas tetap `[ ]` sampai sesi lain mengecek ulang._
+
 _Hasil: semua langkah lulus kecuali hint CLI Resume (AC-10). Langkah UI / manual milestone 2, 3, dan 4 (sesi GUI langkah 10 Build plan) tetap `NOT_RUN`, owner user, di `docs/scope/coordination/05-saat-instance-gagal.manual.md`._
 
 ### Acceptance-criteria coverage (verify penuh)
