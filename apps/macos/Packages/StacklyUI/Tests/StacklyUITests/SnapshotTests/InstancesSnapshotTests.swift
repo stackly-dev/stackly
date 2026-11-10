@@ -74,6 +74,7 @@ extension SnapshotTests {
                     "The inspector shows the compact failure banner of each state F1 to F7 with its title, its excerpt or code, and Use Port when there is one, in every variant"
             ))
         func instancesWithEachFailureBannerChosen() async throws {
+            // covers: spec 0033 AC-17, AC-12 (the compact inspector banner, light, dark, narrow)
             let cases: [FixtureFailureBanner] = [
                 .restarting, .initFailed, .crashLoop, .portInUse, .dataInUse, .failed,
                 .startRefused,

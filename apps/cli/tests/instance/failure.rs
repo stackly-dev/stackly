@@ -644,6 +644,123 @@ fn a_backoff_read_that_fails_writes_crashed_restarting() {
     );
 }
 
+/// Spec 0033 AC-1, AC-3, AC-7 against a real `stacklyd`, on the other
+/// path of a crash loop: the fake becomes ready and crashes after, so the
+/// start you waited for succeeds, the restart policy respawns it as system
+/// starts, and the sixth crash ends it `failed` without a failed operation.
+/// `inspect` then names the last respawn, not an error, and still writes
+/// the next steps.
+#[test]
+fn a_real_crash_after_ready_fails_the_instance_after_the_start_succeeded_and_inspect_names_the_last_respawn()
+ {
+    // covers: spec 0033 AC-1, AC-3, AC-7 (crash after ready, real stacklyd)
+    let ev = evidence!(
+        covers = ["AC-068"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd with the restart constants of spec 0010, instance start --wait of a fake that becomes ready and crashes 700 ms after each spawn exits 0; the restart policy respawns it as background start_instance operations until the sixth crash leaves it failed with crash_loop, exit code 3, and an exhausted budget; inspect writes Last failure crash_loop with its exit code, Last operation as the last respawn that succeeded (not the start you waited for, and no error code), and Next steps, and its JSON names that respawn as lastOperation",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let runtime = crate::stacklyd::seed(&root);
+    let _reap = stackly_testkit::ReapGuard::new(root.path(), &crate::common::paths(&root).runtime);
+    let _daemon = crate::common::stacklyd::start_daemon(&root);
+    create_real(
+        &root,
+        &runtime,
+        "flaky",
+        &[
+            "--set",
+            "crashAfterMs=700",
+            "--set",
+            "crashExitCode=3",
+            "--set",
+            "readyDelayMs=0",
+        ],
+    );
+
+    let started = run(
+        root.path(),
+        &[
+            "instance",
+            "start",
+            "flaky",
+            "--wait",
+            "--timeout",
+            "60s",
+            "--json",
+        ],
+    );
+    assert_eq!(started.code, Some(0), "{started:?}");
+    let started = envelope(&started);
+    assert_eq!(started["result"]["operation"]["state"], "succeeded");
+    let waited_for = started["result"]["operation"]["id"]
+        .as_str()
+        .expect("the start names its operation")
+        .to_owned();
+
+    // The real restart constants pause 0.5 to 31 seconds in all, after six
+    // runs of 700 ms.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    let inspected = loop {
+        let json = run(root.path(), &["instance", "inspect", "flaky", "--json"]);
+        assert_eq!(json.code, Some(0), "{json:?}");
+        let value = envelope(&json);
+        if value["result"]["instance"]["lifecycle"] == "failed" {
+            break value;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the crash loop did not end within 120 s: {value}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
+    let text = run(root.path(), &["instance", "inspect", "flaky"]);
+
+    let instance = &inspected["result"]["instance"];
+    assert_eq!(instance["lastFailure"]["code"], "crash_loop");
+    assert_eq!(instance["lastFailure"]["exitCode"], 3);
+    assert!(instance["lastFailure"]["at"].is_string(), "{instance}");
+    assert_eq!(instance["restart"]["exhausted"], true, "{instance}");
+    let last = &inspected["result"]["lastOperation"];
+    assert_eq!(last["kind"], "start_instance", "{last}");
+    assert_eq!(last["state"], "succeeded", "{last}");
+    assert_eq!(last["trigger"]["origin"], "background", "{last}");
+    let respawn = last["id"].as_str().expect("the respawn has an id");
+    assert_ne!(
+        respawn, waited_for,
+        "the last respawn, not the start you waited for"
+    );
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let failure = line_after(&text.stdout, "Last failure").expect("the Last failure line");
+    assert!(
+        failure.trim_start().starts_with("crash_loop at ") && failure.ends_with(", exit code 3"),
+        "{failure}"
+    );
+    let line = line_after(&text.stdout, "Last operation").expect("the Last operation line");
+    assert_eq!(
+        line.trim_start(),
+        format!("start_instance succeeded, {respawn}")
+    );
+    assert!(
+        !text.stdout.contains("supervisor.retry_budget_exhausted"),
+        "no operation failed, so no error code: {}",
+        text.stdout
+    );
+    assert!(
+        text.stdout
+            .contains("Next steps:\n  read its logs: stackly instance logs flaky\n"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout
+            .contains("  start it again: stackly instance start flaky\n"),
+        "{}",
+        text.stdout
+    );
+    ev.pass();
+}
+
 /// The output of one real CLI run: its exit code, stdout, and stderr.
 fn all_output(run: &crate::common::Run) -> String {
     format!("{}\n{}", run.stdout, run.stderr)

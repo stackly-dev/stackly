@@ -1,6 +1,7 @@
 //! AC-7, AC-15, AC-3, AC-12: the operation commands send what their flags
 //! say, write their text and `--json` result, and exit by the category of
-//! what went wrong.
+//! what went wrong. Spec 0035 AC-10: a cancel that needs recovery suggests
+//! only the recovery actions the operation offers.
 
 use std::sync::Arc;
 
@@ -8,7 +9,7 @@ use stackly_protocol::codes::operation;
 use stackly_protocol::operation::{
     AbandonReply, CancelAvailability, CancelDisposition, CancelReply, CountedProgress,
     CreatedItemInfo, CreatedState, OperationDetail, OperationKind, OperationPage,
-    OperationProgress, OperationState, OperationStepInfo, StepState,
+    OperationProgress, OperationState, OperationStepInfo, RecoveryAction, StepState,
 };
 use stackly_protocol::{Call, Count, ErrorBody, Reply, ResourceKind, ResourceRef, Timestamp};
 use stackly_testkit::TestRoot;
@@ -411,6 +412,82 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
         Some(2),
         "cancel needs no confirmation, so --yes is refused"
     );
+    ev.pass();
+}
+
+#[test]
+fn a_cancel_that_needs_recovery_suggests_only_the_actions_the_operation_offers() {
+    let ev = evidence!(
+        covers = ["REQ-054"],
+        kind = Kind::Fixture,
+        expected = "spec 0035 AC-10: when operation cancel answers recovery_required, the line after needs recovery suggests resume only when recovery.actions holds resume and abandon only when it holds abandon (both for both), and names no command when the actions are empty or the operation carries no recovery; the exit stays the recovery error's, or 3 with cli.cancel_not_applied without one",
+    );
+    let id = id();
+    for (actions, line, code, error) in [
+        (
+            Some(vec![RecoveryAction::Abandon]),
+            "abandon it instead",
+            7,
+            "instance.start_failed",
+        ),
+        (
+            Some(vec![RecoveryAction::Resume]),
+            "resume it instead",
+            7,
+            "instance.start_failed",
+        ),
+        (
+            Some(vec![RecoveryAction::Resume, RecoveryAction::Abandon]),
+            "resume or abandon it instead",
+            7,
+            "instance.start_failed",
+        ),
+        (
+            Some(Vec::new()),
+            "it offers no recovery action now",
+            7,
+            "instance.start_failed",
+        ),
+        (
+            None,
+            "it offers no recovery action now",
+            3,
+            "cli.cancel_not_applied",
+        ),
+    ] {
+        let root = TestRoot::new().unwrap();
+        let offered = actions.clone();
+        let _daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+            Call::OperationCancel(_) => {
+                let mut operation = dto::ended(OperationState::NeedsRecovery, true, 3);
+                match &offered {
+                    Some(actions) => {
+                        if let Some(recovery) = operation.recovery.as_mut() {
+                            recovery.actions.clone_from(actions);
+                        }
+                    }
+                    None => operation.recovery = None,
+                }
+                vec![Step::Reply(Reply::OperationCancel(Box::new(CancelReply {
+                    operation,
+                    disposition: CancelDisposition::RecoveryRequired,
+                })))]
+            }
+            _ => Vec::new(),
+        });
+
+        let text = run(root.path(), &["operation", "cancel", &id]);
+        let json = run(root.path(), &["operation", "cancel", &id, "--json"]);
+
+        assert_eq!(
+            text.stdout,
+            format!("operation {id} needs recovery (state needs_recovery)\n{line}\n"),
+            "{actions:?}"
+        );
+        assert_eq!(text.code, Some(code), "{actions:?}: {text:?}");
+        assert_eq!(json.code, Some(code), "{actions:?}");
+        assert_eq!(envelope(&json)["error"]["code"], error, "{actions:?}");
+    }
     ev.pass();
 }
 

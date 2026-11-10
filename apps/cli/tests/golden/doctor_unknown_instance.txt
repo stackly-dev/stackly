@@ -1,0 +1,3 @@
+Connection        OK      Connected to stacklyd 0.1.0 over the Unix socket
+Protocol          OK      App and daemon both speak protocol <major>.<minor>
+Background agent  OK      Not used while STACKLY_ROOT is set

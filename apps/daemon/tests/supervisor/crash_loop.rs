@@ -282,6 +282,7 @@ pub(crate) async fn untouched_at(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_start_that_crashes_before_ready_spawns_six_times_then_fails_with_its_operation_id() {
+    // covers: spec 0033 AC-1, AC-5, AC-14 (crash before ready: 6 spawns, envelope with the operation ID, log line, nothing repaired)
     let ev = evidence!(
         covers = ["AC-068", "NFR-011"],
         kind = Kind::Fixture,
@@ -365,6 +366,7 @@ async fn a_start_that_crashes_before_ready_spawns_six_times_then_fails_with_its_
 
 #[tokio::test(flavor = "multi_thread")]
 async fn every_pause_inside_the_start_is_the_backoff_stage_with_the_next_attempt_time() {
+    // covers: spec 0033 AC-2 (every pause is the backoff stage after nextAttemptAt is shown)
     let ev = evidence!(
         covers = ["AC-068"],
         kind = Kind::Fixture,
@@ -449,6 +451,7 @@ async fn every_pause_inside_the_start_is_the_backoff_stage_with_the_next_attempt
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_process_that_crashes_after_ready_ends_failed_after_six_spawns_of_system_respawns() {
+    // covers: spec 0033 AC-1 (crash after ready: actor pauses, system respawns, 6 spawns)
     let ev = evidence!(
         covers = ["AC-068"],
         kind = Kind::Fixture,
@@ -521,6 +524,7 @@ async fn a_process_that_crashes_after_ready_ends_failed_after_six_spawns_of_syst
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stop_during_the_actor_pause_ends_stopped_and_keeps_the_last_failure() {
+    // covers: spec 0033 AC-1, AC-3 (a stop in the actor pause, the last failure kept)
     let ev = evidence!(
         covers = ["AC-068"],
         kind = Kind::Fixture,
@@ -590,6 +594,7 @@ async fn a_stop_during_the_actor_pause_ends_stopped_and_keeps_the_last_failure()
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_cancel_in_the_backoff_stage_ends_the_start_cancelled_without_another_spawn() {
+    // covers: spec 0033 AC-2 (a cancel in the backoff stage)
     let ev = evidence!(
         covers = ["AC-068"],
         kind = Kind::Fixture,
@@ -642,6 +647,7 @@ async fn a_cancel_in_the_backoff_stage_ends_the_start_cancelled_without_another_
 
 #[tokio::test(flavor = "multi_thread")]
 async fn after_a_daemon_restart_the_last_failure_keeps_its_code_without_time_or_exit() {
+    // covers: spec 0033 AC-3 (null time and exit after a daemon restart)
     let site = Site::new();
     let daemon = site.start_with(config(BASE, MAX)).await;
     let api = site.api().await;
@@ -679,6 +685,7 @@ async fn after_a_daemon_restart_the_last_failure_keeps_its_code_without_time_or_
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_credential_the_fake_prints_before_it_crashes_reaches_no_failure_text() {
+    // covers: spec 0033 AC-15 (a credential the fake prints reaches no failure text)
     let ev = evidence!(
         covers = ["AC-068", "NFR-011"],
         kind = Kind::Fixture,

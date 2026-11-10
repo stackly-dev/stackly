@@ -166,6 +166,7 @@ fn pauses_in_turn(markers: &[(bool, jiff::Timestamp)], slack: Duration) -> Vec<D
 
 #[test]
 fn the_production_constants_stop_a_crash_loop_at_six_spawns_with_real_pauses() {
+    // covers: spec 0033 AC-1, AC-14 (the production constants of spec 0010)
     let ev = evidence!(
         covers = ["AC-068"],
         kind = Kind::Fixture,
