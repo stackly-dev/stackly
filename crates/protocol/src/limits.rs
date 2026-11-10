@@ -86,6 +86,34 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
         "createSecretsMax",
         crate::instance::CREATE_SECRETS_MAX as u64,
     ),
+    ("doctorChecksMax", crate::doctor::DOCTOR_CHECKS_MAX as u64),
+    (
+        "doctorDetailKeyMax",
+        crate::doctor::DOCTOR_DETAIL_KEY_MAX as u64,
+    ),
+    (
+        "doctorDetailValueMax",
+        crate::doctor::DOCTOR_DETAIL_VALUE_MAX as u64,
+    ),
+    ("doctorDetailsMax", crate::doctor::DOCTOR_DETAILS_MAX as u64),
+    (
+        "doctorExcerptLineMax",
+        crate::doctor::DOCTOR_EXCERPT_LINE_MAX as u64,
+    ),
+    (
+        "doctorExcerptLinesMax",
+        crate::doctor::DOCTOR_EXCERPT_LINES_MAX as u64,
+    ),
+    (
+        "doctorExplanationMax",
+        crate::doctor::DOCTOR_EXPLANATION_MAX as u64,
+    ),
+    (
+        "doctorFindingsMax",
+        crate::doctor::DOCTOR_FINDINGS_MAX as u64,
+    ),
+    ("doctorSummaryMax", crate::doctor::DOCTOR_SUMMARY_MAX as u64),
+    ("doctorTitleMax", crate::doctor::DOCTOR_TITLE_MAX as u64),
     ("eventBufferLen", EVENT_BUFFER_LEN as u64),
     ("eventReplayLen", EVENT_REPLAY_LEN as u64),
     ("fieldErrorsMax", FIELD_ERRORS_MAX as u64),
@@ -267,11 +295,12 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 23] = [
+    const SOURCES: [(&str, &str); 24] = [
         ("audit", include_str!("audit.rs")),
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),
+        ("doctor", include_str!("doctor.rs")),
         ("error", include_str!("error.rs")),
         ("events", include_str!("events.rs")),
         ("fingerprint", include_str!("fingerprint.rs")),

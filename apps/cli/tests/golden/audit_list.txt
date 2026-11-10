@@ -1,0 +1,6 @@
+TIME                        BY          ACTION                                       RESULT          OPERATION                             DETAILS
+2026-11-10 08:00:00 +00:00  user (gui)  operation.cancel (install_runtime)           succeeded       0192f3a4-0000-7000-8000-000000000001  disposition=continuing_past_point_of_no_return
+2026-11-10 08:00:00 +00:00  user (cli)  operation.finished (start_instance)          failed          0192f3a4-0000-7000-8000-000000000002  errorCode=supervisor.endpoint_in_use configRevision=3 message="port 5432 is in use" ports="main 5432" reason=step_failed stage=spawn state=failed
+2026-11-09 21:14:03 +00:00  user (gui)  secret.reveal                                succeeded       -                                     clientKind=gui peerUid=501 purpose=copy reference=local:instance/0192f3a4-0000-7000-8000-0000000000b1/admin-password
+2026-11-09 21:10:00 +00:00  daemon      operation.needs_recovery (restore_instance)  needs_recovery  0192f3a4-0000-7000-8000-000000000003  cause=compensation_failed hint=abandon state=needs_recovery
+2026-11-09 21:00:00 +00:00  daemon      operation.finished (stop_instance)           cancelled       0192f3a4-0000-7000-8000-000000000004  state=cancelled

@@ -332,6 +332,17 @@
       "summary": "the daemon did not appear or disappear within the limit of the command (spec 0015)"
     },
     {
+      "code": "cli.doctor_found_errors",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "errors",
+        "warnings"
+      ],
+      "items": null,
+      "summary": "the doctor ran and found at least one error; the result holds the report (spec 0034)"
+    },
+    {
       "code": "cli.input_required",
       "category": "invalid_input",
       "retryable": false,

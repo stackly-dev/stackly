@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use stackly_protocol::codes::operation;
 use stackly_protocol::operation::{
-    AbandonReply, CancelDisposition, CancelReply, CountedProgress, CreatedItemInfo, CreatedState,
-    OperationDetail, OperationKind, OperationPage, OperationProgress, OperationState,
-    OperationStepInfo, StepState,
+    AbandonReply, CancelAvailability, CancelDisposition, CancelReply, CountedProgress,
+    CreatedItemInfo, CreatedState, OperationDetail, OperationKind, OperationPage,
+    OperationProgress, OperationState, OperationStepInfo, StepState,
 };
 use stackly_protocol::{Call, Count, ErrorBody, Reply, ResourceKind, ResourceRef, Timestamp};
 use stackly_testkit::TestRoot;
@@ -28,6 +28,9 @@ fn page() -> OperationPage {
         done: Count::new(2).expect("2 is a safe count"),
         total: Count::new(5).expect("5 is a safe count"),
     });
+    // The daemon says the step can't be undone; the failed one has no
+    // `cancel`, so the fallback of an older daemon leaves its column empty.
+    first.cancel = Some(CancelAvailability::PastPointOfNoReturn);
     let mut second = dto::ended(OperationState::Failed, true, 9);
     second.id = Uuid::from_u128(0x0192_f3a0_7c1e_7b2a_9d4e_5f6a_7b8c_9d02);
     second.kind = OperationKind::InstallRuntime;
@@ -129,7 +132,7 @@ fn list_writes_a_table_with_a_footer_and_sends_its_flags_as_params() {
     let ev = evidence!(
         covers = ["REQ-028", "REQ-054", "AC-028"],
         kind = Kind::Fixture,
-        expected = "operation list sends operation.list with the flags as params (default limit 50), writes an aligned table even with wide text, a footer hint that repeats the flags, and the page as {items, next} with --json",
+        expected = "operation list sends operation.list with the flags as params (default limit 50), writes an aligned table even with wide text and a CANCEL column from the daemon's cancel, a footer hint that repeats the flags, and the page as {items, next} with --json",
     );
     let root = TestRoot::new().unwrap();
     let daemon = daemon(&root);
@@ -163,6 +166,10 @@ fn list_writes_a_table_with_a_footer_and_sends_its_flags_as_params() {
     assert_eq!(value["command"], "operation list");
     assert_eq!(value["result"]["next"], NEXT);
     assert_eq!(value["result"]["items"][0]["stage"], "数据库迁移");
+    assert_eq!(
+        value["result"]["items"][0]["cancel"],
+        "past_point_of_no_return"
+    );
     assert_eq!(json.stderr, "", "no footer with --json");
     assert!(flagged.stderr.contains(&format!(
         "hint: more operations: stackly operation list --resource instance:{} --limit 20 --before {NEXT}\n",
@@ -272,33 +279,57 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
     let ev = evidence!(
         covers = ["REQ-028", "REQ-054", "AC-054"],
         kind = Kind::Fixture,
-        expected = "operation cancel exits 0 for requested, cancelled_before_start, and continuing_past_point_of_no_return and says so as it is, 3 with cli.cancel_not_applied for already_final, by the recovery error for recovery_required, and 10 for an unknown id; it takes no --yes",
+        expected = "operation cancel exits 0 for requested, cancelled_before_start, and continuing_past_point_of_no_return and says in the words of spec 0035 what each does (stops and undoes, stops safely past the point of no return, nothing ran, continues to a safe end with the inspect command), never a success it did not have; 3 with cli.cancel_not_applied for already_final, by the recovery error for recovery_required, and 10 for an unknown id; it takes no --yes",
     );
-    for (disposition, state, code, error, line) in [
+    let id = id();
+    let continuing = format!(
+        "it is past a step that can't be undone, so it continues to a safe end; check it with stackly operation inspect {id}"
+    );
+    for (disposition, state, past, code, error, line) in [
         (
             CancelDisposition::Requested,
             OperationState::CancelRequested,
+            false,
             0,
             None,
             "cancel requested for operation",
         ),
         (
-            CancelDisposition::CancelledBeforeStart,
-            OperationState::Cancelled,
+            CancelDisposition::Requested,
+            OperationState::CancelRequested,
+            false,
             0,
             None,
-            "it had not started yet",
+            "\nit stops at its next safe point and undoes what it did\n",
+        ),
+        (
+            CancelDisposition::Requested,
+            OperationState::CancelRequested,
+            true,
+            0,
+            None,
+            "\nit stops safely\n",
+        ),
+        (
+            CancelDisposition::CancelledBeforeStart,
+            OperationState::Cancelled,
+            false,
+            0,
+            None,
+            "\nit had not started yet, so nothing of it ran\n",
         ),
         (
             CancelDisposition::ContinuingPastPointOfNoReturn,
             OperationState::CancelRequested,
+            true,
             0,
             None,
-            "past its point of no return and runs to its end",
+            continuing.as_str(),
         ),
         (
             CancelDisposition::AlreadyFinal,
             OperationState::Succeeded,
+            false,
             3,
             Some("cli.cancel_not_applied"),
             "already ended (state succeeded)",
@@ -306,6 +337,7 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
         (
             CancelDisposition::RecoveryRequired,
             OperationState::NeedsRecovery,
+            false,
             7,
             Some("instance.start_failed"),
             "needs recovery (state needs_recovery)",
@@ -314,21 +346,31 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
         let root = TestRoot::new().unwrap();
         let daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
             Call::OperationCancel(_) => {
+                let mut operation = dto::ended(state, true, 3);
+                if past {
+                    operation.point_of_no_return_at =
+                        Some("2026-10-18T03:04:30Z".parse().expect("a fixed time parses"));
+                }
                 vec![Step::Reply(Reply::OperationCancel(Box::new(CancelReply {
-                    operation: dto::ended(state, true, 3),
+                    operation,
                     disposition,
                 })))]
             }
             _ => Vec::new(),
         });
 
-        let text = run(root.path(), &["operation", "cancel", &id()]);
-        let json = run(root.path(), &["operation", "cancel", &id(), "--json"]);
+        let text = run(root.path(), &["operation", "cancel", &id]);
+        let json = run(root.path(), &["operation", "cancel", &id, "--json"]);
 
         assert_eq!(text.code, Some(code), "{disposition:?}: {text:?}");
         assert!(
             text.stdout.contains(line),
             "{disposition:?}: {}",
+            text.stdout
+        );
+        assert!(
+            !text.stdout.contains("stops after it"),
+            "the old sentence is gone: {}",
             text.stdout
         );
         assert_eq!(json.code, Some(code));
@@ -341,15 +383,12 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
             Some(error) => assert_eq!(value["error"]["code"], error),
             None => assert_eq!(value["error"], serde_json::Value::Null),
         }
-        if disposition == CancelDisposition::Requested {
+        if disposition == CancelDisposition::Requested && !past {
             golden::check("operation_cancel.txt", &text.stdout);
             golden::check("operation_cancel.json", &json.stdout);
             assert_eq!(
                 text.stderr,
-                format!(
-                    "hint: wait with: stackly operation inspect {} --wait\n",
-                    id()
-                )
+                format!("hint: wait with: stackly operation inspect {id} --wait\n")
             );
         }
         assert_eq!(
@@ -364,14 +403,78 @@ fn cancel_reports_its_disposition_and_exits_3_when_it_cannot_apply() {
     }
     let root = TestRoot::new().unwrap();
     let _daemon = daemon(&root);
-    let missing = run(root.path(), &["operation", "cancel", &id(), "--json"]);
+    let missing = run(root.path(), &["operation", "cancel", &id, "--json"]);
     assert_eq!(missing.code, Some(10));
-    let yes = run(root.path(), &["operation", "cancel", &id(), "--yes"]);
+    let yes = run(root.path(), &["operation", "cancel", &id, "--yes"]);
     assert_eq!(
         yes.code,
         Some(2),
         "cancel needs no confirmation, so --yes is refused"
     );
+    ev.pass();
+}
+
+#[test]
+fn inspect_says_whether_a_cancel_can_still_stop_the_operation_safely() {
+    let ev = evidence!(
+        covers = ["REQ-054", "AC-054"],
+        kind = Kind::Fixture,
+        expected = "operation inspect writes a Cancel line from the daemon's cancel: not possible now past a step that can't be undone, possible now with what it does, finishing safely for continuing; none for an operation that ended",
+    );
+    for (cancel, past, line) in [
+        (
+            Some(CancelAvailability::PastPointOfNoReturn),
+            true,
+            Some("not possible now, the current step can't be undone safely"),
+        ),
+        (
+            Some(CancelAvailability::Available),
+            false,
+            Some("possible now, it stops at its next safe point and undoes what it did"),
+        ),
+        (
+            Some(CancelAvailability::Available),
+            true,
+            Some("possible now, it stops safely"),
+        ),
+        (
+            Some(CancelAvailability::Continuing),
+            true,
+            Some("requested past a step that can't be undone, so it continues to a safe end"),
+        ),
+        (None, false, None),
+    ] {
+        let root = TestRoot::new().unwrap();
+        let _daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+            Call::OperationGet(_) => {
+                let state = match (cancel, line) {
+                    (Some(CancelAvailability::Continuing), _) => OperationState::CancelRequested,
+                    (_, None) => OperationState::Succeeded,
+                    _ => OperationState::Running,
+                };
+                let mut operation = dto::summary(dto::OPERATION, state, 4);
+                operation.cancel = cancel;
+                if past {
+                    operation.point_of_no_return_at =
+                        Some("2026-10-18T03:04:30Z".parse().expect("a fixed time parses"));
+                }
+                vec![Step::Reply(Reply::OperationGet(Box::new(dto::detail(
+                    operation,
+                ))))]
+            }
+            _ => Vec::new(),
+        });
+
+        let text = run(root.path(), &["operation", "inspect", &id()]);
+
+        assert_eq!(text.code, Some(0), "{cancel:?}: {text:?}");
+        let written = text
+            .stdout
+            .lines()
+            .find_map(|written| written.strip_prefix("Cancel "))
+            .map(str::trim_start);
+        assert_eq!(written, line, "{cancel:?}: {}", text.stdout);
+    }
     ev.pass();
 }
 

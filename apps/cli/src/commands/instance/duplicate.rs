@@ -4,8 +4,9 @@
 //! The command resolves the source like `inspect`, asks the daemon for the
 //! duplicate form, applies the flags on top of its draft, and then sends
 //! `instance.preflight` (`--dry-run`) or `instance.create` exactly as
-//! `stackly instance create` does. The CLI judges nothing of the draft: the
-//! daemon does, once, for the sheet, for `--dry-run`, and for create alike.
+//! `stackly instance create` does, with `duplicateOf` naming the source. The
+//! CLI judges nothing of the draft: the daemon does, once, for the sheet,
+//! for `--dry-run`, and for create alike.
 //! The runtime and the provider revision are always the ones of the source,
 //! so there is no flag to change them.
 
@@ -308,7 +309,9 @@ impl DuplicateArgs {
             settings: self.settings(form),
             secrets,
             startup: None,
-            duplicate_of: None,
+            // The create's audit row names the source, so the trail says
+            // which instance it was created from (spec 0035, AC-18).
+            duplicate_of: Some(form.source.instance_id),
         };
         // `--start` needs the create to end first, whatever `--wait` says.
         let mut run = self.run.clone();

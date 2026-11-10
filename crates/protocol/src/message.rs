@@ -22,6 +22,7 @@ use typeshare::typeshare;
 use crate::audit::{AuditPage, ListAuditParams};
 use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, ShutdownParams};
+use crate::doctor::{DoctorParams, DoctorReport};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
@@ -269,6 +270,10 @@ pub enum Call {
     /// 0070).
     #[serde(rename = "instance.prepare_terminal")]
     InstancePrepareTerminal(PrepareTerminalParams),
+    /// Runs the read only checks of the doctor (spec 0034). Not an
+    /// operation: it writes nothing and holds no lock.
+    #[serde(rename = "doctor.run")]
+    DoctorRun(DoctorParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -453,6 +458,9 @@ pub enum Reply {
     /// The script is written.
     #[serde(rename = "instance.prepare_terminal")]
     InstancePrepareTerminal(PrepareTerminalReply),
+    /// The doctor report, one check per entry.
+    #[serde(rename = "doctor.run")]
+    DoctorRun(Box<DoctorReport>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -581,6 +589,7 @@ methods! {
     "instance.logs_follow" => InstanceLogsFollow(LogsFollowParams), recovery refused;
     "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
     "instance.prepare_terminal" => InstancePrepareTerminal(PrepareTerminalParams), recovery refused;
+    "doctor.run" => DoctorRun(DoctorParams), recovery allowed;
 }
 
 impl Reply {
@@ -706,6 +715,7 @@ mod tests {
                 provider: "official/nats".to_owned(),
             }),
             Call::StorageGetCapacity,
+            Call::DoctorRun(crate::doctor::DoctorParams::default()),
             Call::RuntimeResolve(InstallRuntimeParams {
                 provider: "official/nats".to_owned(),
                 selector: "stable".to_owned(),

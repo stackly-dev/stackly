@@ -89,7 +89,7 @@ fn client_error(
                 })
                 .collect(),
             startup: None,
-            duplicate_of: None,
+            duplicate_of: Some(form.source.instance_id),
         };
         edit(&mut params);
         client
@@ -302,7 +302,7 @@ fn the_fake_journey_creates_duplicates_starts_both_and_reads_a_sentinel_of_each(
     let ev = evidence!(
         covers = ["REQ-009", "REQ-025", "AC-009", "AC-025", "AC-028"],
         kind = Kind::Fixture,
-        expected = "with a real stacklyd and the fake runtime, stackly instance create and stackly instance duplicate make two instances of one runtime, both start with --wait, each answers its own sentinel on its own port, the duplicate answers 404 before its first PUT although the source already holds a sentinel, and the duplicate result names the source",
+        expected = "with a real stacklyd and the fake runtime, stackly instance create and stackly instance duplicate make two instances of one runtime, both start with --wait, each answers its own sentinel on its own port, the duplicate answers 404 before its first PUT although the source already holds a sentinel, the duplicate result names the source, and the audit row of its create carries duplicateOf and duplicateOfName of the source",
     );
     let root = TestRoot::new().expect("a test root");
     let runtime = seed(&root);
@@ -361,6 +361,27 @@ fn the_fake_journey_creates_duplicates_starts_both_and_reads_a_sentinel_of_each(
         .as_str()
         .expect("an instance ID")
         .to_owned();
+    // Spec 0035 AC-18: the create of the duplicate names its source.
+    let trail = run(
+        root.path(),
+        &["audit", "list", "--instance", "fake-b", "--json"],
+    );
+    assert_eq!(trail.code, Some(0), "{trail:?}");
+    let trail = envelope(&trail);
+    let create = trail["result"]["items"]
+        .as_array()
+        .expect("items is an array")
+        .iter()
+        .find(|row| row["operationKind"] == "create_instance")
+        .unwrap_or_else(|| panic!("the create row in {trail}"));
+    let detail = |key: &str| {
+        create["details"]
+            .as_array()
+            .and_then(|details| details.iter().find(|detail| detail["key"] == key))
+            .map(|detail| detail["value"].clone())
+    };
+    assert_eq!(detail("duplicateOf"), Some(json!(first_id)), "{create}");
+    assert_eq!(detail("duplicateOfName"), Some(json!("fake-a")), "{create}");
 
     for id in [&first_id, &second_id] {
         let started = run(

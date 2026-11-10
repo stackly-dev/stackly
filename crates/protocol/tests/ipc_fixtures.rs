@@ -788,6 +788,149 @@ fn foreign_values_of_the_audit_enums_decode_as_unrecognized() {
     );
 }
 
+// covers: AC-1 (spec 0034)
+#[test]
+fn a_doctor_request_names_daemon_checks_and_an_empty_one_asks_for_all() {
+    use stackly_protocol::doctor::{DoctorCheckId, DoctorParams};
+    let request = decode_request(&read("request-doctor-run.json")).unwrap();
+    let Call::DoctorRun(params) = request.call else {
+        panic!("expected doctor.run");
+    };
+    assert_eq!(
+        params.checks,
+        [
+            DoctorCheckId::Endpoints,
+            DoctorCheckId::Processes,
+            DoctorCheckId::Registry
+        ]
+    );
+    assert!(params.instance_id.is_some());
+    let request = decode_request(&read("request-doctor-run-without-fields.json")).unwrap();
+    assert_eq!(request.call, Call::DoctorRun(DoctorParams::default()));
+    for (file, path) in [
+        ("reject-doctor-run-client-check.json", "checks[1]"),
+        ("reject-doctor-run-duplicate-check.json", "checks[1]"),
+    ] {
+        let rejection = decode_request(&read(file)).unwrap_err();
+        assert_eq!(
+            rejection.error.fields().first().map(|field| field.path()),
+            Some(path),
+            "{file}"
+        );
+    }
+}
+
+// covers: AC-1, AC-3, AC-5 (spec 0034)
+#[test]
+fn a_doctor_report_carries_checks_in_order_with_counts_evidence_owner_and_action() {
+    use stackly_protocol::doctor::{
+        DoctorActionKind, DoctorCheckId, DoctorFindingCode, DoctorSeverity, PidFileState,
+        PortOwnerKind,
+    };
+    let Reply::DoctorRun(report) = reply("frame-response-doctor-run.json") else {
+        panic!("expected a doctor.run reply");
+    };
+    let ids: Vec<_> = report.checks.iter().map(|check| check.id).collect();
+    assert_eq!(ids[0], DoctorCheckId::Daemon);
+    assert!(ids.iter().all(|id| id.runs_in_daemon()));
+    let findings = report.checks.iter().flat_map(|check| &check.findings);
+    let (errors, warnings) = findings.fold((0, 0), |(e, w), finding| match finding.severity {
+        DoctorSeverity::Error => (e + 1, w),
+        DoctorSeverity::Warning => (e, w + 1),
+        _ => (e, w),
+    });
+    let omitted: u64 = report
+        .checks
+        .iter()
+        .map(|check| u64::from(check.omitted))
+        .sum();
+    assert_eq!(u64::from(report.errors), errors);
+    assert_eq!(
+        u64::from(report.warnings),
+        warnings + omitted,
+        "the omitted secrets findings are warnings"
+    );
+    let endpoints = report
+        .checks
+        .iter()
+        .find(|check| check.id == DoctorCheckId::Endpoints)
+        .unwrap();
+    let conflict = &endpoints.findings[0];
+    assert_eq!(conflict.code, DoctorFindingCode::PortInUse);
+    let owner = conflict.port_owner.as_ref().unwrap();
+    assert_eq!(owner.kind, PortOwnerKind::Process);
+    assert_eq!(owner.process.as_ref().map(|process| process.pid), Some(812));
+    let action = conflict.action.as_ref().unwrap();
+    assert_eq!(action.kind, DoctorActionKind::ChangePort);
+    assert_eq!(
+        (action.endpoint.as_deref(), action.port),
+        (Some("mysql"), Some(3308))
+    );
+    let processes = report
+        .checks
+        .iter()
+        .find(|check| check.id == DoctorCheckId::Processes)
+        .unwrap();
+    let evidence = processes.findings[0].evidence.as_ref().unwrap();
+    assert_eq!(evidence.identity.lock, None, "no lock probe");
+    assert_eq!(evidence.identity.checks.len(), 7);
+    assert_ne!(
+        evidence.recorded.as_ref().unwrap().started_at,
+        evidence.current.as_ref().unwrap().started_at
+    );
+    let disk = report
+        .checks
+        .iter()
+        .find(|check| check.id == DoctorCheckId::DiskSpace)
+        .unwrap();
+    assert!(disk.capacity.is_some());
+    let failures = report
+        .checks
+        .iter()
+        .find(|check| check.id == DoctorCheckId::InstanceFailures)
+        .unwrap();
+    let remedy = failures.findings[0].remedy.as_ref().unwrap();
+    assert_eq!(
+        remedy.pid_file.as_ref().map(|pid_file| pid_file.state),
+        Some(PidFileState::OtherProcess)
+    );
+}
+
+// covers: AC-1 (spec 0034)
+#[test]
+fn foreign_values_of_the_doctor_enums_decode_as_unrecognized() {
+    use stackly_protocol::doctor::{
+        DoctorActionKind, DoctorCheckId, DoctorFindingCode, DoctorSeverity, PidFileState,
+        PortOwnerKind,
+    };
+    let Reply::DoctorRun(report) = reply("frame-response-doctor-run-unknown-values.json") else {
+        panic!("expected a doctor.run reply");
+    };
+    let check = &report.checks[0];
+    assert_eq!(check.id, DoctorCheckId::Unrecognized);
+    assert_eq!(check.severity, DoctorSeverity::Unrecognized);
+    let finding = &check.findings[0];
+    assert_eq!(finding.code, DoctorFindingCode::Unrecognized);
+    assert_eq!(finding.severity, DoctorSeverity::Unrecognized);
+    assert_eq!(
+        finding.port_owner.as_ref().map(|owner| owner.kind),
+        Some(PortOwnerKind::Unrecognized)
+    );
+    assert_eq!(
+        finding.action.as_ref().map(|action| action.kind),
+        Some(DoctorActionKind::Unrecognized)
+    );
+    assert_eq!(
+        finding
+            .remedy
+            .as_ref()
+            .and_then(|remedy| remedy.pid_file.as_ref())
+            .map(|pid_file| pid_file.state),
+        Some(PidFileState::Unrecognized)
+    );
+    assert!(report.recovery);
+}
+
 #[test]
 fn an_operation_accepted_reply_names_the_operation_and_whether_it_replayed() {
     let accepted: OperationAccepted = dto("dto-operation-accepted.json");

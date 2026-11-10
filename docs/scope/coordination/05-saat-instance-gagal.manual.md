@@ -22,3 +22,31 @@ Disusun dari laporan `chk-f33-m3` (2026-11-10). Butuh app Debug di atas daemon n
 14. Biarkan instance lain memegang port yang sama, tekan Start pada instance `stopped`: banner "Couldn’t start: port in use" dengan "Port {port} of {endpoint} belongs to {nama instance itu}." dan Use Port; lalu Stop menyembunyikan banner, rename tidak (AC-10, AC-11).
 15. Bandingkan dengan `stackly instance inspect <name>` untuk instance yang sama: kode, operation ID, dan port saran sama dengan banner (AC-9, AC-10).
 16. Ulangi dengan app di mode gelap dan jendela sempit (lebar konten sekitar 640 pt): tidak ada label tombol atau baris kode yang terpotong; tombol pindah ke dua baris bila tidak muat (AC-17).
+
+## F33 · Daemon yang terlihat (spec 0033, milestone 1), opsional
+
+Dari laporan `dev-f33-m1` (2026-11-10). Root sementara: `export STACKLY_ROOT=$(mktemp -d)`.
+
+1. Jalankan `stacklyd` dan `skeleton_seed`, buat instance fake dengan `--set crashAfterMs=50 --set readyDelayMs=60000`, lalu `stackly instance start <name> --wait`: baris `crashed, restart <n> of 5 at <waktu>` di setiap jeda, exit 7 dengan hint statis dan `operation: <uuid>`; `stackly instance inspect <name> --json` punya `lastFailure.at` dan `exitCode`.
+2. Hentikan daemon, jalankan lagi, `inspect --json`: kode tetap `crash_loop`, sedangkan `at`, `exitCode`, dan `signal` null.
+
+## F35 · Halaman Operations (spec 0035, milestone 2)
+
+Dari laporan `dev-f35-m2` (2026-11-10). App Debug di atas daemon nyata dengan provider fake di root sementara.
+
+1. Halaman Operations menggantikan placeholder; start sebuah instance dan lihat progress bertahap berjalan langsung.
+2. Install runtime: Cancel nonaktif di tahap Commit dengan teks "can’t be cancelled".
+3. Start yang gagal karena port dipegang proses lain, lalu Retry dari halaman Operations.
+4. Pilih baris: inspector menampilkan jenis, resource, actor dan client, waktu, tahap, dan error.
+5. Operasi `needs_recovery`: Resume dan Abandon di inspector, Abandon dengan dialog destruktif.
+6. Baris operasi di Overview dan item O1 membuka operasi itu di halaman Operations.
+7. Operasi yang sudah dipangkas menampilkan "This operation is no longer in the history."
+8. Daemon dihentikan: data tetap tampil dengan aksi mutasi nonaktif; daemon lebih lama menampilkan "Operations Unavailable".
+9. Ulangi di mode terang dan gelap, dan jendela 900 pt.
+
+## F35 · CLI audit (spec 0035, milestone 1)
+
+Dari laporan `dev-f35-m1-s5` (2026-11-10). `stacklyd` asli dan provider fake di root sementara: `export STACKLY_ROOT=$(mktemp -d)`, lalu `cargo run -q -p stacklyd --example skeleton_seed -- --root "$STACKLY_ROOT"` dan perintah create yang dicetaknya.
+
+1. `COLUMNS=100 stackly audit list`: kolom TIME sampai OPERATION utuh, DETAILS terpotong dengan `…` di akhir dan paling sedikit 24 kolom. `COLUMNS=100 stackly audit list | cat` dan `stackly audit list` tanpa `COLUMNS` yang diekspor: tidak ada yang terpotong (AC-16).
+2. `stackly operation list` dan `stackly operation inspect <id>` untuk operasi yang sedang berjalan: kolom CANCEL `yes` (atau `no` sejak langkah yang tidak bisa dibalik) dan baris `Cancel` dengan kalimatnya; operasi yang sudah selesai: CANCEL `-` dan tanpa baris `Cancel` (AC-16).

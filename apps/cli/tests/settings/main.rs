@@ -46,6 +46,7 @@ pub fn view(revision: u64, autostart: &str, channel: &str, telemetry: bool) -> D
             "cache": location(CACHE, "cache", "/Users/dev/Library/Caches/Stackly", true, 0),
         },
         "logRetention": { "segmentsPerStream": 5, "segmentMaxBytes": 20971520 },
+        "auditRetention": { "days": 30, "maxRows": 100000 },
         "updatedAt": "2026-11-03T08:00:00.000Z"
     }))
     .expect("a settings view")

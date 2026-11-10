@@ -12,6 +12,7 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use jiff::tz::TimeZone;
 use stackly_protocol::ProtocolVersion;
 
+use crate::commands::audit::AuditCommand;
 use crate::commands::completion::CompletionArgs;
 use crate::commands::daemon::DaemonCommand;
 use crate::commands::execute;
@@ -123,6 +124,9 @@ pub enum Command {
     /// List, inspect, cancel, resume, or abandon operations
     #[command(subcommand, arg_required_else_help = true)]
     Operation(OperationCommand),
+    /// List the local audit trail: every operation that ended and every secret action
+    #[command(subcommand, arg_required_else_help = true)]
+    Audit(AuditCommand),
     /// List or inspect the providers in the catalog
     #[command(subcommand, arg_required_else_help = true)]
     Provider(ProviderCommand),
@@ -156,6 +160,7 @@ impl Command {
             Self::Daemon(command) => command.run(cx).await,
             Self::Instance(command) => command.run(cx).await,
             Self::Operation(command) => command.run(cx).await,
+            Self::Audit(command) => command.run(cx).await,
             Self::Provider(command) => command.run(cx).await,
             Self::Runtime(command) => command.run(cx).await,
             Self::Secret(command) => command.run(cx).await,
@@ -381,6 +386,11 @@ fn real_output(global: &GlobalArgs, command: String) -> Output {
         quiet: global.quiet,
         stdout: Box::new(std::io::stdout()),
         stdout_color,
+        stdout_columns: if std::io::stdout().is_terminal() {
+            env::columns(std::env::var_os("COLUMNS").as_deref())
+        } else {
+            None
+        },
         stderr: StderrSink::new(Box::new(std::io::stderr()), stderr_color),
         tz: TimeZone::system(),
         socket: None,

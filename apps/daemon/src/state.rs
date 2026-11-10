@@ -183,6 +183,7 @@ pub struct DaemonCore {
     redactor: Arc<Redactor>,
     secrets: Secrets,
     storage: Storage,
+    doctor: stackly_core::doctor::Doctor,
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
@@ -251,6 +252,7 @@ impl DaemonCore {
             redactor,
             secrets: Secrets::new(secret_target),
             storage: Storage::default(),
+            doctor: stackly_core::doctor::Doctor::default(),
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
@@ -408,6 +410,13 @@ impl DaemonCore {
     #[must_use]
     pub const fn storage(&self) -> &Storage {
         &self.storage
+    }
+
+    /// The doctor of this run (spec 0034): its two run slots and the checks
+    /// that ran past their limit live as long as the run.
+    #[must_use]
+    pub const fn doctor(&self) -> &stackly_core::doctor::Doctor {
+        &self.doctor
     }
 
     /// A new connection ID: a counter per run, from 1.
