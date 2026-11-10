@@ -87,3 +87,42 @@ _Bagian ini ditulis untuk langkah Build plan 6 dan 7 (StacklyClient `auditList`,
 - AC-14 · definisi tahap dan `StageDefinition.also`
 - AC-17 · `auditList` dan test kontrak Swift; kontrak Rust milik milestone 1
 - AC-15, AC-16, AC-18, AC-20 · belum, milik langkah 5 dan 8; AC-19 lengkap milik langkah 9
+
+## Milestone 3: Activity tab and setting
+
+_Bagian ini ditulis untuk langkah Build plan 8: `InstanceTab.activity` sesudah Metrics, `InstanceActivityModel`, `ActivityCopy`, dan `InstanceActivityTab` di `InstanceDetail/Activity/`, bacaan `activity` di `InstanceDetailService` (`audit.list { instanceId }` lewat `AuditClient`), `duplicateOf` dari sheet Duplicate, dan grup Activity di tab Storage Settings. Picker tab detail jatuh ke menu pop up native bila kelima segmen tidak muat (kolom di samping inspector). Swift test integrasi butuh `stacklyd`, `stackly-fake-server`, dan example `skeleton_seed` berprotokol 3.3 (`STACKLY_DAEMON_BIN` dan `STACKLY_SEED_BIN` boleh menunjuk binary checkout utama), selain itu berakhir `BLOCKED`._
+
+### UI / manual
+
+- [ ] Sesi GUI di Mac ini dengan daemon asli dan provider fake di root sementara (`STACKLY_ROOT=$(mktemp -d)`, `skeleton_seed`), buka detail sebuah instance → picker tab "Summary, Configuration, Logs, Metrics, Activity"; tab Activity menampilkan `Table` native tiga kolom Time, By, Activity, urut terbaru, jam singkat untuk hari ini dan tanggal singkat untuk hari lain, tooltip tanggal dan jam lengkap di kolom Time → AC-15
+- [ ] Dengan tab Activity terbuka, start instance dari app lalu stop dari CLI (`stackly stop <nama>`) → dalam sekitar satu detik setelah tiap operasi selesai baris "Started" (By "App") dan "Stopped" (By "CLI") muncul tanpa memuat ulang manual → AC-15
+- [ ] Start yang gagal karena port dipegang proses lain → baris kritis "Start failed · supervisor.endpoint_in_use" → AC-15
+- [ ] Ganti port (Configuration → Ports) → baris "Ports changed: main 5432 → 5433"; bandingkan tiap baris dengan `stackly audit list --instance <nama>` (TIME, BY, ACTION, RESULT, OPERATION sama) → AC-15, AC-2
+- [ ] Show Password lalu Copy di Summary → baris "Viewed superuser password" dan "Copied superuser password"; tidak ada nilai password di tab mana pun → AC-15
+- [ ] Klik ganda baris operasi, atau klik kanan → "Show in Operations" → halaman Operations terbuka dengan operasi itu terpilih dan inspector terbuka; baris secret tidak punya menu itu → AC-13, AC-15
+- [ ] Instance dengan lebih dari 50 baris → Show More di bawah tabel memuat halaman berikutnya sampai habis → AC-15
+- [ ] More → Duplicate… dari instance A, lalu Create → tab Activity instance baru menulis "Created from A"; instance dari New Instance biasa menulis "Created" → AC-18
+- [ ] Hentikan daemon saat tab terbuka → baris tetap tampil; jalankan daemon lagi → tab memuat ulang setelah shell tersambung → AC-15
+- [ ] Daemon versi lama (protokol tanpa `audit.list`) → "Activity Unavailable" → AC-15
+- [ ] Settings → Storage → grup "Activity" di bawah Logs: picker native "Keep activity for" bernilai 30 days dan keterangan "Up to 100,000 entries. Older entries are removed every day and right after you change this." → AC-20
+- [ ] Pilih 90 days → tersimpan tanpa dialog; pilih 7 days → dialog native "Remove activity older than 7 days?" dengan isi "Older entries are removed now and can’t be brought back.", Cancel sebagai tombol default; Cancel membiarkan 90 days; Remove menyimpan 7 days dan `stackly settings get` menulis `audit retention: 7 days, up to 100000 entries` → AC-20, AC-6
+- [ ] Ubah retensi dari CLI (`stackly settings set audit-retention-days 30`) saat Settings terbuka di revision lama, lalu ganti di app → "Changed elsewhere. Try again." di bawah baris dan nilai daemon tampil lagi → AC-20
+- [ ] Saat stacklyd offline → grup Activity tidak tampil, Locations dan Logs tetap dengan nilai terakhir → AC-20
+- [ ] Ulangi tab Activity dan Settings di light dan dark → AC-15, AC-20
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "ActivityCopyTests|InstanceActivityModelTests"` → 30 test lulus: By "App", "CLI", "Stackly", "Client"; Time jam singkat untuk hari ini menurut zona waktu jendela, tanggal tanpa tahun, dan dengan tahun untuk tahun lain; teks setiap action (create dan "Created from", start sampai force stop, gagal "{Start} failed · {kode}", dibatalkan, abandoned, ganti port, apply, drift, rename dengan teks cadangan, jenis lain, needs recovery, cancel, resume, abandon dengan jumlah sisa, secret reveal show dan copy, set, delete, gagal, action asing); tab Activity sesudah Metrics; halaman pertama dan Show More lewat cursor, halaman pertama baru yang bergabung dengan baris termuat, gagal pertama dan gagal sesudah termuat, daemon lama, satu muat ulang 500 ms untuk beberapa perubahan state operasi instance ini, progress dan instance lain tanpa muat ulang, perubahan center sampai tab tertutup, round snapshot hanya saat tab tampil, dan operasi yang dibuka baris → AC-13, AC-15, AC-18
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "StorageSettingsModelTests|SettingsAvailabilityTests|SettingsStoreTests"` → lulus, termasuk retensi lebih panjang langsung terkirim dengan `expectedRevision`, lebih pendek menunggu konfirmasi destruktif, nilai sama dan daemon lama tanpa kiriman, revision basi "Changed elsewhere. Try again.", baris `auditRetention` di tab Storage, dan teks grup Activity → AC-20
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CreateInstanceDuplicateTests|CreateInstanceModelTests"` → lulus; duplicate mengirim `duplicateOf` UUID sumber, create biasa `nil` → AC-18
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "InstanceDetailSnapshotTests|ConfigurationSnapshotTests|InstanceLogsSnapshotTests|InstanceMetricsSnapshotTests"` → lulus terhadap referensi yang direkam ulang: picker detail memuat Activity, dan di samping inspector (`instance-detail-with-inspector`) picker menjadi menu pop up sehingga kolom tidak terpotong → AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus (flaky beban yang dikenal boleh diulang sendirian) → AC-13, AC-15, AC-18, AC-20
+- [ ] `xcrun swift-format lint --strict` pada file yang diubah dan `cargo xtask build-app` → lulus → AC-15
+
+### Acceptance-criteria coverage
+
+- AC-15 · tab, model, teks, refresh pada event, `completedRounds`, dan tampil, Show More, placeholder; tampilan light dan dark milik milestone 4
+- AC-18 · sheet Duplicate mengirim `duplicateOf` dan teks "Created from"; catatan create di daemon milik milestone 1
+- AC-20 · grup Activity, picker, keterangan, konfirmasi, konflik revision; snapshot milik milestone 4
+- AC-13 · baris Activity dengan operation ID memanggil `openOperation`; temuan doctor milik fitur 34
+- AC-19 · milik milestone 4

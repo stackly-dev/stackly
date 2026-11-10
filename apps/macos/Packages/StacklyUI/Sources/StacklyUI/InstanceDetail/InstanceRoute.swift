@@ -14,7 +14,8 @@ nonisolated public struct InstanceRoute: Hashable, Sendable {
 }
 
 /// A tab of the detail page; the picker shows when there is more than one (spec 0021,
-/// *Halaman detail dan navigasi*; Logs from spec 0027, Metrics from spec 0028).
+/// *Halaman detail dan navigasi*; Logs from spec 0027, Metrics from spec 0028, Activity from
+/// spec 0035).
 nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiable, Sendable {
     /// Endpoints, connection, dependents, and details.
     case summary
@@ -24,6 +25,8 @@ nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiabl
     case logs
     /// CPU, memory, disk, restarts, and the processes of the running instance (spec 0028).
     case metrics
+    /// Who did what to the instance and when, from the local audit (spec 0035, AC-15).
+    case activity
 
     /// The tab's identity.
     public var id: String { rawValue }
@@ -35,6 +38,7 @@ nonisolated public enum InstanceTab: String, CaseIterable, Hashable, Identifiabl
         case .configuration: "Configuration"
         case .logs: "Logs"
         case .metrics: "Metrics"
+        case .activity: "Activity"
         }
     }
 }

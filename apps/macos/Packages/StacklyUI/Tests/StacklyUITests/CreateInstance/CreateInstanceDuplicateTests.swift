@@ -368,6 +368,8 @@ struct CreateInstanceDuplicateTests {
         #expect(params.name == "fake-a-copy-2")
         #expect(params.endpoints == [EndpointRequest(name: "http", port: .auto)])
         #expect(params.secrets == [SecretFieldInput(field: "authToken", input: .generate)])
+        // The audit row of the create names the source (spec 0035, AC-18).
+        #expect(params.duplicateOf == Self.source.id)
 
         let instance = FixtureID.uuid(kind: FixtureID.instance, number: 20)
         rig.emit(CreateRig.operation(state: .succeeded, stage: nil, instance: instance))
