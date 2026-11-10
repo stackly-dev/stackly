@@ -100,6 +100,8 @@ nonisolated enum DoctorCopy {
     static let previewExpired = "The preview expired. Review the new one before you export."
     static let preparing = "Preparing the bundle…"
     static let bundleFailedTitle = "Couldn’t Prepare the Bundle"
+    static let exportFailedTitle = "Couldn’t Export the Bundle"
+    static let tryAgain = "Try Again"
     static let showInFinder = "Show in Finder"
 
     /// `Saved {file} to {folder}.`

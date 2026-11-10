@@ -2,23 +2,30 @@ import StacklyClient
 import SwiftUI
 
 /// The Diagnostics page: the Connection section, which works while the daemon is down, the
-/// Background Agent and Command Line sections, then the Doctor (spec 0034, AC-17). The
-/// toolbar holds Run Doctor.
+/// Background Agent and Command Line sections, then the Doctor and the Diagnostic Bundle
+/// (spec 0034, AC-17). The toolbar holds Export Bundle… and Run Doctor.
 ///
 /// Nothing here changes data: a finding's button only goes to a page or opens a flow that
-/// asks first.
+/// asks first, and the bundle is saved by the daemon after the person saw its entries.
 struct DiagnosticsPage: View {
     let diagnostics: ConnectionDiagnostics
     let isReconnecting: Bool
     let reconnect: @MainActor () -> Void
     let refresh: @MainActor () -> Void
+    /// Where the bundle is saved; the app uses the save panel, a test a fixed file.
+    var chooser: any BundleDestinationChoosing = SavePanelBundleDestination()
+    /// Shows a saved bundle in Finder.
+    var reveal: @MainActor (URL) -> Void = { OpenInPorts.system.opener.reveal($0) }
     /// The routes this build has; `open_storage_settings` has none yet.
     var routes: DoctorRoutes = .thisBuild
 
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
     @Environment(\.shellNavigator) private var navigator
+    @Environment(\.feedbackCenter) private var feedbackCenter
     @State private var focus: DiagnosticsFocus?
     @State private var appliedRequest: UUID?
+    @State private var bundle: BundleSession?
+    @State private var saved: ExportedBundle?
 
     var body: some View {
         ScrollView {
@@ -36,6 +43,7 @@ struct DiagnosticsPage: View {
                     DoctorSection(
                         doctor: daemon.doctor, isConnected: isConnected, focus: focus,
                         routes: routes, open: open, showAll: { focus = nil })
+                    DiagnosticBundleSection(isConnected: isConnected, preview: openBundle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,6 +57,10 @@ struct DiagnosticsPage: View {
         .toolbar {
             if let daemon {
                 ToolbarItem(placement: .primaryAction) {
+                    Button(DoctorCopy.exportBundle, action: openBundle)
+                        .disabled(!isConnected)
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Button(daemon.doctor.running ? DoctorCopy.running : DoctorCopy.runDoctor) {
                         Task { await daemon.doctor.request(.user) }
                     }
@@ -61,6 +73,10 @@ struct DiagnosticsPage: View {
         }
         .onChange(of: navigator?.diagnosticsRequest?.id, initial: true) {
             applyRequest()
+        }
+        .sheet(item: $bundle, onDismiss: showSaved) { session in
+            BundleSheet(
+                model: session.model, chooser: chooser, exported: { saved = $0 })
         }
     }
 
@@ -102,4 +118,35 @@ struct DiagnosticsPage: View {
             break
         }
     }
+
+    private func openBundle() {
+        guard let daemon, isConnected else { return }
+        bundle = BundleSession(
+            model: BundleModel(read: { call throws(ClientError) in
+                try await daemon.read(call).get()
+            }))
+    }
+
+    /// "Saved {file} to {folder}." with Show in Finder, sent by the page once the sheet
+    /// closed (spec 0067: a sheet never sends feedback).
+    private func showSaved() {
+        guard let exported = saved else { return }
+        saved = nil
+        let file = URL(filePath: exported.path)
+        var feedback = Feedback.success(
+            DoctorCopy.saved(
+                file: file.lastPathComponent,
+                folder: file.deletingLastPathComponent().lastPathComponent))
+        let reveal = reveal
+        feedback.action = StacklyAction(
+            id: "bundle.reveal", title: DoctorCopy.showInFinder, mutates: false,
+            perform: { reveal(file) })
+        feedbackCenter?.show(feedback)
+    }
+}
+
+/// One opening of the bundle sheet, with its own model.
+private struct BundleSession: Identifiable {
+    let id = UUID()
+    let model: BundleModel
 }
