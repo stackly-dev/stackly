@@ -450,8 +450,9 @@ public struct InstancesPage: View {
                 others: {
                     Set(instances.store.items.values.filter { $0.id != source.id }.map(\.name))
                 }, context: context)
-        case .editPorts(let source):
-            EndpointsSheet(source: source, service: models.configuration, context: context)
+        case .editPorts(let source, let prefill):
+            EndpointsSheet(
+                source: source, service: models.configuration, prefill: prefill, context: context)
         }
     }
 

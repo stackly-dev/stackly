@@ -220,6 +220,8 @@
     /// daemon gave for the click.
     /// Like ``FixtureCreate`` it is data for a page rig or a scenario to answer with; it joins
     /// no scenario by itself, so the instance counts of the existing scenarios stay.
+    /// ``FixtureFailureBanner`` extends it with the start that failed for this instance and
+    /// the other failure banners of spec 0033.
     public nonisolated enum FixtureStartConflict {
         /// The case number of the instance.
         public static let number: UInt8 = 12
