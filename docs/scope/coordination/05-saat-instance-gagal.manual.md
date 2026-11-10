@@ -50,3 +50,18 @@ Dari laporan `dev-f35-m1-s5` (2026-11-10). `stacklyd` asli dan provider fake di 
 
 1. `COLUMNS=100 stackly audit list`: kolom TIME sampai OPERATION utuh, DETAILS terpotong dengan `…` di akhir dan paling sedikit 24 kolom. `COLUMNS=100 stackly audit list | cat` dan `stackly audit list` tanpa `COLUMNS` yang diekspor: tidak ada yang terpotong (AC-16).
 2. `stackly operation list` dan `stackly operation inspect <id>` untuk operasi yang sedang berjalan: kolom CANCEL `yes` (atau `no` sejak langkah yang tidak bisa dibalik) dan baris `Cancel` dengan kalimatnya; operasi yang sudah selesai: CANCEL `-` dan tanpa baris `Cancel` (AC-16).
+
+## F35 · Tab Activity, setting, dan langkah 10 (spec 0035, milestone 3 dan 4)
+
+Dari laporan `dev-f35-m3` (2026-11-10). App Debug di atas daemon asli dan provider fake di root sementara (`STACKLY_ROOT=$(mktemp -d)`, `skeleton_seed`).
+
+1. Buka detail sebuah instance: picker "Summary, Configuration, Logs, Metrics, Activity". Tab Activity menampilkan tabel Time, By, Activity, urut terbaru, dengan tooltip tanggal dan jam lengkap (AC-15).
+2. Dengan tab terbuka, start dari app lalu stop dari CLI: baris "Started" (App) dan "Stopped" (CLI) muncul sendiri. Start pada port yang dipegang proses lain: "Start failed · supervisor.endpoint_in_use" (AC-15).
+3. Ganti port: "Ports changed: main 5432 → 5433"; bandingkan dengan `stackly audit list --instance <nama>` (AC-15, AC-2).
+4. Show Password lalu Copy: "Viewed superuser password" dan "Copied superuser password", tanpa nilai secret (AC-15).
+5. Klik ganda baris operasi, atau klik kanan lalu Show in Operations: halaman Operations dengan operasi itu terpilih dan inspector terbuka (AC-13).
+6. Lebih dari 50 baris: Show More. Daemon dihentikan lalu dijalankan lagi: baris tetap, lalu dimuat ulang. Daemon lama: "Activity Unavailable" (AC-15).
+7. Duplicate… lalu Create: "Created from {sumber}"; create biasa: "Created" (AC-18).
+8. Settings, Storage, grup Activity: "Keep activity for" 30 days dengan keterangan batas 100,000. Pilih 90: langsung tersimpan. Pilih 7: dialog "Remove activity older than 7 days?" dengan Cancel sebagai default; Remove: `stackly settings get` menulis 7 days. Revision basi: "Changed elsewhere. Try again.". Offline: grup tidak tampil (AC-20, AC-6).
+9. Langkah 10 Build plan: install runtime fake dan lihat Cancel mati di Commit; start gagal karena port lalu Retry di Operations; buka operasi dari Overview dan dari tab Activity; ulangi semua di mode terang dan gelap (AC-11, AC-13, AC-15, AC-20).
+10. `cargo xtask snapshot review`: PNG lama dan baru berdampingan untuk suite Operations, Activity, dan Settings (AC-19).
