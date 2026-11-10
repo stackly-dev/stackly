@@ -76,6 +76,13 @@ pub fn summary(view: &OperationView) -> OperationSummary {
         started_at: operation.started_at().map(Timestamp::from_jiff),
         updated_at: Timestamp::from_jiff(operation.updated_at()),
         revision: revision(operation.revision()),
+        // One domain function decides it (spec 0035, AC-8); clients keep no
+        // table of their own.
+        cancel: Some(by_code(
+            operation
+                .cancel_availability(journal.point_of_no_return_at().is_some())
+                .as_code(),
+        )),
     }
 }
 
@@ -360,7 +367,7 @@ fn partial_outcome(outcome: CorePartial) -> PartialOutcome {
 
 /// The client kind a trigger names; a code this build does not know is
 /// left out rather than sent as `unrecognized`.
-fn client_kind(code: &str) -> Option<ClientKind> {
+pub(crate) fn client_kind(code: &str) -> Option<ClientKind> {
     match by_code::<ClientKind>(code) {
         ClientKind::Unrecognized => None,
         kind => Some(kind),
@@ -370,7 +377,7 @@ fn client_kind(code: &str) -> Option<ClientKind> {
 /// The open wire enum whose code is `code`. Every open enum of the area
 /// reads a code it does not know as `unrecognized`; the tests below check
 /// that no domain code falls there.
-fn by_code<T: DeserializeOwned>(code: &str) -> T {
+pub(crate) fn by_code<T: DeserializeOwned>(code: &str) -> T {
     serde_json::from_value(serde_json::Value::String(code.to_owned()))
         .expect("every open wire enum reads any string, an unknown one as unrecognized")
 }
@@ -418,6 +425,21 @@ mod tests {
         );
         round_trips::<stackly_protocol::operation::TriggerOrigin>(
             TriggerOrigin::ALL.iter().map(|origin| origin.as_code()),
+        );
+        round_trips::<stackly_protocol::operation::CancelAvailability>(
+            stackly_domain::CancelAvailability::ALL
+                .iter()
+                .map(|availability| availability.as_code()),
+        );
+        round_trips::<stackly_protocol::audit::AuditResultKind>(
+            stackly_domain::AuditResult::ALL
+                .iter()
+                .map(|result| result.as_code()),
+        );
+        round_trips::<stackly_protocol::audit::AuditActorKind>(
+            stackly_domain::AuditActor::ALL
+                .iter()
+                .map(|actor| actor.as_code()),
         );
         round_trips::<CancelDisposition>(
             [

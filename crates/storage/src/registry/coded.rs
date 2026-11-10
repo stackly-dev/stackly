@@ -63,7 +63,7 @@ macro_rules! codes_of {
 /// Most sets are the codes of a domain `code_enum`. Two are matched by hand
 /// in their mapper, and their lists here must change with it:
 /// `audit_events.resource_kind` (`AuditResource::kind_code`, read in
-/// `stored_audit`) and `operation_created.item_kind`
+/// `stored_audit`, spec 0035 adds the instance, runtime, and environment) and `operation_created.item_kind`
 /// (`CreatedItem::from_parts`, read in `stored_created`).
 pub const CODED_COLUMNS: &[CodedColumn] = &[
     CodedColumn {
@@ -73,8 +73,13 @@ pub const CODED_COLUMNS: &[CodedColumn] = &[
     },
     CodedColumn {
         table: "audit_events",
+        column: "operation_kind",
+        known: || codes_of!(OperationKind),
+    },
+    CodedColumn {
+        table: "audit_events",
         column: "resource_kind",
-        known: || &["secret"],
+        known: || &["secret", "instance", "runtime", "environment"],
     },
     CodedColumn {
         table: "audit_events",
@@ -249,13 +254,26 @@ mod tests {
 
     #[test]
     fn the_audit_resource_kinds_are_the_ones_the_domain_writes() {
-        let id: stackly_domain::SecretReferenceId =
-            "0199f000-0000-7000-8000-000000000061".parse().unwrap();
-        let resource = stackly_domain::AuditResource::SecretReference(id);
-
-        assert_eq!(
-            known_of("audit_events", "resource_kind"),
-            [resource.kind_code()]
+        let id = "0199f000-0000-7000-8000-000000000061";
+        let resources = [
+            stackly_domain::AuditResource::SecretReference(id.parse().unwrap()),
+            stackly_domain::AuditResource::Instance(id.parse().unwrap()),
+            stackly_domain::AuditResource::Runtime(id.parse().unwrap()),
+            stackly_domain::AuditResource::Environment(id.parse().unwrap()),
+        ];
+        let kinds: Vec<&str> = resources
+            .iter()
+            .map(|resource| resource.kind_code())
+            .collect();
+        assert_eq!(known_of("audit_events", "resource_kind"), kinds);
+        for (kind, resource) in kinds.iter().zip(resources) {
+            assert_eq!(
+                stackly_domain::AuditResource::from_parts(kind, resource.id()).unwrap(),
+                resource
+            );
+        }
+        assert!(
+            stackly_domain::AuditResource::from_parts("zzz_not_known", resources[0].id()).is_err()
         );
     }
 }

@@ -86,6 +86,7 @@ async fn the_secret_value_and_the_text_settings_of_a_create_are_not_in_the_daemo
             input: SecretInput::Value(SecretText::new(SECRET.to_owned())),
         }],
         startup: None,
+        duplicate_of: None,
     };
 
     let Reply::InstanceCreate(accepted) = client

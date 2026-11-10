@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use stackly_domain::{
     InstanceFilter, InstanceId, InstanceLifecycle, OperationId, OperationKind, OperationState,
-    SessionEndReason, StopIntent, WriteBatch, WriteOp,
+    OperationTrigger, SessionEndReason, StopIntent, WriteBatch, WriteOp,
 };
 use tokio::time::Instant;
 
@@ -146,7 +146,10 @@ impl Supervisor {
             ) {
                 continue;
             }
-            if let Err(error) = engine.cancel(operation.id()).await {
+            if let Err(error) = engine
+                .cancel(operation.id(), OperationTrigger::background())
+                .await
+            {
                 tracing::warn!(operation = %operation.id(), ?error, "an operation could not be cancelled for the end of the session");
             }
         }

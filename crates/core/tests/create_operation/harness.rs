@@ -189,6 +189,7 @@ impl CreateRig {
             secret_values: Vec::new(),
             start: false,
             startup: Some(stackly_domain::StartupPolicy::Manual),
+            duplicate_of: None,
         }
     }
 

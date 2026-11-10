@@ -5,6 +5,8 @@
 //! or deletes a location row, and an instance keeps the locations it was
 //! created in, so changing the default moves no data.
 
+use std::time::Duration;
+
 use jiff::Timestamp;
 
 use crate::code::code_enum;
@@ -230,6 +232,54 @@ impl StorageLocation {
     }
 }
 
+/// Seconds in one day.
+const DAY_SECS: u64 = 24 * 60 * 60;
+
+/// How long the registry keeps audit rows (spec 0035): 7, 30, or 90 days,
+/// stored as the number of days.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub enum AuditRetentionDays {
+    /// One week.
+    Days7,
+    /// Thirty days, the default.
+    #[default]
+    Days30,
+    /// Ninety days.
+    Days90,
+}
+
+impl AuditRetentionDays {
+    /// Every choice, shortest first.
+    pub const ALL: [Self; 3] = [Self::Days7, Self::Days30, Self::Days90];
+
+    /// Returns the number of days.
+    #[must_use]
+    pub const fn days(self) -> u32 {
+        match self {
+            Self::Days7 => 7,
+            Self::Days30 => 30,
+            Self::Days90 => 90,
+        }
+    }
+
+    /// Returns the choice of `days`, or `None` when it is not 7, 30, or 90.
+    #[must_use]
+    pub const fn from_days(days: u32) -> Option<Self> {
+        match days {
+            7 => Some(Self::Days7),
+            30 => Some(Self::Days30),
+            90 => Some(Self::Days90),
+            _ => None,
+        }
+    }
+
+    /// Returns the oldest audit row kept, as an age.
+    #[must_use]
+    pub const fn max_age(self) -> Duration {
+        Duration::from_secs(self.days() as u64 * DAY_SECS)
+    }
+}
+
 /// The settings the daemon keeps in the registry. One row, always.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonSettings {
@@ -248,6 +298,8 @@ pub struct DaemonSettings {
     pub logs_location: StorageLocationId,
     /// The default download location.
     pub cache_location: StorageLocationId,
+    /// How long audit rows are kept (spec 0035).
+    pub audit_retention: AuditRetentionDays,
     /// Rises with every change.
     pub revision: ResourceRevision,
     /// When a setting last changed.
@@ -256,7 +308,8 @@ pub struct DaemonSettings {
 
 impl DaemonSettings {
     /// The settings a new registry starts with: autostart off, the stable
-    /// channel, telemetry off, and the built in locations.
+    /// channel, telemetry off, the built in locations, and 30 days of
+    /// audit rows.
     #[must_use]
     pub const fn initial(at: Timestamp) -> Self {
         Self {
@@ -267,6 +320,7 @@ impl DaemonSettings {
             data_location: LocationKind::Data.built_in_id(),
             logs_location: LocationKind::Logs.built_in_id(),
             cache_location: LocationKind::Cache.built_in_id(),
+            audit_retention: AuditRetentionDays::Days30,
             revision: ResourceRevision::INITIAL,
             updated_at: at,
         }
@@ -295,6 +349,9 @@ impl DaemonSettings {
         }
         if let Some(telemetry) = patch.telemetry {
             next.telemetry = telemetry;
+        }
+        if let Some(retention) = patch.audit_retention {
+            next.audit_retention = retention;
         }
         if next == *self {
             return None;
@@ -337,13 +394,18 @@ pub struct SettingsPatch {
     pub update_channel: Option<UpdateChannel>,
     /// Whether the person agrees to share usage statistics.
     pub telemetry: Option<bool>,
+    /// How long audit rows are kept (spec 0035).
+    pub audit_retention: Option<AuditRetentionDays>,
 }
 
 impl SettingsPatch {
     /// Whether the patch sets no field.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.default_startup.is_none() && self.update_channel.is_none() && self.telemetry.is_none()
+        self.default_startup.is_none()
+            && self.update_channel.is_none()
+            && self.telemetry.is_none()
+            && self.audit_retention.is_none()
     }
 }
 
@@ -447,6 +509,43 @@ mod tests {
         assert_eq!(next.update_channel, UpdateChannel::Beta);
         assert_eq!(next.revision.get(), 2);
         assert_eq!(next.default_startup, StartupPolicy::Manual);
+    }
+
+    #[test]
+    fn audit_retention_is_7_30_or_90_days_and_30_by_default() {
+        assert_eq!(AuditRetentionDays::default(), AuditRetentionDays::Days30);
+        for choice in AuditRetentionDays::ALL {
+            assert_eq!(AuditRetentionDays::from_days(choice.days()), Some(choice));
+            assert_eq!(
+                choice.max_age(),
+                Duration::from_secs(u64::from(choice.days()) * 86_400)
+            );
+        }
+        for bad in [0, 1, 6, 8, 29, 31, 60, 89, 91, 365] {
+            assert_eq!(AuditRetentionDays::from_days(bad), None, "{bad}");
+        }
+        assert_eq!(
+            DaemonSettings::initial(at()).audit_retention,
+            AuditRetentionDays::Days30
+        );
+    }
+
+    #[test]
+    fn a_patch_of_the_audit_retention_raises_the_revision() {
+        let settings = DaemonSettings::initial(at());
+        let same = SettingsPatch {
+            audit_retention: Some(AuditRetentionDays::Days30),
+            ..SettingsPatch::default()
+        };
+        assert!(!same.is_empty());
+        assert_eq!(settings.patched(&same, at()), None);
+        let shorter = SettingsPatch {
+            audit_retention: Some(AuditRetentionDays::Days7),
+            ..SettingsPatch::default()
+        };
+        let next = settings.patched(&shorter, at()).unwrap();
+        assert_eq!(next.audit_retention, AuditRetentionDays::Days7);
+        assert_eq!(next.revision.get(), 2);
     }
 
     #[test]

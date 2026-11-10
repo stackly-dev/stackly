@@ -477,6 +477,25 @@ public struct OperationTriggerInfo: Codable, Sendable, Equatable {
 	}
 }
 
+/// Whether a cancel can still stop an operation safely (spec 0035,
+/// *Ketersediaan cancel*). Open: a client reads `unrecognized` as `none`.
+public enum CancelAvailability: String, Codable, Sendable, Equatable {
+	/// A cancel stops it and undoes what it did, or stops it safely.
+	case available
+	/// It is past a step that cannot be undone: a cancel would let it
+	/// continue to a safe end, so a client turns Cancel off.
+	case pastPointOfNoReturn = "past_point_of_no_return"
+	/// A cancel was asked for and it winds down.
+	case requested
+	/// A cancel was asked for past a step that cannot be undone, so it
+	/// finishes safely.
+	case continuing
+	/// It ended or needs recovery; a cancel changes nothing.
+	case none
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
 /// One operation as every client sees it, in replies and in both
 /// operation events.
 public struct OperationSummary: Codable, Sendable, Equatable {
@@ -517,8 +536,13 @@ public struct OperationSummary: Codable, Sendable, Equatable {
 	public let updatedAt: Date
 	/// The operation's revision; every committed change raises it.
 	public let revision: UInt64
+	/// Whether a cancel can still stop it safely now (spec 0035, AC-8).
+	/// Absent from an older daemon: then `queued` or `running` means
+	/// `available`, `cancelRequestedAt` means `requested`, and anything
+	/// else `none`.
+	public let cancel: CancelAvailability?
 
-	public init(id: UUID, kind: OperationKind, resource: ResourceRef?, state: OperationState, stage: String?, progress: OperationProgress, waitingOn: UUID?, cancelRequestedAt: Date?, pointOfNoReturnAt: Date?, failure: OperationFailureInfo?, recovery: RecoveryInfo?, result: OperationResult?, trigger: OperationTriggerInfo, createdAt: Date, startedAt: Date?, updatedAt: Date, revision: UInt64) {
+	public init(id: UUID, kind: OperationKind, resource: ResourceRef?, state: OperationState, stage: String?, progress: OperationProgress, waitingOn: UUID?, cancelRequestedAt: Date?, pointOfNoReturnAt: Date?, failure: OperationFailureInfo?, recovery: RecoveryInfo?, result: OperationResult?, trigger: OperationTriggerInfo, createdAt: Date, startedAt: Date?, updatedAt: Date, revision: UInt64, cancel: CancelAvailability?) {
 		self.id = id
 		self.kind = kind
 		self.resource = resource
@@ -536,6 +560,7 @@ public struct OperationSummary: Codable, Sendable, Equatable {
 		self.startedAt = startedAt
 		self.updatedAt = updatedAt
 		self.revision = revision
+		self.cancel = cancel
 	}
 }
 
@@ -836,6 +861,116 @@ public struct ArtifactInfo: Codable, Sendable, Equatable {
 		self.signature = signature
 		self.dependencies = dependencies
 		self.warnings = warnings
+	}
+}
+
+/// One detail of a row: a camelCase key and its redacted value.
+public struct AuditDetail: Codable, Sendable, Equatable {
+	/// The key, such as `errorCode` or `ports`.
+	public let key: String
+	/// The value, at most 512 bytes; never a secret value.
+	public let value: String
+
+	public init(key: String, value: String) {
+		self.key = key
+		self.value = value
+	}
+}
+
+/// Who did what a row records. Open.
+public enum AuditActorKind: String, Codable, Sendable, Equatable {
+	/// A person, through a client.
+	case user
+	/// Stackly itself, on its own.
+	case daemon
+	/// An actor this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// How what a row records ended. Open.
+public enum AuditResultKind: String, Codable, Sendable, Equatable {
+	/// It succeeded.
+	case succeeded
+	/// It failed; the `errorCode` detail names why.
+	case failed
+	/// The operation was cancelled.
+	case cancelled
+	/// The operation needs recovery.
+	case needsRecovery = "needs_recovery"
+	/// A result this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One audit row.
+public struct AuditEventInfo: Codable, Sendable, Equatable {
+	/// The row's ID.
+	public let id: UUID
+	/// When it happened.
+	public let occurredAt: Date
+	/// Who acted.
+	public let actor: AuditActorKind
+	/// The kind of client that asked, from its handshake; absent for the
+	/// daemon's own actions and for rows written before Stackly kept it.
+	public let client: ClientKind?
+	/// What happened, such as `operation.finished` or `secret.reveal`.
+	public let action: String
+	/// The kind of operation, on the `operation.*` actions.
+	public let operationKind: OperationKind?
+	/// The operation it belongs to: the correlation ID that also names it in
+	/// an error and in the logs.
+	public let operationId: UUID?
+	/// What it was about: an instance, a runtime, an environment, or a
+	/// secret reference.
+	public let resource: ResourceRef?
+	/// The instance it is about, also once the instance is removed.
+	public let instanceId: UUID?
+	/// The number of the instance's config revision it is about.
+	public let configRevision: UInt64?
+	/// How it ended.
+	public let result: AuditResultKind
+	/// The details, by key.
+	public let details: [AuditDetail]?
+
+	public init(id: UUID, occurredAt: Date, actor: AuditActorKind, client: ClientKind?, action: String, operationKind: OperationKind?, operationId: UUID?, resource: ResourceRef?, instanceId: UUID?, configRevision: UInt64?, result: AuditResultKind, details: [AuditDetail]?) {
+		self.id = id
+		self.occurredAt = occurredAt
+		self.actor = actor
+		self.client = client
+		self.action = action
+		self.operationKind = operationKind
+		self.operationId = operationId
+		self.resource = resource
+		self.instanceId = instanceId
+		self.configRevision = configRevision
+		self.result = result
+		self.details = details
+	}
+}
+
+/// Reply of `audit.list`: newest first, by time then ID.
+public struct AuditPage: Codable, Sendable, Equatable {
+	/// The rows on this page.
+	public let items: [AuditEventInfo]?
+	/// The cursor of the next page, to send back as `before`; null on the
+	/// last page.
+	public let next: String?
+
+	public init(items: [AuditEventInfo]?, next: String?) {
+		self.items = items
+		self.next = next
+	}
+}
+
+/// How long the daemon keeps audit rows (spec 0035).
+public struct AuditRetention: Codable, Sendable, Equatable {
+	/// The days a row is kept: 7, 30, or 90.
+	public let days: UInt32
+	/// The most rows kept, whatever their age.
+	public let maxRows: UInt64
+
+	public init(days: UInt32, maxRows: UInt64) {
+		self.days = days
+		self.maxRows = maxRows
 	}
 }
 
@@ -2566,8 +2701,12 @@ public struct CreateInstanceParams: Codable, Sendable, Equatable {
 	/// When the instance starts on its own; `manual` when absent (spec
 	/// 0031).
 	public let startup: StartupPolicyKind?
+	/// The instance the Duplicate sheet copied (spec 0035, AC-18). The
+	/// audit row of the create names it while it exists; one that is gone
+	/// is ignored.
+	public let duplicateOf: UUID?
 
-	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretFieldInput]?, startup: StartupPolicyKind?) {
+	public init(name: String, displayName: String?, provider: ProviderSelector, runtimeId: UUID, endpoints: [EndpointRequest]?, settings: JSONObject, secrets: [SecretFieldInput]?, startup: StartupPolicyKind?, duplicateOf: UUID?) {
 		self.name = name
 		self.displayName = displayName
 		self.provider = provider
@@ -2576,6 +2715,7 @@ public struct CreateInstanceParams: Codable, Sendable, Equatable {
 		self.settings = settings
 		self.secrets = secrets
 		self.startup = startup
+		self.duplicateOf = duplicateOf
 	}
 }
 
@@ -3348,10 +3488,13 @@ public struct DaemonSettingsView: Codable, Sendable, Equatable {
 	public let locations: DefaultLocations
 	/// What the instance logs keep, from the daemon's constants.
 	public let logRetention: LogRetention
+	/// How long audit rows are kept (spec 0035); absent from an older
+	/// daemon.
+	public let auditRetention: AuditRetention?
 	/// When a setting last changed.
 	public let updatedAt: Date
 
-	public init(revision: UInt64, defaultStartup: StartupPolicyKind, updateChannel: UpdateChannel, telemetry: Bool, telemetryCopyVersion: UInt64, locations: DefaultLocations, logRetention: LogRetention, updatedAt: Date) {
+	public init(revision: UInt64, defaultStartup: StartupPolicyKind, updateChannel: UpdateChannel, telemetry: Bool, telemetryCopyVersion: UInt64, locations: DefaultLocations, logRetention: LogRetention, auditRetention: AuditRetention?, updatedAt: Date) {
 		self.revision = revision
 		self.defaultStartup = defaultStartup
 		self.updateChannel = updateChannel
@@ -3359,6 +3502,7 @@ public struct DaemonSettingsView: Codable, Sendable, Equatable {
 		self.telemetryCopyVersion = telemetryCopyVersion
 		self.locations = locations
 		self.logRetention = logRetention
+		self.auditRetention = auditRetention
 		self.updatedAt = updatedAt
 	}
 }
@@ -5232,6 +5376,25 @@ public struct KeepRevisionParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `audit.list`. The filters apply together.
+public struct ListAuditParams: Codable, Sendable, Equatable {
+	/// Only rows about this instance, removed ones included.
+	public let instanceId: UUID?
+	/// Only rows of this operation.
+	public let operationId: UUID?
+	/// Most rows on the page, 1 to 200; absent means 50.
+	public let limit: UInt32?
+	/// The `next` cursor of the previous page, sent back unchanged.
+	public let before: String?
+
+	public init(instanceId: UUID?, operationId: UUID?, limit: UInt32?, before: String?) {
+		self.instanceId = instanceId
+		self.operationId = operationId
+		self.limit = limit
+		self.before = before
+	}
+}
+
 /// Params of `instance.list`.
 public struct ListInstancesParams: Codable, Sendable, Equatable {
 	/// Most instances on the page, 1 to 200; absent means 100.
@@ -6609,6 +6772,8 @@ public enum Call: Codable, Sendable, Equatable {
 	case operationAbandon(AbandonOperationParams)
 	/// The engine's counters and limits.
 	case operationGetStats
+	/// One page of audit rows, newest first (spec 0035).
+	case auditList(ListAuditParams)
 	/// Every catalog entry with the facts about the catalog.
 	case catalogListProviders
 	/// One catalog entry with its versions and artifacts.
@@ -6720,6 +6885,7 @@ public enum Call: Codable, Sendable, Equatable {
 			operationResume = "operation.resume",
 			operationAbandon = "operation.abandon",
 			operationGetStats = "operation.get_stats",
+			auditList = "audit.list",
 			catalogListProviders = "catalog.list_providers",
 			catalogGetProvider = "catalog.get_provider",
 			secretList = "secret.list",
@@ -6833,6 +6999,11 @@ public enum Call: Codable, Sendable, Equatable {
 			case .operationGetStats:
 				self = .operationGetStats
 				return
+			case .auditList:
+				if let content = try? container.decode(ListAuditParams.self, forKey: .content) {
+					self = .auditList(content)
+					return
+				}
 			case .catalogListProviders:
 				self = .catalogListProviders
 				return
@@ -7083,6 +7254,9 @@ public enum Call: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .operationGetStats:
 			try container.encode(CodingKeys.operationGetStats, forKey: .type)
+		case .auditList(let content):
+			try container.encode(CodingKeys.auditList, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .catalogListProviders:
 			try container.encode(CodingKeys.catalogListProviders, forKey: .type)
 		case .catalogGetProvider(let content):
@@ -7260,6 +7434,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case operationAbandon(AbandonReply)
 	/// The engine's counters and limits.
 	case operationGetStats(OperationStats)
+	/// One page of audit rows.
+	case auditList(AuditPage)
 	/// Every catalog entry, in display order.
 	case catalogListProviders(ListProvidersReply)
 	/// One catalog entry in detail.
@@ -7365,6 +7541,7 @@ public enum Reply: Codable, Sendable, Equatable {
 			operationResume = "operation.resume",
 			operationAbandon = "operation.abandon",
 			operationGetStats = "operation.get_stats",
+			auditList = "audit.list",
 			catalogListProviders = "catalog.list_providers",
 			catalogGetProvider = "catalog.get_provider",
 			secretList = "secret.list",
@@ -7484,6 +7661,11 @@ public enum Reply: Codable, Sendable, Equatable {
 			case .operationGetStats:
 				if let content = try? container.decode(OperationStats.self, forKey: .content) {
 					self = .operationGetStats(content)
+					return
+				}
+			case .auditList:
+				if let content = try? container.decode(AuditPage.self, forKey: .content) {
+					self = .auditList(content)
 					return
 				}
 			case .catalogListProviders:
@@ -7747,6 +7929,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .operationGetStats(let content):
 			try container.encode(CodingKeys.operationGetStats, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .auditList(let content):
+			try container.encode(CodingKeys.auditList, forKey: .type)
 			try container.encode(content, forKey: .content)
 		case .catalogListProviders(let content):
 			try container.encode(CodingKeys.catalogListProviders, forKey: .type)
@@ -8333,11 +8518,14 @@ public struct SettingsPatch: Codable, Sendable, Equatable {
 	public let updateChannel: UpdateChannel?
 	/// Whether the person agrees to share usage statistics.
 	public let telemetry: Bool?
+	/// How many days audit rows are kept: 7, 30, or 90 (spec 0035).
+	public let auditRetentionDays: UInt32?
 
-	public init(defaultStartup: StartupPolicyKind?, updateChannel: UpdateChannel?, telemetry: Bool?) {
+	public init(defaultStartup: StartupPolicyKind?, updateChannel: UpdateChannel?, telemetry: Bool?, auditRetentionDays: UInt32?) {
 		self.defaultStartup = defaultStartup
 		self.updateChannel = updateChannel
 		self.telemetry = telemetry
+		self.auditRetentionDays = auditRetentionDays
 	}
 }
 

@@ -158,7 +158,7 @@
                 createdAt: at,
                 startedAt: state == .queued ? nil : at,
                 updatedAt: at,
-                revision: 1)
+                revision: 1, cancel: nil)
         }
     }
 

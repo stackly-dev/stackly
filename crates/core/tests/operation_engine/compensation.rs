@@ -518,7 +518,11 @@ async fn a_failed_compensation_needs_recovery_and_abandon_runs_it_again() {
     compensator.broken.store(false, Ordering::SeqCst);
     let abandoned = harness
         .engine
-        .abandon(id, stuck.view.operation.revision())
+        .abandon(
+            id,
+            stuck.view.operation.revision(),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .unwrap();
 
@@ -792,7 +796,11 @@ async fn a_held_lock_keeps_the_tree_and_the_operation_needs_recovery() {
     held.lock().unwrap().clear();
     let abandoned = harness
         .engine
-        .abandon(stuck.view.operation.id(), stuck.view.operation.revision())
+        .abandon(
+            stuck.view.operation.id(),
+            stuck.view.operation.revision(),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .unwrap();
     assert_eq!(abandoned.view.operation.state(), OperationState::Failed);

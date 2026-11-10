@@ -2,6 +2,7 @@
 //! the DTO mapping its area needs (spec 0007, `ipc::operation`).
 
 pub mod agent_off;
+pub mod audit;
 pub mod instance;
 pub mod logs;
 pub mod operation;

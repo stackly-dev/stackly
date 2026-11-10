@@ -1,0 +1,164 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e01",
+    "reply": {
+      "type": "audit.list",
+      "content": {
+        "items": [
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c1",
+            "occurredAt": "2026-11-10T08:00:00.001Z",
+            "actor": "user",
+            "client": "gui",
+            "action": "operation.cancel",
+            "operationKind": "install_runtime",
+            "operationId": "0192f3a4-0000-7000-8000-000000000001",
+            "resource": {
+              "kind": "runtime",
+              "id": "0192f3a4-0000-7000-8000-0000000000a1"
+            },
+            "instanceId": null,
+            "configRevision": null,
+            "result": "succeeded",
+            "details": [
+              {
+                "key": "disposition",
+                "value": "continuing_past_point_of_no_return"
+              }
+            ]
+          },
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c2",
+            "occurredAt": "2026-11-10T08:00:00.000Z",
+            "actor": "user",
+            "client": "cli",
+            "action": "operation.finished",
+            "operationKind": "start_instance",
+            "operationId": "0192f3a4-0000-7000-8000-000000000002",
+            "resource": {
+              "kind": "instance",
+              "id": "0192f3a4-0000-7000-8000-0000000000b1"
+            },
+            "instanceId": "0192f3a4-0000-7000-8000-0000000000b1",
+            "configRevision": 3,
+            "result": "failed",
+            "details": [
+              {
+                "key": "errorCode",
+                "value": "supervisor.endpoint_in_use"
+              },
+              {
+                "key": "message",
+                "value": "port 5432 is in use"
+              },
+              {
+                "key": "ports",
+                "value": "main 5432"
+              },
+              {
+                "key": "reason",
+                "value": "step_failed"
+              },
+              {
+                "key": "stage",
+                "value": "spawn"
+              },
+              {
+                "key": "state",
+                "value": "failed"
+              }
+            ]
+          },
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c3",
+            "occurredAt": "2026-11-09T21:14:03.250Z",
+            "actor": "user",
+            "client": "gui",
+            "action": "secret.reveal",
+            "operationKind": null,
+            "operationId": null,
+            "resource": {
+              "kind": "secret",
+              "id": "local:instance/0192f3a4-0000-7000-8000-0000000000b1/admin-password"
+            },
+            "instanceId": "0192f3a4-0000-7000-8000-0000000000b1",
+            "configRevision": null,
+            "result": "succeeded",
+            "details": [
+              {
+                "key": "clientKind",
+                "value": "gui"
+              },
+              {
+                "key": "peerUid",
+                "value": "501"
+              },
+              {
+                "key": "purpose",
+                "value": "copy"
+              },
+              {
+                "key": "reference",
+                "value": "local:instance/0192f3a4-0000-7000-8000-0000000000b1/admin-password"
+              }
+            ]
+          },
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c4",
+            "occurredAt": "2026-11-09T21:10:00.000Z",
+            "actor": "daemon",
+            "client": null,
+            "action": "operation.needs_recovery",
+            "operationKind": "restore_instance",
+            "operationId": "0192f3a4-0000-7000-8000-000000000003",
+            "resource": {
+              "kind": "instance",
+              "id": "0192f3a4-0000-7000-8000-0000000000b1"
+            },
+            "instanceId": "0192f3a4-0000-7000-8000-0000000000b1",
+            "configRevision": null,
+            "result": "needs_recovery",
+            "details": [
+              {
+                "key": "cause",
+                "value": "compensation_failed"
+              },
+              {
+                "key": "hint",
+                "value": "abandon"
+              },
+              {
+                "key": "state",
+                "value": "needs_recovery"
+              }
+            ]
+          },
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c5",
+            "occurredAt": "2026-11-09T21:00:00.000Z",
+            "actor": "daemon",
+            "client": null,
+            "action": "operation.finished",
+            "operationKind": "stop_instance",
+            "operationId": "0192f3a4-0000-7000-8000-000000000004",
+            "resource": {
+              "kind": "instance",
+              "id": "0192f3a4-0000-7000-8000-0000000000b1"
+            },
+            "instanceId": "0192f3a4-0000-7000-8000-0000000000b1",
+            "configRevision": null,
+            "result": "cancelled",
+            "details": [
+              {
+                "key": "state",
+                "value": "cancelled"
+              }
+            ]
+          }
+        ],
+        "next": "2026-11-09T21:00:00.000000000Z_0192f3a6-0000-7000-8000-0000000000c5"
+      }
+    }
+  }
+}

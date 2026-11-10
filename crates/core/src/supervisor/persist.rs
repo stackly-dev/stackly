@@ -14,6 +14,7 @@ use stackly_platform::ExitStatus;
 use super::commit::{ActorCommitRetry, CommitRetry, InstanceChanges};
 use super::error::SupervisorError;
 use super::{Supervisor, SupervisorDeps};
+use crate::operation::AuditNote;
 
 /// Runs `call` on the blocking pool.
 ///
@@ -44,6 +45,21 @@ pub(crate) async fn read_instance(
         .map_err(SupervisorError::Registry)?
         .value
         .ok_or(SupervisorError::NotFound(id))
+}
+
+/// The audit note of an operation that runs the active config revision of
+/// `id` (spec 0035, *Catatan audit pekerjaan*): its number and no details,
+/// or no number when the instance has no revision yet. A read that fails
+/// gives an empty note, because a note never stops the work.
+pub(crate) async fn active_revision_note(deps: &SupervisorDeps, id: InstanceId) -> AuditNote {
+    let registry = deps.registry.clone();
+    let number = blocking(move || registry.active_config_revision(id))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .and_then(|read| read.value)
+        .map(|revision| revision.number);
+    AuditNote::new(number)
 }
 
 /// How a commit reacts to a registry refusal.

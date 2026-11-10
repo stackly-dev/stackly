@@ -4,6 +4,7 @@
 //! platform, so nothing touches the real Application Support folder.
 #![cfg(unix)]
 
+mod audit;
 mod common;
 mod create;
 mod detect;

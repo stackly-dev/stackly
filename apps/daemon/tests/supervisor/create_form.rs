@@ -283,6 +283,7 @@ async fn preflight_and_create_give_a_bad_draft_the_same_code_and_the_same_fields
                 input: stackly_protocol::secret::SecretInput::Generate,
             }],
             startup: None,
+            duplicate_of: None,
         };
         let refused = api.create(create).await.unwrap_err();
         assert_eq!(refused.code(), first.code(), "{label}");

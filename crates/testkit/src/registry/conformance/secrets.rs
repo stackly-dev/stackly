@@ -8,10 +8,11 @@ use std::collections::BTreeMap;
 use jiff::Timestamp;
 use stackly_domain::{
     AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord, AuditQuery,
-    AuditResource, AuditResult, DetailKey, InstanceId, OperationId, PlatformStoreKey,
-    RegistryError, ResourceRef, SafeDetails, SecretFieldName, SecretOrigin, SecretOwner,
-    SecretOwnerKind, SecretPurpose, SecretRef, SecretReferenceFilter, SecretReferenceId,
-    SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse, SecretUser, WriteOp,
+    AuditResource, AuditResult, ClientCode, ConfigRevisionNumber, DetailKey, InstanceId,
+    OperationId, OperationKind, PlatformStoreKey, RegistryError, ResourceRef, RuntimeId,
+    SafeDetails, SecretFieldName, SecretOrigin, SecretOwner, SecretOwnerKind, SecretPurpose,
+    SecretRef, SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord,
+    SecretReferenceView, SecretStatus, SecretUse, SecretUser, WriteOp,
 };
 
 use super::{Suite, at, batch, domain, expect, expect_eq, fail, parse, rev, shifted, suffix};
@@ -24,6 +25,7 @@ pub(super) fn secrets(suite: &Suite<'_>) {
     uses_and_delete(suite);
     lists(suite);
     audit(suite);
+    audit_filters(suite);
     guard_reads(suite);
 }
 
@@ -774,7 +776,7 @@ fn audit(suite: &Suite<'_>) {
     let page = |check: &str, limit: u16, before: Option<AuditCursor>| {
         suite.value(
             check,
-            suite.registry.audit_events(AuditQuery { limit, before }),
+            suite.registry.audit_events(AuditQuery::page(limit, before)),
         )
     };
     let first = page("read the first audit page", 2, None);
@@ -807,10 +809,7 @@ fn audit(suite: &Suite<'_>) {
     );
     for limit in [0, AuditQuery::LIMIT_MAX + 1] {
         let check = format!("an audit page limit of {limit} is an invalid query");
-        match suite.registry.audit_events(AuditQuery {
-            limit,
-            before: None,
-        }) {
+        match suite.registry.audit_events(AuditQuery::page(limit, None)) {
             Err(err) => expect(
                 &check,
                 matches!(err, RegistryError::InvalidQuery { .. }),
@@ -819,6 +818,134 @@ fn audit(suite: &Suite<'_>) {
             Ok(page) => fail(&check, &format!("{} rows", page.value.items.len())),
         }
     }
+}
+
+/// Spec 0035 AC-7: the operation fields of an audit row are stored and read
+/// back, and the instance and operation filters apply together, with the
+/// cursor, to an instance that has no registry row (no foreign key).
+fn audit_filters(suite: &Suite<'_>) {
+    const CHECK: &str = "audit_rows_filter_on_instance_and_operation";
+    let base = domain(CHECK, "2201-01-01T00:00:00Z".parse::<Timestamp>());
+    let gone = InstanceId::generate();
+    let other = InstanceId::generate();
+    let create = OperationId::generate();
+    let start = OperationId::generate();
+    let client: ClientCode = parse(CHECK, "gui");
+    let row = |n: i64,
+               instance: Option<InstanceId>,
+               operation: OperationId,
+               kind: OperationKind,
+               result: AuditResult| {
+        let mut record = AuditEventRecord::new(
+            AuditEventId::generate(),
+            AuditActor::User,
+            AuditAction::OPERATION_FINISHED,
+            result,
+            shifted(base, n),
+        );
+        record.operation = Some(operation);
+        record.operation_kind = Some(kind);
+        record.instance = instance;
+        record.resource = Some(instance.map_or_else(
+            || AuditResource::Runtime(RuntimeId::generate()),
+            AuditResource::Instance,
+        ));
+        if instance.is_some() {
+            record.config_revision = Some(domain(CHECK, ConfigRevisionNumber::new(3)));
+        }
+        record.client = Some(client.clone());
+        record
+    };
+    let rows = [
+        row(
+            0,
+            Some(gone),
+            create,
+            OperationKind::CreateInstance,
+            AuditResult::Failed,
+        ),
+        row(
+            1,
+            Some(gone),
+            start,
+            OperationKind::StartInstance,
+            AuditResult::NeedsRecovery,
+        ),
+        row(
+            2,
+            Some(other),
+            OperationId::generate(),
+            OperationKind::StartInstance,
+            AuditResult::Cancelled,
+        ),
+        row(
+            3,
+            None,
+            start,
+            OperationKind::InstallRuntime,
+            AuditResult::Succeeded,
+        ),
+        row(
+            4,
+            Some(gone),
+            start,
+            OperationKind::StartInstance,
+            AuditResult::Succeeded,
+        ),
+    ];
+    suite.commit(
+        CHECK,
+        rows.iter()
+            .cloned()
+            .map(WriteOp::InsertAuditEvent)
+            .collect(),
+    );
+    let read = |instance, operation, limit, before| {
+        let query = AuditQuery {
+            instance,
+            operation,
+            ..AuditQuery::page(limit, before)
+        };
+        suite.value(CHECK, suite.registry.audit_events(query))
+    };
+
+    let by_instance = read(Some(gone), None, 2, None);
+    expect_eq(
+        "the instance filter holds only that instance's rows, newest first, every field read back",
+        by_instance.items.clone(),
+        vec![rows[4].clone(), rows[1].clone()],
+    );
+    expect_eq(
+        "a full filtered page points at its last row",
+        by_instance.next,
+        Some(AuditCursor::of(&rows[1])),
+    );
+    let rest = read(Some(gone), None, 2, by_instance.next);
+    expect_eq(
+        "the next filtered page goes on after the cursor",
+        rest.items,
+        vec![rows[0].clone()],
+    );
+    expect_eq("the last filtered page has no next", rest.next, None);
+
+    expect_eq(
+        "the operation filter holds every row of that operation",
+        read(None, Some(start), 10, None).items,
+        vec![rows[4].clone(), rows[3].clone(), rows[1].clone()],
+    );
+    expect_eq(
+        "both filters apply together",
+        read(Some(gone), Some(start), 10, None).items,
+        vec![rows[4].clone(), rows[1].clone()],
+    );
+    expect_eq(
+        "a filter that matches nothing reads an empty last page",
+        read(Some(InstanceId::generate()), None, 10, None),
+        stackly_domain::AuditPage {
+            items: Vec::new(),
+            next: None,
+        },
+    );
 }
 
 /// A commit guard reads a reference row with its uses as a plain read

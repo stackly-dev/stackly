@@ -98,7 +98,7 @@ struct NotificationModelTests {
             progress: base.progress, waitingOn: nil, cancelRequestedAt: nil,
             pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
             trigger: base.trigger, createdAt: started, startedAt: started,
-            updatedAt: started.addingTimeInterval(seconds), revision: base.revision)
+            updatedAt: started.addingTimeInterval(seconds), revision: base.revision, cancel: nil)
     }
 
     // MARK: - A failed instance

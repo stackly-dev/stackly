@@ -598,6 +598,7 @@ impl Api<'_> {
                 input: SecretInput::Value(SecretText::new(TOKEN.to_owned())),
             }],
             startup: None,
+            duplicate_of: None,
         };
         let Reply::InstanceCreate(accepted) = call_with_key(
             self.client,

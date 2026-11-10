@@ -20,7 +20,7 @@ use tokio::time::Instant;
 use super::Supervisor;
 use super::actor::restart_status;
 use super::error::SupervisorError;
-use super::persist::{blocking, read_instance};
+use super::persist::{active_revision_note, blocking, read_instance};
 use super::startup::{StartRequest, start_stopped};
 use super::stop::{StopEnd, StopJournal};
 use crate::operation::{
@@ -117,6 +117,7 @@ async fn run_restart(
     ctx.begin_step(StepSpec::new(StageName::VALIDATE)).await?;
     ctx.set_stage(StageName::VALIDATE).await?;
     let instance = read_instance(deps, id).await.map_err(failed)?;
+    ctx.set_audit_note(active_revision_note(deps, id).await);
     restart_allowed(instance.lifecycle()).map_err(failed)?;
 
     ctx.begin_step(StepSpec::new(StageName::LOCK)).await?;

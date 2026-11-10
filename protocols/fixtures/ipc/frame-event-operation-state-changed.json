@@ -48,7 +48,8 @@
         "createdAt": "2026-10-19T08:00:00.000Z",
         "startedAt": "2026-10-19T08:00:00.120Z",
         "updatedAt": "2026-10-19T08:00:21.000Z",
-        "revision": 7
+        "revision": 7,
+        "cancel": "none"
       }
     }
   }

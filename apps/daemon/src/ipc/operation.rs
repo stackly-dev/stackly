@@ -14,7 +14,8 @@ use stackly_core::operation::{
 use stackly_core::secret::Redactor;
 use stackly_domain::{
     ClientCode, IdempotencyKey, JournalPayload, MethodName, OperationCursor, OperationId,
-    OperationQuery, OperationResource, OperationState, ResourceRevision, Sha256Digest,
+    OperationQuery, OperationResource, OperationState, OperationTrigger, ResourceRevision,
+    Sha256Digest,
 };
 use stackly_protocol::codes::{daemon, internal, operation, request, resource};
 use stackly_protocol::daemon::subsystem;
@@ -164,13 +165,14 @@ pub fn list<'a>(
 /// The real `operation.cancel`.
 pub fn cancel<'a>(
     core: &'a DaemonCore,
+    context: &'a RequestContext,
     params: CancelOperationParams,
 ) -> HandlerFuture<'a, CancelReply> {
     Box::pin(async move {
         let engine = core.operations().writer()?;
         let id = operation_id(params.operation_id)?;
         let outcome = engine
-            .cancel(id)
+            .cancel(id, sender(context))
             .await
             .map_err(|error| boxed(engine_error(&error)))?;
         Ok(CancelReply {
@@ -183,6 +185,7 @@ pub fn cancel<'a>(
 /// The real `operation.resume`.
 pub fn resume<'a>(
     core: &'a DaemonCore,
+    context: &'a RequestContext,
     params: ResumeOperationParams,
 ) -> HandlerFuture<'a, OperationSummary> {
     Box::pin(async move {
@@ -193,7 +196,7 @@ pub fn resume<'a>(
             .map(|revision| expected_revision(revision, "expectedRevision"))
             .transpose()?;
         let view = engine
-            .resume(id, expected)
+            .resume(id, expected, sender(context))
             .await
             .map_err(|error| boxed(engine_error(&error)))?;
         Ok(dto::summary(&view))
@@ -203,6 +206,7 @@ pub fn resume<'a>(
 /// The real `operation.abandon`.
 pub fn abandon<'a>(
     core: &'a DaemonCore,
+    context: &'a RequestContext,
     params: AbandonOperationParams,
 ) -> HandlerFuture<'a, AbandonReply> {
     Box::pin(async move {
@@ -210,7 +214,7 @@ pub fn abandon<'a>(
         let id = operation_id(params.operation_id)?;
         let expected = expected_revision(params.expected_revision, "expectedRevision")?;
         let outcome = engine
-            .abandon(id, expected)
+            .abandon(id, expected, sender(context))
             .await
             .map_err(|error| boxed(engine_error(&error)))?;
         Ok(AbandonReply {
@@ -488,6 +492,17 @@ fn replay_result(found: Option<BeginOutcome>) -> Result<Option<Replay>, Box<Erro
             Err(unexpected("the operation engine answered a replay wrongly"))
         }
     }
+}
+
+/// Who sends a cancel, resume, or abandon, from the connection's handshake:
+/// the same client kind and prompt rule as a [`RequestOrigin`], so the audit
+/// row of that action names its sender, not the operation's trigger (spec
+/// 0035 AC-3).
+pub(crate) fn sender(context: &RequestContext) -> OperationTrigger {
+    OperationTrigger::user(
+        Some(client_code(context.client.kind)),
+        context.client.is_interactive(),
+    )
 }
 
 /// The checks and parts both [`start_operation`] and [`replay_operation`]

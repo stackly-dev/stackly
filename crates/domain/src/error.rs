@@ -152,6 +152,8 @@ pub enum ValueKind {
     RecoveryCause,
     /// A [`RecoveryHint`](crate::RecoveryHint).
     RecoveryHint,
+    /// A [`CancelAvailability`](crate::CancelAvailability).
+    CancelAvailability,
     /// A [`FailureError`](crate::FailureError).
     FailureError,
     /// A [`FailureItem`](crate::FailureItem).
@@ -308,6 +310,7 @@ impl ValueKind {
             Self::TriggerOrigin => "trigger origin",
             Self::RecoveryCause => "recovery cause",
             Self::RecoveryHint => "recovery hint",
+            Self::CancelAvailability => "cancel availability",
             Self::FailureError => "failure error",
             Self::FailureItem => "failure item",
             Self::Rule => "business rule",

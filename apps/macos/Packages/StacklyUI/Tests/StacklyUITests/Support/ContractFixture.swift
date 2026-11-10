@@ -71,7 +71,7 @@ extension OperationSummary {
             progress: progress, waitingOn: waitingOn, cancelRequestedAt: cancelRequestedAt,
             pointOfNoReturnAt: pointOfNoReturnAt, failure: failure, recovery: recovery,
             result: result ?? self.result, trigger: trigger, createdAt: createdAt,
-            startedAt: startedAt, updatedAt: updatedAt, revision: revision)
+            startedAt: startedAt, updatedAt: updatedAt, revision: revision, cancel: nil)
     }
 }
 

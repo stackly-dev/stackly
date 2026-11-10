@@ -335,12 +335,23 @@ async fn resume_reruns_the_failed_step_and_refuses_what_cannot_resume() {
 
     let wrong = stuck.view.operation.revision().next();
     assert!(matches!(
-        harness.engine.resume(id, Some(wrong)).await,
+        harness
+            .engine
+            .resume(
+                id,
+                Some(wrong),
+                stackly_domain::OperationTrigger::background()
+            )
+            .await,
         Err(EngineError::RevisionMismatch { .. })
     ));
     let resumed = harness
         .engine
-        .resume(id, Some(stuck.view.operation.revision()))
+        .resume(
+            id,
+            Some(stuck.view.operation.revision()),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .unwrap();
     assert_eq!(resumed.journal.recovery_cause(), None);
@@ -353,7 +364,10 @@ async fn resume_reruns_the_failed_step_and_refuses_what_cannot_resume() {
     assert_eq!(attempts, [("fetch", 1), ("verify", 2)]);
 
     assert!(matches!(
-        harness.engine.resume(id, None).await,
+        harness
+            .engine
+            .resume(id, None, stackly_domain::OperationTrigger::background())
+            .await,
         Err(EngineError::NotResumable {
             reason: NotResumableReason::WrongState,
             ..
@@ -372,7 +386,10 @@ async fn resume_reruns_the_failed_step_and_refuses_what_cannot_resume() {
         .await;
     wait_state(&harness.engine, manual, OperationState::NeedsRecovery).await;
     assert!(matches!(
-        harness.engine.resume(manual, None).await,
+        harness
+            .engine
+            .resume(manual, None, stackly_domain::OperationTrigger::background())
+            .await,
         Err(EngineError::NotResumable {
             reason: NotResumableReason::KindNotResumable,
             ..
@@ -402,12 +419,20 @@ async fn abandon_undoes_reversible_steps_and_closes_the_operation_with_its_lefto
 
     let stale = harness
         .engine
-        .abandon(id, stuck.view.operation.revision().next())
+        .abandon(
+            id,
+            stuck.view.operation.revision().next(),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await;
     assert!(matches!(stale, Err(EngineError::RevisionMismatch { .. })));
     let abandoned = harness
         .engine
-        .abandon(id, stuck.view.operation.revision())
+        .abandon(
+            id,
+            stuck.view.operation.revision(),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .unwrap();
 
@@ -443,7 +468,11 @@ async fn abandon_undoes_reversible_steps_and_closes_the_operation_with_its_lefto
     assert!(matches!(
         harness
             .engine
-            .abandon(id, abandoned.view.operation.revision())
+            .abandon(
+                id,
+                abandoned.view.operation.revision(),
+                stackly_domain::OperationTrigger::background()
+            )
             .await,
         Err(EngineError::NotAbandonable {
             reason: NotAbandonableReason::WrongState,
@@ -608,7 +637,12 @@ async fn shutdown_lets_a_cancel_requested_operation_finish_its_compensation_with
         .await;
     hold.started().await;
     assert_eq!(
-        harness.engine.cancel(id).await.unwrap().disposition,
+        harness
+            .engine
+            .cancel(id, stackly_domain::OperationTrigger::background())
+            .await
+            .unwrap()
+            .disposition,
         CancelDisposition::Requested
     );
     let release = hold.clone();
@@ -818,7 +852,11 @@ impl OperationWork for LeavesAnItem {
 }
 
 async fn resume_reason(harness: &Harness, id: stackly_domain::OperationId) -> NotResumableReason {
-    match harness.engine.resume(id, None).await {
+    match harness
+        .engine
+        .resume(id, None, stackly_domain::OperationTrigger::background())
+        .await
+    {
         Err(EngineError::NotResumable { reason, .. }) => reason,
         other => panic!("expected a refused resume, got {other:?}"),
     }
@@ -940,8 +978,16 @@ async fn while_automatic_compensation_runs_resume_and_abandon_refuse_with_auto_c
     engine.start();
     stall.started().await;
     let running = engine.get(id).await.unwrap().unwrap();
-    let resumed = engine.resume(id, None).await;
-    let abandoned = engine.abandon(id, running.view.operation.revision()).await;
+    let resumed = engine
+        .resume(id, None, stackly_domain::OperationTrigger::background())
+        .await;
+    let abandoned = engine
+        .abandon(
+            id,
+            running.view.operation.revision(),
+            stackly_domain::OperationTrigger::background(),
+        )
+        .await;
     stall.release();
     let closed = wait_state(&engine, id, OperationState::Failed).await;
 

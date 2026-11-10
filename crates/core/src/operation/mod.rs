@@ -8,6 +8,7 @@
 //! Registry calls run on blocking threads, and no registry transaction ever
 //! stays open across an `await` (REQ-048).
 
+pub mod audit;
 pub mod codes;
 mod compensation;
 mod context;
@@ -34,11 +35,13 @@ use stackly_domain::{ClientCode, OperationCursor};
 use stackly_domain::{
     CompensatorName, CreatedRecord, IdempotencyKey, InterruptPolicy, JournalPayload, JournalStep,
     LockKey, MethodName, Operation, OperationId, OperationJournal, OperationKind, OperationQuery,
-    OperationResource, OperationState, Registry, RegistryError, ResourceRevision, Sha256Digest,
+    OperationResource, OperationState, OperationTrigger, Registry, RegistryError, ResourceRevision,
+    Sha256Digest,
 };
 use stackly_platform::{Platform, PlatformError};
 use tokio::sync::Notify;
 
+pub use audit::{AuditEvent, AuditNote};
 pub(crate) use compensation::check_instance_lock;
 pub use compensation::{
     CompensationError, CompensationResult, CompensationScope, Compensator,
@@ -823,16 +826,22 @@ impl OperationEngine {
         state::list(&self.inner, query).await
     }
 
-    /// Cancels an operation (spec 0007, "Cancel").
+    /// Cancels an operation (spec 0007, "Cancel") on behalf of `by`, the
+    /// sender of the request: a cancel that changes the operation writes an
+    /// `operation.cancel` audit row in the same batch (spec 0035 AC-3).
     ///
     /// # Errors
     ///
     /// Returns [`EngineError::NotReady`] while recovering,
     /// [`EngineError::NotFound`] for an unknown operation, and
     /// [`EngineError::Registry`] when the commit fails.
-    pub async fn cancel(&self, id: OperationId) -> Result<CancelOutcome, EngineError> {
+    pub async fn cancel(
+        &self,
+        id: OperationId,
+        by: OperationTrigger,
+    ) -> Result<CancelOutcome, EngineError> {
         let inner = Arc::clone(&self.inner);
-        tokio::spawn(async move { scheduler::cancel(&inner, id).await })
+        tokio::spawn(async move { scheduler::cancel(&inner, id, by).await })
             .await
             .unwrap_or(Err(EngineError::Internal {
                 reason: "the cancel task stopped",
@@ -840,7 +849,8 @@ impl OperationEngine {
     }
 
     /// Queues an operation in `needs_recovery` to run again from its last
-    /// step.
+    /// step, on behalf of `by`, with an `operation.resume` audit row (spec
+    /// 0035 AC-3).
     ///
     /// # Errors
     ///
@@ -852,18 +862,20 @@ impl OperationEngine {
         &self,
         id: OperationId,
         expected: Option<ResourceRevision>,
+        by: OperationTrigger,
     ) -> Result<OperationView, EngineError> {
         let inner = Arc::clone(&self.inner);
-        tokio::spawn(async move { recovery::resume(&inner, id, expected).await })
+        tokio::spawn(async move { recovery::resume(&inner, id, expected, by).await })
             .await
             .unwrap_or(Err(EngineError::Internal {
                 reason: "the resume task stopped",
             }))
     }
 
-    /// Abandons an operation in `needs_recovery`: undoes what its
-    /// reversible steps created, releases its keys, and closes it `failed`
-    /// with reason `abandoned`.
+    /// Abandons an operation in `needs_recovery` on behalf of `by`: undoes
+    /// what its reversible steps created, releases its keys, and closes it
+    /// `failed` with reason `abandoned`, with an `operation.abandon` audit
+    /// row before its `operation.finished` one (spec 0035 AC-3).
     ///
     /// # Errors
     ///
@@ -874,9 +886,10 @@ impl OperationEngine {
         &self,
         id: OperationId,
         expected: ResourceRevision,
+        by: OperationTrigger,
     ) -> Result<AbandonOutcome, EngineError> {
         let inner = Arc::clone(&self.inner);
-        tokio::spawn(async move { recovery::abandon(&inner, id, expected).await })
+        tokio::spawn(async move { recovery::abandon(&inner, id, expected, by).await })
             .await
             .unwrap_or(Err(EngineError::Internal {
                 reason: "the abandon task stopped",

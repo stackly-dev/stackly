@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use crate::audit::{AUDIT_RETENTION_DAYS, AuditRetention};
 use crate::error::FieldError;
 use crate::instance::StartupPolicyKind;
 use crate::json::{FieldCode, Validate};
@@ -210,6 +211,10 @@ pub struct DaemonSettingsView {
     pub locations: DefaultLocations,
     /// What the instance logs keep, from the daemon's constants.
     pub log_retention: LogRetention,
+    /// How long audit rows are kept (spec 0035); absent from an older
+    /// daemon.
+    #[serde(default)]
+    pub audit_retention: Option<AuditRetention>,
     /// When a setting last changed.
     pub updated_at: Timestamp,
 }
@@ -228,18 +233,31 @@ pub struct SettingsPatch {
     /// Whether the person agrees to share usage statistics.
     #[serde(default)]
     pub telemetry: Option<bool>,
+    /// How many days audit rows are kept: 7, 30, or 90 (spec 0035).
+    #[serde(default)]
+    pub audit_retention_days: Option<u32>,
 }
 
 impl Validate for SettingsPatch {
-    /// A patch needs a field, and no field may hold a value this build does
-    /// not know.
+    /// A patch needs a field, no field may hold a value this build does not
+    /// know, and the audit retention is 7, 30, or 90 days.
     fn validate(&self) -> Vec<FieldError> {
         let mut errors = Vec::new();
         if self.default_startup.is_none()
             && self.update_channel.is_none()
             && self.telemetry.is_none()
+            && self.audit_retention_days.is_none()
         {
             errors.push(FieldError::new("patch", FieldCode::Required));
+        }
+        if self
+            .audit_retention_days
+            .is_some_and(|days| !AUDIT_RETENTION_DAYS.contains(&days))
+        {
+            errors.push(FieldError::new(
+                "patch.auditRetentionDays",
+                FieldCode::UnknownValue,
+            ));
         }
         if self.default_startup == Some(StartupPolicyKind::Unrecognized) {
             errors.push(FieldError::new(
@@ -332,6 +350,29 @@ mod tests {
             ..SettingsPatch::default()
         };
         assert!(patch.validate().is_empty());
+    }
+
+    #[test]
+    fn the_audit_retention_is_7_30_or_90_days() {
+        for days in AUDIT_RETENTION_DAYS {
+            let patch = SettingsPatch {
+                audit_retention_days: Some(days),
+                ..SettingsPatch::default()
+            };
+            assert!(patch.validate().is_empty(), "{days}");
+        }
+        for days in [0, 1, 14, 31, 365] {
+            let patch = SettingsPatch {
+                audit_retention_days: Some(days),
+                ..SettingsPatch::default()
+            };
+            let fields: Vec<_> = patch
+                .validate()
+                .iter()
+                .map(|error| error.path().to_owned())
+                .collect();
+            assert_eq!(fields, ["patch.auditRetentionDays"], "{days}");
+        }
     }
 
     #[test]

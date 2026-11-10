@@ -89,4 +89,8 @@ pub struct CreateDraft {
     /// asks for the `defaultStartup` setting, which create reads inside its
     /// guarded commit (spec 0032, AC-18).
     pub startup: Option<StartupPolicy>,
+    /// The instance the Duplicate sheet copied (spec 0035, AC-18). Only the
+    /// audit note of the create reads it, and it never enters the journal,
+    /// so an instance that is gone by then is ignored.
+    pub duplicate_of: Option<InstanceId>,
 }

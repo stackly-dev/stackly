@@ -34,7 +34,8 @@
           "createdAt": "2026-10-19T08:00:00.000Z",
           "startedAt": "2026-10-19T08:00:00.120Z",
           "updatedAt": "2026-10-19T08:00:05.500Z",
-          "revision": 5
+          "revision": 5,
+          "cancel": "requested"
         },
         "disposition": "deferred_until_tuesday"
       }

@@ -5,6 +5,7 @@
 //! server for the probes.
 
 mod actor_commit;
+mod audit_notes;
 mod common;
 mod config;
 mod data_compat;

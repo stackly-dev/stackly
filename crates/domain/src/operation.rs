@@ -361,6 +361,53 @@ pub enum InterruptPolicy {
 }
 
 code_enum! {
+    /// Whether a cancel of an operation can still stop it safely now (spec
+    /// 0035, *Ketersediaan cancel*), computed only by
+    /// [`cancel_availability`].
+    pub enum CancelAvailability: CancelAvailability {
+        /// A cancel stops it and undoes what it did, or stops it safely.
+        Available => "available",
+        /// It is past a step that cannot be undone, so a cancel would let
+        /// it continue to a safe end.
+        PastPointOfNoReturn => "past_point_of_no_return",
+        /// A cancel was asked for and it winds down.
+        Requested => "requested",
+        /// A cancel was asked for past a step that cannot be undone, so it
+        /// continues to a safe end.
+        Continuing => "continuing",
+        /// It is final or in `needs_recovery`; a cancel changes nothing.
+        None => "none",
+    }
+}
+
+/// Returns whether a cancel can still stop an operation of `kind` in
+/// `state` safely, with `point_of_no_return` telling whether its journal
+/// passed its point of no return (spec 0035, *Ketersediaan cancel*). A
+/// kind that closes as interrupted takes a cancel in any step, so for it
+/// the point of no return does not count.
+#[must_use]
+pub const fn cancel_availability(
+    state: OperationState,
+    kind: OperationKind,
+    point_of_no_return: bool,
+) -> CancelAvailability {
+    let past =
+        point_of_no_return && !matches!(kind.interrupt_policy(), InterruptPolicy::CloseInterrupted);
+    match state {
+        OperationState::Succeeded
+        | OperationState::Failed
+        | OperationState::Cancelled
+        | OperationState::NeedsRecovery => CancelAvailability::None,
+        OperationState::CancelRequested if past => CancelAvailability::Continuing,
+        OperationState::CancelRequested => CancelAvailability::Requested,
+        OperationState::Queued | OperationState::Running if past => {
+            CancelAvailability::PastPointOfNoReturn
+        }
+        OperationState::Queued | OperationState::Running => CancelAvailability::Available,
+    }
+}
+
+code_enum! {
     /// What the user can do about an operation in `needs_recovery`.
     pub enum RecoveryHint: RecoveryHint {
         /// The engine compensates it on its own once the daemon is ready.
@@ -565,6 +612,15 @@ impl Operation {
         self.state
     }
 
+    /// Returns whether a cancel can still stop it safely, with
+    /// `point_of_no_return` telling whether its journal passed its point of
+    /// no return (spec 0035): [`cancel_availability`] of its state and
+    /// kind.
+    #[must_use]
+    pub const fn cancel_availability(&self, point_of_no_return: bool) -> CancelAvailability {
+        cancel_availability(self.state, self.kind, point_of_no_return)
+    }
+
     /// Returns when it first started, or `None` if it never did.
     #[must_use]
     pub const fn started_at(&self) -> Option<Timestamp> {
@@ -726,6 +782,83 @@ mod tests {
 
     fn at(text: &str) -> Timestamp {
         text.parse().unwrap()
+    }
+
+    // covers: AC-8 (spec 0035)
+    #[test]
+    fn cancel_availability_follows_the_table_for_every_kind_state_and_point() {
+        for kind in OperationKind::ALL.iter().copied() {
+            let closes = kind.interrupt_policy() == InterruptPolicy::CloseInterrupted;
+            for state in OperationState::ALL.iter().copied() {
+                for past in [false, true] {
+                    let expected = match state {
+                        OperationState::Succeeded
+                        | OperationState::Failed
+                        | OperationState::Cancelled
+                        | OperationState::NeedsRecovery => CancelAvailability::None,
+                        OperationState::CancelRequested if past && !closes => {
+                            CancelAvailability::Continuing
+                        }
+                        OperationState::CancelRequested => CancelAvailability::Requested,
+                        OperationState::Queued | OperationState::Running if past && !closes => {
+                            CancelAvailability::PastPointOfNoReturn
+                        }
+                        OperationState::Queued | OperationState::Running => {
+                            CancelAvailability::Available
+                        }
+                    };
+                    assert_eq!(
+                        cancel_availability(state, kind, past),
+                        expected,
+                        "{kind} {state} past={past}"
+                    );
+                }
+            }
+        }
+    }
+
+    // covers: AC-8 (spec 0035)
+    #[test]
+    fn a_started_instance_start_takes_a_cancel_and_an_install_past_its_commit_does_not() {
+        let mut start = Operation::new(NewOperation {
+            id: OperationId::generate(),
+            kind: OperationKind::StartInstance,
+            resource: OperationResource::Instance(InstanceId::generate()),
+            idempotency_key: None,
+            created_at: at("2026-01-01T00:00:00Z"),
+        });
+        start
+            .apply(OperationEvent::Start, at("2026-01-01T00:00:01Z"))
+            .unwrap();
+        assert_eq!(
+            start.cancel_availability(true),
+            CancelAvailability::Available,
+            "a kind that closes as interrupted takes a cancel past spawn"
+        );
+
+        let mut install = operation();
+        install
+            .apply(OperationEvent::Start, at("2026-01-01T00:00:01Z"))
+            .unwrap();
+        assert_eq!(
+            install.cancel_availability(false),
+            CancelAvailability::Available
+        );
+        assert_eq!(
+            install.cancel_availability(true),
+            CancelAvailability::PastPointOfNoReturn
+        );
+        install
+            .apply(OperationEvent::RequestCancel, at("2026-01-01T00:00:02Z"))
+            .unwrap();
+        assert_eq!(
+            install.cancel_availability(true),
+            CancelAvailability::Continuing
+        );
+        assert_eq!(
+            install.cancel_availability(false),
+            CancelAvailability::Requested
+        );
     }
 
     fn operation() -> Operation {

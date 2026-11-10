@@ -15,6 +15,7 @@ use super::error::ConfigError;
 use super::evaluate::{ConfigImpact, SettingChange, evaluate_change};
 use super::gather::ConfigFacts;
 use crate::instance::create::{CreateError, FieldIssue, PortProblem, judge_change};
+use crate::operation::AuditNote;
 use crate::supervisor::{PortProbe, SupervisorError};
 
 /// What a caller asks to change on the active config revision.
@@ -116,6 +117,54 @@ impl ChangePlan {
                 "new": request(*new),
             })).collect::<Vec<_>>(),
         })
+    }
+}
+
+impl ChangePlan {
+    /// The audit note of the operation once the commit wrote the new
+    /// revision (spec 0035, *Catatan audit pekerjaan*): its number as the
+    /// config revision, then `oldRevision`, the names of the settings that
+    /// change, each endpoint that moves as `<endpoint> <old> → <new>`
+    /// (`auto` for a port Stackly picks), all joined by commas, and the
+    /// impact. Like [`ChangePlan::audit`] it holds no setting value. The
+    /// journal input keeps [`ChangePlan::audit`].
+    #[must_use]
+    pub fn audit_note(&self) -> AuditNote {
+        let request = |request: PortRequest| match request {
+            PortRequest::Fixed(port) => port.get().to_string(),
+            PortRequest::Auto => "auto".to_owned(),
+        };
+        let mut note =
+            AuditNote::new(Some(self.active.next())).with("oldRevision", self.active.get());
+        if !self.changes.is_empty() {
+            let settings: Vec<&str> = self
+                .changes
+                .iter()
+                .map(|change| change.key.as_str())
+                .collect();
+            note = note.with("settings", settings.join(", "));
+        }
+        if !self.endpoint_changes.is_empty() {
+            let ports: Vec<String> = self
+                .endpoint_changes
+                .iter()
+                .map(|(name, old, new)| {
+                    format!("{name} {} \u{2192} {}", request(*old), request(*new))
+                })
+                .collect();
+            note = note.with("ports", ports.join(", "));
+        }
+        note.with("impact", impact_code(self.impact))
+    }
+}
+
+/// The code of an impact in an audit note.
+const fn impact_code(impact: ConfigImpact) -> &'static str {
+    match impact {
+        ConfigImpact::None => "none",
+        ConfigImpact::NextStart => "next_start",
+        ConfigImpact::Reload => "reload",
+        ConfigImpact::Restart => "restart",
     }
 }
 

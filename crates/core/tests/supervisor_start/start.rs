@@ -595,7 +595,10 @@ async fn a_cancel_with_a_live_process_stops_it_gracefully_and_ends_cancelled() {
     let op = rig.start(id).await;
     let spawn = rig.main_spawn(1).await;
     wait_for("the process runs", || rig.sup.status(id).process.is_some()).await;
-    rig.engine.cancel(op).await.unwrap();
+    rig.engine
+        .cancel(op, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     wait_for("the stop signal arrives", || {
         !rig.processes().signals(spawn.pid).is_empty()
     })
@@ -626,7 +629,10 @@ async fn a_cancel_during_the_pause_between_respawns_ends_stopped_without_a_secon
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Recovering
     })
     .await;
-    rig.engine.cancel(op).await.unwrap();
+    rig.engine
+        .cancel(op, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     let detail = rig.wait_final(op).await;
 
     assert_eq!(detail.view.operation.state(), OperationState::Cancelled);
@@ -728,7 +734,11 @@ async fn a_cancel_after_the_render_and_before_any_process_runs_removes_the_secre
     }
     // The cancel is asked while the start waits at the door.
     let engine = rig.engine.clone();
-    let cancel = tokio::spawn(async move { engine.cancel(op).await });
+    let cancel = tokio::spawn(async move {
+        engine
+            .cancel(op, stackly_domain::OperationTrigger::background())
+            .await
+    });
     tokio::time::sleep(Duration::from_millis(200)).await;
     door.release();
     let detail = rig.wait_final(op).await;
@@ -824,7 +834,10 @@ async fn ac_8_a_cancel_before_the_journal_leaves_no_side_effect() {
 
     let op = rig.start(id).await;
     wait_for("the start reaches the endpoints stage", || hold.entered()).await;
-    rig.engine.cancel(op).await.unwrap();
+    rig.engine
+        .cancel(op, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     hold.release();
     let detail = rig.wait_final(op).await;
 

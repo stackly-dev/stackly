@@ -13,7 +13,7 @@ use super::drift;
 use super::error::SupervisorError;
 use super::helper::HelperEnd;
 use super::init::config_invalid;
-use super::persist::{blocking, read_instance};
+use super::persist::{active_revision_note, blocking, read_instance};
 use super::prepare::{Checks, prepare};
 use super::probe::{self, ProbeContext};
 use super::readiness::mark_ready;
@@ -242,6 +242,7 @@ impl OperationWork for ReloadWork {
     fn run(self: Box<Self>, mut ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
         Box::pin(async move {
             ctx.set_stage(StageName::VERIFY).await?;
+            ctx.set_audit_note(active_revision_note(self.sup.deps(), self.request.instance).await);
             self.sup
                 .execute_reload(&self.request)
                 .await

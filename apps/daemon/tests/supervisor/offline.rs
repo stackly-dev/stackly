@@ -238,10 +238,7 @@ async fn show_password_writes_the_real_string_and_each_reveal_is_audited() {
     );
     let registry = daemon.core().registry().expect("the registry is ready");
     let page = registry
-        .audit_events(AuditQuery {
-            limit: 50,
-            before: None,
-        })
+        .audit_events(AuditQuery::page(50, None))
         .expect("the audit rows read")
         .value;
     let reveals = page

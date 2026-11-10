@@ -73,7 +73,7 @@
                 revision: revision, defaultStartup: startup, updateChannel: channel,
                 telemetry: telemetry, telemetryCopyVersion: 1, locations: locations,
                 logRetention: LogRetention(segmentsPerStream: 8, segmentMaxBytes: 1_048_576),
-                updatedAt: FixtureClock.daysAgo(2))
+                auditRetention: nil, updatedAt: FixtureClock.daysAgo(2))
         }
 
         /// A storage location.

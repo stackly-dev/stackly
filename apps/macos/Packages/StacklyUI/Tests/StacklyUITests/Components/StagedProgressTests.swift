@@ -27,7 +27,7 @@ struct StagedProgressTests {
             failure: nil, recovery: nil, result: nil,
             trigger: OperationTriggerInfo(origin: .user, client: .gui),
             createdAt: Date(timeIntervalSince1970: 0), startedAt: nil,
-            updatedAt: Date(timeIntervalSince1970: 0), revision: 1)
+            updatedAt: Date(timeIntervalSince1970: 0), revision: 1, cancel: nil)
     }
 
     private func value(

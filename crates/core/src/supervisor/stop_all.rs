@@ -12,8 +12,8 @@
 use std::collections::VecDeque;
 
 use stackly_domain::{
-    ErrorCodeName, InstanceId, OperationKind, OperationResource, Progress, ResourceRef, StageName,
-    StopIntent,
+    ErrorCodeName, InstanceId, OperationKind, OperationResource, OperationTrigger, Progress,
+    ResourceRef, StageName, StopIntent,
 };
 use tokio::task::JoinSet;
 
@@ -84,7 +84,9 @@ impl Supervisor {
                     operation.kind(),
                     OperationKind::StartInstance | OperationKind::RestartInstance
                 )
-                && let Err(error) = engine.cancel(operation.id()).await
+                && let Err(error) = engine
+                    .cancel(operation.id(), OperationTrigger::background())
+                    .await
             {
                 tracing::warn!(instance = %id, ?error, "an open start could not be cancelled");
             }

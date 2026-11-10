@@ -215,10 +215,7 @@ impl Harness {
     pub fn audit(&self) -> Vec<AuditEventRecord> {
         let mut rows = self
             .registry
-            .audit_events(AuditQuery {
-                limit: 500,
-                before: None,
-            })
+            .audit_events(AuditQuery::page(500, None))
             .expect("the audit rows read")
             .value
             .items;

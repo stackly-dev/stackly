@@ -404,6 +404,10 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("result", "TEXT", true, 0),
             ("safe_details", "TEXT", true, 0),
             ("occurred_at", "TEXT", true, 0),
+            ("instance_id", "TEXT", false, 0),
+            ("operation_kind", "TEXT", false, 0),
+            ("config_revision", "INTEGER", false, 0),
+            ("client", "TEXT", false, 0),
         ],
     ),
     (
@@ -438,6 +442,7 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("cache_location_id", "TEXT", true, 0),
             ("revision", "INTEGER", true, 0),
             ("updated_at", "TEXT", true, 0),
+            ("audit_retention_days", "INTEGER", true, 0),
         ],
     ),
     (

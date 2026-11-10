@@ -87,7 +87,8 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .settingsUpdate = $0 { true } else { false } })
         #expect(methods.contains(.storageListLocations))
         #expect(methods.contains { if case .storageSetLocation = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 57)
+        #expect(methods.contains { if case .auditList = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 58)
     }
 
     private func check<Value: Codable & Equatable>(

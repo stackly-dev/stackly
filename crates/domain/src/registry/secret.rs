@@ -18,13 +18,14 @@ use uuid::Uuid;
 
 use crate::code::code_enum;
 use crate::error::{ValueError, ValueKind};
-use crate::id::{EnvironmentId, InstanceId, OperationId};
+use crate::id::{EnvironmentId, InstanceId, OperationId, RuntimeId};
+use crate::operation::OperationKind;
 use crate::registry::error::RegistryError;
-use crate::registry::{AuditEventId, SecretReferenceId};
+use crate::registry::{AuditEventId, ConfigRevisionNumber, SecretReferenceId};
 use crate::secret::{
     SecretOrigin, SecretOwner, SecretOwnerKind, SecretPurpose, SecretRef, SecretStatus,
 };
-use crate::value::{DetailKey, ResourceRevision};
+use crate::value::{ClientCode, DetailKey, ResourceRevision};
 
 /// Longest [`SecretFieldName`] and [`AuditAction`], in bytes.
 const NAME_MAX: usize = 64;
@@ -121,10 +122,29 @@ impl AuditAction {
         Self(Cow::Borrowed(action))
     }
 
+    /// An operation reached `succeeded`, `failed`, or `cancelled` (spec
+    /// 0035).
+    pub const OPERATION_FINISHED: Self = Self::from_static("operation.finished");
+    /// An operation entered `needs_recovery` (spec 0035).
+    pub const OPERATION_NEEDS_RECOVERY: Self = Self::from_static("operation.needs_recovery");
+    /// A cancel of an operation that changed it (spec 0035).
+    pub const OPERATION_CANCEL: Self = Self::from_static("operation.cancel");
+    /// A resume of an operation in `needs_recovery` (spec 0035).
+    pub const OPERATION_RESUME: Self = Self::from_static("operation.resume");
+    /// An abandon of an operation in `needs_recovery` (spec 0035).
+    pub const OPERATION_ABANDON: Self = Self::from_static("operation.abandon");
+
     /// Returns the text form.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Returns whether the operation engine writes this action, so the row
+    /// carries the operation's kind (spec 0035, *Model data*).
+    #[must_use]
+    pub fn is_operation(&self) -> bool {
+        self.0.starts_with("operation.")
     }
 }
 
@@ -426,6 +446,10 @@ code_enum! {
         Succeeded => "succeeded",
         /// It failed.
         Failed => "failed",
+        /// An operation was cancelled (spec 0035).
+        Cancelled => "cancelled",
+        /// An operation entered `needs_recovery` (spec 0035).
+        NeedsRecovery => "needs_recovery",
     }
 }
 
@@ -435,6 +459,12 @@ code_enum! {
 pub enum AuditResource {
     /// A secret reference row, stored as `resource_kind` `secret`.
     SecretReference(SecretReferenceId),
+    /// An instance, stored as `instance` (spec 0035).
+    Instance(InstanceId),
+    /// A runtime, stored as `runtime` (spec 0035).
+    Runtime(RuntimeId),
+    /// An environment, stored as `environment` (spec 0035).
+    Environment(EnvironmentId),
 }
 
 impl AuditResource {
@@ -443,6 +473,9 @@ impl AuditResource {
     pub const fn kind_code(&self) -> &'static str {
         match self {
             Self::SecretReference(_) => "secret",
+            Self::Instance(_) => "instance",
+            Self::Runtime(_) => "runtime",
+            Self::Environment(_) => "environment",
         }
     }
 
@@ -451,6 +484,18 @@ impl AuditResource {
     pub const fn id(&self) -> Uuid {
         match self {
             Self::SecretReference(id) => id.as_uuid(),
+            Self::Instance(id) => id.as_uuid(),
+            Self::Runtime(id) => id.as_uuid(),
+            Self::Environment(id) => id.as_uuid(),
+        }
+    }
+
+    /// Returns the instance, when the row is about one.
+    #[must_use]
+    pub const fn instance(&self) -> Option<InstanceId> {
+        match self {
+            Self::Instance(id) => Some(*id),
+            _ => None,
         }
     }
 
@@ -470,6 +515,15 @@ impl AuditResource {
         match kind {
             "secret" => SecretReferenceId::from_uuid(id)
                 .map(Self::SecretReference)
+                .map_err(|_| invalid()),
+            "instance" => InstanceId::from_uuid(id)
+                .map(Self::Instance)
+                .map_err(|_| invalid()),
+            "runtime" => RuntimeId::from_uuid(id)
+                .map(Self::Runtime)
+                .map_err(|_| invalid()),
+            "environment" => EnvironmentId::from_uuid(id)
+                .map(Self::Environment)
                 .map_err(|_| invalid()),
             _ => Err(invalid()),
         }
@@ -593,10 +647,22 @@ pub struct AuditEventRecord {
     pub safe_details: SafeDetails,
     /// When it happened, from the caller's clock.
     pub occurred_at: Timestamp,
+    /// The instance it is about, if any; not checked, so history stays
+    /// after the instance is removed (spec 0035).
+    pub instance: Option<InstanceId>,
+    /// The kind of the operation, set exactly on the `operation.*` actions
+    /// (spec 0035).
+    pub operation_kind: Option<OperationKind>,
+    /// The number of the instance's config revision the row is about; only
+    /// with an instance (spec 0035).
+    pub config_revision: Option<ConfigRevisionNumber>,
+    /// The kind of client that asked, from its handshake (spec 0035).
+    pub client: Option<ClientCode>,
 }
 
 impl AuditEventRecord {
-    /// A row with no resource, no operation, and no details.
+    /// A row with no resource, no operation, no instance, no client, and no
+    /// details.
     #[must_use]
     pub const fn new(
         id: AuditEventId,
@@ -614,6 +680,10 @@ impl AuditEventRecord {
             result,
             safe_details: SafeDetails::empty(),
             occurred_at,
+            instance: None,
+            operation_kind: None,
+            config_revision: None,
+            client: None,
         }
     }
 }
@@ -639,19 +709,34 @@ impl AuditCursor {
     }
 }
 
-/// A page of audit rows, newest `(occurred_at, id)` first. Feature 35 adds
-/// filters.
+/// A page of audit rows, newest `(occurred_at, id)` first, with optional
+/// filters that all apply together (spec 0035).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AuditQuery {
     /// The most rows on the page, 1 to [`AuditQuery::LIMIT_MAX`].
     pub limit: u16,
     /// Start after this cursor, for the next page.
     pub before: Option<AuditCursor>,
+    /// Only rows about this instance.
+    pub instance: Option<InstanceId>,
+    /// Only rows of this operation.
+    pub operation: Option<OperationId>,
 }
 
 impl AuditQuery {
     /// The largest page.
     pub const LIMIT_MAX: u16 = 500;
+
+    /// A page of `limit` rows after `before`, with no filter.
+    #[must_use]
+    pub const fn page(limit: u16, before: Option<AuditCursor>) -> Self {
+        Self {
+            limit,
+            before,
+            instance: None,
+            operation: None,
+        }
+    }
 
     /// Checks the page limit.
     ///
@@ -666,6 +751,14 @@ impl AuditQuery {
             });
         }
         Ok(())
+    }
+
+    /// Returns whether `record` passes the filters (the cursor and the
+    /// limit are not filters).
+    #[must_use]
+    pub fn matches(&self, record: &AuditEventRecord) -> bool {
+        self.instance.is_none_or(|id| record.instance == Some(id))
+            && self.operation.is_none_or(|id| record.operation == Some(id))
     }
 }
 
@@ -744,7 +837,75 @@ mod tests {
             AuditResource::from_parts("secret", resource.id()).unwrap(),
             resource
         );
-        assert!(AuditResource::from_parts("instance", resource.id()).is_err());
+        assert!(AuditResource::from_parts("operation", resource.id()).is_err());
+        assert!(AuditResource::from_parts("secret", Uuid::nil()).is_err());
+    }
+
+    #[test]
+    fn audit_resources_of_an_operation_round_trip_and_name_their_instance() {
+        let instance = InstanceId::generate();
+        let resources = [
+            (AuditResource::Instance(instance), "instance"),
+            (AuditResource::Runtime(RuntimeId::generate()), "runtime"),
+            (
+                AuditResource::Environment(EnvironmentId::generate()),
+                "environment",
+            ),
+        ];
+        for (resource, kind) in resources {
+            assert_eq!(resource.kind_code(), kind);
+            assert_eq!(
+                AuditResource::from_parts(kind, resource.id()).unwrap(),
+                resource
+            );
+        }
+        assert_eq!(resources[0].0.instance(), Some(instance));
+        assert_eq!(resources[1].0.instance(), None);
+    }
+
+    #[test]
+    fn the_operation_actions_are_the_ones_the_engine_writes() {
+        for action in [
+            AuditAction::OPERATION_FINISHED,
+            AuditAction::OPERATION_NEEDS_RECOVERY,
+            AuditAction::OPERATION_CANCEL,
+            AuditAction::OPERATION_RESUME,
+            AuditAction::OPERATION_ABANDON,
+        ] {
+            assert!(action.is_operation(), "{action}");
+        }
+        assert!(!AuditAction::from_static("secret.reveal").is_operation());
+        assert_eq!(
+            "needs_recovery".parse::<AuditResult>().unwrap(),
+            AuditResult::NeedsRecovery
+        );
+        assert_eq!(AuditResult::Cancelled.as_code(), "cancelled");
+    }
+
+    #[test]
+    fn an_audit_query_filters_on_instance_and_operation_together() {
+        let instance = InstanceId::generate();
+        let operation = OperationId::generate();
+        let mut record = AuditEventRecord::new(
+            AuditEventId::generate(),
+            AuditActor::User,
+            AuditAction::OPERATION_FINISHED,
+            AuditResult::Succeeded,
+            "2026-11-10T08:00:00Z".parse().unwrap(),
+        );
+        record.instance = Some(instance);
+        record.operation = Some(operation);
+
+        let mut query = AuditQuery::page(10, None);
+        assert!(query.matches(&record));
+        query.instance = Some(instance);
+        assert!(query.matches(&record));
+        query.operation = Some(OperationId::generate());
+        assert!(!query.matches(&record), "both filters apply");
+        query.operation = Some(operation);
+        assert!(query.matches(&record));
+        query.instance = Some(InstanceId::generate());
+        assert!(!query.matches(&record));
     }
 
     #[test]
@@ -795,37 +956,9 @@ mod tests {
 
     #[test]
     fn an_audit_query_takes_1_to_500_rows() {
-        assert!(
-            AuditQuery {
-                limit: 1,
-                before: None
-            }
-            .validate()
-            .is_ok()
-        );
-        assert!(
-            AuditQuery {
-                limit: 500,
-                before: None
-            }
-            .validate()
-            .is_ok()
-        );
-        assert!(
-            AuditQuery {
-                limit: 0,
-                before: None
-            }
-            .validate()
-            .is_err()
-        );
-        assert!(
-            AuditQuery {
-                limit: 501,
-                before: None
-            }
-            .validate()
-            .is_err()
-        );
+        assert!(AuditQuery::page(1, None).validate().is_ok());
+        assert!(AuditQuery::page(500, None).validate().is_ok());
+        assert!(AuditQuery::page(0, None).validate().is_err());
+        assert!(AuditQuery::page(501, None).validate().is_err());
     }
 }

@@ -9,16 +9,16 @@
 use jiff::Timestamp;
 use rusqlite::{Connection, params};
 use stackly_domain::{
-    DaemonSettings, LocationKind, RegistryError, ResourceRef, ResourceRevision, SettingsPatch,
-    StorageLocation, StorageLocationId, WriteOp,
+    AuditRetentionDays, DaemonSettings, LocationKind, RegistryError, ResourceRef, ResourceRevision,
+    SettingsPatch, StorageLocation, StorageLocationId, WriteOp,
 };
 
 use super::column::{Cells, collect, corrupt, exists, first, int, sql_error, ts};
 
 /// The settings columns every read selects.
 const SETTINGS_COLUMNS: &str = "default_startup, update_channel, telemetry, \
-     telemetry_copy_version, data_location_id, logs_location_id, cache_location_id, revision, \
-     updated_at";
+     telemetry_copy_version, data_location_id, logs_location_id, cache_location_id, \
+     audit_retention_days, revision, updated_at";
 
 /// The one settings row.
 pub(super) fn settings(conn: &Connection) -> Result<DaemonSettings, RegistryError> {
@@ -27,6 +27,11 @@ pub(super) fn settings(conn: &Connection) -> Result<DaemonSettings, RegistryErro
         let copy = cells
             .opt_u64("telemetry_copy_version")?
             .ok_or_else(|| cells.corrupt("telemetry_copy_version", "is null"))?;
+        let audit_retention = cells
+            .opt_u64("audit_retention_days")?
+            .and_then(|days| u32::try_from(days).ok())
+            .and_then(AuditRetentionDays::from_days)
+            .ok_or_else(|| cells.corrupt("audit_retention_days", "is not 7, 30, or 90"))?;
         Ok(DaemonSettings {
             default_startup: cells.parse("default_startup")?,
             update_channel: cells.parse("update_channel")?,
@@ -39,6 +44,7 @@ pub(super) fn settings(conn: &Connection) -> Result<DaemonSettings, RegistryErro
             data_location: cells.parse("data_location_id")?,
             logs_location: cells.parse("logs_location_id")?,
             cache_location: cells.parse("cache_location_id")?,
+            audit_retention,
             revision: cells.revision()?,
             updated_at: cells.ts("updated_at")?,
         })
@@ -190,7 +196,8 @@ fn write(
     conn.execute(
         "UPDATE daemon_settings SET default_startup = ?1, update_channel = ?2, telemetry = ?3, \
          telemetry_copy_version = ?4, data_location_id = ?5, logs_location_id = ?6, \
-         cache_location_id = ?7, revision = ?8, updated_at = ?9 WHERE id = 1 AND revision = ?10",
+         cache_location_id = ?7, audit_retention_days = ?8, revision = ?9, updated_at = ?10 \
+         WHERE id = 1 AND revision = ?11",
         params![
             next.default_startup.as_code(),
             next.update_channel.as_code(),
@@ -199,6 +206,7 @@ fn write(
             next.data_location.to_string(),
             next.logs_location.to_string(),
             next.cache_location.to_string(),
+            i64::from(next.audit_retention.days()),
             int(next.revision.get(), "revision")?,
             ts(next.updated_at),
             int(expected.get(), "revision")?,

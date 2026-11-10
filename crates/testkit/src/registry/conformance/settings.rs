@@ -6,8 +6,8 @@
 //! locations.
 
 use stackly_domain::{
-    LocationKind, RegistryError, ResourceRef, SettingsPatch, StartupPolicy, StorageLocation,
-    StorageLocationId, UpdateChannel, WriteOp,
+    AuditRetentionDays, LocationKind, RegistryError, ResourceRef, SettingsPatch, StartupPolicy,
+    StorageLocation, StorageLocationId, UpdateChannel, WriteOp,
 };
 
 use super::{Suite, at, batch, domain, expect_eq, shifted};
@@ -15,6 +15,7 @@ use super::{Suite, at, batch, domain, expect_eq, shifted};
 /// Runs every settings and location scenario.
 pub(super) fn settings(suite: &Suite<'_>) {
     patches(suite);
+    audit_retention(suite);
     locations(suite);
     instance_locations(suite);
 }
@@ -90,10 +91,59 @@ fn patches(suite: &Suite<'_>) {
                 default_startup: Some(StartupPolicy::Manual),
                 update_channel: Some(before.update_channel),
                 telemetry: Some(before.telemetry),
+                audit_retention: Some(before.audit_retention),
             },
             expected: after.revision,
             at: shifted(suite.loaded_at, 70),
         }],
+    );
+}
+
+/// Spec 0035 AC-6, AC-7: the audit retention is stored, read back, and
+/// changes only itself.
+fn audit_retention(suite: &Suite<'_>) {
+    const CHECK: &str = "the_audit_retention_is_stored_as_7_30_or_90_days";
+    let before = current(suite, CHECK);
+    expect_eq(CHECK, before.audit_retention, AuditRetentionDays::Days30);
+    let mut revision = before.revision;
+    for (days, seconds) in [
+        (AuditRetentionDays::Days7, 80),
+        (AuditRetentionDays::Days90, 85),
+    ] {
+        suite.commit(
+            CHECK,
+            vec![WriteOp::UpdateDaemonSettings {
+                patch: SettingsPatch {
+                    audit_retention: Some(days),
+                    ..SettingsPatch::default()
+                },
+                expected: revision,
+                at: shifted(suite.loaded_at, seconds),
+            }],
+        );
+        let after = current(suite, CHECK);
+        expect_eq(CHECK, after.audit_retention, days);
+        expect_eq(CHECK, after.revision, revision.next());
+        expect_eq(CHECK, after.telemetry, before.telemetry);
+        expect_eq(CHECK, after.update_channel, before.update_channel);
+        expect_eq(CHECK, after.default_startup, before.default_startup);
+        revision = after.revision;
+    }
+    suite.commit(
+        CHECK,
+        vec![WriteOp::UpdateDaemonSettings {
+            patch: SettingsPatch {
+                audit_retention: Some(AuditRetentionDays::Days30),
+                ..SettingsPatch::default()
+            },
+            expected: revision,
+            at: shifted(suite.loaded_at, 90),
+        }],
+    );
+    expect_eq(
+        CHECK,
+        current(suite, CHECK).audit_retention,
+        AuditRetentionDays::Days30,
     );
 }
 

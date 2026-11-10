@@ -27,6 +27,7 @@ const FOREIGN: &str = "zzz_not_known";
 /// limits, each with the reason. Every other such column must be in
 /// [`CODED_COLUMNS`].
 const FREE_CODE_COLUMNS: &[(&str, &str, &str)] = &[
+    ("audit_events", "client", "a ClientCode takes any code"),
     ("backups", "method", "no mapper reads backups yet"),
     ("backups", "scope", "no mapper reads backups yet"),
     ("backups", "consistency", "no mapper reads backups yet"),
@@ -136,10 +137,7 @@ fn probe(setup: &Setup, side: &Connection, entry: &CodedColumn, row_id: i64) -> 
     let registry = &setup.registry;
     let result = match entry.table {
         "audit_events" => registry
-            .audit_events(AuditQuery {
-                limit: AuditQuery::LIMIT_MAX,
-                before: None,
-            })
+            .audit_events(AuditQuery::page(AuditQuery::LIMIT_MAX, None))
             .map(drop),
         "config_revisions" => {
             let instance: InstanceId = text(

@@ -101,7 +101,10 @@ async fn a_cancel_lets_the_running_stop_finish_and_skips_the_rest() {
     while rig.processes().signals(first.pid).is_empty() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
-    rig.engine.cancel(op).await.expect("the cancel is accepted");
+    rig.engine
+        .cancel(op, stackly_domain::OperationTrigger::background())
+        .await
+        .expect("the cancel is accepted");
     rig.kill_servers();
     rig.processes().exit(first.pid, Some(ExitStatus::Exited(0)));
     let detail = rig.wait_state(op, OperationState::Succeeded).await;

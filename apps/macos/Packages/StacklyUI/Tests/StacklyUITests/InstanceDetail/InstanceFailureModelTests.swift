@@ -245,6 +245,6 @@ struct InstanceFailureModelTests {
             stage: nil, progress: .indeterminate, waitingOn: nil, cancelRequestedAt: nil,
             pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
             trigger: OperationTriggerInfo(origin: .user, client: .gui), createdAt: at,
-            startedAt: at, updatedAt: at, revision: 2)
+            startedAt: at, updatedAt: at, revision: 2, cancel: nil)
     }
 }

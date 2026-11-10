@@ -18,8 +18,8 @@ use super::persist::{blocking, read_instance};
 use super::steps::ensure_directories;
 use super::{Supervisor, SupervisorDeps};
 use crate::operation::{
-    BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError, WorkOutcome,
-    WorkResult,
+    AuditNote, BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError,
+    WorkOutcome, WorkResult,
 };
 use crate::{CoreError, check_owned_path};
 
@@ -379,6 +379,8 @@ async fn resolve(sup: &Supervisor, id: InstanceId, mut ctx: OperationContext) ->
                 reason: "no_config_revision".to_owned(),
             })
         })?;
+    // The files go back to the active revision; no new one is written.
+    ctx.set_audit_note(AuditNote::new(Some(active.number)));
     let paths = deps.layout.instance_paths(id);
     let target = RenderTarget::new(&paths, active.id);
     let report = observe(sup, id, &target).await.map_err(failed)?;

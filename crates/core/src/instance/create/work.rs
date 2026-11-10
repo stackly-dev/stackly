@@ -8,11 +8,12 @@ use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 use stackly_domain::{
-    CommitGuard, ConfigRevisionId, ConfigRevisionRecord, ConfigValuesJson, EndpointRequests,
-    GuardDecision, GuardView, Guarded, InstallMode, Instance, InstanceId, InstanceManifest,
-    JournalPayload, ManifestRuntime, NewInstance, NewInstanceManifest, Operation, OperationId,
-    OperationResource, ProviderSourceId, ReasonCode, RegistryError, ResourceRef, ResourceRevision,
-    SecretFieldName, SecretOwner, SecretRef, SecretUser, StageName, StartupPolicy, WriteOp,
+    CommitGuard, ConfigRevisionId, ConfigRevisionNumber, ConfigRevisionRecord, ConfigValuesJson,
+    EndpointRequests, GuardDecision, GuardView, Guarded, InstallMode, Instance, InstanceId,
+    InstanceManifest, JournalPayload, ManifestRuntime, NewInstance, NewInstanceManifest, Operation,
+    OperationId, OperationResource, ProviderSourceId, ReasonCode, RegistryError, ResourceRef,
+    ResourceRevision, SecretFieldName, SecretOwner, SecretRef, SecretUser, StageName,
+    StartupPolicy, WriteOp,
 };
 use stackly_platform::{InstancePaths, Platform, SecretValue, WriteMode, check_private_dir};
 
@@ -26,8 +27,8 @@ use super::port;
 use crate::catalog::{CatalogEntry, CatalogState, PinError, pin_revision};
 use crate::instance::create::compensator::INSTANCE_REGISTRATION;
 use crate::operation::{
-    BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork, RebuildError,
-    StepSpec, WorkError, WorkFactory, WorkOutcome, WorkResult,
+    AuditNote, BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork,
+    RebuildError, StepSpec, WorkError, WorkFactory, WorkOutcome, WorkResult,
 };
 use crate::secret::{
     FieldContext, PutRequest, PutTarget, SecretCaller, SecretError, SecretInput, SecretService,
@@ -174,6 +175,11 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
     // validate: the same checks as the precheck, now under the lock.
     enter(&mut ctx, StageName::VALIDATE, true).await?;
     let resolved = validate(&ctx, &deps, &draft, id).await?;
+    // Spec 0035: the note is set as soon as the draft passed, so a failure
+    // after it carries the provider and runtime; revision 1 is added once
+    // `register` wrote it.
+    let note = audit_note(&ctx, &draft).await;
+    ctx.set_audit_note(note.clone());
 
     // pin: copy the catalog package, unless an instance already pinned it.
     enter(&mut ctx, StageName::PIN, true).await?;
@@ -191,6 +197,10 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
     enter(&mut ctx, StageName::REGISTER, false).await?;
     let instance = register(&mut ctx, &deps, id, &resolved, pinned, bound, now).await?;
     deps.events.instance_changed(&instance);
+    ctx.set_audit_note(AuditNote {
+        config_revision: Some(ConfigRevisionNumber::FIRST),
+        ..note
+    });
 
     // init: the provider's init plan, under the instance lock.
     enter(&mut ctx, StageName::INIT, false).await?;
@@ -210,6 +220,30 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
         },
         finalize: None,
     })
+}
+
+/// The audit note of a create (spec 0035, *Catatan audit pekerjaan*): the
+/// provider by name, the runtime, and, when the draft names the instance it
+/// duplicates and that instance still exists, its ID and its name now
+/// (AC-18). An instance that is gone, or a read that fails, leaves both out.
+async fn audit_note(ctx: &OperationContext, draft: &CreateDraft) -> AuditNote {
+    let mut note = AuditNote::new(None)
+        .with("provider", &draft.provider.name)
+        .with("runtimeId", draft.runtime_id);
+    if let Some(source) = draft.duplicate_of {
+        let registry = Arc::clone(ctx.registry());
+        let found = blocking(move || registry.instance(source))
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .and_then(|read| read.value);
+        if let Some(instance) = found {
+            note = note
+                .with("duplicateOf", source)
+                .with("duplicateOfName", instance.name());
+        }
+    }
+    note
 }
 
 async fn validate(
@@ -1048,5 +1082,6 @@ fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
             .get("startup")
             .and_then(serde_json::Value::as_str)
             .and_then(|code| code.parse().ok()),
+        duplicate_of: None,
     })
 }

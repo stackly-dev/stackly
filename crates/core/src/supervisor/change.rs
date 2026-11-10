@@ -28,8 +28,8 @@ use crate::instance::config::{
 };
 use crate::instance::create::CreateError;
 use crate::operation::{
-    BoxFuture, EngineError, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError,
-    WorkOutcome, WorkResult,
+    AuditNote, BoxFuture, EngineError, OperationContext, OperationOutcome, OperationWork, StepSpec,
+    WorkError, WorkOutcome, WorkResult,
 };
 use crate::secret::SecretCaller;
 
@@ -224,6 +224,9 @@ async fn run_change(
         Planned::Unchanged => return Ok(done(id)),
         Planned::Change(plan) => plan,
     };
+    // Until the commit writes the new revision, the note names only the
+    // one it follows (spec 0035).
+    ctx.set_audit_note(AuditNote::new(None).with("oldRevision", plan.active.get()));
 
     ctx.begin_step(StepSpec::new(StageName::LOCK)).await?;
     ctx.set_stage(StageName::LOCK).await?;
@@ -232,6 +235,7 @@ async fn run_change(
         .await?;
     ctx.set_stage(StageName::COMMIT).await?;
     commit(sup, &mut ctx, id, &plan).await?;
+    ctx.set_audit_note(plan.audit_note());
 
     ctx.begin_step(StepSpec::new(StageName::APPLY)).await?;
     ctx.set_stage(StageName::APPLY).await?;
@@ -419,6 +423,11 @@ async fn run_rename(
     if instance.name() == &request.name {
         return Ok(done(id));
     }
+    ctx.set_audit_note(
+        AuditNote::new(None)
+            .with("oldName", instance.name())
+            .with("newName", &request.name),
+    );
 
     ctx.begin_step(StepSpec::new(StageName::LOCK)).await?;
     ctx.set_stage(StageName::LOCK).await?;

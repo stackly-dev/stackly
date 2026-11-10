@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
+use stackly_protocol::audit::{AuditPage, ListAuditParams};
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{
@@ -58,6 +59,7 @@ use stackly_protocol::settings::{
 use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
+use crate::ipc::audit;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -213,6 +215,17 @@ pub trait Handlers: Send + Sync + 'static {
         operation::list(core, params)
     }
 
+    /// `audit.list` (spec 0035).
+    fn list_audit<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListAuditParams,
+    ) -> HandlerFuture<'a, AuditPage> {
+        let _ = context;
+        audit::list(core, params)
+    }
+
     /// `operation.cancel`.
     fn cancel_operation<'a>(
         &'a self,
@@ -220,8 +233,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: CancelOperationParams,
     ) -> HandlerFuture<'a, CancelReply> {
-        let _ = context;
-        operation::cancel(core, params)
+        operation::cancel(core, context, params)
     }
 
     /// `operation.resume`.
@@ -231,8 +243,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: ResumeOperationParams,
     ) -> HandlerFuture<'a, OperationSummary> {
-        let _ = context;
-        operation::resume(core, params)
+        operation::resume(core, context, params)
     }
 
     /// `operation.abandon`.
@@ -242,8 +253,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: AbandonOperationParams,
     ) -> HandlerFuture<'a, AbandonReply> {
-        let _ = context;
-        operation::abandon(core, params)
+        operation::abandon(core, context, params)
     }
 
     /// `operation.get_stats`.

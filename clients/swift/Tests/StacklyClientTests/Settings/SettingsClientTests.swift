@@ -43,7 +43,7 @@ struct SettingsClientTests {
             locations: DefaultLocations(
                 data: location(.data), logs: location(.logs), cache: location(.cache)),
             logRetention: LogRetention(segmentsPerStream: 8, segmentMaxBytes: 1_048_576),
-            updatedAt: Date(timeIntervalSince1970: 1_700_000_000))
+            auditRetention: nil, updatedAt: Date(timeIntervalSince1970: 1_700_000_000))
     }
 
     @Test func getSendsNoKeyAndReadsTheSettings() async throws {
@@ -59,7 +59,8 @@ struct SettingsClientTests {
     @Test func updateSendsTheRevisionThePatchAndTheKey() async throws {
         let changed = Self.settings(revision: 4)
         let fake = Fake(.success(.settingsUpdate(changed)))
-        let patch = SettingsPatch(defaultStartup: .atLogin, updateChannel: nil, telemetry: nil)
+        let patch = SettingsPatch(
+            defaultStartup: .atLogin, updateChannel: nil, telemetry: nil, auditRetentionDays: nil)
         let view = try await fake.client.update(
             expectedRevision: 3, patch: patch, idempotencyKey: "key-1")
 
@@ -112,7 +113,9 @@ struct SettingsClientTests {
         do {
             _ = try await fake.client.update(
                 expectedRevision: 1,
-                patch: SettingsPatch(defaultStartup: nil, updateChannel: nil, telemetry: true),
+                patch: SettingsPatch(
+                    defaultStartup: nil, updateChannel: nil, telemetry: true,
+                    auditRetentionDays: nil),
                 idempotencyKey: "k")
             Issue.record("the refusal should throw")
         } catch {

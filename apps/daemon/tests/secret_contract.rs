@@ -164,6 +164,7 @@ fn create_params(secrets: Vec<SecretFieldInput>) -> CreateInstanceParams {
         settings: SettingsDocument::new(serde_json::Map::new()),
         secrets,
         startup: None,
+        duplicate_of: None,
     }
 }
 

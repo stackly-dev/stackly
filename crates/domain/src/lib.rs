@@ -70,8 +70,8 @@ pub use lease::{
     should_autostart,
 };
 pub use location::{
-    BUILT_IN_LOCATION_IDS, DaemonSettings, LOCATION_PATH_MAX, LocationKind, LocationRule,
-    SettingsPatch, StorageLocation, TELEMETRY_COPY_VERSION, UpdateChannel,
+    AuditRetentionDays, BUILT_IN_LOCATION_IDS, DaemonSettings, LOCATION_PATH_MAX, LocationKind,
+    LocationRule, SettingsPatch, StorageLocation, TELEMETRY_COPY_VERSION, UpdateChannel,
 };
 pub use manifest::{
     INSTANCE_MANIFEST_SCHEMA, InstallKind, InstanceManifest, ManifestData, ManifestRuntime,
@@ -87,12 +87,12 @@ pub use observation::{
     ReadinessState,
 };
 pub use operation::{
-    CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError, FailureItem,
-    InterruptPolicy, JournalPayload, JournalStep, JournalView, LockKey, NewJournal, NewOperation,
-    NewStep, Operation, OperationEvent, OperationFailure, OperationJournal, OperationKind,
-    OperationResource, OperationState, OperationTrigger, Outcome, Progress, RecoveryCause,
-    RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal, StoredOperation,
-    StoredStep, TriggerOrigin, force_intent,
+    CancelAvailability, CreatedItem, CreatedRecord, CreatedSeq, CreatedState, FailureError,
+    FailureItem, InterruptPolicy, JournalPayload, JournalStep, JournalView, LockKey, NewJournal,
+    NewOperation, NewStep, Operation, OperationEvent, OperationFailure, OperationJournal,
+    OperationKind, OperationResource, OperationState, OperationTrigger, Outcome, Progress,
+    RecoveryCause, RecoveryHint, StepSeq, StepState, StoredCreatedRecord, StoredJournal,
+    StoredOperation, StoredStep, TriggerOrigin, cancel_availability, force_intent,
 };
 pub use os_version::OsVersion;
 pub use process::{
@@ -103,16 +103,16 @@ pub use provider::{
     AcceptedRevisionChange, LineCompatibility, ProviderRevision, ProviderRevisionKey,
 };
 pub use registry::{
-    ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId, AuditEventRecord,
-    AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX, CommitGuard,
-    Committed, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope, ConfigRevisionId,
-    ConfigRevisionNumber, ConfigRevisionOrigin, ConfigRevisionRecord, ConfigRevisionStatus,
-    ConfigValuesJson, DependencyManifestJson, EndpointRequests, Generation, GuardDecision,
-    GuardView, Guarded, InstallDetails, InstanceFilter, InstancePathEntry, InstancePathKind,
-    LeaseFilter, LogicalRoot, NotDeletableReason, OperationCursor, OperationPage, OperationQuery,
-    PlatformStoreKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
-    ProviderSourceStatus, PruneReport, QUICK_CHECK_MESSAGES_MAX, QuickCheck, Registry,
-    RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
+    AUDIT_MAX_ROWS, ArtifactRecord, AuditAction, AuditActor, AuditCursor, AuditEventId,
+    AuditEventRecord, AuditPage, AuditQuery, AuditResource, AuditResult, BatchError, CODES_MAX,
+    CommitGuard, Committed, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
+    ConfigRevisionId, ConfigRevisionNumber, ConfigRevisionOrigin, ConfigRevisionRecord,
+    ConfigRevisionStatus, ConfigValuesJson, DependencyManifestJson, EndpointRequests, Generation,
+    GuardDecision, GuardView, Guarded, InstallDetails, InstanceFilter, InstancePathEntry,
+    InstancePathKind, LeaseFilter, LogicalRoot, NotDeletableReason, OperationCursor, OperationPage,
+    OperationQuery, PlatformStoreKey, ProviderRevisionRecord, ProviderSourceKind,
+    ProviderSourceRecord, ProviderSourceStatus, PruneReport, QUICK_CHECK_MESSAGES_MAX, QuickCheck,
+    Registry, RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
     SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
     SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, SignatureInfoJson,
     UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN, UnrecognizedValue, Versioned,

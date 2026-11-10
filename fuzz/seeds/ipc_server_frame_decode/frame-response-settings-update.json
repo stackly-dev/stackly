@@ -43,6 +43,10 @@
           "segmentsPerStream": 5,
           "segmentMaxBytes": 20971520
         },
+        "auditRetention": {
+          "days": 30,
+          "maxRows": 100000
+        },
         "updatedAt": "2026-11-03T08:00:00.000Z"
       }
     }

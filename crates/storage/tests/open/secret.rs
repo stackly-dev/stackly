@@ -155,10 +155,7 @@ fn the_v3_fixture_secret_and_audit_rows_read_back_through_the_registry() {
     );
 
     let page = registry
-        .audit_events(AuditQuery {
-            limit: 2,
-            before: None,
-        })
+        .audit_events(AuditQuery::page(2, None))
         .unwrap()
         .value;
     let ids: Vec<String> = page.items.iter().map(|row| row.id.to_string()).collect();
@@ -187,10 +184,7 @@ fn the_v3_fixture_secret_and_audit_rows_read_back_through_the_registry() {
     );
     assert_eq!(set.safe_details.get("peerUid"), Some("501"));
     let rest = registry
-        .audit_events(AuditQuery {
-            limit: 500,
-            before: page.next,
-        })
+        .audit_events(AuditQuery::page(500, page.next))
         .unwrap()
         .value;
     assert_eq!(rest.items.len(), 1);

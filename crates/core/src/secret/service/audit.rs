@@ -2,7 +2,7 @@
 //! which reference, and how it ended, never a value.
 
 use stackly_domain::{
-    AuditAction, AuditEventId, AuditEventRecord, AuditResource, AuditResult, DetailKey,
+    AuditAction, AuditEventId, AuditEventRecord, AuditResource, AuditResult, DetailKey, InstanceId,
     SafeDetails, SecretRef, SecretReferenceId, WriteBatch, WriteOp,
 };
 
@@ -25,6 +25,16 @@ pub(super) enum AuditDetail<'a> {
     /// The source reference of a `copyFrom` put, as `copiedFrom`: the
     /// reference whose value was read, never the value (audit note 112).
     CopiedFrom(&'a SecretRef),
+}
+
+/// The instance that owns `reference`: only the daemon names a reference
+/// `local:instance/<id>/<field>`, for a secret field of that instance, so
+/// the owner column holds the same instance (spec 0011).
+fn instance_of(reference: &SecretRef) -> Option<InstanceId> {
+    if !reference.is_instance_reference() {
+        return None;
+    }
+    reference.segments().nth(1)?.parse().ok()
 }
 
 fn key(text: &str) -> DetailKey {
@@ -83,6 +93,10 @@ impl SecretService {
         );
         record.resource = resource.map(AuditResource::SecretReference);
         record.operation = caller.operation;
+        // Spec 0035: the client kind and, for a reference an instance owns,
+        // that instance, so the row shows in the instance's Activity.
+        record.client = caller.client.clone();
+        record.instance = instance_of(reference);
         // At most six short entries, so the limits of SafeDetails hold.
         record.safe_details = SafeDetails::new(redacted).unwrap_or_default();
         record
@@ -115,6 +129,25 @@ impl SecretService {
                 error = %written,
                 "the audit row of a failed secret action was not written"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // covers: spec 0035 *Model data* (the secret row of an instance)
+    #[test]
+    fn an_instance_reference_names_its_instance_and_others_name_none() {
+        let id = InstanceId::generate();
+        let owned: SecretRef = format!("local:instance/{id}/admin-password")
+            .parse()
+            .unwrap();
+        assert_eq!(instance_of(&owned), Some(id));
+        for other in ["local:erp/postgres/admin", "local:instance/not-an-id/admin"] {
+            let reference: SecretRef = other.parse().unwrap();
+            assert_eq!(instance_of(&reference), None, "{other}");
         }
     }
 }
