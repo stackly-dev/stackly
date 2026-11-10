@@ -45,6 +45,7 @@ enum SettingsRow: String, CaseIterable, Sendable {
     case logsLocation
     case cacheLocation
     case logRetention
+    case auditRetention
     case updateChannel
     case telemetry
     case cleanUpCache
@@ -84,6 +85,7 @@ enum SettingsAvailability {
         Entry(row: .logsLocation, tab: .storage, owner: "feature 32", isBuilt: true),
         Entry(row: .cacheLocation, tab: .storage, owner: "feature 32", isBuilt: true),
         Entry(row: .logRetention, tab: .storage, owner: "feature 27", isBuilt: true),
+        Entry(row: .auditRetention, tab: .storage, owner: "feature 35", isBuilt: true),
         Entry(row: .updateChannel, tab: .updates, owner: "feature 32", isBuilt: true),
         Entry(row: .telemetry, tab: .updates, owner: "feature 32", isBuilt: true),
         Entry(row: .cleanUpCache, tab: .storage, owner: "feature 55", isBuilt: false),

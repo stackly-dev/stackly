@@ -138,6 +138,8 @@ struct CreateInstanceModelTests {
             return
         }
         #expect(params.startup == .atLogin)
+        // Only the Duplicate sheet names a source (spec 0035, AC-18).
+        #expect(params.duplicateOf == nil)
     }
 
     private static func form(startupDefault: StartupPolicyKind) -> CreateForm {

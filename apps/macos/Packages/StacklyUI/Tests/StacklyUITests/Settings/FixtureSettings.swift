@@ -28,14 +28,15 @@ nonisolated enum FixtureSettings {
         revision: UInt64 = 3, startup: StartupPolicyKind = .manual,
         channel: UpdateChannel = .stable, telemetry: Bool = false,
         data: StorageLocationView = dataLocation, logs: StorageLocationView = logsLocation,
-        cache: StorageLocationView = cacheLocation
+        cache: StorageLocationView = cacheLocation, auditDays: UInt32? = nil
     ) -> DaemonSettingsView {
         DaemonSettingsView(
             revision: revision, defaultStartup: startup, updateChannel: channel,
             telemetry: telemetry, telemetryCopyVersion: 1,
             locations: DefaultLocations(data: data, logs: logs, cache: cache),
             logRetention: LogRetention(segmentsPerStream: 8, segmentMaxBytes: 1_048_576),
-            auditRetention: nil, updatedAt: updatedAt)
+            auditRetention: auditDays.map { AuditRetention(days: $0, maxRows: 100_000) },
+            updatedAt: updatedAt)
     }
 
     /// What the daemon does with a patch: sets what it names and raises the revision.
@@ -48,7 +49,10 @@ nonisolated enum FixtureSettings {
             updateChannel: patch.updateChannel ?? settings.updateChannel,
             telemetry: patch.telemetry ?? settings.telemetry,
             telemetryCopyVersion: settings.telemetryCopyVersion, locations: settings.locations,
-            logRetention: settings.logRetention, auditRetention: settings.auditRetention,
+            logRetention: settings.logRetention,
+            auditRetention: patch.auditRetentionDays.map {
+                AuditRetention(days: $0, maxRows: settings.auditRetention?.maxRows ?? 100_000)
+            } ?? settings.auditRetention,
             updatedAt: settings.updatedAt)
     }
 
