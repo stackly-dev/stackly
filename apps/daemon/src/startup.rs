@@ -203,6 +203,7 @@ pub fn run(config: StartConfig) -> ExitCode {
 #[cfg(target_os = "macos")]
 mod imp {
     use std::io;
+    use std::path::{Path, PathBuf};
     use std::process::ExitCode;
     use std::sync::Arc;
     use std::time::Duration;
@@ -210,8 +211,12 @@ mod imp {
     use stackly_core::secret::{Redactor, SecretWorker, WorkerConfig};
     use stackly_core::{daemon_info, prepare_layout};
     use stackly_platform::bundle::AppBundle;
-    use stackly_platform::{DirectoryLayout, LaunchContext, Platform, SecretStore, UserId};
-    use stackly_platform_macos::{KeychainTarget, MacosPlatform, MacosSecretStore};
+    use stackly_platform::{
+        Clock, DirectoryLayout, LaunchContext, Platform, RootKind, SecretStore, SystemClock, UserId,
+    };
+    use stackly_platform_macos::{
+        KeychainTarget, MacosFilesystem, MacosIdentity, MacosPlatform, MacosSecretStore,
+    };
     use stackly_protocol::daemon::ShutdownMode;
     use stackly_protocol::events::ShutdownReason;
     use stackly_protocol::secret::SecretStoreTarget;
@@ -228,6 +233,7 @@ mod imp {
     use crate::map::StartFacts;
     use crate::server::{self, DaemonDeps};
     use crate::shutdown::StopSignals;
+    use crate::start_failure::{self, StartFailure, StartFailureRecord};
 
     /// How long blocking tasks get when the runtime shuts down.
     const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(1);
@@ -271,17 +277,106 @@ mod imp {
                 tracing::error!(error = %invalid, "cannot start stacklyd");
                 EXIT_START_FAILED
             }
-            (Ok(()), None) => start(&sink, &redactor, config),
+            (Ok(()), None) => {
+                let mut note = FailureNote::default();
+                let code = start(&sink, &redactor, config, &mut note);
+                if code == EXIT_START_FAILED {
+                    note.write(&redactor);
+                }
+                code
+            }
         };
         // Shutdown step 7: the queue gets at most a second to drain.
         let _ = sink.flush(LOG_CONTROL_TIMEOUT);
         ExitCode::from(code)
     }
 
+    /// What a start that fails leaves for its record (spec 0034, AC-11):
+    /// the data root once it is known, why the start failed, and who
+    /// started the daemon.
+    #[derive(Default)]
+    struct FailureNote {
+        data_root: Option<PathBuf>,
+        failure: Option<StartFailure>,
+        launch: Option<LaunchContext>,
+        bundle: Option<AppBundle>,
+    }
+
+    impl FailureNote {
+        /// Records why the start failed, if nothing did before, and returns
+        /// the exit code of a failed start.
+        fn fail(&mut self, code: Option<String>, message: impl Into<String>) -> u8 {
+            if self.failure.is_none() {
+                self.failure = Some(StartFailure::new(code, message));
+            }
+            EXIT_START_FAILED
+        }
+
+        /// Writes the record into the data root, when it is known and a
+        /// private folder of this user; logs what happened.
+        fn write(&self, redactor: &Redactor) {
+            let Some(data_root) = self.data_root.as_deref() else {
+                return;
+            };
+            let failure = self.failure.clone().unwrap_or_else(|| {
+                StartFailure::new(
+                    None,
+                    "stacklyd stopped after a fatal error; its log says why",
+                )
+            });
+            let launch = self
+                .launch
+                .clone()
+                .unwrap_or_else(|| LaunchContext::detect(None, 0));
+            let record = StartFailureRecord::new(
+                &failure,
+                redactor,
+                stackly_protocol::Timestamp::from_jiff(SystemClock.now()),
+                daemon_info().version,
+                &launch,
+                self.bundle.as_ref(),
+            );
+            match start_failure::write_record(&MacosFilesystem, &MacosIdentity, data_root, &record)
+            {
+                Ok(true) => tracing::info!(
+                    path = %data_root.join(stackly_platform::DAEMON_START_FAILURE_RECORD_FILE).display(),
+                    code = record.code,
+                    "wrote the record of the failed start",
+                ),
+                Ok(false) => tracing::warn!(
+                    data_root = %data_root.display(),
+                    "the data root is not a private folder of this user, so the failed start leaves no record",
+                ),
+                Err(error) => tracing::warn!(
+                    error = %error,
+                    "cannot write the record of the failed start",
+                ),
+            }
+        }
+    }
+
+    /// The data root of `STACKLY_ROOT` as written, before it is checked, so
+    /// a start that refuses the override still knows where its data would
+    /// be: `<root>/data` for an absolute path, else none.
+    fn override_data_root(root: Option<&std::ffi::OsStr>) -> Option<PathBuf> {
+        let root = Path::new(root?);
+        root.is_absolute().then(|| root.join("data"))
+    }
+
     /// Steps 3 to 8, then the server until it stops.
-    fn start(sink: &Arc<LogSink>, redactor: &Arc<Redactor>, config: StartConfig) -> u8 {
+    fn start(
+        sink: &Arc<LogSink>,
+        redactor: &Arc<Redactor>,
+        config: StartConfig,
+        note: &mut FailureNote,
+    ) -> u8 {
         let info = daemon_info();
         let has_override = config.root_override.is_some();
+        note.data_root = override_data_root(config.root_override.as_deref());
+        note.launch = Some(LaunchContext::detect(
+            config.xpc_service_name.as_deref(),
+            config.parent_pid,
+        ));
 
         // Step 3: resolve the roots once.
         let resolved = MacosPlatform::new(config.root_override).and_then(|platform| {
@@ -298,16 +393,20 @@ mod imp {
                     root_override = has_override,
                     "cannot resolve the Stackly directories",
                 );
-                return EXIT_START_FAILED;
+                return note.fail(
+                    None,
+                    format!("cannot resolve the Stackly directories: {error}"),
+                );
             }
         };
+        note.data_root = Some(layout.roots().data().to_path_buf());
         // The home folder for the protected folder rule of storage
         // locations, from the user database like the roots, never `HOME`.
         let home = match MacosPlatform::home_dir() {
             Ok(home) => home,
             Err(error) => {
                 tracing::error!(error = %error, "cannot resolve the home directory");
-                return EXIT_START_FAILED;
+                return note.fail(None, format!("cannot resolve the home directory: {error}"));
             }
         };
         // Who started the daemon, and the app bundle it runs from. The
@@ -319,12 +418,14 @@ mod imp {
             .as_deref()
             .and_then(|exe| platform.fs().canonicalize(exe).ok())
             .and_then(|exe| AppBundle::enclosing(&exe));
+        note.launch = Some(launch.clone());
+        note.bundle.clone_from(&bundle);
         // Step 3 also checks the catalog folder, which only reads.
         let catalog = match parse_catalog_dir(platform.fs(), config.catalog_dir.as_deref()) {
             Ok(development) => catalog_location(development, bundle.as_ref()),
             Err(error) => {
                 tracing::error!(error = %error, "cannot start stacklyd");
-                return EXIT_START_FAILED;
+                return note.fail(None, format!("cannot start stacklyd: {error}"));
             }
         };
         if config.print_roots {
@@ -346,7 +447,10 @@ mod imp {
             Ok(prepared) => prepared,
             Err(error) => {
                 tracing::error!(error = %error, "cannot prepare the Stackly directories");
-                return EXIT_START_FAILED;
+                return note.fail(
+                    None,
+                    format!("cannot prepare the Stackly directories: {error}"),
+                );
             }
         };
         let layout = prepared.layout();
@@ -360,7 +464,13 @@ mod imp {
         let owner = LockOwner::new(pid, server_instance_id, started_at, info.version);
         let lock = match DaemonLock::acquire(&layout.daemon_lock(), owner) {
             Ok(lock) => lock,
-            Err(error) => return lock_failed(&error),
+            Err(error) => {
+                let code = lock_failed(&error);
+                if code == EXIT_START_FAILED {
+                    note.fail(None, format!("cannot take the daemon lock: {error}"));
+                }
+                return code;
+            }
         };
 
         // Step 7.
@@ -409,7 +519,7 @@ mod imp {
             Err(error) => {
                 tracing::error!(error = %error, "cannot set up the secret store");
                 release(lock);
-                return EXIT_START_FAILED;
+                return note.fail(None, format!("cannot set up the secret store: {error}"));
             }
         };
         let worker = match SecretWorker::spawn(Arc::new(store), WorkerConfig::default()) {
@@ -417,7 +527,10 @@ mod imp {
             Err(error) => {
                 tracing::error!(error = %error, "cannot start the secret store thread");
                 release(lock);
-                return EXIT_START_FAILED;
+                return note.fail(
+                    None,
+                    format!("cannot start the secret store thread: {error}"),
+                );
             }
         };
         let platform = platform.with_secrets(Arc::clone(&worker) as Arc<dyn SecretStore>);
@@ -433,7 +546,7 @@ mod imp {
             Err(error) => {
                 tracing::error!(error = %error, "cannot start the async runtime");
                 release(lock);
-                return EXIT_START_FAILED;
+                return note.fail(None, format!("cannot start the async runtime: {error}"));
             }
         };
         let signals = {
@@ -445,7 +558,7 @@ mod imp {
             Err(error) => {
                 tracing::error!(error = %error, "cannot install the signal handlers");
                 release(lock);
-                return EXIT_START_FAILED;
+                return note.fail(None, format!("cannot install the signal handlers: {error}"));
             }
         };
 
@@ -460,7 +573,7 @@ mod imp {
                 home: Some(home),
                 ..server::DaemonConfig::default()
             });
-        let code = runtime.block_on(serve(deps, &mut signals));
+        let code = runtime.block_on(serve(deps, &mut signals, note));
         // Blocking tasks (a registry close, a prune) get a moment to end.
         runtime.shutdown_timeout(RUNTIME_SHUTDOWN);
         // Step 6 of the stop: the registry is closed, so the lock can go.
@@ -471,7 +584,7 @@ mod imp {
 
     /// Steps 9 to 12, then the wait for a signal or a fatal error, then the
     /// stop order.
-    async fn serve(deps: DaemonDeps, signals: &mut StopSignals) -> u8 {
+    async fn serve(deps: DaemonDeps, signals: &mut StopSignals, note: &mut FailureNote) -> u8 {
         let handle = match server::start(deps).await {
             Ok(handle) => handle,
             Err(error) => {
@@ -480,9 +593,26 @@ mod imp {
                     code = error.code(),
                     "cannot start the daemon server",
                 );
-                return EXIT_START_FAILED;
+                return note.fail(
+                    error.code(),
+                    format!("cannot start the daemon server: {error}"),
+                );
             }
         };
+        // The socket is bound: the record of an earlier failed start is
+        // over (spec 0034, AC-11).
+        let core = handle.core();
+        match start_failure::remove_record(
+            core.platform().fs(),
+            core.prepared().canonical_root(RootKind::Data),
+        ) {
+            Ok(true) => tracing::info!("removed the record of an earlier failed start"),
+            Ok(false) => {}
+            Err(error) => tracing::warn!(
+                error = %error,
+                "cannot remove the record of an earlier failed start",
+            ),
+        }
         // What ends the run: the reason of the stop order, the exit code, and
         // whether the run is a logout (spec 0031, *Sinyal per konteks*).
         let (reason, code, ending) = tokio::select! {
@@ -508,6 +638,11 @@ mod imp {
             },
             code = handle.fatal() => {
                 tracing::error!(exit_code = code, "stacklyd stopping after a fatal error");
+                if code == EXIT_START_FAILED
+                    && let Some(reason) = handle.core().fatal_reason()
+                {
+                    note.fail(None, reason);
+                }
                 (ShutdownReason::Requested, code, Ending::Fatal)
             }
         };

@@ -3,8 +3,10 @@
 //! `main` only reads the arguments and the environment (`STACKLY_ROOT`,
 //! `STACKLY_LOG`, and `STACKLY_CATALOG_DIR`), once, and hands
 //! them to [`stacklyd::run`]. Exit codes: 0 after a normal stop or
-//! `--print-roots`, 1 when the daemon cannot start, 2 for bad arguments
-//! (clap), and 3 when another daemon holds the lock.
+//! `--print-roots`, 1 when the daemon cannot start (after it knew its data
+//! root, it leaves `<data>/daemon-start-failure.json` saying why, spec
+//! 0034), 2 for bad arguments (clap), and 3 when another daemon holds the
+//! lock.
 
 use std::process::ExitCode;
 

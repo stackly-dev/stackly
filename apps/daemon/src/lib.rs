@@ -43,6 +43,8 @@ pub mod server;
 pub mod session;
 #[cfg(unix)]
 pub mod shutdown;
+#[cfg(unix)]
+pub mod start_failure;
 pub mod startup;
 #[cfg(unix)]
 pub mod state;
