@@ -94,6 +94,7 @@ pub(super) fn from_preflight(params: &PreflightCreateParams) -> CreateDraft {
         secret_values: Vec::new(),
         start: params.start,
         startup: startup_of(params.startup),
+        duplicate_of: None,
     }
 }
 
@@ -131,6 +132,7 @@ pub(super) fn from_create(
         secret_values: Vec::new(),
         start: false,
         startup: startup_of(params.startup),
+        duplicate_of: None,
     };
     draft.secret_values = values
         .iter()

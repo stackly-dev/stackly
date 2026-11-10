@@ -72,6 +72,7 @@ pub fn build_duplicate(facts: &DuplicateFacts) -> DuplicateModel {
         secret_values: Vec::new(),
         start: false,
         startup: None,
+        duplicate_of: None,
     };
     let secret_sources = secret_fields
         .iter()

@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use stackly_domain::{
-    ConfigRevisionId, Endpoint, EndpointName, InstallMode, Instance, InstanceId, InstanceLifecycle,
-    Port, Runtime, RuntimeState, ShortKey,
+    ConfigRevisionId, ConfigRevisionNumber, Endpoint, EndpointName, InstallMode, Instance,
+    InstanceId, InstanceLifecycle, Port, Runtime, RuntimeState, ShortKey,
 };
 use stackly_platform::{InstancePaths, check_private_dir};
 
@@ -42,6 +42,8 @@ pub(crate) struct Prepared {
     pub(crate) settings: SettingsValues,
     /// The active config revision the settings come from.
     pub(crate) revision: ConfigRevisionId,
+    /// Its number, for the audit note of the operation (spec 0035).
+    pub(crate) revision_number: ConfigRevisionNumber,
 }
 
 impl Prepared {
@@ -141,9 +143,11 @@ pub(crate) async fn prepare(
                 let initialized = instance.data_initialized_at().is_some().then_some(&package);
                 check_instance_folder(&platform, &paths, initialized)?;
             }
-            let (revision, settings) = settings(&*registry, &package, instance.id())?;
+            let (revision, revision_number, settings) =
+                settings(&*registry, &package, instance.id())?;
             Ok(Loaded {
                 revision,
+                revision_number,
                 runtime,
                 runtime_root,
                 package,
@@ -162,6 +166,7 @@ pub(crate) async fn prepare(
         paths: loaded.paths,
         settings: loaded.settings,
         revision: loaded.revision,
+        revision_number: loaded.revision_number,
     })
 }
 
@@ -203,6 +208,7 @@ fn check_locations(
 
 struct Loaded {
     revision: ConfigRevisionId,
+    revision_number: ConfigRevisionNumber,
     runtime: Runtime,
     runtime_root: PathBuf,
     package: ValidatedPackage,
@@ -375,7 +381,7 @@ fn settings(
     registry: &dyn stackly_domain::Registry,
     package: &ValidatedPackage,
     id: InstanceId,
-) -> Result<(ConfigRevisionId, SettingsValues), SupervisorError> {
+) -> Result<(ConfigRevisionId, ConfigRevisionNumber, SettingsValues), SupervisorError> {
     let invalid = |reason: String| SupervisorError::ConfigInvalid {
         field: "settings".to_owned(),
         reason,
@@ -390,7 +396,7 @@ fn settings(
     package
         .settings_schema()
         .validate(&document)
-        .map(|settings| (revision.id, settings))
+        .map(|settings| (revision.id, revision.number, settings))
         .map_err(|error| invalid(error.to_string()))
 }
 

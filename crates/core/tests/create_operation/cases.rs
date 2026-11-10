@@ -5,9 +5,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use stackly_core::instance::create::{CreateHooks, SecretSourceKind};
 use stackly_core::read_instance_manifest;
 use stackly_domain::{
-    CreatedState, Endpoint, HealthState, Instance, InstanceId, InstanceLifecycle, IpEndpoint,
-    OperationState, Port, PortRequest, ProviderSourceKind, ReadinessState, ReasonCode, Registry,
-    SecretPurpose, SecretRef, SecretUser, Transport,
+    AuditAction, AuditEventRecord, AuditQuery, AuditResult, CreatedState, Endpoint, HealthState,
+    Instance, InstanceId, InstanceLifecycle, IpEndpoint, OperationState, Port, PortRequest,
+    ProviderSourceKind, ReadinessState, ReasonCode, Registry, SecretPurpose, SecretRef, SecretUser,
+    Transport,
 };
 use stackly_evidence::{Kind, evidence};
 use stackly_platform::{ChildRole, ExitStatus, InstanceLock, ProcessSupervision, SecretValue};
@@ -988,6 +989,7 @@ fn the_input_of_a_huge_settings_document_keeps_only_its_digest() {
         secret_values: Vec::new(),
         start: false,
         startup: Some(stackly_domain::StartupPolicy::Manual),
+        duplicate_of: None,
     };
 
     let payload = encode_input(InstanceId::generate(), &draft).expect("it fits once shortened");
@@ -1327,4 +1329,101 @@ async fn a_create_into_a_default_location_whose_folder_is_gone_is_refused_withou
     );
     assert!(!rig.paths(id).root.exists());
     assert!(rig.registry.instance(id).expect("it reads").value.is_none());
+}
+
+/// The one `operation.finished` row of `operation`.
+fn finished_row(rig: &Rig, operation: stackly_domain::OperationId) -> AuditEventRecord {
+    let query = AuditQuery {
+        operation: Some(operation),
+        ..AuditQuery::page(50, None)
+    };
+    let rows: Vec<AuditEventRecord> = rig
+        .registry
+        .audit_events(query)
+        .expect("the audit rows read")
+        .value
+        .items
+        .into_iter()
+        .filter(|row| row.action == AuditAction::OPERATION_FINISHED)
+        .collect();
+    assert_eq!(rows.len(), 1, "one finished row: {rows:?}");
+    rows.into_iter().next().expect("checked above")
+}
+
+// covers: AC-2, AC-18 (spec 0035)
+#[tokio::test]
+async fn a_create_notes_revision_1_its_provider_and_runtime_and_the_instance_it_duplicates() {
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let source = create_to_the_end(&cr, "orders").await;
+    let source_name = rig.instance_row(source).name().to_string();
+
+    let id = InstanceId::generate();
+    let mut draft = cr.draft("orders-copy");
+    draft.duplicate_of = Some(source);
+    let op = cr
+        .begin(id, draft, Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    finish_init(rig, 1).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+    let row = finished_row(rig, op);
+    assert_eq!(row.result, AuditResult::Succeeded);
+    assert_eq!(row.instance, Some(id));
+    assert_eq!(row.config_revision.map(|number| number.get()), Some(1));
+    assert_eq!(
+        row.safe_details.get("provider"),
+        Some(cr.draft("x").provider.name.as_str())
+    );
+    assert_eq!(
+        row.safe_details.get("runtimeId"),
+        Some(rig.runtime.id().to_string().as_str())
+    );
+    assert_eq!(
+        row.safe_details.get("duplicateOf"),
+        Some(source.to_string().as_str())
+    );
+    assert_eq!(
+        row.safe_details.get("duplicateOfName"),
+        Some(source_name.as_str())
+    );
+
+    // An instance that is gone is ignored without an error.
+    let gone = InstanceId::generate();
+    let mut draft = cr.draft("orders-gone");
+    draft.duplicate_of = Some(gone);
+    let id = InstanceId::generate();
+    let op = cr
+        .begin(id, draft, Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    finish_init(rig, 2).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+    let row = finished_row(rig, op);
+    assert_eq!(row.safe_details.get("duplicateOf"), None);
+    assert_eq!(row.safe_details.get("duplicateOfName"), None);
+}
+
+// covers: AC-2 (spec 0035, a create that fails at init)
+#[tokio::test]
+async fn a_create_that_fails_at_init_keeps_revision_1_and_its_error_in_the_row() {
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let id = InstanceId::generate();
+    let op = cr
+        .begin(id, cr.draft("orders"), Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    let step = rig.helper_spawn(ChildRole::InitStep, 0).await;
+    rig.processes().exit(step.pid, Some(ExitStatus::Exited(1)));
+    rig.wait_state(op, OperationState::Failed).await;
+    let row = finished_row(rig, op);
+    assert_eq!(row.result, AuditResult::Failed);
+    assert_eq!(row.instance, Some(id), "a failed create keeps its instance");
+    assert_eq!(row.config_revision.map(|number| number.get()), Some(1));
+    assert_eq!(
+        row.safe_details.get("errorCode"),
+        Some("supervisor.init_failed")
+    );
+    assert_eq!(row.safe_details.get("stage"), Some("init"));
 }

@@ -47,6 +47,7 @@ use super::{
     SupervisorDeps, secrets,
 };
 use crate::instance::data_compat::check_data_compatibility;
+use crate::operation::AuditNote;
 use crate::operation::{
     BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError, WorkOutcome,
     WorkResult,
@@ -413,6 +414,13 @@ async fn gate(
     enter(ctx, StageName::LOCK, first_attempt, false).await?;
     // The resource lock is the engine's; the instance lock is ours.
     let prepared = prepare(sup, id, Checks::Full).await?;
+    // A start records the revision it renders as soon as it is read, and
+    // its ports once they are chosen (spec 0035). A restart, an apply, or a
+    // port change that runs this start half keeps the note it set itself.
+    let noted = ctx.kind() == stackly_domain::OperationKind::StartInstance;
+    if noted {
+        ctx.set_audit_note(AuditNote::new(Some(prepared.revision_number)));
+    }
     let lock = take_lock(deps, &prepared).await?;
     guard_last_observation(deps, &prepared, id).await?;
 
@@ -423,12 +431,27 @@ async fn gate(
 
     enter(ctx, StageName::ENDPOINTS, first_attempt, false).await?;
     let ports = select_ports(sup, &prepared).await?;
+    if noted {
+        ctx.set_audit_note(
+            AuditNote::new(Some(prepared.revision_number)).with("ports", ports_text(&ports)),
+        );
+    }
     Ok(Armed {
         prepared,
         secrets,
         lock,
         ports,
     })
+}
+
+/// The chosen ports as the audit note shows them: `<endpoint> <port>`, by
+/// endpoint name, joined by commas.
+fn ports_text(ports: &BTreeMap<EndpointName, Port>) -> String {
+    ports
+        .iter()
+        .map(|(name, port)| format!("{name} {}", port.get()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn ctx_instance(ctx: &OperationContext) -> InstanceId {
