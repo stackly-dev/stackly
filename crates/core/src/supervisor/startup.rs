@@ -34,8 +34,8 @@ use super::exit::{crash_reason, finish_process, remove_material, spawn_exit_task
 use super::init::config_invalid;
 use super::lock::{guard_last_observation, take_lock};
 use super::persist::{
-    CommitMode, ExitRecord, ExitSeen, apply_event, apply_exit, blocking, commit_exit,
-    commit_instance, exit_kind, read_instance, read_instance_actor,
+    CommitMode, ExitRecord, ExitSeen, apply_event, apply_event_after, apply_exit, blocking,
+    commit_exit, commit_instance, exit_kind, read_instance, read_instance_actor,
 };
 use super::prepare::{Checks, Prepared, prepare};
 use super::readiness::spawn_probes;
@@ -46,6 +46,7 @@ use super::{
     BindOptions, BindOutcome, DrainContext, DrainOutcome, SpoolDrain, SpoolSource, Supervisor,
     SupervisorDeps, secrets,
 };
+use crate::instance::create::suggest_for_start;
 use crate::instance::data_compat::check_data_compatibility;
 use crate::operation::AuditNote;
 use crate::operation::{
@@ -532,19 +533,9 @@ async fn select_ports(
     prepared: &Prepared,
 ) -> Result<BTreeMap<EndpointName, Port>, SupervisorError> {
     let deps = sup.deps().clone();
-    let registry = deps.registry.clone();
-    let own = prepared.instance.id();
-    let others = blocking(move || {
-        registry.instances(InstanceFilter {
-            include_retained: false,
-        })
-    })
-    .await?
-    .map_err(SupervisorError::Registry)?
-    .value;
+    let others = other_instances(&deps, prepared.instance.id()).await?;
     let mut taken: Vec<(Option<InstanceId>, Endpoint)> = others
         .iter()
-        .filter(|other| other.id() != own)
         .flat_map(|other| {
             other
                 .endpoints()
@@ -555,10 +546,14 @@ async fn select_ports(
     let mut chosen = BTreeMap::new();
     for endpoint in prepared.instance.endpoints() {
         let Endpoint::Ip(ip) = endpoint else { continue };
+        // Spec 0033 AC-4: a fixed port the start cannot use carries the
+        // first free port after it, searched only once the start fails.
+        let suggest = |port: Port| suggest_port(&deps, &prepared.instance, ip, port, &others);
         let fault = |port: Port| EndpointFault {
             endpoint: ip.name().to_string(),
             address: ip.address().to_string(),
             port: port.get(),
+            suggested_port: suggest(port),
         };
         let conflict = |port: Port, taken: &[(Option<InstanceId>, Endpoint)]| {
             let probe = Endpoint::Ip(IpEndpoint::new(
@@ -597,7 +592,7 @@ async fn select_ports(
                     }
                 }
                 if let Some(owner) = conflict(port, &taken) {
-                    return Err(endpoint_conflict(ip, port, owner));
+                    return Err(endpoint_conflict(ip, port, owner, &suggest));
                 }
                 port
             }
@@ -626,12 +621,60 @@ async fn select_ports(
     Ok(chosen)
 }
 
-fn endpoint_conflict(ip: &IpEndpoint, port: Port, owner: Option<InstanceId>) -> SupervisorError {
+/// The instances that are not retained, other than `own`: the ones whose
+/// ports a start of `own` must not take.
+///
+/// # Errors
+///
+/// Returns [`SupervisorError::Registry`] when the registry cannot list them.
+async fn other_instances(
+    deps: &SupervisorDeps,
+    own: InstanceId,
+) -> Result<Vec<Instance>, SupervisorError> {
+    let registry = deps.registry.clone();
+    let mut others = blocking(move || {
+        registry.instances(InstanceFilter {
+            include_retained: false,
+        })
+    })
+    .await?
+    .map_err(SupervisorError::Registry)?
+    .value;
+    others.retain(|other| other.id() != own);
+    Ok(others)
+}
+
+/// The free port a start suggests for `ip` of `instance` when it cannot
+/// use `port` (spec 0033, AC-4): the search of spec 0020 and 0029 against
+/// the other endpoints of the instance and `others`. It changes nothing.
+fn suggest_port(
+    deps: &SupervisorDeps,
+    instance: &Instance,
+    ip: &IpEndpoint,
+    port: Port,
+    others: &[Instance],
+) -> Option<u16> {
+    let siblings: Vec<Endpoint> = instance
+        .endpoints()
+        .iter()
+        .filter(|endpoint| endpoint.name() != ip.name())
+        .cloned()
+        .collect();
+    suggest_for_start(&*deps.ports, ip, port, &siblings, others).map(Port::get)
+}
+
+fn endpoint_conflict(
+    ip: &IpEndpoint,
+    port: Port,
+    owner: Option<InstanceId>,
+    suggest: &dyn Fn(Port) -> Option<u16>,
+) -> SupervisorError {
     match owner {
         Some(other) => SupervisorError::EndpointConflict {
             endpoint: ip.name().to_string(),
             port: port.get(),
             other,
+            suggested_port: suggest(port),
         },
         None => SupervisorError::AutoPortUnavailable {
             endpoint: ip.name().to_string(),
@@ -802,19 +845,26 @@ fn with_last_exit(error: SupervisorError, status: Option<ExitStatus>) -> Supervi
     }
 }
 
-/// Waits `delay` before a respawn, showing when it happens. A cancel or a
-/// shutdown ends the pause at once and reaches the caller as an error.
+/// Waits `delay` before a respawn, showing when it happens. The operation
+/// enters the stage `backoff` only after the `restart` status names the
+/// next attempt's time (spec 0033, AC-2), so a client that sees the stage
+/// and reads the instance always finds `nextAttemptAt`; the next attempt
+/// enters `lock` again, with no journal step. A cancel or a shutdown ends
+/// the pause at once and reaches the caller as an error.
 async fn wait_to_respawn(
     sup: &Supervisor,
-    ctx: &OperationContext,
+    ctx: &mut OperationContext,
     delay: Duration,
 ) -> Result<(), WorkError> {
     let deps = sup.deps();
     let actor = sup.actor(ctx_instance(ctx));
     actor.update(deps, |state| show_pause(deps, state, delay));
-    tokio::select! {
-        () = tokio::time::sleep(delay) => {}
-        () = ctx.stopped() => {}
+    let staged = ctx.set_stage(StageName::BACKOFF).await;
+    if staged.is_ok() {
+        tokio::select! {
+            () = tokio::time::sleep(delay) => {}
+            () = ctx.stopped() => {}
+        }
     }
     actor.update(deps, |state| {
         let attempts = state
@@ -822,6 +872,7 @@ async fn wait_to_respawn(
             .crashes_in_window(Instant::now(), &deps.config);
         state.restart_status = restart_status(&deps.config, attempts, None, false);
     });
+    staged?;
     ctx.check_cancel()
 }
 
@@ -866,7 +917,7 @@ async fn fail_lifecycle(
             },
             _ => return Ok(Vec::new()),
         };
-        apply_event(changes, event, now)?;
+        apply_event_after(changes, event, now, seen.and_then(|seen| seen.status))?;
         Ok(Vec::new())
     })
     .await;
@@ -1441,15 +1492,41 @@ pub(crate) async fn after_unrequested_exit(
             {
                 let reason = FailureCode::ENDPOINT_IN_USE;
                 fail_lifecycle(sup, id, &reason, Some(seen), mode).await;
+                // Only an operation sends this error to a client; an actor
+                // only logs it, so it does not search.
+                let suggested_port = match mode {
+                    CommitMode::Operation => early_exit_suggestion(deps, &instance, ip, port).await,
+                    CommitMode::Actor => None,
+                };
                 return Next::Final(SupervisorError::EndpointInUse(EndpointFault {
                     endpoint: ip.name().to_string(),
                     address: ip.address().to_string(),
                     port: port.get(),
+                    suggested_port,
                 }));
             }
         }
     }
     apply_policy(sup, id, crash_reason(notice.status), Some(seen), mode).await
+}
+
+/// The free port the early exit check suggests (spec 0033, AC-4): it reads
+/// the other instances once, since the check read only this one. A read
+/// that fails gives no suggestion and one warning; the error goes out
+/// either way.
+async fn early_exit_suggestion(
+    deps: &SupervisorDeps,
+    instance: &Instance,
+    ip: &IpEndpoint,
+    port: Port,
+) -> Option<u16> {
+    match other_instances(deps, instance.id()).await {
+        Ok(others) => suggest_port(deps, instance, ip, port, &others),
+        Err(error) => {
+            tracing::warn!(instance = %instance.id(), %error, "the other instances could not be read, so no free port is suggested");
+            None
+        }
+    }
 }
 
 /// A respawn whose instance lock was still held counts as a failed attempt

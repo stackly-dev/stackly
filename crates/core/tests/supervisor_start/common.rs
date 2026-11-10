@@ -230,6 +230,9 @@ pub struct FaultyRegistry {
     hold: Mutex<Option<Arc<Hold>>>,
     /// Errors the next `instance` reads answer with, one each, oldest first.
     read_faults: Mutex<Vec<stackly_domain::RegistryError>>,
+    /// Errors the next `instances` lists answer with, one each, oldest
+    /// first.
+    list_faults: Mutex<Vec<stackly_domain::RegistryError>>,
     /// Holds the next commit that records a crash until the test opens it.
     crash_hold: Mutex<Option<Arc<Hold>>>,
     /// Errors the next guarded commits answer with, one each, oldest first;
@@ -302,6 +305,15 @@ impl FaultyRegistry {
     pub fn fail_instance_reads(&self, errors: Vec<stackly_domain::RegistryError>) {
         *self
             .read_faults
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = errors;
+    }
+
+    /// Makes the next `instances` lists fail with `errors`, one error per
+    /// list.
+    pub fn fail_instance_lists(&self, errors: Vec<stackly_domain::RegistryError>) {
+        *self
+            .list_faults
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = errors;
     }
@@ -450,6 +462,15 @@ impl Registry for FaultyRegistry {
             .clone();
         if let Some(hold) = hold {
             hold.pass();
+        }
+        {
+            let mut faults = self
+                .list_faults
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if !faults.is_empty() {
+                return Err(faults.remove(0));
+            }
         }
         self.inner.instances(filter)
     }
@@ -706,6 +727,7 @@ impl Rig {
             commit_faults: Mutex::new(Vec::new()),
             hold: Mutex::new(None),
             read_faults: Mutex::new(Vec::new()),
+            list_faults: Mutex::new(Vec::new()),
             crash_hold: Mutex::new(None),
             guarded_faults: Mutex::new(Vec::new()),
             before_guarded: Mutex::new(None),

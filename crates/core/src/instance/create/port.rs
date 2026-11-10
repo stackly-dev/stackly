@@ -319,28 +319,73 @@ pub(crate) fn judge_change(
     own_bound: Option<Port>,
 ) -> Result<(), (PortProblem, Option<Port>)> {
     let slot = Slot::of(endpoint);
-    let problem = |candidate: Port| -> Option<PortProblem> {
-        let moved = slot.endpoint(PortRequest::Fixed(candidate));
-        if siblings
-            .iter()
-            .any(|sibling| endpoints_conflict(&moved, sibling))
-        {
-            return Some(PortProblem::Sibling);
-        }
-        if let Some(other) = conflicts_with_instances(others, &slot, candidate) {
-            return Some(PortProblem::Instance(other));
-        }
-        if own_bound == Some(candidate) {
-            return None;
-        }
-        let found = probe(port_probe, &slot, candidate);
-        (found.exact != BindOutcome::Free).then_some(PortProblem::Bind(found.exact))
-    };
+    let problem =
+        |candidate: Port| problem_at(port_probe, &slot, candidate, siblings, others, own_bound);
     let Some(failure) = problem(port) else {
         return Ok(());
     };
+    Err((failure, first_free_after(port_probe, &slot, port, &problem)))
+}
+
+/// The port a start that found `port` unusable for `endpoint` suggests
+/// (spec 0033, AC-4): the search of [`judge_change`] with nothing bound,
+/// the first port after `port` that no endpoint of `siblings` (the other
+/// endpoints of the instance) and no instance of `others` (the other
+/// instances that are not retained) has, and whose trial binds of steps 4
+/// to 6 are clean. It only opens trial sockets, which close at once, and
+/// writes nothing. `None` when no candidate passes.
+pub(crate) fn suggest_for_start(
+    port_probe: &dyn PortProbe,
+    endpoint: &IpEndpoint,
+    port: Port,
+    siblings: &[Endpoint],
+    others: &[Instance],
+) -> Option<Port> {
+    let slot = Slot::of(endpoint);
+    let problem =
+        |candidate: Port| problem_at(port_probe, &slot, candidate, siblings, others, None);
+    first_free_after(port_probe, &slot, port, &problem)
+}
+
+/// What steps 2 to 4 of spec 0020 find for `slot` at `candidate`, for an
+/// endpoint of an existing instance; `own_bound` skips the trial bind of
+/// the port the instance's own process holds.
+fn problem_at(
+    port_probe: &dyn PortProbe,
+    slot: &Slot,
+    candidate: Port,
+    siblings: &[Endpoint],
+    others: &[Instance],
+    own_bound: Option<Port>,
+) -> Option<PortProblem> {
+    let moved = slot.endpoint(PortRequest::Fixed(candidate));
+    if siblings
+        .iter()
+        .any(|sibling| endpoints_conflict(&moved, sibling))
+    {
+        return Some(PortProblem::Sibling);
+    }
+    if let Some(other) = conflicts_with_instances(others, slot, candidate) {
+        return Some(PortProblem::Instance(other));
+    }
+    if own_bound == Some(candidate) {
+        return None;
+    }
+    let found = probe(port_probe, slot, candidate);
+    (found.exact != BindOutcome::Free).then_some(PortProblem::Bind(found.exact))
+}
+
+/// The first port from `max(port + 1, 1024)` up to 65535, at most
+/// [`PORT_SUGGESTION_ATTEMPTS`] candidates, that `problem` lets through
+/// and whose trial binds of steps 4 to 6 are clean.
+fn first_free_after(
+    port_probe: &dyn PortProbe,
+    slot: &Slot,
+    port: Port,
+    problem: &dyn Fn(Port) -> Option<PortProblem>,
+) -> Option<Port> {
     let start = (u32::from(port.get()) + 1).max(PORT_SUGGESTION_MIN);
-    let suggestion = (start..=u32::from(u16::MAX))
+    (start..=u32::from(u16::MAX))
         .take(PORT_SUGGESTION_ATTEMPTS)
         .filter_map(|candidate| {
             u16::try_from(candidate)
@@ -348,9 +393,8 @@ pub(crate) fn judge_change(
                 .and_then(|n| Port::new(n).ok())
         })
         .find(|&candidate| {
-            problem(candidate).is_none() && probe(port_probe, &slot, candidate).clean()
-        });
-    Err((failure, suggestion))
+            problem(candidate).is_none() && probe(port_probe, slot, candidate).clean()
+        })
 }
 
 /// The first of `others` whose effective or fixed port conflicts with

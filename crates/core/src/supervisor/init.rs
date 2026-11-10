@@ -16,7 +16,7 @@ use super::drift;
 use super::error::SupervisorError;
 use super::helper::HelperEnd;
 use super::lock::take_lock;
-use super::persist::{CommitMode, apply_event, blocking, commit_instance};
+use super::persist::{CommitMode, apply_event, apply_event_after, blocking, commit_instance};
 use super::prepare::{Checks, Prepared, prepare};
 use super::sink::{LogBatch, LogLine, SinkOutcome};
 use super::spool::char_cut;
@@ -67,6 +67,18 @@ impl InitFault {
             Self::Step { .. } => FailureCode::INIT_STEP_FAILED,
             Self::StepTimeout { .. } => FailureCode::INIT_STEP_TIMEOUT,
             Self::Deadline => FailureCode::INIT_TIMEOUT,
+        }
+    }
+
+    /// The exit of the init step process that failed, for the failure
+    /// facts (spec 0033, AC-3); `None` when no step process exited.
+    const fn exit(&self) -> Option<ExitStatus> {
+        match self {
+            Self::Step {
+                exit_code: Some(code),
+                ..
+            } => Some(ExitStatus::Exited(*code)),
+            _ => None,
         }
     }
 
@@ -189,13 +201,15 @@ impl Supervisor {
                     tracing::warn!(instance = %id, step, %reason, "an init step failed");
                 }
                 let reason = fault.code();
+                let exit = fault.exit();
                 commit_instance(self, id, None, CommitMode::Operation, |changes| {
-                    apply_event(
+                    apply_event_after(
                         changes,
                         LifecycleEvent::InitFailed {
                             reason: reason.clone(),
                         },
                         now,
+                        exit,
                     )?;
                     Ok(Vec::new())
                 })

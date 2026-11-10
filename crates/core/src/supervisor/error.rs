@@ -43,6 +43,10 @@ pub struct EndpointFault {
     pub address: String,
     /// The port.
     pub port: u16,
+    /// The first free port after `port` the start found (spec 0033, AC-4),
+    /// sent as the `suggestedPort` detail; `None` without a candidate or
+    /// when the other instances could not be read.
+    pub suggested_port: Option<u16>,
 }
 
 /// Why a supervisor operation failed.
@@ -132,6 +136,9 @@ pub enum SupervisorError {
         port: u16,
         /// The other instance.
         other: InstanceId,
+        /// The first free port after `port` (spec 0033, AC-4), as in
+        /// [`EndpointFault::suggested_port`].
+        suggested_port: Option<u16>,
     },
     /// No candidate for an `Auto` port was free.
     #[error("no free port for endpoint {endpoint}")]
@@ -390,13 +397,23 @@ fn pid_list(pids: &[Pid]) -> String {
         .join(",")
 }
 
+/// The `suggestedPort` detail, when a start found a free port to suggest
+/// (spec 0033, AC-4).
+fn suggested(port: Option<u16>) -> Option<(DetailKey, String)> {
+    port.map(|port| (key("suggestedPort"), port.to_string()))
+}
+
+/// The details of an endpoint fault in catalog order: `endpoint`,
+/// `address`, `port`, `suggestedPort` when there is one, `omitted`.
 fn endpoint_details(fault: &EndpointFault) -> Vec<(DetailKey, String)> {
-    vec![
+    let mut details = vec![
         (key("endpoint"), fault.endpoint.clone()),
         (key("address"), fault.address.clone()),
         (key("port"), fault.port.to_string()),
-        omitted(),
-    ]
+    ];
+    details.extend(suggested(fault.suggested_port));
+    details.push(omitted());
+    details
 }
 
 impl OperationError for SupervisorError {
@@ -497,12 +514,17 @@ impl OperationError for SupervisorError {
                 endpoint,
                 port,
                 other,
-            } => vec![
-                (key("endpoint"), endpoint.clone()),
-                (key("port"), port.to_string()),
-                (key("otherInstance"), other.to_string()),
-                omitted(),
-            ],
+                suggested_port,
+            } => {
+                let mut details = vec![
+                    (key("endpoint"), endpoint.clone()),
+                    (key("port"), port.to_string()),
+                    (key("otherInstance"), other.to_string()),
+                ];
+                details.extend(suggested(*suggested_port));
+                details.push(omitted());
+                details
+            }
             Self::AutoPortUnavailable { endpoint } => vec![(key("endpoint"), endpoint.clone())],
             Self::RuntimeUnavailable { runtime_id, state } => vec![
                 (key("runtimeId"), runtime_id.clone()),
@@ -616,6 +638,92 @@ mod tests {
             endpoint: "http".to_owned(),
             address: "127.0.0.1".to_owned(),
             port: 18080,
+            suggested_port: None,
+        }
+    }
+
+    fn detail_pairs(error: &SupervisorError) -> Vec<(String, String)> {
+        error
+            .details()
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect()
+    }
+
+    #[test]
+    fn a_suggested_port_comes_before_omitted_in_every_endpoint_error() {
+        // covers: spec 0033 AC-4 (suggestedPort in catalog order)
+        let suggested = EndpointFault {
+            suggested_port: Some(18081),
+            ..fault()
+        };
+        let in_use = SupervisorError::EndpointInUse(suggested.clone());
+        let unavailable = SupervisorError::EndpointUnavailable {
+            fault: suggested,
+            reason: UnavailableReason::Unavailable,
+        };
+        let conflict = SupervisorError::EndpointConflict {
+            endpoint: "http".to_owned(),
+            port: 18080,
+            other: InstanceId::generate(),
+            suggested_port: Some(18081),
+        };
+
+        let keys = |error: &SupervisorError| -> Vec<String> {
+            detail_pairs(error)
+                .into_iter()
+                .map(|(key, _)| key)
+                .collect()
+        };
+        assert_eq!(
+            keys(&in_use),
+            ["endpoint", "address", "port", "suggestedPort", "omitted"]
+        );
+        assert_eq!(
+            keys(&unavailable),
+            [
+                "endpoint",
+                "address",
+                "port",
+                "reason",
+                "suggestedPort",
+                "omitted"
+            ]
+        );
+        assert_eq!(
+            keys(&conflict),
+            [
+                "endpoint",
+                "port",
+                "otherInstance",
+                "suggestedPort",
+                "omitted"
+            ]
+        );
+        for error in [&in_use, &unavailable, &conflict] {
+            assert!(
+                detail_pairs(error).contains(&("suggestedPort".to_owned(), "18081".to_owned())),
+                "{error}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_endpoint_error_without_a_candidate_has_no_suggested_port() {
+        // covers: spec 0033 AC-4 (no detail without a candidate)
+        let conflict = SupervisorError::EndpointConflict {
+            endpoint: "http".to_owned(),
+            port: 18080,
+            other: InstanceId::generate(),
+            suggested_port: None,
+        };
+        for error in [SupervisorError::EndpointInUse(fault()), conflict] {
+            assert!(
+                detail_pairs(&error)
+                    .iter()
+                    .all(|(key, _)| key != "suggestedPort"),
+                "{error}"
+            );
         }
     }
 

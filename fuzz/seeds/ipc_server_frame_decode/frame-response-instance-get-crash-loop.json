@@ -1,0 +1,73 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003301",
+    "reply": {
+      "type": "instance.get",
+      "content": {
+        "id": "0192f3a5-0000-7000-8000-000000003301",
+        "name": "orders",
+        "displayName": null,
+        "revision": 21,
+        "software": "postgresql",
+        "provider": {
+          "name": "official/postgresql",
+          "revision": "2026.10.1",
+          "manifestSha256": "3f786850e387550fdab836ed7e6dc881de23001b3f786850e387550fdab836ed"
+        },
+        "runtimeId": "0192f3a5-0000-7000-8000-0000000000a1",
+        "runtimeVersion": "17.2.0",
+        "lifecycle": "failed",
+        "desired": "running",
+        "readiness": {
+          "state": "unknown",
+          "reason": "not_running",
+          "detail": null,
+          "observedAt": "2026-11-10T08:00:31.204Z",
+          "latencyMs": null
+        },
+        "health": {
+          "state": "unknown",
+          "reason": "not_running",
+          "detail": null,
+          "observedAt": "2026-11-10T08:00:31.204Z",
+          "latencyMs": null
+        },
+        "statusSeq": 31,
+        "process": null,
+        "lastFailure": {
+          "code": "crash_loop",
+          "at": "2026-11-10T08:00:31.204Z",
+          "exitCode": 3,
+          "signal": null,
+          "excerpt": [
+            "FATAL: could not map anonymous shared memory: Cannot allocate memory",
+            "LOG: database system is shut down"
+          ]
+        },
+        "restart": {
+          "attempts": 6,
+          "budget": 5,
+          "windowSeconds": 300,
+          "nextAttemptAt": null,
+          "exhausted": true
+        },
+        "restartTotal": 5,
+        "blocker": null,
+        "endpoints": [],
+        "leftoverProcesses": [],
+        "logsUnavailable": false,
+        "ownership": "manual",
+        "initialized": true,
+        "capabilities": {
+          "reload": true
+        },
+        "lastExit": "crashed",
+        "autostart": {
+          "policy": "manual",
+          "session": "none"
+        }
+      }
+    }
+  }
+}

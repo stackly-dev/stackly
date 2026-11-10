@@ -18,7 +18,7 @@ use tokio::sync::{Notify, watch};
 
 use super::drain::DrainSlot;
 use super::restart::RestartHistory;
-use super::status::{InstanceStatus, ProcessStatus, RestartStatus};
+use super::status::{FailureFacts, InstanceStatus, ProcessStatus, RestartStatus};
 use super::{SupervisorConfig, SupervisorDeps};
 
 /// The process an actor supervises.
@@ -110,6 +110,9 @@ pub(crate) struct ActorState {
     /// Flips to `true` to cancel the pause before a respawn the actor's
     /// timer waits out; `None` when no pause is pending.
     pub(crate) respawn: Option<watch::Sender<bool>>,
+    /// The last failure a commit of this daemon run wrote, with its time
+    /// and exit (spec 0033, AC-3); see [`FailureFacts`].
+    pub(crate) last_failure: Option<FailureFacts>,
     seq: u64,
     published: InstanceStatus,
 }
@@ -133,6 +136,7 @@ impl ActorState {
             logs_unavailable: self.logs_unavailable,
             pending_commit: self.pending_commit,
             exit_unrecorded: self.exit_unrecorded && self.process.is_none(),
+            last_failure: self.last_failure.clone(),
         }
     }
 
@@ -280,6 +284,7 @@ impl InstanceActor {
             op_owns_exit: false,
             next_generation: 1,
             respawn: None,
+            last_failure: None,
             seq: 0,
             published: placeholder(now),
         };
@@ -413,6 +418,7 @@ fn placeholder(now: Timestamp) -> InstanceStatus {
         logs_unavailable: false,
         pending_commit: false,
         exit_unrecorded: false,
+        last_failure: None,
     }
 }
 

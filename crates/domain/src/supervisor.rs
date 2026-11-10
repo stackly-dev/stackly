@@ -76,6 +76,10 @@ impl StageName {
     pub const IDENTITY: Self = Self::from_static("identity");
     /// Probes readiness until ready, a crash, a cancel, or the deadline.
     pub const READINESS: Self = Self::from_static("readiness");
+    /// Waits out the pause of the restart policy between two attempts of
+    /// one start, after the next attempt's time is shown (spec 0033,
+    /// AC-2); the next attempt enters `lock` again.
+    pub const BACKOFF: Self = Self::from_static("backoff");
     /// Publishes the ready instance and its final ports.
     pub const PUBLISH: Self = Self::from_static("publish");
     /// Ends the operation and releases its lock.
@@ -199,6 +203,7 @@ mod tests {
                 "complete",
             ]
         );
+        assert_eq!(StageName::BACKOFF.as_str(), "backoff");
         let others: Vec<_> = [
             StageName::STOP,
             StageName::PIN,

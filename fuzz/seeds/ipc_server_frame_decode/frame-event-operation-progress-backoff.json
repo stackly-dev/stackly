@@ -1,0 +1,44 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 3302,
+    "at": "2026-11-10T08:00:00.871Z",
+    "resource": {
+      "kind": "operation",
+      "id": "0192f3a4-0000-7000-8000-000000003302"
+    },
+    "revision": 14,
+    "kind": {
+      "type": "operation.progress",
+      "content": {
+        "id": "0192f3a4-0000-7000-8000-000000003302",
+        "kind": "start_instance",
+        "resource": {
+          "kind": "instance",
+          "id": "0192f3a5-0000-7000-8000-000000003301"
+        },
+        "state": "running",
+        "stage": "backoff",
+        "progress": {
+          "type": "indeterminate"
+        },
+        "waitingOn": null,
+        "cancelRequestedAt": null,
+        "pointOfNoReturnAt": "2026-11-10T08:00:00.190Z",
+        "failure": null,
+        "recovery": null,
+        "result": null,
+        "trigger": {
+          "origin": "user",
+          "client": "cli"
+        },
+        "createdAt": "2026-11-10T08:00:00.000Z",
+        "startedAt": "2026-11-10T08:00:00.040Z",
+        "updatedAt": "2026-11-10T08:00:00.870Z",
+        "revision": 14,
+        "cancel": "available"
+      }
+    }
+  }
+}
