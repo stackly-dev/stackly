@@ -23,7 +23,7 @@ Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, reco
 - [ ] Verify it: `/check verify crash loop & error start yang aman`
 - [ ] Test it: `/test crash loop & error start yang aman`
 
-### 34. Doctor & diagnostic bundle · needs a decision
+### 34. Doctor & diagnostic bundle · in-progress
 
 `stackly doctor` dan halaman Diagnostics yang memeriksa izin, runtime atau dependency yang hilang, konflik endpoint, data lock, ruang disk, registry, background agent, protocol mismatch, dan config drift, plus paket diagnosis yang disanitasi.
 
@@ -31,7 +31,17 @@ Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, reco
 
 **Trace:** REQ-019, REQ-028, PAGE-13, NFR-016, AC-019, PRD bagian 35.3
 
-- [ ] Design it (spec): `/architect doctor & diagnostic bundle`
+**Pointer:** spec [0034](../specs/0034-doctor-diagnostic-bundle/index.md)
+
+- [x] Design it (spec): `/architect doctor & diagnostic bundle` · spec 0034, cross check (Sonnet) applied, accepted 2026-11-10
+- [ ] Build it: `/develop doctor & diagnostic bundle`
+  - [ ] Doctor contract and daemon checks: `doctor.run` DTOs and the protocol minor, `ListenerLookup`, `quick_check` and `CODED_COLUMNS` scan, the 13 read only checks with passive identity evidence, and daemon integration tests with a real `sleep` process (spec 0034 AC-1 to AC-9, AC-22; build steps 1 to 5; after build step 4 of feature 35 is merged, since both touch crates/protocol, crates/core, and apps/daemon; steps 2 and 3 can run as parallel sessions now)
+  - [ ] Provider remedies and the daemon start failure record: `remedies` manifest block, two PostgreSQL entries, `daemon-start-failure.json` written by `main` (spec 0034 AC-9, AC-10, AC-11; build steps 6 to 8; needs milestone 1)
+  - [ ] Diagnostic bundle preview and export: staging, Redactor and `~`, limits, exact copy export, sentinel suite (spec 0034 AC-12, AC-13, AC-14, AC-22; build steps 9 and 10; needs milestone 1; step 9 amends the step 1 protocol minor while it is not on main)
+  - [ ] CLI `stackly doctor` and `stackly diagnostics preview|export` with client checks, exit codes, and goldens (spec 0034 AC-11, AC-14, AC-15, AC-16, AC-18; build steps 11 and 12; step 11 needs milestone 1, step 12 needs milestone 3; can run in parallel with the GUI milestone)
+  - [ ] GUI Diagnostics: doctor section, finding sheet, safe actions, focus, badge, CapacityModel, bundle sheet, spec 0068 fixtures, then manual A (real launchd) and manual B (GUI pass) recorded BLOCKED until run (spec 0034 AC-11, AC-17 to AC-22; build steps 13 to 16; step 13 needs milestone 1, step 14 needs milestone 3, `show_operation` after feature 35 `openOperation`)
+- [ ] Verify it: `/check verify doctor & diagnostic bundle`
+- [ ] Test it: `/test doctor & diagnostic bundle`
 
 ### 35. Operations, activity & audit · in-progress
 
