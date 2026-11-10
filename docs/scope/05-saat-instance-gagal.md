@@ -4,7 +4,7 @@
 
 Journey PRD JOURNEY-05: start gagal, pesan yang aman, doctor dan log, perbaikan config atau dependency, coba lagi, dan semuanya tercatat sebagai operasi. Data tidak pernah direset otomatis. Fase ini selesai kalau pengguna bisa sampai ke akar masalah dan pulih tanpa menebak, dan seluruh jalur itu bekerja dari GUI dan CLI.
 
-### 33. Crash loop & error start yang aman · in-progress
+### 33. Crash loop & error start yang aman · done
 
 Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, recovery hint, dan tautan ke log dan doctor, plus backoff dan retry budget dari spec supervisor (fitur 10) yang terlihat oleh pengguna.
 
@@ -23,7 +23,7 @@ Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, reco
 - [x] Verify it: `/check verify crash loop & error start yang aman` · automated and native PASS in chk-f33-verify on main (merge `95c97c69`), AC-1 to AC-17 met; the GUI steps of milestone 4 and build step 7 are not run and sit in `coordination/05-saat-instance-gagal.manual.md`, owner you (your instruction of 2026-11-10)
 - [x] Test it: `/test crash loop & error start yang aman` · tst-f33-test (merge `1e50342e`): every AC-1 to AC-17 has a test naming it; new tests for a credential in the failure banner (AC-15) and a real crash loop after ready through the CLI; suites green; text selection, the primary Retry style, and the click paths stay manual
 
-### 34. Doctor & diagnostic bundle · in-progress
+### 34. Doctor & diagnostic bundle · done
 
 `stackly doctor` dan halaman Diagnostics yang memeriksa izin, runtime atau dependency yang hilang, konflik endpoint, data lock, ruang disk, registry, background agent, protocol mismatch, dan config drift, plus paket diagnosis yang disanitasi.
 
@@ -43,7 +43,7 @@ Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, reco
 - [x] Verify it: `/check verify doctor & diagnostic bundle` · automated and native PASS in chk-f34-verify on main (merge `f5bb7257`), AC-1 to AC-22 met, native PostgreSQL 17 and 18 and a native bundle probe; manual A (real launchd), manual B (GUI pass), the terminal color step, and the `socket_fdinfo` remeasure are not run and sit in `coordination/05-saat-instance-gagal.manual.md`, BLOCKED, owner you (your instruction of 2026-11-10)
 - [x] Test it: `/test doctor & diagnostic bundle` · tst-f34-test (merge `c53d3848`): every AC-1 to AC-22 has a test naming it; new tests for the 2000 line and 50 log limits over the socket, a credential in a readiness detail, two port conflicts in one report, the native bundle probe on PostgreSQL 17 and 18, and a failed run over a shown report; suites green; the 64 MiB limit stays unit tested and the Diagnostics toolbar stays manual
 
-### 35. Operations, activity & audit · in-progress
+### 35. Operations, activity & audit · done
 
 Halaman Operations dan tab Activity: stage, progress, cancel, error, retry atau resume bila aman, serta audit lokal (actor, operation ID, instance, aksi, config revision, hasil) tanpa secret.
 
