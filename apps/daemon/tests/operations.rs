@@ -5,6 +5,8 @@
 //! contract method starts one before feature 10.
 #![cfg(target_os = "macos")]
 
+#[path = "operations/audit_paths.rs"]
+mod audit_paths;
 #[path = "operations/cancel_point.rs"]
 mod cancel_point;
 #[path = "operations/flow.rs"]

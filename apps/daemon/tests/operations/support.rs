@@ -14,9 +14,12 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use stackly_core::operation::testing::{ScriptedFactory, ScriptedWork};
-use stackly_core::operation::{BeginRequest, BusyPolicy, OperationEngine, Origin, RebuildError};
+use stackly_core::operation::{
+    BeginRequest, BusyPolicy, FinalBatch, NoOpReply, OperationEngine, Origin, Precheck,
+    PrecheckOutcome, RebuildError,
+};
 use stackly_core::{PreparedLayout, prepare_layout};
-use stackly_domain::{InstanceId, JournalPayload, OperationKind, OperationResource};
+use stackly_domain::{InstanceId, JournalPayload, OperationKind, OperationResource, WriteOp};
 use stackly_ipc::{Client, ConnectPolicy};
 use stackly_platform::{Clock, Platform, SystemClock, UserId};
 use stackly_platform_macos::MacosPlatform;
@@ -27,7 +30,7 @@ use stackly_protocol::operation::{
     OperationSummary,
 };
 use stackly_protocol::{CONTRACT_DIGEST, Call, ErrorBody, ProtocolVersion, Reply, Timestamp};
-use stackly_testkit::TestRoot;
+use stackly_testkit::{EnvironmentBuilder, TestRoot};
 use stacklyd::dispatch::Handlers;
 use stacklyd::ipc::operation::{TestStart, TestStartingMethod};
 use stacklyd::lock::{DaemonLock, LockOwner};
@@ -63,6 +66,10 @@ pub struct Script {
     /// What a resume or a restart rebuilds; scripts with one get a factory
     /// for their kind when the daemon starts.
     pub rebuild: Option<ScriptedWork>,
+    /// Whether the precheck answers with a no operation reply that still
+    /// writes a batch, as `instance.stop` does when only the desired state
+    /// changes, instead of running the work.
+    pub no_op: bool,
 }
 
 impl Script {
@@ -73,6 +80,7 @@ impl Script {
             creates: false,
             work,
             rebuild: None,
+            no_op: false,
         }
     }
 
@@ -87,6 +95,25 @@ impl Script {
         self.rebuild = Some(work);
         self
     }
+
+    /// Answers with a no operation reply that writes one new environment,
+    /// so the engine records a `succeeded` operation with no steps.
+    pub fn answering_no_op(mut self) -> Self {
+        self.no_op = true;
+        self
+    }
+}
+
+/// The precheck of a script that answers with a writing no operation reply.
+fn no_op_precheck() -> Box<dyn Precheck> {
+    Box::new(|| {
+        PrecheckOutcome::NoOp(NoOpReply::writing(FinalBatch {
+            expected_generation: None,
+            ops: vec![WriteOp::InsertEnvironment(
+                EnvironmentBuilder::new().no_members().build(),
+            )],
+        }))
+    })
 }
 
 /// The test's starting method: scripts by name, started through
@@ -163,6 +190,7 @@ impl TestStartingMethod for Scripts {
         };
         let input = JournalPayload::new(json!({ "script": name }).to_string(), 16_384)
             .expect("a script name fits the journal input");
+        let no_op = script.no_op;
         Ok(TestStart {
             fingerprint,
             build: Box::new(move |origin: Origin| BeginRequest {
@@ -175,7 +203,7 @@ impl TestStartingMethod for Scripts {
                 origin,
                 input,
                 work: script.work.boxed(),
-                precheck: None,
+                precheck: no_op.then(no_op_precheck),
             }),
         })
     }

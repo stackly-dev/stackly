@@ -9,16 +9,18 @@ use stackly_core::operation::testing::{HoldHandle, ScriptedWork};
 use stackly_domain::OperationKind;
 use stackly_ipc::Client;
 use stackly_protocol::audit::{AuditActorKind, AuditEventInfo, AuditResultKind, ListAuditParams};
+use stackly_protocol::events::{EventKind, SubscribeParams};
 use stackly_protocol::handshake::ClientKind;
+use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::operation::{
     AbandonOperationParams, CancelAvailability, CancelDisposition, CancelOperationParams,
-    CreatedState, OperationState,
+    CreatedState, ListOperationsParams, OperationState, OperationSummary,
 };
 use stackly_protocol::{Call, Reply};
 use uuid::Uuid;
 
 use crate::support::{
-    PATIENCE, Raw, Script, Scripts, Site, accepted, client, get, key, wait_state,
+    PATIENCE, Raw, Script, Scripts, Site, accepted, client, get, key, list, wait_state,
 };
 
 /// Every audit row of `operation`, oldest first.
@@ -257,5 +259,120 @@ async fn a_commit_that_fails_needs_recovery_never_cancelled_and_an_abandon_names
     );
     assert_eq!(found[3].client, Some(ClientKind::Gui));
     assert_eq!(detail(&found[3], "reason"), Some("abandoned"));
+    stop(daemon).await;
+}
+
+/// What `cancel` must say for `summary` at its moment (spec 0035,
+/// *Ketersediaan cancel*), for an operation nobody asked to cancel.
+fn expected_cancel(summary: &OperationSummary) -> CancelAvailability {
+    match summary.state {
+        OperationState::Queued | OperationState::Running
+            if summary.point_of_no_return_at.is_some() =>
+        {
+            CancelAvailability::PastPointOfNoReturn
+        }
+        OperationState::Queued | OperationState::Running => CancelAvailability::Available,
+        _ => CancelAvailability::None,
+    }
+}
+
+// covers: AC-8 (spec 0035, `cancel` in every reply and event)
+#[tokio::test]
+async fn every_summary_in_an_event_or_a_reply_carries_the_cancel_of_its_moment() {
+    let site = Site::new();
+    let scripts = Scripts::new();
+    let staging = HoldHandle::new();
+    let committing = HoldHandle::new();
+    scripts.add("restore", staged(Some(&staging), &committing, false));
+    let daemon = site.start(&scripts).await;
+    let cli = client(&site).await;
+    let (_, mut events) = cli
+        .subscribe(SubscribeParams {
+            kinds: vec!["operation.".to_owned()],
+            ..SubscribeParams::default()
+        })
+        .await
+        .expect("the client subscribes to operation events");
+    let mut gui = Raw::ready(&site.socket()).await;
+
+    let started = accepted(
+        &gui.start(Some(&key()), json!({ "script": "restore" }))
+            .await,
+    );
+    let id = started.operation.id;
+    assert_eq!(
+        started.operation.cancel,
+        Some(expected_cancel(&started.operation)),
+        "the start reply"
+    );
+    tokio::time::timeout(PATIENCE, staging.started())
+        .await
+        .expect("the staging step runs");
+    let (page, _) = list(
+        &cli,
+        ListOperationsParams {
+            active_only: true,
+            ..ListOperationsParams::default()
+        },
+    )
+    .await;
+    let listed = page
+        .iter()
+        .find(|summary| summary.id == id)
+        .expect("operation.list holds the running operation");
+    assert_eq!(listed.cancel, Some(CancelAvailability::Available));
+    staging.release();
+    tokio::time::timeout(PATIENCE, committing.started())
+        .await
+        .expect("the commit step runs");
+    let (page, _) = list(&cli, ListOperationsParams::default()).await;
+    let listed = page
+        .iter()
+        .find(|summary| summary.id == id)
+        .expect("operation.list holds the operation");
+    assert_eq!(listed.cancel, Some(CancelAvailability::PastPointOfNoReturn));
+    committing.release();
+
+    let mut seen = Vec::new();
+    loop {
+        let frame = tokio::time::timeout(PATIENCE, events.next())
+            .await
+            .expect("events arrive in time")
+            .expect("the event stream reads")
+            .expect("the stream stays open");
+        let DecodedFrame::Event(event) = frame else {
+            panic!("not an event: {frame:?}");
+        };
+        let (EventKind::OperationStateChanged(summary) | EventKind::OperationProgress(summary)) =
+            event.kind
+        else {
+            continue;
+        };
+        if summary.id != id {
+            continue;
+        }
+        assert_eq!(
+            summary.cancel,
+            Some(expected_cancel(&summary)),
+            "the event of revision {} in {:?}",
+            summary.revision.get(),
+            summary.state
+        );
+        let done = summary.state == OperationState::Succeeded;
+        seen.push(summary.cancel);
+        if done {
+            break;
+        }
+    }
+    for wanted in [
+        CancelAvailability::Available,
+        CancelAvailability::PastPointOfNoReturn,
+        CancelAvailability::None,
+    ] {
+        assert!(
+            seen.contains(&Some(wanted)),
+            "an event carried {wanted:?}: {seen:?}"
+        );
+    }
     stop(daemon).await;
 }
