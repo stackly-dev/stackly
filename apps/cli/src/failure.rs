@@ -573,6 +573,24 @@ impl CliFailure {
         Self::local(body.with_detail("reason", reason).with_hint(hint))
     }
 
+    /// `cli.doctor_found_errors` (spec 0034): the doctor ran and found
+    /// `errors` findings with severity Error and `warnings` with Warning.
+    /// Exits 7; `stackly doctor` keeps the report in `result`.
+    // provisional: F34 (spec 0034 step 11, `stackly doctor`, calls it)
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "stackly doctor arrives in spec 0034 step 11")
+    )]
+    #[must_use]
+    pub fn doctor_found_errors(errors: u64, warnings: u64) -> Self {
+        Self::local(
+            ErrorBody::new(&cli::DOCTOR_FOUND_ERRORS, "the doctor found errors")
+                .with_detail("errors", errors.to_string())
+                .with_detail("warnings", warnings.to_string())
+                .with_hint("Each error above says what to do next."),
+        )
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
     /// restart is sent or while it is sent, or `agent_call` after a macOS call that
@@ -700,6 +718,7 @@ mod tests {
             CliFailure::restart_aborted(OPERATION, "stop_timeout", &[], &[]),
             CliFailure::restart_restore_failed(OPERATION),
             CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
+            CliFailure::doctor_found_errors(2, 1),
         ]
     }
 

@@ -1008,6 +1008,8 @@ area! {
             details ["planId"], "the daemon restarted but at least one instance did not end up running";
         CONNECTION_UNAVAILABLE = "cli.connection_unavailable", Conflict, retryable false,
             details ["format", "reason"], "the selected connection string cannot be built now, or the pinned package cannot be read (spec 0021)";
+        DOCTOR_FOUND_ERRORS = "cli.doctor_found_errors", Failed, retryable false,
+            details ["errors", "warnings"], "the doctor ran and found at least one error; the result holds the report (spec 0034)";
     }
 }
 
@@ -1591,6 +1593,11 @@ mod tests {
                 "cli.connection_unavailable",
                 ErrorCategory::Conflict,
                 &["format", "reason"],
+            ),
+            (
+                "cli.doctor_found_errors",
+                ErrorCategory::Failed,
+                &["errors", "warnings"],
             ),
         ];
         assert_eq!(table, expected);

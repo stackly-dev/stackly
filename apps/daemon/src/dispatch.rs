@@ -25,6 +25,7 @@ use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
 };
+use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
     ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
@@ -60,6 +61,7 @@ use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::audit;
+use crate::ipc::doctor;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -381,6 +383,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, PrepareTerminalReply> {
         let _ = context;
         instance::prepare_terminal(core, params)
+    }
+
+    /// `doctor.run` (spec 0034).
+    fn run_doctor<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: DoctorParams,
+    ) -> HandlerFuture<'a, DoctorReport> {
+        let _ = context;
+        doctor::run(core, params)
     }
 
     /// `instance.get_data_usage`.

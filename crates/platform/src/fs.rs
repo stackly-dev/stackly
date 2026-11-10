@@ -524,6 +524,9 @@ pub struct FileInfo {
     pub owner: Option<UserId>,
     /// The permission bits (`0o7777` mask), when the OS has them.
     pub mode: Option<u32>,
+    /// When the content last changed (for a folder, its list of entries),
+    /// when the OS has it.
+    pub modified: Option<jiff::Timestamp>,
 }
 
 impl FileInfo {
@@ -542,7 +545,15 @@ impl FileInfo {
             identity,
             owner,
             mode,
+            modified: None,
         }
+    }
+
+    /// The same metadata with the time the content last changed.
+    #[must_use]
+    pub const fn with_modified(mut self, modified: Option<jiff::Timestamp>) -> Self {
+        self.modified = modified;
+        self
     }
 
     /// Converts metadata that `std::fs::symlink_metadata` returned on a
@@ -571,6 +582,12 @@ impl FileInfo {
             },
             Some(UserId::Unix(metadata.uid())),
             Some(metadata.mode() & 0o7777),
+        )
+        .with_modified(
+            metadata
+                .modified()
+                .ok()
+                .and_then(|time| jiff::Timestamp::try_from(time).ok()),
         )
     }
 }

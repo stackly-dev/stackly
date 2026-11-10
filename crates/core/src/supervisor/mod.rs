@@ -59,7 +59,7 @@ mod deps;
 mod drain;
 pub mod drift;
 mod error;
-mod evidence;
+pub(crate) mod evidence;
 mod exit;
 #[cfg(feature = "fixture")]
 pub mod fixture;
@@ -68,7 +68,7 @@ mod handover;
 mod helper;
 mod http;
 mod init;
-mod integrity;
+pub(crate) mod integrity;
 mod lock;
 mod login;
 mod pending;

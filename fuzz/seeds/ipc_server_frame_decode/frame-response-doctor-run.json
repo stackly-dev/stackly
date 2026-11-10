@@ -1,0 +1,384 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f01",
+    "reply": {
+      "type": "doctor.run",
+      "content": {
+        "runId": "0192f3a7-0000-7000-8000-0000000000e1",
+        "startedAt": "2026-11-10T08:00:00.000Z",
+        "finishedAt": "2026-11-10T08:00:01.250Z",
+        "recovery": false,
+        "scope": null,
+        "checks": [
+          {
+            "id": "daemon",
+            "severity": "ok",
+            "title": "stacklyd",
+            "summary": "stacklyd 0.9.0 · protocol 3.4 · launchd",
+            "findings": [],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "registry",
+            "severity": "ok",
+            "title": "Registry",
+            "summary": "quick_check passed · schema 12",
+            "findings": [],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "permissions",
+            "severity": "ok",
+            "title": "Permissions",
+            "summary": "All Stackly folders are private and writable by you.",
+            "findings": [],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "disk_space",
+            "severity": "warning",
+            "title": "Disk space",
+            "summary": "82% used · 41 GB free",
+            "findings": [
+              {
+                "code": "volume_filling",
+                "severity": "warning",
+                "title": "Data volume is filling",
+                "explanation": "The volume that holds your Stackly data is 82% full. Instances may fail to write once it is full.",
+                "subject": null,
+                "instance": null,
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "usedPercent",
+                    "value": "82"
+                  },
+                  {
+                    "key": "availableBytes",
+                    "value": "41000000000"
+                  }
+                ],
+                "evidence": null,
+                "portOwner": null,
+                "excerpt": [],
+                "remedy": null,
+                "action": {
+                  "kind": "open_storage_settings",
+                  "instanceId": null,
+                  "operationId": null,
+                  "endpoint": null,
+                  "port": null
+                }
+              }
+            ],
+            "omitted": 0,
+            "capacity": {
+              "checkedAt": "2026-11-10T08:00:00.000Z",
+              "totalBytes": 227812384768,
+              "availableBytes": 41000000000,
+              "usedPercent": 82,
+              "level": "filling"
+            }
+          },
+          {
+            "id": "endpoints",
+            "severity": "error",
+            "title": "Endpoints",
+            "summary": "1 conflict across 4 configured endpoints.",
+            "findings": [
+              {
+                "code": "port_in_use",
+                "severity": "error",
+                "title": "Port conflict · mysql-legacy",
+                "explanation": "127.0.0.1:3307 is held by mysqld (PID 812, ~/homebrew/bin/mysqld). Not owned by Stackly.",
+                "subject": "mysql",
+                "instance": {
+                  "id": "0192f3a4-0000-7000-8000-0000000000b1",
+                  "name": "mysql-legacy"
+                },
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "endpoint",
+                    "value": "mysql"
+                  },
+                  {
+                    "key": "address",
+                    "value": "127.0.0.1"
+                  },
+                  {
+                    "key": "port",
+                    "value": "3307"
+                  },
+                  {
+                    "key": "problem",
+                    "value": "in_use"
+                  },
+                  {
+                    "key": "suggestedPort",
+                    "value": "3308"
+                  }
+                ],
+                "evidence": null,
+                "portOwner": {
+                  "kind": "process",
+                  "process": {
+                    "pid": 812,
+                    "startedAt": "2026-11-10T07:12:03.000Z",
+                    "executable": "~/homebrew/bin/mysqld",
+                    "sameUser": true
+                  },
+                  "instance": null
+                },
+                "excerpt": [],
+                "remedy": null,
+                "action": {
+                  "kind": "change_port",
+                  "instanceId": "0192f3a4-0000-7000-8000-0000000000b1",
+                  "operationId": null,
+                  "endpoint": "mysql",
+                  "port": 3308
+                }
+              }
+            ],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "processes",
+            "severity": "error",
+            "title": "Processes",
+            "summary": "1 recorded process no longer matches its instance.",
+            "findings": [
+              {
+                "code": "pid_reused",
+                "severity": "error",
+                "title": "PID reused · pg-main",
+                "explanation": "PID 4242 now belongs to /bin/sleep, not the process Stackly recorded. Stackly leaves both alone.",
+                "subject": null,
+                "instance": {
+                  "id": "0192f3a4-0000-7000-8000-0000000000b2",
+                  "name": "pg-main"
+                },
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "pid",
+                    "value": "4242"
+                  }
+                ],
+                "evidence": {
+                  "identity": {
+                    "checks": [
+                      {
+                        "name": "boot_matches",
+                        "result": "passed"
+                      },
+                      {
+                        "name": "pid_exists",
+                        "result": "passed"
+                      },
+                      {
+                        "name": "start_matches",
+                        "result": "failed"
+                      },
+                      {
+                        "name": "executable_matches",
+                        "result": "failed"
+                      },
+                      {
+                        "name": "user_matches",
+                        "result": "passed"
+                      },
+                      {
+                        "name": "session_matches",
+                        "result": "notChecked"
+                      },
+                      {
+                        "name": "holds_lock",
+                        "result": "notChecked"
+                      }
+                    ],
+                    "pid": 4242,
+                    "lock": null,
+                    "stopped": false,
+                    "error": null
+                  },
+                  "recorded": {
+                    "pid": 4242,
+                    "startedAt": "2026-11-09T21:00:00.000Z",
+                    "executable": "~/Library/Application Support/Stackly/runtimes/postgresql/17.2/bin/postgres",
+                    "sameUser": true
+                  },
+                  "current": {
+                    "pid": 4242,
+                    "startedAt": "2026-11-10T07:59:00.000Z",
+                    "executable": "/bin/sleep",
+                    "sameUser": true
+                  },
+                  "observedAt": "2026-11-10T08:00:00.000Z"
+                },
+                "portOwner": null,
+                "excerpt": [],
+                "remedy": null,
+                "action": {
+                  "kind": "show_instance",
+                  "instanceId": "0192f3a4-0000-7000-8000-0000000000b2",
+                  "operationId": null,
+                  "endpoint": null,
+                  "port": null
+                }
+              }
+            ],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "instance_failures",
+            "severity": "error",
+            "title": "Start failures",
+            "summary": "1 instance failed.",
+            "findings": [
+              {
+                "code": "start_failed",
+                "severity": "error",
+                "title": "Start failed · pg-main",
+                "explanation": "pg-main exited with code 1 while it started.",
+                "subject": null,
+                "instance": {
+                  "id": "0192f3a4-0000-7000-8000-0000000000b2",
+                  "name": "pg-main"
+                },
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "failureCode",
+                    "value": "process_exited"
+                  },
+                  {
+                    "key": "at",
+                    "value": "2026-11-10T07:58:00.000Z"
+                  },
+                  {
+                    "key": "exitCode",
+                    "value": "1"
+                  }
+                ],
+                "evidence": null,
+                "portOwner": null,
+                "excerpt": [
+                  "FATAL:  lock file \"postmaster.pid\" already exists",
+                  "HINT:  Is another postmaster (PID 4242) running in data directory?"
+                ],
+                "remedy": {
+                  "provider": "official/postgresql",
+                  "revision": "2026.11.1",
+                  "name": "stale_postmaster_pid",
+                  "title": "PostgreSQL found an old postmaster.pid",
+                  "steps": [
+                    {
+                      "text": "Stackly never removes this file, because it also guards the data folder against a second server.",
+                      "command": null,
+                      "path": null
+                    },
+                    {
+                      "text": "If the PID below isn’t a PostgreSQL server for this data folder, remove the file yourself, then start the instance again.",
+                      "command": null,
+                      "path": "~/Library/Application Support/Stackly/instances/0192f3a4-0000-7000-8000-0000000000b2/data/postmaster.pid"
+                    }
+                  ],
+                  "pidFile": {
+                    "path": "~/Library/Application Support/Stackly/instances/0192f3a4-0000-7000-8000-0000000000b2/data/postmaster.pid",
+                    "pid": 4242,
+                    "state": "other_process",
+                    "process": {
+                      "pid": 4242,
+                      "startedAt": "2026-11-10T07:59:00.000Z",
+                      "executable": "/bin/sleep",
+                      "sameUser": true
+                    }
+                  }
+                },
+                "action": {
+                  "kind": "show_instance",
+                  "instanceId": "0192f3a4-0000-7000-8000-0000000000b2",
+                  "operationId": null,
+                  "endpoint": null,
+                  "port": null
+                }
+              }
+            ],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "operations",
+            "severity": "warning",
+            "title": "Operations",
+            "summary": "No operation needs recovery.",
+            "findings": [
+              {
+                "code": "scratch_leftover",
+                "severity": "warning",
+                "title": "Scratch folder left behind",
+                "explanation": "operations/0192f3a6-0000-7000-8000-0000000000d1 has no operation. Stackly leaves it in place.",
+                "subject": "operations/0192f3a6-0000-7000-8000-0000000000d1",
+                "instance": null,
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "path",
+                    "value": "operations/0192f3a6-0000-7000-8000-0000000000d1"
+                  }
+                ],
+                "evidence": null,
+                "portOwner": null,
+                "excerpt": [],
+                "remedy": null,
+                "action": null
+              }
+            ],
+            "omitted": 0,
+            "capacity": null
+          },
+          {
+            "id": "secrets",
+            "severity": "warning",
+            "title": "Secrets",
+            "summary": "The check did not finish within 5 seconds.",
+            "findings": [
+              {
+                "code": "check_unavailable",
+                "severity": "warning",
+                "title": "Secrets check unavailable",
+                "explanation": "The check did not finish within 5 seconds.",
+                "subject": null,
+                "instance": null,
+                "operationId": null,
+                "details": [
+                  {
+                    "key": "reason",
+                    "value": "timeout"
+                  }
+                ],
+                "evidence": null,
+                "portOwner": null,
+                "excerpt": [],
+                "remedy": null,
+                "action": null
+              }
+            ],
+            "omitted": 2,
+            "capacity": null
+          }
+        ],
+        "errors": 3,
+        "warnings": 5
+      }
+    }
+  }
+}

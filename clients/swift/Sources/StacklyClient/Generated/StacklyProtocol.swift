@@ -3665,6 +3665,552 @@ public struct DetailSecret: Codable, Sendable, Equatable {
 	}
 }
 
+/// The kind of a safe action. Open: a client hides a kind it does not
+/// know.
+public enum DoctorActionKind: String, Codable, Sendable, Equatable {
+	/// Open the instance.
+	case showInstance = "show_instance"
+	/// Open the instance's configuration to review the drift.
+	case reviewConfig = "review_config"
+	/// Open the endpoints of the instance with the suggested port filled
+	/// in; nothing changes until you apply it.
+	case changePort = "change_port"
+	/// Open the operation.
+	case showOperation = "show_operation"
+	/// Open the storage settings.
+	case openStorageSettings = "open_storage_settings"
+	/// An action this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The one safe action of a finding: a place to go or a flow that already
+/// asks before it changes anything. A flat struct with an open `kind`, so
+/// a new action is a minor version and an older client hides it.
+public struct DoctorAction: Codable, Sendable, Equatable {
+	/// What to do.
+	public let kind: DoctorActionKind
+	/// The instance, for `show_instance`, `review_config`, and
+	/// `change_port`.
+	public let instanceId: UUID?
+	/// The operation, for `show_operation`.
+	public let operationId: UUID?
+	/// The endpoint, for `change_port`.
+	public let endpoint: String?
+	/// The suggested port, for `change_port`.
+	public let port: UInt16?
+
+	public init(kind: DoctorActionKind, instanceId: UUID?, operationId: UUID?, endpoint: String?, port: UInt16?) {
+		self.kind = kind
+		self.instanceId = instanceId
+		self.operationId = operationId
+		self.endpoint = endpoint
+		self.port = port
+	}
+}
+
+/// One check of the doctor. Open.
+public enum DoctorCheckId: String, Codable, Sendable, Equatable {
+	/// Whether the client reaches the daemon. A client check.
+	case connection
+	/// Whether client and daemon speak the same protocol. A client check.
+	case `protocol`
+	/// The state of the background agent. A client check.
+	case backgroundAgent = "background_agent"
+	/// The daemon's own subsystems.
+	case daemon
+	/// The registry file.
+	case registry
+	/// The roots and the instance folders.
+	case permissions
+	/// The volume that holds the data root.
+	case diskSpace = "disk_space"
+	/// The managed runtimes.
+	case runtimes
+	/// The pinned provider packages instances use.
+	case providerPackages = "provider_packages"
+	/// Ports of instances that are not running.
+	case endpoints
+	/// Recorded processes and their identity.
+	case processes
+	/// The data folder and runtime of each instance.
+	case instanceFiles = "instance_files"
+	/// Instances that failed or are not ready.
+	case instanceFailures = "instance_failures"
+	/// Rendered config that differs from its revision.
+	case configDrift = "config_drift"
+	/// Secrets an instance needs and cannot find.
+	case secrets
+	/// Operations that need recovery and scratch folders left behind.
+	case operations
+	/// A check this build does not know. A client never sends it.
+	case unrecognized
+}
+
+/// How serious a finding or a check is. Open.
+public enum DoctorSeverity: String, Codable, Sendable, Equatable {
+	/// Something is wrong and keeps Stackly from doing its work.
+	case error
+	/// Something may need your attention.
+	case warning
+	/// Nothing is wrong.
+	case ok
+	/// A severity this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What a finding is about. Open.
+public enum DoctorFindingCode: String, Codable, Sendable, Equatable {
+	/// `connection`: the client cannot reach the daemon; the `code` detail
+	/// holds the `ipc.*` error.
+	case daemonUnreachable = "daemon_unreachable"
+	/// `protocol`: the daemon speaks another protocol major.
+	case protocolIncompatible = "protocol_incompatible"
+	/// `background_agent`: the agent needs you; the `state` detail names
+	/// the state (spec 0015).
+	case agentState = "agent_state"
+	/// `background_agent`: the daemon wrote a start failure record.
+	case daemonStartFailed = "daemon_start_failed"
+	/// `background_agent`: the daemon binary may have been replaced since
+	/// launchd last started it.
+	case binaryReplaced = "binary_replaced"
+	/// `daemon`: one subsystem of the daemon is degraded.
+	case subsystemDegraded = "subsystem_degraded"
+	/// `registry`: the registry is open in recovery mode.
+	case recoveryMode = "recovery_mode"
+	/// `registry`: `PRAGMA quick_check` failed.
+	case quickCheckFailed = "quick_check_failed"
+	/// `registry`: a row holds a code this build does not know.
+	case unrecognizedValue = "unrecognized_value"
+	/// `permissions`: a root is not private to you.
+	case rootNotPrivate = "root_not_private"
+	/// `permissions`: a folder of an instance is not writable by you.
+	case pathNotWritable = "path_not_writable"
+	/// `permissions`: an entry of an instance belongs to another user.
+	case pathForeignOwner = "path_foreign_owner"
+	/// `disk_space`: the data volume is filling.
+	case volumeFilling = "volume_filling"
+	/// `disk_space`: the data volume is low on space.
+	case volumeLow = "volume_low"
+	/// `disk_space`: the data volume is almost full.
+	case volumeCritical = "volume_critical"
+	/// `runtimes`: a runtime is `missing`, `drifted`, or `failed`.
+	case runtimeState = "runtime_state"
+	/// `runtimes`: an installed runtime misses a file.
+	case runtimeFilesMissing = "runtime_files_missing"
+	/// `provider_packages`: a pinned package does not load.
+	case packageUnreadable = "package_unreadable"
+	/// `endpoints`: a port of an instance that is not running is in use.
+	case portInUse = "port_in_use"
+	/// `processes`: a recorded PID now belongs to another process.
+	case pidReused = "pid_reused"
+	/// `processes`: the data folder is in use by a process Stackly did not
+	/// start.
+	case dataInUse = "data_in_use"
+	/// `processes`: the recorded process can't be proven to be the
+	/// instance's.
+	case identityUnproven = "identity_unproven"
+	/// `processes`: the recorded process is suspended.
+	case processSuspended = "process_suspended"
+	/// `instance_files`: the data folder of an instance is gone.
+	case dataMissing = "data_missing"
+	/// `instance_files`: the runtime of an instance is gone.
+	case runtimeMissing = "runtime_missing"
+	/// `instance_failures`: an instance failed.
+	case startFailed = "start_failed"
+	/// `instance_failures`: a running instance is not ready.
+	case notReady = "not_ready"
+	/// `config_drift`: a rendered file differs from its revision.
+	case configDrift = "config_drift"
+	/// `secrets`: a secret an instance needs is missing.
+	case secretMissing = "secret_missing"
+	/// `operations`: an operation needs recovery.
+	case needsRecovery = "needs_recovery"
+	/// `operations`: a scratch folder has no operation.
+	case scratchLeftover = "scratch_leftover"
+	/// Any check: the check could not run; the `reason` detail says why
+	/// (`timeout`, `recovery_mode`, `not_supported`, or `io`).
+	case checkUnavailable = "check_unavailable"
+	/// A code this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// An instance a report or a finding is about.
+public struct DoctorInstanceRef: Codable, Sendable, Equatable {
+	/// Its ID.
+	public let id: UUID
+	/// Its name.
+	public let name: String
+
+	public init(id: UUID, name: String) {
+		self.id = id
+		self.name = name
+	}
+}
+
+/// One detail of a finding.
+public struct DoctorDetail: Codable, Sendable, Equatable {
+	/// The key, camelCase, at most 32 bytes, such as `port`.
+	public let key: String
+	/// The value, at most 512 bytes.
+	public let value: String
+
+	public init(key: String, value: String) {
+		self.key = key
+		self.value = value
+	}
+}
+
+/// The seven checks that prove a process belongs to an instance. Open.
+public enum IdentityCheckName: String, Codable, Sendable, Equatable {
+	/// The boot ID now equals the recorded one.
+	case bootMatches = "boot_matches"
+	/// A live process has the recorded PID.
+	case pidExists = "pid_exists"
+	/// Its start time equals the recorded one.
+	case startMatches = "start_matches"
+	/// Its executable is the recorded canonical path.
+	case executableMatches = "executable_matches"
+	/// It runs as the user running now.
+	case userMatches = "user_matches"
+	/// Its session ID equals the recorded one.
+	case sessionMatches = "session_matches"
+	/// It holds the instance lock file open.
+	case holdsLock = "holds_lock"
+	/// A check this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The result of one identity check. Open. `not_checked` is spelled
+/// `notChecked` on the wire.
+public enum IdentityCheckResult: String, Codable, Sendable, Equatable {
+	/// The check ran and passed.
+	case passed
+	/// The check ran and failed.
+	case failed
+	/// The check did not run, because an earlier one already decided the
+	/// outcome or an input was missing.
+	case notChecked
+	/// A result this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// The result of one identity check, by name.
+public struct IdentityCheckEntry: Codable, Sendable, Equatable {
+	/// Which check.
+	public let name: IdentityCheckName
+	/// What it found.
+	public let result: IdentityCheckResult
+
+	public init(name: IdentityCheckName, result: IdentityCheckResult) {
+		self.name = name
+		self.result = result
+	}
+}
+
+/// Whether the instance lock is held, as a probe saw it. Open.
+public enum InstanceLockState: String, Codable, Sendable, Equatable {
+	/// Nobody holds the lock.
+	case free
+	/// A process holds the lock.
+	case held
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What gathering evidence found about a process, in the order the checks
+/// run. Checks that did not run are `notChecked`.
+public struct IdentityEvidence: Codable, Sendable, Equatable {
+	/// One entry per check.
+	public let checks: [IdentityCheckEntry]?
+	/// The PID of the recorded observation.
+	public let pid: UInt32?
+	/// The state of the instance lock.
+	public let lock: InstanceLockState?
+	/// True when the process is still suspended: its daemon died after
+	/// spawning it and before resuming it.
+	public let stopped: Bool
+	/// Redacted text of the error that stopped the gathering.
+	public let error: String?
+
+	public init(checks: [IdentityCheckEntry]?, pid: UInt32?, lock: InstanceLockState?, stopped: Bool, error: String?) {
+		self.checks = checks
+		self.pid = pid
+		self.lock = lock
+		self.stopped = stopped
+		self.error = error
+	}
+}
+
+/// A process, as the doctor shows it.
+public struct ProcessRef: Codable, Sendable, Equatable {
+	/// Its PID.
+	public let pid: UInt32
+	/// When it started, if known.
+	public let startedAt: Date?
+	/// Its executable, with your home folder written `~`; null for a
+	/// process of another user.
+	public let executable: String?
+	/// False for a process of another user; null when it was not looked
+	/// at.
+	public let sameUser: Bool?
+
+	public init(pid: UInt32, startedAt: Date?, executable: String?, sameUser: Bool?) {
+		self.pid = pid
+		self.startedAt = startedAt
+		self.executable = executable
+		self.sameUser = sameUser
+	}
+}
+
+/// What the passive identity checks found about a recorded process.
+public struct DoctorEvidence: Codable, Sendable, Equatable {
+	/// The checks of spec 0010 without the lock probe; `lock` comes from a
+	/// stored blocker, or is null.
+	public let identity: IdentityEvidence
+	/// The process the registry recorded.
+	public let recorded: ProcessRef?
+	/// The process that holds the PID now, if one does.
+	public let current: ProcessRef?
+	/// When the evidence was gathered.
+	public let observedAt: Date
+
+	public init(identity: IdentityEvidence, recorded: ProcessRef?, current: ProcessRef?, observedAt: Date) {
+		self.identity = identity
+		self.recorded = recorded
+		self.current = current
+		self.observedAt = observedAt
+	}
+}
+
+/// Who holds a port. Open.
+public enum PortOwnerKind: String, Codable, Sendable, Equatable {
+	/// A process of yours that is not a Stackly instance.
+	case process
+	/// Another Stackly instance: the PID is its recorded process and the
+	/// start time matches.
+	case stacklyInstance = "stackly_instance"
+	/// No process of yours holds it; another user or the system may.
+	case unknown
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// Who holds a port.
+public struct PortOwner: Codable, Sendable, Equatable {
+	/// Which kind of owner.
+	public let kind: PortOwnerKind
+	/// The process, for `process` and `stackly_instance`.
+	public let process: ProcessRef?
+	/// The instance, for `stackly_instance`.
+	public let instance: DoctorInstanceRef?
+
+	public init(kind: PortOwnerKind, process: ProcessRef?, instance: DoctorInstanceRef?) {
+		self.kind = kind
+		self.process = process
+		self.instance = instance
+	}
+}
+
+/// One step of a remedy.
+public struct RemedyStep: Codable, Sendable, Equatable {
+	/// What to do.
+	public let text: String
+	/// A command to copy and run yourself.
+	public let command: String?
+	/// A path to look at.
+	public let path: String?
+
+	public init(text: String, command: String?, path: String?) {
+		self.text = text
+		self.command = command
+		self.path = path
+	}
+}
+
+/// What a PID file of a remedy holds. Open.
+public enum PidFileState: String, Codable, Sendable, Equatable {
+	/// The file is not there.
+	case missing
+	/// The file could not be read, or its first line is not a PID.
+	case unreadable
+	/// No process has the PID.
+	case notRunning = "not_running"
+	/// The PID is a process of the instance's runtime.
+	case runtimeProcess = "runtime_process"
+	/// The PID is another process.
+	case otherProcess = "other_process"
+	/// A state this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What the PID file of a remedy holds, read passively.
+public struct PidFileEvidence: Codable, Sendable, Equatable {
+	/// The file, with your home folder written `~`.
+	public let path: String
+	/// The PID on its first line, if it is one.
+	public let pid: UInt32?
+	/// What the PID is.
+	public let state: PidFileState
+	/// The process with that PID, if one is alive.
+	public let process: ProcessRef?
+
+	public init(path: String, pid: UInt32?, state: PidFileState, process: ProcessRef?) {
+		self.path = path
+		self.pid = pid
+		self.state = state
+		self.process = process
+	}
+}
+
+/// A provider's guidance for a failure (spec 0034, *Blok remedies*). Only
+/// text, commands to copy, and paths; Stackly never runs it.
+public struct DoctorRemedy: Codable, Sendable, Equatable {
+	/// The provider of the package the entry comes from.
+	public let provider: String
+	/// The revision of that package.
+	public let revision: String
+	/// The name of the entry, such as `stale_postmaster_pid`.
+	public let name: String
+	/// Its title.
+	public let title: String
+	/// The steps, in order.
+	public let steps: [RemedyStep]?
+	/// What the PID file the entry names holds.
+	public let pidFile: PidFileEvidence?
+
+	public init(provider: String, revision: String, name: String, title: String, steps: [RemedyStep]?, pidFile: PidFileEvidence?) {
+		self.provider = provider
+		self.revision = revision
+		self.name = name
+		self.title = title
+		self.steps = steps
+		self.pidFile = pidFile
+	}
+}
+
+/// One finding of a check.
+public struct DoctorFinding: Codable, Sendable, Equatable {
+	/// What it is about.
+	public let code: DoctorFindingCode
+	/// How serious it is.
+	public let severity: DoctorSeverity
+	/// Its title, at most 120 characters, such as `Port conflict ·
+	/// mysql-legacy`.
+	public let title: String
+	/// One to three sentences, at most 600 characters.
+	public let explanation: String
+	/// What it is about within its instance: an endpoint, a path, or an
+	/// operation ID.
+	public let subject: String?
+	/// The instance it is about.
+	public let instance: DoctorInstanceRef?
+	/// The operation it is about.
+	public let operationId: UUID?
+	/// At most 16 details, by key; never a secret value.
+	public let details: [DoctorDetail]?
+	/// The identity evidence of a `processes` finding.
+	public let evidence: DoctorEvidence?
+	/// Who holds the port of a `port_in_use` finding.
+	public let portOwner: PortOwner?
+	/// At most 10 redacted lines of output, each at most 256 characters.
+	public let excerpt: [String]?
+	/// The provider's guidance for this failure, if any.
+	public let remedy: DoctorRemedy?
+	/// The one safe action, if any.
+	public let action: DoctorAction?
+
+	public init(code: DoctorFindingCode, severity: DoctorSeverity, title: String, explanation: String, subject: String?, instance: DoctorInstanceRef?, operationId: UUID?, details: [DoctorDetail]?, evidence: DoctorEvidence?, portOwner: PortOwner?, excerpt: [String]?, remedy: DoctorRemedy?, action: DoctorAction?) {
+		self.code = code
+		self.severity = severity
+		self.title = title
+		self.explanation = explanation
+		self.subject = subject
+		self.instance = instance
+		self.operationId = operationId
+		self.details = details
+		self.evidence = evidence
+		self.portOwner = portOwner
+		self.excerpt = excerpt
+		self.remedy = remedy
+		self.action = action
+	}
+}
+
+/// One check of a report.
+public struct DoctorCheck: Codable, Sendable, Equatable {
+	/// Which check.
+	public let id: DoctorCheckId
+	/// The heaviest severity of its findings; `ok` without findings.
+	public let severity: DoctorSeverity
+	/// Its title, such as `Endpoints`.
+	public let title: String
+	/// One line, 1 to 200 characters, such as `No conflicts across 4
+	/// configured endpoints.`.
+	public let summary: String
+	/// At most 100 findings, the most serious first.
+	public let findings: [DoctorFinding]?
+	/// The findings left out past the limit.
+	public let omitted: UInt64
+	/// The reading behind `disk_space`; absent for every other check.
+	public let capacity: CapacityReport?
+
+	public init(id: DoctorCheckId, severity: DoctorSeverity, title: String, summary: String, findings: [DoctorFinding]?, omitted: UInt64, capacity: CapacityReport?) {
+		self.id = id
+		self.severity = severity
+		self.title = title
+		self.summary = summary
+		self.findings = findings
+		self.omitted = omitted
+		self.capacity = capacity
+	}
+}
+
+/// Params of `doctor.run`.
+public struct DoctorParams: Codable, Sendable, Equatable {
+	/// Limits the checks that are about instances to this one; the global
+	/// checks still run. An ID that is not there is `resource.not_found`.
+	public let instanceId: UUID?
+	/// The daemon checks to run, each at most once; empty means all of
+	/// them. A client check or an unknown one is refused.
+	public let checks: [DoctorCheckId]?
+
+	public init(instanceId: UUID?, checks: [DoctorCheckId]?) {
+		self.instanceId = instanceId
+		self.checks = checks
+	}
+}
+
+/// Reply of `doctor.run`.
+public struct DoctorReport: Codable, Sendable, Equatable {
+	/// The ID of this run (UUID version 7).
+	public let runId: UUID
+	/// When the run started.
+	public let startedAt: Date
+	/// When the run finished.
+	public let finishedAt: Date
+	/// True when the registry is open in recovery mode.
+	public let recovery: Bool
+	/// The instance the run was limited to, if any.
+	public let scope: DoctorInstanceRef?
+	/// One entry per check, in the order of the check table.
+	public let checks: [DoctorCheck]?
+	/// The findings with severity `error`, the omitted ones included.
+	public let errors: UInt64
+	/// The findings with severity `warning`, the omitted ones included.
+	public let warnings: UInt64
+
+	public init(runId: UUID, startedAt: Date, finishedAt: Date, recovery: Bool, scope: DoctorInstanceRef?, checks: [DoctorCheck]?, errors: UInt64, warnings: UInt64) {
+		self.runId = runId
+		self.startedAt = startedAt
+		self.finishedAt = finishedAt
+		self.recovery = recovery
+		self.scope = scope
+		self.checks = checks
+		self.errors = errors
+		self.warnings = warnings
+	}
+}
+
 /// The instance a duplicate form was built from.
 public struct DuplicateSource: Codable, Sendable, Equatable {
 	/// The source instance.
@@ -4416,87 +4962,6 @@ public struct HandshakeParams: Codable, Sendable, Equatable {
 		self.protocol = `protocol`
 		self.client = client
 		self.contractDigest = contractDigest
-	}
-}
-
-/// The seven checks that prove a process belongs to an instance. Open.
-public enum IdentityCheckName: String, Codable, Sendable, Equatable {
-	/// The boot ID now equals the recorded one.
-	case bootMatches = "boot_matches"
-	/// A live process has the recorded PID.
-	case pidExists = "pid_exists"
-	/// Its start time equals the recorded one.
-	case startMatches = "start_matches"
-	/// Its executable is the recorded canonical path.
-	case executableMatches = "executable_matches"
-	/// It runs as the user running now.
-	case userMatches = "user_matches"
-	/// Its session ID equals the recorded one.
-	case sessionMatches = "session_matches"
-	/// It holds the instance lock file open.
-	case holdsLock = "holds_lock"
-	/// A check this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// The result of one identity check. Open. `not_checked` is spelled
-/// `notChecked` on the wire.
-public enum IdentityCheckResult: String, Codable, Sendable, Equatable {
-	/// The check ran and passed.
-	case passed
-	/// The check ran and failed.
-	case failed
-	/// The check did not run, because an earlier one already decided the
-	/// outcome or an input was missing.
-	case notChecked
-	/// A result this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// The result of one identity check, by name.
-public struct IdentityCheckEntry: Codable, Sendable, Equatable {
-	/// Which check.
-	public let name: IdentityCheckName
-	/// What it found.
-	public let result: IdentityCheckResult
-
-	public init(name: IdentityCheckName, result: IdentityCheckResult) {
-		self.name = name
-		self.result = result
-	}
-}
-
-/// Whether the instance lock is held, as a probe saw it. Open.
-public enum InstanceLockState: String, Codable, Sendable, Equatable {
-	/// Nobody holds the lock.
-	case free
-	/// A process holds the lock.
-	case held
-	/// A state this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// What gathering evidence found about a process, in the order the checks
-/// run. Checks that did not run are `notChecked`.
-public struct IdentityEvidence: Codable, Sendable, Equatable {
-	/// One entry per check.
-	public let checks: [IdentityCheckEntry]?
-	/// The PID of the recorded observation.
-	public let pid: UInt32?
-	/// The state of the instance lock.
-	public let lock: InstanceLockState?
-	/// True when the process is still suspended: its daemon died after
-	/// spawning it and before resuming it.
-	public let stopped: Bool
-	/// Redacted text of the error that stopped the gathering.
-	public let error: String?
-
-	public init(checks: [IdentityCheckEntry]?, pid: UInt32?, lock: InstanceLockState?, stopped: Bool, error: String?) {
-		self.checks = checks
-		self.pid = pid
-		self.lock = lock
-		self.stopped = stopped
-		self.error = error
 	}
 }
 
@@ -6869,6 +7334,9 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Writes the Terminal script of a `terminal` Open In action (spec
 	/// 0070).
 	case instancePrepareTerminal(PrepareTerminalParams)
+	/// Runs the read only checks of the doctor (spec 0034). Not an
+	/// operation: it writes nothing and holds no lock.
+	case doctorRun(DoctorParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -6928,7 +7396,8 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
-			instancePrepareTerminal = "instance.prepare_terminal"
+			instancePrepareTerminal = "instance.prepare_terminal",
+			doctorRun = "doctor.run"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -7209,6 +7678,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .instancePrepareTerminal(content)
 					return
 				}
+			case .doctorRun:
+				if let content = try? container.decode(DoctorParams.self, forKey: .content) {
+					self = .doctorRun(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -7381,6 +7855,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instancePrepareTerminal(let content):
 			try container.encode(CodingKeys.instancePrepareTerminal, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .doctorRun(let content):
+			try container.encode(CodingKeys.doctorRun, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -7525,6 +8002,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instanceLogsUnfollow
 	/// The script is written.
 	case instancePrepareTerminal(PrepareTerminalReply)
+	/// The doctor report, one check per entry.
+	case doctorRun(DoctorReport)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -7584,7 +8063,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceLogsRead = "instance.logs_read",
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
-			instancePrepareTerminal = "instance.prepare_terminal"
+			instancePrepareTerminal = "instance.prepare_terminal",
+			doctorRun = "doctor.run"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -7881,6 +8361,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .instancePrepareTerminal(content)
 					return
 				}
+			case .doctorRun:
+				if let content = try? container.decode(DoctorReport.self, forKey: .content) {
+					self = .doctorRun(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -8060,6 +8545,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(CodingKeys.instanceLogsUnfollow, forKey: .type)
 		case .instancePrepareTerminal(let content):
 			try container.encode(CodingKeys.instancePrepareTerminal, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .doctorRun(let content):
+			try container.encode(CodingKeys.doctorRun, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
