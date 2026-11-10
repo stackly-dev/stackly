@@ -15,7 +15,7 @@ use stackly_protocol::events::SubscribeParams;
 use stackly_protocol::operation::{
     GetOperationParams, OperationDetail, OperationProgress, OperationState, OperationSummary,
 };
-use stackly_protocol::{Call, ResourceKind, ResourceRef};
+use stackly_protocol::{Call, ResourceKind, ResourceRef, Revision};
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tokio::time::{Instant, interval_at, sleep, sleep_until};
 use uuid::Uuid;
@@ -298,9 +298,9 @@ async fn follow(
         };
         let mut refresh = true;
         let mut last_get: Option<Instant> = None;
-        // The backoff line of the pause the operation is in, read once when
-        // it enters the stage (spec 0033, AC-8).
-        let mut note: Option<String> = None;
+        // The backoff line of the pause the operation is in, read once per
+        // pause (spec 0033, AC-8).
+        let mut note: Option<PauseNote> = None;
         let mut tick = interval_at(Instant::now() + TICK, TICK);
         let mut redraw = interval_at(Instant::now() + REDRAW, REDRAW);
         loop {
@@ -320,14 +320,26 @@ async fn follow(
                         if newer {
                             *last = Some(*detail);
                         }
-                        note = match (last.as_ref().map(|held| &held.operation), note) {
-                            (Some(operation), None) if in_backoff(operation) => {
-                                Some(backoff_line(cx, operation).await)
-                            }
-                            (Some(operation), Some(held)) if in_backoff(operation) => Some(held),
+                        note = match last.as_ref().map(|held| &held.operation) {
+                            Some(operation) if in_backoff(operation) => match note {
+                                Some(held) if held.revision == operation.revision => Some(held),
+                                // A backoff at a newer revision is a later
+                                // pause, even when the stages between the two
+                                // pauses passed between two reads.
+                                _ => Some(PauseNote {
+                                    line: backoff_line(cx, operation).await,
+                                    revision: operation.revision,
+                                }),
+                            },
                             _ => None,
                         };
-                        show(cx, progress, last.as_ref(), started, note.as_deref());
+                        show(
+                            cx,
+                            progress,
+                            last.as_ref(),
+                            started,
+                            PauseNote::text(note.as_ref()),
+                        );
                         if last
                             .as_ref()
                             .is_some_and(|detail| settled(detail.operation.state))
@@ -360,10 +372,27 @@ async fn follow(
                 },
                 _ = tick.tick() => refresh = true,
                 _ = redraw.tick(), if progress.mode() == ProgressMode::Live => {
-                    show(cx, progress, last.as_ref(), started, note.as_deref());
+                    show(cx, progress, last.as_ref(), started, PauseNote::text(note.as_ref()));
                 }
             }
         }
+    }
+}
+
+/// The backoff line of one pause of a start or restart (spec 0033, AC-8),
+/// with the operation revision it was read for. Every committed change
+/// raises the revision, so the operation in `backoff` at another revision
+/// left the stage and came back: a later pause, whose line is read again.
+#[derive(Debug)]
+struct PauseNote {
+    line: String,
+    revision: Revision,
+}
+
+impl PauseNote {
+    /// The line of `note`, when there is one.
+    fn text(note: Option<&Self>) -> Option<&str> {
+        note.map(|note| note.line.as_str())
     }
 }
 
