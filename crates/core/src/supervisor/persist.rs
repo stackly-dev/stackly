@@ -11,8 +11,10 @@ use stackly_domain::{
 };
 use stackly_platform::ExitStatus;
 
+use super::actor::InstanceActor;
 use super::commit::{ActorCommitRetry, CommitRetry, InstanceChanges};
 use super::error::SupervisorError;
+use super::status::FailureFacts;
 use super::{Supervisor, SupervisorDeps};
 use crate::operation::AuditNote;
 
@@ -178,6 +180,7 @@ async fn commit_with(
         } else {
             (false, false)
         };
+        let failure_before = instance.last_failure().cloned();
         let mut changes = InstanceChanges::new(instance);
         let extra = match build(&mut changes, force) {
             Ok(extra) => extra,
@@ -185,6 +188,7 @@ async fn commit_with(
         };
         let read = changes.read_revision();
         let after = changes.instance().clone();
+        let failure = changes.failure().cloned();
         let mut ops = changes.into_ops();
         ops.extend(extra);
         let lease_effect = crate::session::startup_lease_effect(id, &ops);
@@ -226,6 +230,13 @@ async fn commit_with(
         match sent {
             Ok(_) => {
                 actor.note_revision(after.revision());
+                note_failure_facts(
+                    deps,
+                    &actor,
+                    failure,
+                    failure_before.as_ref(),
+                    after.last_failure(),
+                );
                 if let Some(state) = lease_effect {
                     deps.events.startup_lease_changed(id, state);
                 }
@@ -262,6 +273,26 @@ async fn commit_with(
         }
     }
     result
+}
+
+/// Hands the actor the failure facts of a committed batch (spec 0033, AC-3):
+/// the facts of the failure event it wrote replace the ones the actor
+/// holds, and a batch that changed the stored `last_failure` without a
+/// failure event (`spawned`, `adopted`, a refused restore) clears them, so
+/// the actor never holds facts of a failure the registry no longer names.
+/// The actor publishes the change before the commit's `instance.changed`.
+fn note_failure_facts(
+    deps: &SupervisorDeps,
+    actor: &InstanceActor,
+    failure: Option<FailureFacts>,
+    before: Option<&stackly_domain::FailureCode>,
+    after: Option<&stackly_domain::FailureCode>,
+) {
+    match failure {
+        Some(facts) => actor.update(deps, |state| state.last_failure = Some(facts)),
+        None if before != after => actor.update(deps, |state| state.last_failure = None),
+        None => {}
+    }
 }
 
 /// Records whether the actor gave up recording how a process ended (spec
@@ -400,12 +431,40 @@ pub(crate) fn apply_event(
     event: LifecycleEvent,
     at: Timestamp,
 ) -> Result<(), SupervisorError> {
+    apply_event_after(changes, event, at, None)
+}
+
+/// Applies one lifecycle event that follows `exit`, the exit status of the
+/// process whose end led to it, or `None` when no process ended. A failure
+/// event (`init_failed`, `start_failed`, `crashed`) also notes its
+/// [`FailureFacts`] in the changes: its code, `at`, and that exit (spec
+/// 0033, AC-3).
+///
+/// # Errors
+///
+/// The errors of [`apply_event`].
+pub(crate) fn apply_event_after(
+    changes: &mut InstanceChanges,
+    event: LifecycleEvent,
+    at: Timestamp,
+    exit: Option<ExitStatus>,
+) -> Result<(), SupervisorError> {
+    let failure = match &event {
+        LifecycleEvent::InitFailed { reason }
+        | LifecycleEvent::StartFailed { reason }
+        | LifecycleEvent::Crashed { reason, .. } => Some(reason.clone()),
+        _ => None,
+    };
     changes.apply(|instance| {
         instance
             .apply_lifecycle(event, at)
             .map(|_| ())
             .map_err(|error| SupervisorError::internal(error.to_string()))
-    })
+    })?;
+    if let Some(code) = failure {
+        changes.note_failure(FailureFacts::new(code, at, exit));
+    }
+    Ok(())
 }
 
 /// What [`apply_exit`] recorded.
@@ -516,7 +575,7 @@ pub(crate) fn apply_exit(
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
         | InstanceLifecycle::Recovering => {
-            apply_event(changes, crash, at)?;
+            apply_event_after(changes, crash, at, seen.and_then(|seen| seen.status))?;
             Ok(ExitRecord::Crashed)
         }
         _ => Ok(ExitRecord::Nothing),

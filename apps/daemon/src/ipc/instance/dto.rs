@@ -393,6 +393,7 @@ mod tests {
             logs_unavailable: false,
             pending_commit: false,
             exit_unrecorded,
+            last_failure: None,
         }
     }
 
