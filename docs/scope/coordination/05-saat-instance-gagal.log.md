@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/05-saat-instance-gagal.md`
 - **Hash awal:** `5e38ae87` · **Hash awal wave aktif:** `5e38ae87`
 - **Wave aktif:** `1`, mulai `2026-11-10`
-- **Diperbarui:** `2026-11-10 13:30`
+- **Diperbarui:** `2026-11-10` (penutupan)
 
 ## Sub sesi wave `1`
 
@@ -102,10 +102,14 @@
 | `2026-11-10` | `arc-sync` di-merge (`502bd000`): 24 spec diselaraskan dengan kode F33 sampai F35, Follow-up sumber yang sudah dibangun dicentang, empat teks AC yang didelegasikan diubah dengan ID tetap. Tetap terbuka dengan catatan: spec 0015 "Last start failure" di `stackly daemon status`, purge AC-045 (fitur 54), runtime `missing`/`drifted` (fitur 55, 56), `CopyButton` di Copy Details agent (spec 0067:833), perintah menu (spec 0069:537). | `lead` |
 | `2026-11-10` | Fitur 33, 34, dan 35 ditandai `done` (heading, At a glance, Urutan file) dan spec 0033, 0034, 0035 `Accepted`, atas delegasi user (tujuan perintah awal: menyelesaikan scope ini; titik yang disarankan Legend untuk Beta adalah sesudah `/test`). Selisih mockup F33 sampai F35 ditambahkan ke `ui-macos.md`. Dilaporkan ke user, yang boleh membatalkannya. | `user` (delegasi), `lead` |
 | `2026-11-10` | Diteruskan ke user, tidak diubah: (1) teks AC-3 spec 0008 ("teks tidak pernah dipotong") lawan pemotongan DETAILS `stackly audit list` lewat `COLUMNS`; (2) bagian desain spec 0068 masih menggambarkan varian HC dan RT (butuh satu `architect (update)`); (3) fixture registry beku memuat kode yang tidak dikenal build ini (`builtin`, `trusted`, `retain_instance`, `doctor`, `resume_retain`): perlu dicek apakah registry nyata dari build lama bisa memuatnya dan butuh migrasi; (4) `apps/macos/design.md` belum punya baris "Finishing…". | `lead` |
+| `2026-11-10` | Gerbang penuh terakhir di `main` (`bf513130`) sebelum push: clippy workspace, 4650 test Rust seluruh workspace tanpa kegagalan, target Windows, `provider check`, `catalog check`, `clients/swift` 268, StacklyUI 2066 (6 known issues lama), `build-app`, `check-deps`, `codegen --check`, `evidence check`, fmt hijau. `cargo deny check` gagal di advisories: RUSTSEC-2026-0459 (`libsqlite3-sys` 0.38.2, CVE-2026-119375 di SQLite C, solusi >= 0.39.0). `Cargo.lock` tidak berubah di rentang `5e38ae87..HEAD`, jadi advisory ini bukan dari scope 05; diteruskan ke user, tidak diperbaiki di koordinasi ini. Graph dokumen (`/graphify . --update` untuk sekitar 30 file spec dan scope) tidak dijalankan; graph kode diperbarui tiap merge. | `lead` |
 
 ## Blocker terbuka
 
+- Langkah manual dan `BLOCKED` di `05-saat-instance-gagal.manual.md`, owner user: sesi GUI F33 (milestone 4, langkah 7), Manual A dan B F34, langkah warna terminal F34, sesi GUI F35 (milestone 2, 3, langkah 10), ukur ulang `socket_fdinfo` saat SDK berganti
 - Empat teks AC (0035 AC-1, 0034 AC-20, 0033 AC-17, 0068 AC-5) diubah lewat delegasi user; user boleh membatalkan
+- Untuk user: teks AC-3 spec 0008 lawan pemotongan DETAILS lewat `COLUMNS`; bagian desain spec 0068 (varian HC dan RT); kode tak dikenal di fixture registry beku; advisory RUSTSEC-2026-0459 (`libsqlite3-sys`); graph dokumen belum diperbarui
+- Bagian purge AC-045 `NOT_RUN` sampai fitur 54
 
 ## Dicentang pada wave ini
 
@@ -130,8 +134,16 @@
 
 ## Riwayat wave
 
-- belum ada
+- Wave `1` (`2026-11-10`, hash awal `5e38ae87`): tiga spec (0033, 0034, 0035) ditulis, dibangun, diverifikasi, dan diuji dalam satu wave oleh tiga sesi yang dipakai ulang. Semua 26 kotak scope 05 tercentang; fitur 33, 34, 35 `done`; protokol 3.2 ke 3.5; migrasi `0012`. Tidak ada kotak scope lain yang terbuka oleh merge ini selain Follow-up yang dicatat `arc-sync`.
 
 ## Penutupan
 
-- belum
+- **Semua branch hijau di-merge:** `2026-11-10`; `git branch --no-merged main` kosong
+- **Merge:** `claude/arc-f33-spec-350b33`, `claude/arc-f34-spec-b3cd4c`, `claude/arc-f35-spec-2486d3` (tiga branch dipakai ulang lintas item; hash merge per item ada di tabel sub sesi dan di "Dicentang pada wave ini"). Tidak ada branch `tidak di-merge`.
+- **Document:** tidak ada (tidak ada fitur `· GA` di scope 05)
+- **/sync:** `2026-11-10`, rentang `5e38ae87..bf513130`; `AGENTS.md` (dua perintah, lima aturan: start gagal, doctor read only, bundle, `CODED_COLUMNS`, audit operasi) dan `apps/macos/AGENTS.md` (aturan `ShellNavigator`, tiga spec terkait); spec diselaraskan `arc-sync` (`502bd000`); tidak ada centang yang ditolak
+- **Commit penutup:** commit ini, `docs(scope): close 05-saat-instance-gagal coordination`
+- **Push:** `origin/main` = `bf513130` · `2026-11-10`, lalu commit penutup ini
+- **Dibersihkan:** `claude/arc-f33-spec-350b33`, `claude/arc-f34-spec-b3cd4c`, `claude/arc-f35-spec-2486d3` · ketiga sesi diarsipkan · worktree di `~/worktrees/Stackly/` dihapus tanpa `--force` · branch dihapus dengan `git branch -d` (semuanya lulus `merge-base --is-ancestor <branch> origin/main` dan worktree bersih)
+- **Disimpan:** tidak ada
+- **Blocker tersisa:** lihat "Blocker terbuka"
