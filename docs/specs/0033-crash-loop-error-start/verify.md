@@ -1,0 +1,35 @@
+# Verify: Crash loop & error start yang aman · spec 0033 · updated 2026-11-10
+
+_Langkah diturunkan dari acceptance criteria spec 0033. `/check verify` menjalankan langkah ini; `/test` mengunci yang tahan lama. Setiap milestone punya bagiannya sendiri di bawah. Jalankan dari root repo di Mac Apple Silicon dengan macOS 27 dan Xcode 27; build dengan `CARGO_PROFILE_DEV_DEBUG=0` bila disk sempit._
+
+## Milestone 2: CLI
+
+_Dibangun di atas daemon skrip (`ScriptedDaemon`), karena milestone 1 (daemon mengisi `lastFailure.at`, `exitCode`, `signal`, `suggestedPort`, dan stage `backoff`) belum ada di `main`. DTO yang dipakai test dibuat di `apps/cli/tests/instance/failure.rs` sesuai bentuk yang spec tulis; setelah milestone 1 masuk, langkah bertanda **(setelah milestone 1)** bisa dijalankan dengan daemon nyata._
+
+### UI / manual
+
+- [ ] Buka `apps/cli/src/commands/instance/next_steps.rs` → urutan langkah: port (hanya untuk ketiga kode endpoint atau `lastFailure.code` `endpoint_in_use`, hanya untuk lifecycle `stopped`, `failed`, atau tidak diketahui, dan tidak setelah ganti port), log, doctor (konstanta `DOCTOR_COMMAND` false dengan `// provisional: F34`), lalu selalu terakhir start → AC-6, AC-16
+- [ ] Di file yang sama, `Related::of` → `latest` adalah start, restart, stop, atau ganti port pertama dari `operation.list` (jenis lain dilewati); error hanya start atau restart `failed`, dan untuk `failed` juga cocok dengan `lastFailure.at` atau baris *Pemetaan sebab*; ganti port sukses yang lebih baru hanya dilewati pada instance `failed` (`portsChanged`), sedangkan pada `stopped` ia menyembunyikan error (AC-11) → AC-7
+- [ ] **(setelah milestone 1)** Buat instance fake yang terus crash di root sementara (`STACKLY_ROOT=$(mktemp -d)`, `cargo run -q -p stacklyd --example skeleton_seed -- --root <R>`, lalu instance dengan `crashAfterMs` kecil), jalankan `stackly instance start <name> --wait` di terminal → baris hidup berganti ke `crashed, restart <n> of 5 at <waktu lokal> (<durasi>)` di setiap jeda, lalu blok error dengan `code: supervisor.retry_budget_exhausted`, hint daemon, `operation: <uuid>`, `hint: read its logs: stackly instance logs <name>`, `hint: start it again: stackly instance start <name>`; exit 7 → AC-6, AC-8
+- [ ] **(setelah milestone 1)** Pada instance yang sama, `stackly instance inspect <name>` → `Last failure crash_loop at <waktu>, exit code <n>`, `Last operation start_instance failed, supervisor.retry_budget_exhausted, <uuid>`, dan blok `Next steps:` sesudah `Failure output:`; `--json` punya `result.lastOperation` dengan ID yang sama → AC-7
+- [ ] **(setelah milestone 1)** Pegang port fixed sebuah instance dengan `nc -l 127.0.0.1 <port>`, jalankan `stackly instance start <name> --wait` → `hint: use a free port: stackly instance endpoint set <name> --port <endpoint>=<saran>` sebelum langkah log; exit 3; `stackly instance inspect <name>` (instance tetap `stopped`) menulis `Last operation start_instance failed, supervisor.endpoint_in_use, <uuid>` dan `Next steps:` yang sama; jalankan perintah saran dengan `--dry-run` → verdict tanpa perubahan port → AC-6, AC-7, AC-14
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --bin stackly next_steps` → 15 unit test lulus: langkah port dengan dan tanpa `suggestedPort` untuk ketiga kode endpoint dan `lastFailure.code`, port dilewati setelah ganti port dan pada `recovering`, tanpa langkah doctor, *Operasi terkait* (rename lebih baru dilewati, stop atau ganti port lebih baru pada `stopped` menyembunyikan error, ganti port pada `failed` menyimpan error lama, operasi lebih tua dari `lastFailure.at`, `at` null dengan baris *Pemetaan sebab*, respawn sukses bukan error, tanpa error saat `recovering`, tanpa `lastFailure`, atau tanpa error operasi, sama dengan `RelatedOperation` di app), format `Last operation`, kapan blok tampil, error mana yang mendapat langkah, dan teks backoff → AC-6, AC-7, AC-8, AC-16
+- [ ] `cargo test -p stackly-cli --bin stackly output::stderr` → blok error menulis `operation: <uuid>` setelah hint daemon dan sebelum hint CLI dan `request:` → AC-6
+- [ ] `cargo test -p stackly-cli --bin stackly progress` → catatan backoff menggantikan state dan stage, satu baris per perubahan stage di mode baris dan di baris hidup → AC-8
+- [ ] `cargo test -p stackly-cli --test instance failure::` → 10 test lulus: golden `instance_start_crash_loop.txt`, `instance_start_port_in_use.txt`, `instance_start_port_in_use_no_suggestion.txt` (blok error dari `error:`), restart yang ditolak membaca nama lewat satu `instance.get` dan menulis langkah tanpa baris `operation:`, `--json` tanpa langkah, wait yang habis waktu, `--quiet`, dan `resource.not_found` tanpa langkah, golden `instance_inspect_crash_loop.txt` dan `.json` (`operation.list { resource, limit: 10 }`, `get` sama), `instance_inspect_port_refused.txt`, `unavailable` dan `-`, instance `running` tanpa blok tetapi dengan `lastOperation` di JSON, dan baris backoff sekali per jeda dari satu `instance.get` (`crashed, restarting` saat `nextAttemptAt` null atau bacaan gagal); credential fixture tidak muncul di output teks dan JSON → AC-6, AC-7, AC-8, AC-15
+- [ ] `cargo test -p stackly-cli --test instance` → semua lulus, termasuk golden lama yang berubah: `instance_inspect.txt` dan `instance_get_failed.txt` (baris `Last operation -` dan `Next steps:`), `instance_inspect.json` dan `instance_get.json` (`lastOperation: null`) → AC-7
+- [ ] `cargo test -p stackly-cli` → semua test target lulus → AC-6, AC-7, AC-8
+- [ ] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings` dan `cargo fmt --all --check` → bersih
+- [ ] `cargo xtask check-deps` dan `cargo xtask evidence check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-6 · blok error `start` dan `restart`, dengan dan tanpa `--wait`: `operation:` untuk semua command, hint daemon diteruskan apa adanya, langkah lanjutan dengan nama dari `InstanceSummary.name` (satu `instance.get` tambahan hanya untuk penolakan sinkron di mode teks), exit code dari kategori, `--json` tidak berubah; hint statis dari daemon dan `suggestedPort` nyata menunggu milestone 1
+- AC-7 · `Last operation`, `Next steps:`, dan `lastOperation` dari `operation.list { resource, limit: 10 }` dengan aturan *Operasi terkait*; baris Restarts dan Last failure sudah menulis waktu dan exit code bila daemon mengisinya, yang baru terjadi setelah milestone 1
+- AC-8 · baris backoff sekali per masuk stage `backoff` lewat `Progress`, waktu lewat `format_local` yang sama dengan baris Restarts; stage itu sendiri baru dikirim daemon setelah milestone 1
+- AC-15 · bagian CLI: langkah dan baris `Last operation` hanya memakai teks tetap, kode, ID, nama, dan details katalog (`endpoint`, `suggestedPort`), tidak pernah output proses; test credential fixture end to end dengan daemon nyata (`leakToken`) milik milestone 1
+- AC-16 · hint `stackly doctor --instance <name>` ditulis di kode tetapi tidak dicetak sampai fitur 34 menambah perintah itu (`// provisional: F34`)
+- AC-1 sampai AC-5, AC-14 · milik milestone 1 (daemon); AC-9 sampai AC-13, AC-17 · milik milestone 3 dan 4 (GUI)

@@ -73,6 +73,9 @@ pub struct Update<'a> {
     pub counted: Option<(u64, u64)>,
     /// How long the CLI has been waiting.
     pub waited: Duration,
+    /// A sentence that stands in for the state and the stage, such as the
+    /// backoff line of a start (spec 0033, AC-8).
+    pub note: Option<&'a str>,
 }
 
 /// Draws progress updates in one [`ProgressMode`].
@@ -96,13 +99,16 @@ impl Progress {
     }
 
     /// Shows `update`: redraws the live line, or writes a line when the
-    /// state or the stage changed.
+    /// state or the stage changed. A note takes the place of the state and
+    /// the stage in both.
     pub fn show(&mut self, sink: &mut StderrSink, update: &Update<'_>) {
         match self.mode {
             ProgressMode::Off => {}
             ProgressMode::Live => {
                 let mut text = update.state.to_owned();
-                if let Some(stage) = update.stage {
+                if let Some(note) = update.note {
+                    note.clone_into(&mut text);
+                } else if let Some(stage) = update.stage {
                     text.push(' ');
                     text.push_str(stage);
                 }
@@ -117,10 +123,16 @@ impl Progress {
                 if self.last.as_ref() == Some(&key) {
                     return;
                 }
-                let mut text = format!("{} {}", format_duration(update.waited), update.state);
-                if let Some(stage) = update.stage {
-                    text.push(' ');
-                    text.push_str(stage);
+                let mut text = format_duration(update.waited);
+                text.push(' ');
+                if let Some(note) = update.note {
+                    text.push_str(note);
+                } else {
+                    text.push_str(update.state);
+                    if let Some(stage) = update.stage {
+                        text.push(' ');
+                        text.push_str(stage);
+                    }
                 }
                 sink.line(&escape_display(&text));
                 self.last = Some(key);
@@ -165,6 +177,7 @@ mod tests {
             stage,
             counted: None,
             waited: Duration::from_secs(seconds),
+            note: None,
         }
     }
 
@@ -233,6 +246,35 @@ mod tests {
             out.text(),
             "0s queued\n2s running fetch\n12s running unpack\n"
         );
+    }
+
+    /// Spec 0033 AC-8.
+    #[test]
+    fn a_note_stands_in_for_the_state_and_stage_once_per_stage_in_lines_and_on_the_live_line() {
+        let note = "crashed, restart 2 of 5 at 2026-11-10 10:04:05 +07:00";
+        let backoff = |seconds| Update {
+            note: Some(note),
+            ..update("running", Some("backoff"), seconds)
+        };
+        let (mut sink, out) = sink();
+        let mut lines = Progress::new(ProgressMode::Lines);
+        for shown in [
+            update("running", Some("lock"), 1),
+            backoff(2),
+            backoff(3),
+            update("running", Some("lock"), 4),
+            backoff(5),
+        ] {
+            lines.show(&mut sink, &shown);
+        }
+        assert_eq!(
+            out.text(),
+            format!("1s running lock\n2s {note}\n4s running lock\n5s {note}\n")
+        );
+        let (mut sink, out) = self::sink();
+        let mut live = Progress::new(ProgressMode::Live);
+        live.show(&mut sink, &backoff(2));
+        assert_eq!(out.text(), format!("\r\u{1b}[K{note} (2s)"));
     }
 
     #[test]

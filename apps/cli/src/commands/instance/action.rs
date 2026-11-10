@@ -1,5 +1,7 @@
 //! `stackly instance start` and `stop` (spec 0014, AC-6; by name, spec 0022,
 //! AC-15), and `restart`, `reload`, and `stop --force` (spec 0026, AC-13).
+//! A failed `start` or `restart` adds its next steps to the error block
+//! (spec 0033, AC-6).
 
 use clap::Args;
 use stackly_protocol::instance::{
@@ -10,7 +12,7 @@ use stackly_protocol::{Call, Reply};
 
 use super::resolve::{InstanceTarget, TargetArg};
 use super::stop::StopAll;
-use super::{InstanceAction, Verb, accepted, conclude};
+use super::{InstanceAction, Verb, accepted, conclude, next_steps};
 use crate::commands::RunCommand;
 use crate::confirm::{Approval, Confirm, ConfirmRequest, ConfirmRole, OnNoninteractive};
 use crate::context::Context;
@@ -159,18 +161,19 @@ impl RunCommand for StartArgs {
     type Output = InstanceAction;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<InstanceAction> {
-        let id = match self.instance.target.resolve(cx).await {
-            Ok(id) => id,
+        let (id, name) = match self.instance.target.resolve_named(cx).await {
+            Ok(resolved) => resolved,
             Err(failure) => return CommandOutput::failed(failure),
         };
         let call = Call::InstanceStart(StartInstanceParams {
             instance_id: id,
             expected_revision: None,
         });
-        match cx.submit(call, &self.run, extract_start).await {
+        let output = match cx.submit(call, &self.run, extract_start).await {
             Ok(submission) => conclude(cx, submission, Verb::Start, Some(id)).await,
             Err(failure) => CommandOutput::failed(failure),
-        }
+        };
+        next_steps::explain(cx, output, id, name.as_deref()).await
     }
 }
 
@@ -221,18 +224,19 @@ impl RunCommand for RestartArgs {
     type Output = InstanceAction;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<InstanceAction> {
-        let id = match self.instance.target.resolve(cx).await {
-            Ok(id) => id,
+        let (id, name) = match self.instance.target.resolve_named(cx).await {
+            Ok(resolved) => resolved,
             Err(failure) => return CommandOutput::failed(failure),
         };
         let call = Call::InstanceRestart(RestartInstanceParams {
             instance_id: id,
             expected_revision: None,
         });
-        match cx.submit(call, &self.run, extract_restart).await {
+        let output = match cx.submit(call, &self.run, extract_restart).await {
             Ok(submission) => conclude(cx, submission, Verb::Restart, Some(id)).await,
             Err(failure) => CommandOutput::failed(failure),
-        }
+        };
+        next_steps::explain(cx, output, id, name.as_deref()).await
     }
 }
 

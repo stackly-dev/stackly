@@ -48,6 +48,7 @@ fn serving_with(
                 stackly_protocol::instance::DataUsageReply { usage },
             ))]
         }
+        Call::OperationList(_) => vec![data::operations(Vec::new())],
         other => extra(other),
     });
     (root, daemon)
@@ -695,6 +696,7 @@ fn a_data_usage_that_fails_does_not_fail_inspect() {
             "unavailable",
             "the data folder size can't be measured",
         ))],
+        Call::OperationList(_) => vec![data::operations(Vec::new())],
         _ => Vec::new(),
     });
 
@@ -739,6 +741,7 @@ fn a_detail_of_another_revision_makes_inspect_read_the_instance_and_the_detail_o
         Call::InstanceGetDataUsage(_) => vec![Step::Reply(Reply::InstanceGetDataUsage(
             stackly_protocol::instance::DataUsageReply { usage: None },
         ))],
+        Call::OperationList(_) => vec![data::operations(Vec::new())],
         _ => Vec::new(),
     });
 
@@ -754,7 +757,8 @@ fn a_detail_of_another_revision_makes_inspect_read_the_instance_and_the_detail_o
             "instance.get_detail",
             "instance.get",
             "instance.get_detail",
-            "instance.get_data_usage"
+            "instance.get_data_usage",
+            "operation.list"
         ]
     );
     assert_eq!(

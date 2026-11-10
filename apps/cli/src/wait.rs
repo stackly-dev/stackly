@@ -21,6 +21,7 @@ use tokio::time::{Instant, interval_at, sleep, sleep_until};
 use uuid::Uuid;
 
 use crate::args::IdempotencyKeyArg;
+use crate::commands::instance::next_steps::{backoff_line, in_backoff};
 use crate::context::Context;
 use crate::exit::EXIT_INTERRUPTED;
 use crate::failure::CliFailure;
@@ -297,6 +298,9 @@ async fn follow(
         };
         let mut refresh = true;
         let mut last_get: Option<Instant> = None;
+        // The backoff line of the pause the operation is in, read once when
+        // it enters the stage (spec 0033, AC-8).
+        let mut note: Option<String> = None;
         let mut tick = interval_at(Instant::now() + TICK, TICK);
         let mut redraw = interval_at(Instant::now() + REDRAW, REDRAW);
         loop {
@@ -316,7 +320,14 @@ async fn follow(
                         if newer {
                             *last = Some(*detail);
                         }
-                        show(cx, progress, last.as_ref(), started);
+                        note = match (last.as_ref().map(|held| &held.operation), note) {
+                            (Some(operation), None) if in_backoff(operation) => {
+                                Some(backoff_line(cx, operation).await)
+                            }
+                            (Some(operation), Some(held)) if in_backoff(operation) => Some(held),
+                            _ => None,
+                        };
+                        show(cx, progress, last.as_ref(), started, note.as_deref());
                         if last
                             .as_ref()
                             .is_some_and(|detail| settled(detail.operation.state))
@@ -349,7 +360,7 @@ async fn follow(
                 },
                 _ = tick.tick() => refresh = true,
                 _ = redraw.tick(), if progress.mode() == ProgressMode::Live => {
-                    show(cx, progress, last.as_ref(), started);
+                    show(cx, progress, last.as_ref(), started, note.as_deref());
                 }
             }
         }
@@ -413,12 +424,14 @@ fn retried(failure: &CliFailure) -> bool {
     .any(|spec| failure.body.is(spec))
 }
 
-/// Draws the newest snapshot, or `unknown` before the first.
+/// Draws the newest snapshot, or `unknown` before the first, with the
+/// backoff line in place of the state and stage while there is one.
 fn show(
     cx: &mut Context,
     progress: &mut Progress,
     last: Option<&OperationDetail>,
     started: Instant,
+    note: Option<&str>,
 ) {
     let state = state_of(last);
     let operation = last.map(|detail| &detail.operation);
@@ -438,6 +451,7 @@ fn show(
             }),
             counted,
             waited: started.elapsed(),
+            note,
         },
     );
 }
