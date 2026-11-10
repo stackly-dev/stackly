@@ -149,6 +149,19 @@ impl StartFailureRecord {
     }
 }
 
+/// What [`write_record`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RecordWrite {
+    /// The record is in the data root.
+    Written,
+    /// Nothing is at the data root path, so nothing was written.
+    NoDataRoot,
+    /// The data root is a symlink, not a folder, another user's, or
+    /// writable by group or others, so nothing was written.
+    NotPrivate,
+}
+
 /// Writes `record` as `<data_root>/daemon-start-failure.json` when
 /// `data_root` is a folder of the current user that neither group nor
 /// others can write; otherwise writes nothing. It never creates a folder.
@@ -156,28 +169,27 @@ impl StartFailureRecord {
 /// # Errors
 ///
 /// Returns the filesystem error of the inspection or of the atomic write;
-/// an older record is then intact. `Ok(false)` means the data root did not
-/// qualify and nothing was written.
+/// an older record is then intact.
 pub fn write_record(
     fs: &dyn Filesystem,
     identity: &dyn UserIdentity,
     data_root: &Path,
     record: &StartFailureRecord,
-) -> Result<bool, PlatformError> {
+) -> Result<RecordWrite, PlatformError> {
     let Some(info) = fs.symlink_metadata(data_root)? else {
-        return Ok(false);
+        return Ok(RecordWrite::NoDataRoot);
     };
     let private = info.kind == FileKind::Dir
         && info.owner == Some(identity.current_user()?)
         && info.mode.is_some_and(|mode| mode & 0o022 == 0);
     if !private {
-        return Ok(false);
+        return Ok(RecordWrite::NotPrivate);
     }
     fs.write_file_atomic(
         &data_root.join(DAEMON_START_FAILURE_RECORD_FILE),
         &record.to_bytes(),
     )?;
-    Ok(true)
+    Ok(RecordWrite::Written)
 }
 
 /// Removes the record of an earlier start from `data_root`, the canonical

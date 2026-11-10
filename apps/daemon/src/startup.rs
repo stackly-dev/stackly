@@ -233,7 +233,7 @@ mod imp {
     use crate::map::StartFacts;
     use crate::server::{self, DaemonDeps};
     use crate::shutdown::StopSignals;
-    use crate::start_failure::{self, StartFailure, StartFailureRecord};
+    use crate::start_failure::{self, RecordWrite, StartFailure, StartFailureRecord};
 
     /// How long blocking tasks get when the runtime shuts down.
     const RUNTIME_SHUTDOWN: Duration = Duration::from_secs(1);
@@ -338,15 +338,16 @@ mod imp {
             );
             match start_failure::write_record(&MacosFilesystem, &MacosIdentity, data_root, &record)
             {
-                Ok(true) => tracing::info!(
+                Ok(RecordWrite::Written) => tracing::info!(
                     path = %data_root.join(stackly_platform::DAEMON_START_FAILURE_RECORD_FILE).display(),
                     code = record.code,
                     "wrote the record of the failed start",
                 ),
-                Ok(false) => tracing::warn!(
+                Ok(RecordWrite::NotPrivate) => tracing::warn!(
                     data_root = %data_root.display(),
                     "the data root is not a private folder of this user, so the failed start leaves no record",
                 ),
+                Ok(_) => {}
                 Err(error) => tracing::warn!(
                     error = %error,
                     "cannot write the record of the failed start",
@@ -372,7 +373,11 @@ mod imp {
     ) -> u8 {
         let info = daemon_info();
         let has_override = config.root_override.is_some();
-        note.data_root = override_data_root(config.root_override.as_deref());
+        // `--print-roots` creates nothing (spec 0006 AC-17), a record
+        // included.
+        if !config.print_roots {
+            note.data_root = override_data_root(config.root_override.as_deref());
+        }
         note.launch = Some(LaunchContext::detect(
             config.xpc_service_name.as_deref(),
             config.parent_pid,
@@ -399,7 +404,9 @@ mod imp {
                 );
             }
         };
-        note.data_root = Some(layout.roots().data().to_path_buf());
+        if !config.print_roots {
+            note.data_root = Some(layout.roots().data().to_path_buf());
+        }
         // The home folder for the protected folder rule of storage
         // locations, from the user database like the roots, never `HOME`.
         let home = match MacosPlatform::home_dir() {
