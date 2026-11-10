@@ -38,6 +38,13 @@
             var instanceOperations: [OperationSummary] = []
             /// The failure `operation.list { resource }` answers, or `nil`.
             var instanceOperationsFailure: ClientError?
+            /// What `audit.list { instanceId }` of the Activity tab answers (spec 0035).
+            var activity = FixtureActivity.Case.rows
+
+            /// What `audit.list { instanceId }` answers: the rows of ``activity``.
+            func activityPage(of id: UUID, before: String?) async throws(ClientError) -> AuditPage {
+                try await FixtureActivity.read(activity)(id, before)
+            }
 
             /// What `operation.list { resource: instance }` answers: the newest operations of
             /// one instance, at most `limit`.
@@ -199,6 +206,9 @@
                 },
                 operations: { id, limit throws(ClientError) in
                     try await script.operations(of: id, limit: limit)
+                },
+                activity: { id, before throws(ClientError) in
+                    try await script.activityPage(of: id, before: before)
                 })
             actions = InstanceActionModel(
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },

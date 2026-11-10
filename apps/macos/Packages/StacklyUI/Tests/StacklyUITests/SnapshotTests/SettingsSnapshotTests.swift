@@ -105,6 +105,26 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["REQ-045", "NFR-012"],
+                expected:
+                    "Below Logs the Storage tab has the Activity group: Keep activity for 30 days and the entry limit (spec 0035 AC-20)"
+            ))
+        @MainActor
+        func storageActivity() async throws {
+            let runtime = try await Self.runtime(.settingsGeneral)
+            defer { runtime.willTerminate() }
+            // Taller than the window, so the whole form shows down to the Activity group.
+            try await assertSnapshot(
+                StorageSettingsTab(model: runtime.model)
+                    .environment(runtime.model)
+                    .environment(runtime.preferences)
+                    .environment(\.mutationAvailability, runtime.model.mutationAvailability)
+                    .frame(width: SettingsRoot.size.width, height: 720),
+                named: "settings-storage-activity", size: Self.size, variants: Self.variants)
+        }
+
+        @Test(
+            .evidence(
                 covers: ["REQ-046", "NFR-012"],
                 expected:
                     "The Updates tab shows the beta channel and statistics on, with the honest notes"

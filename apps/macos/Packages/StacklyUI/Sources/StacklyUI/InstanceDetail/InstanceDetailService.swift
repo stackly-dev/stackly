@@ -29,6 +29,9 @@ nonisolated public struct InstanceDetailService: Sendable {
     /// `operation.list` with the instance as `resource` and a `limit`: its newest operations,
     /// which the failure banner reads (spec 0033, *Sumber data*).
     public var operations: @Sendable (UUID, UInt32) async throws(ClientError) -> [OperationSummary]
+    /// `audit.list` with the instance as `instanceId`: one page of its Activity tab, newest
+    /// first, before an opaque cursor (`nil` for the first page) (spec 0035, AC-15).
+    public var activity: @Sendable (UUID, String?) async throws(ClientError) -> AuditPage
 
     /// Creates a service.
     /// - Parameters:
@@ -41,6 +44,7 @@ nonisolated public struct InstanceDetailService: Sendable {
     ///   - setStartup: Sends `instance.set_startup` with the revision of the shown row.
     ///   - autostartContext: Reads the session and the agent for the Autostart text.
     ///   - operations: Reads the newest operations of one instance.
+    ///   - activity: Reads one page of the audit rows of one instance.
     public init(
         detail: @escaping @Sendable (UUID) async throws(ClientError) -> InstanceDetail,
         usage: @escaping @Sendable (UUID, Bool, Bool) async throws(ClientError) -> DataUsage?,
@@ -55,7 +59,10 @@ nonisolated public struct InstanceDetailService: Sendable {
         autostartContext: @escaping @MainActor @Sendable () -> AutostartContext = { .unknown },
         operations:
             @escaping @Sendable (UUID, UInt32) async throws(ClientError) -> [OperationSummary] =
-            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) }
+            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) },
+        activity: @escaping @Sendable (UUID, String?) async throws(ClientError) -> AuditPage = {
+            _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected())
+        }
     ) {
         self.detail = detail
         self.usage = usage
@@ -66,6 +73,7 @@ nonisolated public struct InstanceDetailService: Sendable {
         self.setStartup = setStartup
         self.autostartContext = autostartContext
         self.operations = operations
+        self.activity = activity
     }
 
     /// A service over the detail methods of a client.
@@ -159,6 +167,13 @@ extension InstanceDetailService {
                     throw .rejected(ClientErrorCatalog.protocolViolation())
                 }
                 return page.items ?? []
+            },
+            activity: { id, before throws(ClientError) in
+                let audit = AuditClient { call, _ throws(ClientError) in
+                    try await model.read(call).get()
+                }
+                return try await audit.auditList(
+                    instanceId: id, limit: InstanceActivityModel.pageSize, before: before)
             })
     }
 }

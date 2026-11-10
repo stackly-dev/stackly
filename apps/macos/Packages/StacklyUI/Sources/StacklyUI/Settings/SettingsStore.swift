@@ -20,6 +20,8 @@ public final class SettingsStore {
         case updateChannel
         /// Sharing usage statistics.
         case telemetry
+        /// How many days audit rows are kept (spec 0035, AC-20).
+        case auditRetention
     }
 
     /// One change a row asks for.
@@ -30,6 +32,8 @@ public final class SettingsStore {
         case channel(UpdateChannel)
         /// Sharing usage statistics.
         case telemetry(Bool)
+        /// The days audit rows are kept: 7, 30, or 90.
+        case auditRetention(UInt32)
 
         /// The setting the change is for.
         public var field: Field {
@@ -37,6 +41,7 @@ public final class SettingsStore {
             case .startup: .defaultStartup
             case .channel: .updateChannel
             case .telemetry: .telemetry
+            case .auditRetention: .auditRetention
             }
         }
 
@@ -54,6 +59,10 @@ public final class SettingsStore {
                 SettingsPatch(
                     defaultStartup: nil, updateChannel: nil, telemetry: value,
                     auditRetentionDays: nil)
+            case .auditRetention(let days):
+                SettingsPatch(
+                    defaultStartup: nil, updateChannel: nil, telemetry: nil,
+                    auditRetentionDays: days)
             }
         }
     }
@@ -144,6 +153,13 @@ public final class SettingsStore {
     public var telemetry: Bool? {
         if case .telemetry(let value)? = saving { return value }
         return settings?.telemetry
+    }
+
+    /// The value the Keep activity for row shows: the days asked for while it is saving, or
+    /// `nil` before the first read and from a daemon that does not keep audit rows by days.
+    public var auditRetentionDays: UInt32? {
+        if case .auditRetention(let days)? = saving { return days }
+        return settings?.auditRetention?.days
     }
 
     /// Sends one change. Nothing happens before the first read or while another change is on

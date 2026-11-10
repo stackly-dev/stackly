@@ -758,7 +758,9 @@ public final class CreateInstanceModel {
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: secrets,
-            startup: startAtLogin ? .atLogin : .manual, duplicateOf: nil)
+            startup: startAtLogin ? .atLogin : .manual,
+            // The audit row of the create names the source while it exists (spec 0035, AC-18).
+            duplicateOf: duplicateSource?.id)
         let outcome = await send(.instanceCreate(params), key)
         switch outcome {
         case .completed(let reply):

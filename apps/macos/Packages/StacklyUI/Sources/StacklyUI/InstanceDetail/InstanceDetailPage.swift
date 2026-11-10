@@ -26,6 +26,7 @@ struct InstanceDetailPage: View {
     @State private var tab: InstanceTab
     @State private var secretNeeds: [SecretNeed]?
     @State private var openInNeeds: [SecretNeed]?
+    @State private var activity: InstanceActivityModel
 
     let id: UUID
     let instances: InstanceStore
@@ -48,6 +49,7 @@ struct InstanceDetailPage: View {
         logs: InstanceLogsModel, metrics: InstanceMetricsModel, configuration: ConfigurationModel,
         failure: InstanceFailureModel, operations: OperationCenter?,
         completedRounds: Int,
+        activity: InstanceActivityModel? = nil,
         tab: InstanceTab = .summary,
         back: @escaping @MainActor () -> Void
     ) {
@@ -64,6 +66,9 @@ struct InstanceDetailPage: View {
         self.failure = failure
         self.operations = operations
         self.completedRounds = completedRounds
+        // The page keeps the Activity model while it shows, so a tab switch keeps its rows.
+        _activity = State(
+            initialValue: activity ?? InstanceActivityModel(instanceId: id, service: service))
         _tab = State(initialValue: tab)
         self.back = back
     }
@@ -158,6 +163,15 @@ struct InstanceDetailPage: View {
                     .padding(.vertical, Spacing.s16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            case .activity:
+                VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                    tabPicker
+                    InstanceActivityTab(
+                        model: activity, operations: operations, completedRounds: completedRounds)
+                }
+                .padding(.horizontal, Spacing.pageHorizontal)
+                .padding(.vertical, Spacing.s16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .pageChrome(title: summary.name, subtitle: subtitle(summary))
@@ -216,18 +230,29 @@ struct InstanceDetailPage: View {
             reload: { Task { await model.reload() } })
     }
 
+    /// The tab picker: segments while they fit the page column, else a pop up menu, so a
+    /// column beside the inspector is not pushed wider than it is.
     @ViewBuilder private var tabPicker: some View {
         let tabs = InstanceTab.allCases
         if tabs.count > 1 {
-            Picker("Tab", selection: $tab) {
-                ForEach(tabs) { tab in
-                    Text(tab.title).tag(tab)
-                }
+            ViewThatFits(in: .horizontal) {
+                tabPicker(tabs)
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                tabPicker(tabs)
+                    .pickerStyle(.menu)
+                    .fixedSize()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
         }
+    }
+
+    private func tabPicker(_ tabs: [InstanceTab]) -> some View {
+        Picker("Tab", selection: $tab) {
+            ForEach(tabs) { tab in
+                Text(tab.title).tag(tab)
+            }
+        }
+        .labelsHidden()
     }
 
     /// The items of the More menu of the toolbar.

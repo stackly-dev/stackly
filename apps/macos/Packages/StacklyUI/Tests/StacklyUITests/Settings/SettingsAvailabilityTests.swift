@@ -26,7 +26,7 @@ struct SettingsAvailabilityTests {
         #expect(SettingsAvailability.rows(in: .sources) == [.catalogSource, .providers])
         #expect(
             SettingsAvailability.rows(in: .storage)
-                == [.dataLocation, .logsLocation, .cacheLocation, .logRetention])
+                == [.dataLocation, .logsLocation, .cacheLocation, .logRetention, .auditRetention])
         #expect(SettingsAvailability.rows(in: .general).contains(.appearance))
     }
 
@@ -64,6 +64,23 @@ struct SettingsAvailabilityTests {
         #expect(SettingsCopy.offlineMessage == "Showing the last known settings.")
         #expect(SettingsCopy.notAvailable == "Not available while stacklyd is offline.")
         #expect(SettingsCopy.changedElsewhere == "Changed elsewhere. Try again.")
+    }
+
+    @Test func theActivityRowSaysHowLongAndHowManyEntriesAreKept() {
+        #expect(SettingsCopy.auditRetentionTitle == "Keep activity for")
+        #expect(
+            SettingsCopy.auditRetentionChoices.map(SettingsCopy.days) == [
+                "7 days", "30 days", "90 days",
+            ])
+        #expect(
+            SettingsCopy.auditRetentionNote(maxRows: 100_000, locale: Locale(identifier: "en_US"))
+                == "Up to 100,000 entries. Older entries are removed every day and right after you change this."
+        )
+        #expect(
+            SettingsCopy.auditRetentionRemoveTitle(days: 7) == "Remove activity older than 7 days?")
+        #expect(
+            SettingsCopy.auditRetentionRemoveMessage
+                == "Older entries are removed now and can’t be brought back.")
     }
 
     @Test func aCatalogSourceReadsAsAPlace() {
