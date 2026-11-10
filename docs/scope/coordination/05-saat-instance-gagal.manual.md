@@ -78,3 +78,11 @@ Dari laporan `chk-f34-m1` (2026-11-10).
 Dari laporan `dev-f34-m4` (2026-11-10).
 
 1. Di Terminal yang berwarna, jalankan `stackly doctor` terhadap daemon yang berjalan: tanda ✓, !, ✗ berwarna hijau, kuning, merah. `stackly doctor | cat`: kata OK, WARNING, ERROR tanpa kode ANSI (AC-15).
+
+## F34 · Manual A dan B (spec 0034, milestone 5, langkah 16) · `BLOCKED`, owner user
+
+Dari laporan `dev-f34-m5` (2026-11-10).
+
+1. Manual A (launchd asli): dengan build bertanda tangan yang terdaftar sebagai agent, ganti binary lewat `cargo xtask build-app --install`, hentikan daemon, buka Diagnostics dan jalankan `stackly doctor`: baris What to do `binary_replaced` tampil di seksi Background Agent dan di `stackly doctor`, lalu Start stacklyd menyalakan daemon lagi (AC-11, AC-22).
+2. Manual B (lintasan GUI): di app nyata, buat port conflict lalu Run Doctor, tekan Use Port {port}: tab Configuration terbuka dengan sheet port dan port saran terisi, tanpa perubahan sampai Apply. Details… pada `pid_reused`: kedua proses dan setiap check identitas. Export Bundle…: daftar entri dulu, Export… membuka save panel di Downloads, lalu "Saved {file} to Downloads." dan Show in Finder (AC-17, AC-18, AC-19, AC-22).
+3. Saat Manual B: badge Diagnostics, subjudul toolbar, Diagnose… dari banner gagal (fokus instance, Show All), item S Overview (fokus `disk_space`), Open Settings pada temuan disk (tab Storage) (AC-18, AC-20).
