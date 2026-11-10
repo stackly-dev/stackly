@@ -178,6 +178,7 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `queued` | Queued | `neutral` |
 | `running` | Running | `informative` |
 | `cancelRequested` | Cancelling… | `caution` |
+| `cancelRequested` dengan `continuing` true | Finishing… | `caution` |
 | `succeeded` | Done | `neutral` |
 | `succeeded` dengan `partial` true | Partial | `caution` |
 | `failed` | Failed | `critical` |
@@ -186,6 +187,8 @@ Daemon yang menerapkan `effective(now, max_age)` spec 0004 sebelum mengirim read
 | `unrecognized` | Unrecognized State | `caution` |
 
 Status operasi tampil sebagai `ToneBadge`, jadi `symbol` di `StatusAppearance.operation` adalah simbol tone dan `detail` selalu kosong.
+
+*Diperbarui 2026-11-10 (koordinasi scope 05, spec 0035):* `StatusAppearance.operation(state:partial:continuing:)` mendapat parameter `continuing` (default false). Layar mengisinya true untuk operasi `cancelRequested` yang `OperationSummary.cancel` nya `continuing` (cancel diminta setelah langkah yang tidak bisa dibalik, jadi operasi selesai sendiri), dan labelnya "Finishing…" alih alih "Cancelling…"; state lain mengabaikannya. Baris ini juga perlu masuk tabel status operasi `apps/macos/design.md`.
 
 Copy label di luar lima label mockup (Running, Stopped, Starting…, Stopping…, Failed, dan Waiting for probe) adalah copy baru yang ditetapkan spec ini.
 

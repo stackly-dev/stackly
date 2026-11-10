@@ -277,7 +277,13 @@ public struct CheckList: View { public init(_ items: [CheckItem], layout: CheckL
 nonisolated public struct StageDefinition: Equatable, Sendable {
     public var key: String     // nilai OperationSummary.stage
     public var title: String
-    public init(key: String, title: String)
+    public var also: [StageAlias]   // nilai stage lain yang dihitung sebagai tahap ini (spec 0035)
+    public init(key: String, title: String, also: [StageAlias] = [])
+}
+nonisolated public struct StageAlias: Equatable, Sendable, ExpressibleByStringLiteral {
+    public var key: String     // nilai OperationSummary.stage
+    public var title: String?  // judul selama operasi di nilai ini, nil berarti judul tahapnya
+    public init(key: String, title: String? = nil)
 }
 nonisolated public enum StageState: Equatable, Sendable { case pending, running, done, failed, cancelled }
 nonisolated public struct ProgressStage: Equatable, Sendable { public var key: String; public var title: String; public var state: StageState }
@@ -465,7 +471,7 @@ Layar membungkus `CheckList` dengan `CardSection` (misalnya judul "Preflight").
 | `cancelled`, stage dikenal | sebelum `i` `done`, `i` `cancelled`, sesudahnya `pending` | `i` | nil, nil | "Cancelled" | `cancelled` |
 | `cancelled`, stage nil, tidak dikenal, atau `n` 0 (termasuk batal saat antre) | semua `pending` | nil | nil, nil | "Cancelled" | `cancelled` |
 
-Untuk baris yang memakai rumus AC-14, `fraction` adalah `Double` dari pembilang dan penyebut yang sama dengan `percent` (`succeeded` memberi 1). Definisi tahap datang dari spec pemilik operasi (spec 0018: lima tahap install; spec 0020: enam tahap create; fitur 35, 50, 52 untuk operasi lain).
+Untuk baris yang memakai rumus AC-14, `fraction` adalah `Double` dari pembilang dan penyebut yang sama dengan `percent` (`succeeded` memberi 1). Definisi tahap datang dari spec pemilik operasi (spec 0018: lima tahap install; spec 0020: enam tahap create; fitur 35, 50, 52 untuk operasi lain). *Diperbarui 2026-11-10 (koordinasi scope 05, spec 0035):* `StagedProgressValue.from` mencari `stage` di `key` lalu di `also` setiap definisi dan memakai indeks definisi itu, dan `currentTitle` memakai judul alias bila ada (misalnya `backoff` "Waiting to restart" di tahap Launch); spec 0035 *Definisi tahap* memberi definisi untuk start, stop, restart, force stop, apply config, ganti port, dan drift lewat `OperationStages.definitions(for:)`.
 
 
 | `outcome` | Teks `.compact` | Bar |
@@ -830,7 +836,7 @@ Pendekatan proyek adalah Journey, tapi fitur 67 adalah fondasi tanpa journey sen
 - [ ] Fitur 27 dan 29: tulis spec nya di atas `LogView` dan `DiffView`; ubah API komponen itu lewat `/architect` spec ini kalau kebutuhannya berbeda.
 - [ ] Fitur 32: popover menu bar memasang `.actionHost()` sendiri dan memutuskan presentasi umpan baliknya (kartu di popover atau tanpa kartu).
 - [x] Fitur 18 *(2026-10-22, dari laporan `dbg-f67-inspector`)*: `RuntimesPage.minimumWidth` (`Runtimes/RuntimesPage.swift`) dan `#expect(RuntimesPage.minimumWidth == 384)` di `RuntimesPageTests` tidak dipakai halaman lagi sejak `e99c6061`; hapus keduanya, atau catat pemakaian barunya di spec 0018. Diterapkan: keduanya dihapus di `e5684d06` (merge `88a92569`, milestone 4 spec 0022).
-- [ ] Fitur 34 dan 15: hasil doctor memakai `CheckList(.single)`; tombol Copy Details di seksi Diagnostics agent (spec 0015) memakai `CopyButton`.
+- [ ] Fitur 34 dan 15: hasil doctor memakai `CheckList(.single)`; tombol Copy Details di seksi Diagnostics agent (spec 0015) memakai `CopyButton`. *Bagian fitur 34 diterapkan di spec 0034 (2026-11-10): `DoctorSection` memakai `CheckList(.single)` dan `CopyButton` "Copy Report". Tetap terbuka untuk bagian spec 0015: Copy Details di `BackgroundAgentDiagnosticsSection` masih `Button` biasa, belum `CopyButton`.*
 
 ## Rationale
 

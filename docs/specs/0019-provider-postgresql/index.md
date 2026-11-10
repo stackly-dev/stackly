@@ -629,7 +629,7 @@ Urutan mengikuti pendekatan Journey proyek: satu jalur dibuat lengkap dulu, yait
 - [x] `/architect` update spec 0010: `Stdin::Text` lewat `StdinSource::Bytes(SecretValue::new(text))` dengan kegagalan `init_step_failed`, dan detail `check_failed` probe `exec` dengan format spec ini. Diterapkan di spec 0010 (2026-10-20, K3 dan K8, langkah 6 dan 7).
 - [ ] Fitur 21: bentuk connection string PostgreSQL (`postgresql://postgres:<password>@<host>:<port>/postgres` dan varian socket) dan tempatnya di manifest, menjawab Follow-up spec 0009 tentang `purpose` endpoint.
 - [ ] Fitur 26: force stop PostgreSQL sebaiknya `SIGQUIT` (immediate shutdown) sebelum eskalasi lain, karena `SIGKILL` ke postmaster meninggalkan backend yatim.
-- [ ] Fitur 34: perbaikan terpandu untuk `postmaster.pid` basi dengan PID yang dipakai ulang, dan untuk role `stackly_readiness` yang hilang atau berubah.
+- [x] Fitur 34: perbaikan terpandu untuk `postmaster.pid` basi dengan PID yang dipakai ulang, dan untuk role `stackly_readiness` yang hilang atau berubah. Diterapkan di spec 0034 (2026-11-10): entri `remedies` `stale_postmaster_pid` (dengan bukti `pidFile` pasif) dan `readiness_role` di `providers/postgresql/provider.yaml` (AC-10, *Entri PostgreSQL*); remedy hanya teks, Stackly tidak menghapus atau menjalankan apa pun.
 - [ ] Fitur 51 dan 52: dump dan restore logical melewati role `stackly_readiness`, dan instance hasil restore membuatnya lewat init biasa.
 - [ ] Fitur 57: adoption data PostgreSQL luar membuat role `stackly_readiness` (single user mode saat server berhenti) dan memasang folder config Stackly sebelum start pertama.
 - [ ] Fitur 28: peringatan kapasitas untuk batas shared memory System V saat jumlah instance PostgreSQL yang berjalan mendekati batas.
