@@ -65,3 +65,10 @@ Dari laporan `dev-f35-m3` (2026-11-10). App Debug di atas daemon asli dan provid
 8. Settings, Storage, grup Activity: "Keep activity for" 30 days dengan keterangan batas 100,000. Pilih 90: langsung tersimpan. Pilih 7: dialog "Remove activity older than 7 days?" dengan Cancel sebagai default; Remove: `stackly settings get` menulis 7 days. Revision basi: "Changed elsewhere. Try again.". Offline: grup tidak tampil (AC-20, AC-6).
 9. Langkah 10 Build plan: install runtime fake dan lihat Cancel mati di Commit; start gagal karena port lalu Retry di Operations; buka operasi dari Overview dan dari tab Activity; ulangi semua di mode terang dan gelap (AC-11, AC-13, AC-15, AC-20).
 10. `cargo xtask snapshot review`: PNG lama dan baru berdampingan untuk suite Operations, Activity, dan Settings (AC-19).
+
+## F34 · Check doctor (spec 0034, milestone 1)
+
+Dari laporan `chk-f34-m1` (2026-11-10).
+
+1. Hanya bila SDK macOS berganti: ukur ulang layout `struct socket_fdinfo`, `socket_info`, `in_sockinfo`, dan `tcp_sockinfo` dari `sys/proc_info.h` dengan program C kecil (`offsetof` dan `sizeof`, `xcrun clang -arch arm64`) dan cocokkan dengan assert `const` di `crates/platform-macos/src/process/sys.rs` (`socket_fdinfo` 792 byte, `psi` di 24, `soi_kind` di 232, `soi_proto` di 240 dengan ukuran 528, `in_sockinfo` 80 byte, `tcp_sockinfo` 120 byte dengan `tcpsi_state` di 80) (AC-5).
+2. Lintasan GUI nyata dan `binary_replaced` di bawah launchd adalah Manual A dan B milestone 5 fitur 34 (`BLOCKED` sampai dijalankan), ditulis saat milestone itu dibangun (AC-5, AC-8, AC-22).
