@@ -111,10 +111,12 @@ pub use registry::{
     GuardView, Guarded, InstallDetails, InstanceFilter, InstancePathEntry, InstancePathKind,
     LeaseFilter, LogicalRoot, NotDeletableReason, OperationCursor, OperationPage, OperationQuery,
     PlatformStoreKey, ProviderRevisionRecord, ProviderSourceKind, ProviderSourceRecord,
-    ProviderSourceStatus, PruneReport, Registry, RegistryError, RegistryId, RelativePath,
-    ResourceRef, RetentionPolicy, SafeDetails, SafeDetailsError, SecretFieldName,
-    SecretReferenceFilter, SecretReferenceId, SecretReferenceRecord, SecretReferenceView,
-    SecretUse, SecretUser, SignatureInfoJson, Versioned, WriteBatch, WriteOp,
+    ProviderSourceStatus, PruneReport, QUICK_CHECK_MESSAGES_MAX, QuickCheck, Registry,
+    RegistryError, RegistryId, RelativePath, ResourceRef, RetentionPolicy, SafeDetails,
+    SafeDetailsError, SecretFieldName, SecretReferenceFilter, SecretReferenceId,
+    SecretReferenceRecord, SecretReferenceView, SecretUse, SecretUser, SignatureInfoJson,
+    UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN, UnrecognizedValue, Versioned,
+    WriteBatch, WriteOp,
 };
 pub use restart::{
     NewRestartPlan, PlanCloseReason, PlanDecision, PlanInstance, PlanOutcome, PlanReason,

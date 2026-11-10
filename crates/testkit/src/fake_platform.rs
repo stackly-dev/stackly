@@ -295,6 +295,7 @@ impl FakePlatform {
         )
         .with_secrets(Arc::new(self.secrets.clone()))
         .with_processes(Arc::new(self.processes.clone()))
+        .with_listeners(Arc::new(self.processes.clone()))
         .with_background_agent(Arc::new(self.background_agent.clone()))
         .with_fetcher(Arc::new(self.fetcher.clone()))
         .with_code_signing(Arc::new(self.code_signing.clone()))
