@@ -144,6 +144,14 @@ impl Filesystem for MacosFilesystem {
         rename::rename_no_replace(from, to)
     }
 
+    fn rename_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
+        rename::rename_replace(from, to)
+    }
+
+    fn remove_file(&self, path: &Path) -> Result<(), PlatformError> {
+        rename::remove_file(path)
+    }
+
     fn open_tree_writer(&self, root: &Path) -> Result<Box<dyn TreeWriter>, PlatformError> {
         tree_writer::open_tree_writer(root)
     }

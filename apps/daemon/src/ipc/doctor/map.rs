@@ -4,9 +4,9 @@
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
-use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::path::Path;
 
+use stackly_core::diagnostics::HomeMask;
 use stackly_core::doctor::{
     Action, CheckReport, DiskReading, Finding, FindingFacts, IdentityFacts, InstanceRef,
     PidFileFacts, PidFileState as CorePidFileState, PortOwnerFacts, PortProblemKind, RemedyFacts,
@@ -109,18 +109,23 @@ fn check_dto(
 
 fn finding_dto(core: &DaemonCore, redactor: &Redactor, finding: &Finding) -> DoctorFinding {
     let failure = failure_of(core, finding);
-    let shown = shown(finding, failure.as_ref());
+    let home = core.home_mask();
+    let shown = shown(finding, failure.as_ref(), home);
     let title = clip_chars(
         &redactor.redact(&copy::finding_title(&shown)),
         TITLE_CHARS_MAX,
     );
     let mut explanation = copy::explanation(&shown);
-    if let Some(sentence) = finding.remedy.as_deref().and_then(pid_file_sentence) {
+    if let Some(sentence) = finding
+        .remedy
+        .as_deref()
+        .and_then(|remedy| pid_file_sentence(remedy, home))
+    {
         explanation.push(' ');
         explanation.push_str(&sentence);
     }
     let explanation = clip_chars(&redactor.redact(&explanation), EXPLANATION_CHARS_MAX);
-    let mut details = details(&shown, failure.as_ref());
+    let mut details = details(&shown, failure.as_ref(), home);
     details.truncate(DETAILS_MAX);
     let excerpt = failure
         .as_ref()
@@ -137,10 +142,12 @@ fn finding_dto(core: &DaemonCore, redactor: &Redactor, finding: &Finding) -> Doc
         severity: severity(finding.severity),
         title,
         explanation,
-        subject: finding
-            .subject
-            .as_deref()
-            .map(|subject| clip_bytes(&redactor.redact(&tilde(subject)), DETAIL_VALUE_BYTES_MAX)),
+        subject: finding.subject.as_deref().map(|subject| {
+            clip_bytes(
+                &redactor.redact(&tilde(home, subject)),
+                DETAIL_VALUE_BYTES_MAX,
+            )
+        }),
         instance: finding.instance.as_ref().map(instance_ref),
         operation_id: match &finding.facts {
             FindingFacts::NeedsRecovery { operation, .. } => Some(operation.id().as_uuid()),
@@ -154,18 +161,18 @@ fn finding_dto(core: &DaemonCore, redactor: &Redactor, finding: &Finding) -> Doc
             })
             .collect(),
         evidence: match &finding.facts {
-            FindingFacts::Identity(facts) => Some(evidence(facts)),
+            FindingFacts::Identity(facts) => Some(evidence(facts, home)),
             _ => None,
         },
         port_owner: match &finding.facts {
-            FindingFacts::Port { owner, .. } => Some(port_owner(owner)),
+            FindingFacts::Port { owner, .. } => Some(port_owner(owner, home)),
             _ => None,
         },
         excerpt,
         remedy: finding
             .remedy
             .as_deref()
-            .map(|remedy| remedy_dto(redactor, remedy)),
+            .map(|remedy| remedy_dto(redactor, home, remedy)),
         action: finding.action.as_ref().map(action),
     }
 }
@@ -212,6 +219,7 @@ fn failure_of(
 fn shown<'a>(
     finding: &'a Finding,
     failure: Option<&stackly_protocol::instance::InstanceLastFailure>,
+    home: &HomeMask,
 ) -> Shown<'a> {
     let mut shown = Shown {
         code: finding.code,
@@ -231,13 +239,13 @@ fn shown<'a>(
         FindingFacts::Subsystem(subsystem) => shown.label = Some(subsystem.name.clone()),
         FindingFacts::Root { root, path, .. } => {
             shown.label = Some(format!("{root} root"));
-            shown.path = Some(tilde_path(path));
+            shown.path = Some(tilde_path(home, path));
         }
         FindingFacts::Runtime {
             runtime, folder, ..
         } => {
             shown.label = Some(format!("{} {}", runtime.software(), runtime.version()));
-            shown.path = Some(tilde_path(folder));
+            shown.path = Some(tilde_path(home, folder));
         }
         FindingFacts::Package { key, .. } => {
             shown.label = Some(format!("{} {}", key.provider(), key.revision()));
@@ -252,13 +260,13 @@ fn shown<'a>(
                 shown.owner_name = executable
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned());
-                shown.owner_path = Some(tilde_path(executable));
+                shown.owner_path = Some(tilde_path(home, executable));
             }
         }
         FindingFacts::Identity(facts) => {
             shown.other_user = same_user(facts) == Some(false);
             if let Some(current) = facts.current.as_ref().filter(|_| !shown.other_user) {
-                shown.owner_path = Some(tilde_path(&current.executable));
+                shown.owner_path = Some(tilde_path(home, &current.executable));
             }
         }
         _ => {}
@@ -270,6 +278,7 @@ fn shown<'a>(
 fn details(
     shown: &Shown<'_>,
     failure: Option<&stackly_protocol::instance::InstanceLastFailure>,
+    home: &HomeMask,
 ) -> Vec<(&'static str, String)> {
     let mut details: Vec<(&'static str, String)> = Vec::new();
     match shown.facts {
@@ -449,7 +458,7 @@ fn details(
                 details.push(("errorCode", code.clone()));
             }
             if let Some(path) = path {
-                details.push(("path", tilde(path)));
+                details.push(("path", tilde(home, path)));
             }
         }
         FindingFacts::Scratch { name } => details.push(("path", format!("operations/{name}"))),
@@ -461,14 +470,14 @@ fn details(
 /// The evidence of a `processes` finding: the passive checks, the recorded
 /// process, and the one that holds the PID now. A process of another user
 /// shows no executable.
-fn evidence(facts: &IdentityFacts) -> DoctorEvidence {
+fn evidence(facts: &IdentityFacts, home: &HomeMask) -> DoctorEvidence {
     let same = same_user(facts);
     DoctorEvidence {
         identity: dto::evidence_dto(&facts.evidence),
         recorded: facts.recorded.as_ref().map(|recorded| ProcessRef {
             pid: recorded.pid.get(),
             started_at: started_at(recorded.start),
-            executable: Some(tilde_path(&recorded.executable)),
+            executable: Some(tilde_path(home, &recorded.executable)),
             same_user: Some(true),
         }),
         current: if facts.current_other_user {
@@ -482,7 +491,7 @@ fn evidence(facts: &IdentityFacts) -> DoctorEvidence {
             facts
                 .current
                 .as_ref()
-                .map(|current| current_ref(current, same))
+                .map(|current| current_ref(current, same, home))
         },
         observed_at: Timestamp::from_jiff(facts.observed_at),
     }
@@ -498,25 +507,25 @@ fn same_user(facts: &IdentityFacts) -> Option<bool> {
     }
 }
 
-fn current_ref(current: &ProcessFacts, same: Option<bool>) -> ProcessRef {
+fn current_ref(current: &ProcessFacts, same: Option<bool>, home: &HomeMask) -> ProcessRef {
     ProcessRef {
         pid: current.pid.get(),
         started_at: started_at(current.start),
-        executable: (same != Some(false)).then(|| tilde_path(&current.executable)),
+        executable: (same != Some(false)).then(|| tilde_path(home, &current.executable)),
         same_user: same,
     }
 }
 
-fn port_owner(owner: &PortOwnerFacts) -> PortOwner {
+fn port_owner(owner: &PortOwnerFacts, home: &HomeMask) -> PortOwner {
     match owner {
         PortOwnerFacts::Process(process) => PortOwner {
             kind: PortOwnerKind::Process,
-            process: Some(listener_ref(process)),
+            process: Some(listener_ref(process, home)),
             instance: None,
         },
         PortOwnerFacts::StacklyInstance { owner, instance } => PortOwner {
             kind: PortOwnerKind::StacklyInstance,
-            process: Some(listener_ref(owner)),
+            process: Some(listener_ref(owner, home)),
             instance: Some(instance_ref(instance)),
         },
         _ => PortOwner {
@@ -527,23 +536,26 @@ fn port_owner(owner: &PortOwnerFacts) -> PortOwner {
     }
 }
 
-fn listener_ref(owner: &ListenerOwner) -> ProcessRef {
+fn listener_ref(owner: &ListenerOwner, home: &HomeMask) -> ProcessRef {
     ProcessRef {
         pid: owner.pid.get(),
         started_at: owner.start.and_then(started_at),
-        executable: owner.executable.as_deref().map(tilde_path),
+        executable: owner
+            .executable
+            .as_deref()
+            .map(|path| tilde_path(home, path)),
         same_user: Some(true),
     }
 }
 
 /// The sentence the explanation gets for the PID file of a remedy.
-fn pid_file_sentence(remedy: &RemedyFacts) -> Option<String> {
+fn pid_file_sentence(remedy: &RemedyFacts, home: &HomeMask) -> Option<String> {
     let facts = remedy.pid_file.as_ref()?;
     let executable = facts
         .process
         .as_ref()
         .filter(|_| !facts.other_user)
-        .map(|process| tilde_path(&process.executable));
+        .map(|process| tilde_path(home, &process.executable));
     copy::pid_file(
         &remedy.display_name,
         facts.state,
@@ -556,7 +568,7 @@ fn pid_file_sentence(remedy: &RemedyFacts) -> Option<String> {
 /// A remedy on the wire: its text redacted, its paths with `~`. A command
 /// keeps its absolute paths, since a shell does not expand `~` inside the
 /// quotes a path with a space needs or after `--host=`.
-fn remedy_dto(redactor: &Redactor, facts: &RemedyFacts) -> DoctorRemedy {
+fn remedy_dto(redactor: &Redactor, home: &HomeMask, facts: &RemedyFacts) -> DoctorRemedy {
     let redact = |text: &str| redactor.redact(text).into_owned();
     DoctorRemedy {
         provider: facts.package.provider().to_string(),
@@ -573,19 +585,22 @@ fn remedy_dto(redactor: &Redactor, facts: &RemedyFacts) -> DoctorRemedy {
                 path: step
                     .path
                     .as_deref()
-                    .map(|path| redact(&tilde_path(Path::new(path)))),
+                    .map(|path| redact(&tilde_path(home, Path::new(path)))),
             })
             .collect(),
-        pid_file: facts.pid_file.as_ref().map(pid_file_dto),
+        pid_file: facts
+            .pid_file
+            .as_ref()
+            .map(|facts| pid_file_dto(facts, home)),
     }
 }
 
-fn pid_file_dto(facts: &PidFileFacts) -> PidFileEvidence {
+fn pid_file_dto(facts: &PidFileFacts, home: &HomeMask) -> PidFileEvidence {
     let process = match (&facts.process, facts.pid) {
         (Some(process), _) => Some(ProcessRef {
             pid: process.pid.get(),
             started_at: started_at(process.start),
-            executable: (!facts.other_user).then(|| tilde_path(&process.executable)),
+            executable: (!facts.other_user).then(|| tilde_path(home, &process.executable)),
             same_user: Some(!facts.other_user),
         }),
         (None, Some(pid)) if facts.other_user => Some(ProcessRef {
@@ -597,7 +612,7 @@ fn pid_file_dto(facts: &PidFileFacts) -> PidFileEvidence {
         (None, _) => None,
     };
     PidFileEvidence {
-        path: tilde_path(&facts.path),
+        path: tilde_path(home, &facts.path),
         pid: facts.pid.map(stackly_domain::Pid::get),
         state: match facts.state {
             CorePidFileState::Missing => PidFileState::Missing,
@@ -690,39 +705,15 @@ pub(super) fn socket_text(address: IpAddr, port: u16) -> String {
     }
 }
 
-/// The home folder, canonical, read once.
-// provisional: F34 (spec 0034 step 9 reads HOME once at daemon start for
-// the bundle; the doctor then takes it from there)
-fn home() -> Option<&'static Path> {
-    static HOME: OnceLock<Option<PathBuf>> = OnceLock::new();
-    HOME.get_or_init(|| {
-        let home = PathBuf::from(std::env::var_os("HOME")?);
-        Some(std::fs::canonicalize(&home).unwrap_or(home))
-    })
-    .as_deref()
-    .filter(|home| home.is_absolute() && home != &Path::new("/"))
+/// `path` with the home folder written `~` (spec 0034, *Penggantian folder
+/// home*).
+pub(super) fn tilde_path(home: &HomeMask, path: &Path) -> String {
+    home.mask(&path.display().to_string()).into_owned()
 }
 
-/// `path` with the home folder written `~`.
-pub(super) fn tilde_path(path: &Path) -> String {
-    if let Some(home) = home()
-        && let Ok(rest) = path.strip_prefix(home)
-    {
-        return if rest.as_os_str().is_empty() {
-            "~".to_owned()
-        } else {
-            format!("~/{}", rest.display())
-        };
-    }
-    path.display().to_string()
-}
-
-/// `text` with every occurrence of the home folder written `~`.
-fn tilde(text: &str) -> String {
-    match home().and_then(Path::to_str) {
-        Some(home) => text.replace(home, "~"),
-        None => text.to_owned(),
-    }
+/// `text` with the home folder written `~`.
+fn tilde(home: &HomeMask, text: &str) -> String {
+    home.mask(text).into_owned()
 }
 
 /// The wire ID of a check.

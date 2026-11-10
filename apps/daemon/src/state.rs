@@ -9,10 +9,11 @@ use std::time::Instant;
 
 use stackly_core::PreparedLayout;
 use stackly_core::catalog::CatalogState;
+use stackly_core::diagnostics::{HomeMask, Staging};
 use stackly_core::instance::create::CreateHooks;
 use stackly_core::metrics::{MetricsStore, SamplerConfig};
 use stackly_core::secret::Redactor;
-use stackly_platform::Platform;
+use stackly_platform::{Platform, RootKind};
 use stackly_protocol::Count;
 use stackly_protocol::daemon::{
     DaemonCounters, DaemonHealth, DaemonHealthStatus, DaemonInfo, RegistryRecovery, ShutdownMode,
@@ -190,6 +191,11 @@ pub struct DaemonCore {
     /// Why the first fatal error happened, for the record of a failed start
     /// (spec 0034, AC-11).
     fatal_reason: OnceLock<String>,
+    /// The home folder written `~`, from `HOME` as `main` read it (spec
+    /// 0034, *Penggantian folder home*).
+    home_mask: OnceLock<HomeMask>,
+    /// The staged previews of the diagnostic bundle (spec 0034).
+    bundles: Staging,
     shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
     /// Set while a `daemon.shutdown` `agent_off` runs (spec 0031, *Matikan
     /// agent*): other shutdown requests and new operations from clients get
@@ -226,6 +232,7 @@ impl DaemonCore {
         redactor: Arc<Redactor>,
         secret_target: Option<SecretStoreTarget>,
     ) -> Self {
+        let bundles = Staging::new(prepared.canonical_root(RootKind::Cache).to_path_buf());
         Self {
             info,
             platform,
@@ -260,6 +267,8 @@ impl DaemonCore {
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
             fatal_reason: OnceLock::new(),
+            home_mask: OnceLock::new(),
+            bundles,
             shutdown: Arc::new(watch::Sender::new(None)),
             agent_off: AtomicBool::new(false),
             plan_stopping: Arc::new(AtomicBool::new(false)),
@@ -648,6 +657,25 @@ impl DaemonCore {
             let _ = self.fatal_reason.set(reason.into());
         }
         self.fail(code);
+    }
+
+    /// Records the home folder mask of this run; the first call wins.
+    pub fn set_home_mask(&self, mask: HomeMask) {
+        let _ = self.home_mask.set(mask);
+    }
+
+    /// The home folder mask of this run; one that masks nothing when the
+    /// start recorded none.
+    #[must_use]
+    pub fn home_mask(&self) -> &HomeMask {
+        static NONE: HomeMask = HomeMask::none();
+        self.home_mask.get().unwrap_or(&NONE)
+    }
+
+    /// The staged previews of the diagnostic bundle (spec 0034).
+    #[must_use]
+    pub const fn bundles(&self) -> &Staging {
+        &self.bundles
     }
 
     /// The reason of the first fatal error, when it was recorded with one.

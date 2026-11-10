@@ -49,6 +49,10 @@ pub enum FsOp {
     OpenAppendPrivate,
     /// [`Filesystem::rename_no_replace`].
     RenameNoReplace,
+    /// [`Filesystem::rename_replace`].
+    RenameReplace,
+    /// [`Filesystem::remove_file`].
+    RemoveFile,
     /// [`Filesystem::open_tree_writer`].
     OpenTreeWriter,
     /// [`Filesystem::volume_space`], and through it
@@ -89,6 +93,8 @@ impl FsOp {
             Self::CreateFilePrivate => "create_file_private",
             Self::OpenAppendPrivate => "open_append_private",
             Self::RenameNoReplace => "rename_no_replace",
+            Self::RenameReplace => "rename_replace",
+            Self::RemoveFile => "remove_file",
             Self::OpenTreeWriter => "open_tree_writer",
             Self::VolumeSpace => "volume_space",
             Self::VolumeFacts => "volume_facts",
@@ -620,6 +626,36 @@ impl Filesystem for FakeFilesystem {
         self.enter(FsOp::RenameNoReplace, to)?;
         handles::rename_no_replace(from, to)?;
         self.record(FsOp::RenameNoReplace, to);
+        Ok(())
+    }
+
+    fn rename_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
+        self.confine(from)?;
+        self.confine(to)?;
+        self.enter(FsOp::RenameReplace, to)?;
+        if fs::symlink_metadata(to).is_ok_and(|meta| meta.file_type().is_dir()) {
+            return Err(PlatformError::Io {
+                op: "rename_replace",
+                path: to.to_path_buf(),
+                kind: std::io::ErrorKind::IsADirectory,
+                message: "a folder is never replaced".to_owned(),
+            });
+        }
+        fs::rename(from, to).map_err(|err| PlatformError::from_io("rename_replace", to, &err))?;
+        if let Some(parent) = to.parent() {
+            File::open(parent)
+                .and_then(|dir| dir.sync_all())
+                .map_err(|err| PlatformError::from_io("sync directory", parent, &err))?;
+        }
+        self.record(FsOp::RenameReplace, to);
+        Ok(())
+    }
+
+    fn remove_file(&self, path: &Path) -> Result<(), PlatformError> {
+        self.confine(path)?;
+        self.enter(FsOp::RemoveFile, path)?;
+        fs::remove_file(path).map_err(|err| PlatformError::from_io("remove_file", path, &err))?;
+        self.record(FsOp::RemoveFile, path);
         Ok(())
     }
 

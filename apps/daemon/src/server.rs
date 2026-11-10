@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use stackly_core::catalog::{CatalogLocation, CatalogState};
+use stackly_core::diagnostics::HomeMask;
 use stackly_core::instance::create::{
     CreateHooks, CreateWorkFactory, INSTANCE_REGISTRATION, InstanceRegistrationCompensator,
 };
@@ -127,6 +128,10 @@ pub struct DaemonConfig {
     /// user database (spec 0004 AC-6); `None`, the default, skips that
     /// rule, so an in process test never reads the real home.
     pub home: Option<PathBuf>,
+    /// `HOME` as `main` read it, which the doctor and the diagnostic
+    /// bundle write as `~` together with its canonical form (spec 0034).
+    /// `None`, the default, masks nothing.
+    pub home_env: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for DaemonConfig {
@@ -160,6 +165,7 @@ impl Default for DaemonConfig {
             durable_logs: DurableLogConfig::default(),
             metrics: SamplerConfig::default(),
             home: None,
+            home_env: None,
         }
     }
 }
@@ -385,6 +391,19 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         .set_read_timeout(config.capacity_read_timeout);
     if let Some(home) = config.home.clone() {
         core.set_home(home);
+    }
+    let canonical_home = config
+        .home_env
+        .as_deref()
+        .and_then(|home| core.platform().fs().canonicalize(home).ok());
+    core.set_home_mask(HomeMask::new(
+        config.home_env.as_deref(),
+        canonical_home.as_deref(),
+    ));
+    // Previews of an earlier run cannot be exported any more (spec 0034,
+    // *Staging preview*).
+    if let Err(error) = core.bundles().clear(core.platform().fs()) {
+        tracing::warn!(error = %error, "cannot empty the diagnostics staging folder");
     }
 
     // The launch record comes after the lock and before the socket, so a

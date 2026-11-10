@@ -558,6 +558,168 @@
         "resumable"
       ]
     },
+    "BundleEntry": {
+      "description": "One entry of a preview.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "Its bytes before compression.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "description": {
+          "description": "One sentence about it.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What it is.",
+          "$ref": "#/$defs/BundleEntryKind"
+        },
+        "lines": {
+          "description": "Its lines, for a log.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "path": {
+          "description": "Its path in the zip, such as `logs/stacklyd.log`.",
+          "type": "string"
+        },
+        "truncated": {
+          "description": "True when it holds less than its source had.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "description",
+        "bytes",
+        "truncated"
+      ]
+    },
+    "BundleEntryKind": {
+      "description": "What an entry of the bundle is. Open.",
+      "oneOf": [
+        {
+          "description": "`README.txt`: what the bundle holds and leaves out.",
+          "type": "string",
+          "const": "readme"
+        },
+        {
+          "description": "`doctor.json`: the doctor report of the preview.",
+          "type": "string",
+          "const": "doctor"
+        },
+        {
+          "description": "`system.json`: versions, macOS, launch context, capacity, roots.",
+          "type": "string",
+          "const": "system"
+        },
+        {
+          "description": "`instances.json`: every instance, secrets only as references.",
+          "type": "string",
+          "const": "instances"
+        },
+        {
+          "description": "`runtimes.json`: every runtime.",
+          "type": "string",
+          "const": "runtimes"
+        },
+        {
+          "description": "`operations.json`: the newest operations and those that need\nrecovery.",
+          "type": "string",
+          "const": "operations"
+        },
+        {
+          "description": "`logs/stacklyd.log`: the tail of the daemon log.",
+          "type": "string",
+          "const": "daemon_log"
+        },
+        {
+          "description": "`logs/instances/<name>.log`: the tail of one instance log.",
+          "type": "string",
+          "const": "instance_log"
+        },
+        {
+          "description": "A file of `agent/`: the launch record or the start failure record.",
+          "type": "string",
+          "const": "agent"
+        },
+        {
+          "description": "A kind this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "BundlePreview": {
+      "description": "Reply of `diagnostics.preview_bundle`: what the staged zip holds. The\nsame bytes are what `diagnostics.export_bundle` writes.",
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "description": "When it was built.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "entries": {
+          "description": "Its entries, in zip order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BundleEntry"
+          }
+        },
+        "expiresAt": {
+          "description": "When it can no longer be exported, 15 minutes later.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "previewId": {
+          "description": "The preview, for `diagnostics.export_bundle`.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "recovery": {
+          "description": "True when the registry is in recovery mode, so the entries that need\nit are left out.",
+          "type": "boolean"
+        },
+        "suggestedFileName": {
+          "description": "`stackly-diagnostics-<YYYYMMDD>T<HHMMSS>Z.zip`, from `createdAt` in\nUTC.",
+          "type": "string"
+        },
+        "totalBytes": {
+          "description": "The bytes of all entries before compression.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "zipBytes": {
+          "description": "The size of the zip.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "previewId",
+        "createdAt",
+        "expiresAt",
+        "suggestedFileName",
+        "totalBytes",
+        "zipBytes",
+        "recovery"
+      ]
+    },
     "CancelAvailability": {
       "description": "Whether a cancel can still stop an operation safely (spec 0035,\n*Ketersediaan cancel*). Open: a client reads `unrecognized` as `none`.",
       "oneOf": [
@@ -4754,6 +4916,32 @@
       "required": [
         "path",
         "kind"
+      ]
+    },
+    "ExportedBundle": {
+      "description": "Reply of `diagnostics.export_bundle`.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "Its size.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "path": {
+          "description": "The file written, with its parent folder made canonical.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Its sha256, lowercase hex, the same as the staged preview's.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
       ]
     },
     "FieldApply": {
@@ -10802,6 +10990,40 @@
             "type": {
               "type": "string",
               "const": "doctor.run"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What the staged bundle holds.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/BundlePreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "diagnostics.preview_bundle"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The file the bundle was copied to.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ExportedBundle"
+            },
+            "type": {
+              "type": "string",
+              "const": "diagnostics.export_bundle"
             }
           },
           "required": [

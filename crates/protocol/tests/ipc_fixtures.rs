@@ -1555,3 +1555,69 @@ fn reconciliation_findings_name_each_instance_and_problem() {
         "an older daemon sends no findings"
     );
 }
+
+// covers: AC-12, AC-13 (spec 0034)
+#[test]
+fn a_bundle_preview_has_no_params_and_an_export_names_the_preview_and_destination() {
+    use stackly_protocol::diagnostics::ExportBundleParams;
+    let request = decode_request(&read("request-diagnostics-preview-bundle.json")).unwrap();
+    assert_eq!(request.call, Call::DiagnosticsPreviewBundle);
+    let request = decode_request(&read("request-diagnostics-export-bundle.json")).unwrap();
+    let Call::DiagnosticsExportBundle(params) = request.call else {
+        panic!("expected diagnostics.export_bundle");
+    };
+    assert!(params.replace);
+    assert_eq!(
+        params.destination,
+        "/Users/dev/Downloads/stackly-diagnostics-20261110T080000Z.zip"
+    );
+    let request = decode_request(&read(
+        "request-diagnostics-export-bundle-without-replace.json",
+    ))
+    .unwrap();
+    let Call::DiagnosticsExportBundle(ExportBundleParams { replace, .. }) = request.call else {
+        panic!("expected diagnostics.export_bundle");
+    };
+    assert!(!replace, "replace defaults to false");
+    let rejection = decode_request(&read(
+        "reject-diagnostics-export-bundle-empty-destination.json",
+    ))
+    .unwrap_err();
+    assert_eq!(
+        rejection.error.fields().first().map(|field| field.path()),
+        Some("destination")
+    );
+}
+
+// covers: AC-12, AC-13 (spec 0034)
+#[test]
+fn a_bundle_preview_lists_its_entries_and_an_export_its_file_and_digest() {
+    use stackly_protocol::diagnostics::BundleEntryKind;
+    let Reply::DiagnosticsPreviewBundle(preview) =
+        reply("frame-response-diagnostics-preview-bundle.json")
+    else {
+        panic!("expected a diagnostics.preview_bundle reply");
+    };
+    assert_eq!(
+        preview.suggested_file_name,
+        "stackly-diagnostics-20261110T080000Z.zip"
+    );
+    assert_eq!(preview.entries[0].kind, BundleEntryKind::Readme);
+    let daemon_log = &preview.entries[7];
+    assert_eq!(daemon_log.kind, BundleEntryKind::DaemonLog);
+    assert!(daemon_log.truncated);
+    assert_eq!(daemon_log.lines.map(u64::from), Some(2000));
+    assert!(!preview.recovery);
+    let Reply::DiagnosticsExportBundle(exported) =
+        reply("frame-response-diagnostics-export-bundle.json")
+    else {
+        panic!("expected a diagnostics.export_bundle reply");
+    };
+    assert_eq!(exported.sha256.len(), 64);
+    let Reply::DiagnosticsPreviewBundle(unknown) =
+        reply("frame-response-diagnostics-preview-bundle-unknown-values.json")
+    else {
+        panic!("expected a diagnostics.preview_bundle reply");
+    };
+    assert_eq!(unknown.entries[0].kind, BundleEntryKind::Unrecognized);
+}

@@ -1254,6 +1254,20 @@ async fn dispatch(
             .map(|report| Reply::DoctorRun(Box::new(report))),
             None,
         ),
+        Call::DiagnosticsPreviewBundle => (
+            guarded(core, handlers, context, |h, c, x| h.preview_bundle(c, x))
+                .await
+                .map(|preview| Reply::DiagnosticsPreviewBundle(Box::new(preview))),
+            None,
+        ),
+        Call::DiagnosticsExportBundle(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.export_bundle(c, x, p)
+            })
+            .await
+            .map(Reply::DiagnosticsExportBundle),
+            None,
+        ),
         Call::InstanceGetDataUsage(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_data_usage(c, x, p)

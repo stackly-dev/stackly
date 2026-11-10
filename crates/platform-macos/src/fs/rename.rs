@@ -48,3 +48,39 @@ pub(super) fn rename_no_replace(from: &Path, to: &Path) -> Result<(), PlatformEr
     }
     Ok(())
 }
+
+/// [`Filesystem::rename_replace`](stackly_platform::Filesystem::rename_replace)
+/// through `rename(2)`, which replaces a file or a symlink at `to` as
+/// itself; a folder at `to` is refused before the call, then the parent of
+/// `to` is synced.
+pub(super) fn rename_replace(from: &Path, to: &Path) -> Result<(), PlatformError> {
+    const REPLACE: &str = "rename_replace";
+    let to_parent = to.parent().ok_or_else(|| PlatformError::Io {
+        op: REPLACE,
+        path: to.to_path_buf(),
+        kind: io::ErrorKind::InvalidInput,
+        message: "the path has no parent directory".to_owned(),
+    })?;
+    if fs::symlink_metadata(to).is_ok_and(|meta| meta.file_type().is_dir()) {
+        return Err(PlatformError::Io {
+            op: REPLACE,
+            path: to.to_path_buf(),
+            kind: io::ErrorKind::IsADirectory,
+            message: "a folder is never replaced".to_owned(),
+        });
+    }
+    fs::rename(from, to).map_err(|err| match err.raw_os_error() {
+        Some(libc::EXDEV) => PlatformError::CrossesDevice {
+            path: to.to_path_buf(),
+        },
+        _ => PlatformError::from_io(REPLACE, to, &err),
+    })?;
+    sync_dir(REPLACE, to_parent)
+}
+
+/// [`Filesystem::remove_file`](stackly_platform::Filesystem::remove_file)
+/// through `unlink(2)`, which removes a symlink as itself and refuses a
+/// folder.
+pub(super) fn remove_file(path: &Path) -> Result<(), PlatformError> {
+    fs::remove_file(path).map_err(|err| PlatformError::from_io("remove_file", path, &err))
+}

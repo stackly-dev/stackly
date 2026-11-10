@@ -919,6 +919,39 @@ area! {
 }
 
 area! {
+    /// Diagnostic bundle codes (spec 0034). A preview and an export are not
+    /// operations; none of these is retryable as is, since the next try
+    /// needs a new preview or another destination.
+    pub mod diagnostics = "diagnostics", owner "spec 0034" {
+        PREVIEW_NOT_FOUND = "diagnostics.preview_not_found", NotFound, retryable false,
+            details ["previewId"], "the preview is not staged: it expired, a newer one pushed it out, or stacklyd restarted";
+        DESTINATION_EXISTS = "diagnostics.destination_exists", Conflict, retryable false,
+            details ["path"], "something is at the destination and replace is false";
+        DESTINATION_INVALID = "diagnostics.destination_invalid", InvalidInput, retryable false,
+            details ["reason", "path"], "the destination is refused; reason is not_absolute, invalid_name, parent_missing, parent_not_directory, is_directory, or not_regular";
+        WRITE_FAILED = "diagnostics.write_failed", Failed, retryable false,
+            details ["reason", "path"], "the bundle could not be written to the destination; reason is no_space, permission, or io, and no partial file is left";
+        BUNDLE_FAILED = "diagnostics.bundle_failed", Failed, retryable false,
+            details ["reason"], "the preview could not be built or staged; reason is no_space, permission, or io";
+
+        @functions
+
+        /// The static hint of a diagnostics error; `None` for a code
+        /// outside the area or without a hint.
+        #[must_use]
+        pub fn hint(code: &str) -> Option<&'static str> {
+            if code == DESTINATION_EXISTS.code {
+                Some("Choose another path, or pass --force to replace it.")
+            } else if code == PREVIEW_NOT_FOUND.code {
+                Some("Preview the bundle again.")
+            } else {
+                None
+            }
+        }
+    }
+}
+
+area! {
     /// Codes about what the host platform cannot tell (spec 0031).
     pub mod platform = "platform", owner "spec 0031" {
         SESSION_UNAVAILABLE = "platform.session_unavailable", Unavailable, retryable false,
@@ -1033,6 +1066,7 @@ pub const AREAS: &[Area] = &[
     process::AREA,
     instance::AREA,
     storage::AREA,
+    diagnostics::AREA,
     platform::AREA,
     internal::AREA,
     cli::AREA,
@@ -1446,6 +1480,7 @@ mod tests {
                 ("process", "spec 0010"),
                 ("instance", "spec 0010"),
                 ("storage", "spec 0022"),
+                ("diagnostics", "spec 0034"),
                 ("platform", "spec 0031"),
                 ("internal", "spec 0006"),
                 ("cli", "spec 0008"),

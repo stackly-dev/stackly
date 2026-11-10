@@ -25,6 +25,7 @@ use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
 };
+use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
@@ -61,7 +62,6 @@ use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::audit;
-use crate::ipc::doctor;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -70,6 +70,7 @@ use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::ipc::settings;
 use crate::ipc::stop_all;
+use crate::ipc::{diagnostics, doctor};
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -383,6 +384,26 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, PrepareTerminalReply> {
         let _ = context;
         instance::prepare_terminal(core, params)
+    }
+
+    /// `diagnostics.preview_bundle` (spec 0034).
+    fn preview_bundle<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, BundlePreview> {
+        diagnostics::preview(self, core, context)
+    }
+
+    /// `diagnostics.export_bundle` (spec 0034).
+    fn export_bundle<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ExportBundleParams,
+    ) -> HandlerFuture<'a, ExportedBundle> {
+        let _ = context;
+        diagnostics::export_bundle(core, params)
     }
 
     /// `doctor.run` (spec 0034).

@@ -1,7 +1,7 @@
 //! `stacklyd`, the per user Stackly daemon.
 //!
 //! `main` only reads the arguments and the environment (`STACKLY_ROOT`,
-//! `STACKLY_LOG`, and `STACKLY_CATALOG_DIR`), once, and hands
+//! `STACKLY_LOG`, `STACKLY_CATALOG_DIR`, and `HOME`), once, and hands
 //! them to [`stacklyd::run`]. Exit codes: 0 after a normal stop or
 //! `--print-roots`, 1 when the daemon cannot start (after it knew its data
 //! root, it leaves `<data>/daemon-start-failure.json` saying why, spec
@@ -49,6 +49,7 @@ fn main() -> ExitCode {
             args.print_roots,
         )
         .with_catalog_dir(std::env::var_os(CATALOG_DIR_ENV))
+        .with_home_env(std::env::var_os("HOME"))
         .with_launch_environment(
             std::env::var_os(XPC_SERVICE_NAME_ENV),
             parent_pid(),

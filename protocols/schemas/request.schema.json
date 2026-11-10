@@ -1051,6 +1051,36 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Builds a diagnostic bundle in the daemon's cache and lists what it\nholds (spec 0034). Not an operation.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "diagnostics.preview_bundle"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Copies the zip of a preview exactly to a path the client chose\n(spec 0034). Not an operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ExportBundleParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "diagnostics.export_bundle"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1465,6 +1495,30 @@
       "required": [
         "serverInstanceId",
         "sequence"
+      ]
+    },
+    "ExportBundleParams": {
+      "description": "Params of `diagnostics.export_bundle`.",
+      "type": "object",
+      "properties": {
+        "destination": {
+          "description": "The absolute path to write, at most 1024 bytes, without a `.` or\n`..` component; its file name is at most 200 bytes and its parent\nfolder must exist. The daemon checks the rest and answers\n`diagnostics.destination_invalid` with its reason.",
+          "type": "string"
+        },
+        "previewId": {
+          "description": "The preview to copy.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "replace": {
+          "description": "Whether a file or symlink already at `destination` is replaced; a\nclient sends true only after the user confirmed the replacement.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "previewId",
+        "destination"
       ]
     },
     "ForceStopInstanceParams": {
