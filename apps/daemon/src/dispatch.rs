@@ -62,7 +62,6 @@ use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::audit;
-use crate::ipc::doctor;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -71,6 +70,7 @@ use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::ipc::settings;
 use crate::ipc::stop_all;
+use crate::ipc::{diagnostics, doctor};
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -392,14 +392,7 @@ pub trait Handlers: Send + Sync + 'static {
         core: &'a DaemonCore,
         context: &'a RequestContext,
     ) -> HandlerFuture<'a, BundlePreview> {
-        let _ = (core, context);
-        // provisional: F34 (spec 0034 step 10 replaces this with the handler)
-        Box::pin(async {
-            Err(Box::new(ErrorBody::new(
-                &stackly_protocol::codes::request::UNKNOWN_METHOD,
-                "diagnostics.preview_bundle is not served by this build yet",
-            )))
-        })
+        diagnostics::preview(self, core, context)
     }
 
     /// `diagnostics.export_bundle` (spec 0034).
@@ -409,14 +402,8 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: ExportBundleParams,
     ) -> HandlerFuture<'a, ExportedBundle> {
-        let _ = (core, context, params);
-        // provisional: F34 (spec 0034 step 10 replaces this with the handler)
-        Box::pin(async {
-            Err(Box::new(ErrorBody::new(
-                &stackly_protocol::codes::request::UNKNOWN_METHOD,
-                "diagnostics.export_bundle is not served by this build yet",
-            )))
-        })
+        let _ = context;
+        diagnostics::export_bundle(core, params)
     }
 
     /// `doctor.run` (spec 0034).

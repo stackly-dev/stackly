@@ -53,6 +53,9 @@ pub struct StartConfig {
     /// The path of the running executable as the OS reports it, or `None`
     /// when it cannot be read.
     pub current_exe: Option<PathBuf>,
+    /// The value of `HOME`, or `None` when it is unset; the doctor and the
+    /// diagnostic bundle write it as `~` (spec 0034).
+    pub home_env: Option<OsString>,
 }
 
 impl StartConfig {
@@ -71,7 +74,15 @@ impl StartConfig {
             xpc_service_name: None,
             parent_pid: 0,
             current_exe: None,
+            home_env: None,
         }
+    }
+
+    /// Adds the value of `HOME`, which `main` reads once (spec 0034).
+    #[must_use]
+    pub fn with_home_env(mut self, home_env: Option<OsString>) -> Self {
+        self.home_env = home_env;
+        self
     }
 
     /// Adds the value of `STACKLY_CATALOG_DIR`.
@@ -578,6 +589,7 @@ mod imp {
             .with_secret_worker(worker)
             .with_config(server::DaemonConfig {
                 home: Some(home),
+                home_env: config.home_env.map(PathBuf::from),
                 ..server::DaemonConfig::default()
             });
         let code = runtime.block_on(serve(deps, &mut signals, note));
