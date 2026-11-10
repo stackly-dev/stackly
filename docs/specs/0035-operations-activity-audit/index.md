@@ -1,7 +1,7 @@
 # 0035. Operations, activity, dan audit lokal
 
 **Date**: 2026-11-10
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

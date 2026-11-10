@@ -410,10 +410,7 @@ async fn every_reveal_and_every_set_writes_an_audit_row_without_the_value() {
 
     let registry = daemon.core().registry().expect("the registry is ready");
     let page = registry
-        .audit_events(AuditQuery {
-            limit: 20,
-            before: None,
-        })
+        .audit_events(AuditQuery::page(20, None))
         .expect("the audit rows read")
         .value;
     let actions: Vec<String> = page

@@ -126,6 +126,7 @@ fn patch_of(params: &UpdateSettingsParams) -> Result<SettingsPatch, Box<ErrorBod
         default_startup,
         update_channel,
         telemetry: params.patch.telemetry,
+        audit_retention: None,
     })
 }
 

@@ -13,10 +13,10 @@ use std::collections::BTreeMap;
 use rusqlite::{Connection, params, params_from_iter};
 use serde_json::{Map, Value};
 use stackly_domain::{
-    AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource, DetailKey,
-    PlatformStoreKey, RegistryError, ResourceRef, ResourceRevision, SafeDetails, SecretFieldName,
-    SecretOwner, SecretOwnerKind, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
-    SecretReferenceView, SecretStatus, SecretUse, SecretUser, WriteOp,
+    AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource, ConfigRevisionNumber,
+    DetailKey, PlatformStoreKey, RegistryError, ResourceRef, ResourceRevision, SafeDetails,
+    SecretFieldName, SecretOwner, SecretOwnerKind, SecretRef, SecretReferenceFilter,
+    SecretReferenceRecord, SecretReferenceView, SecretStatus, SecretUse, SecretUser, WriteOp,
 };
 
 use super::column::{Cells, collect, exists, first, int, opt_ts, sql_error, ts};
@@ -25,7 +25,8 @@ const REFERENCE_COLUMNS: &str = "id, reference, platform_store_key, owner_kind, 
      purpose, value_origin, status, status_observed_at, value_updated_at, revision, created_at, \
      updated_at";
 
-const AUDIT_COLUMNS: &str = "id, actor, action, resource_kind, resource_id, operation_id, result, safe_details, occurred_at";
+const AUDIT_COLUMNS: &str = "id, actor, action, resource_kind, resource_id, operation_id, result, \
+     safe_details, occurred_at, instance_id, operation_kind, config_revision, client";
 
 // Writes.
 
@@ -241,7 +242,8 @@ pub(super) fn insert_audit(
     }
     conn.execute(
         &format!(
-            "INSERT INTO audit_events ({AUDIT_COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"
+            "INSERT INTO audit_events ({AUDIT_COLUMNS}) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"
         ),
         params![
             id,
@@ -253,6 +255,13 @@ pub(super) fn insert_audit(
             record.result.as_code(),
             details_text(&record.safe_details)?,
             ts(record.occurred_at),
+            record.instance.map(|instance| instance.to_string()),
+            record.operation_kind.map(|kind| kind.as_code()),
+            record
+                .config_revision
+                .map(|number| int(number.get(), "config_revision"))
+                .transpose()?,
+            record.client.as_ref().map(|client| client.as_str()),
         ],
     )
     .map_err(sql_error)?;
@@ -416,8 +425,11 @@ pub(super) fn uses_by(
 fn stored_audit(cells: Cells<'_, '_>) -> Result<AuditEventRecord, RegistryError> {
     let resource = match cells.opt_text("resource_kind")?.as_deref() {
         None if cells.opt_text("resource_id")?.is_none() => None,
-        Some("secret") => Some(AuditResource::SecretReference(cells.parse("resource_id")?)),
         None => return Err(cells.corrupt("resource_id", "is set without a resource kind")),
+        Some("secret") => Some(AuditResource::SecretReference(cells.parse("resource_id")?)),
+        Some("instance") => Some(AuditResource::Instance(cells.parse("resource_id")?)),
+        Some("runtime") => Some(AuditResource::Runtime(cells.parse("resource_id")?)),
+        Some("environment") => Some(AuditResource::Environment(cells.parse("resource_id")?)),
         Some(_) => return Err(cells.corrupt("resource_kind", "is not a known resource kind")),
     };
     let mut record = AuditEventRecord::new(
@@ -431,6 +443,14 @@ fn stored_audit(cells: Cells<'_, '_>) -> Result<AuditEventRecord, RegistryError>
     record.operation = cells.opt_parse("operation_id")?;
     record.safe_details = stored_details(&cells.text("safe_details")?)
         .ok_or_else(|| cells.corrupt("safe_details", "is not an object of detail strings"))?;
+    record.instance = cells.opt_parse("instance_id")?;
+    record.operation_kind = cells.opt_parse("operation_kind")?;
+    record.config_revision = cells
+        .opt_u64("config_revision")?
+        .map(ConfigRevisionNumber::new)
+        .transpose()
+        .map_err(|_| cells.corrupt("config_revision", "is 0"))?;
+    record.client = cells.opt_parse("client")?;
     Ok(record)
 }
 
@@ -453,13 +473,28 @@ pub(super) fn audit_events(
     query: &AuditQuery,
 ) -> Result<AuditPage, RegistryError> {
     let mut params = Vec::new();
-    let clause = match query.before {
-        Some(before) => {
-            params.push(ts(before.occurred_at));
-            params.push(before.id.to_string());
-            "WHERE (occurred_at, id) < (?1, ?2)"
-        }
-        None => "",
+    let mut conditions = Vec::new();
+    if let Some(before) = query.before {
+        params.push(ts(before.occurred_at));
+        params.push(before.id.to_string());
+        conditions.push(format!(
+            "(occurred_at, id) < (?{}, ?{})",
+            params.len() - 1,
+            params.len()
+        ));
+    }
+    if let Some(instance) = query.instance {
+        params.push(instance.to_string());
+        conditions.push(format!("instance_id = ?{}", params.len()));
+    }
+    if let Some(operation) = query.operation {
+        params.push(operation.to_string());
+        conditions.push(format!("operation_id = ?{}", params.len()));
+    }
+    let clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
     };
     // One row more than the page shows whether another page follows.
     let limit = usize::from(query.limit);

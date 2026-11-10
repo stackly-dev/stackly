@@ -55,7 +55,7 @@ pub use record::{
     ArtifactRecord, InstallDetails, ProviderRevisionRecord, ProviderSourceKind,
     ProviderSourceRecord, ProviderSourceStatus,
 };
-pub use retention::{PruneReport, RetentionPolicy};
+pub use retention::{AUDIT_MAX_ROWS, PruneReport, RetentionPolicy};
 pub use secret::{
     AuditAction, AuditActor, AuditCursor, AuditEventRecord, AuditPage, AuditQuery, AuditResource,
     AuditResult, PlatformStoreKey, SafeDetails, SafeDetailsError, SecretFieldName,

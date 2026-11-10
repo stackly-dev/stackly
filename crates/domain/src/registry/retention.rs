@@ -2,8 +2,13 @@
 
 use std::time::Duration;
 
+use crate::location::AuditRetentionDays;
+
 /// Seconds in one day.
 const DAY_SECS: u64 = 24 * 60 * 60;
+
+/// The most audit rows the registry keeps, whatever their age (spec 0035).
+pub const AUDIT_MAX_ROWS: u32 = 100_000;
 
 /// Limits on the history [`Registry::prune`](crate::Registry::prune)
 /// keeps.
@@ -36,17 +41,27 @@ pub struct RetentionPolicy {
 impl RetentionPolicy {
     /// 30 days and 100,000 rows of operations and audit events, 30 days of
     /// released leases, 20 process observations per instance, and 20 final
-    /// restart plans, until Settings (features 32 and 35) make them
-    /// configurable.
+    /// restart plans. The daemon takes the age of audit rows from its
+    /// settings through [`RetentionPolicy::with_audit_days`] (spec 0035).
     pub const DEFAULT: Self = Self {
         operation_max_age: Duration::from_secs(30 * DAY_SECS),
         audit_max_age: Duration::from_secs(30 * DAY_SECS),
         released_lease_max_age: Duration::from_secs(30 * DAY_SECS),
         operation_max_rows: 100_000,
-        audit_max_rows: 100_000,
+        audit_max_rows: AUDIT_MAX_ROWS,
         observations_per_instance: 20,
         restart_plans: 20,
     };
+
+    /// The policy with the age limit of audit rows set to `days`; every
+    /// other limit stays.
+    #[must_use]
+    pub const fn with_audit_days(self, days: AuditRetentionDays) -> Self {
+        Self {
+            audit_max_age: days.max_age(),
+            ..self
+        }
+    }
 }
 
 impl Default for RetentionPolicy {
@@ -81,5 +96,26 @@ impl PruneReport {
             + self.released_leases
             + self.process_observations
             + self.restart_plans
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_audit_days_change_only_the_age_of_audit_rows() {
+        for days in AuditRetentionDays::ALL {
+            let policy = RetentionPolicy::DEFAULT.with_audit_days(days);
+            assert_eq!(policy.audit_max_age, days.max_age());
+            assert_eq!(
+                RetentionPolicy {
+                    audit_max_age: RetentionPolicy::DEFAULT.audit_max_age,
+                    ..policy
+                },
+                RetentionPolicy::DEFAULT
+            );
+        }
+        assert_eq!(RetentionPolicy::DEFAULT.audit_max_rows, 100_000);
     }
 }

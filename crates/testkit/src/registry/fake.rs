@@ -604,6 +604,7 @@ impl Registry for FakeRegistry {
                     query
                         .before
                         .is_none_or(|before| AuditCursor::of(record) < before)
+                        && query.matches(record)
                 })
                 .collect();
             matching.sort_by_key(|record| std::cmp::Reverse(AuditCursor::of(record)));
