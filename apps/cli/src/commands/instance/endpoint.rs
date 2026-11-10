@@ -3,13 +3,13 @@
 
 use clap::{ArgAction, Args, Subcommand};
 use stackly_protocol::codes::lookup;
+use stackly_protocol::instance::EndpointRequest;
 use stackly_protocol::instance::config::{
     ChangeEndpointsParams, ChangeEndpointsReply, EndpointValidation,
 };
-use stackly_protocol::instance::{EndpointRequest, PortRequest};
 use stackly_protocol::{Call, ErrorBody, Reply};
 
-use super::config::{accepted_apply, mapped, read_view};
+use super::config::{accepted_apply, mapped, read_view, request_text};
 use super::resolve::TargetArg;
 use super::{InstanceAction, Verb, conclude};
 use crate::args::PortArg;
@@ -189,14 +189,6 @@ impl Render for SetOutput {
                 }
             }
         }
-    }
-}
-
-/// A port request the way `--port` takes it: the port number, or `auto`.
-fn request_text(request: PortRequest) -> String {
-    match request {
-        PortRequest::Fixed(port) => port.to_string(),
-        PortRequest::Auto => "auto".to_owned(),
     }
 }
 

@@ -11,11 +11,11 @@
 
 use clap::{ArgAction, Args, Subcommand};
 use stackly_protocol::codes::instance as instance_codes;
-use stackly_protocol::instance::SettingsDocument;
 use stackly_protocol::instance::config::{
     ApplyConfigParams, ConfigApplyAccepted, ConfigChangeRequest, ConfigValidation, EffectiveFile,
     GetConfigParams, InstanceConfigView, KeepRevisionParams, ValidateConfigParams,
 };
+use stackly_protocol::instance::{PortRequest, SettingsDocument};
 use stackly_protocol::{Call, ConfigRevisionNumber, ErrorBody, Reply};
 use uuid::Uuid;
 
@@ -643,8 +643,8 @@ impl Render for ValidateOutput {
             out.line(&format!(
                 "  port {}: {} -> {}",
                 escape_display(&change.name),
-                wire_name(&change.old),
-                wire_name(&change.new)
+                request_text(change.old),
+                request_text(change.new)
             ));
         }
     }
@@ -664,6 +664,16 @@ fn shown_value(value: Option<&str>) -> String {
         || "(none)".to_owned(),
         |text| escape_display(text).into_owned(),
     )
+}
+
+/// A port request the way `--port` takes it: the port number, or `auto`.
+/// The change lines of `config validate`, `config apply --dry-run`, and
+/// `endpoint set --dry-run` use it.
+pub(super) fn request_text(request: PortRequest) -> String {
+    match request {
+        PortRequest::Fixed(port) => port.to_string(),
+        PortRequest::Auto => "auto".to_owned(),
+    }
 }
 
 /// `output` with its result turned into another type.
@@ -705,5 +715,28 @@ mod tests {
             render(&ValidateOutput(verdict)),
             "invalid\n  max\\u{1b}: bad \\u{1b}[2Jvalue\\u{202e}\n"
         );
+    }
+
+    #[test]
+    fn a_port_change_names_the_old_and_new_requests_like_port_takes_them() {
+        let verdict: ConfigValidation = serde_json::from_value(serde_json::json!({
+            "valid": true,
+            "fieldErrors": [],
+            "changes": [{"key": "maxConnections", "old": "100", "new": "200"}],
+            "endpointChanges": [
+                {
+                    "name": "postgres",
+                    "old": {"type": "fixed", "content": 5432},
+                    "new": {"type": "fixed", "content": 5433},
+                },
+                {"name": "admin", "old": {"type": "auto"}, "new": {"type": "fixed", "content": 8080}},
+            ],
+            "impact": "restart",
+            "preview": [],
+        }))
+        .unwrap();
+        let shown = "valid, impact restart\n  maxConnections: 100 -> 200\n  port postgres: 5432 -> 5433\n  port admin: auto -> 8080\n";
+        assert_eq!(render(&ValidateOutput(verdict.clone())), shown);
+        assert_eq!(render(&ApplyOutput::DryRun(ValidateOutput(verdict))), shown);
     }
 }
