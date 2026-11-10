@@ -1,6 +1,7 @@
-//! The text of one instance: a `kv` block, the endpoint table, and the
-//! failure output (spec 0014 AC-7, spec 0022 *CLI*). `inspect` and its
-//! alias `get` write it, so label, order, and format stay here.
+//! The text of one instance: a `kv` block, the endpoint table, the failure
+//! output (spec 0014 AC-7, spec 0022 *CLI*), and for a failure the last
+//! operation and the next steps (spec 0033, AC-7). `inspect` and its alias
+//! `get` write it, so label, order, and format stay here.
 
 use stackly_protocol::instance::AutostartSession;
 use stackly_protocol::instance::connection::ConnectionPartKind;
@@ -13,6 +14,7 @@ use stackly_protocol::instance::{
 use stackly_protocol::runtime::InstallModeKind;
 
 use super::inspect::{InstanceInspect, UsageNote};
+use super::next_steps::{Related, for_inspect, last_operation_line};
 use crate::output::escape::escape_display;
 use crate::output::human::{Cell, HumanWriter, wire_name};
 use crate::output::style::Tone;
@@ -21,10 +23,12 @@ use crate::output::style::Tone;
 const DIGEST_SHOWN: usize = 12;
 
 /// Writes the instance, its detail, and the size of its data folder: the
-/// block, the endpoints, the connections, and the failure output.
+/// block, the endpoints, the connections, the failure output, and the next
+/// steps.
 pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
     let instance = &inspect.instance;
     let detail = &inspect.detail;
+    let failure_shown = Related::shown(instance.lifecycle, inspect.related());
     let mut rows = vec![
         ("Name", Cell::text(&instance.name)),
         (
@@ -100,6 +104,19 @@ pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
             }),
         ),
     ];
+    if failure_shown {
+        let at = rows
+            .iter()
+            .position(|(label, _)| *label == "Last failure")
+            .map_or(rows.len(), |at| at + 1);
+        rows.insert(
+            at,
+            (
+                "Last operation",
+                Cell::text(&last_operation_line(inspect.related())),
+            ),
+        );
+    }
     let at = rows
         .iter()
         .position(|(label, _)| *label == "Logs")
@@ -154,6 +171,13 @@ pub fn render_inspect(out: &mut HumanWriter, inspect: &InstanceInspect) {
         out.line("Failure output:");
         for line in &failure.excerpt {
             out.line(&format!("  {}", escape_display(line)));
+        }
+    }
+    if failure_shown {
+        out.line("");
+        out.line("Next steps:");
+        for step in for_inspect(instance, inspect.related()) {
+            out.line(&format!("  {}", escape_display(&step)));
         }
     }
 }

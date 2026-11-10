@@ -41,6 +41,7 @@ fn serving() -> (TestRoot, ScriptedDaemon) {
             item.and_then(|item| data::detail_steps(call, item))
                 .unwrap_or_default()
         }
+        Call::OperationList(_) => vec![data::operations(Vec::new())],
         _ => Vec::new(),
     });
     (root, daemon)
@@ -85,7 +86,7 @@ fn inspect_by_id_in_either_case_calls_instance_get_once_and_writes_the_block() {
             .unwrap()
             .keys()
             .collect::<Vec<_>>(),
-        ["dataUsage", "detail", "instance"]
+        ["dataUsage", "detail", "instance", "lastOperation"]
     );
     assert_eq!(value["result"]["instance"]["name"], "broken-db");
     assert_eq!(
@@ -95,10 +96,12 @@ fn inspect_by_id_in_either_case_calls_instance_get_once_and_writes_the_block() {
             "instance.get",
             "instance.get_detail",
             "instance.get_data_usage",
+            "operation.list",
             "daemon.handshake",
             "instance.get",
             "instance.get_detail",
-            "instance.get_data_usage"
+            "instance.get_data_usage",
+            "operation.list"
         ]
     );
     assert_eq!(daemon.log()[3].raw["call"]["content"]["instanceId"], id);
@@ -124,10 +127,12 @@ fn inspect_by_name_finds_the_id_in_the_list_and_reads_the_instance() {
             "instance.get",
             "instance.get_detail",
             "instance.get_data_usage",
+            "operation.list",
             "daemon.handshake",
             "instance.get",
             "instance.get_detail",
-            "instance.get_data_usage"
+            "instance.get_data_usage",
+            "operation.list"
         ]
     );
     assert_eq!(daemon.log()[2].raw["call"]["content"]["instanceId"], id);
@@ -202,7 +207,7 @@ fn get_is_the_alias_of_inspect_with_the_same_output() {
     assert_eq!(get.code, Some(0), "{get:?}");
     assert_eq!(get.stdout, inspect.stdout);
     assert_eq!(envelope(&get_json)["command"], "instance get");
-    assert_eq!(daemon.methods().len(), 5 + 5 + 4);
+    assert_eq!(daemon.methods().len(), 6 + 6 + 5);
 }
 
 /// Spec 0022 AC-11.

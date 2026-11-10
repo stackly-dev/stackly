@@ -92,7 +92,8 @@ impl StderrSink {
     }
 
     /// The error block of spec 0008: `error: <message>`, then indented
-    /// `code:`, the body's `hint:`, one `hint:` per CLI hint, the fields,
+    /// `code:`, the body's `hint:`, `operation:` when the body names an
+    /// operation (spec 0033, AC-6), one `hint:` per CLI hint, the fields,
     /// up to 20 items, and `request:` when `request_id` is given. `message`
     /// replaces the body's message when the CLI words it better for people
     /// (the body itself never changes). Daemon text is escaped.
@@ -111,6 +112,9 @@ impl StderrSink {
         );
         if let Some(hint) = body.hint() {
             let _ = writeln!(text, "  hint: {}", escape_display(hint));
+        }
+        if let Some(operation) = body.operation_id() {
+            let _ = writeln!(text, "  operation: {operation}");
         }
         for hint in cli_hints {
             let _ = writeln!(text, "  hint: {}", escape_display(hint));
@@ -236,6 +240,23 @@ mod tests {
             "error: the params are invalid\n  code: request.invalid_params\n  hint: check the flags\n\
              \x20 hint: update stacklyd\n  limit: value is out of range\n\
              \x20 request: 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d0e\n"
+        );
+    }
+
+    /// Spec 0033 AC-6.
+    #[test]
+    fn an_error_that_names_an_operation_shows_it_after_the_daemon_hint_and_before_cli_hints() {
+        let (mut sink, out) = sink(false);
+        let operation = uuid::Uuid::from_u128(0x0192_f3a0_7c1e_7b2a_9d4e_5f6a_7b8c_9d04);
+        let body = ErrorBody::new(&request::INVALID_PARAMS, "the params are invalid")
+            .with_hint("check the flags")
+            .with_operation_id(operation);
+        sink.error(&body, None, &["read its logs".to_owned()], Some("r-1"));
+        assert_eq!(
+            out.text(),
+            "error: the params are invalid\n  code: request.invalid_params\n  hint: check the flags\n\
+             \x20 operation: 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d04\n  hint: read its logs\n\
+             \x20 request: r-1\n"
         );
     }
 

@@ -194,10 +194,16 @@ impl Output {
     }
 
     /// Writes the error block of `failure` to stderr, with the CLI's own
-    /// wording and hints for some codes.
+    /// wording and hints for some codes, then the hints the command added.
     pub fn write_error(&mut self, failure: &CliFailure) {
         let extra = human_hints(&failure.body, self.socket.as_deref());
-        let hints = if self.quiet { Vec::new() } else { extra.hints };
+        let hints = if self.quiet {
+            Vec::new()
+        } else {
+            let mut hints = extra.hints;
+            hints.extend(failure.hints.iter().cloned());
+            hints
+        };
         let request_id = if self.verbose {
             failure.request_id.as_deref()
         } else {

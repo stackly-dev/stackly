@@ -47,7 +47,7 @@ fn get_writes_the_block_the_endpoints_and_the_json_result() {
             .unwrap()
             .keys()
             .collect::<Vec<_>>(),
-        ["dataUsage", "detail", "instance"]
+        ["dataUsage", "detail", "instance", "lastOperation"]
     );
     assert_eq!(
         daemon.methods(),
@@ -56,10 +56,12 @@ fn get_writes_the_block_the_endpoints_and_the_json_result() {
             "instance.get",
             "instance.get_detail",
             "instance.get_data_usage",
+            "operation.list",
             "daemon.handshake",
             "instance.get",
             "instance.get_detail",
-            "instance.get_data_usage"
+            "instance.get_data_usage",
+            "operation.list"
         ]
     );
     assert_eq!(daemon.log()[1].raw["call"]["content"]["instanceId"], ID);

@@ -1,14 +1,17 @@
 //! `stackly instance inspect` (spec 0022, AC-11, extended by spec 0021
 //! AC-7): one instance by name or ID, with the detail the instance page
-//! shows. `get` of spec 0014 runs the same code, so both write the same text
-//! and the same `{ instance, detail, dataUsage }`.
+//! shows, and its related operation (spec 0033, AC-7). `get` of spec 0014
+//! runs the same code, so both write the same text and the same
+//! `{ instance, detail, dataUsage, lastOperation }`.
 
 use clap::Args;
 use serde::Serialize;
 use stackly_platform::BackgroundAgentState;
 use stackly_protocol::instance::{DataUsage, InstanceDetail, InstanceSummary, StartupPolicyKind};
+use stackly_protocol::operation::OperationSummary;
 use stackly_protocol::{Call, Reply};
 
+use super::next_steps::{Related, read_related};
 use super::render::render_inspect;
 use super::resolve::TargetArg;
 use super::{read_detail, read_instance, read_usage};
@@ -52,8 +55,14 @@ pub struct InstanceInspect {
     /// The size of the data folder; null when none was measured or it could
     /// not be.
     pub data_usage: Option<DataUsage>,
+    /// The related operation of spec 0033 (*Operasi terkait*): the newest
+    /// start, restart, stop, or port change among the last ten operations;
+    /// null without one, or when they could not be read.
+    pub last_operation: Option<OperationSummary>,
     #[serde(skip)]
     usage_note: UsageNote,
+    #[serde(skip)]
+    related: Option<Related>,
     #[serde(skip)]
     agent_off: Option<&'static str>,
 }
@@ -72,6 +81,13 @@ impl InstanceInspect {
     pub const fn usage_note(&self) -> UsageNote {
         self.usage_note
     }
+
+    /// The related operation and the error it explains, or `None` when
+    /// `operation.list` could not be read.
+    #[must_use]
+    pub const fn related(&self) -> Option<&Related> {
+        self.related.as_ref()
+    }
 }
 
 impl RunCommand for InspectArgs {
@@ -84,8 +100,9 @@ impl RunCommand for InspectArgs {
 
 /// Reads the instance `arg` names with `instance.get`, `instance.get_detail`,
 /// and `instance.get_data_usage` (`refresh` with `size`, else the cache
-/// only). When the detail is of another revision than the summary, both are
-/// read once more. A data usage that cannot be read does not stop the
+/// only), then its last ten operations with `operation.list`. When the
+/// detail is of another revision than the summary, both are read once more.
+/// A data usage or operation list that cannot be read does not stop the
 /// command.
 pub async fn inspect(
     cx: &mut Context,
@@ -123,11 +140,14 @@ async fn read_all(
     } else {
         None
     };
+    let related = read_related(cx, &instance).await;
     Ok(InstanceInspect {
+        last_operation: related.as_ref().and_then(|related| related.latest.clone()),
         instance,
         detail,
         data_usage,
         usage_note,
+        related,
         agent_off,
     })
 }
