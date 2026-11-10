@@ -1,0 +1,123 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000003303",
+    "reply": {
+      "type": "operation.get",
+      "content": {
+        "operation": {
+          "id": "0192f3a4-0000-7000-8000-000000003303",
+          "kind": "start_instance",
+          "resource": {
+            "kind": "instance",
+            "id": "0192f3a5-0000-7000-8000-000000003301"
+          },
+          "state": "failed",
+          "stage": "endpoints",
+          "progress": {
+            "type": "indeterminate"
+          },
+          "waitingOn": null,
+          "cancelRequestedAt": null,
+          "pointOfNoReturnAt": null,
+          "failure": {
+            "reason": "step_failed",
+            "retryable": false,
+            "error": {
+              "code": "supervisor.endpoint_in_use",
+              "category": "conflict",
+              "message": "endpoint postgres is in use at 127.0.0.1:5432",
+              "retryable": false,
+              "resource": null,
+              "fields": [],
+              "hint": "Stackly never moves a fixed port on its own. Pick another port for this endpoint, or stop the process that holds it.",
+              "details": [
+                {
+                  "key": "endpoint",
+                  "value": "postgres"
+                },
+                {
+                  "key": "address",
+                  "value": "127.0.0.1"
+                },
+                {
+                  "key": "port",
+                  "value": "5432"
+                },
+                {
+                  "key": "suggestedPort",
+                  "value": "5433"
+                },
+                {
+                  "key": "omitted",
+                  "value": "0"
+                }
+              ],
+              "operationId": "0192f3a4-0000-7000-8000-000000003303",
+              "rule": null,
+              "items": []
+            }
+          },
+          "recovery": null,
+          "result": null,
+          "trigger": {
+            "origin": "user",
+            "client": "cli"
+          },
+          "createdAt": "2026-11-10T08:05:00.000Z",
+          "startedAt": "2026-11-10T08:05:00.030Z",
+          "updatedAt": "2026-11-10T08:05:00.120Z",
+          "revision": 6,
+          "cancel": "none"
+        },
+        "steps": [
+          {
+            "seq": 1,
+            "name": "validate",
+            "state": "done",
+            "repeatable": false,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-11-10T08:05:00.030Z",
+            "finishedAt": "2026-11-10T08:05:00.050Z",
+            "errorCode": null
+          },
+          {
+            "seq": 2,
+            "name": "lock",
+            "state": "done",
+            "repeatable": false,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-11-10T08:05:00.050Z",
+            "finishedAt": "2026-11-10T08:05:00.080Z",
+            "errorCode": null
+          },
+          {
+            "seq": 3,
+            "name": "verify",
+            "state": "done",
+            "repeatable": false,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-11-10T08:05:00.080Z",
+            "finishedAt": "2026-11-10T08:05:00.100Z",
+            "errorCode": null
+          },
+          {
+            "seq": 4,
+            "name": "endpoints",
+            "state": "failed",
+            "repeatable": false,
+            "reversible": true,
+            "attempts": 1,
+            "startedAt": "2026-11-10T08:05:00.100Z",
+            "finishedAt": "2026-11-10T08:05:00.120Z",
+            "errorCode": "supervisor.endpoint_in_use"
+          }
+        ],
+        "created": []
+      }
+    }
+  }
+}

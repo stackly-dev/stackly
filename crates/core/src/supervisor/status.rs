@@ -10,7 +10,8 @@
 //! never by revision.
 
 use jiff::Timestamp;
-use stackly_domain::{Health, InstanceBlocker, Pid, ProcessStart, Readiness};
+use stackly_domain::{FailureCode, Health, InstanceBlocker, Pid, ProcessStart, Readiness};
+use stackly_platform::ExitStatus;
 
 /// The process of an instance, as the status shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +42,45 @@ pub struct RestartStatus {
     pub next_attempt_at: Option<Timestamp>,
     /// True after the budget ran out.
     pub exhausted: bool,
+}
+
+/// What this daemon run knows about the last failure it recorded for an
+/// instance (spec 0033, AC-3): every commit that writes `crashed`,
+/// `start_failed`, or `init_failed` replaces it, and a commit that clears
+/// the stored `last_failure` (`spawned`, `adopted`) clears it. It lives in
+/// memory only, so a daemon restart forgets it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailureFacts {
+    /// The failure code the commit wrote, the same as the stored
+    /// `last_failure`.
+    pub code: FailureCode,
+    /// When the commit recorded it.
+    pub at: Timestamp,
+    /// The exit code of the process whose exit led to the failure, if it
+    /// exited.
+    pub exit_code: Option<i32>,
+    /// The number of the signal that ended that process, if one did.
+    pub signal: Option<i32>,
+}
+
+impl FailureFacts {
+    /// The facts of a failure with `code` recorded at `at`, after `exit`:
+    /// the exit of the process that led to it, or `None` when no process
+    /// ended (a start refused before its spawn, an interrupted start).
+    #[must_use]
+    pub const fn new(code: FailureCode, at: Timestamp, exit: Option<ExitStatus>) -> Self {
+        let (exit_code, signal) = match exit {
+            Some(ExitStatus::Exited(code)) => (Some(code), None),
+            Some(ExitStatus::Signaled(signal)) => (None, Some(signal)),
+            None => (None, None),
+        };
+        Self {
+            code,
+            at,
+            exit_code,
+            signal,
+        }
+    }
 }
 
 /// An instance's status at one moment: a snapshot of the actor.
@@ -75,6 +115,10 @@ pub struct InstanceStatus {
     /// live one is shown `unknown` until a commit or the recheck settles it
     /// (spec 0010, *Commit*, audit note 100).
     pub exit_unrecorded: bool,
+    /// The last failure this daemon run recorded, with its time and exit
+    /// (spec 0033, AC-3). A client shows it only while its code is the one
+    /// the registry holds.
+    pub last_failure: Option<FailureFacts>,
 }
 
 impl InstanceStatus {
@@ -103,6 +147,7 @@ impl InstanceStatus {
             || self.logs_unavailable != other.logs_unavailable
             || self.pending_commit != other.pending_commit
             || self.exit_unrecorded != other.exit_unrecorded
+            || self.last_failure != other.last_failure
     }
 }
 
@@ -126,7 +171,39 @@ mod tests {
             logs_unavailable: false,
             pending_commit: false,
             exit_unrecorded: false,
+            last_failure: None,
         }
+    }
+
+    #[test]
+    fn failure_facts_take_the_exit_code_or_the_signal_of_the_exit() {
+        let at: Timestamp = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let exited = FailureFacts::new(FailureCode::CRASH_LOOP, at, Some(ExitStatus::Exited(3)));
+        let signaled = FailureFacts::new(
+            FailureCode::PROCESS_SIGNALED,
+            at,
+            Some(ExitStatus::Signaled(11)),
+        );
+        let none = FailureFacts::new(FailureCode::ENDPOINT_IN_USE, at, None);
+
+        assert_eq!((exited.exit_code, exited.signal), (Some(3), None));
+        assert_eq!((signaled.exit_code, signaled.signal), (None, Some(11)));
+        assert_eq!((none.exit_code, none.signal), (None, None));
+        assert_eq!(exited.at, at);
+    }
+
+    #[test]
+    fn new_failure_facts_are_a_visible_change() {
+        let before = status("2026-01-01T00:00:00Z");
+        let mut after = before.clone();
+        after.last_failure = Some(FailureFacts::new(
+            FailureCode::PROCESS_EXITED,
+            "2026-01-01T00:00:01Z".parse().unwrap(),
+            Some(ExitStatus::Exited(70)),
+        ));
+
+        assert!(before.differs_visibly(&after));
     }
 
     #[test]
