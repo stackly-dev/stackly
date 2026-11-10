@@ -228,7 +228,7 @@ Diterapkan lead lewat `/sync` atau pemilik spec; spec ini tidak mengeditnya.
 
 - **Spec 0010**: tabel *Startup transaction* menyebut stage `backoff` di antara percobaan; *Model data* status menyebut `InstanceStatus.last_failure`; tabel *Kode error* menyebut `suggestedPort` di ketiga kode endpoint dari start.
 - **Spec 0021**: *Tab Summary* butir Banner menyebut bahwa I1 dan I7 memakai `InstanceFailureBanner` spec 0033.
-- **Spec 0022**: *Inspector* butir banner menyebut view ringkas spec 0033 untuk I1 dan I7. Ditemukan saat menulis spec ini: isi I7 "Restart {attempts + 1} of {budget}" meleset satu, karena `restart.attempts` sudah menghitung crash yang memicu jeda (`RestartHistory::record_crash` di `crates/core/src/supervisor/restart.rs`); respawn pertama tampil sebagai "Restart 2 of 5" dan respawn kelima jatuh ke teks umum. Usulannya "{attempts}" dan syarat `attempts` ≤ `budget`, diputuskan lead karena mengubah teks spec 0022.
+- **Spec 0022**: *Inspector* butir banner menyebut view ringkas spec 0033 untuk I1 dan I7. Ditemukan saat menulis spec ini: isi I7 "Restart {attempts + 1} of {budget}" meleset satu, karena `restart.attempts` sudah menghitung crash yang memicu jeda (`RestartHistory::record_crash` di `crates/core/src/supervisor/restart.rs`); respawn pertama tampil sebagai "Restart 2 of 5" dan respawn kelima jatuh ke teks umum. Usulannya "{attempts}" dan syarat `attempts` ≤ `budget`; diterima lead 2026-11-10, dikerjakan langkah 4 spec ini di `AttentionRules`, dan teks spec 0022 diselaraskan lead lewat `/sync`.
 - **Spec 0029**: `InstanceEdit.editPorts` dan `EndpointsModel` menerima `prefill` dari banner spec 0033.
 - **Spec 0008**: bentuk JSON `stackly instance inspect` mendapat field `lastOperation`, dan blok error teks mendapat baris `operation:`.
 
@@ -253,7 +253,7 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 **Milestone 3: model GUI** (after milestone 1; bisa paralel dengan milestone 2, file berbeda)
 
-4. `FailureBannerContent` dengan *Operasi terkait* dan *Pemetaan sebab*, `InstanceFailureModel` (bacaan, event, offline), copy, prefill `InstanceEdit.editPorts` dan `EndpointsModel`, dan kasus fixture spec 0068 untuk F1 sampai F7 (perluas `FixtureStartConflict`); unit test model. Satisfies **AC-9** sampai **AC-13**, **AC-16**.
+4. `FailureBannerContent` dengan *Operasi terkait* dan *Pemetaan sebab*, `InstanceFailureModel` (bacaan, event, offline), copy, prefill `InstanceEdit.editPorts` dan `EndpointsModel`, isi I7 `AttentionRules` menjadi "Restart {attempts} of {budget}" dengan syarat `attempts` ≤ `budget` (usulan spec 0022 yang diterima), dan kasus fixture spec 0068 untuk F1 sampai F7 (perluas `FixtureStartConflict`); unit test model. Satisfies **AC-9** sampai **AC-13**, **AC-16**.
 
 **Milestone 4: banner GUI** (after milestone 3; needs fitur 34 dan 35 hanya untuk tautan final)
 
@@ -291,6 +291,7 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 - [ ] Lead: bawa *Usulan update untuk spec lain* ke spec 0010, 0021, 0022, dan 0029 lewat `/sync` setelah build.
 - [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
+- [ ] Milestone GUI fitur ini (langkah 4): isi I7 Needs Attention menjadi "Restart {attempts} of {budget} at {time}." dengan syarat `attempts` ≤ `budget` (diterima lead 2026-11-10); teks spec 0022 diselaraskan lead lewat `/sync`.
 - [ ] Fitur 34 dan 35: setelah keduanya di `main`, hapus `// provisional: F34` dan `// provisional: F35` (Diagnose… dengan fokus, hint `stackly doctor`, `openOperation`).
 - [ ] `/sync` setelah build: catat stage `backoff`, `InstanceFailureBanner`, `next_steps.rs`, dan aturan "saran port hanya lewat sheet Ports" di root `AGENTS.md` dan `apps/macos/AGENTS.md`.
 
