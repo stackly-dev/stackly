@@ -63,6 +63,7 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     );
 
     check_directories(fs, &base, uid);
+    check_modified_time(fs, &base);
     check_symlinks(fs, &base);
     check_atomic_writes(fs, &base);
     check_limited_reads(fs, &base);
@@ -118,6 +119,38 @@ fn check_directories(fs: &dyn Filesystem, base: &Path, uid: u32) {
         ),
         None,
     );
+}
+
+/// A folder reports when its list of entries last changed (spec 0034,
+/// `scratch_leftover`): close to now when it is made, and not earlier once
+/// an entry is added.
+fn check_modified_time(fs: &dyn Filesystem, base: &Path) {
+    // Inside `dir`, so the listing of `base` stays as `check_listing` expects.
+    let dir = base.join("dir").join("dated");
+    must("create a dated directory", fs.create_dir_private(&dir));
+    let made = must("symlink_metadata reads it", fs.symlink_metadata(&dir))
+        .and_then(|info| info.modified)
+        .unwrap_or_else(|| fail("a new directory has a modified time", "None"));
+    let age = jiff::Timestamp::now().duration_since(made);
+    if age.abs() > jiff::SignedDuration::from_secs(60) {
+        fail(
+            "a new directory was modified just now",
+            &format!("{age:?} ago"),
+        );
+    }
+    must(
+        "create an entry in the dated directory",
+        fs.create_dir_private(&dir.join("entry")),
+    );
+    let changed = must("symlink_metadata reads it again", fs.symlink_metadata(&dir))
+        .and_then(|info| info.modified)
+        .unwrap_or_else(|| fail("the directory still has a modified time", "None"));
+    if changed < made {
+        fail(
+            "adding an entry never moves the modified time back",
+            &format!("{made} then {changed}"),
+        );
+    }
 }
 
 fn check_symlinks(fs: &dyn Filesystem, base: &Path) {

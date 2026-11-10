@@ -110,6 +110,16 @@ fn codes(report: &Report, id: DoctorCheckId) -> Vec<DoctorFindingCode> {
         .collect()
 }
 
+/// Sets the modification time of the folder `path` to `minutes` before
+/// `now`.
+fn modified_ago(path: &std::path::Path, now: jiff::Timestamp, minutes: u64) {
+    let when = std::time::SystemTime::from(now) - Duration::from_secs(minutes * 60);
+    std::fs::File::open(path)
+        .expect("the folder opens")
+        .set_modified(when)
+        .expect("the folder time is set");
+}
+
 fn stopped_spec() -> Spec {
     Spec {
         request: Some(Rig::free_port()),
@@ -437,9 +447,22 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
     let stray = folder.join("not-an-operation");
     let orphan = folder.join("0190f000-0000-7000-8000-000000000001");
     let young = folder.join(uuid::Uuid::now_v7().to_string());
+    let young_stray = folder.join("just-made");
     let with_row = folder.join(operation.id().to_string());
-    for path in [&stray, &orphan, &young, &with_row] {
+    for path in [&stray, &orphan, &young, &young_stray, &with_row] {
         std::fs::create_dir_all(path).expect("a scratch folder");
+    }
+    // The age is the folder's own modification time, against the clock of
+    // the platform: an hour for the old ones, a minute for the young ones.
+    let now = rig.fake_now();
+    for (path, minutes) in [
+        (&stray, 60),
+        (&orphan, 60),
+        (&with_row, 60),
+        (&young, 1),
+        (&young_stray, 1),
+    ] {
+        modified_ago(path, now, minutes);
     }
     let before = footprint(&rig);
     let report = run(&rig).await;
@@ -474,7 +497,7 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
             "operations/not-an-operation"
         ]
     );
-    for path in [&stray, &orphan, &young, &with_row] {
+    for path in [&stray, &orphan, &young, &young_stray, &with_row] {
         assert!(path.is_dir(), "{} stays", path.display());
     }
     assert_eq!(footprint(&rig), before);

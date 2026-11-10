@@ -1,19 +1,20 @@
 //! `operations`: one Error per operation that needs recovery (spec 0007),
 //! and one Warning per folder in `<data>/operations/` without an operation
-//! row. A folder whose UUID version 7 name was made less than
+//! row (or whose name is not an operation ID). A folder modified less than
 //! [`SCRATCH_MIN_AGE`] ago, or that names an operation active in the
 //! engine, is skipped, so an operation being created is not counted. The
 //! doctor removes nothing.
 //!
-//! The age comes from the time inside the UUID version 7 name, which the
-//! daemon gives the operation when it creates it: the filesystem port does
-//! not read modification times. A name that is not a UUID version 7 was
-//! never made by Stackly, so no age applies to it.
+//! The age is the folder's own modification time, which moves when an
+//! entry is added or removed in it. The engine makes a scratch folder only
+//! from the work of an operation whose row is already committed, so a
+//! folder without a row is never one an operation still writes to.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use jiff::Timestamp;
 use stackly_domain::doctor::{DoctorFindingCode, DoctorSeverity, SCRATCH_MIN_AGE};
 use stackly_domain::{OperationId, OperationResource, OperationState};
 use uuid::Uuid;
@@ -108,11 +109,14 @@ pub(super) fn run(
             break;
         }
         let name = entry.name.to_string_lossy().into_owned();
+        if young(entry.info.modified, now) {
+            continue;
+        }
         if let Some(id) = Uuid::parse_str(&name)
             .ok()
             .and_then(|uuid| OperationId::from_uuid(uuid).ok())
         {
-            if active.contains(&id) || young(id.as_uuid(), now) {
+            if active.contains(&id) {
                 continue;
             }
             let row = registry
@@ -135,14 +139,13 @@ pub(super) fn run(
     Ok(CheckFindings::checked(findings, checked))
 }
 
-/// Whether the time inside `uuid` is less than [`SCRATCH_MIN_AGE`] before
-/// `now`, or after it.
-fn young(uuid: Uuid, now: jiff::Timestamp) -> bool {
-    let Some(made) = uuid.get_timestamp() else {
+/// Whether `modified` is less than [`SCRATCH_MIN_AGE`] before `now`, or
+/// after it. A folder whose time the OS does not report counts as old, so
+/// it is still shown.
+fn young(modified: Option<Timestamp>, now: Timestamp) -> bool {
+    let Some(modified) = modified else {
         return false;
     };
-    let (seconds, _) = made.to_unix();
-    let made = i64::try_from(seconds).unwrap_or(i64::MAX);
-    let age = now.as_second().saturating_sub(made);
-    age < i64::try_from(SCRATCH_MIN_AGE.as_secs()).unwrap_or(i64::MAX)
+    let age = now.duration_since(modified);
+    age < jiff::SignedDuration::try_from(SCRATCH_MIN_AGE).unwrap_or(jiff::SignedDuration::MAX)
 }

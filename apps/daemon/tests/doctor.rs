@@ -420,6 +420,13 @@ async fn a_scratch_folder_without_an_operation_is_a_warning_and_stays() {
         .operations_dir()
         .join("0190f000-0000-7000-8000-0000000000aa");
     std::fs::create_dir_all(&folder).expect("a scratch folder");
+    // Made an hour ago: a folder modified in the last 10 minutes is skipped.
+    let young = site.prepared.layout().operations_dir().join("just-made");
+    std::fs::create_dir_all(&young).expect("a young scratch folder");
+    std::fs::File::open(&folder)
+        .expect("the folder opens")
+        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+        .expect("the folder time is set");
     let report = doctor(
         &api,
         DoctorParams {
@@ -437,7 +444,9 @@ async fn a_scratch_folder_without_an_operation_is_a_warning_and_stays() {
         finding.subject.as_deref(),
         Some("operations/0190f000-0000-7000-8000-0000000000aa")
     );
+    assert_eq!(operations.findings.len(), 1, "the young folder is skipped");
     assert!(folder.is_dir(), "the doctor removes nothing");
+    assert!(young.is_dir());
     stop(daemon).await;
 }
 

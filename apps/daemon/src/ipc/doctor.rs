@@ -8,13 +8,11 @@
 mod copy;
 mod map;
 
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::Instant;
 
 use stackly_core::doctor::{
-    CapacityFailure, CapacityOutcome, DaemonFacts, DegradedSubsystem, DiskReading, Doctor,
-    DoctorError, DoctorMode, DoctorRequest, DoctorSources,
+    CapacityFailure, CapacityOutcome, DaemonFacts, DegradedSubsystem, DiskReading, DoctorError,
+    DoctorMode, DoctorRequest, DoctorSources,
 };
 use stackly_domain::InstanceId;
 use stackly_domain::doctor::CheckUnavailableReason;
@@ -47,7 +45,8 @@ pub fn run(core: &DaemonCore, params: DoctorParams) -> HandlerFuture<'_, DoctorR
             .filter_map(|check| map::domain_check(*check))
             .collect();
         let request = DoctorRequest::new(instance, checks);
-        let report = doctor_of(core)
+        let report = core
+            .doctor()
             .run(sources(core), request, capacity(core))
             .await
             .map_err(|error| match error {
@@ -60,21 +59,6 @@ pub fn run(core: &DaemonCore, params: DoctorParams) -> HandlerFuture<'_, DoctorR
             })?;
         Ok(map::report(core, &report))
     })
-}
-
-/// The doctor of this daemon run: its two slots and its left behind
-/// checks live as long as the run.
-// provisional: F34 (moves into `DaemonCore` once the lead agrees to the
-// field in `state.rs`)
-fn doctor_of(core: &DaemonCore) -> Doctor {
-    static DOCTORS: OnceLock<Mutex<HashMap<Uuid, Doctor>>> = OnceLock::new();
-    DOCTORS
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .entry(core.info().server_instance_id)
-        .or_default()
-        .clone()
 }
 
 /// What the checks read: the platform, the layout, the registry through the
