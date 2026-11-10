@@ -10,6 +10,7 @@ mod common;
 
 mod action;
 mod action_real;
+mod audit_real;
 mod autostart;
 mod config;
 mod config_parity;

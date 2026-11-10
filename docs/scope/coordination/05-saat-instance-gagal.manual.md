@@ -43,3 +43,10 @@ Dari laporan `dev-f35-m2` (2026-11-10). App Debug di atas daemon nyata dengan pr
 7. Operasi yang sudah dipangkas menampilkan "This operation is no longer in the history."
 8. Daemon dihentikan: data tetap tampil dengan aksi mutasi nonaktif; daemon lebih lama menampilkan "Operations Unavailable".
 9. Ulangi di mode terang dan gelap, dan jendela 900 pt.
+
+## F35 · CLI audit (spec 0035, milestone 1)
+
+Dari laporan `dev-f35-m1-s5` (2026-11-10). `stacklyd` asli dan provider fake di root sementara: `export STACKLY_ROOT=$(mktemp -d)`, lalu `cargo run -q -p stacklyd --example skeleton_seed -- --root "$STACKLY_ROOT"` dan perintah create yang dicetaknya.
+
+1. `COLUMNS=100 stackly audit list`: kolom TIME sampai OPERATION utuh, DETAILS terpotong dengan `…` di akhir dan paling sedikit 24 kolom. `COLUMNS=100 stackly audit list | cat` dan `stackly audit list` tanpa `COLUMNS` yang diekspor: tidak ada yang terpotong (AC-16).
+2. `stackly operation list` dan `stackly operation inspect <id>` untuk operasi yang sedang berjalan: kolom CANCEL `yes` (atau `no` sejak langkah yang tidak bisa dibalik) dan baris `Cancel` dengan kalimatnya; operasi yang sudah selesai: CANCEL `-` dan tanpa baris `Cancel` (AC-16).

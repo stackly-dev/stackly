@@ -49,6 +49,7 @@ fn get_prints_one_line_per_setting_and_the_json_carries_the_view() {
         "telemetry          on",
         "data location      /Users/dev/Library/Application Support/Stackly (built in)",
         "log retention      5 files × 20 MiB per stream",
+        "audit retention    30 days, up to 100000 entries",
         "revision           3",
     ] {
         assert!(text.stdout.contains(line), "{line:?} in {}", text.stdout);
@@ -59,6 +60,91 @@ fn get_prints_one_line_per_setting_and_the_json_carries_the_view() {
     assert_eq!(value["result"]["revision"], 3);
     assert_eq!(value["result"]["defaultStartup"], "at_login");
     assert_eq!(value["result"]["locations"]["data"]["builtIn"], true);
+    assert_eq!(
+        value["result"]["auditRetention"],
+        json!({ "days": 30, "maxRows": 100_000 })
+    );
+}
+
+#[test]
+fn an_older_daemon_without_the_audit_retention_gets_no_line_for_it() {
+    // covers: AC-6 (spec 0035)
+    let root = TestRoot::new().expect("a test root is made");
+    let mut older = serde_json::to_value(view(3, "manual", "stable", false)).expect("a view");
+    older
+        .as_object_mut()
+        .expect("the view is an object")
+        .remove("auditRetention");
+    let older: stackly_protocol::settings::DaemonSettingsView =
+        serde_json::from_value(older).expect("a view without auditRetention decodes");
+    let _daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+        Call::SettingsGet => vec![Step::Reply(Reply::SettingsGet(Box::new(older.clone())))],
+        _ => Vec::new(),
+    });
+
+    let text = run(root.path(), &["settings", "get"]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    assert!(!text.stdout.contains("audit retention"), "{}", text.stdout);
+    assert!(
+        text.stdout.contains("revision           3"),
+        "{}",
+        text.stdout
+    );
+}
+
+#[test]
+fn audit_retention_days_sends_7_30_or_90_and_refuses_any_other_value_before_sending() {
+    // covers: AC-6 (spec 0035)
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = ScriptedDaemon::serve(&root, |call, _| match call {
+        Call::SettingsGet => vec![Step::Reply(Reply::SettingsGet(Box::new(view(
+            3, "manual", "stable", false,
+        ))))],
+        Call::SettingsUpdate(_) => vec![Step::Reply(Reply::SettingsUpdate(Box::new(view(
+            4, "manual", "stable", false,
+        ))))],
+        _ => Vec::new(),
+    });
+
+    let accepted: Vec<_> = ["7", "30", "90"]
+        .iter()
+        .map(|days| {
+            run(
+                root.path(),
+                &["settings", "set", "audit-retention-days", days],
+            )
+        })
+        .collect();
+    let refused: Vec<_> = ["14", "0", "030", "thirty", "-7"]
+        .iter()
+        .map(|days| {
+            run(
+                root.path(),
+                &["settings", "set", "audit-retention-days", days, "--json"],
+            )
+        })
+        .collect();
+
+    for run in &accepted {
+        assert_eq!(run.code, Some(0), "{run:?}");
+    }
+    for run in &refused {
+        assert_eq!(run.code, Some(2), "{run:?}");
+        assert_eq!(envelope(run)["error"]["code"], "cli.usage", "{run:?}");
+    }
+    let patches: Vec<_> = daemon
+        .log()
+        .into_iter()
+        .filter(|logged| logged.method == "settings.update")
+        .map(|logged| logged.raw["call"]["content"].clone())
+        .collect();
+    assert_eq!(patches.len(), 3, "a refused value sends nothing");
+    for (patch, days) in patches.iter().zip([7, 30, 90]) {
+        assert_eq!(patch["expectedRevision"], 3);
+        assert_eq!(patch["patch"]["auditRetentionDays"], days);
+        assert_eq!(patch["patch"]["telemetry"], serde_json::Value::Null);
+    }
 }
 
 #[test]

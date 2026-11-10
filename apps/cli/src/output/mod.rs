@@ -104,6 +104,10 @@ pub struct Output {
     pub stdout: Box<dyn Write + Send>,
     /// Whether text on stdout is colored.
     pub stdout_color: bool,
+    /// The width in display columns of the terminal stdout writes to, from
+    /// `COLUMNS`, read only when stdout is a terminal; `None` when it is not
+    /// one or the width is not known, and then nothing is cut.
+    pub stdout_columns: Option<usize>,
     /// The one owner of stderr.
     pub stderr: StderrSink,
     /// The zone times are written in.
@@ -126,10 +130,12 @@ impl std::fmt::Debug for Output {
 }
 
 impl Output {
-    /// A writer for one result, colored like stdout.
+    /// A writer for one result, colored like stdout and as wide as its
+    /// terminal when that is known.
     #[must_use]
     pub fn human_writer(&self) -> HumanWriter {
         HumanWriter::new(self.stdout_color, jiff::Timestamp::now(), self.tz.clone())
+            .with_columns(self.stdout_columns)
     }
 
     /// Writes `output` and returns the exit code: the failure's, or 0.
@@ -246,6 +252,7 @@ pub mod testing {
             quiet: false,
             stdout: Box::new(stdout.clone()),
             stdout_color: false,
+            stdout_columns: None,
             stderr: StderrSink::new(Box::new(stderr.clone()), false),
             tz: TimeZone::UTC,
             socket: Some(PathBuf::from("/run/stacklyd.sock")),
