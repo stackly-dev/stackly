@@ -17,6 +17,7 @@ public final class InstanceDetailModels {
     private let reload: Duration
     private let sleep: @Sendable (Duration) async throws -> Void
     private var models: [UUID: InstanceDetailModel] = [:]
+    private var failures: [UUID: InstanceFailureModel] = [:]
 
     /// The Open In model of the page: the menus of the toolbar, the inspector, and the menu
     /// bar share it (spec 0070). It is held here so the work of a chosen action outlives the
@@ -100,6 +101,16 @@ public final class InstanceDetailModels {
         return made
     }
 
+    /// The failure banner model of an instance, made on first use, so the Summary tab and the
+    /// inspector read its operations once (spec 0033).
+    /// - Parameter id: The instance.
+    func failureModel(for id: UUID) -> InstanceFailureModel {
+        if let held = failures[id] { return held }
+        let made = InstanceFailureModel(instanceId: id, service: service)
+        failures[id] = made
+        return made
+    }
+
     /// The config service, for the Rename and Ports sheets.
     var configuration: InstanceConfigService { configService }
 
@@ -120,6 +131,10 @@ public final class InstanceDetailModels {
         }
         for id in configurations.keys where ids.contains(id) == false {
             configurations[id] = nil
+        }
+        for (id, model) in failures where ids.contains(id) == false {
+            model.close()
+            failures[id] = nil
         }
     }
 }

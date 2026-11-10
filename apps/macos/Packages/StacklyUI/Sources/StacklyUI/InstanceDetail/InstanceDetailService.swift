@@ -26,6 +26,9 @@ nonisolated public struct InstanceDetailService: Sendable {
         @MainActor @Sendable (UUID, StartupPolicyKind, UInt64?) async -> MutationOutcome
     /// The session and the agent the Autostart row words its text with (spec 0031).
     public var autostartContext: @MainActor @Sendable () -> AutostartContext
+    /// `operation.list` with the instance as `resource` and a `limit`: its newest operations,
+    /// which the failure banner reads (spec 0033, *Sumber data*).
+    public var operations: @Sendable (UUID, UInt32) async throws(ClientError) -> [OperationSummary]
 
     /// Creates a service.
     /// - Parameters:
@@ -37,6 +40,7 @@ nonisolated public struct InstanceDetailService: Sendable {
     ///   - prepareTerminal: Writes the script of a `terminal` action and returns its path.
     ///   - setStartup: Sends `instance.set_startup` with the revision of the shown row.
     ///   - autostartContext: Reads the session and the agent for the Autostart text.
+    ///   - operations: Reads the newest operations of one instance.
     public init(
         detail: @escaping @Sendable (UUID) async throws(ClientError) -> InstanceDetail,
         usage: @escaping @Sendable (UUID, Bool, Bool) async throws(ClientError) -> DataUsage?,
@@ -48,7 +52,10 @@ nonisolated public struct InstanceDetailService: Sendable {
         setStartup:
             @escaping @MainActor @Sendable (UUID, StartupPolicyKind, UInt64?) async
             -> MutationOutcome = { _, _, _ in .notSent(ClientErrorCatalog.notConnected()) },
-        autostartContext: @escaping @MainActor @Sendable () -> AutostartContext = { .unknown }
+        autostartContext: @escaping @MainActor @Sendable () -> AutostartContext = { .unknown },
+        operations:
+            @escaping @Sendable (UUID, UInt32) async throws(ClientError) -> [OperationSummary] =
+            { _, _ throws(ClientError) in throw .notSent(ClientErrorCatalog.notConnected()) }
     ) {
         self.detail = detail
         self.usage = usage
@@ -58,6 +65,7 @@ nonisolated public struct InstanceDetailService: Sendable {
         self.prepareTerminal = prepareTerminal
         self.setStartup = setStartup
         self.autostartContext = autostartContext
+        self.operations = operations
     }
 
     /// A service over the detail methods of a client.
@@ -140,6 +148,17 @@ extension InstanceDetailService {
                 AutostartContext(
                     rotation: model.lastDaemon?.info?.session?.rotation,
                     agent: model.agent?.assessment?.state, rootOverride: model.rootOverrideActive)
+            },
+            operations: { id, limit throws(ClientError) in
+                let params = ListOperationsParams(
+                    activeOnly: nil,
+                    resource: ResourceRef(kind: .instance, id: id.uuidString.lowercased()),
+                    limit: limit, before: nil)
+                let reply = try await model.read(.operationList(params)).get()
+                guard case .operationList(let page) = reply else {
+                    throw .rejected(ClientErrorCatalog.protocolViolation())
+                }
+                return page.items ?? []
             })
     }
 }

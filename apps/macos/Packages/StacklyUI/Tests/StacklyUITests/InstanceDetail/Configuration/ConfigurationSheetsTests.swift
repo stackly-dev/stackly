@@ -196,6 +196,93 @@ struct ConfigurationSheetsTests {
         #expect(model.endpoints.first?.portText == "5601")
     }
 
+    @Test(
+        .evidence(
+            covers: ["AC-010"],
+            expected:
+                "Use Port fills the suggested port into the sheet and judges it at once, without the pause, and nothing changes before Change Ports"
+        ))
+    func aPrefilledPortIsJudgedAtOnce() async throws {
+        let script = try script()
+        let sleeper = sleeper
+        let model = EndpointsModel(
+            source: source, service: script.service, prefill: ["main": 5601],
+            sleep: { try await sleeper.sleep(for: $0) })
+        await model.open()
+
+        #expect(model.endpoints.first?.mode == .fixed)
+        #expect(model.endpoints.first?.portText == "5601")
+        #expect(sleeper.durations.isEmpty)
+        #expect(script.validatedEndpoints == [[EndpointRequest(name: "main", port: .fixed(5601))]])
+        #expect(model.isValidating == false)
+        #expect(model.disabledReason == nil)
+        #expect(script.sent.isEmpty)
+
+        // A read again drops what was typed and fills in nothing.
+        await model.load()
+        #expect(model.endpoints.first?.portText == "5555")
+    }
+
+    @Test(
+        .evidence(
+            covers: ["AC-056"],
+            expected:
+                "A suggestion that went stale is refused by the verdict of the sheet, which offers its own free port"
+        ))
+    func aStalePrefillIsRefusedByTheVerdict() async throws {
+        let script = try script()
+        script.judgeEndpoints(
+            .success(
+                EndpointValidation(
+                    valid: false,
+                    problems: [
+                        EndpointProblem(
+                            endpoint: "main", code: "supervisor.endpoint_in_use",
+                            suggestedPort: 5602)
+                    ], changes: [], impact: .restart)))
+        let model = EndpointsModel(
+            source: source, service: script.service, prefill: ["main": 5601])
+        await model.open()
+
+        let check = try #require(model.check(forEndpoint: "main"))
+        #expect(check.suggestedPort == 5602)
+        #expect(model.disabledReason == "Fix the ports first.")
+        #expect(model.endpoints.first?.portText == "5601")
+    }
+
+    @Test func aPrefillForNoEndpointOfTheSheetIsIgnored() async throws {
+        let script = try script()
+        let model = EndpointsModel(
+            source: source, service: script.service, prefill: ["metrics": 9100])
+        await model.open()
+        #expect(model.endpoints.first?.portText == "5555")
+        #expect(script.validatedEndpoints.isEmpty)
+        #expect(model.disabledReason == "Change a port first.")
+    }
+
+    @Test(
+        .evidence(
+            covers: ["AC-010"],
+            expected:
+                "The port button of a failure banner opens the Ports sheet of the instance, filled in for Use Port and empty for Change Port"
+        ))
+    func thePortButtonOfABannerOpensTheSheetFilledIn() {
+        var opened: [InstanceEdit] = []
+        let action = InstanceEditAction { opened.append($0) }
+        let use = action.portAction(for: source, fix: PortFix(endpoint: "main", port: 5601))
+        let change = action.portAction(for: source, fix: nil)
+        #expect(use.title == "Use Port 5601")
+        #expect(change.title == "Change Port…")
+        #expect(use.mutates && change.mutates)
+        use.perform()
+        change.perform()
+        #expect(
+            opened == [
+                .editPorts(source, prefill: ["main": 5601]), .editPorts(source, prefill: [:]),
+            ])
+        #expect(Set(opened.map(\.id)) == ["ports:\(source.id.uuidString)"])
+    }
+
     @Test func aPortThatIsNotANumberIsNotSentToTheDaemon() async throws {
         let script = try script()
         let model = endpoints(script)
@@ -272,7 +359,7 @@ struct ConfigurationSheetsTests {
         #expect(rename.mutates && ports.mutates)
         rename.perform()
         ports.perform()
-        #expect(opened == [.renaming(source), .editPorts(source)])
+        #expect(opened == [.renaming(source), .editPorts(source, prefill: [:])])
     }
 
     @Test func theMoreMenuListsRenameAndEditPortsAfterDuplicate() {

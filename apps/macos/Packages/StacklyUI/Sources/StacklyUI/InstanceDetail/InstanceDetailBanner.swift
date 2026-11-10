@@ -1,11 +1,11 @@
 import StacklyClient
 import SwiftUI
 
-/// The banners on top of the Summary tab (spec 0021, *Tab Summary*): the problem of the
-/// instance by rules I1 to I4 of spec 0022, and the failed load of the detail.
-/// A failed instance carries the output of its last process and Retry; a blocker that needs a
-/// secret carries "Enter Secret…", which opens the sheet of spec 0011 for the missing
-/// references.
+/// The banners on top of the Summary tab (spec 0021, *Tab Summary*): the failure banner of
+/// spec 0033 for a failed, recovering, or refused instance (I1 and I7 of spec 0022, and F7),
+/// otherwise the problem of the instance by rules I2 to I4, and the failed load of the detail.
+/// A blocker that needs a secret carries "Enter Secret…", which opens the sheet of spec 0011
+/// for the missing references.
 struct InstanceDetailBanner: View {
     /// The two buttons of the "Still stopping." banner (spec 0026, AC-16).
     struct Stopping {
@@ -15,14 +15,29 @@ struct InstanceDetailBanner: View {
         let forceStop: StacklyAction
     }
 
+    /// What the failure banner reads and where its buttons go (spec 0033).
+    struct Failure {
+        /// The operations of the instance.
+        let model: InstanceFailureModel
+        /// The active and the recent operations of the operation center.
+        let center: [OperationSummary]
+        /// The name of another instance by ID, for a port it owns.
+        let instanceNames: (UUID) -> String?
+        /// Shows the Logs tab of this page.
+        let showLogs: @MainActor () -> Void
+    }
+
     @Environment(\.actionHost) private var host
     @Environment(\.mutationAvailability) private var gate
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
+    @Environment(\.instanceEditAction) private var editInstance
+    @Environment(\.shellNavigator) private var navigator
 
     let summary: InstanceSummary
     let action: StacklyAction
+    let failure: Failure
     let detailError: ErrorBody?
     let retryDetail: @MainActor () -> Void
     let enterSecrets: @MainActor ([SecretNeed]) -> Void
@@ -42,10 +57,13 @@ struct InstanceDetailBanner: View {
                         perform: { [host, gate] in stopping.forceStop.run(host: host, gate: gate) }),
                 ], base: .window)
         }
-        if let item = AttentionRules.banner(
-            for: summary, now: fixtureNow ?? Date(), locale: locale, timeZone: timeZone)
-        {
-            problem(item)
+        if summary.lifecycle == .recovering, summary.restart.nextAttemptAt != nil {
+            // The countdown of the restart moves every second (AC-12).
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                failureOrProblem(now: fixtureNow ?? context.date)
+            }
+        } else {
+            failureOrProblem(now: fixtureNow ?? Date())
         }
         if let detailError {
             StateBanner(
@@ -53,6 +71,24 @@ struct InstanceDetailBanner: View {
                 message: DaemonText.sentence(detailError.message), code: detailError.code,
                 actions: [StateAction(title: "Retry", mutates: false, perform: retryDetail)],
                 base: .window)
+        }
+    }
+
+    /// The failure banner when the instance has one, else the banner of rules I2 to I4.
+    @ViewBuilder
+    private func failureOrProblem(now: Date) -> some View {
+        if let content = failure.model.content(
+            for: summary, center: failure.center, instanceNames: failure.instanceNames, now: now)
+        {
+            InstanceFailureBanner(
+                content: content, mode: .summary,
+                actions: FailureBannerActions(
+                    summary: summary, main: action, edit: editInstance, navigator: navigator,
+                    showLogs: failure.showLogs))
+        } else if let item = AttentionRules.banner(
+            for: summary, now: now, locale: locale, timeZone: timeZone)
+        {
+            problem(item)
         }
     }
 
@@ -70,20 +106,8 @@ struct InstanceDetailBanner: View {
                 ], base: .window)
         } else {
             StateBanner(
-                tone: item.tone, title: item.title, message: item.message,
-                code: item.rule == "I1" ? InstanceInspector.excerpt(summary.lastFailure) : nil,
-                actions: retry(for: item), base: .window)
+                tone: item.tone, title: item.title, message: item.message, base: .window)
         }
-    }
-
-    /// Retry on a failed instance, when the main action is Retry and it can run.
-    private func retry(for item: AttentionItem) -> [StateAction] {
-        guard item.rule == "I1", action.id == InstanceAction.Kind.retry.rawValue,
-            action.disabledReason == nil
-        else { return [] }
-        return [
-            StateAction(title: "Retry", mutates: true, perform: { action.perform() })
-        ]
     }
 
     /// The references a `needsSecret` blocker lists, as the rows of the secret sheet.

@@ -107,7 +107,35 @@ struct AttentionRulesTests {
         #expect(found.rule == "I7")
         #expect(found.title == "flapping is restarting")
         // macOS puts a narrow no-break space before “AM”.
-        #expect(Self.plain(found.message) == "It crashed. Restart 2 of 5 at 9:00 AM.")
+        #expect(Self.plain(found.message) == "It crashed. Restart 1 of 5 at 9:00 AM.")
+    }
+
+    @Test(
+        .evidence(
+            covers: ["AC-068"],
+            expected:
+                "The restart that waits is named by the crash count, so the fifth respawn reads Restart 5 of 5 and a sixth crash the plain sentence"
+        ))
+    func theRestartThatWaitsIsTheCrashCountUpToTheBudget() throws {
+        let base = try InstanceContractFixture.instance("flapping")
+        func message(attempts: UInt32) throws -> String? {
+            let summary = InstanceSummary(
+                id: base.id, name: base.name, displayName: nil, revision: base.revision,
+                software: base.software, provider: base.provider, runtimeId: base.runtimeId,
+                runtimeVersion: base.runtimeVersion, lifecycle: .recovering, desired: base.desired,
+                readiness: base.readiness, health: base.health, statusSeq: base.statusSeq,
+                process: nil, lastFailure: nil,
+                restart: InstanceRestart(
+                    attempts: attempts, budget: 5, windowSeconds: 300, nextAttemptAt: now,
+                    exhausted: false), restartTotal: 0, blocker: nil, endpoints: nil,
+                leftoverProcesses: nil, logsUnavailable: false, ownership: .manual,
+                initialized: true, capabilities: nil, lastExit: nil,
+                autostart: InstanceAutostart(policy: .manual, session: .none))
+            return try items(instances: [summary]).first.map { Self.plain($0.message) }
+        }
+        #expect(try message(attempts: 1)?.hasPrefix("It crashed. Restart 1 of 5 at ") == true)
+        #expect(try message(attempts: 5)?.hasPrefix("It crashed. Restart 5 of 5 at ") == true)
+        #expect(try message(attempts: 6) == "It crashed and Stackly is starting it again.")
     }
 
     @Test func aRestartWithoutATimeOrBudgetUsesThePlainSentence() throws {
@@ -128,7 +156,7 @@ struct AttentionRulesTests {
         let noTime = InstanceRestart(
             attempts: 1, budget: 5, windowSeconds: 60, nextAttemptAt: nil, exhausted: false)
         let spent = InstanceRestart(
-            attempts: 5, budget: 5, windowSeconds: 60, nextAttemptAt: now, exhausted: false)
+            attempts: 6, budget: 5, windowSeconds: 60, nextAttemptAt: now, exhausted: false)
         #expect(try items(instances: [with(noTime)]).first?.message == plain)
         #expect(try items(instances: [with(spent)]).first?.message == plain)
     }
@@ -137,7 +165,7 @@ struct AttentionRulesTests {
         let base = try InstanceContractFixture.instance("flapping")
         let tomorrow = now.addingTimeInterval(86_400)
         let restart = InstanceRestart(
-            attempts: 0, budget: 5, windowSeconds: 60, nextAttemptAt: tomorrow, exhausted: false)
+            attempts: 1, budget: 5, windowSeconds: 60, nextAttemptAt: tomorrow, exhausted: false)
         let summary = InstanceSummary(
             id: base.id, name: base.name, displayName: nil, revision: base.revision,
             software: base.software, provider: base.provider, runtimeId: base.runtimeId,

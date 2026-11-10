@@ -33,6 +33,22 @@
             var prepareFailure: ClientError?
             /// The `(instance, action)` pairs `instance.prepare_terminal` was asked for.
             var prepared: [(instance: UUID, action: String)] = []
+            /// The ended operations `operation.list { resource }` answers besides
+            /// ``operations``, such as those of ``FixtureFailureBanner`` (spec 0033).
+            var instanceOperations: [OperationSummary] = []
+            /// The failure `operation.list { resource }` answers, or `nil`.
+            var instanceOperationsFailure: ClientError?
+
+            /// What `operation.list { resource: instance }` answers: the newest operations of
+            /// one instance, at most `limit`.
+            func operations(of id: UUID, limit: UInt32) throws(ClientError) -> [OperationSummary] {
+                if let instanceOperationsFailure { throw instanceOperationsFailure }
+                let key = id.uuidString.lowercased()
+                let own = (operations + instanceOperations).filter {
+                    $0.resource?.kind == .instance && $0.resource?.id == key
+                }
+                return Array(RelatedOperation.newestFirst(own).prefix(Int(limit)))
+            }
 
             /// The script path `instance.prepare_terminal` answers for `action`.
             func prepareTerminal(_ id: UUID, _ action: String) throws(ClientError) -> String {
@@ -180,6 +196,9 @@
                 },
                 prepareTerminal: { id, action throws(ClientError) in
                     try await script.prepareTerminal(id, action)
+                },
+                operations: { id, limit throws(ClientError) in
+                    try await script.operations(of: id, limit: limit)
                 })
             actions = InstanceActionModel(
                 send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
