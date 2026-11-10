@@ -11,8 +11,9 @@ nonisolated public enum AttentionDestination: Hashable, Sendable {
     case operation(UUID)
     /// The Operations page.
     case operations
-    /// The Diagnostics page.
-    case diagnostics
+    /// The Diagnostics page, through ``ShellNavigator/openDiagnostics(focus:)``, with the
+    /// Doctor section filtered by `focus` (spec 0034, AC-20).
+    case diagnostics(focus: DiagnosticsFocus?)
 
 }
 

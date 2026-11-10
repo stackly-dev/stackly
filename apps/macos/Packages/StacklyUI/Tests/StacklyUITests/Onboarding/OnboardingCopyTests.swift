@@ -259,11 +259,14 @@ struct OnboardingCopyTests {
 
     @Test func theExampleBlockHoldsOnlyTheCommandsOfTheTableOneForEachLine() {
         #expect(OnboardingCopy.commandExamplesLabel == "Example commands")
+        // `stackly doctor` joined with spec 0034 (AC-20, spec 0016 Follow-up).
         #expect(
-            OnboardingCopy.commandExamples == ["stackly daemon status", "stackly provider list"])
+            OnboardingCopy.commandExamples == [
+                "stackly daemon status", "stackly provider list", "stackly doctor",
+            ])
         #expect(
             OnboardingCopy.commandExamplesText
-                == "$ stackly daemon status\n$ stackly provider list")
+                == "$ stackly daemon status\n$ stackly provider list\n$ stackly doctor")
     }
 
     // MARK: - The source rules over Onboarding/ (AC-4, AC-9, AC-3)

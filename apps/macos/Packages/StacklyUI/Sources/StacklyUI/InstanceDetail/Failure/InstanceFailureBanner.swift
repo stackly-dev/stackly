@@ -33,9 +33,9 @@ struct FailureBannerActions {
         case .diagnose:
             return StacklyAction(
                 id: "failure.diagnose", title: action.title, mutates: false,
-                perform: { [navigator] in
-                    // provisional: F34 (ShellNavigator.openDiagnostics(focus: .instance(id)) of spec 0034)
-                    navigator?.show(.diagnostics)
+                perform: { [navigator, id = summary.id] in
+                    // The Doctor section filtered to this instance (spec 0034, AC-20).
+                    navigator?.openDiagnostics(focus: .instance(id))
                 })
         }
     }

@@ -95,10 +95,12 @@ struct CommandLineStepContentTests {
 
     @Test func theExampleBlockHoldsOnlyTheCommandsOfTheCopy() {
         #expect(
-            OnboardingCopy.commandExamples == ["stackly daemon status", "stackly provider list"])
+            OnboardingCopy.commandExamples == [
+                "stackly daemon status", "stackly provider list", "stackly doctor",
+            ])
         #expect(
-            OnboardingCopy.commandExamplesText == "$ stackly daemon status\n$ stackly provider list"
-        )
+            OnboardingCopy.commandExamplesText
+                == "$ stackly daemon status\n$ stackly provider list\n$ stackly doctor")
         #expect(OnboardingCopy.commandExamplesLabel == "Example commands")
     }
 

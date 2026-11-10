@@ -263,6 +263,7 @@ public enum ShellBootstrap {
 
             agent: agent)
         model.rootOverrideActive = rootOverrideActive
+        model.startFacts = .live(home: UserHome.current())
         let preferences = AppPreferences()
         return LiveShellParts(
             runtime: ShellRuntime(

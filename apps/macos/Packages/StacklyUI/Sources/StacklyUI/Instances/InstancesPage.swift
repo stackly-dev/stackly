@@ -57,6 +57,8 @@ public struct InstancesPage: View {
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
+    /// The request whose sheet was opened, so a page built again does not open it twice.
+    @State private var appliedEdit: UUID?
     @State private var edit: InstanceEdit?
     @State private var requestedTab: InstanceTab?
     @Environment(\.feedbackCenter) private var feedbackCenter
@@ -604,6 +606,11 @@ public struct InstancesPage: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             path = [InstanceRoute(request.instance)]
+        }
+        // A sheet the request asks for opens once per request (spec 0034, AC-18).
+        if let requested = request.edit, appliedEdit != request.id {
+            appliedEdit = request.id
+            edit = requested
         }
     }
 

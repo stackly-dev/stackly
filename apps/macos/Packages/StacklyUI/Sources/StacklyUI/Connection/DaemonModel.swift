@@ -101,6 +101,8 @@ public final class DaemonModel {
     public let runtimes: RuntimeStore
     /// The space left on the disk that holds Stackly data, for the Overview (spec 0022).
     public let capacity: CapacityModel
+    /// The last doctor report, for the Diagnostics page and its sidebar badge (spec 0034).
+    public let doctor: DoctorModel
     /// Start, Stop, and Retry of instances, shared by the Overview and the Instances page
     /// (spec 0022).
     public let instanceActions: InstanceActionModel
@@ -118,6 +120,10 @@ public final class DaemonModel {
     /// Whether `STACKLY_ROOT` is set. `ShellBootstrap.assemble` sets it once, right after
     /// the model is created; the agent model learned the same value at creation.
     public internal(set) var rootOverrideActive = false
+    /// Where the Background Agent section reads the start failure record and the binary's
+    /// change time (spec 0034, AC-11). Only the live shell sets it, so a fixture never reads
+    /// the user's home.
+    @ObservationIgnored var startFacts: StartFactsSources?
 
     @ObservationIgnored private let link: LinkHandle
     @ObservationIgnored private let signals: AsyncStream<SyncSignal>?
@@ -188,6 +194,9 @@ public final class DaemonModel {
         capacity = CapacityModel(read: { call throws(ClientError) in
             try await link.call(call, nil, .standard)
         })
+        doctor = DoctorModel(
+            read: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            capacity: capacity, now: now)
         let mutations = MutationPathBox()
         instanceActions = InstanceActionModel(
             send: { call, key in
@@ -294,7 +303,8 @@ public final class DaemonModel {
     /// snapshot.
     public var sidebarCounts: SidebarCounts {
         SidebarCounts(
-            instances: instances.loadedCount, runningOperations: operations.runningCount)
+            instances: instances.loadedCount, runningOperations: operations.runningCount,
+            doctorErrors: doctor.report.map { _ in doctor.errorCount })
     }
 
     /// Starts the link, the signal loop, and the one second timer of the
@@ -555,6 +565,11 @@ public final class DaemonModel {
             break
         }
         sync.handle(signal)
+        if case .caughtUp = signal {
+            // A new daemon run gets a fresh report (spec 0034, AC-20); the same run does not.
+            let id = serverInstance.id
+            Task { await doctor.request(.caughtUp(serverInstanceId: id)) }
+        }
         if case .event(let event) = signal {
             restart.receive(event: event)
             settings.receive(event: event)

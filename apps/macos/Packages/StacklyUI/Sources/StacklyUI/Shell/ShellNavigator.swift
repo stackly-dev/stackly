@@ -53,10 +53,14 @@ public struct InstanceRequest: Equatable, Sendable {
     public let instance: UUID
     /// The tab the detail page starts on.
     public let tab: InstanceTab
+    /// A sheet to open on the detail page, such as the endpoints sheet with a port filled in
+    /// (the `change_port` action of the doctor, spec 0034 AC-18), or `nil`.
+    public let edit: InstanceEdit?
 
-    init(instance: UUID, tab: InstanceTab = .summary) {
+    init(instance: UUID, tab: InstanceTab = .summary, edit: InstanceEdit? = nil) {
         self.instance = instance
         self.tab = tab
+        self.edit = edit
     }
 }
 
@@ -68,6 +72,15 @@ public struct OperationRequest: Equatable, Sendable {
     public let id = UUID()
     /// The operation to select.
     public let operation: UUID
+}
+
+/// A request to open Diagnostics with a focus (spec 0034, AC-20). Each request has its own
+/// ID, so asking again applies it again.
+public struct DiagnosticsRequest: Equatable, Sendable {
+    /// The request's identity.
+    public let id = UUID()
+    /// What the Doctor section shows first, or `nil` for everything.
+    public let focus: DiagnosticsFocus?
 }
 
 /// The one way a page sends the person to another page of the window (spec 0022, *Navigasi*).
@@ -93,6 +106,9 @@ public final class ShellNavigator {
             if section != .operations {
                 operationRequest = nil
             }
+            if section != .diagnostics {
+                diagnosticsRequest = nil
+            }
         }
     }
     /// The last request for the Instances page, while the Instances section shows.
@@ -101,6 +117,8 @@ public final class ShellNavigator {
     public private(set) var instanceRequest: InstanceRequest?
     /// The last operation asked of the Operations page, while the Operations section shows.
     public private(set) var operationRequest: OperationRequest?
+    /// The last request to open Diagnostics, kept while Diagnostics shows.
+    public private(set) var diagnosticsRequest: DiagnosticsRequest?
     /// Counts the times the person asked for the table of Instances again, such as a second
     /// click on its sidebar row: the page closes the detail page when it changes.
     public private(set) var instancesResets = 0
@@ -147,6 +165,21 @@ public final class ShellNavigator {
     public func openOperation(_ id: UUID) {
         operationRequest = OperationRequest(operation: id)
         section = .operations
+    }
+
+    /// Opens the detail page of an instance at `tab` with the sheet `edit` open, such as the
+    /// endpoints sheet with a suggested port filled in (spec 0034, AC-18). Nothing changes
+    /// until the user applies the sheet.
+    public func openInstance(_ id: UUID, tab: InstanceTab, edit: InstanceEdit) {
+        instanceRequest = InstanceRequest(instance: id, tab: tab, edit: edit)
+        section = .instances
+    }
+
+    /// Opens Diagnostics, its Doctor section filtered by `focus`, and asks the doctor for a
+    /// run (spec 0034, AC-20).
+    public func openDiagnostics(focus: DiagnosticsFocus?) {
+        diagnosticsRequest = DiagnosticsRequest(focus: focus)
+        section = .diagnostics
     }
 
     /// Asks the Instances page to go back to its table.
