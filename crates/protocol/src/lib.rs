@@ -23,6 +23,7 @@ pub mod catalog;
 pub mod codes;
 mod contract_digest;
 pub mod daemon;
+pub mod doctor;
 pub mod error;
 pub mod events;
 pub mod fingerprint;

@@ -1,0 +1,70 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f05",
+    "reply": {
+      "type": "doctor.run",
+      "content": {
+        "runId": "0192f3a7-0000-7000-8000-0000000000e2",
+        "startedAt": "2026-11-10T08:00:00.000Z",
+        "finishedAt": "2026-11-10T08:00:00.100Z",
+        "recovery": true,
+        "scope": {
+          "id": "0192f3a4-0000-7000-8000-0000000000b1",
+          "name": "mysql-legacy"
+        },
+        "checks": [
+          {
+            "id": "telemetry",
+            "severity": "fatal",
+            "title": "Telemetry",
+            "summary": "A check a newer daemon runs.",
+            "findings": [
+              {
+                "code": "cosmic_ray",
+                "severity": "fatal",
+                "title": "Something new",
+                "explanation": "A finding a newer daemon knows.",
+                "subject": null,
+                "instance": null,
+                "operationId": null,
+                "details": [],
+                "evidence": null,
+                "portOwner": {
+                  "kind": "kernel",
+                  "process": null,
+                  "instance": null
+                },
+                "excerpt": [],
+                "remedy": {
+                  "provider": "official/postgresql",
+                  "revision": "2026.11.1",
+                  "name": "future",
+                  "title": "Future",
+                  "steps": [],
+                  "pidFile": {
+                    "path": "~/x.pid",
+                    "pid": null,
+                    "state": "zombie",
+                    "process": null
+                  }
+                },
+                "action": {
+                  "kind": "reinstall",
+                  "instanceId": null,
+                  "operationId": null,
+                  "endpoint": null,
+                  "port": null
+                }
+              }
+            ],
+            "omitted": 0,
+            "capacity": null
+          }
+        ],
+        "errors": 0,
+        "warnings": 0
+      }
+    }
+  }
+}

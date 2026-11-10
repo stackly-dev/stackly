@@ -19,6 +19,7 @@ mod capability;
 pub mod capacity;
 mod catalog;
 mod code;
+pub mod doctor;
 mod endpoint;
 mod environment;
 mod error;
