@@ -50,7 +50,7 @@ pub const OWNER: &str = "@ojiepermana";
 /// The provider of the package.
 pub const PROVIDER: &str = "official/postgresql";
 /// The revision of the package.
-pub const REVISION: &str = "1.0.0";
+pub const REVISION: &str = "1.0.2";
 /// The role that owns the cluster.
 pub const SUPERUSER: &str = "postgres";
 

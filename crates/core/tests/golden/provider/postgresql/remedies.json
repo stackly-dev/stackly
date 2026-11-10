@@ -1,0 +1,46 @@
+[
+  {
+    "name": "stale_postmaster_pid",
+    "pidFile": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/postmaster.pid",
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Stackly never removes this file, because it also guards the data folder against a second server."
+      },
+      {
+        "command": null,
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/postmaster.pid",
+        "text": "If the PID below isn’t a PostgreSQL server for this data folder, remove the file yourself, then start the instance again."
+      }
+    ],
+    "title": "PostgreSQL found an old postmaster.pid"
+  },
+  {
+    "name": "readiness_role",
+    "pidFile": null,
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Stackly checks that this instance is ready by signing in as the role stackly_readiness, which the instance’s init created. That sign in fails now."
+      },
+      {
+        "command": "'/Volumes/Test Root/Ünï cödé/data/runtimes/postgresql/18.6/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000/bin/psql' --host=/private/tmp/skt-golden/stackly-0000000a/i/0000000a --port=14000 --username=postgres --dbname=postgres --command=\"CREATE ROLE stackly_readiness WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3\"",
+        "path": null,
+        "text": "If the role is gone, run this in Terminal to create it again. psql asks for the postgres password, and Stackly never puts it in the command."
+      },
+      {
+        "command": "'/Volumes/Test Root/Ünï cödé/data/runtimes/postgresql/18.6/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000/bin/psql' --host=/private/tmp/skt-golden/stackly-0000000a/i/0000000a --port=14000 --username=postgres --dbname=postgres --command=\"ALTER ROLE stackly_readiness WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3\" --command=\"ALTER ROLE stackly_readiness SET default_transaction_read_only = on\" --command=\"ALTER ROLE stackly_readiness SET statement_timeout = '2s'\"",
+        "path": null,
+        "text": "Then run this to set the role back to what Stackly expects."
+      },
+      {
+        "command": null,
+        "path": null,
+        "text": "The instance becomes ready again on its next readiness check."
+      }
+    ],
+    "title": "The readiness role stackly_readiness is missing or changed"
+  }
+]

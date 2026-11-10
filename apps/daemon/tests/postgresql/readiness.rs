@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
+use stackly_protocol::doctor::{DoctorCheckId, DoctorFindingCode, DoctorParams};
 use stackly_protocol::instance::InstanceReadinessState;
+use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{PG17, PG18, Pg, Site, Via, create_instance, stop_and_shutdown};
@@ -63,8 +65,46 @@ async fn is_not_ready_when_the_port_accepts_but_the_query_fails(pg: Pg, ev: Evid
         "the TCP port still accepts connections"
     );
 
-    let ran = psql.admin(&made.password, "ALTER ROLE stackly_readiness LOGIN");
-    assert!(ran.ok, "{ran:?}");
+    // The doctor shows the provider remedy for the role (spec 0034 AC-10),
+    // and its command, pasted into a shell as is, brings readiness back.
+    let reply = api
+        .client
+        .call(Call::DoctorRun(DoctorParams {
+            instance_id: Some(made.id),
+            checks: vec![DoctorCheckId::InstanceFailures],
+        }))
+        .await
+        .expect("doctor.run answers");
+    let Reply::DoctorRun(report) = reply else {
+        panic!("not a doctor reply: {reply:?}");
+    };
+    let finding = report.checks[0]
+        .findings
+        .iter()
+        .find(|finding| finding.code == DoctorFindingCode::NotReady)
+        .expect("not_ready is reported");
+    let remedy = finding
+        .remedy
+        .as_ref()
+        .expect("the readiness role remedy matches");
+    assert_eq!(remedy.name, "readiness_role");
+    let reset = remedy
+        .steps
+        .iter()
+        .filter_map(|step| step.command.as_deref())
+        .find(|command| command.contains("ALTER ROLE"))
+        .expect("a command sets the role back");
+    assert!(
+        !reset.contains(&made.password),
+        "the password never enters a command"
+    );
+    let ran = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(reset)
+        .env("PGPASSWORD", &made.password)
+        .output()
+        .expect("the shell runs");
+    assert!(ran.status.success(), "{ran:?}");
     api.wait_instance(made.id, "ready again", |summary| {
         summary.readiness.state == InstanceReadinessState::Ready
     })
@@ -81,7 +121,7 @@ async fn postgresql_17_is_not_ready_when_the_port_accepts_but_the_query_fails() 
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
-        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
+        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and the ALTER ROLE command of the readiness_role remedy that doctor.run shows, run in a shell, makes it ready again",
     );
     is_not_ready_when_the_port_accepts_but_the_query_fails(pg, ev).await;
 }
@@ -93,7 +133,7 @@ async fn postgresql_18_is_not_ready_when_the_port_accepts_but_the_query_fails() 
     let ev = evidence!(
         covers = ["REQ-035", "AC-035"],
         kind = Kind::Native,
-        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and LOGIN makes it ready again",
+        expected = "the readiness role is unprivileged and read only, ALTER ROLE NOLOGIN makes the instance not_ready with the PostgreSQL message while TCP still accepts, and the ALTER ROLE command of the readiness_role remedy that doctor.run shows, run in a shell, makes it ready again",
     );
     is_not_ready_when_the_port_accepts_but_the_query_fails(pg, ev).await;
 }

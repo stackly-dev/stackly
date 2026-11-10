@@ -4,7 +4,7 @@ metadata:
   id: official/postgresql
   software: postgresql
   displayName: PostgreSQL
-  revision: "1.0.1"
+  revision: "1.0.2"
   category: database
   description: PostgreSQL relational database. Each instance is its own cluster with a password protected superuser, a loopback port, and a private Unix socket.
 compatibility:
@@ -157,3 +157,26 @@ openWith:
       args: ["--host=${endpoint.socket.socketDir}", "--port=${endpoint.client.port}", "--username=postgres", "postgres"]
       env: { PGAPPNAME: stackly-terminal }
     copySecret: superuserPassword
+remedies:
+  - name: stale_postmaster_pid
+    when:
+      failureCodes: [crash_loop, process_exited]
+      excerptContains: 'lock file "postmaster.pid" already exists'
+    evidence:
+      pidFile: "${instance.data}/postmaster.pid"
+    title: "PostgreSQL found an old postmaster.pid"
+    steps:
+      - text: "Stackly never removes this file, because it also guards the data folder against a second server."
+      - text: "If the PID below isn’t a PostgreSQL server for this data folder, remove the file yourself, then start the instance again."
+        path: "${instance.data}/postmaster.pid"
+  - name: readiness_role
+    when:
+      readinessDetailContains: 'role "stackly_readiness"'
+    title: "The readiness role stackly_readiness is missing or changed"
+    steps:
+      - text: "Stackly checks that this instance is ready by signing in as the role stackly_readiness, which the instance’s init created. That sign in fails now."
+      - text: "If the role is gone, run this in Terminal to create it again. psql asks for the postgres password, and Stackly never puts it in the command."
+        command: '${runtime.executables.psql} --host=${endpoint.socket.socketDir} --port=${endpoint.client.port} --username=postgres --dbname=postgres --command="CREATE ROLE stackly_readiness WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3"'
+      - text: "Then run this to set the role back to what Stackly expects."
+        command: '${runtime.executables.psql} --host=${endpoint.socket.socketDir} --port=${endpoint.client.port} --username=postgres --dbname=postgres --command="ALTER ROLE stackly_readiness WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3" --command="ALTER ROLE stackly_readiness SET default_transaction_read_only = on" --command="ALTER ROLE stackly_readiness SET statement_timeout = ''2s''"'
+      - text: "The instance becomes ready again on its next readiness check."
