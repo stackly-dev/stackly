@@ -19,7 +19,7 @@ Spec ini membuat jejak setiap perubahan bisa kamu lihat dan percayai. Mesin oper
 
 **Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit):
 
-- **AC-1** (REQ-045): Setiap commit engine yang membawa operasi ke `succeeded`, `failed`, atau `cancelled` memuat tepat satu baris `audit_events` dengan action `operation.finished` di batch yang sama, dan setiap commit yang membawanya ke `needs_recovery` memuat tepat satu baris `operation.needs_recovery`. Ini berlaku di semua jalur di *Baris audit operasi* (finalize, gagal sebelum mulai, cancel sebelum mulai, kompensasi selesai, jawaban `NoOp` yang menulis batch, pemulihan saat start, shutdown, abandon). Baris memuat `actor` (`user` untuk origin `user`, `daemon` untuk `background`), `client` dari `trigger.client`, `operation_id` sama dengan ID operasi, `operation_kind`, `resource` operasi (kosong untuk manager), `instance_id` bila resource nya instance, `config_revision` dari catatan audit pekerjaan bila ada, `result` (`succeeded`, `failed`, `cancelled`, atau `needs_recovery`), dan `safe_details` di *Kunci `safe_details`*. Commit yang gagal tidak meninggalkan baris audit, dan commit ulang engine menulisnya bersama state akhir. Test core memeriksa setiap jalur di tabel itu dengan `ScriptedWork` di `FakeRegistry` dan `SqliteRegistry`.
+- **AC-1** (REQ-045): Setiap commit engine yang membawa operasi ke `succeeded`, `failed`, atau `cancelled` memuat tepat satu baris `audit_events` dengan action `operation.finished` di batch yang sama, dan setiap commit yang membawanya ke `needs_recovery` memuat tepat satu baris `operation.needs_recovery`. Ini berlaku di semua jalur di *Baris audit operasi* (finalize, gagal sebelum mulai, cancel sebelum mulai, kompensasi selesai, jawaban `NoOp` yang menulis batch, pemulihan saat start, shutdown, abandon). Baris memuat `actor` (`user` untuk origin `user`, `daemon` untuk `background`), `client` dari `trigger.client`, `operation_id` sama dengan ID operasi, `operation_kind`, `resource` operasi (kosong untuk manager), `instance_id` bila resource nya instance, `config_revision` dari catatan audit pekerjaan bila ada, `result` (`succeeded`, `failed`, `cancelled`, atau `needs_recovery`), dan `safe_details` di *Kunci `safe_details`*. Commit yang gagal tidak meninggalkan baris audit, dan commit ulang engine menulisnya bersama state akhir. Test core memeriksa setiap jalur di tabel itu dengan `ScriptedWork` di `FakeRegistry`, dan di `SqliteRegistry` lewat daemon serta conformance. *Diperbarui 2026-11-10 (koordinasi scope 05):* `SqliteRegistry` diuji lewat daemon dan `registry_conformance`, karena `cargo xtask check-deps` melarang `stackly-core` memakai `stackly-storage`.
 - **AC-2** (AC-045): Lewat socket dengan provider fake di `TestRoot`: `instance.create`, `instance.start`, dan `instance.change_endpoints` (ganti port), masing masing sukses dan gagal (start gagal di dalam operasi karena port dipegang listener test, `supervisor.endpoint_in_use`; create gagal di langkah `init` lewat setting fake `failInit`), lalu `audit.list { instanceId }` membalas baris `operation.finished` yang `operationId` nya sama dengan `operationId` di `OperationAccepted` dan di `failure.error` operasi itu, `result` sesuai state akhir, `errorCode` sama dengan `failure.error.code` untuk yang gagal, `configRevision` 1 untuk create, nomor revision aktif yang dirender untuk start, dan revision baru plus `oldRevision` dan `ports` (`main 5432 → 5433`) untuk ganti port. Instance dibuat dengan `FixtureCredential` sebagai password: pindaian byte file registry (termasuk WAL), balasan `audit.list` mentah, dan log daemon tidak memuat nilai sentinel. Assertion `configRevision` dan detail berlaku untuk operasi yang ditutup di run daemon yang sama; operasi yang ditutup `recover` setelah restart punya baris tanpa catatan (K5). Purge (fitur 54) tercakup aturan AC-1 dan catatan audit dari spec pemiliknya; bagian AC-045 untuk purge tetap `NOT_RUN` sampai fitur 54.
 - **AC-3** (Follow-up spec 0007): `operation.cancel` yang meng commit perubahan (disposisi `cancelled_before_start`, `requested`, atau `continuing_past_point_of_no_return` yang pertama) menulis satu baris `operation.cancel` berhasil dengan `disposition`, di batch yang sama dengan commit itu. `operation.resume` yang berhasil menulis `operation.resume`, dan `operation.abandon` yang berhasil menulis `operation.abandon` dengan `leftovers` (jumlah), di samping baris `operation.finished` penutupnya. Actor dan client baris itu milik pengirim permintaan (dari handshake koneksi nya), bukan milik pemicu operasi: operasi yang dimulai GUI lalu dibatalkan CLI punya baris `operation.cancel` dengan client `cli`. Jawaban yang tidak mengubah apa pun (`already_final`, `recovery_required`, cancel kedua, `operation.not_resumable`, `operation.not_abandonable`) tidak menulis baris audit.
 - **AC-4** (Follow-up spec 0011): Setiap nilai `safe_details` yang ditulis engine dan catatan audit pekerjaan lewat `Redactor` daemon sebelum dipotong ke 512 byte di batas karakter, kunci lebih dari 20 dibuang dari belakang dengan `omitted` berisi jumlahnya, dan baris audit yang dibangun tidak pernah membuat commit state gagal. Test sentinel: pekerjaan yang gagal dengan pesan berisi nilai `FixtureCredential`, dan catatan audit yang detail nya berisi nilai itu, menghasilkan baris tanpa nilai tersebut; nilai 600 byte yang memuat sentinel melintasi byte ke 512 tetap tersensor (redaksi dulu, potong kemudian).
@@ -126,18 +126,19 @@ API engine yang berubah: `cancel(id, by: OperationTrigger)`, `resume(id, expecte
 
 ### Catatan audit pekerjaan
 
-`OperationContext::set_audit_note(AuditNote)` (core) menyimpan catatan di memori operasi; panggilan berikutnya menggantinya. `AuditNote { config_revision: Option<ConfigRevisionNumber>, details: Vec<(DetailKey, String)> }`, paling banyak 12 entri. Catatan tidak masuk journal, jadi operasi yang ditutup `recover` setelah daemon restart punya baris tanpa catatan (correlation ID dan hasil tetap ada). Pekerjaan memanggilnya segera setelah nilainya diketahui, supaya baris kegagalan pun membawanya. `config_revision` hanya diisi dengan revision yang sudah ada di registry: start memakai revision aktif yang dibaca, sedangkan apply, ganti port, dan drift mengisinya setelah langkah `commit` (sebelum itu catatan hanya membawa `oldRevision`).
+`OperationContext::set_audit_note(AuditNote)` (core) menyimpan catatan di memori operasi; panggilan berikutnya menggantinya. `AuditNote { config_revision: Option<ConfigRevisionNumber>, details: Vec<(DetailKey, String)> }`, paling banyak 12 entri. Catatan tidak masuk journal, jadi operasi yang ditutup `recover` setelah daemon restart punya baris tanpa catatan (correlation ID dan hasil tetap ada). Pekerjaan memanggilnya segera setelah nilainya diketahui, supaya baris kegagalan pun membawanya. `config_revision` hanya diisi dengan revision yang sudah ada di registry: start, restart, reload, dan drift memakai revision aktif yang dibaca (drift tidak menulis revision baru), sedangkan apply dan ganti port mengisinya setelah langkah `commit` (sebelum itu catatan hanya membawa `oldRevision`).
 
 | Jenis | Kapan | `config_revision` | Detail |
 | --- | --- | --- | --- |
 | `create_instance` | setelah validasi draft | 1 | `provider` (nama), `runtimeId`, `duplicateOf` dan `duplicateOfName` (AC-18) |
 | `start_instance` | setelah revision aktif dibaca, sebelum `render` | nomor revision aktif | `ports` (`<endpoint> <port>`, dipisah koma) setelah port dipilih |
 | `restart_instance`, `reload_instance` | setelah revision aktif dibaca | nomor revision aktif | tidak ada |
-| `apply_config`, `change_endpoints`, `resolve_config_drift` | dari `ChangePlan` spec 0029 | `newRevision` | `oldRevision`, `settings` (nama, dipisah koma), `ports` (`<endpoint> <lama> → <baru>`, `auto` untuk port otomatis), `impact` |
+| `apply_config`, `change_endpoints` | dari `ChangePlan` spec 0029: sebelum `commit` hanya `oldRevision`, setelah `commit` catatan penuh | `newRevision` | `oldRevision`, `settings` (nama, dipisah koma), `ports` (`<endpoint> <lama> → <baru>`, `auto` untuk port otomatis), `impact` |
+| `resolve_config_drift` | setelah revision aktif dibaca, sebelum `render` | nomor revision aktif (file dikembalikan ke revision itu) | tidak ada |
 | `rename_instance` | dari plan | tidak ada | `oldName`, `newName` |
 | jenis lain | tidak ada catatan sampai pemiliknya menambahkannya | | |
 
-Satu fungsi `ChangePlan::audit_note()` menggantikan pemakaian JSON `audit()` untuk catatan ini; input journal spec 0029 AC-20 tidak berubah.
+Satu fungsi `ChangePlan::audit_note()` menggantikan pemakaian JSON `audit()` untuk catatan ini; input journal spec 0029 AC-20 tidak berubah. *Diperbarui 2026-11-10 (koordinasi scope 05):* baris drift dipisah dari `ChangePlan`, sesuai `supervisor/drift.rs`.
 
 ### Kunci `safe_details`
 
@@ -194,25 +195,32 @@ Handler `audit.list` membaca registry di `spawn_blocking` (baca halaman kecil, s
 
 | Perintah | Perilaku |
 | --- | --- |
-| `stackly audit list` | AC-16; DETAILS berisi `errorCode`, `configRevision`, lalu detail lain `key=value` dipotong ke lebar terminal |
+| `stackly audit list` | AC-16; DETAILS berisi `errorCode`, `configRevision`, lalu detail lain `key=value`. DETAILS dipotong ke sisa lebar `COLUMNS` (paling sedikit 24 kolom) hanya bila stdout adalah terminal dan env `COLUMNS` berisi bilangan 1 sampai 10000; selain itu tidak dipotong, karena spec 0008 memutuskan CLI tidak membaca lebar terminal lewat `ioctl` (pengecualian ini dicatat di spec 0008) |
 | `stackly operation list` | kolom baru CANCEL (`yes`, `no`, `requested`, `finishing`, kosong) |
-| `stackly operation inspect` | baris `cancel:` dengan kalimat tabel di bawah |
+| `stackly operation inspect` | baris `Cancel` dengan kalimat tabel di bawah; tanpa baris bila cancel tidak mengubah apa pun |
 | `stackly operation cancel` | kalimat disposisi di bawah |
 | `stackly settings set audit-retention-days <7\|30\|90>` | AC-6; `settings get` menulis `audit retention: 30 days, up to 100000 entries` |
 
 | Disposisi atau ketersediaan | Kalimat |
 | --- | --- |
 | `cancelled_before_start` | "it had not started yet, so nothing of it ran" |
-| `requested` | "it stops at its next safe point and undoes what it did" (jenis `CloseInterrupted`: "it stops safely") |
+| `requested` | "it stops at its next safe point and undoes what it did"; bila `pointOfNoReturnAt` operasi terisi (hanya jenis `CloseInterrupted` yang masih menerima cancel setelah titik itu): "it stops safely" |
 | `continuing_past_point_of_no_return` | "it is past a step that can't be undone, so it continues to a safe end; check it with stackly operation inspect {id}" |
-| `past_point_of_no_return` (inspect) | "cancel: not possible now, the current step can't be undone safely" |
+| `already_final` | hanya "operation {id} already ended (state {state})" |
+| `recovery_required` | "operation {id} needs recovery (state {state})", lalu kalimat dari `recovery.actions` saja (AC-10): `resume` dan `abandon` "resume or abandon it instead", hanya `resume` "resume it instead", hanya `abandon` "abandon it instead", tanpa keduanya atau tanpa `recovery` "it offers no recovery action now" |
+| `available` (inspect) | "possible now, " lalu kalimat `requested` di atas |
+| `past_point_of_no_return` (inspect) | "not possible now, the current step can't be undone safely" |
+| `requested` (inspect) | "requested, " lalu kalimat `requested` di atas |
+| `continuing` (inspect) | "requested past a step that can't be undone, so it continues to a safe end" |
+
+*Diperbarui 2026-11-10 (koordinasi scope 05):* baris `already_final`, kalimat `recovery_required` (termasuk "it offers no recovery action now", copy developer), baris inspect selain `past_point_of_no_return`, dan syarat `CloseInterrupted` lewat `pointOfNoReturnAt` diselaraskan dengan `apps/cli/src/commands/operation.rs`. Tiga disposisi pertama didahului baris "cancel requested for operation {id} (state {state})". Daemon lama tanpa `cancel`: `queued` dan `running` dianggap `available`, `cancel_requested` dianggap `requested`.
 
 ### Halaman Operations
 
 `StacklyUI/Operations/OperationsPage.swift` menggantikan `UnbuiltPage(.operations)` di `AppShell`. Model `OperationHistory` (`@MainActor @Observable`) memegang halaman `operation.list` tanpa `activeOnly`, menerapkan setiap perubahan dari `OperationCenter` (aktif dan `recent`) menurut `id` dan `revision` yang lebih tinggi, dan memuat ulang halaman pertama pada `.resnapshot` `ShellSync`. Operasi yang belum ada di daftar disisipkan hanya bila `(createdAt, id)` nya tidak lebih tua dari baris tertua yang termuat (atau daftar sudah lengkap tanpa `next`); yang lebih tua hanya menunggu Show More. Halaman berikutnya yang memuat ID yang sudah ada memakai revision yang lebih tinggi.
 
 - **Daftar**: `List` native dengan pilihan tunggal; inspector `.inspector` untuk detail (pola halaman Instances). Toolbar: judul "Operations" dan subjudul `OperationCenter.subtitle` (spec 0013).
-- **Baris**: judul `OperationTitle.title` (install yang sudah selesai: nama dan versi dari `RuntimeStore` lewat `resource`), baris catatan, "{jam mulai} · {8 karakter ID}", `ToneBadge`, lalu tombol. Operasi berjalan dengan definisi tahap: `StagedProgress(value, layout: .standard)`; tanpa definisi: label tahap dan `ProgressView()` indeterminate.
+- **Baris**: judul `OperationTitle.title` (install yang sudah selesai: nama dan versi dari `RuntimeStore` lewat `resource`), baris catatan, "{jam mulai} · {8 karakter ID}", `ToneBadge`, lalu tombol. Operasi berjalan dengan definisi tahap: `StagedProgress(value, layout: .stages)` (*Diperbarui 2026-11-10 (koordinasi scope 05):* tata letak `.stages` spec 0067; `.standard` tidak ada); tanpa definisi: label tahap dan `ProgressView()` indeterminate.
 - **Status**: `StatusAppearance.operation(state:partial:continuing:)` dengan parameter baru `continuing` (default false) yang memberi "Finishing…" tone `caution` untuk `cancelRequested` yang `cancel` nya `continuing` (Follow-up spec 0012).
 - **Footer**: "Stackly stages and checks each change before a step that can’t be undone. From that step on, Cancel is off and the operation finishes on its own." (adaptasi copy mockup; angka 80% mockup hanya contoh).
 - **Konfirmasi**: Cancel tanpa dialog (bisa dibalik atau berhenti aman); Abandon dengan dialog destruktif native, Cancel sebagai tombol default: judul "Abandon “{judul}”?", isi "Stackly undoes what it can and leaves the rest as it is. You can’t resume it afterwards.", tombol "Abandon".
@@ -251,7 +259,7 @@ Kunci tahap adalah konstanta `StageName` di `crates/domain/src/supervisor.rs`; d
 
 - `ShellNavigator.openOperation(_ id: UUID)` menyimpan `OperationRequest { id: UUID(), operation }` (baru setiap panggilan) dan mengganti `section` ke `.operations`; berpindah ke section lain membuang request itu. `ShellDestination.operations` tetap tanpa associated value.
 - Overview: setiap baris seksi Operations memanggil `openOperation(operation.id)`; "Show All in Operations" tetap `show(.operations)`. Item O1 memanggil `openOperation`, dan isinya menjadi teks `needs_recovery` di *Baris catatan* (tanpa perintah CLI). O2 tidak berubah.
-- Baris Activity dengan operation ID dan temuan doctor memanggil `openOperation`.
+- Baris Activity dengan operation ID (klik ganda lewat `primaryAction`, atau menu konteks "Show in Operations") dan temuan doctor memanggil `openOperation`.
 
 ### Teks Activity
 
@@ -275,6 +283,8 @@ Kunci tahap adalah konstanta `StageName` di `crates/domain/src/supervisor.rs`; d
 | `secret.reveal` | "Viewed {field} (show)" atau "Copied {field}" dari bagian terakhir reference |
 | `secret.set`, `secret.delete` | "Changed {field}", "Deleted {field}" |
 | action asing | action apa adanya |
+
+Di bawah tabel dan Show More, tab menulis baris kaki `.caption` `textSecondary` "Double-click an entry to open its operation." (`ActivityCopy.footer`). *Diperbarui 2026-11-10 (koordinasi scope 05):* baris kaki ini copy developer F35 dan tidak ada di mockup; dicatat agar spec, kode, dan snapshot sama.
 
 ### Baris Settings
 
@@ -408,19 +418,19 @@ Pendekatan Journey: milestone 1 menyelesaikan jalur "jejak operasi dari CLI" len
 
 ## Follow-up
 
-- [ ] Spec 0005 (`/sync`): catat kolom audit baru, index `audit_events_instance`, `AuditQuery.instance` dan `operation`, kolom `daemon_settings.audit_retention_days`, dan `RetentionPolicy::with_audit_days` di tabel *Tambahan*; baris 320, 515, dan 820 dijawab di sini.
-- [ ] Spec 0007 (`/sync`): baris Follow-up "Fitur 35: baris audit untuk cancel, abandon, dan jenis operasi destruktif" dijawab di *Baris audit operasi* (semua jenis, bukan hanya yang destruktif); `cancel`, `resume`, dan `abandon` menerima `OperationTrigger` pengirim; catat `set_audit_note` dan `cancel_availability` di *API engine*.
-- [ ] Spec 0011 (`/sync`): baris Follow-up 612 bagian `safe_details` audit dijawab AC-4; `audit_row` mengisi kolom `instance_id` dan `client`.
-- [ ] Spec 0013 (`/sync`): Follow-up 733 dijawab; halaman Operations di atas `OperationCenter` plus `OperationHistory`.
-- [ ] Spec 0022 (`/sync`): Follow-up 592 dijawab (AC-11, AC-13); teks O1 diganti *Baris catatan*, dan baris seksi Operations memanggil `openOperation`.
-- [ ] Spec 0024 (`/sync`): Follow-up 476 dijawab AC-18 (field `duplicateOf` di `instance.create`).
-- [ ] Spec 0012 (`/sync`): Follow-up 435 dijawab; tambahan parameter `continuing` di `StatusAppearance.operation` dan barisnya di tabel status operasi `design.md`.
-- [ ] Spec 0067 (`/sync`): Follow-up 468 dijawab *Definisi tahap*; `StageDefinition.also`.
-- [ ] Spec 0032 (`/sync`): grup Activity di tab Storage, `auditRetention` di `DaemonSettingsView`, dan key CLI `audit-retention-days`; AC-21 spec itu (retensi log read only) tidak berubah.
-- [ ] Spec 0008 (`/sync`): perintah `stackly audit list` dan perubahan output `stackly operation`.
-- [ ] Spec 0020 dan 0029 (`/sync`): `duplicateOf` di params create; `ChangePlan::audit_note` di samping input journal AC-20.
+- [x] Spec 0005 (`/sync`): catat kolom audit baru, index `audit_events_instance`, `AuditQuery.instance` dan `operation`, kolom `daemon_settings.audit_retention_days`, dan `RetentionPolicy::with_audit_days` di tabel *Tambahan*; baris 320, 515, dan 820 dijawab di sini. Diterapkan di spec 0005 (2026-11-10): baris *Tambahan fitur 35* dan catatan `result`.
+- [x] Spec 0007 (`/sync`): baris Follow-up "Fitur 35: baris audit untuk cancel, abandon, dan jenis operasi destruktif" dijawab di *Baris audit operasi* (semua jenis, bukan hanya yang destruktif); `cancel`, `resume`, dan `abandon` menerima `OperationTrigger` pengirim; catat `set_audit_note` dan `cancel_availability` di *API engine*. Diterapkan di spec 0007 (2026-11-10): Follow-up dicentang, `by: OperationTrigger` di *API engine*, `set_audit_note` di `OperationContext`, dan `cancel_availability` di *Cancel*.
+- [x] Spec 0011 (`/sync`): baris Follow-up 612 bagian `safe_details` audit dijawab AC-4; `audit_row` mengisi kolom `instance_id` dan `client`. Diterapkan di spec 0011 (2026-11-10): catatan `audit_row` (`client`, `instance_id`) dan bagian fitur 35 di Follow-up 612.
+- [x] Spec 0013 (`/sync`): Follow-up 733 dijawab; halaman Operations di atas `OperationCenter` plus `OperationHistory`. Diterapkan di spec 0013 (2026-11-10).
+- [x] Spec 0022 (`/sync`): Follow-up 592 dijawab (AC-11, AC-13); teks O1 diganti *Baris catatan*, dan baris seksi Operations memanggil `openOperation`. Diterapkan di spec 0022 (2026-11-10).
+- [x] Spec 0024 (`/sync`): Follow-up 476 dijawab AC-18 (field `duplicateOf` di `instance.create`). Diterapkan di spec 0024 (2026-11-10).
+- [ ] Spec 0012 (`/sync`): Follow-up 435 dijawab; tambahan parameter `continuing` di `StatusAppearance.operation` dan barisnya di tabel status operasi `design.md`. *(2026-11-10) Spec 0012 diselaraskan (baris "Finishing…" dan parameter `continuing`). Tetap terbuka untuk baris yang sama di tabel status operasi `apps/macos/design.md`, yang di luar `docs/specs/`.*
+- [x] Spec 0067 (`/sync`): Follow-up 468 dijawab *Definisi tahap*; `StageDefinition.also`. Diterapkan di spec 0067 (2026-11-10): `StageDefinition.also` dan `StageAlias` di sketsa API.
+- [x] Spec 0032 (`/sync`): grup Activity di tab Storage, `auditRetention` di `DaemonSettingsView`, dan key CLI `audit-retention-days`; AC-21 spec itu (retensi log read only) tidak berubah. Diterapkan di spec 0032 (2026-11-10).
+- [x] Spec 0008 (`/sync`): perintah `stackly audit list` dan perubahan output `stackly operation`. Diterapkan di spec 0008 (2026-11-10), termasuk pengecualian `COLUMNS` untuk DETAILS.
+- [x] Spec 0020 dan 0029 (`/sync`): `duplicateOf` di params create; `ChangePlan::audit_note` di samping input journal AC-20. Diterapkan di spec 0020 dan 0029 (2026-11-10).
 - [ ] Fitur 51 dan 54: catatan audit untuk restore, remove, dan purge (paling sedikit `config_revision` dan apakah data dihapus), lalu jalankan bagian purge AC-045.
-- [ ] Fitur 34: tidak ada audit untuk doctor dan bundle (disepakati dengan `arc-f34-spec`); bila audit perlu ikut bundle, pakai `audit.list`.
+- [x] Fitur 34: tidak ada audit untuk doctor dan bundle (disepakati dengan `arc-f34-spec`); bila audit perlu ikut bundle, pakai `audit.list`. Fitur 34 di `main` tanpa audit untuk doctor dan bundle (2026-11-10); bagian bersyarat "bila audit perlu ikut bundle" dilacak Follow-up spec 0034.
 
 ## Rationale
 
