@@ -22,6 +22,8 @@ mod create;
 mod create_cli;
 #[path = "postgresql/create_ports.rs"]
 mod create_ports;
+#[path = "postgresql/doctor.rs"]
+mod doctor;
 #[path = "postgresql/endpoints.rs"]
 mod endpoints;
 #[path = "postgresql/failure.rs"]

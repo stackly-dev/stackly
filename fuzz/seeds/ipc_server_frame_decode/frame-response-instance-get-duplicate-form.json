@@ -18,7 +18,7 @@
           "name": "pg17-dev-copy",
           "provider": {
             "name": "official/postgresql",
-            "revision": "1.0.1"
+            "revision": "1.0.2"
           },
           "runtimeId": "0192f3a6-0000-7000-8000-0000000000a1",
           "secrets": [
@@ -227,9 +227,9 @@
           "provider": {
             "category": "database",
             "displayName": "PostgreSQL",
-            "manifestSha256": "e6399840ce02751b405796f577f9cbb42c59275bbf32d0f737dc8f4693442765",
+            "manifestSha256": "389b77ee34e052acff0917d792bc4e517cc4fb58204b0622a48283c80ddf4c87",
             "name": "official/postgresql",
-            "revision": "1.0.1",
+            "revision": "1.0.2",
             "source": "pinned"
           },
           "runtime": {

@@ -46,6 +46,10 @@ const INSTANCE_TEMP_DIR: &str = "temp";
 const REGISTRY_DIR: &str = "registry";
 /// The launch record in the data root (spec 0015).
 const AGENT_LAUNCH_RECORD_FILE: &str = "background-agent.json";
+/// File name of the record of the last daemon start that failed, in the
+/// data root (spec 0034, *Catatan gagal start daemon*). Public, because
+/// `stacklyd` names it under a data root it could not resolve fully.
+pub const DAEMON_START_FAILURE_RECORD_FILE: &str = "daemon-start-failure.json";
 /// Folder under the data root that holds the file keychain of a root
 /// override (spec 0011).
 const KEYCHAIN_DIR: &str = "keychain";
@@ -134,6 +138,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn agent_launch_record(&self) -> PathBuf {
         self.roots.data().join(AGENT_LAUNCH_RECORD_FILE)
+    }
+
+    /// Returns `<data>/daemon-start-failure.json`, which `stacklyd` writes
+    /// when it exits 1 after it knew its data root and removes once a later
+    /// start bound its socket (spec 0034, AC-11).
+    #[must_use]
+    pub fn daemon_start_failure_record(&self) -> PathBuf {
+        self.roots.data().join(DAEMON_START_FAILURE_RECORD_FILE)
     }
 
     /// Returns the folder that holds the registry database.
@@ -749,6 +761,16 @@ mod tests {
         assert_eq!(
             layout.agent_launch_record(),
             layout.roots().data().join("background-agent.json")
+        );
+    }
+
+    #[test]
+    fn the_daemon_start_failure_record_is_a_file_in_the_data_root() {
+        let layout = layout();
+
+        assert_eq!(
+            layout.daemon_start_failure_record(),
+            layout.roots().data().join("daemon-start-failure.json")
         );
     }
 

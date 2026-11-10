@@ -963,14 +963,17 @@ async fn start_slot(
             core.operations().unavailable(REGISTRY_FAILED);
             core.supervision().unavailable(REGISTRY_FAILED);
             core.secrets().unavailable();
-            core.fail(EXIT_START_FAILED);
+            core.fail_because(
+                EXIT_START_FAILED,
+                format!("cannot open the registry: {error}"),
+            );
         }
         None => {
             core.set_registry(RegistryState::Failed, None);
             core.operations().unavailable(REGISTRY_FAILED);
             core.supervision().unavailable(REGISTRY_FAILED);
             core.secrets().unavailable();
-            core.fail(EXIT_START_FAILED);
+            core.fail_because(EXIT_START_FAILED, "the registry could not be opened");
         }
     }
     // The catalog shows after the registry, in recovery mode too (spec
@@ -1202,7 +1205,7 @@ async fn prune_loop(core: Arc<DaemonCore>, interval: Duration) {
 fn registry_failed(core: &DaemonCore) {
     tracing::error!("the registry stopped working; stacklyd stops");
     core.mark_registry_failed();
-    core.fail(EXIT_START_FAILED);
+    core.fail_because(EXIT_START_FAILED, "the registry stopped working");
 }
 
 /// Writes the launch record of the default root; logs a failure once.

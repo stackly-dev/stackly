@@ -914,3 +914,348 @@ async fn a_rendered_file_that_differs_from_its_revision_copy_is_drift_with_revie
     );
     assert_eq!(footprint(&rig), before);
 }
+
+/// Two remedies for the fake provider: one for readiness, which a failure
+/// never matches, then one for an old PID file in the data folder.
+const FAKE_REMEDIES: &str = r#"remedies:
+  - name: tls_hint
+    when: { readinessDetailContains: "tls" }
+    title: Readiness needs TLS
+    steps:
+      - text: Turn TLS off.
+  - name: stale_pid
+    when:
+      failureCodes: [crash_loop, process_exited]
+      excerptContains: 'lock file "fake.pid" already exists'
+    evidence:
+      pidFile: "${instance.data}/fake.pid"
+    title: Fake found an old fake.pid
+    steps:
+      - text: Stackly never removes this file.
+      - text: If the PID below is not a Fake server for this data folder, remove the file yourself.
+        path: "${instance.data}/fake.pid"
+      - text: Then start the instance again.
+        command: "${runtime.executable} --data=${instance.data} --port=${endpoint.http.port}"
+"#;
+
+/// The excerpt line the stale PID remedy looks for.
+const PID_LINE: &str = "FATAL:  lock file \"fake.pid\" already exists";
+
+/// A rig whose pinned fake package carries [`FAKE_REMEDIES`].
+async fn remedy_rig() -> Rig {
+    Rig::patched(|text| format!("{text}{FAKE_REMEDIES}")).await
+}
+
+/// A failed instance with `last_failure`, a fixed port, and `lines` as the
+/// output of its last start.
+fn failed_with(rig: &Rig, last_failure: Option<&'static str>, lines: &[&str]) -> InstanceId {
+    let id = rig.instance(&Spec {
+        lifecycle: InstanceLifecycle::Failed,
+        last_failure,
+        ..stopped_spec()
+    });
+    let batch = stackly_core::supervisor::LogBatch::new(
+        stackly_platform::OutputStream::Stderr,
+        rig.fake_now(),
+        lines
+            .iter()
+            .map(|line| stackly_core::supervisor::LogLine::new(*line))
+            .collect(),
+    );
+    stackly_core::supervisor::LogSink::accept(&*rig.deps.tail, id, batch);
+    id
+}
+
+/// The canonical path of the runtime's main executable.
+fn runtime_executable(rig: &Rig) -> std::path::PathBuf {
+    let stackly_domain::InstallMode::Managed { artifact_sha256 } = rig.runtime.install() else {
+        unreachable!("the rig installs a managed runtime");
+    };
+    rig.layout
+        .layout()
+        .runtime_dir(
+            rig.runtime.software(),
+            rig.runtime.version(),
+            rig.runtime.target(),
+            artifact_sha256,
+        )
+        .canonicalize()
+        .expect("the runtime folder exists")
+        .join("stackly-fake-server")
+}
+
+/// Adds a live process with `executable` and `uid`, and returns its PID.
+fn live_process(rig: &Rig, pid: u32, executable: &str, uid: stackly_platform::UserId) -> u32 {
+    let pid = stackly_domain::Pid::new(pid).expect("a test PID is not 0");
+    rig.processes().insert(stackly_platform::ProcessFacts {
+        pid,
+        parent: stackly_domain::Pid::new(1).ok(),
+        group: pid,
+        session: pid,
+        uid,
+        start: stackly_domain::ProcessStart::new(1_760_000_000, 7).expect("a start time"),
+        executable: executable.into(),
+        stopped: false,
+    });
+    pid.get()
+}
+
+fn start_failed(report: &Report) -> &stackly_core::doctor::Finding {
+    check(report, DoctorCheckId::InstanceFailures)
+        .findings
+        .iter()
+        .find(|finding| finding.code == DoctorFindingCode::StartFailed)
+        .expect("a start_failed finding")
+}
+
+// covers: AC-9, AC-10 (spec 0034)
+#[tokio::test]
+async fn a_failed_instance_gets_the_first_matching_remedy_rendered_for_it() {
+    let rig = remedy_rig().await;
+    let id = failed_with(&rig, Some("process_exited"), &["starting", PID_LINE]);
+    let report = run(&rig).await;
+
+    let remedy = start_failed(&report)
+        .remedy
+        .as_deref()
+        .expect("the stale PID remedy matches");
+    assert_eq!(
+        remedy.package,
+        *rig.key(),
+        "the pinned package without a catalog"
+    );
+    assert_eq!(remedy.display_name, rig.package.manifest().display_name());
+    assert_eq!(remedy.remedy.name, "stale_pid");
+    assert_eq!(remedy.remedy.title, "Fake found an old fake.pid");
+    let data = rig.layout.instance_paths(id).data;
+    let pid_file = data.join("fake.pid");
+    let steps: Vec<_> = remedy
+        .remedy
+        .steps
+        .iter()
+        .map(|step| (step.text.as_str(), step.command.clone(), step.path.clone()))
+        .collect();
+    let port = rig
+        .registry
+        .instance(id)
+        .expect("the instance reads")
+        .value
+        .expect("the instance exists")
+        .endpoints()[0]
+        .clone();
+    let stackly_domain::Endpoint::Ip(port) = port else {
+        panic!("an IP endpoint");
+    };
+    let port = port.effective_port().expect("a fixed port").get();
+    let quote = |path: &std::path::Path| {
+        let text = path.display().to_string();
+        if text.contains(' ') {
+            format!("'{text}'")
+        } else {
+            text
+        }
+    };
+    assert_eq!(
+        steps,
+        [
+            ("Stackly never removes this file.", None, None),
+            (
+                "If the PID below is not a Fake server for this data folder, remove the file yourself.",
+                None,
+                Some(pid_file.display().to_string()),
+            ),
+            (
+                "Then start the instance again.",
+                Some(format!(
+                    "{} --data={} --port={port}",
+                    quote(&runtime_executable(&rig)),
+                    quote(&data)
+                )),
+                None,
+            ),
+        ]
+    );
+    let read = remedy.pid_file.as_ref().expect("the PID file is read");
+    assert_eq!(read.path, pid_file);
+    assert_eq!(read.state, stackly_core::doctor::PidFileState::Missing);
+    assert_eq!(read.pid, None);
+}
+
+// covers: AC-10 (spec 0034)
+#[tokio::test]
+async fn a_remedy_matches_only_when_every_condition_holds() {
+    let rig = remedy_rig().await;
+    failed_with(&rig, Some("spawn_failed"), &[PID_LINE]);
+    let other_code = run(&rig).await;
+    assert!(
+        start_failed(&other_code).remedy.is_none(),
+        "the code differs"
+    );
+
+    let rig = remedy_rig().await;
+    failed_with(&rig, Some("process_exited"), &["FATAL:  something else"]);
+    let other_line = run(&rig).await;
+    assert!(
+        start_failed(&other_line).remedy.is_none(),
+        "no line matches"
+    );
+
+    let rig = remedy_rig().await;
+    failed_with(&rig, None, &[PID_LINE]);
+    let unknown = run(&rig).await;
+    assert!(
+        start_failed(&unknown).remedy.is_none(),
+        "a failure the daemon no longer knows matches no failureCodes"
+    );
+
+    let rig = Rig::new().await;
+    failed_with(&rig, Some("process_exited"), &[PID_LINE]);
+    let without = run(&rig).await;
+    assert!(
+        start_failed(&without).remedy.is_none(),
+        "a package without remedies has none"
+    );
+}
+
+// covers: AC-2, AC-10 (spec 0034)
+#[tokio::test]
+async fn the_pid_file_is_read_passively_and_its_pid_looked_up_without_a_signal() {
+    use stackly_core::doctor::PidFileState;
+
+    let rig = remedy_rig().await;
+    let id = failed_with(&rig, Some("crash_loop"), &[PID_LINE]);
+    let file = rig.layout.instance_paths(id).data.join("fake.pid");
+    let uid = rig.processes().user();
+    let runtime = runtime_executable(&rig);
+    let stackly_platform::UserId::Unix(raw) = uid else {
+        unreachable!("the fake runs as a Unix user");
+    };
+    let other = stackly_platform::UserId::Unix(raw + 1);
+    let cases: [(&str, Option<u32>, PidFileState, bool); 5] = [
+        ("61001\n/data\n", None, PidFileState::NotRunning, false),
+        (
+            "",
+            Some(live_process(
+                &rig,
+                61002,
+                runtime.to_str().expect("UTF-8"),
+                uid.clone(),
+            )),
+            PidFileState::RuntimeProcess,
+            false,
+        ),
+        (
+            "",
+            Some(live_process(&rig, 61003, "/bin/sleep", uid.clone())),
+            PidFileState::OtherProcess,
+            false,
+        ),
+        (
+            "",
+            Some(live_process(&rig, 61004, "/usr/sbin/other", other)),
+            PidFileState::OtherProcess,
+            true,
+        ),
+        ("not a pid\n", None, PidFileState::Unreadable, false),
+    ];
+    for (text, pid, state, other_user) in cases {
+        let text = pid.map_or_else(|| text.to_owned(), |pid| format!("{pid}\n/data\n"));
+        std::fs::write(&file, &text).expect("the PID file is written");
+        let before = footprint(&rig);
+        let report = run(&rig).await;
+        let read = start_failed(&report)
+            .remedy
+            .as_deref()
+            .and_then(|remedy| remedy.pid_file.clone())
+            .expect("the PID file is read");
+        assert_eq!(
+            (read.state, read.other_user),
+            (state, other_user),
+            "{text:?}"
+        );
+        let expected_pid = text
+            .lines()
+            .next()
+            .and_then(|line| line.parse::<u32>().ok());
+        assert_eq!(read.pid.map(stackly_domain::Pid::get), expected_pid);
+        assert_eq!(read.process.is_some(), pid.is_some(), "{text:?}");
+        assert_eq!(footprint(&rig), before, "a read writes and signals nothing");
+        assert_eq!(
+            std::fs::read_to_string(&file).expect("the PID file stays"),
+            text,
+            "the PID file is never changed"
+        );
+        if let Some(pid) = pid {
+            let pid = stackly_domain::Pid::new(pid).expect("a PID");
+            assert!(rig.processes().signals(pid).is_empty());
+        }
+    }
+}
+
+// covers: AC-10 (spec 0034)
+#[tokio::test]
+async fn a_pid_file_that_is_a_symlink_or_outside_the_instance_is_unreadable() {
+    use stackly_core::doctor::PidFileState;
+
+    let rig = remedy_rig().await;
+    let id = failed_with(&rig, Some("process_exited"), &[PID_LINE]);
+    let data = rig.layout.instance_paths(id).data;
+    let elsewhere = rig.root.path().join("elsewhere.pid");
+    std::fs::write(&elsewhere, "61010\n").expect("a file outside the instance");
+    std::os::unix::fs::symlink(&elsewhere, data.join("fake.pid")).expect("the symlink is made");
+
+    let report = run(&rig).await;
+    let read = start_failed(&report)
+        .remedy
+        .as_deref()
+        .and_then(|remedy| remedy.pid_file.clone())
+        .expect("the PID file is looked at");
+    assert_eq!(read.state, PidFileState::Unreadable);
+    assert_eq!(read.pid, None, "the target of a symlink is never read");
+}
+
+// covers: AC-10 (spec 0034)
+#[tokio::test]
+async fn the_catalog_revision_of_the_provider_comes_before_the_pinned_package() {
+    use stackly_core::catalog::{Catalog, CatalogEntry, ProviderEntry, TileColor, TileHint};
+    use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
+
+    let rig = Rig::new().await;
+    failed_with(&rig, Some("process_exited"), &[PID_LINE]);
+    let mut files = std::collections::BTreeMap::new();
+    for (path, bytes) in rig.package.files().iter() {
+        files.insert(path.to_owned(), bytes.to_vec());
+    }
+    let manifest = files.get_mut("provider.yaml").expect("a manifest");
+    let newer = String::from_utf8(manifest.clone())
+        .expect("a UTF-8 manifest")
+        .replacen("revision: ", "revision: \"9.9.9\"\n  # was: ", 1);
+    *manifest = format!("{newer}{FAKE_REMEDIES}").into_bytes();
+    let package = ValidatedPackage::from_files(PackageFiles::new("fake", files), NameCheck::Skip)
+        .expect("the newer revision is valid");
+    assert_ne!(package.key(), rig.key());
+    let catalog = Catalog::for_tests(&[CatalogEntry::Provider(ProviderEntry {
+        package: Arc::new(package.clone()),
+        tile: TileHint {
+            mark: "Fk".to_owned(),
+            tile: TileColor::Blue,
+        },
+        notes: Vec::new(),
+    })]);
+
+    let reading = capacity(&rig, TB, TB / 2);
+    let report = Doctor::default()
+        .run(
+            sources(&rig).with_catalog(Some(Arc::new(catalog))),
+            DoctorRequest::default(),
+            async move { reading },
+        )
+        .await
+        .expect("the run starts");
+    let remedy = start_failed(&report)
+        .remedy
+        .as_deref()
+        .expect("the catalog revision has the remedy the pinned one lacks");
+    assert_eq!(remedy.package, *package.key());
+    assert_eq!(remedy.remedy.name, "stale_pid");
+}

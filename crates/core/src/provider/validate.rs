@@ -41,6 +41,7 @@ use super::raw::{
     RawStep, RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
     parse_yaml,
 };
+use super::remedies;
 use super::settings::{ApplyClass, FieldKind, ScalarKind, SettingsSchema, parse_schema};
 use super::template::{self, Checked, TemplateFormat};
 use super::timeouts::{
@@ -677,6 +678,7 @@ impl Checker<'_> {
             &env,
             &mut self.yaml(),
         );
+        let remedies = remedies::check(raw.remedies.as_deref(), &env, &mut self.yaml());
         let version_check =
             version_check::check(raw.runtime.version_check.as_ref(), &mut self.yaml());
         let (capabilities, cold_backup_paths) =
@@ -712,6 +714,7 @@ impl Checker<'_> {
             managed_fields,
             connections,
             open_with,
+            remedies,
             version_check,
         })
     }

@@ -9,7 +9,8 @@ use std::sync::OnceLock;
 
 use stackly_core::doctor::{
     Action, CheckReport, DiskReading, Finding, FindingFacts, IdentityFacts, InstanceRef,
-    PortOwnerFacts, PortProblemKind, Report,
+    PidFileFacts, PidFileState as CorePidFileState, PortOwnerFacts, PortProblemKind, RemedyFacts,
+    Report,
 };
 use stackly_core::secret::Redactor;
 use stackly_domain::doctor::{
@@ -24,8 +25,9 @@ use stackly_protocol::Timestamp;
 use stackly_protocol::daemon::DaemonInfo;
 use stackly_protocol::doctor::{
     DoctorAction, DoctorActionKind, DoctorCheck, DoctorCheckId, DoctorDetail, DoctorEvidence,
-    DoctorFinding, DoctorFindingCode, DoctorInstanceRef, DoctorReport, DoctorSeverity, PortOwner,
-    PortOwnerKind, ProcessRef,
+    DoctorFinding, DoctorFindingCode, DoctorInstanceRef, DoctorRemedy, DoctorReport,
+    DoctorSeverity, PidFileEvidence, PidFileState, PortOwner, PortOwnerKind, ProcessRef,
+    RemedyStep,
 };
 use stackly_protocol::storage::{CapacityLevel as WireLevel, CapacityReport};
 use stackly_protocol::wire::Count;
@@ -112,10 +114,12 @@ fn finding_dto(core: &DaemonCore, redactor: &Redactor, finding: &Finding) -> Doc
         &redactor.redact(&copy::finding_title(&shown)),
         TITLE_CHARS_MAX,
     );
-    let explanation = clip_chars(
-        &redactor.redact(&copy::explanation(&shown)),
-        EXPLANATION_CHARS_MAX,
-    );
+    let mut explanation = copy::explanation(&shown);
+    if let Some(sentence) = finding.remedy.as_deref().and_then(pid_file_sentence) {
+        explanation.push(' ');
+        explanation.push_str(&sentence);
+    }
+    let explanation = clip_chars(&redactor.redact(&explanation), EXPLANATION_CHARS_MAX);
     let mut details = details(&shown, failure.as_ref());
     details.truncate(DETAILS_MAX);
     let excerpt = failure
@@ -158,7 +162,10 @@ fn finding_dto(core: &DaemonCore, redactor: &Redactor, finding: &Finding) -> Doc
             _ => None,
         },
         excerpt,
-        remedy: None,
+        remedy: finding
+            .remedy
+            .as_deref()
+            .map(|remedy| remedy_dto(redactor, remedy)),
         action: finding.action.as_ref().map(action),
     }
 }
@@ -526,6 +533,81 @@ fn listener_ref(owner: &ListenerOwner) -> ProcessRef {
         started_at: owner.start.and_then(started_at),
         executable: owner.executable.as_deref().map(tilde_path),
         same_user: Some(true),
+    }
+}
+
+/// The sentence the explanation gets for the PID file of a remedy.
+fn pid_file_sentence(remedy: &RemedyFacts) -> Option<String> {
+    let facts = remedy.pid_file.as_ref()?;
+    let executable = facts
+        .process
+        .as_ref()
+        .filter(|_| !facts.other_user)
+        .map(|process| tilde_path(&process.executable));
+    copy::pid_file(
+        &remedy.display_name,
+        facts.state,
+        facts.pid?.get(),
+        executable.as_deref(),
+        facts.other_user,
+    )
+}
+
+/// A remedy on the wire: its text redacted, its paths with `~`. A command
+/// keeps its absolute paths, since a shell does not expand `~` inside the
+/// quotes a path with a space needs or after `--host=`.
+fn remedy_dto(redactor: &Redactor, facts: &RemedyFacts) -> DoctorRemedy {
+    let redact = |text: &str| redactor.redact(text).into_owned();
+    DoctorRemedy {
+        provider: facts.package.provider().to_string(),
+        revision: facts.package.revision().to_string(),
+        name: facts.remedy.name.clone(),
+        title: redact(&facts.remedy.title),
+        steps: facts
+            .remedy
+            .steps
+            .iter()
+            .map(|step| RemedyStep {
+                text: redact(&step.text),
+                command: step.command.as_deref().map(redact),
+                path: step
+                    .path
+                    .as_deref()
+                    .map(|path| redact(&tilde_path(Path::new(path)))),
+            })
+            .collect(),
+        pid_file: facts.pid_file.as_ref().map(pid_file_dto),
+    }
+}
+
+fn pid_file_dto(facts: &PidFileFacts) -> PidFileEvidence {
+    let process = match (&facts.process, facts.pid) {
+        (Some(process), _) => Some(ProcessRef {
+            pid: process.pid.get(),
+            started_at: started_at(process.start),
+            executable: (!facts.other_user).then(|| tilde_path(&process.executable)),
+            same_user: Some(!facts.other_user),
+        }),
+        (None, Some(pid)) if facts.other_user => Some(ProcessRef {
+            pid: pid.get(),
+            started_at: None,
+            executable: None,
+            same_user: Some(false),
+        }),
+        (None, _) => None,
+    };
+    PidFileEvidence {
+        path: tilde_path(&facts.path),
+        pid: facts.pid.map(stackly_domain::Pid::get),
+        state: match facts.state {
+            CorePidFileState::Missing => PidFileState::Missing,
+            CorePidFileState::Unreadable => PidFileState::Unreadable,
+            CorePidFileState::NotRunning => PidFileState::NotRunning,
+            CorePidFileState::RuntimeProcess => PidFileState::RuntimeProcess,
+            CorePidFileState::OtherProcess => PidFileState::OtherProcess,
+            _ => PidFileState::Unrecognized,
+        },
+        process,
     }
 }
 

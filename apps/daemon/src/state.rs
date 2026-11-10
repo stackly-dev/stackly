@@ -187,6 +187,9 @@ pub struct DaemonCore {
     next_connection_id: AtomicU64,
     stop: watch::Sender<bool>,
     fatal: watch::Sender<Option<u8>>,
+    /// Why the first fatal error happened, for the record of a failed start
+    /// (spec 0034, AC-11).
+    fatal_reason: OnceLock<String>,
     shutdown: Arc<watch::Sender<Option<ShutdownMode>>>,
     /// Set while a `daemon.shutdown` `agent_off` runs (spec 0031, *Matikan
     /// agent*): other shutdown requests and new operations from clients get
@@ -256,6 +259,7 @@ impl DaemonCore {
             next_connection_id: AtomicU64::new(1),
             stop: watch::Sender::new(false),
             fatal: watch::Sender::new(None),
+            fatal_reason: OnceLock::new(),
             shutdown: Arc::new(watch::Sender::new(None)),
             agent_off: AtomicBool::new(false),
             plan_stopping: Arc::new(AtomicBool::new(false)),
@@ -634,6 +638,22 @@ impl DaemonCore {
                 false
             }
         });
+    }
+
+    /// Records a fatal error like [`fail`](Self::fail), with the reason
+    /// the record of a failed start keeps (spec 0034, AC-11). The reason of
+    /// the first fatal error wins.
+    pub fn fail_because(&self, code: u8, reason: impl Into<String>) {
+        if self.fatal.borrow().is_none() {
+            let _ = self.fatal_reason.set(reason.into());
+        }
+        self.fail(code);
+    }
+
+    /// The reason of the first fatal error, when it was recorded with one.
+    #[must_use]
+    pub fn fatal_reason(&self) -> Option<&str> {
+        self.fatal_reason.get().map(String::as_str)
     }
 
     /// Records the mode of a `daemon.shutdown` request. Only the first

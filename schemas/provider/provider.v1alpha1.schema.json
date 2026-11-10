@@ -92,6 +92,17 @@
     "readiness": {
       "$ref": "#/$defs/Readiness"
     },
+    "remedies": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Remedy"
+      },
+      "maxItems": 8,
+      "minItems": 1
+    },
     "resources": {
       "$ref": "#/$defs/Resources"
     },
@@ -859,6 +870,142 @@
       "required": [
         "action"
       ]
+    },
+    "Remedy": {
+      "description": "One `remedies` entry: the repair steps the doctor shows with a start\nfailure or a readiness problem it matches (spec 0034, *Blok remedies*).\nText only: Stackly never runs a command or removes a path of a remedy.",
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemedyEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RemedyStep"
+          },
+          "maxItems": 6,
+          "minItems": 1
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1
+        },
+        "when": {
+          "$ref": "#/$defs/RemedyWhen"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "when",
+        "title",
+        "steps"
+      ]
+    },
+    "RemedyEvidence": {
+      "description": "The `evidence` table of a remedy.",
+      "type": "object",
+      "properties": {
+        "pidFile": {
+          "type": "string",
+          "maxLength": 300,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "pidFile"
+      ]
+    },
+    "RemedyStep": {
+      "description": "One step of a remedy.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500,
+          "minLength": 1
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300,
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 300,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ]
+    },
+    "RemedyWhen": {
+      "description": "The `when` table of a remedy: at least one condition, and every one\nthat is set must match.",
+      "type": "object",
+      "properties": {
+        "excerptContains": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "failureCodes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "maxItems": 8,
+          "minItems": 1
+        },
+        "readinessDetailContains": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "minLength": 1
+        },
+        "readinessReasons": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "maxItems": 8,
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
     },
     "Resources": {
       "type": "object",

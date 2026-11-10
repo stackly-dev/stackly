@@ -22,6 +22,7 @@ mod plan;
 mod preflight;
 pub mod probe;
 mod raw;
+mod remedies;
 mod settings;
 mod template;
 mod timeouts;
@@ -56,6 +57,11 @@ pub use plan::{
     RuntimeContext, Segment, Stdin, StopPlan,
 };
 pub use preflight::{DATA_MARKER_MAX_LEN, MarkerRead, PreflightOutcome};
+pub use remedies::{
+    REMEDIES_MAX, REMEDY_COMMAND_MAX, REMEDY_PATH_MAX, REMEDY_STEPS_MAX, REMEDY_TEXT_MAX,
+    REMEDY_TITLE_MAX, REMEDY_WHEN_CODES_MAX, REMEDY_WHEN_TEXT_MAX, RemedySpec, RemedySubject,
+    RenderedRemedy, RenderedRemedyStep, render_remedy,
+};
 pub use settings::{
     ApplyClass, ArrayRules, BooleanRules, FieldKind, IntegerRules, ItemField, Pattern,
     SETTINGS_DOCUMENT_MAX_LEN, ScalarKind, ScalarValue, SettingClass, SettingField, SettingValue,

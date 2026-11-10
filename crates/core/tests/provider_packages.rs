@@ -13,12 +13,12 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     Command, EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
-    PreflightOutcome, ProbeSpec, ReloadAction, ResolvedEndpoint, RunSpec, RuntimeContext, Segment,
-    Stdin, ValidatedPackage, read_package,
+    PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject, ResolvedEndpoint,
+    RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage, read_package, render_remedy,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
 use stackly_domain::{
-    Capability, ExactVersion, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
+    Capability, ExactVersion, FailureCode, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
 use stackly_evidence::{Kind, evidence};
 use stackly_platform::{DirectoryLayout, RootSet, SecretValue};
@@ -1028,7 +1028,7 @@ fn the_postgresql_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "official/postgresql");
-    assert_eq!(key.revision().as_str(), "1.0.1");
+    assert_eq!(key.revision().as_str(), "1.0.2");
     assert_eq!(package.software().as_str(), "postgresql");
     assert_eq!(
         package
@@ -1070,6 +1070,90 @@ fn the_postgresql_package_reads_without_writes_and_validates() {
         ]
     );
     ev.pass();
+}
+
+// covers: AC-10 (spec 0034)
+#[test]
+fn postgresql_remedies_match_their_failures_and_render_like_the_golden_file() {
+    let package = validated(&postgresql_dir());
+    let manifest = package.manifest();
+    let context = golden_context(&package, postgresql_settings());
+    let names: Vec<_> = manifest.remedies().iter().map(RemedySpec::name).collect();
+    assert_eq!(names, ["stale_postmaster_pid", "readiness_role"]);
+
+    let excerpt = [
+        "2026-11-10 10:00:00.000 UTC [4242] FATAL:  lock file \"postmaster.pid\" already exists"
+            .to_owned(),
+        "2026-11-10 10:00:00.000 UTC [4242] HINT:  Is another postmaster (PID 812) running in data directory?"
+            .to_owned(),
+    ];
+    let first_match = |subject: &RemedySubject<'_>| {
+        manifest
+            .remedies()
+            .iter()
+            .find(|remedy| remedy.matches(subject))
+            .map(RemedySpec::name)
+    };
+    for code in [FailureCode::PROCESS_EXITED, FailureCode::CRASH_LOOP] {
+        assert_eq!(
+            first_match(&RemedySubject::Failure {
+                code: Some(&code),
+                excerpt: &excerpt,
+            }),
+            Some("stale_postmaster_pid")
+        );
+    }
+    assert_eq!(
+        first_match(&RemedySubject::Failure {
+            code: Some(&FailureCode::ENDPOINT_IN_USE),
+            excerpt: &excerpt,
+        }),
+        None,
+        "another failure code"
+    );
+    for detail in [
+        "psql: error: connection to server on socket \"/private/tmp/skt-golden/stackly-0000000a/0a/.s.PGSQL.14000\" failed: FATAL:  role \"stackly_readiness\" does not exist",
+        "psql: error: connection to server on socket \"/private/tmp/skt-golden/stackly-0000000a/0a/.s.PGSQL.14000\" failed: FATAL:  role \"stackly_readiness\" is not permitted to log in",
+    ] {
+        assert_eq!(
+            first_match(&RemedySubject::Readiness {
+                reason: "probe_failed",
+                detail: Some(detail),
+            }),
+            Some("readiness_role"),
+            "{detail}"
+        );
+    }
+    assert_eq!(
+        first_match(&RemedySubject::Readiness {
+            reason: "probe_failed",
+            detail: Some("psql: error: connection refused"),
+        }),
+        None
+    );
+
+    let rendered: Vec<serde_json::Value> = manifest
+        .remedies()
+        .iter()
+        .map(|remedy| {
+            let remedy = render_remedy(manifest, remedy, &context)
+                .unwrap_or_else(|err| panic!("{} renders: {err}", remedy.name()));
+            serde_json::json!({
+                "name": remedy.name,
+                "title": remedy.title,
+                "steps": remedy.steps.iter().map(|step| serde_json::json!({
+                    "text": step.text,
+                    "command": step.command,
+                    "path": step.path,
+                })).collect::<Vec<_>>(),
+                "pidFile": remedy.pid_file,
+            })
+        })
+        .collect();
+    let text = pretty(&rendered);
+    assert!(!text.contains("secret"), "a remedy names no secret: {text}");
+    assert!(!text.contains(GOLDEN_SECRET_REF));
+    assert_golden("postgresql", "remedies.json", &text);
 }
 
 #[test]

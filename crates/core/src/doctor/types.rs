@@ -10,13 +10,15 @@ use stackly_domain::doctor::{
 };
 use stackly_domain::{
     EndpointName, IdentityEvidence, Instance, InstanceId, InstanceName, NeedsSecretReason,
-    Operation, OperationId, Port, ProcessIdentity, ProviderRevisionKey, RecoveryCause,
+    Operation, OperationId, Pid, Port, ProcessIdentity, ProviderRevisionKey, RecoveryCause,
     RegistryError, Runtime, SecretRef, Transport, UnrecognizedValue,
 };
 use stackly_platform::{ListenerOwner, Platform, ProcessFacts, RootKind, UserId};
 use uuid::Uuid;
 
 use crate::PreparedLayout;
+use crate::catalog::Catalog;
+use crate::provider::RenderedRemedy;
 use crate::storage::CapacityReading;
 use crate::supervisor::{BindOutcome, InstanceStatus, Supervisor};
 use stackly_domain::CapacityLevel;
@@ -34,10 +36,13 @@ pub struct DoctorSources {
     pub mode: DoctorMode,
     /// What the daemon knows about itself.
     pub daemon: DaemonFacts,
+    /// The loaded provider catalog, whose package revisions the remedies
+    /// come from first (spec 0034, AC-10); `None` without one.
+    pub catalog: Option<Arc<Catalog>>,
 }
 
 impl DoctorSources {
-    /// Bundles the sources of a run.
+    /// Bundles the sources of a run, without a catalog.
     #[must_use]
     pub const fn new(
         platform: Arc<Platform>,
@@ -50,7 +55,15 @@ impl DoctorSources {
             layout,
             mode,
             daemon,
+            catalog: None,
         }
+    }
+
+    /// The same sources with the loaded catalog, if there is one.
+    #[must_use]
+    pub fn with_catalog(mut self, catalog: Option<Arc<Catalog>>) -> Self {
+        self.catalog = catalog;
+        self
     }
 }
 
@@ -59,6 +72,7 @@ impl std::fmt::Debug for DoctorSources {
         f.debug_struct("DoctorSources")
             .field("mode", &self.mode)
             .field("daemon", &self.daemon)
+            .field("catalog", &self.catalog.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -347,6 +361,8 @@ pub struct Finding {
     pub facts: FindingFacts,
     /// The one safe action.
     pub action: Option<Action>,
+    /// The provider remedy that matches a `start_failed` or `not_ready`.
+    pub remedy: Option<Box<RemedyFacts>>,
 }
 
 impl Finding {
@@ -364,6 +380,7 @@ impl Finding {
             subject: None,
             facts,
             action: None,
+            remedy: None,
         }
     }
 
@@ -388,6 +405,13 @@ impl Finding {
         self
     }
 
+    /// The same finding with `remedy`, if there is one.
+    #[must_use]
+    pub fn remedy(mut self, remedy: Option<RemedyFacts>) -> Self {
+        self.remedy = remedy.map(Box::new);
+        self
+    }
+
     /// The finding of a check that could not run.
     #[must_use]
     pub const fn unavailable(reason: CheckUnavailableReason, message: Option<String>) -> Self {
@@ -397,6 +421,57 @@ impl Finding {
             FindingFacts::Unavailable { reason, message },
         )
     }
+}
+
+/// The provider remedy of a finding (spec 0034, AC-10): the first entry of
+/// the package whose `when` matches, rendered for the instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RemedyFacts {
+    /// The package revision the entry comes from: the one of the catalog,
+    /// else the one the instance pins.
+    pub package: ProviderRevisionKey,
+    /// The display name of the provider, such as `PostgreSQL`.
+    pub display_name: String,
+    /// The entry, rendered.
+    pub remedy: RenderedRemedy,
+    /// What the PID file of the entry holds, read passively.
+    pub pid_file: Option<PidFileFacts>,
+}
+
+/// What the PID file of a remedy holds (spec 0034, AC-10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PidFileFacts {
+    /// The file.
+    pub path: PathBuf,
+    /// The PID on its first line, if it is one.
+    pub pid: Option<Pid>,
+    /// What the PID is.
+    pub state: PidFileState,
+    /// The process with that PID, when it is alive and its facts could be
+    /// read.
+    pub process: Option<ProcessFacts>,
+    /// True when that process belongs to another user, whose executable is
+    /// never shown.
+    pub other_user: bool,
+}
+
+/// What the PID of a PID file is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PidFileState {
+    /// The file is not there.
+    Missing,
+    /// The file could not be read, its folder is outside the instance's
+    /// data and config folders, or its first line is not a PID.
+    Unreadable,
+    /// No process has the PID.
+    NotRunning,
+    /// The PID is a process of one of the instance's runtime executables.
+    RuntimeProcess,
+    /// The PID is another process.
+    OtherProcess,
 }
 
 /// A place to go, or a flow that asks before it changes anything.

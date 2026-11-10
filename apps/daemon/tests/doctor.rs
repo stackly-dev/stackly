@@ -506,3 +506,143 @@ async fn in_recovery_mode_the_registry_is_an_error_and_the_checks_that_need_it_a
         "the registry file stays as it was"
     );
 }
+
+/// A remedy of the fake package for a start that crashed after it began to
+/// listen, with the PID file `fake.pid` in the data folder.
+const FAKE_REMEDY: &str = r#"remedies:
+  - name: stale_pid
+    when:
+      failureCodes: [crash_loop, process_exited]
+      excerptContains: "listening on"
+    evidence:
+      pidFile: "${instance.data}/fake.pid"
+    title: Fake found an old fake.pid
+    steps:
+      - text: Stackly never removes this file.
+      - text: If the PID below is not a Fake server for this data folder, remove the file yourself.
+        path: "${instance.data}/fake.pid"
+      - text: Then start the instance again.
+        command: "${runtime.executable} --port=${endpoint.http.port}"
+"#;
+
+/// `path` with the home folder written `~`, as the report writes it.
+fn tilde(path: &Path) -> String {
+    let home = std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .and_then(|home| home.canonicalize().ok());
+    match home
+        .as_deref()
+        .and_then(|home| path.strip_prefix(home).ok())
+    {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => path.display().to_string(),
+    }
+}
+
+// covers: AC-2, AC-9, AC-10, AC-22 (spec 0034)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_start_carries_the_provider_remedy_and_its_pid_file_evidence() {
+    let (_scratch, package) = support::edited_fake_package(|dir| {
+        let path = dir.join("provider.yaml");
+        let mut text = std::fs::read_to_string(&path).expect("the manifest reads");
+        text.push_str(FAKE_REMEDY);
+        std::fs::write(&path, text).expect("the manifest writes");
+    });
+    let site = Site::with_package(&package);
+    let mut config = support::fast();
+    config.supervisor.restart_base_delay = std::time::Duration::from_millis(20);
+    config.supervisor.restart_max_delay = std::time::Duration::from_millis(400);
+    let daemon = site.start_with(config).await;
+    let api = site.api().await;
+    let id = api
+        .create_ready(
+            "crashy",
+            json!({ "crashAfterMs": 150, "crashExitCode": 3, "readyDelayMs": 60_000 }),
+        )
+        .await;
+    let operation = api
+        .start(id)
+        .await
+        .expect("the start is accepted")
+        .accepted
+        .expect("a start begins an operation")
+        .operation
+        .id;
+    api.wait_final(operation).await;
+    let failed = api.get(id).await.expect("the instance reads");
+    assert_eq!(failed.lifecycle, InstanceLifecycle::Failed);
+
+    let sleeper = Sleeper::start();
+    let paths = site.instance_paths(id);
+    let pid_file = paths.data.join("fake.pid");
+    let text = format!("{}\n{}\n", sleeper.pid().get(), paths.data.display());
+    std::fs::write(&pid_file, &text).expect("the PID file is written");
+    let data_before = digests(&paths.data);
+    let lock_before = std::fs::read(&paths.lock).expect("instance.lock reads");
+
+    let report = doctor(
+        &api,
+        DoctorParams {
+            instance_id: Some(id),
+            checks: vec![DoctorCheckId::InstanceFailures],
+        },
+    )
+    .await
+    .expect("the doctor runs");
+
+    let failures = check(&report, DoctorCheckId::InstanceFailures);
+    let finding = &failures.findings[0];
+    assert_eq!(finding.code, DoctorFindingCode::StartFailed);
+    let remedy = finding.remedy.as_ref().expect("the remedy matches");
+    assert_eq!(remedy.provider, "testing/fake");
+    assert_eq!(remedy.name, "stale_pid");
+    assert_eq!(remedy.title, "Fake found an old fake.pid");
+    assert_eq!(remedy.steps.len(), 3);
+    assert_eq!(
+        remedy.steps[1].path.as_deref(),
+        Some(tilde(&pid_file).as_str())
+    );
+    let command = remedy.steps[2].command.as_deref().expect("a command");
+    let port = failed.endpoints[0].port.expect("the instance has a port");
+    assert!(
+        command.ends_with(&format!("stackly-fake-server --port={port}"))
+            || command.ends_with(&format!("stackly-fake-server' --port={port}")),
+        "{command}"
+    );
+    assert!(!command.contains('~'), "a command keeps absolute paths");
+    let evidence = remedy.pid_file.as_ref().expect("the PID file is read");
+    assert_eq!(evidence.path, tilde(&pid_file));
+    assert_eq!(evidence.pid, Some(sleeper.pid().get()));
+    assert_eq!(
+        evidence.state,
+        stackly_protocol::doctor::PidFileState::OtherProcess
+    );
+    let process = evidence.process.as_ref().expect("the sleep is shown");
+    assert_eq!(process.executable.as_deref(), Some("/bin/sleep"));
+    assert_eq!(process.same_user, Some(true));
+    assert!(
+        finding.explanation.ends_with(&format!(
+            "PID {} now belongs to /bin/sleep, not Fake Provider.",
+            sleeper.pid().get()
+        )),
+        "{}",
+        finding.explanation
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(&pid_file).expect("the PID file stays"),
+        text
+    );
+    assert_eq!(digests(&paths.data), data_before, "the data folder stays");
+    assert_eq!(
+        std::fs::read(&paths.lock).expect("instance.lock reads"),
+        lock_before
+    );
+    let alive = site
+        .platform
+        .processes()
+        .inspect(sleeper.pid())
+        .expect("sleep can be inspected");
+    assert!(alive.is_some(), "the sleep still runs");
+    stop(daemon).await;
+}

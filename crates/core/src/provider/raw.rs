@@ -64,6 +64,8 @@ pub(crate) struct RawManifest {
     pub(crate) connection: Option<Vec<RawConnection>>,
     #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 8)))]
     pub(crate) open_with: Option<Vec<RawOpenWith>>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 8)))]
+    pub(crate) remedies: Option<Vec<RawRemedy>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -564,6 +566,74 @@ pub(crate) struct RawOpenReveal {
         schemars(pattern(super::json_schema::MANIFEST_NAME))
     )]
     pub(crate) config_file: String,
+}
+
+/// One `remedies` entry: the repair steps the doctor shows with a start
+/// failure or a readiness problem it matches (spec 0034, *Blok remedies*).
+/// Text only: Stackly never runs a command or removes a path of a remedy.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "Remedy"))]
+pub(crate) struct RawRemedy {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(pattern(super::json_schema::CONNECTION_NAME))
+    )]
+    pub(crate) name: String,
+    pub(crate) when: RawRemedyWhen,
+    pub(crate) evidence: Option<RawRemedyEvidence>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 80)))]
+    pub(crate) title: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 6)))]
+    pub(crate) steps: Vec<RawRemedyStep>,
+}
+
+/// The `when` table of a remedy: at least one condition, and every one
+/// that is set must match.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "RemedyWhen"))]
+pub(crate) struct RawRemedyWhen {
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(length(min = 1, max = 8), inner(pattern(super::json_schema::CODE)))
+    )]
+    pub(crate) failure_codes: Option<Vec<String>>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 200)))]
+    pub(crate) excerpt_contains: Option<String>,
+    #[cfg_attr(
+        feature = "json-schema",
+        schemars(length(min = 1, max = 8), inner(pattern(super::json_schema::CODE)))
+    )]
+    pub(crate) readiness_reasons: Option<Vec<String>>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 200)))]
+    pub(crate) readiness_detail_contains: Option<String>,
+}
+
+/// The `evidence` table of a remedy.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "RemedyEvidence"))]
+pub(crate) struct RawRemedyEvidence {
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 300)))]
+    pub(crate) pid_file: String,
+}
+
+/// One step of a remedy.
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[cfg_attr(feature = "json-schema", schemars(rename = "RemedyStep"))]
+pub(crate) struct RawRemedyStep {
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 300)))]
+    pub(crate) text: String,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 500)))]
+    pub(crate) command: Option<String>,
+    #[cfg_attr(feature = "json-schema", schemars(length(min = 1, max = 300)))]
+    pub(crate) path: Option<String>,
 }
 
 /// `schemas/settings.schema.json`.

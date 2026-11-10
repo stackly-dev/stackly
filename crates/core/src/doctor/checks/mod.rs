@@ -27,6 +27,7 @@ mod permissions;
 mod ports;
 mod processes;
 mod registry;
+mod remedy;
 mod runtimes;
 mod secrets;
 

@@ -20,6 +20,6 @@ pub use runner::{Doctor, DoctorLimits};
 pub use types::{
     Action, CapacityFailure, CapacityOutcome, CheckReport, DaemonFacts, DegradedSubsystem,
     DiskReading, DoctorError, DoctorMode, DoctorRequest, DoctorSources, FailureSnapshot, Finding,
-    FindingFacts, IdentityFacts, IdentityReason, InstanceRef, PathProblem, PortOwnerFacts,
-    PortProblemKind, Report, RootProblem, SummaryFacts,
+    FindingFacts, IdentityFacts, IdentityReason, InstanceRef, PathProblem, PidFileFacts,
+    PidFileState, PortOwnerFacts, PortProblemKind, RemedyFacts, Report, RootProblem, SummaryFacts,
 };
