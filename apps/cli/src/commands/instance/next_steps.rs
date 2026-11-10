@@ -24,11 +24,6 @@ use crate::output::time::format_local;
 use crate::output::{CommandOutput, OutputMode};
 use crate::session::CallSpec;
 
-/// Whether `stackly doctor` (spec 0034) exists, so the step that names it
-/// is written (spec 0033, AC-16).
-// provisional: F34
-const DOCTOR_COMMAND: bool = false;
-
 /// How many of the newest operations of an instance `inspect` reads to
 /// find its related operation.
 pub const RELATED_LIMIT: u32 = 10;
@@ -57,7 +52,7 @@ pub struct Failure<'a> {
 }
 
 /// The commands to run next, in order (*Perintah lanjutan CLI*): a port
-/// step for a port failure, the logs, the doctor once it exists, and always
+/// step for a port failure, the logs, the doctor (spec 0034), and always
 /// last the start. The port step is left out after a port change and for a
 /// lifecycle whose ports `endpoint set` cannot save (spec 0029, AC-6).
 #[must_use]
@@ -66,9 +61,7 @@ pub fn next_steps(failure: &Failure<'_>) -> Vec<String> {
     let mut steps = Vec::new();
     steps.extend(port_step(failure));
     steps.push(format!("read its logs: stackly instance logs {name}"));
-    if DOCTOR_COMMAND {
-        steps.push(format!("check this Mac: stackly doctor --instance {name}"));
-    }
+    steps.push(format!("check this Mac: stackly doctor --instance {name}"));
     steps.push(format!("start it again: stackly instance start {name}"));
     steps
 }
@@ -491,6 +484,7 @@ mod tests {
             [
                 "use a free port: stackly instance endpoint set orders-db --port postgres=5433",
                 "read its logs: stackly instance logs orders-db",
+                "check this Mac: stackly doctor --instance orders-db",
                 "start it again: stackly instance start orders-db",
             ]
         );
@@ -524,26 +518,32 @@ mod tests {
         let error = port_error(Some("5433"));
         let mut changed = failure(Some(&error), None, Some(InstanceLifecycle::Failed));
         changed.ports_changed = true;
-        assert_eq!(next_steps(&changed).len(), 2);
+        assert_eq!(next_steps(&changed).len(), 3);
         let recovering = failure(Some(&error), None, Some(InstanceLifecycle::Recovering));
-        assert_eq!(next_steps(&recovering).len(), 2);
+        assert_eq!(next_steps(&recovering).len(), 3);
         let crash = ErrorBody::new(&supervisor::RETRY_BUDGET_EXHAUSTED, "kept crashing");
         assert_eq!(
             next_steps(&failure(Some(&crash), Some("crash_loop"), None)),
             [
                 "read its logs: stackly instance logs orders-db",
+                "check this Mac: stackly doctor --instance orders-db",
                 "start it again: stackly instance start orders-db",
             ]
         );
     }
 
-    /// Spec 0033 AC-16: no doctor step until `stackly doctor` exists.
+    /// Spec 0033 AC-16: the doctor step names the instance, after the logs
+    /// and before the start.
     #[test]
-    fn the_doctor_step_waits_for_the_doctor_command() {
+    fn the_doctor_step_names_the_instance_between_the_logs_and_the_start() {
         let steps = next_steps(&failure(None, None, None));
-        assert!(
-            !steps.iter().any(|step| step.contains("doctor")),
-            "{steps:?}"
+        assert_eq!(
+            steps,
+            [
+                "read its logs: stackly instance logs orders-db",
+                "check this Mac: stackly doctor --instance orders-db",
+                "start it again: stackly instance start orders-db",
+            ]
         );
     }
 
@@ -693,7 +693,7 @@ mod tests {
         assert_eq!(related.latest, Some(change));
         assert_eq!(related.error, Some(start));
         assert!(related.ports_changed);
-        assert_eq!(for_inspect(&failed, Some(&related)).len(), 2);
+        assert_eq!(for_inspect(&failed, Some(&related)).len(), 3);
     }
 
     /// Spec 0033 *Operasi terkait*.

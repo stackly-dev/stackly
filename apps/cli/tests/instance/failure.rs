@@ -262,6 +262,7 @@ fn a_refused_restart_reads_the_name_and_writes_the_next_steps_without_an_operati
         text.stderr,
         "error: the instance is not running\n  code: supervisor.instance_not_running\n\
          \x20 hint: read its logs: stackly instance logs orders-db\n\
+         \x20 hint: check this Mac: stackly doctor --instance orders-db\n\
          \x20 hint: start it again: stackly instance start orders-db\n"
     );
     assert_eq!(json.code, Some(3), "{json:?}");
@@ -446,7 +447,7 @@ fn a_failed_instance_without_its_operations_shows_unavailable_or_a_dash() {
             line.split_whitespace().skip(2).collect::<Vec<_>>(),
             [expected]
         );
-        assert!(text.stdout.contains("\nNext steps:\n  read its logs: stackly instance logs orders-db\n  start it again: stackly instance start orders-db\n"), "{}", text.stdout);
+        assert!(text.stdout.contains("\nNext steps:\n  read its logs: stackly instance logs orders-db\n  check this Mac: stackly doctor --instance orders-db\n  start it again: stackly instance start orders-db\n"), "{}", text.stdout);
         assert_eq!(json.code, Some(0), "{json:?}");
         assert_eq!(
             envelope(&json)["result"]["lastOperation"],

@@ -11,6 +11,7 @@ pub mod install;
 pub mod plan;
 pub mod restart;
 pub mod start;
+pub mod start_failure;
 pub mod status;
 pub mod stop;
 pub mod uninstall;

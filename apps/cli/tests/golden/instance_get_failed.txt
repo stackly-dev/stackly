@@ -37,4 +37,5 @@ Failure output:
 
 Next steps:
   read its logs: stackly instance logs cache
+  check this Mac: stackly doctor --instance cache
   start it again: stackly instance start cache

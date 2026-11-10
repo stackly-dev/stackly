@@ -40,4 +40,5 @@ Failure output:
 
 Next steps:
   read its logs: stackly instance logs orders-db
+  check this Mac: stackly doctor --instance orders-db
   start it again: stackly instance start orders-db

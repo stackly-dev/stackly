@@ -1,14 +1,16 @@
 //! The real `stacklyd` binary for the CLI tests (spec 0008, *Critical test
 //! scenarios*): started with the test root as `STACKLY_ROOT`, and ready and
-//! quiet before the test runs `stackly`.
+//! quiet before the test runs `stackly`; and the fake runtime and provider
+//! `skeleton_seed` writes into a test root.
 
 use std::path::Path;
+use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use stackly_ipc::{Client, ConnectPolicy};
 use stackly_protocol::handshake::{ClientInfo, ClientKind};
-use stackly_testkit::{SpawnedDaemon, TestRoot, cargo_bin};
+use stackly_testkit::{SpawnedDaemon, TestRoot, cargo_bin, cargo_example, fake_server};
 
 use super::{paths, uid};
 
@@ -74,4 +76,29 @@ pub fn start_daemon(root: &TestRoot) -> SpawnedDaemon {
         std::thread::sleep(Duration::from_millis(10));
     }
     daemon
+}
+
+/// Seeds `root` with the fake runtime and provider and returns the runtime
+/// ID.
+pub fn seed(root: &TestRoot) -> String {
+    let fake = fake_server::binary();
+    let output = Command::new(cargo_example("stacklyd", "skeleton_seed"))
+        .args(["--root".as_ref(), root.path().as_os_str()])
+        .args([
+            "--fake-server".as_ref(),
+            fake.as_os_str(),
+            "--json".as_ref(),
+        ])
+        .output()
+        .expect("skeleton_seed runs");
+    assert!(
+        output.status.success(),
+        "the seed failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let seeded: Value = serde_json::from_slice(&output.stdout).expect("the seed prints JSON");
+    seeded["runtimeId"]
+        .as_str()
+        .expect("a runtime ID")
+        .to_owned()
 }

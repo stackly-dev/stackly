@@ -1,7 +1,8 @@
 //! The CLI's side of the background agent (spec 0015): the port calls under
 //! their time limit, the state read with [`classify`], the `AgentReport`
 //! that every daemon command prints, the failure each state and each macOS
-//! error gets, and the text of the recovery steps.
+//! error gets, the text of the recovery steps, and the record of a failed
+//! daemon start (spec 0034).
 //!
 //! The only calls that change the registration are [`AgentEnv::act`] with
 //! `Register` (from `install`) and `Relaunch` (from `start` and `restart`);
@@ -20,6 +21,7 @@ use stackly_platform::{
 };
 use stackly_protocol::Timestamp;
 
+use super::start_failure::StartFailureFile;
 use super::wait::{Interrupt, LaunchRecordSource};
 use crate::failure::CliFailure;
 
@@ -27,13 +29,15 @@ use crate::failure::CliFailure;
 pub const AGENT_CALL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// What the daemon commands know about the agent: the port, the bundle the
-/// CLI runs from, the launch record, and the clock.
+/// CLI runs from, the launch record, the record of a failed start, and the
+/// clock.
 #[derive(Clone)]
 pub struct AgentEnv {
     port: Arc<dyn BackgroundAgent>,
     bundle: Option<AppBundle>,
     executable: PathBuf,
     records: Arc<dyn LaunchRecordSource>,
+    start_failures: StartFailureFile,
     root_override: bool,
     clock: Arc<dyn Clock>,
     call_timeout: Duration,
@@ -84,12 +88,21 @@ impl AgentEnv {
             bundle: AppBundle::enclosing(&executable),
             executable,
             records,
+            start_failures: StartFailureFile::none(),
             root_override,
             clock,
             call_timeout: AGENT_CALL_TIMEOUT,
             #[cfg(test)]
             inline: false,
         }
+    }
+
+    /// This environment reading the record of a failed daemon start from
+    /// `start_failures` (spec 0034); without it there is never a record.
+    #[must_use]
+    pub fn with_start_failures(mut self, start_failures: StartFailureFile) -> Self {
+        self.start_failures = start_failures;
+        self
     }
 
     /// This environment with another time limit for a port call.
@@ -118,6 +131,12 @@ impl AgentEnv {
     #[must_use]
     pub fn records(&self) -> &dyn LaunchRecordSource {
         &*self.records
+    }
+
+    /// The record of a failed daemon start in the active root.
+    #[must_use]
+    pub const fn start_failures(&self) -> &StartFailureFile {
+        &self.start_failures
     }
 
     /// The wall clock.

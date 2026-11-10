@@ -3,39 +3,13 @@
 //! runtime and provider that `skeleton_seed` writes, and the real `stackly`
 //! binary lists them and finds them by name or ID.
 
-use std::process::Command;
-
-use serde_json::Value;
 use stackly_testkit::evidence::{Kind, evidence};
-use stackly_testkit::{ReapGuard, TestRoot, cargo_example, fake_server};
+use stackly_testkit::{ReapGuard, TestRoot};
 
 use crate::common::stacklyd::start_daemon;
 use crate::common::{detail, envelope, paths, run};
 
-/// Seeds `root` with the fake runtime and provider and returns the runtime
-/// ID.
-pub(crate) fn seed(root: &TestRoot) -> String {
-    let fake = fake_server::binary();
-    let output = Command::new(cargo_example("stacklyd", "skeleton_seed"))
-        .args(["--root".as_ref(), root.path().as_os_str()])
-        .args([
-            "--fake-server".as_ref(),
-            fake.as_os_str(),
-            "--json".as_ref(),
-        ])
-        .output()
-        .expect("skeleton_seed runs");
-    assert!(
-        output.status.success(),
-        "the seed failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let seeded: Value = serde_json::from_slice(&output.stdout).expect("the seed prints JSON");
-    seeded["runtimeId"]
-        .as_str()
-        .expect("a runtime ID")
-        .to_owned()
-}
+pub(crate) use crate::common::stacklyd::seed;
 
 fn create(root: &TestRoot, runtime: &str, name: &str) -> String {
     let created = run(
