@@ -212,7 +212,8 @@ Modul baru `crates/core/src/instance/config/` dengan fungsi murni yang dipakai `
 2. `lock`: `LockKey::Instance`, `BusyPolicy::Queue`; baca lagi dan ulangi langkah 1 dari data segar.
 3. `commit`: `commit_guarded` dengan guard murni yang memeriksa revision aktif masih `baseRevision`, lifecycle masih cocok dengan dampak, dan (untuk endpoint) port fixed tidak konflik dengan instance lain; lalu `ActivateConfigRevision` dan `PruneConfigRevisions` dalam satu transaksi. Kompensator: tidak ada setelah langkah ini (revision tetap aktif).
 4. `apply`: dampak dihitung ulang dari lifecycle segar setelah commit (state bisa berubah, misalnya instance berhenti sendiri): `stopped`, `failed`, atau `uninitialized` sekarang berarti `next_start`, dan operasi `succeeded` dengan dampak itu di hasilnya, bukan gagal. `next_start` selesai; `reload` menjalankan langkah reload spec 0026 di bawah operasi ini; `restart` menjalankan langkah restart spec 0026 (stop, tunggu exit, tunggu lock, start) di bawah operasi ini. Kegagalan memakai kode langkah itu (AC-8).
-5. Secret: params tidak membawa caller; handler membangun `SecretCaller` pengguna dari `OperationTrigger` request, sama dengan restart spec 0026, dan meneruskannya ke `ReloadRequest.caller` dan startup. `NeedsSecret` di sub langkah restart menggagalkan operasi dengan kode spec 0010 dan 0011, memasang blocker `NeedsSecret`, dan revision baru tetap aktif.
+5. Catatan audit (spec 0035, juga untuk `change_endpoints`): sebelum `commit` operasi memasang catatan yang hanya membawa `oldRevision`, dan setelah `commit` catatan dari `ChangePlan::audit_note()` (`newRevision`, `oldRevision`, `settings`, `ports`, `impact`), dari plan yang sama dengan input journal AC-20; input journal itu tidak berubah. *Diperbarui 2026-11-10 (koordinasi scope 05):* `ChangePlan::audit_note` dari spec 0035.
+6. Secret: params tidak membawa caller; handler membangun `SecretCaller` pengguna dari `OperationTrigger` request, sama dengan restart spec 0026, dan meneruskannya ke `ReloadRequest.caller` dan startup. `NeedsSecret` di sub langkah restart menggagalkan operasi dengan kode spec 0010 dan 0011, memasang blocker `NeedsSecret`, dan revision baru tetap aktif.
 
 ### Last known good
 
@@ -243,6 +244,8 @@ Di `apps/cli/src/commands/instance/`:
 
 `--unset k` mengembalikan field ke default schema (ditolak untuk field `required` tanpa default). `--from-revision` digabung dengan `--set` berarti nilai revision itu lalu override. Progress ke stderr, hasil ke stdout.
 
+Verdict yang valid menulis satu baris per perubahan port dalam bentuk input `--port` (nomor port, atau `auto`): `config validate` dan `config apply --dry-run` menulis `  port <endpoint>: <lama> -> <baru>` setelah baris setting, dan `endpoint set --dry-run` menulis `  <endpoint>: <lama> -> <baru>` (misalnya `postgres: 5432 -> 5433`, `admin: 8080 -> auto`), lewat satu fungsi `request_text`. *Diperbarui 2026-11-10 (koordinasi scope 05):* spec ini tidak menetapkan teks baris itu; bentuk input `--port` dipilih saat perbaikan baris `unknown -> unknown` (commit `c94eb326` dan `fca3b5b6`).
+
 ### GUI
 
 Di `apps/macos/Packages/StacklyUI/Sources/StacklyUI/InstanceDetail/Configuration/` (baru):
@@ -253,6 +256,7 @@ Di `apps/macos/Packages/StacklyUI/Sources/StacklyUI/InstanceDetail/Configuration
 - Show Diff: sheet diff per file memakai view diff spec 0067.
 - Konfirmasi native untuk Apply and Restart ("Restarting stops {name} briefly."), Roll Back, dan Keep Revision, dengan Cancel sebagai default untuk Keep Revision karena menimpa edit di luar Stackly.
 - `RenameSheet` dan `EndpointsSheet` (di `InstanceDetail/`), item menu Rename… dan Edit Ports… di peta perintah spec 0069 tanpa shortcut, dan item perhatian drift di Overview.
+- `InstanceEdit.editPorts(source, prefill: [String: UInt16])`: `prefill` kosong untuk Edit Ports… dan Change Port…, dan berisi port saran per nama endpoint untuk Use Port {n} di banner gagal spec 0033 dan aksi `change_port` doctor spec 0034. `EndpointsModel` mengisi field endpoint itu dari `prefill` saat sheet dibuka; tidak ada yang berubah sampai kamu menekan Apply, dan `instance.change_endpoints` tidak berubah. *Diperbarui 2026-11-10 (koordinasi scope 05):* prefill dari spec 0033 dan 0034.
 
 ### Copy
 
