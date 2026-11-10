@@ -38,4 +38,5 @@ socket      postgresql://postgres:****@/postgres?host=/Users/test/Library/Applic
 Next steps:
   use a free port: stackly instance endpoint set orders-db --port postgres=5433
   read its logs: stackly instance logs orders-db
+  check this Mac: stackly doctor --instance orders-db
   start it again: stackly instance start orders-db

@@ -1,0 +1,36 @@
+Connection        OK      Connected to stacklyd 0.1.0 over the Unix socket
+Protocol          OK      App and daemon both speak protocol <major>.<minor>
+Background agent  OK      Not used while STACKLY_ROOT is set
+
+Endpoints         ERROR   Port conflict · mysql-legacy
+                          127.0.0.1:3307 is held by mysqld (PID 812, ~/homebrew/bin/mysqld). Not owned by Stackly.
+                          Next: stackly instance endpoint set mysql-legacy --port mysql=3308
+Processes         ERROR   PID reused · pg-main
+                          PID 4242 now belongs to /bin/sleep, not the process Stackly recorded. Stackly leaves both alone.
+                          Recorded: PID 4242 · started 2026-11-09 21:00:00 +00:00 · ~/Library/Application Support/Stackly/runtimes/postgresql/17.2/bin/postgres
+                          Now:      PID 4242 · started 2026-11-10 07:59:00 +00:00 · /bin/sleep
+                          Failed checks: start_matches, executable_matches
+                          Next: stackly instance inspect pg-main
+Start failures    ERROR   Start failed · pg-main
+                          pg-main exited with code 1 while it started.
+                          Output:
+                            FATAL:  lock file "postmaster.pid" already exists
+                            HINT:  Is another postmaster (PID 4242) running in data directory?
+                          PostgreSQL found an old postmaster.pid
+                            1. Stackly never removes this file, because it also guards the data folder against a second server.
+                            2. If the PID below isn’t a PostgreSQL server for this data folder, remove the file yourself, then start the instance again.
+                               ~/Library/Application Support/Stackly/instances/0192f3a4-0000-7000-8000-0000000000b2/data/postmaster.pid
+                          Next: stackly instance inspect pg-main
+Disk space        WARNING Data volume is filling
+                          The volume that holds your Stackly data is 82% full. Instances may fail to write once it is full.
+                          Next: stackly storage locations
+Operations        WARNING Scratch folder left behind
+                          operations/0192f3a6-0000-7000-8000-0000000000d1 has no operation. Stackly leaves it in place.
+Secrets           WARNING Secrets check unavailable
+                          The check did not finish within 5 seconds.
+                          … and 2 more
+stacklyd          OK      stacklyd 0.9.0 · protocol 3.4 · launchd
+Registry          OK      quick_check passed · schema 12
+Permissions       OK      All Stackly folders are private and writable by you.
+
+3 errors, 5 warnings · 12 checks · run 0192f3a7-0000-7000-8000-0000000000e1

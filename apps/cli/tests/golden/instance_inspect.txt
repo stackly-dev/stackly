@@ -39,4 +39,5 @@ Failure output:
 
 Next steps:
   read its logs: stackly instance logs broken-db
+  check this Mac: stackly doctor --instance broken-db
   start it again: stackly instance start broken-db

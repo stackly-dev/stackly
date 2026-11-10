@@ -15,6 +15,7 @@ use stackly_protocol::ProtocolVersion;
 use crate::commands::audit::AuditCommand;
 use crate::commands::completion::CompletionArgs;
 use crate::commands::daemon::DaemonCommand;
+use crate::commands::doctor::DoctorArgs;
 use crate::commands::execute;
 use crate::commands::instance::InstanceCommand;
 use crate::commands::manpage::ManpageArgs;
@@ -142,6 +143,11 @@ pub enum Command {
     /// Choose where new instances, logs, and downloads go
     #[command(subcommand, arg_required_else_help = true)]
     Storage(StorageCommand),
+    /// Check this Mac, stacklyd, and your instances for problems; changes nothing
+    #[command(
+        after_help = "Examples:\n  stackly doctor\n  stackly doctor --instance orders-db\n  stackly doctor --check endpoints --check disk_space --json"
+    )]
+    Doctor(DoctorArgs),
     /// Write the completion script of a shell
     #[command(after_help = "Examples:\n  stackly completion zsh\n  stackly completion bash --json")]
     Completion(CompletionArgs),
@@ -166,6 +172,7 @@ impl Command {
             Self::Secret(command) => command.run(cx).await,
             Self::Settings(command) => command.run(cx).await,
             Self::Storage(command) => command.run(cx).await,
+            Self::Doctor(args) => execute(args, cx).await,
             Self::Completion(args) => execute(args, cx).await,
             Self::Manpage(args) => execute(args, cx).await,
         }

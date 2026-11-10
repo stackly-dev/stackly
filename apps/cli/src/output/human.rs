@@ -132,6 +132,13 @@ impl HumanWriter {
         self
     }
 
+    /// Whether this writer colors, for a result that writes marks instead
+    /// of words when it does (spec 0034, *CLI*).
+    #[must_use]
+    pub const fn colored(&self) -> bool {
+        self.color
+    }
+
     /// The text written so far.
     #[must_use]
     pub fn into_string(self) -> String {
