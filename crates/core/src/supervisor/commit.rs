@@ -7,6 +7,7 @@ use std::time::Duration;
 use stackly_domain::{BatchError, Instance, RegistryError, ResourceRevision, WriteOp};
 
 use super::SupervisorConfig;
+use super::status::FailureFacts;
 
 /// The changes to one instance aggregate in one batch: every mutation that
 /// raises the revision becomes its own `UpdateInstance`, expecting the
@@ -31,6 +32,9 @@ pub struct InstanceChanges {
     instance: Instance,
     read: ResourceRevision,
     ops: Vec<WriteOp>,
+    /// The facts of the last failure event these changes wrote (spec 0033,
+    /// AC-3), which the actor takes once the batch is committed.
+    failure: Option<FailureFacts>,
 }
 
 impl InstanceChanges {
@@ -42,6 +46,7 @@ impl InstanceChanges {
             instance,
             read,
             ops: Vec::new(),
+            failure: None,
         }
     }
 
@@ -81,6 +86,17 @@ impl InstanceChanges {
     #[must_use]
     pub const fn read_revision(&self) -> ResourceRevision {
         self.read
+    }
+
+    /// Notes the facts of a failure event a mutation just wrote; a later
+    /// one replaces them.
+    pub(crate) fn note_failure(&mut self, facts: FailureFacts) {
+        self.failure = Some(facts);
+    }
+
+    /// Returns the facts of the last failure event these changes wrote.
+    pub(crate) const fn failure(&self) -> Option<&FailureFacts> {
+        self.failure.as_ref()
     }
 
     /// Returns true when no mutation raised the revision.

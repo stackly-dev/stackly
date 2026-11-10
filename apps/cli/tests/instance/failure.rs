@@ -4,9 +4,10 @@
 //! steps:` and `lastOperation` in JSON (AC-7), and `--wait` writes the
 //! backoff line once per pause (AC-8).
 //!
-//! The daemon of milestone 1 does not fill `lastFailure.at`, `exitCode`,
-//! `suggestedPort`, or the `backoff` stage yet, so these DTOs are made
-//! here the way spec 0033 describes them.
+//! The scripted cases make their DTOs here the way spec 0033 describes
+//! them. The two `a_real_` tests at the end run the same commands against
+//! a real `stacklyd`, which fills `lastFailure.at`, `exitCode`,
+//! `suggestedPort`, and the `backoff` stage since milestone 1.
 
 use stackly_protocol::codes::supervisor;
 use stackly_protocol::instance::InstanceSummary;
@@ -574,4 +575,226 @@ fn a_backoff_read_that_fails_writes_crashed_restarting() {
         "{}",
         text.stderr
     );
+}
+
+/// The output of one real CLI run: its exit code, stdout, and stderr.
+fn all_output(run: &crate::common::Run) -> String {
+    format!("{}\n{}", run.stdout, run.stderr)
+}
+
+/// Creates a fake instance named `name` through the real CLI and waits for
+/// it; `extra` are more `instance create` arguments.
+fn create_real(root: &TestRoot, runtime: &str, name: &str, extra: &[&str]) {
+    let mut args = vec![
+        "instance",
+        "create",
+        name,
+        "--runtime",
+        runtime,
+        "--provider",
+        "testing/fake",
+        "--revision",
+        "0.4.0",
+        "--wait",
+        "--timeout",
+        "60s",
+        "--json",
+    ];
+    args.extend(extra);
+    let created = run(root.path(), &args);
+    assert_eq!(created.code, Some(0), "{created:?}");
+}
+
+/// The value after `prefix` on the line of `text` that starts with it.
+fn line_after<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+    text.lines()
+        .find_map(|line| line.trim_start().strip_prefix(prefix))
+}
+
+/// Spec 0033 AC-6, AC-7, AC-8, AC-15 against a real `stacklyd`.
+#[test]
+fn a_real_crash_loop_ends_the_start_with_its_operation_and_inspect_shows_the_same() {
+    let ev = evidence!(
+        covers = ["AC-068", "NFR-011"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd, instance start --wait of a fake that prints its fixture credential and crashes before ready writes the backoff line, then exits 7 with code supervisor.retry_budget_exhausted, the static hint, operation <uuid>, and the logs and start commands; inspect writes Last failure crash_loop with its exit code, Last operation with the same uuid, and Next steps, its JSON carries lastOperation and the failure time, and no output holds the credential",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let runtime = crate::stacklyd::seed(&root);
+    let _reap = stackly_testkit::ReapGuard::new(root.path(), &crate::common::paths(&root).runtime);
+    let _daemon = crate::common::stacklyd::start_daemon(&root);
+    let credential = stackly_testkit::evidence::FixtureCredential::new();
+    let token = root.path().join("token.txt");
+    std::fs::write(&token, credential.value()).expect("the token file is written");
+    let secret = format!("authToken=file:{}", token.display());
+    create_real(
+        &root,
+        &runtime,
+        "leaky",
+        &[
+            "--set",
+            "crashAfterMs=50",
+            "--set",
+            "crashExitCode=3",
+            "--set",
+            "readyDelayMs=60000",
+            "--set",
+            "leakToken=true",
+            "--secret",
+            &secret,
+        ],
+    );
+
+    // The real restart constants pause 0.5 to 31 seconds in all.
+    let started = run(
+        root.path(),
+        &["instance", "start", "leaky", "--wait", "--timeout", "120s"],
+    );
+    let text = run(root.path(), &["instance", "inspect", "leaky"]);
+    let json = run(root.path(), &["instance", "inspect", "leaky", "--json"]);
+
+    assert_eq!(started.code, Some(7), "{started:?}");
+    let block = error_block(&started.stderr);
+    assert!(
+        block.contains("  code: supervisor.retry_budget_exhausted\n"),
+        "{block}"
+    );
+    assert!(
+        block.contains(&format!("  hint: {BUDGET_HINT}\n")),
+        "{block}"
+    );
+    let operation = line_after(block, "operation: ").expect("the operation line");
+    Uuid::parse_str(operation).expect("the operation line holds a uuid");
+    assert!(
+        block.contains("  hint: read its logs: stackly instance logs leaky\n"),
+        "{block}"
+    );
+    assert!(
+        block.ends_with("  hint: start it again: stackly instance start leaky\n"),
+        "{block}"
+    );
+    assert!(
+        started.stderr.contains("crashed, restart 1 of 5"),
+        "the backoff line of the first pause: {}",
+        started.stderr
+    );
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let failure = line_after(&text.stdout, "Last failure").expect("the Last failure line");
+    assert!(
+        failure.trim_start().starts_with("crash_loop at ") && failure.ends_with(", exit code 3"),
+        "{failure}"
+    );
+    let last = line_after(&text.stdout, "Last operation").expect("the Last operation line");
+    assert_eq!(
+        last.trim_start(),
+        format!("start_instance failed, supervisor.retry_budget_exhausted, {operation}")
+    );
+    assert!(
+        text.stdout
+            .contains("Next steps:\n  read its logs: stackly instance logs leaky\n"),
+        "{}",
+        text.stdout
+    );
+    assert_eq!(json.code, Some(0), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["result"]["lastOperation"]["id"], operation);
+    let failure = &value["result"]["instance"]["lastFailure"];
+    assert_eq!(failure["code"], "crash_loop");
+    assert_eq!(failure["exitCode"], 3);
+    assert!(failure["at"].is_string(), "{failure}");
+
+    for (out, what) in [
+        (all_output(&started), "instance start"),
+        (all_output(&text), "instance inspect"),
+        (all_output(&json), "instance inspect --json"),
+    ] {
+        credential.assert_absent(&out, what);
+    }
+    ev.pass();
+}
+
+/// Spec 0033 AC-4, AC-6, AC-7, AC-14 against a real `stacklyd`.
+#[test]
+fn a_real_port_refusal_suggests_a_free_port_that_a_dry_run_accepts_without_a_change() {
+    let ev = evidence!(
+        covers = ["AC-010", "AC-055", "NFR-011"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd, instance start --wait of a fake whose fixed port the test holds exits 3 with supervisor.endpoint_in_use, the static hint, its operation, and a use a free port command whose port lies after the held one; inspect writes the same operation and command, the suggested command with --dry-run passes, and the stored port stays the held one",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let runtime = crate::stacklyd::seed(&root);
+    let _reap = stackly_testkit::ReapGuard::new(root.path(), &crate::common::paths(&root).runtime);
+    let _daemon = crate::common::stacklyd::start_daemon(&root);
+    let port = stackly_testkit::allocate_port().expect("a free port");
+    let request = format!("http={port}");
+    create_real(&root, &runtime, "held", &["--port", &request]);
+    // Create checks the port too, so the test takes it only afterwards.
+    let held = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
+        .expect("the test holds the port");
+
+    let started = run(
+        root.path(),
+        &["instance", "start", "held", "--wait", "--timeout", "60s"],
+    );
+    let text = run(root.path(), &["instance", "inspect", "held"]);
+
+    assert_eq!(started.code, Some(3), "{started:?}");
+    let block = error_block(&started.stderr);
+    assert!(
+        block.contains("  code: supervisor.endpoint_in_use\n"),
+        "{block}"
+    );
+    assert!(block.contains(&format!("  hint: {PORT_HINT}\n")), "{block}");
+    let operation = line_after(block, "operation: ").expect("the operation line");
+    let command = line_after(block, "hint: use a free port: ").expect("the port step");
+    let suggested: u16 = command
+        .strip_prefix("stackly instance endpoint set held --port http=")
+        .unwrap_or_else(|| panic!("the port step names the endpoint: {command}"))
+        .parse()
+        .expect("a suggested port");
+    assert!(suggested > port, "{suggested} after {port}");
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let last = line_after(&text.stdout, "Last operation").expect("the Last operation line");
+    assert_eq!(
+        last.trim_start(),
+        format!("start_instance failed, supervisor.endpoint_in_use, {operation}")
+    );
+    assert!(
+        text.stdout
+            .contains(&format!("Next steps:\n  use a free port: {command}\n")),
+        "{}",
+        text.stdout
+    );
+
+    let suggested_arg = format!("http={suggested}");
+    let dry = run(
+        root.path(),
+        &[
+            "instance",
+            "endpoint",
+            "set",
+            "held",
+            "--port",
+            &suggested_arg,
+            "--dry-run",
+        ],
+    );
+    assert_eq!(
+        dry.code,
+        Some(0),
+        "the suggested port passes the verdict: {dry:?}"
+    );
+    let after = envelope(&run(
+        root.path(),
+        &["instance", "inspect", "held", "--json"],
+    ));
+    assert_eq!(after["result"]["instance"]["lifecycle"], "stopped");
+    assert_eq!(
+        after["result"]["instance"]["endpoints"][0]["port"], port,
+        "the port stays"
+    );
+    drop(held);
+    ev.pass();
 }

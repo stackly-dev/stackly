@@ -29,4 +29,5 @@ mod start;
 mod status;
 mod stop;
 mod stop_all;
+mod visible;
 mod wake;

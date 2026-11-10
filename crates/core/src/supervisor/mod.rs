@@ -137,7 +137,7 @@ pub use session_end::SessionEndReport;
 pub use sink::{LogBatch, LogLine, LogSink, RunEvent, SinkOutcome, SinkSet, SpoolSource, TailSink};
 pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};
-pub use status::{InstanceStatus, ProcessStatus, RestartStatus};
+pub use status::{FailureFacts, InstanceStatus, ProcessStatus, RestartStatus};
 pub use stop::StopRequest;
 pub use stop_all::StopAllRequest;
 

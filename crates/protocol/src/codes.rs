@@ -676,13 +676,34 @@ area! {
         @functions
 
         /// The static hint of a supervisor error, chosen from its code and
-        /// the values of its `details` (spec 0025, *Hint migrasi*): only
-        /// `supervisor.data_incompatible` has one, by `outcome`. The text
-        /// holds no value; lines and paths are in the message and the
+        /// the values of its `details`: `supervisor.data_incompatible` by
+        /// `outcome` (spec 0025, *Hint migrasi*), and the spent restart
+        /// budget, the three endpoint codes, and `supervisor.data_in_use`
+        /// by code alone (spec 0033, *Hint statis*). The text holds no
+        /// value; lines, ports, and paths are in the message and the
         /// details. `None` for `unknown`, an `outcome` it does not know, and
         /// any other code.
         #[must_use]
         pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            let fixed = match code {
+                c if c == RETRY_BUDGET_EXHAUSTED.code => Some(
+                    "It kept crashing, so Stackly stopped restarting it. Read its logs, fix the cause, then start it again.",
+                ),
+                c if c == ENDPOINT_IN_USE.code => Some(
+                    "Stackly never moves a fixed port on its own. Pick another port for this endpoint, or stop the process that holds it.",
+                ),
+                c if c == ENDPOINT_CONFLICT.code => Some(
+                    "Stackly never moves a fixed port on its own. Pick another port, or stop that instance.",
+                ),
+                c if c == ENDPOINT_UNAVAILABLE.code => Some("Pick another port for this endpoint."),
+                c if c == DATA_IN_USE.code => Some(
+                    "Stackly never removes the lock on its own. Stop that process, then start it again.",
+                ),
+                _ => None,
+            };
+            if fixed.is_some() {
+                return fixed;
+            }
             if code != DATA_INCOMPATIBLE.code {
                 return None;
             }
@@ -2046,6 +2067,58 @@ mod tests {
             assert!(!hint.contains('{'), "{hint}");
             assert!(hint.is_ascii() || hint.contains('’'), "{hint}");
         }
+    }
+
+    #[test]
+    fn supervisor_hint_names_the_next_step_for_a_crash_loop_a_port_and_a_held_lock() {
+        // covers: spec 0033 AC-5 (*Hint statis*: exact texts, whatever the details)
+        let table = [
+            (
+                &supervisor::RETRY_BUDGET_EXHAUSTED,
+                "It kept crashing, so Stackly stopped restarting it. Read its logs, fix the cause, then start it again.",
+            ),
+            (
+                &supervisor::ENDPOINT_IN_USE,
+                "Stackly never moves a fixed port on its own. Pick another port for this endpoint, or stop the process that holds it.",
+            ),
+            (
+                &supervisor::ENDPOINT_CONFLICT,
+                "Stackly never moves a fixed port on its own. Pick another port, or stop that instance.",
+            ),
+            (
+                &supervisor::ENDPOINT_UNAVAILABLE,
+                "Pick another port for this endpoint.",
+            ),
+            (
+                &supervisor::DATA_IN_USE,
+                "Stackly never removes the lock on its own. Stop that process, then start it again.",
+            ),
+        ];
+        let details = [
+            crate::error::ErrorDetail::new("port", "5432"),
+            crate::error::ErrorDetail::new("suggestedPort", "5433"),
+        ];
+        for (spec, text) in table {
+            assert_eq!(
+                supervisor::hint(spec.code, &[]),
+                Some(text),
+                "{}",
+                spec.code
+            );
+            assert_eq!(
+                supervisor::hint(spec.code, &details),
+                Some(text),
+                "{}",
+                spec.code
+            );
+            assert!(text.len() <= 200, "{} bytes: {text}", text.len());
+            assert!(!text.contains('{') && !text.contains("5432"), "{text}");
+        }
+        assert_eq!(
+            supervisor_hint(&supervisor::AUTO_PORT_UNAVAILABLE, None),
+            None,
+            "only the codes of the table get a hint"
+        );
     }
 
     #[test]

@@ -2010,6 +2010,21 @@
       "expect": "roundtrip"
     },
     {
+      "file": "frame-response-instance-get-crash-loop.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-event-operation-progress-backoff.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-operation-get-start-endpoint-in-use.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
       "file": "request-doctor-run.json",
       "type": "Request",
       "expect": "roundtrip"
