@@ -1034,6 +1034,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Runs the read only checks of the doctor (spec 0034). Not an\noperation: it writes nothing and holds no lock.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DoctorParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "doctor.run"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1296,6 +1313,119 @@
       "required": [
         "reference"
       ]
+    },
+    "DoctorCheckId": {
+      "description": "One check of the doctor. Open.",
+      "oneOf": [
+        {
+          "description": "Whether the client reaches the daemon. A client check.",
+          "type": "string",
+          "const": "connection"
+        },
+        {
+          "description": "Whether client and daemon speak the same protocol. A client check.",
+          "type": "string",
+          "const": "protocol"
+        },
+        {
+          "description": "The state of the background agent. A client check.",
+          "type": "string",
+          "const": "background_agent"
+        },
+        {
+          "description": "The daemon's own subsystems.",
+          "type": "string",
+          "const": "daemon"
+        },
+        {
+          "description": "The registry file.",
+          "type": "string",
+          "const": "registry"
+        },
+        {
+          "description": "The roots and the instance folders.",
+          "type": "string",
+          "const": "permissions"
+        },
+        {
+          "description": "The volume that holds the data root.",
+          "type": "string",
+          "const": "disk_space"
+        },
+        {
+          "description": "The managed runtimes.",
+          "type": "string",
+          "const": "runtimes"
+        },
+        {
+          "description": "The pinned provider packages instances use.",
+          "type": "string",
+          "const": "provider_packages"
+        },
+        {
+          "description": "Ports of instances that are not running.",
+          "type": "string",
+          "const": "endpoints"
+        },
+        {
+          "description": "Recorded processes and their identity.",
+          "type": "string",
+          "const": "processes"
+        },
+        {
+          "description": "The data folder and runtime of each instance.",
+          "type": "string",
+          "const": "instance_files"
+        },
+        {
+          "description": "Instances that failed or are not ready.",
+          "type": "string",
+          "const": "instance_failures"
+        },
+        {
+          "description": "Rendered config that differs from its revision.",
+          "type": "string",
+          "const": "config_drift"
+        },
+        {
+          "description": "Secrets an instance needs and cannot find.",
+          "type": "string",
+          "const": "secrets"
+        },
+        {
+          "description": "Operations that need recovery and scratch folders left behind.",
+          "type": "string",
+          "const": "operations"
+        },
+        {
+          "description": "A check this build does not know. A client never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "DoctorParams": {
+      "description": "Params of `doctor.run`.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "The daemon checks to run, each at most once; empty means all of\nthem. A client check or an unknown one is refused.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DoctorCheckId"
+          }
+        },
+        "instanceId": {
+          "description": "Limits the checks that are about instances to this one; the global\nchecks still run. An ID that is not there is `resource.not_found`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        }
+      }
     },
     "EndpointRequest": {
       "description": "The port request of one manifest endpoint.",

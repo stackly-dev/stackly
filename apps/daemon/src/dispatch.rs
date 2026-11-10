@@ -25,6 +25,7 @@ use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
 };
+use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
     ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
@@ -381,6 +382,23 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, PrepareTerminalReply> {
         let _ = context;
         instance::prepare_terminal(core, params)
+    }
+
+    /// `doctor.run` (spec 0034).
+    fn run_doctor<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: DoctorParams,
+    ) -> HandlerFuture<'a, DoctorReport> {
+        let _ = (core, context, params);
+        // provisional: F34 (spec 0034 step 5 replaces this with the handler)
+        Box::pin(async {
+            Err(Box::new(ErrorBody::new(
+                &stackly_protocol::codes::request::UNKNOWN_METHOD,
+                "doctor.run is not served by this build yet",
+            )))
+        })
     }
 
     /// `instance.get_data_usage`.

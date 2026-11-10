@@ -1246,6 +1246,14 @@ async fn dispatch(
             .map(Reply::InstancePrepareTerminal),
             None,
         ),
+        Call::DoctorRun(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.run_doctor(c, x, p)
+            })
+            .await
+            .map(|report| Reply::DoctorRun(Box::new(report))),
+            None,
+        ),
         Call::InstanceGetDataUsage(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_data_usage(c, x, p)

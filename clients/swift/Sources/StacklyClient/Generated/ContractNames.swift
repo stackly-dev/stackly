@@ -83,6 +83,7 @@ extension Call {
 		case .instanceLogsFollow: "instance.logs_follow"
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		case .instancePrepareTerminal: "instance.prepare_terminal"
+		case .doctorRun: "doctor.run"
 		}
 	}
 }
@@ -149,6 +150,7 @@ extension Reply {
 		case .instanceLogsFollow: "instance.logs_follow"
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		case .instancePrepareTerminal: "instance.prepare_terminal"
+		case .doctorRun: "doctor.run"
 		}
 	}
 }

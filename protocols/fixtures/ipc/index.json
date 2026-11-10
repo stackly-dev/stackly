@@ -2008,6 +2008,44 @@
       "file": "frame-response-operation-list-cancel.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-doctor-run.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-doctor-run-without-fields.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "reject-doctor-run-client-check.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-doctor-run-duplicate-check.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-doctor-run.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-doctor-run-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
     }
   ]
 }
