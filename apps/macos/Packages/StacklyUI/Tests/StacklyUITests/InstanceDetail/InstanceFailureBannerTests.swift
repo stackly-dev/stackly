@@ -75,6 +75,7 @@ struct InstanceFailureBannerTests {
                 "Retry in the banner is the main Retry: each click sends one new instance.start with a new key and a refusal shows the failure card"
         ))
     func retrySendsANewStartWithANewKeyEachClick() async throws {
+        // covers: spec 0033 AC-13 (Retry is one new instance.start with a new key)
         let model = actionModel()
         let summary = FixtureFailureBanner.crashLoop.instance
         for round in 1...2 {
@@ -103,6 +104,7 @@ struct InstanceFailureBannerTests {
     }
 
     @Test func retryShowsStartingWhileTheStartRuns() async throws {
+        // covers: spec 0033 AC-13 (the busy label Starting…)
         let model = actionModel()
         let summary = FixtureFailureBanner.crashLoop.instance
         script.holdNextSend = true
@@ -133,6 +135,7 @@ struct InstanceFailureBannerTests {
                 "Retry keeps the reason the main action is off, so a start that cannot run is disabled with the reason of spec 0022"
         ))
     func retryKeepsTheReasonTheMainActionIsOff() {
+        // covers: spec 0033 AC-13 (off with the same reason)
         let main = StacklyAction(
             id: "retry", title: "Retry", mutates: true,
             disabledReason: "Initialization failed. Remove the instance and create it again.",
@@ -154,6 +157,7 @@ struct InstanceFailureBannerTests {
                 "The banner of a port in use offers Use Port, Show Logs, Retry, and Diagnose…, and Use Port opens the Ports sheet with the port filled in"
         ))
     func usePortOpensThePortsSheetFilledIn() throws {
+        // covers: spec 0033 AC-10 (Use Port opens the Ports sheet filled in)
         var opened: [InstanceEdit] = []
         let edit = InstanceEditAction { opened.append($0) }
         let banner = InstanceFailureBanner(
@@ -176,6 +180,7 @@ struct InstanceFailureBannerTests {
             expected: "The inspector shows only Use Port, and nothing for a banner without one"
         ))
     func theInspectorShowsOnlyUsePort() throws {
+        // covers: spec 0033 AC-12 (the compact inspector banner)
         let edit = InstanceEditAction { _ in }
         let main = StacklyAction(id: "retry", title: "Retry", mutates: true) {}
         let port = InstanceFailureBanner(
@@ -212,6 +217,7 @@ struct InstanceFailureBannerTests {
                 "Show Logs selects the Logs tab, Show in Operations opens Operations, and Diagnose… opens Diagnostics focused on the instance, through the navigator"
         ))
     func theLinksGoToLogsOperationsAndDiagnostics() throws {
+        // covers: spec 0033 AC-16 (Show Logs, Show in Operations, Diagnose…)
         let navigator = ShellNavigator(section: .instances)
         var showedLogs = 0
         let actions = actions(
