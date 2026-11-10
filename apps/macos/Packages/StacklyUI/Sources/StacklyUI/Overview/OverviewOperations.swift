@@ -14,11 +14,14 @@ enum OverviewOperationsContent {
 }
 
 /// The Operations section: the operations that queue, run, or are being cancelled, newest
-/// first. An operation that needs recovery is an item of Needs Attention instead.
+/// first. An operation that needs recovery is an item of Needs Attention instead. A row opens
+/// its operation on the Operations page, and "Show All in Operations" the page itself
+/// (spec 0035, *Navigasi*).
 struct OverviewOperations: View {
     let content: OverviewOperationsContent
     let title: (OperationSnapshot) -> String
-    let open: @MainActor () -> Void
+    let open: @MainActor (UUID) -> Void
+    let showAll: @MainActor () -> Void
     let openDiagnostics: @MainActor () -> Void
 
     var body: some View {
@@ -58,10 +61,11 @@ struct OverviewOperations: View {
                 } else {
                     ForEach(rows) { operation in
                         OverviewOperationRow(
-                            operation: operation, title: title(operation), open: open)
+                            operation: operation, title: title(operation),
+                            open: { open(operation.id) })
                     }
                     if total > rows.count {
-                        Button(action: open) {
+                        Button(action: showAll) {
                             Text(OverviewCopy.showAllOperations)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(Spacing.rowInsets)

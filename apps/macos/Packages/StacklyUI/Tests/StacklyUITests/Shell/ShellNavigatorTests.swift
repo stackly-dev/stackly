@@ -103,4 +103,38 @@ struct ShellNavigatorTests {
         navigator.showInstancesTable()
         #expect(navigator.instancesResets == before + 1)
     }
+
+    // MARK: - Operations (spec 0035, AC-13)
+
+    @Test func openingAnOperationLeavesANewRequestForTheOperationsPage() {
+        let navigator = ShellNavigator(section: .instances)
+        let id = UUID()
+        navigator.openOperation(id)
+        #expect(navigator.section == .operations)
+        #expect(navigator.operationRequest?.operation == id)
+        let first = navigator.operationRequest
+        navigator.openOperation(id)
+        #expect(navigator.operationRequest?.operation == id)
+        #expect(navigator.operationRequest != first)
+    }
+
+    @Test func anOperationRequestStaysWhileOperationsShowsAndGoesWithAnotherSection() {
+        let navigator = ShellNavigator()
+        navigator.openOperation(UUID())
+        let request = navigator.operationRequest
+        // `AppShell` writes the section back from its scene storage.
+        navigator.section = .operations
+        #expect(navigator.operationRequest == request)
+        navigator.show(.diagnostics)
+        #expect(navigator.operationRequest == nil)
+        #expect(ShellDestination.operations.section == .operations)
+    }
+
+    @Test func showingOperationsLeavesNoOperationRequest() {
+        let navigator = ShellNavigator()
+        navigator.show(.operations)
+        #expect(navigator.section == .operations)
+        #expect(navigator.operationRequest == nil)
+        #expect(navigator.instancesRequest == nil)
+    }
 }

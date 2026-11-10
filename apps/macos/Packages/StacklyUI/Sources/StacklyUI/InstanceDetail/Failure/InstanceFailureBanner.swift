@@ -56,8 +56,7 @@ struct FailureBannerActions {
     /// Opens the failed operation in Operations (AC-16).
     /// - Parameter id: The operation.
     func showOperation(_ id: UUID) {
-        // provisional: F35 (ShellNavigator.openOperation(_:) of spec 0035)
-        navigator?.show(.operations)
+        navigator?.openOperation(id)
     }
 
     private var source: InstanceEditSource {
