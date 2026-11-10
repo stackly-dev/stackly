@@ -92,7 +92,7 @@ async fn log_entries(api: &Api, id: Uuid) -> Vec<LogEntry> {
 
 /// The run markers of the log: `true` for `started`, `false` for
 /// `exited`, with the time the daemon saw each.
-async fn markers(api: &Api, id: Uuid) -> Vec<(bool, jiff::Timestamp)> {
+pub(crate) async fn markers(api: &Api, id: Uuid) -> Vec<(bool, jiff::Timestamp)> {
     log_entries(api, id)
         .await
         .into_iter()
@@ -223,7 +223,16 @@ fn files(dir: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 pub(crate) async fn untouched(site: &Site, api: &Api, id: Uuid) -> Untouched {
-    let paths = site.instance_paths(id);
+    untouched_at(&site.instance_paths(id), api, id).await
+}
+
+/// [`untouched`] for an instance whose folders are `paths`, for a root that
+/// the `stacklyd` binary serves rather than a [`Site`].
+pub(crate) async fn untouched_at(
+    paths: &stackly_platform::InstancePaths,
+    api: &Api,
+    id: Uuid,
+) -> Untouched {
     let summary = api.get(id).await.expect("the instance reads");
     let config = match api
         .client
