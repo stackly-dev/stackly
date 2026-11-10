@@ -257,9 +257,9 @@ impl OperationEngine {
     pub async fn replay(&self, origin: &RequestOrigin) -> Result<Option<BeginOutcome>, BeginError>; // baca saja, sebelum begin (langkah 16, K12)
     pub async fn get(&self, id: OperationId) -> Result<Option<OperationDetailView>, EngineError>;
     pub async fn list(&self, query: OperationQuery) -> Result<OperationListPage, EngineError>;
-    pub async fn cancel(&self, id: OperationId) -> Result<CancelOutcome, EngineError>;
-    pub async fn resume(&self, id: OperationId, expected: Option<ResourceRevision>) -> Result<OperationView, EngineError>;
-    pub async fn abandon(&self, id: OperationId, expected: ResourceRevision) -> Result<AbandonOutcome, EngineError>;
+    pub async fn cancel(&self, id: OperationId, by: OperationTrigger) -> Result<CancelOutcome, EngineError>;   // by: pengirim, untuk baris audit (spec 0035)
+    pub async fn resume(&self, id: OperationId, expected: Option<ResourceRevision>, by: OperationTrigger) -> Result<OperationView, EngineError>;
+    pub async fn abandon(&self, id: OperationId, expected: ResourceRevision, by: OperationTrigger) -> Result<AbandonOutcome, EngineError>;
     pub fn stats(&self) -> EngineStats;
     pub fn locks(&self) -> LockTable;
     pub async fn shutdown(&self, grace: Duration) -> ShutdownReport;
@@ -338,6 +338,7 @@ impl OperationContext {
     pub fn kind(&self) -> OperationKind;
     pub fn resource(&self) -> OperationResource;
     pub fn trigger(&self) -> &OperationTrigger;
+    pub fn set_audit_note(&self, note: AuditNote);    // spec 0035: catatan baris audit akhir, di memori, menggantikan catatan sebelumnya
     pub fn input(&self) -> Option<&JournalPayload>;
     pub fn registry(&self) -> &Arc<dyn Registry>;     // baca; tulis hanya lewat commit atau finalize
     pub fn platform(&self) -> &Arc<Platform>;
@@ -476,6 +477,7 @@ Default yang diwarisi fitur pemilik; perubahan baris lewat update spec ini.
 - `cancel(id)`: berstate akhir menghasilkan `already_final`; `needs_recovery` menghasilkan `recovery_required`; `cancel_requested` menghasilkan lagi `requested` atau `continuing_past_point_of_no_return` tanpa commit; `queued` tanpa `started_at` langsung `cancelled` (`cancelled_before_start`); `queued` dengan `started_at` (operasi yang dilanjutkan) menjadi `cancel_requested`, lalu dispatcher menjalankan kompensasi tanpa melanjutkan pekerjaan kalau titik tak bisa dibalik belum dilewati, atau melanjutkan pekerjaan sampai selesai kalau sudah (`continuing_past_point_of_no_return`); `running` menjadi `cancel_requested` dengan `cancel_requested_at`, sinyal `watch` dikirim, dan disposisinya `requested` atau `continuing_past_point_of_no_return`.
 - Cancel sebelum titik tak bisa dibalik juga diperiksa tepat sebelum `finalize`: kalau sudah diminta, engine mengompensasi lalu `cancelled`, bukan `succeeded`.
 - Setelah titik tak bisa dibalik, cancel tidak menghentikan pekerjaan. Operasi selesai sebagai `succeeded` dengan `cancelRequestedAt` dan `pointOfNoReturnAt` di DTO, atau `needs_recovery` kalau gagal.
+- *Diperbarui 2026-11-10 (koordinasi scope 05, spec 0035):* `cancel`, `resume`, dan `abandon` menerima `OperationTrigger` pengirim (`by`), dan commit yang mengubah state menulis baris audit `operation.cancel`, `operation.resume`, atau `operation.abandon` dengan trigger itu, selain baris `operation.finished` atau `operation.needs_recovery` yang ditulis engine di setiap commit akhir (spec 0035 *Baris audit operasi*, untuk semua jenis, bukan hanya yang destruktif). Ketersediaan cancel per operasi adalah fungsi domain murni `stackly_domain::cancel_availability(state, kind, point_of_no_return)` (juga `Operation::cancel_availability`), yang mengisi `OperationSummary.cancel`: jenis `CloseInterrupted` menerima cancel di langkah mana pun, jadi titik tak bisa dibalik tidak dihitung untuknya. Pekerjaan memasang catatan audit lewat `OperationContext::set_audit_note`; catatan itu tidak masuk journal.
 
 ### Kompensasi dan primitive hapus
 
@@ -830,8 +832,8 @@ Untuk pemilik fitur lain:
 - [x] Spec 0005 (pemilik fitur 5): catat tambahan port, migrasi, `IdempotencyKeyTaken`, aturan `touch` untuk revision operasi, dan potongan prune 500 operasi dari *Port registry* saat milestone 1 fitur ini masuk. Diterapkan di spec 0005 (2026-10-18).
 - [x] Spec 0006 (pemilik fitur 6): catat `ClientInfo.interactive` di handshake (juga dibutuhkan spec 0011) dan urutan slot start serta shutdown dengan engine operasi. Diterapkan di spec 0006 (2026-10-18): `ClientInfo.interactive` (AC-19) dan urutan slot start serta shutdown.
 - [ ] Fitur 8: command `stackly operation list`, `inspect`, `cancel`, `resume`, dan `abandon`, `--wait`, `--idempotency-key`, dan exit code dari `failure.error.category`. Spec 0008 menambah `resume` dan `abandon` (2026-10-18).
-- [ ] Fitur 34: doctor menampilkan operasi `needs_recovery` beserta hint nya, dan folder scratch tanpa baris operasi (`scratch_leftover`).
-- [ ] Fitur 35: baris audit untuk cancel, abandon, dan jenis operasi destruktif memakai `trigger` dari journal.
+- [x] Fitur 34: doctor menampilkan operasi `needs_recovery` beserta hint nya, dan folder scratch tanpa baris operasi (`scratch_leftover`). Diterapkan di spec 0034 (2026-11-10): check `operations` (AC-6) memberi `needs_recovery` dengan hint dan aksi `show_operation`, dan `scratch_leftover` untuk folder tanpa baris operasi yang lebih tua dari 10 menit.
+- [x] Fitur 35: baris audit untuk cancel, abandon, dan jenis operasi destruktif memakai `trigger` dari journal. Diterapkan di spec 0035 (2026-11-10): *Baris audit operasi* untuk semua jenis, bukan hanya yang destruktif; `cancel`, `resume`, dan `abandon` menerima `OperationTrigger` pengirim (*Cancel* di spec ini).
 - [ ] Fitur 46: operasi environment tidak boleh menunggu operasi lain sambil memegang slot berjalan (risiko deadlock di batas 8); desain operasi anak diputuskan di sana.
 - [ ] Fitur 63: review keamanan blok `unsafe` `remove_tree` dan test balapan.
 - [ ] Fitur 64: benchmark boleh menyetel ulang `MAX_RUNNING_OPERATIONS`, `MAX_QUEUED_OPERATIONS`, dan `PROGRESS_COMMIT_INTERVAL` lewat update spec ini.
