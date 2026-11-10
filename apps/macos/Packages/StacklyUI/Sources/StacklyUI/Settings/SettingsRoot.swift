@@ -29,21 +29,28 @@ public struct SettingsRoot: View {
 
     /// The Settings content.
     public var body: some View {
-        TabView {
-            Tab(SettingsTab.general.title, systemImage: SettingsTab.general.symbol) {
+        TabView(selection: Bindable(model.settingsTab).tab) {
+            Tab(SettingsTab.general.title, systemImage: SettingsTab.general.symbol, value: .general)
+            {
                 GeneralSettingsTab(loginItem: loginItem)
             }
-            Tab(SettingsTab.instances.title, systemImage: SettingsTab.instances.symbol) {
+            Tab(
+                SettingsTab.instances.title, systemImage: SettingsTab.instances.symbol,
+                value: .instances
+            ) {
                 InstancesSettingsTab(
                     model: model, notifications: notifications, preferences: preferences)
             }
-            Tab(SettingsTab.sources.title, systemImage: SettingsTab.sources.symbol) {
+            Tab(SettingsTab.sources.title, systemImage: SettingsTab.sources.symbol, value: .sources)
+            {
                 SourcesSettingsTab(model: model)
             }
-            Tab(SettingsTab.storage.title, systemImage: SettingsTab.storage.symbol) {
+            Tab(SettingsTab.storage.title, systemImage: SettingsTab.storage.symbol, value: .storage)
+            {
                 StorageSettingsTab(model: model)
             }
-            Tab(SettingsTab.updates.title, systemImage: SettingsTab.updates.symbol) {
+            Tab(SettingsTab.updates.title, systemImage: SettingsTab.updates.symbol, value: .updates)
+            {
                 UpdatesSettingsTab(model: model)
             }
         }

@@ -72,6 +72,22 @@ struct CapacityModelTests {
         #expect(model.failure == nil)
     }
 
+    @Test func aReportFromTheDoctorReplacesOnlyAnOlderOne() async {
+        let model = makeModel()
+        script.replies = [.success(report(20, level: .low))]
+        await model.refresh()
+        let older = InstanceContractFixture.capacity(
+            .ok, checkedAt: Date(timeIntervalSince1970: 10))
+        model.accept(older)
+        #expect(model.report?.level == .low)
+        let newer = InstanceContractFixture.capacity(
+            .critical, checkedAt: Date(timeIntervalSince1970: 30))
+        model.accept(newer)
+        #expect(model.report?.level == .critical)
+        #expect(model.failure == nil)
+        #expect(model.attempted)
+    }
+
     @Test func aReplyOlderThanTheReportHeldIsIgnored() async {
         let model = makeModel()
         script.replies = [.success(report(20, level: .low)), .success(report(10, level: .ok))]

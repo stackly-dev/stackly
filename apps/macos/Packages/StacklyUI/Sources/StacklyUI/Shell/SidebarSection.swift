@@ -57,7 +57,7 @@ nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifi
     }
 
     /// The badge of the section, or `nil` when it has none.
-    /// Operations shows the running operations only while connected. A count of zero, a count that never loaded, and every other section show no badge.
+    /// Operations shows the running operations, and Diagnostics the Error findings of the last doctor report, only while connected. A count of zero, a count that never loaded, and every other section show no badge.
     /// - Parameters:
     ///   - counts: The counts from the stores.
     ///   - isConnected: Whether the daemon is connected and every store refreshed.
@@ -75,7 +75,12 @@ nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifi
                 return nil
             }
             return SidebarBadge(count: count, isProminent: true)
-        case .overview, .environments, .catalog, .runtimes, .diagnostics:
+        case .diagnostics:
+            // The Error findings of the last doctor report while connected (spec 0034,
+            // AC-20).
+            guard isConnected, let count = counts.doctorErrors, count > 0 else { return nil }
+            return SidebarBadge(count: count, isProminent: true)
+        case .overview, .environments, .catalog, .runtimes:
             return nil
         }
     }
@@ -121,11 +126,14 @@ nonisolated public struct SidebarCounts: Hashable, Sendable {
     public var instances: Int?
     /// The operations that are running or cancelling.
     public var runningOperations: Int?
+    /// The Error findings of the last doctor report, `nil` before a run (spec 0034).
+    public var doctorErrors: Int?
 
     /// Creates the counts.
-    public init(instances: Int? = nil, runningOperations: Int? = nil) {
+    public init(instances: Int? = nil, runningOperations: Int? = nil, doctorErrors: Int? = nil) {
         self.instances = instances
         self.runningOperations = runningOperations
+        self.doctorErrors = doctorErrors
     }
 }
 

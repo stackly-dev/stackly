@@ -253,7 +253,7 @@ struct AttentionRulesTests {
             critical.message
                 == "Only 1.7 GB free on the disk that holds Stackly data. Instances can fail when it fills up."
         )
-        #expect(critical.destination == .diagnostics)
+        #expect(critical.destination == .diagnostics(focus: .check(.diskSpace)))
 
         let low = try #require(try disk(.low, available: 4_100_000_000))
         #expect(low.rule == "S2")

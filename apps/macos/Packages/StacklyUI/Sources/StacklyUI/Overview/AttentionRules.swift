@@ -248,7 +248,8 @@ nonisolated public enum AttentionRules {
         {
             AttentionItem(
                 id: "disk", rule: rule, tone: tone, category: .disk, title: title,
-                message: message, destination: .diagnostics, sortKey: "")
+                message: message, destination: .diagnostics(focus: .check(.diskSpace)),
+                sortKey: "")
         }
         if let report = capacity.report {
             let available = CatalogCopy.sizeText(report.availableBytes, locale: locale)

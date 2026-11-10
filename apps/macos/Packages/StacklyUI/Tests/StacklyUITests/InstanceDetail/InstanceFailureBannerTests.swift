@@ -209,7 +209,7 @@ struct InstanceFailureBannerTests {
         .evidence(
             covers: ["AC-068"],
             expected:
-                "Show Logs selects the Logs tab, and Show in Operations and Diagnose… open Operations and Diagnostics through the navigator"
+                "Show Logs selects the Logs tab, Show in Operations opens Operations, and Diagnose… opens Diagnostics focused on the instance, through the navigator"
         ))
     func theLinksGoToLogsOperationsAndDiagnostics() throws {
         let navigator = ShellNavigator(section: .instances)
@@ -222,9 +222,11 @@ struct InstanceFailureBannerTests {
         #expect(showedLogs == 1)
         #expect(navigator.section == .instances)
 
-        // provisional: F34 (Diagnostics with the focus on the instance)
+        // Diagnostics with the Doctor section filtered to this instance (spec 0034, AC-20).
         try #require(actions.stacklyAction(for: .diagnose)).perform()
         #expect(navigator.section == .diagnostics)
+        let instance = FixtureFailureBanner.crashLoop.instance.id
+        #expect(navigator.diagnosticsRequest?.focus == .instance(instance))
 
         // The operation itself on the Operations page (spec 0035, AC-13).
         let operation = try #require(try content(.crashLoop).operationId)
