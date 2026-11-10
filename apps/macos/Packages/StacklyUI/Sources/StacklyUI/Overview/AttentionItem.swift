@@ -7,6 +7,8 @@ nonisolated public enum AttentionDestination: Hashable, Sendable {
     /// The Configuration tab of the instance, through
     /// ``ShellNavigator/openInstance(_:tab:)`` (spec 0029, AC-19).
     case configuration(UUID)
+    /// The operation, through ``ShellNavigator/openOperation(_:)`` (spec 0035, AC-13).
+    case operation(UUID)
     /// The Operations page.
     case operations
     /// The Diagnostics page.

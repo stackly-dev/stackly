@@ -226,8 +226,10 @@ struct InstanceFailureBannerTests {
         try #require(actions.stacklyAction(for: .diagnose)).perform()
         #expect(navigator.section == .diagnostics)
 
-        // provisional: F35 (the operation itself on the Operations page)
-        actions.showOperation(try #require(try content(.crashLoop).operationId))
+        // The operation itself on the Operations page (spec 0035, AC-13).
+        let operation = try #require(try content(.crashLoop).operationId)
+        actions.showOperation(operation)
         #expect(navigator.section == .operations)
+        #expect(navigator.operationRequest?.operation == operation)
     }
 }

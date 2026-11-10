@@ -207,15 +207,20 @@ struct AttentionRulesTests {
         let byRule = all.filter { $0.rule == "O1" }
         #expect(byRule.count == 4)
         let messages = byRule.map(\.message)
+        // The words of the row on the Operations page, with no command (spec 0035, AC-13).
+        #expect(messages.contains("It can continue. Resume or abandon it."))
+        #expect(messages.contains("It can’t continue. Abandon it to clean up."))
+        #expect(messages.contains("It needs manual cleanup. Open it for details."))
+        #expect(messages.contains("Open it for details."))
+        #expect(messages.allSatisfy { $0.contains("stackly") == false })
+        #expect(byRule.allSatisfy { $0.tone == .critical })
+        // Each item opens its own operation.
+        let recovering = operations.filter {
+            $0.state == .needsRecovery && $0.recovery?.hint != .autoCompensate
+        }
         #expect(
-            messages.contains(
-                "It can continue. Resume or abandon it with stackly operation resume or abandon."))
-        #expect(
-            messages.contains("It can’t continue. Abandon it with stackly operation abandon."))
-        #expect(
-            messages.contains("It needs manual cleanup. Check it with stackly operation inspect."))
-        #expect(messages.contains("Check it with stackly operation inspect."))
-        #expect(byRule.allSatisfy { $0.tone == .critical && $0.destination == .operations })
+            Set(byRule.map(\.destination))
+                == Set(recovering.map { AttentionDestination.operation($0.id) }))
         #expect(byRule.contains { $0.title == "Install runtime needs recovery" })
         #expect(byRule.contains { $0.title == "Create instance needs recovery" })
     }
