@@ -168,7 +168,7 @@ DTO baru di `stackly-protocol` modul `doctor` (camelCase, count dengan newtype `
 
 `BundlePreview { previewId, createdAt, expiresAt, suggestedFileName, entries: [BundleEntry], totalBytes: Count, zipBytes: Count, recovery: bool }`, `BundleEntry { path, kind: BundleEntryKind, description, bytes: Count, lines: Count?, truncated: bool }`, `BundleEntryKind` terbuka (`readme`, `doctor`, `system`, `instances`, `runtimes`, `operations`, `daemon_log`, `instance_log`, `agent`, `unrecognized`). `suggestedFileName` adalah `stackly-diagnostics-<YYYYMMDD>T<HHMMSS>Z.zip` dari `createdAt` UTC.
 
-Kontrak ini menaikkan `ProtocolVersion::CURRENT` satu minor (minor bebas berikutnya, sementara 3.5, ditetapkan lead saat build) dengan codegen, fixture di `protocols/fixtures/`, dan entri katalog error. Tidak ada event kind baru dan tidak ada migrasi registry.
+Kontrak ini menaikkan `ProtocolVersion::CURRENT` satu minor (minor bebas berikutnya menurut urutan merge, sementara 3.5, ditetapkan lead saat build; langkah 9 memakai `--amend` pada minor langkah 1 selama minor itu belum ada di `main`, selain itu minor berikutnya) dengan codegen, fixture di `protocols/fixtures/`, dan entri katalog error. Tidak ada event kind baru dan tidak ada migrasi registry.
 
 ### Kode error baru
 
@@ -464,7 +464,7 @@ Approach Journey: satu jalur pengguna (instance gagal, lalu doctor menjelaskan s
 
 16. Manual A launchd asli dan Manual B lintasan GUI, dicatat di `verify.md` spec ini, `BLOCKED` sampai dijalankan, satisfies **AC-11**, **AC-17**, **AC-19**, **AC-22**
 
-**Sesi paralel**: setelah milestone 1 masuk, milestone 2 (provider dan `main` daemon), milestone 3 (`diagnostics` di core dan daemon), dan milestone 5 langkah 13 (Swift saja) tidak berbagi file dan bisa dibangun paralel. Milestone 4 langkah 11 (CLI) juga terpisah dari Swift dan bisa jalan bersama langkah 13. Langkah 2 (platform macOS) dan langkah 3 (storage) bisa paralel di dalam milestone 1 sebelum langkah 4. Codegen dan bump protokol hanya di langkah 1 dan 9, jadi kedua langkah itu berurutan.
+**Sesi paralel**: area per langkah: langkah 1 dan 9 menyentuh `crates/protocol` (DTO, `methods!`, bump, codegen ke `protocols/` dan `clients/swift`); langkah 4, 6, dan 9 menyentuh `crates/core` (`doctor/`, `supervisor/evidence.rs`, `provider/`, `diagnostics/`); langkah 5, 8, dan 10 menyentuh `apps/daemon` (`ipc/doctor`, `main.rs`, `ipc/diagnostics`); langkah 2 hanya `crates/platform`, `crates/platform-macos`, dan `crates/testkit`; langkah 3 hanya `crates/storage`; langkah 7 hanya `providers/postgresql` dan golden paket; langkah 11 dan 12 hanya `apps/cli`; langkah 13 sampai 15 hanya `apps/macos`. Langkah 2 dan 3 bisa paralel satu sama lain dan dengan sesi lain yang memegang protocol, core, atau daemon. Langkah 1, 4, 5, 6, 8, 9, dan 10 berurutan dengan sesi lain yang sedang memegang `crates/protocol`, `crates/core`, atau `apps/daemon` (saat ini `dev-f35-m1` dengan protokol 3.3), dan minor protokol F34 diambil menurut urutan merge. Setelah milestone 1 masuk, langkah 11 (CLI) dan langkah 13 (Swift) tidak berbagi file dengan milestone 2 atau 3 dan bisa dibangun paralel; langkah 12 dan 14 menunggu milestone 3.
 
 ## Consequences
 
