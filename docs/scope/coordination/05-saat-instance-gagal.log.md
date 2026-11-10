@@ -12,6 +12,7 @@
 | `arc-f33-spec` | architect | F33 spec baru `0033-crash-loop-error-start` (kotak `Build it` tanpa Pointer diperlakukan sebagai `(spec)`) | `05-saat-instance-gagal.md` | `docs/specs/0033-crash-loop-error-start/` | `claude/arc-f33-spec-*` | `opus-5-5 · xhigh` | `aktif` |
 | `arc-f34-spec` | architect | F34 `Design it (spec)`, spec `0034-doctor-diagnostic-bundle` | `05-saat-instance-gagal.md` | `docs/specs/0034-doctor-diagnostic-bundle/` | `claude/arc-f34-spec-*` | `opus-5-5 · xhigh` | `aktif` |
 | `arc-f35-spec` | architect | F35 `Design it (spec)`, spec `0035-operations-activity-audit` | `05-saat-instance-gagal.md` | `docs/specs/0035-operations-activity-audit/` | `claude/arc-f35-spec-2486d3` | `opus-5-5 · xhigh` (giliran pertama `medium`) | `merged` `747f9ba1` |
+| `dev-f35-m1` | developer | F35 milestone 1, langkah Build plan 1 sampai 4 (kontrak 3.3, migrasi `0012`, engine audit, daemon) | `05-saat-instance-gagal.md` | `crates/domain/`, `crates/storage/`, `crates/core/`, `crates/protocol/`, `crates/testkit/`, `apps/daemon/`, `protocols/`, `schemas/`, hasil codegen, `fuzz/seeds/`, `verify.md` 0035 | `claude/arc-f35-spec-2486d3` (sesi `local_818f334f`) | `opus-5-5 · xhigh` | `dipakai ulang` · `aktif` |
 
 ## Keputusan
 
@@ -25,6 +26,7 @@
 | `2026-11-10` | Nomor sementara untuk build supaya tiga spec tidak bertabrakan: protokol F33 3.3, F35 3.4, F34 3.5; migrasi F35 `0012`, F34 `0013` (hanya bila dibutuhkan). Spec menulis "nomor bebas berikutnya, ditetapkan lead saat build". | `lead` |
 | `2026-11-10` | Lead berjalan di `claude-fable-5-2` effort `medium`; sub sesi diminta `claude-opus-5-5` `xhigh` dan effort-nya diperiksa lewat `get_session` sesudah mulai. | `lead` |
 | `2026-11-10` | Spec 0035 diterima lead atas delegasi user (20 AC, cross check Sonnet 15 temuan: 13 diterapkan, 2 dipertahankan; K1 sampai K16 di `rationale.md`). F35 membangun lebih dulu, jadi nomor final: protokol 3.3 dan migrasi `0012`; F33 dan F34 mengambil nomor berikutnya menurut urutan merge. Worktree sub sesi ada di `~/worktrees/Stackly/`, bukan `.claude/worktrees/`. Langkah 10 Build plan 0035 (sesi GUI manual) masuk `05-saat-instance-gagal.manual.md`. | `lead` |
+| `2026-11-10` | `start_session` ditolak pada giliran yang dipicu pesan sesi lain (sama seperti scope 02 dan 04), jadi sesi architect yang sudah di-merge dipakai ulang sebagai developer fitur yang sama: `clear_session`, judul baru, brief lewat `SendMessage`. | `lead` |
 
 ## Blocker terbuka
 
