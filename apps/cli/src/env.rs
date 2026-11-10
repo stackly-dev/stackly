@@ -4,7 +4,9 @@
 //! created: the CLI only works out where the daemon's socket is.
 //!
 //! `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `TZ` are read by
-//! `anstream` and jiff, not here.
+//! `anstream` and jiff, not here. `COLUMNS` is read once with the output,
+//! and only when stdout is a terminal, through [`columns`]: the CLI never
+//! asks the terminal itself, since that needs `ioctl` (spec 0008).
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -66,6 +68,23 @@ pub fn read(executable: PathBuf) -> Result<Environment, CliFailure> {
         agent,
     })
 }
+
+/// The terminal width `COLUMNS` holds: a whole number of at least 1 and
+/// at most 10000 columns, else `None`, so a width that makes no sense cuts
+/// nothing instead of failing the command.
+#[must_use]
+pub fn columns(value: Option<&OsStr>) -> Option<usize> {
+    let text = value?.to_str()?;
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<usize>()
+        .ok()
+        .filter(|columns| (1..=COLUMNS_MAX).contains(columns))
+}
+
+/// The widest `COLUMNS` [`columns`] takes.
+const COLUMNS_MAX: usize = 10_000;
 
 /// The canonical path of the running executable: `current_exe` resolved
 /// through symlinks; as `current_exe` gave it when that fails (a symlink
@@ -208,6 +227,26 @@ mod tests {
     use stackly_protocol::codes::cli;
 
     use super::*;
+
+    #[test]
+    fn columns_is_a_whole_number_from_1_to_10000_and_anything_else_is_unknown() {
+        for (value, expected) in [
+            ("80", Some(80)),
+            ("1", Some(1)),
+            ("10000", Some(10_000)),
+            ("0", None),
+            ("10001", None),
+            ("", None),
+            ("-1", None),
+            ("+80", None),
+            ("80 ", None),
+            ("eighty", None),
+            ("99999999999999999999999", None),
+        ] {
+            assert_eq!(columns(Some(OsStr::new(value))), expected, "{value:?}");
+        }
+        assert_eq!(columns(None), None);
+    }
 
     #[test]
     fn no_input_takes_1_or_true_in_any_case_and_refuses_unknown_values() {

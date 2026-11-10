@@ -143,7 +143,7 @@ fn the_flags_go_over_the_draft_and_copy_takes_the_reference_the_source_uses() {
                 "input": { "type": "copyFrom", "content": REFERENCE }
             }],
             "startup": null,
-            "duplicateOf": null
+            "duplicateOf": SOURCE
         })
     );
     let value = envelope(&json);

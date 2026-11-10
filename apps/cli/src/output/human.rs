@@ -7,7 +7,7 @@ use anstyle::Style;
 use jiff::tz::TimeZone;
 use serde::Serialize;
 use stackly_protocol::Timestamp;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use super::escape::escape_display;
 use super::style::Tone;
@@ -15,6 +15,9 @@ use super::time::{format_age, format_local};
 
 /// The text written for an empty cell or value.
 pub const EMPTY: &str = "-";
+
+/// The mark at the end of a cell [`HumanWriter::fitted_table`] cut.
+pub const CUT: char = '…';
 
 /// A command result that can be written for people.
 pub trait Render {
@@ -75,6 +78,27 @@ impl Cell {
     fn width(&self) -> usize {
         self.text.width()
     }
+
+    /// This cell in at most `width` display columns (at least one): cut
+    /// where it does not fit, with [`CUT`] as its last column.
+    fn cut(self, width: usize) -> Self {
+        let width = width.max(1);
+        if self.width() <= width {
+            return self;
+        }
+        let mut used = 0;
+        let mut text = String::new();
+        for c in self.text.chars() {
+            let w = c.width().unwrap_or(0);
+            if used + w > width - 1 {
+                break;
+            }
+            used += w;
+            text.push(c);
+        }
+        text.push(CUT);
+        Self { text, ..self }
+    }
 }
 
 /// Builds the text of one result in memory, with or without color.
@@ -84,11 +108,12 @@ pub struct HumanWriter {
     color: bool,
     now: jiff::Timestamp,
     tz: TimeZone,
+    columns: Option<usize>,
 }
 
 impl HumanWriter {
     /// A writer that colors when `color`, writes times in `tz`, and counts
-    /// ages from `now`.
+    /// ages from `now`. It does not know the terminal width.
     #[must_use]
     pub const fn new(color: bool, now: jiff::Timestamp, tz: TimeZone) -> Self {
         Self {
@@ -96,7 +121,15 @@ impl HumanWriter {
             color,
             now,
             tz,
+            columns: None,
         }
+    }
+
+    /// This writer for a terminal `columns` wide, or of unknown width.
+    #[must_use]
+    pub fn with_columns(mut self, columns: Option<usize>) -> Self {
+        self.columns = columns;
+        self
     }
 
     /// The text written so far.
@@ -162,6 +195,39 @@ impl HumanWriter {
             }
             self.buf.push('\n');
         }
+    }
+
+    /// [`Self::table`] with the cells of its last column cut to what the
+    /// other columns leave of the terminal width, but never below
+    /// `last_min` columns, so a line may still be wider than the terminal.
+    /// Nothing is cut when the width is not known, as when stdout is not a
+    /// terminal.
+    pub fn fitted_table(&mut self, headers: &[&str], rows: &[Vec<Cell>], last_min: usize) {
+        let (Some(columns), Some(last)) = (self.columns, headers.len().checked_sub(1)) else {
+            self.table(headers, rows);
+            return;
+        };
+        let used: usize = (0..last)
+            .map(|column| {
+                let header = headers[column].to_uppercase().width();
+                rows.iter()
+                    .filter_map(|row| row.get(column).map(Cell::width))
+                    .fold(header, usize::max)
+                    + 2
+            })
+            .sum();
+        let room = columns.saturating_sub(used).max(last_min);
+        let rows: Vec<Vec<Cell>> = rows
+            .iter()
+            .map(|row| {
+                let mut row = row.clone();
+                if let Some(cell) = row.get_mut(last) {
+                    *cell = cell.clone().cut(room);
+                }
+                row
+            })
+            .collect();
+        self.table(headers, &rows);
     }
 
     /// `ts` in the system time zone, such as `2026-10-18 10:04:05 +07:00`.
@@ -304,6 +370,47 @@ mod tests {
             "NAME                        X\na\\u{1b}[31mb\\u{a}c\\u{202e}  1\n"
         );
         assert!(!text.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn a_fitted_table_cuts_only_its_last_column_to_the_terminal_width() {
+        let rows = [
+            vec![Cell::fixed("1"), Cell::text("errorCode=x stage=spawn")],
+            vec![Cell::fixed("22"), Cell::text("ok")],
+        ];
+        let mut wide = writer(false).with_columns(Some(80));
+        wide.fitted_table(&["id", "details"], &rows, 4);
+        assert_eq!(
+            wide.into_string(),
+            "ID  DETAILS\n1   errorCode=x stage=spawn\n22  ok\n"
+        );
+        let mut narrow = writer(false).with_columns(Some(16));
+        narrow.fitted_table(&["id", "details"], &rows, 4);
+        assert_eq!(
+            narrow.into_string(),
+            "ID  DETAILS\n1   errorCode=x…\n22  ok\n"
+        );
+        let mut floor = writer(false).with_columns(Some(5));
+        floor.fitted_table(&["id", "details"], &rows, 6);
+        assert_eq!(floor.into_string(), "ID  DETAILS\n1   error…\n22  ok\n");
+    }
+
+    #[test]
+    fn without_a_known_width_a_fitted_table_cuts_nothing() {
+        let rows = [vec![Cell::fixed("1"), Cell::text(&"x".repeat(300))]];
+        let mut out = writer(false);
+        out.fitted_table(&["id", "details"], &rows, 4);
+        assert!(
+            out.into_string()
+                .ends_with(&format!("{}\n", "x".repeat(300)))
+        );
+    }
+
+    #[test]
+    fn a_cut_counts_display_columns_of_wide_text() {
+        let cell = Cell::text("数据库迁移").cut(6);
+        assert_eq!(cell.text, "数据…");
+        assert_eq!(Cell::text("ab").cut(0).text, "…");
     }
 
     #[test]
