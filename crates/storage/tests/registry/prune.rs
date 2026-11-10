@@ -5,7 +5,10 @@
 
 use jiff::{SignedDuration, Timestamp};
 use rusqlite::Connection;
-use stackly_domain::{InstanceId, OperationId, PruneReport, Registry, RetentionPolicy, WriteOp};
+use stackly_domain::{
+    AuditRetentionDays, InstanceId, OperationId, PruneReport, Registry, RetentionPolicy,
+    SettingsPatch, WriteOp,
+};
 
 use stackly_testkit::evidence::{Kind, evidence};
 
@@ -276,4 +279,90 @@ fn prune_deletes_operations_in_batches_with_their_journal_rows() {
             "{table} keeps no row of a pruned operation"
         );
     }
+}
+
+/// Every `occurred_at` of the audit rows, newest first.
+fn audit_times(conn: &Connection) -> Vec<String> {
+    conn.prepare("SELECT occurred_at FROM audit_events ORDER BY occurred_at DESC")
+        .expect("audit_events can be read")
+        .query_map([], |row| row.get(0))
+        .expect("audit_events can be queried")
+        .collect::<Result<_, _>>()
+        .expect("every audit time reads")
+}
+
+// covers: AC-6 (spec 0035)
+#[test]
+fn the_audit_retention_setting_sets_the_age_of_audit_rows_and_no_other_age() {
+    let ev = evidence!(
+        covers = ["REQ-045"],
+        kind = Kind::Fixture,
+        expected = "spec 0035 AC-6: with the audit retention stored as 7, 30, or 90 days, a \
+                    prune with the policy built from the stored setting deletes exactly the \
+                    audit rows older than that many days, while finished operations and \
+                    released leases still go after 30 days",
+    );
+    for (days, kept) in [
+        (AuditRetentionDays::Days7, vec![1, 6]),
+        (AuditRetentionDays::Days30, vec![1, 6, 8, 29]),
+        (AuditRetentionDays::Days90, vec![1, 6, 8, 29, 31, 89]),
+    ] {
+        let harness = Harness::new();
+        let base = harness.base();
+        let instance = harness.instance(&base, "main");
+        harness.commit(vec![WriteOp::InsertInstance(instance.clone())]);
+        let before = harness.registry.daemon_settings().unwrap().value;
+        harness.commit(vec![WriteOp::UpdateDaemonSettings {
+            patch: SettingsPatch {
+                audit_retention: Some(days),
+                ..SettingsPatch::default()
+            },
+            expected: before.revision,
+            at: harness.now(),
+        }]);
+        let now = harness.now();
+        let side = harness.side();
+        for age in [1, 6, 8, 29, 31, 89, 91] {
+            seed_audit_event(&side, &days_before(now, age));
+        }
+        for age in [29, 31] {
+            seed_operation(&side, "succeeded", &days_before(now, age));
+            seed_lease(
+                &side,
+                instance.id(),
+                "released",
+                Some(&days_before(now, age)),
+            );
+        }
+
+        // The policy the daemon builds before every prune (spec 0035, AC-6).
+        let stored = harness.registry.daemon_settings().unwrap().value;
+        assert_eq!(stored.audit_retention, days);
+        let policy = RetentionPolicy::DEFAULT.with_audit_days(stored.audit_retention);
+        let report = harness.registry.prune(&policy, now).unwrap();
+
+        assert_eq!(
+            audit_times(&side),
+            kept.iter()
+                .map(|age| days_before(now, *age))
+                .collect::<Vec<_>>(),
+            "{days:?}"
+        );
+        assert_eq!(
+            report.audit_events,
+            7 - u64::try_from(kept.len()).unwrap(),
+            "{days:?}"
+        );
+        assert_eq!(
+            (report.operations, report.released_leases),
+            (1, 1),
+            "{days:?}: the other ages stay at 30 days"
+        );
+        assert_eq!(
+            count(&side, "SELECT count(*) FROM operations"),
+            1,
+            "{days:?}"
+        );
+    }
+    ev.pass();
 }
