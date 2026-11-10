@@ -19,7 +19,7 @@ use stackly_core::supervisor::{
 };
 use stackly_domain::{
     InstanceFilter, JournalPayload, LockKey, OperationId, OperationKind, OperationResource,
-    OperationState, PlanDecision, RestartPlan, RestartPlanId, Sha256Digest,
+    OperationState, OperationTrigger, PlanDecision, RestartPlan, RestartPlanId, Sha256Digest,
 };
 use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{LaunchContextKind, ShutdownAccepted, ShutdownMode, ShutdownParams};
@@ -468,7 +468,9 @@ pub fn restart<'a>(
         {
             // The operation still waits for an instance lock, and a
             // restart nobody waits for must not run later.
-            let _ = engine.cancel(operation).await;
+            let _ = engine
+                .cancel(operation, OperationTrigger::background())
+                .await;
         }
         match prepared {
             Ok(Ok(PlanPrepared::Written(plan))) => {

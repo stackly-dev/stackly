@@ -8,14 +8,15 @@ use std::sync::{Arc, Mutex};
 
 use jiff::Timestamp;
 use stackly_domain::{
-    CreatedRecord, CreatedSeq, DetailKey, ErrorCodeName, FailureError, FailureItem,
-    InterruptPolicy, JournalStep, JournalView, LockKey, Operation, OperationCursor, OperationId,
-    OperationJournal, OperationKind, OperationQuery, OperationState, Progress, RecoveryHint,
-    Registry, RegistryError, Rule, StepSeq, StepState, WriteBatch, WriteOp,
+    AuditEventRecord, CreatedRecord, CreatedSeq, DetailKey, ErrorCodeName, FailureError,
+    FailureItem, InterruptPolicy, JournalStep, JournalView, LockKey, Operation, OperationCursor,
+    OperationId, OperationJournal, OperationKind, OperationQuery, OperationState, OperationTrigger,
+    Progress, RecoveryHint, Registry, RegistryError, Rule, StepSeq, StepState, WriteBatch, WriteOp,
 };
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tokio::time::Instant;
 
+use super::audit::{self, AuditEvent, AuditNote};
 use super::limits::FAILURE_ITEMS_MAX_BYTES;
 use super::{
     EngineError, EngineStats, Inner, OperationDetailView, OperationListPage, OperationView,
@@ -163,6 +164,8 @@ pub(crate) struct OpHandle {
     pub(crate) stop: watch::Sender<StopSignal>,
     pub(crate) compensating: AtomicBool,
     pub(crate) progress: Mutex<ProgressCell>,
+    /// The work's audit note, in memory only (spec 0035).
+    pub(crate) audit_note: Mutex<Option<AuditNote>>,
     state: Mutex<OperationState>,
 }
 
@@ -182,7 +185,13 @@ impl OpHandle {
             stop,
             compensating: AtomicBool::new(false),
             progress: Mutex::new(ProgressCell::default()),
+            audit_note: Mutex::new(None),
         })
+    }
+
+    /// The audit note the work set last, if any.
+    pub(crate) fn audit_note(&self) -> Option<AuditNote> {
+        lock(&self.audit_note).clone()
     }
 
     /// The state as last committed.
@@ -352,7 +361,23 @@ impl Inner {
         ];
         ops.extend(record.changed_steps(&next));
         ops.extend(record.changed_created(&next));
+        // The rows of a sender (cancel, resume, abandon) come first; the
+        // row of the state change follows them by a nanosecond each.
+        let earlier = extra
+            .iter()
+            .filter(|op| matches!(op, WriteOp::InsertAuditEvent(row) if row.action.is_operation()))
+            .count();
         ops.extend(extra);
+        if let Some(event) = audit::transition(record.operation.state(), next.operation.state()) {
+            let note = handle.audit_note();
+            ops.push(WriteOp::InsertAuditEvent(self.audit_row(
+                &next,
+                event,
+                &next.journal.trigger().clone(),
+                note.as_ref(),
+                audit::nth(now, earlier),
+            )));
+        }
         let mut batch = WriteBatch::new(ops);
         batch.expected_generation = generation;
         // A final operation holds no key (spec 0007, "Lock dan antrian"),
@@ -367,6 +392,26 @@ impl Inner {
         record.written();
         self.after_commit(handle, record, shown);
         Ok(())
+    }
+
+    /// The audit row of `event` for `record` on behalf of `by` (spec 0035).
+    pub(crate) fn audit_row(
+        &self,
+        record: &OpRecord,
+        event: AuditEvent,
+        by: &OperationTrigger,
+        note: Option<&AuditNote>,
+        at: Timestamp,
+    ) -> AuditEventRecord {
+        audit::row(
+            &record.operation,
+            &record.journal,
+            event,
+            by,
+            note,
+            self.deps.redactor.as_ref(),
+            at,
+        )
     }
 
     /// Copies the latest reported progress into `next` when it changed and

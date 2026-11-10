@@ -421,7 +421,11 @@ async fn a_step_ended_while_its_commit_failed_lands_and_resumes_after_a_restart(
     engine.recover().await.unwrap();
     engine.start();
     engine
-        .resume(id, Some(stuck.view.operation.revision()))
+        .resume(
+            id,
+            Some(stuck.view.operation.revision()),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .unwrap();
     let done = wait_state(&engine, id, OperationState::Succeeded).await;

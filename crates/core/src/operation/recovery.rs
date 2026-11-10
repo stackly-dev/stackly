@@ -7,10 +7,11 @@ use std::time::Duration;
 
 use stackly_domain::{
     FailureCode, JournalView, OperationEvent, OperationFailure, OperationId, OperationState,
-    Outcome, RecoveryCause, RecoveryHint, ResourceRevision, StepState, WriteOp,
+    OperationTrigger, Outcome, RecoveryCause, RecoveryHint, ResourceRevision, StepState, WriteOp,
 };
 use tokio::time::Instant;
 
+use super::audit::AuditEvent;
 use super::compensation::{self, Mode};
 use super::runner::{abandoned_outcome, write_final};
 use super::scheduler::{Job, QueueEntry, close_for_recovery, recovery_holder};
@@ -553,6 +554,7 @@ pub(crate) async fn resume(
     inner: &Arc<Inner>,
     id: OperationId,
     expected: Option<ResourceRevision>,
+    by: OperationTrigger,
 ) -> Result<OperationView, EngineError> {
     if let Some(error) = not_ready(inner) {
         return Err(error);
@@ -617,7 +619,8 @@ pub(crate) async fn resume(
                 .map_err(|_| refused())?;
             next.journal.set_recovery_cause(None);
             next.journal.set_failure_error(None);
-            Ok(Vec::new())
+            let row = inner.audit_row(next, AuditEvent::Resume, &by, None, now);
+            Ok(vec![WriteOp::InsertAuditEvent(row)])
         })
         .await?;
     inner.locks.release_operation(id);
@@ -630,6 +633,7 @@ pub(crate) async fn abandon(
     inner: &Arc<Inner>,
     id: OperationId,
     expected: ResourceRevision,
+    by: OperationTrigger,
 ) -> Result<AbandonOutcome, EngineError> {
     if let Some(error) = not_ready(inner) {
         return Err(error);
@@ -706,7 +710,19 @@ pub(crate) async fn abandon(
                 })?;
             next.journal.set_failure_error(Some(error));
             next.journal.set_recovery_cause(None);
-            Ok(vec![WriteOp::DeleteLocks { operation: id }])
+            let row = inner.audit_row(
+                next,
+                AuditEvent::Abandon {
+                    leftovers: leftovers.len(),
+                },
+                &by,
+                None,
+                now,
+            );
+            Ok(vec![
+                WriteOp::DeleteLocks { operation: id },
+                WriteOp::InsertAuditEvent(row),
+            ])
         })
         .await?;
     let view = inner.view(&record, Some(&handle));

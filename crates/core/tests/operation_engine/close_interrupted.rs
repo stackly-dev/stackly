@@ -192,7 +192,11 @@ async fn a_start_interrupted_while_it_winds_down_a_cancel_closes_cancelled() {
         ))
         .await;
     hold.started().await;
-    let cancel = harness.engine.cancel(start).await.unwrap();
+    let cancel = harness
+        .engine
+        .cancel(start, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(
         cancel.disposition,
         CancelDisposition::Requested,
@@ -345,7 +349,11 @@ async fn past_its_spawn_a_start_fails_or_cancels_without_compensation_and_never_
         ))
         .await;
     spawned.started().await;
-    let cancel = harness.engine.cancel(cancelled).await.unwrap();
+    let cancel = harness
+        .engine
+        .cancel(cancelled, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(cancel.disposition, CancelDisposition::Requested);
     let done = wait_state(&harness.engine, cancelled, OperationState::Cancelled).await;
     assert!(done.view.journal.point_of_no_return_at().is_some());

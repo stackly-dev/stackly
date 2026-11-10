@@ -3,6 +3,7 @@
 //! of `stackly_core::operation::testing`.
 #![cfg(unix)]
 
+mod audit;
 mod cancel;
 mod close_interrupted;
 mod common;

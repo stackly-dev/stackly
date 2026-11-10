@@ -14,6 +14,7 @@ use stackly_domain::{
 };
 use tokio::time::Instant;
 
+use super::audit::{self, AuditEvent};
 use super::limits::INPUT_MAX;
 use super::precheck::{NO_OP_STAGE, NoOpReply, Precheck, PrecheckOutcome, Rejection};
 use super::state::{OpHandle, OpRecord, pair};
@@ -257,9 +258,19 @@ async fn answer_no_op(
     operation
         .apply(OperationEvent::Succeed, now)
         .expect("a running operation always succeeds");
+    let row = audit::row(
+        &operation,
+        &journal,
+        AuditEvent::Finished,
+        journal.trigger(),
+        None,
+        inner.deps.redactor.as_ref(),
+        now,
+    );
     let mut ops = vec![
         WriteOp::InsertOperation(operation.clone()),
         WriteOp::InsertJournal(journal.clone()),
+        WriteOp::InsertAuditEvent(row),
     ];
     ops.extend(batch.ops);
     let mut write = WriteBatch::new(ops);
@@ -458,6 +469,7 @@ fn requested(handle: &OpHandle, record: &OpRecord) -> CancelDisposition {
 pub(crate) async fn cancel(
     inner: &Arc<Inner>,
     id: OperationId,
+    by: OperationTrigger,
 ) -> Result<CancelOutcome, EngineError> {
     if matches!(inner.phase(), Phase::Created | Phase::Recovering) {
         return Err(EngineError::NotReady);
@@ -489,6 +501,7 @@ pub(crate) async fn cancel(
         OperationState::NeedsRecovery => CancelDisposition::RecoveryRequired,
         OperationState::CancelRequested => requested(&handle, &record),
         OperationState::Queued if record.operation.started_at().is_none() => {
+            let disposition = CancelDisposition::CancelledBeforeStart;
             inner
                 .write(&handle, &mut record, |next, now| {
                     next.operation
@@ -498,15 +511,23 @@ pub(crate) async fn cancel(
                         })?;
                     next.journal.mark_cancel_requested(now);
                     next.journal.set_waiting_on(None);
-                    Ok(vec![WriteOp::DeleteLocks { operation: id }])
+                    let row =
+                        inner.audit_row(next, AuditEvent::Cancel(disposition), &by, None, now);
+                    Ok(vec![
+                        WriteOp::DeleteLocks { operation: id },
+                        WriteOp::InsertAuditEvent(row),
+                    ])
                 })
                 .await?;
             inner.sched().remove(id);
             inner.forget(id);
             inner.wake.notify_one();
-            CancelDisposition::CancelledBeforeStart
+            disposition
         }
         OperationState::Queued | OperationState::Running => {
+            // The point of no return does not move in this commit, so the
+            // disposition is the same before and after it.
+            let disposition = requested(&handle, &record);
             inner
                 .write(&handle, &mut record, |next, now| {
                     next.operation
@@ -515,11 +536,13 @@ pub(crate) async fn cancel(
                             reason: "an operation refused a cancel",
                         })?;
                     next.journal.mark_cancel_requested(now);
-                    Ok(Vec::new())
+                    let row =
+                        inner.audit_row(next, AuditEvent::Cancel(disposition), &by, None, now);
+                    Ok(vec![WriteOp::InsertAuditEvent(row)])
                 })
                 .await?;
             handle.signal(|stop| stop.cancel = true);
-            requested(&handle, &record)
+            disposition
         }
     };
     Ok(CancelOutcome {

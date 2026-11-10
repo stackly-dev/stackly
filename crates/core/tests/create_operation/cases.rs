@@ -309,7 +309,10 @@ async fn a_cancel_during_init_waits_for_the_step_then_compensates() {
         .expect("accepted");
     let step = rig.helper_spawn(ChildRole::InitStep, 0).await;
 
-    rig.engine.cancel(op).await.expect("the cancel is accepted");
+    rig.engine
+        .cancel(op, stackly_domain::OperationTrigger::background())
+        .await
+        .expect("the cancel is accepted");
     rig.processes().exit(step.pid, Some(ExitStatus::Exited(0)));
     let cancelled = rig.wait_state(op, OperationState::Cancelled).await;
 
@@ -375,7 +378,11 @@ async fn a_lock_a_helper_still_holds_keeps_the_row_and_the_tree_until_abandon() 
     held.lock().unwrap_or_else(PoisonError::into_inner).take();
     let abandoned = rig
         .engine
-        .abandon(op, stuck.view.operation.revision())
+        .abandon(
+            op,
+            stuck.view.operation.revision(),
+            stackly_domain::OperationTrigger::background(),
+        )
         .await
         .expect("abandon is accepted");
 

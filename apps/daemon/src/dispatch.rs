@@ -220,8 +220,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: CancelOperationParams,
     ) -> HandlerFuture<'a, CancelReply> {
-        let _ = context;
-        operation::cancel(core, params)
+        operation::cancel(core, context, params)
     }
 
     /// `operation.resume`.
@@ -231,8 +230,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: ResumeOperationParams,
     ) -> HandlerFuture<'a, OperationSummary> {
-        let _ = context;
-        operation::resume(core, params)
+        operation::resume(core, context, params)
     }
 
     /// `operation.abandon`.
@@ -242,8 +240,7 @@ pub trait Handlers: Send + Sync + 'static {
         context: &'a RequestContext,
         params: AbandonOperationParams,
     ) -> HandlerFuture<'a, AbandonReply> {
-        let _ = context;
-        operation::abandon(core, params)
+        operation::abandon(core, context, params)
     }
 
     /// `operation.get_stats`.

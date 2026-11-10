@@ -679,7 +679,9 @@ async fn a_cancel_during_the_download_ends_cancelled_and_keeps_the_partial_file(
             };
             let engine = engine.clone();
             handle.spawn(async move {
-                let _ = engine.cancel(id).await;
+                let _ = engine
+                    .cancel(id, stackly_domain::OperationTrigger::background())
+                    .await;
             });
             std::thread::sleep(Duration::from_millis(200));
         }

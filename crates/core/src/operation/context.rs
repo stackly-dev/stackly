@@ -15,6 +15,7 @@ use stackly_platform::{Platform, PlatformError, SecretPresence};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
+use super::audit::AuditNote;
 use super::limits::{CHECKPOINT_MAX, CUSTOM_PAYLOAD_MAX, MAX_CREATED, MAX_STEPS};
 use super::precheck::NO_OP_STAGE;
 use super::state::{OpHandle, StopSignal};
@@ -107,6 +108,14 @@ impl OperationContext {
     #[must_use]
     pub const fn trigger(&self) -> &OperationTrigger {
         &self.trigger
+    }
+
+    /// Keeps `note` for the audit rows of this operation (spec 0035,
+    /// *Catatan audit pekerjaan*), replacing the note set before. Call it as
+    /// soon as the values are known, so a row of a failure carries them too.
+    /// The note stays in memory only and never enters the journal.
+    pub fn set_audit_note(&self, note: AuditNote) {
+        *lock(&self.handle.audit_note) = Some(note);
     }
 
     /// Returns its stored input.

@@ -35,7 +35,11 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
         ))
         .await;
 
-    let before_start = harness.engine.cancel(queued).await.unwrap();
+    let before_start = harness
+        .engine
+        .cancel(queued, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(
         before_start.disposition,
         CancelDisposition::CancelledBeforeStart
@@ -45,12 +49,20 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
         OperationState::Cancelled
     );
 
-    let requested = harness.engine.cancel(first).await.unwrap();
+    let requested = harness
+        .engine
+        .cancel(first, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(requested.disposition, CancelDisposition::Requested);
     wait_state(&harness.engine, first, OperationState::Cancelled).await;
     assert_eq!(effects.get(), 0, "the cancelled queued work never ran");
 
-    let late = harness.engine.cancel(first).await.unwrap();
+    let late = harness
+        .engine
+        .cancel(first, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(late.disposition, CancelDisposition::AlreadyFinal);
 
     let committing = HoldHandle::new();
@@ -66,12 +78,20 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
         ))
         .await;
     committing.started().await;
-    let continuing = harness.engine.cancel(past).await.unwrap();
+    let continuing = harness
+        .engine
+        .cancel(past, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(
         continuing.disposition,
         CancelDisposition::ContinuingPastPointOfNoReturn
     );
-    let again = harness.engine.cancel(past).await.unwrap();
+    let again = harness
+        .engine
+        .cancel(past, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(
         again.disposition,
         CancelDisposition::ContinuingPastPointOfNoReturn
@@ -98,7 +118,11 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
         ))
         .await;
     wait_state(&harness.engine, broken, OperationState::NeedsRecovery).await;
-    let recovery = harness.engine.cancel(broken).await.unwrap();
+    let recovery = harness
+        .engine
+        .cancel(broken, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(recovery.disposition, CancelDisposition::RecoveryRequired);
 }
 
@@ -164,8 +188,20 @@ async fn a_resumed_queued_operation_past_its_point_of_no_return_keeps_running_on
         .await;
     slot.started().await;
 
-    let resumed = harness.engine.resume(failing, None).await.unwrap();
-    let cancelled = harness.engine.cancel(failing).await.unwrap();
+    let resumed = harness
+        .engine
+        .resume(
+            failing,
+            None,
+            stackly_domain::OperationTrigger::background(),
+        )
+        .await
+        .unwrap();
+    let cancelled = harness
+        .engine
+        .cancel(failing, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
 
     assert_eq!(resumed.operation.state(), OperationState::Queued);
     assert_eq!(
@@ -251,7 +287,12 @@ async fn a_cancelled_fake_restore_keeps_the_target_or_reports_its_point_of_no_re
         .join(staged.to_string());
     assert!(scratch.join("restored.db").is_file());
     assert_eq!(
-        harness.engine.cancel(staged).await.unwrap().disposition,
+        harness
+            .engine
+            .cancel(staged, stackly_domain::OperationTrigger::background())
+            .await
+            .unwrap()
+            .disposition,
         CancelDisposition::Requested
     );
     wait_state(&harness.engine, staged, OperationState::Cancelled).await;
@@ -274,7 +315,11 @@ async fn a_cancelled_fake_restore_keeps_the_target_or_reports_its_point_of_no_re
         ))
         .await;
     commit_hold.started().await;
-    let cancel = harness.engine.cancel(committed).await.unwrap();
+    let cancel = harness
+        .engine
+        .cancel(committed, stackly_domain::OperationTrigger::background())
+        .await
+        .unwrap();
     assert_eq!(
         cancel.disposition,
         CancelDisposition::ContinuingPastPointOfNoReturn
