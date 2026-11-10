@@ -24,7 +24,7 @@ Hasil JOURNEY-05 di GUI dan CLI: start yang gagal tampil dengan pesan aman, reco
 
 - [ ] Design it (spec): `/architect doctor & diagnostic bundle`
 
-### 35. Operations, activity & audit · needs a decision
+### 35. Operations, activity & audit · in-progress
 
 Halaman Operations dan tab Activity: stage, progress, cancel, error, retry atau resume bila aman, serta audit lokal (actor, operation ID, instance, aksi, config revision, hasil) tanpa secret.
 
@@ -32,4 +32,13 @@ Halaman Operations dan tab Activity: stage, progress, cancel, error, retry atau 
 
 **Trace:** REQ-045, REQ-054, PAGE-12, AC-045, AC-054, JOURNEY-05
 
-- [ ] Design it (spec): `/architect operations, activity & audit`
+**Pointer:** spec [0035](../specs/0035-operations-activity-audit/index.md)
+
+- [x] Design it (spec): `/architect operations, activity & audit` · spec 0035, cross check (Sonnet) applied, accepted 2026-11-10
+- [ ] Build it: `/develop operations, activity & audit`
+  - [ ] Audit in the daemon through the CLI: audit fields and migration, `CancelAvailability`, engine audit rows on every path with `OperationTrigger` on cancel, resume, and abandon, `set_audit_note` for create, start, restart, reload, config, ports, drift, and rename, `duplicateOf`, `OperationSummary.cancel`, `audit.list`, the audit retention setting with the prune wake, protocol minor bump and codegen, socket tests with the fixture credential and the staging then commit cancel, then `stackly audit list`, the cancel texts of `stackly operation`, and `audit-retention-days` (spec 0035 AC-1 to AC-9, AC-16 to AC-18; build steps 1 to 5; needs features 7, 11, 29, and 32 on main)
+  - [ ] Operations page: `auditList` in `StacklyClient`, `StageDefinition.also` and the stage definitions, `StatusAppearance.operation` with `continuing`, `OperationHistory`, `OperationsPage` with inspector, Cancel, Retry, Resume, and Abandon, `ShellNavigator.openOperation`, the Overview rows and O1 text (spec 0035 AC-9 to AC-14, AC-17; build steps 6 and 7; after build step 4; can run in parallel with build step 5)
+  - [ ] Activity tab and setting: `InstanceTab.activity` with its model and texts, the Duplicate sheet sending `duplicateOf`, the Activity group in the Storage tab of Settings (spec 0035 AC-15, AC-18, AC-20; build step 8; after the navigator part of build step 7)
+  - [ ] Views and evidence: `FixtureOperations` and `FixtureActivity` snapshots in light and dark, then the manual GUI session on this Mac with the real daemon and the fake provider, which needs your eyes and hands (spec 0035 AC-11, AC-13, AC-15, AC-19, AC-20; build steps 9 and 10; after milestones 2 and 3)
+- [ ] Verify it: `/check verify operations, activity & audit`
+- [ ] Test it: `/test operations, activity & audit`
