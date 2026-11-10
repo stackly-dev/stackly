@@ -78,7 +78,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang.
 | Mayor 18 di samping dua mayor 17, matriks tiga cluster, penolakan rebind | spec 0025 (memakai ulang *Helper sentinel* dan `two_postgresql_17_instances`) |
 | Restart sebagai satu operasi | fitur 26 |
 | Remove dan purge, termasuk reference secret yang di `bind` bersama | fitur 54 |
-| Riwayat asal instance di tab Activity | fitur 35 (Follow-up) |
+| Riwayat asal instance di tab Activity | fitur 35 (spec 0035 AC-18: `duplicateOf` di `instance.create`) |
 
 ### Alur
 
@@ -89,12 +89,12 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang.
 1. Kamu memilih Duplicate… di menu More halaman detail atau ⌘D (menu Instance) dengan baris terpilih, atau menjalankan `stackly instance duplicate <sumber>`.
 2. Client memanggil `instance.get_duplicate_form { instanceId }`. Daemon membaca registry dan paket pinned sumber (`gather_duplicate`), lalu `build_duplicate` membangun form dan draft tanpa IO.
 3. GUI mengisi sheet dari draft; CLI menerapkan flag di atas draft. Setiap perubahan (GUI) atau `--dry-run` (CLI) memanggil `instance.preflight` spec 0020.
-4. Create mengirim `instance.create` spec 0020 dengan draft itu dan `SecretInput` per secret field. Operasi `create_instance` berjalan apa adanya.
+4. Create mengirim `instance.create` spec 0020 dengan draft itu, `SecretInput` per secret field, dan `duplicateOf` berisi ID instance sumber (sheet Duplicate lewat `CreateInstanceModel`, CLI lewat `stackly instance duplicate`). Operasi `create_instance` berjalan apa adanya; `duplicateOf` hanya masuk catatan audit create, sehingga tab Activity menulis "Created from {nama sumber}". *Diperbarui 2026-11-10 (koordinasi scope 05, spec 0035 AC-18):* field `duplicateOf`.
 5. Kalau "Start after creating" aktif atau `--start`, client mengirim `instance.start` dengan key turunan (spec 0020).
 
 ### Model data
 
-Tidak ada tabel, kolom, migrasi, atau op registry baru. `instance.get_duplicate_form` hanya membaca; semua yang ditulis duplicate ditulis create spec 0020 (*Model data* spec itu). Registry tidak mencatat asal duplicate (keputusan 9 di rationale): instance hasil duplicate tidak bisa dibedakan dari instance hasil create biasa, kecuali lewat journal operasi create yang menyimpan draft tanpa nilai secret (termasuk reference `copyFrom`).
+Tidak ada tabel, kolom, migrasi, atau op registry baru. `instance.get_duplicate_form` hanya membaca; semua yang ditulis duplicate ditulis create spec 0020 (*Model data* spec itu). Registry tidak mencatat asal duplicate (keputusan 9 di rationale): instance hasil duplicate tidak bisa dibedakan dari instance hasil create biasa, kecuali lewat journal operasi create yang menyimpan draft tanpa nilai secret (termasuk reference `copyFrom`) dan, sejak spec 0035, lewat baris audit create yang memuat `duplicateOf` dan `duplicateOfName`.
 
 Yang dibaca `gather_duplicate`:
 
@@ -454,7 +454,7 @@ Sesi paralel: langkah 8 bisa dimulai begitu milestone 2 masuk. Milestone tiga cl
 
 - Instance hasil duplicate dengan port Automatic mendapat port efemeral yang tinggi saat start pertama; pengguna yang ingin port yang mudah diingat harus memilih Fixed sendiri dan menekan "Use {n}" kalau bentrok.
 - Password tidak ikut tersalin secara default; pengguna yang ingin aplikasinya cukup mengganti port harus memilih Copy from per secret field (atau `--secret <field>=copy`).
-- Registry tidak mencatat asal duplicate; tab Activity (fitur 35) hanya bisa menunjukkannya dari journal create kalau nanti dibutuhkan.
+- Registry tidak mencatat asal duplicate; tab Activity (fitur 35) menunjukkannya dari catatan audit create (`duplicateOf`, spec 0035 AC-18), bukan dari journal. *(2026-11-10)*
 - Runtime terkunci ke runtime sumber: duplicate ke mayor lain tidak didukung dan harus lewat New Instance.
 - Kalau runtime sumber rusak atau dihapus, duplicate gagal sampai runtime diperbaiki, walaupun runtime lain dengan versi sama terpasang.
 - *(diselaraskan dengan build, 2026-10-22)* Sejak F20 milestone 5 (`7cd4d1a9`, AC-9 spec 0020 yang disetujui pengguna Scope 02), sumber duplicate yang paket pinned nya butuh port saat `initialize` (hari ini hanya salinan NATS `1.0.0`, yang merender `nats.conf` saat init) membuat draft yang semua port nya `auto` mendapat preflight `ready: false`: baris `settings` error `instance.endpoint_invalid` dan field `endpoints[<i>].port` `invalid_value`, sampai pengguna memilih port Fixed untuk setiap endpoint yang dibutuhkan init (untuk NATS `1.0.0` itu `client` dan `monitoring`; penolakan pindah ke endpoint berikutnya selama masih ada yang `auto`). Sebelumnya preflight `ready` lalu create gagal di init dengan `supervisor.config_invalid`. NATS `1.0.1` lulus dengan semua port `auto`. AC-4 dan AC-6 tetap benar apa adanya: draft tetap meminta `auto`, dan duplicate memakai preflight dan create spec 0020 tanpa jalur sendiri. Aturan dan teks nya ada di AC-9, *Copy preflight*, dan *Consequences* [spec 0020](../0020-create-instance/index.md).
@@ -473,7 +473,7 @@ Sesi paralel: langkah 8 bisa dimulai begitu milestone 2 masuk. Milestone tiga cl
 - [x] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`. Dicatat lead `ui-macos` di `2b1e4f3` (2026-10-22).
 - [x] Lead: spec 0020 tidak menyebut dari mana `copyFromOptions` `SecretField` di mode create diisi (misalnya `secret.list`); mode duplicate spec ini hanya menambahkan reference sumber di depan daftar itu. Putuskan lewat `/architect` update spec 0020 sebelum milestone 3 spec 0020; dijawab spec 0020 Keputusan 19 (`49f0f4f`, 2026-10-22).
 - [x] Spec 0025: pakai *Helper sentinel* dan `two_postgresql_17_instances` (disepakati dengan arc-f25-spec, 2026-10-22); milestone tiga cluster after langkah 9. Diterapkan di spec 0025 (`0afcd9b`, milestone 3 langkah 6).
-- [ ] Fitur 35: kalau tab Activity perlu menampilkan "created from", ambil dari journal create (reference `copyFrom` dan nama di draft) atau putuskan field asal di create lewat `/architect`.
+- [x] Fitur 35: kalau tab Activity perlu menampilkan "created from", ambil dari journal create (reference `copyFrom` dan nama di draft) atau putuskan field asal di create lewat `/architect`. Diputuskan dan diterapkan di spec 0035 (2026-11-10): field `duplicateOf` di `instance.create` (AC-18), yang dikirim sheet Duplicate dan `stackly instance duplicate`; tab Activity menulis "Created from {duplicateOfName}".
 - [ ] Fitur 54: remove instance yang reference secret nya di `bind` oleh instance lain mengikuti aturan `in_use` spec 0011.
 - [ ] Fitur 26: restart sebagai satu operasi memakai ulang skenario sentinel langkah 9 untuk membuktikan isolasi setelah restart.
 - [ ] Lead: baris *Batas dengan spec lain* spec 0020 (teks usulan spec ini, diterapkan 2026-10-22) masih menyebut `CreateSheetRequest`; selaraskan lewat `/architect` update spec 0020 dengan `NewInstancePresenter.presentDuplicate(of:)` (dicatat 2026-10-23).

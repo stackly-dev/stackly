@@ -217,8 +217,8 @@ Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah comm
 
 **DTO** (camelCase, `Unrecognized` di setiap open enum, field opsional `#[serde(default)]`, counter memakai newtype `wire.rs`):
 
-- `DaemonSettingsView { revision: Revision, defaultStartup: StartupPolicyKind, updateChannel: UpdateChannel, telemetry: bool, telemetryCopyVersion: Count, locations: DefaultLocations { data, logs, cache: StorageLocationView }, logRetention: LogRetention, updatedAt: Timestamp }`; `LogRetention` adalah tipe spec 0027.
-- `SettingsPatch { defaultStartup?: StartupPolicyKind, updateChannel?: UpdateChannel, telemetry?: bool }`; `Validate` menolak patch tanpa field dan nilai `Unrecognized`.
+- `DaemonSettingsView { revision: Revision, defaultStartup: StartupPolicyKind, updateChannel: UpdateChannel, telemetry: bool, telemetryCopyVersion: Count, locations: DefaultLocations { data, logs, cache: StorageLocationView }, logRetention: LogRetention, auditRetention: AuditRetention?, updatedAt: Timestamp }`; `LogRetention` adalah tipe spec 0027, dan `auditRetention` (`{ days, maxRows }`, null dari daemon lama) milik spec 0035 AC-6.
+- `SettingsPatch { defaultStartup?: StartupPolicyKind, updateChannel?: UpdateChannel, telemetry?: bool, auditRetentionDays?: u32 }`; `Validate` menolak patch tanpa field dan nilai `Unrecognized`, dan `auditRetentionDays` di luar 7, 30, atau 90 (spec 0035). *Diperbarui 2026-11-10 (koordinasi scope 05, spec 0034 dan 0035):* field audit retention dari spec 0035.
 - `StorageLocationView { id: Uuid, kind: LocationKind, path: String, builtIn: bool, isDefault: bool, instanceCount: Count, reachable: bool }`, dengan `path` selalu path yang sudah resolve dan `reachable` dari `file_info` saat dibaca; `instanceCount` 0 untuk cache.
 - `LocationKind`: `data`, `logs`, `cache`, `Unrecognized`. `LocationTarget`: `{ "type": "path", "content": String }` atau `{ "type": "builtIn" }`. `UpdateChannel`: `stable`, `beta`, `Unrecognized`.
 - `StopAllPreview { items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: Count }`, setiap daftar urut nama lalu ID; `atLoginCount` = jumlah `items` dengan policy `at_login`. DTO preview di bawah ini dibangun fitur 31 langkah 9 sesuai definisi di sini.
@@ -240,8 +240,8 @@ Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah comm
 
 | Perintah | Perilaku |
 |---|---|
-| `stackly settings get [--json]` | satu baris per setting, plus lokasi default per jenis dan retention log |
-| `stackly settings set <key> <value>` | key `default-autostart` (`on`/`off`), `update-channel` (`stable`/`beta`), `telemetry` (`on`/`off`); mengambil revision lewat `settings.get`, mengirim update, dan keluar 3 pada konflik (AC-17) |
+| `stackly settings get [--json]` | satu baris per setting, plus lokasi default per jenis, retention log, dan `audit retention: {days} days, up to {maxRows} entries` (spec 0035) |
+| `stackly settings set <key> <value>` | key `default-autostart` (`on`/`off`), `update-channel` (`stable`/`beta`), `telemetry` (`on`/`off`), `audit-retention-days` (`7`/`30`/`90`, spec 0035); mengambil revision lewat `settings.get`, mengirim update, dan keluar 3 pada konflik (AC-17) |
 | `stackly storage locations [--json]` | setiap lokasi dengan jenis, path, default atau bukan, jumlah instance, terjangkau atau tidak |
 | `stackly storage set-location <data\|logs\|cache> <path\|--default>` | path relatif diubah menjadi absolut dari cwd sebelum dikirim; error menulis kalimat aturan |
 | `stackly instance stop --all [--yes] [--json]` | AC-9. Keputusan lokal saat build: preview tanpa `items` menulis "Nothing is running.", tidak bertanya, dan tidak mengirim `instance.stop_all` (`outcome` null); sesudah sebagian gagal, exit mengikuti kategori kode instance pertama di `failed` (misalnya `supervisor.stop_timeout`), atau `operation.cancelled` kalau Stop All dibatalkan; `--all` dan `--wait` saling menolak, karena balasan `instance.stop_all` baru datang setelah operasi selesai |
@@ -261,10 +261,13 @@ Event baru `settings.changed { revision: Revision }`, dikirim hanya setelah comm
 | Sources | Providers | setiap provider dari `catalog.list_providers` dengan publisher | spec 0017 | teks trust |
 | Storage | Locations | Instance data, Logs, Download cache: path default, "Used for new instances" | daemon | Change…, Use Default, Reveal in Finder, baris lokasi lama |
 | Storage | Logs | Instance logs (AC-21) | spec 0027 | teks |
+| Storage | Activity | Keep activity for (7 days, 30 days, 90 days; tidak tampil saat offline atau tanpa `auditRetention`) | spec 0035 | `Picker`, dengan konfirmasi saat periode diperpendek |
 | Updates | Updates | Channel | daemon | segmented Stable, Beta, dengan catatan AC-23 |
 | Updates | Privacy | Share anonymous usage statistics | daemon | toggle, dengan catatan AC-23 |
 
 Ketersediaan baris dicatat di satu tabel statis `SettingsAvailability` di `StacklyUI/Settings/`, satu entri per baris dengan fitur pemiliknya; fitur yang kemudian membangun baris tersembunyi mengubah entrinya. Toggle dan segmented langsung berlaku tanpa tombol Apply (konvensi Settings macOS): baris menampilkan nilai yang diminta dengan indikator kecil selama operasi berjalan, dan kembali ke nilai daemon dengan pesan inline kalau gagal. Change… dan Use Default nonaktif selama `set_storage_location` berjalan.
+
+Tab yang tampil di jendela Settings dipegang `SettingsTabSelection` (`@Observable`, satu per launch di `DaemonModel.settingsTab`, default General), yang menjadi selection `TabView` di `SettingsRoot`. Jendela lain bisa memilih tab sebelum membuka Settings: aksi Open Settings temuan doctor (`open_storage_settings`, spec 0034 AC-18) memilih Storage lalu membuka jendela Settings. *Diperbarui 2026-11-10 (koordinasi scope 05, spec 0034):* `SettingsTabSelection` dari F34 langkah 13 sampai 15.
 
 ### Popover menu bar
 

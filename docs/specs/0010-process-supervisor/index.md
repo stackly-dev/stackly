@@ -261,6 +261,7 @@ Satu operasi `start_instance` (spec 0007) dengan tahap berikut. `StageName` sama
 | `spawn` | verifikasi `ExecutablePath` (canonical, di dalam root runtime, file biasa, bisa dieksekusi), `runtime::launch::check_launchable` (spec 0018: quarantine), siapkan spool, `spawn_main` dengan lock di fd 3 | `start_failed { spawn_failed }` atau `{ executable_invalid }`; `LaunchRefusal::Quarantined` menjadi `start_failed { quarantined }` dengan kode wire `runtime.quarantined` (spec 0018); `LaunchRefusal::QuarantineUnreadable` menjadi `start_failed { executable_invalid }`, dan task blocking cek quarantine yang gagal (join error) menjadi `start_failed { spawn_failed }`, tidak pernah dianggap boleh jalan |
 | `identity` | tangkap `ProcessIdentity` dari child yang tertahan, commit `spawned` plus port `Auto` plus observasi, `watch_exit`, `resume`, tutup salinan fd lock daemon | `discard` lalu `start_failed { identity_capture_failed }`; kalau `discard` mengembalikan status child yang sudah mati sendiri dan `classify_early_exit` menjawab `BinaryRejectedByOs`, hasilnya seperti bullet exit dini di bawah |
 | `readiness` | probe readiness sampai ready, crash (restart policy), cancel, atau deadline | lihat AC-7, AC-8, dan AC-17 |
+| `backoff` *(spec 0033)* | jeda backoff di antara dua percobaan di dalam operasi start atau respawn (`wait_to_respawn`, juga jalur `on_lock_held`): `actor.update(show_pause)` menerbitkan `nextAttemptAt` lewat `instance.health_changed`, lalu stage `backoff`, lalu tidur; tanpa langkah journal. Jeda pertama timer actor di luar operasi tidak punya stage | cancel mengikuti AC-8 |
 | `publish` | observasi ready, `holds_file` sekali, port `Auto` ditandai final, event | |
 | `complete` | operasi `succeeded`, lock resource dilepas | |
 
@@ -363,7 +364,7 @@ Semua transisi di tabel ini ada di tabel lifecycle spec 0004.
 | `readiness`, `health` | `{ state, reason, detail, observedAt }` setelah `effective(now, READINESS_MAX_AGE)` | `unknown`, reason `daemon_restarted` atau `not_running`, sampai probe pertama |
 | `statusSeq` | penghitung monotonik per instance per run daemon, mulai 1, naik setiap kali isi summary berubah | mulai lagi dari 1 (client tahu lewat gap `server_restarted`) |
 | `process` | `{ pid, startedAt, adopted, adoptable }` atau null | dari observasi terakhir untuk proses yang diadopsi, `adopted: true` |
-| `lastFailure` | `{ code, at, exitCode, signal, excerpt }` atau null; `excerpt` paling banyak `FAILURE_EXCERPT_LINES` baris dari `TailSink` (stderr dulu, lalu stdout), sudah tersamar | `code` dari `last_failure` registry; `at`, `exitCode`, `signal` null; `excerpt` dari ekor spool kalau masih ada |
+| `lastFailure` | `{ code, at, exitCode, signal, excerpt }` atau null; `at`, `exitCode`, dan `signal` dari `InstanceStatus.last_failure` (spec 0033, *Model data*); `excerpt` paling banyak `FAILURE_EXCERPT_LINES` baris dari `TailSink` (stderr dulu, lalu stdout), sudah tersamar | `code` dari `last_failure` registry; `at`, `exitCode`, `signal` null; `excerpt` dari ekor spool kalau masih ada |
 | `restart` | `{ attempts, budget, windowSeconds, nextAttemptAt, exhausted }` | `attempts` 0; `exhausted` benar kalau lifecycle `failed` dengan `last_failure` `crash_loop` |
 | `blocker` | satu nilai dengan prioritas `identityUnproven`, lalu `dataInUse`, lalu `needsSecret` (spec 0011), atau null | dihitung ulang oleh rekonsiliasi dan start berikutnya |
 | `endpoints` | `{ name, transport, host, port, portMode, bound, socketPath }`; `port` adalah port efektif (`bound` kalau ada, kalau tidak port `Fixed`, null untuk `Auto` tanpa `bound`); `bound` benar hanya setelah readiness berhasil untuk proses yang sekarang; `socketPath` = folder run ditambah `socketName` paket pinned yang dirender dengan port efektif endpoint rujukannya, dihitung saat dibaca dan di cache per provider revision key, atau null kalau endpoint rujukan belum punya port efektif (nama socket tersimpan hanya pengisi kolom; untuk endpoint rujukan `Auto` ia memuat penanda `auto`, spec 0020, dibangun langkah 9 spec 0020) | `bound` benar untuk proses yang diadopsi setelah ready pertama |
@@ -406,9 +407,9 @@ Semua `retryable` false kecuali disebut. Pesan bahasa Inggris, huruf kecil di aw
 | `supervisor.instance_retained` | `conflict` | aksi pada instance retained | |
 | `supervisor.identity_unproven` | `conflict` | start atau stop saat `unknown` | `pid`; `items` ber `kind` `check` (field `name`, `result`) |
 | `supervisor.data_in_use` | `conflict` | lock instance dipegang, atau proses observasi terakhir masih hidup | `lockPath`, `pid` |
-| `supervisor.endpoint_in_use` | `conflict` | port dipakai proses lain | `endpoint`, `address`, `port`, `omitted` |
-| `supervisor.endpoint_unavailable` *(K2, 2026-10-20)* | `unavailable`, retryable | bind percobaan port `Fixed` ditolak OS (`Denied`) atau alamat tidak tersedia (`Unavailable`) di tahap `endpoints`, sebelum `journal`; dibangun langkah 12 | `endpoint`, `address`, `port`, `reason` (`denied` atau `unavailable`), `omitted` |
-| `supervisor.endpoint_conflict` | `conflict` | port efektif instance Stackly lain | `endpoint`, `port`, `otherInstance`, `omitted` |
+| `supervisor.endpoint_in_use` | `conflict` | port dipakai proses lain | `endpoint`, `address`, `port`, `omitted`, `suggestedPort` bila ada (spec 0033) |
+| `supervisor.endpoint_unavailable` *(K2, 2026-10-20)* | `unavailable`, retryable | bind percobaan port `Fixed` ditolak OS (`Denied`) atau alamat tidak tersedia (`Unavailable`) di tahap `endpoints`, sebelum `journal`; dibangun langkah 12 | `endpoint`, `address`, `port`, `reason` (`denied` atau `unavailable`), `omitted`, `suggestedPort` bila ada (spec 0033) |
+| `supervisor.endpoint_conflict` | `conflict` | port efektif instance Stackly lain | `endpoint`, `port`, `otherInstance`, `omitted`, `suggestedPort` bila ada (spec 0033) |
 | `supervisor.auto_port_unavailable` | `unavailable`, retryable | tidak ada kandidat bebas setelah `AUTO_PORT_ATTEMPTS` | `endpoint` |
 | `supervisor.runtime_unavailable` | `conflict` | runtime atau dependency tidak `installed` | `runtimeId`, `state` |
 | `supervisor.package_unavailable` | `failed` | paket pinned hilang, tidak valid, atau digest beda | `provider`, `reason` |
@@ -461,6 +462,7 @@ Tidak ada tabel atau kolom baru.
 | observasi terakhir | registry | `Registry::latest_process_observation(InstanceId)` | dibaca rekonsiliasi, pemeriksaan ulang, dan pengaman start |
 | config revision awal | registry (`config_revisions`) | nilai settings dengan reference secret | create, lewat `WriteOp::InsertConfigRevision` dan `Registry::active_config_revision` (update spec 0005) |
 | lifecycle, desired, `last_failure` | registry (`instances`) | aggregate spec 0004 | CAS per commit |
+| `InstanceStatus.last_failure` *(spec 0033)* | memori daemon (`ActorState`) | `FailureFacts { code, at, exit_code, signal }`: ditimpa setiap commit `crashed`, `start_failed`, atau `init_failed` (waktu commit itu; exit dan sinyal dari proses yang keluar, null bila tidak ada), dikosongkan bersama `last_failure` registry di `spawned` dan `adopted`; mengisi `lastFailure.at`, `exitCode`, dan `signal` di `InstanceSummary` | hilang saat daemon berhenti, jadi setelah restart ketiganya null |
 | port `Auto` (`bound_port`) | registry (`instance_endpoints`) | port yang diberikan ke proses yang sekarang | batch `spawned` (aturan `bound` di spec 0004 diperbarui, Follow-up) |
 | `instance.lock` | root instance | file kosong 0600 | supervisor saat pertama dibutuhkan |
 | spool | folder run | output mentah proses utama | proses utama |
@@ -741,8 +743,8 @@ Untuk fitur lain:
 - [ ] Fitur 29: config revision lengkap; perubahan `apply: restart` dirender ulang lewat render sebelum spawn.
 - [ ] Fitur 30: pengerasan rekonsiliasi (runtime, endpoint, storage, operasi) dan restart daemon terencana yang menghentikan instance sampai handover terbukti.
 - [x] Fitur 31: start saat login setelah boot baru, dan perilaku instance saat logout. Dirancang spec 0031 (2026-11-02) dan diterapkan di spec ini 2026-11-03: rotasi sebelum rekonsiliasi dan `session_changed`, *Antrean start* di langkah 7, desired dibaca di bawah lock untuk start sistem, lease di start dan stop pengguna, sinyal per konteks dan *Akhir sesi*, timer `secret_retry`, dan kalimat boot baru. AC-21 dipersempit ke konteks manual dan ke sinyal yang bukan logout.
-- [ ] Fitur 33: banner crash loop dari `restart` dan `lastFailure` di `InstanceSummary`.
-- [ ] Fitur 34: doctor menampilkan `IdentityEvidence` dan tidak pernah menghapus `instance.lock`.
+- [x] Fitur 33: banner crash loop dari `restart` dan `lastFailure` di `InstanceSummary`. Diterapkan di spec 0033 (2026-11-10): AC-9 dan AC-12; stage `backoff`, `InstanceStatus.last_failure`, dan `suggestedPort` dicatat di spec ini.
+- [x] Fitur 34: doctor menampilkan `IdentityEvidence` dan tidak pernah menghapus `instance.lock`. Diterapkan di spec 0034 (2026-11-10): AC-2 dan AC-3, *Bukti identitas pasif* (`observe_passive` tanpa `probe_lock` dan tanpa `lock_instance`).
 - [ ] Fitur 36: harness konformitas provider memeriksa bahwa proses utama tetap memegang fd 3, tidak me re exec, dan tetap foreground.
 - [ ] Fitur 50, 51, dan 54: ambil `instance.lock` sebelum cold backup, restore, retain, dan purge.
 - [ ] Fitur 64: benchmark NFR-003 dan NFR-006 dengan supervisor nyata, lalu setel ulang konstanta lewat update spec ini kalau perlu.

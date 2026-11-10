@@ -453,7 +453,7 @@ Diterapkan di spec 0013 (2026-10-22, `97e093f9`).
 - [ ] `docs/scope/ui-macos.md` *Selisih yang sudah diketahui* (lewat `/scope`), selisih mockup onboarding yang disengaja: Welcome memakai ikon app, bukan tile accent; baris "Isolated instances" memakai teks isolasi logis spec 0016, bukan "never touching each other’s data"; Catalog Trust berjudul "Catalog sources", tanpa toggle community dan tanpa "Signed manifests"; baris "Environments as files" serta contoh `stackly env up` dan `stackly doctor` (juga `stackly instance list`) belum tampil sampai fiturnya ada, dan "No account needed" mengisi tempatnya; toggle Command Line bekerja langsung lewat konfirmasi, bukan saat Get Started; tidak ada tombol Skip yang terlihat (Escape melewati).
 - [ ] Fitur 18: saat milestone 3 spec 0018 masuk, set `OnboardingCopy.runtimeInstallAvailable` ke true (baris Welcome "Verified runtimes" dan kalimat digest di Catalog Trust), kalau build fitur 16 sudah lebih dulu.
 - [ ] Fitur 22: tambahkan `stackly instance list` ke `OnboardingCopy.commandExamples` saat perintah itu dibangun.
-- [ ] Fitur 34: tambahkan `stackly doctor` ke `OnboardingCopy.commandExamples`.
+- [x] Fitur 34: tambahkan `stackly doctor` ke `OnboardingCopy.commandExamples`. Diterapkan di spec 0034 (2026-11-10): AC-20; `OnboardingCopy.commandExamples` memuat `stackly doctor`.
 - [ ] Fitur 44: tambahkan baris "Environments as files" dari mockup ke langkah Welcome.
 - [ ] Fitur 46: tambahkan `stackly env up ~/Code/erp` ke `OnboardingCopy.commandExamples`.
 - [ ] Fitur 32: baris "Show Welcome…" di tab General Settings yang memanggil `OnboardingModel.present()`.

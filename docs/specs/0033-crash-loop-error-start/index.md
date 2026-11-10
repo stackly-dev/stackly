@@ -35,7 +35,7 @@ Spec ini menetapkan apa yang kamu lihat saat sebuah instance gagal start atau te
 - **AC-14** (tidak ada perbaikan otomatis, JOURNEY-05, PRD 35.3): Daemon, CLI, dan GUI tidak pernah mengganti port, menulis revision config, menghapus atau mereset data, menghapus `instance.lock` atau file di folder run instance, atau menjalankan ulang instance di luar budget tanpa aksi eksplisit. Test mencatat baris registry instance dan endpoint, isi folder data, `instance.lock`, daftar file folder run, dan revision config sebelum dan sesudah crash loop dan kegagalan port, lalu membandingkannya (berkas log dan spool yang memang ditulis selama run dikecualikan).
 - **AC-15** (aman dari secret): Credential fixture yang dicetak fake ke stderr sebelum crash tidak pernah muncul di `lastFailure.excerpt`, pesan atau hint error, output CLI teks dan JSON, maupun teks banner dan blok kode.
 - **AC-16** (tautan Logs, Operations, dan doctor): Show Logs membuka tab Logs instance itu (spec 0027). Operation ID di banner Summary punya tautan "Show in Operations" yang membuka operasi itu di halaman Operations (spec 0035). Diagnose… membuka halaman Diagnostics dengan fokus instance itu (spec 0034), dan CLI menambah hint `stackly doctor --instance <name>`. Selama fitur 34 atau 35 belum ada di `main`, tautan jatuh ke `.diagnostics` atau `.operations` tanpa fokus, dan hint doctor CLI tidak ditulis (`// provisional: F34`, `// provisional: F35`).
-- **AC-17** (fixture dan snapshot, spec 0068): Setiap state di *State banner* punya kasus fixture dan snapshot di `InstanceDetailSnapshotTests` (Summary) dan `InstancesSnapshotTests` (inspector), dengan lima varian spec 0068; label tombol dan blok kode tidak terpotong di lebar sempit.
+- **AC-17** (fixture dan snapshot, spec 0068): Setiap state di *State banner* punya kasus fixture dan snapshot di `InstanceDetailSnapshotTests` (Summary) dan `InstancesSnapshotTests` (inspector), dengan tiga varian spec 0068 (light, dark, narrow); label tombol dan blok kode tidak terpotong di lebar sempit. *Diperbarui 2026-11-10 (koordinasi scope 05):* "lima varian" menjadi tiga, karena Interaction policy `AGENTS.md` (2026-10-24) menghapus varian aksesibilitas.
 
 ## Decision
 
@@ -68,8 +68,8 @@ Spec ini menampilkan keputusan supervisor spec 0010, bukan mendesain ulang: corr
 - **Spec 0012**: state `failed` tetap tanpa detail di `StatusLabel`; alasannya tampil di banner spec ini (catatan "alasan kegagalan ditampilkan banner layar, fitur 33" di tabel status instance spec 0012 dijawab).
 - **Spec 0027**: Show Logs membuka tab Logs; test AC-1 membaca penanda `started` dan `exited` dari store log.
 - **Spec 0029**: sheet Ports (`EndpointsModel`) mendapat isian awal opsional; `instance.change_endpoints` tidak berubah.
-- **Spec 0034** (paralel): isi doctor, `ShellNavigator.openDiagnostics(focus: .instance(id))`, dan `stackly doctor --instance <name>` milik spec 0034. Spec ini hanya menautkannya. Doctor membaca `restart` dan `lastFailure` apa adanya.
-- **Spec 0035** (paralel): halaman Operations, `ShellNavigator.openOperation(_:)`, definisi stage `start_instance` (termasuk `backoff` di grup Launch dengan judul "Waiting to restart"), dan Retry dari halaman Operations milik spec 0035. Retry di banner dan di Operations sama sama mengirim `instance.start` baru.
+- **Spec 0034** (di `main` sejak 2026-11-10): isi doctor, `ShellNavigator.openDiagnostics(focus: .instance(id))`, dan `stackly doctor --instance <name>` milik spec 0034. Spec ini hanya menautkannya. Doctor membaca `restart` dan `lastFailure` apa adanya.
+- **Spec 0035** (di `main` sejak 2026-11-10): halaman Operations, `ShellNavigator.openOperation(_:)`, definisi stage `start_instance` (termasuk `backoff` di grup Launch dengan judul "Waiting to restart"), dan Retry dari halaman Operations milik spec 0035. Retry di banner dan di Operations sama sama mengirim `instance.start` baru.
 
 ### Kontrak
 
@@ -104,7 +104,7 @@ Isi banner (*Copy banner*) menyebut faktanya dan hint menyebut langkahnya, jadi 
 
 1. Port (ketiga kode endpoint, atau `lastFailure.code` `endpoint_in_use`): "use a free port: stackly instance endpoint set {name} --port {endpoint}={suggestedPort}" bila ada saran, selain itu "pick another port: stackly instance endpoint set {name} --port {endpoint}=<port>".
 2. Selalu: "read its logs: stackly instance logs {name}".
-3. Selalu: "check this Mac: stackly doctor --instance {name}" (`// provisional: F34`, ditulis hanya setelah fitur 34 ada).
+3. Selalu: "check this Mac: stackly doctor --instance {name}". *Diperbarui 2026-11-10 (koordinasi scope 05):* sakelar sementara `DOCTOR_COMMAND` dan tanda `// provisional: F34` dihapus setelah fitur 34 mendarat (F34 langkah 11), jadi langkah ini selalu ditulis.
 4. Selalu terakhir: "start it again: stackly instance start {name}".
 
 Menjalankan `stackly instance endpoint set` adalah aksi eksplisit kamu, setara dengan tombol konfirmasi sheet Ports; tambahkan `--dry-run` untuk melihat verdict lebih dulu. Ia hanya menyimpan port untuk instance `stopped` atau `failed` (spec 0029 AC-6), karena itu langkah 4 selalu ada. Nama yang mengandung karakter shell ditulis dengan quoting yang sama dengan hint CLI lain (`escape_display`). Blok error juga mendapat baris `operation: <uuid>` di `StderrSink::error` setiap kali `body.operation_id()` ada, untuk semua command, sebelum baris `request:`; golden error yang membawa `operationId` ikut diperbarui.
@@ -116,7 +116,7 @@ Menjalankan `stackly instance endpoint set` adalah aksi eksplisit kamu, setara d
 - `latest` dipakai sebagai **error** hanya bila ia start atau restart yang `failed`, dan untuk lifecycle `failed` juga cocok dengan kegagalan instance: `latest.updatedAt` ≥ `lastFailure.at` bila `at` ada, atau kode errornya ada di baris yang sama di *Pemetaan sebab* dengan `lastFailure.code` bila `at` null (daemon restart). Selain itu banner hanya memakai `summary` (misalnya crash loop yang diputuskan actor setelah operasi respawn terakhir `succeeded`).
 - `latest` berjenis `change_endpoints` yang `succeeded` dan lebih baru dari `lastFailure.at` (atau dengan `at` null) memberi kalimat "Its ports changed. Retry to start with them." dan menyembunyikan tombol port (AC-10); error yang dipakai kemudian adalah operasi start atau restart sebelumnya dengan aturan yang sama.
 
-**Sumber data.** `InstanceFailureModel` (`@Observable`, `StacklyUI/InstanceDetail/Failure/`) per instance memegang operasi terkaitnya: saat dibuka, satu `operation.list { resource: { kind: instance, id }, limit: 10 }` (tanpa operasi terkait di 10 itu, `latest` nil), diulang saat `revision` atau `statusSeq` summary berubah dan saat `OperationCenter.recent` menerima operasi final dengan resource instance itu; di antara itu, entri `OperationCenter.active` dan `recent` dengan resource yang sama dan `(createdAt, id)` lebih baru menggantikannya. Selama bacaan pertama berjalan, gagal, atau daemon offline, model memberi `latest` nil dan banner tampil dari `summary` saja (judul dari sebab `lastFailure`, tanpa operation ID dan tanpa Use Port), lalu naik ke isi lengkap begitu operasinya tiba; urutan aturan dan *Pemetaan sebab* menjamin judulnya tidak berubah saat naik. Dipakai tab Summary dan inspector; inspector membuatnya untuk baris terpilih saja.
+**Sumber data.** `InstanceFailureModel` (`@Observable`, `StacklyUI/InstanceDetail/Failure/`) per instance memegang operasi terkaitnya: saat banner pertama tampil, satu `operation.list { resource: { kind: instance, id }, limit: 10 }` (tanpa operasi terkait di 10 itu, `latest` nil). Ia membaca ulang saat `revision` atau `statusSeq` summary berubah, tetapi hanya selama instance bisa punya banner (lifecycle `failed`, `stopped`, atau `recovering`; instance `running` sering berubah status dan tidak pernah punya banner), dan saat `OperationCenter` memegang operasi instance itu yang sudah berakhir dan belum ada di bacaan terakhir dengan revision itu; di antara itu, entri `OperationCenter.active` dan `recent` dengan resource yang sama dan `(createdAt, id)` lebih baru menggantikannya. Sebelum bacaan pertama berhasil (masih berjalan, gagal, atau daemon offline), model memberi `latest` nil dan banner tampil dari `summary` saja (judul dari sebab `lastFailure`, tanpa operation ID dan tanpa Use Port), lalu naik ke isi lengkap begitu operasinya tiba; urutan aturan dan *Pemetaan sebab* menjamin judulnya tidak berubah saat naik. Bacaan berikutnya yang gagal, termasuk saat daemon offline, mempertahankan hasil bacaan terakhir yang berhasil. Tab Summary dan inspector berbagi satu model per instance; inspector membuatnya untuk baris terpilih saja. *Diperbarui 2026-11-10 (koordinasi scope 05):* hasil terakhir dipertahankan saat offline, dan baca ulang karena summary hanya untuk `failed`, `stopped`, dan `recovering`.
 
 **Konten.** `FailureBannerContent.resolve(summary, related: [OperationSummary], instanceNames: (UUID) -> String?, now: Date) -> FailureBannerContent?` adalah fungsi murni (tanpa view) yang menerapkan *Operasi terkait*, lalu memilih state di *State banner*, judul, isi, baris blok kode, operation ID, `PortFix?` (`endpoint`, `suggestedPort`), dan aksi.
 
@@ -249,7 +249,7 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 **Milestone 2: CLI** (after milestone 1)
 
-3. `StderrSink::error` dengan baris `operation:`, `next_steps.rs`, aturan *Operasi terkait* di CLI, hint di `start` dan `restart`, `Last operation` dan `Next steps:` di `inspect` dan `get` serta `lastOperation` JSON, baris backoff di `--wait`; golden baru dan golden error yang diperbarui. Satisfies **AC-6**, **AC-7**, **AC-8**, **AC-15**, **AC-16** (hint doctor provisional).
+3. `StderrSink::error` dengan baris `operation:`, `next_steps.rs`, aturan *Operasi terkait* di CLI, hint di `start` dan `restart`, `Last operation` dan `Next steps:` di `inspect` dan `get` serta `lastOperation` JSON, baris backoff di `--wait`; golden baru dan golden error yang diperbarui. Satisfies **AC-6**, **AC-7**, **AC-8**, **AC-15**, **AC-16** (hint doctor provisional saat itu; final sejak F34 langkah 11).
 
 **Milestone 3: model GUI** (after milestone 1; bisa paralel dengan milestone 2, file berbeda)
 
@@ -257,7 +257,7 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 **Milestone 4: banner GUI** (after milestone 3; needs fitur 34 dan 35 hanya untuk tautan final)
 
-5. `InstanceFailureBanner` mode Summary dan inspector, pemasangan di `InstanceDetailBanner` dan `InstanceInspector`, Use Port ke sheet Ports, Show Logs, Show in Operations, Diagnose… (provisional sampai spec 0034 dan 0035 di `main`), snapshot di `InstanceDetailSnapshotTests` dan `InstancesSnapshotTests`. Satisfies **AC-9** sampai **AC-13**, **AC-16**, **AC-17**.
+5. `InstanceFailureBanner` mode Summary dan inspector, pemasangan di `InstanceDetailBanner` dan `InstanceInspector`, Use Port ke sheet Ports, Show Logs, Show in Operations, Diagnose… (provisional sampai spec 0034 dan 0035 di `main`; kini final: `openOperation(id)` dan `openDiagnostics(focus: .instance(id))`), snapshot di `InstanceDetailSnapshotTests` dan `InstancesSnapshotTests`. Satisfies **AC-9** sampai **AC-13**, **AC-16**, **AC-17**.
 
 **Milestone 5: bukti** (after milestone 2 dan 4)
 
@@ -277,7 +277,7 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 - Crash loop yang crash keenamnya diputuskan actor setelah proses sempat ready tidak punya operasi yang gagal, jadi tidak punya operation ID; correlation nya hanya ID instance di log daemon.
 - Fakta kegagalan hanya di memori, jadi setelah daemon restart waktu dan exit code hilang dan banner jatuh ke teks tanpa detail.
-- Banner bergantung pada satu `operation.list` tambahan per instance yang dibuka, dan aturan *Operasi terkait* harus dijaga sama di GUI dan CLI; saat daemon offline, banner F7 hanya ada bila operasi itu sudah dimuat sebelumnya, dan banner lain tampil tanpa operation ID dan tanpa Use Port.
+- Banner bergantung pada satu `operation.list` tambahan per instance yang dibuka, dan aturan *Operasi terkait* harus dijaga sama di GUI dan CLI; saat daemon offline sebelum bacaan pertama berhasil, banner F7 tidak ada dan banner lain tampil tanpa operation ID dan tanpa Use Port; setelah satu bacaan berhasil, hasil itu tetap dipakai selama offline.
 - Untuk sesaat sesudah kegagalan, banner bisa tampil dari `summary` saja lalu mendapat kode, operation ID, dan Use Port begitu event operasi tiba.
 - `InstanceFailureBanner` adalah view baru di samping `StateBanner`, sehingga ada dua tempat yang memakai gaya banner yang sama.
 - Baris `operation:` baru dan field `lastOperation` mengubah golden CLI yang sudah ada.
@@ -289,11 +289,11 @@ Pendekatan Journey: jalur "start gagal, lihat sebabnya, perbaiki, coba lagi" dib
 
 ## Follow-up
 
-- [ ] Lead: bawa *Usulan update untuk spec lain* ke spec 0010, 0021, 0022, dan 0029 lewat `/sync` setelah build.
-- [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`.
-- [ ] Milestone GUI fitur ini (langkah 4): isi I7 Needs Attention menjadi "Restart {attempts} of {budget} at {time}." dengan syarat `attempts` ≤ `budget` (diterima lead 2026-11-10); teks spec 0022 diselaraskan lead lewat `/sync`.
-- [ ] Fitur 34 dan 35: setelah keduanya di `main`, hapus `// provisional: F34` dan `// provisional: F35` (Diagnose… dengan fokus, hint `stackly doctor`, `openOperation`).
-- [ ] `/sync` setelah build: catat stage `backoff`, `InstanceFailureBanner`, `next_steps.rs`, dan aturan "saran port hanya lewat sheet Ports" di root `AGENTS.md` dan `apps/macos/AGENTS.md`.
+- [x] Lead: bawa *Usulan update untuk spec lain* ke spec 0010, 0021, 0022, dan 0029 lewat `/sync` setelah build. Diterapkan 2026-11-10 (koordinasi scope 05, `arc-sync`) di spec 0010, 0021, 0022, dan 0029, juga usulan untuk spec 0008.
+- [ ] Lead: catat *Selisih mockup yang disengaja* di `ui-macos.md` lewat `/scope`. *(2026-11-10) Masih terbuka: `docs/scope/` di luar `docs/specs/`; teks usulannya ada di laporan `arc-sync` ke lead.*
+- [x] Milestone GUI fitur ini (langkah 4): isi I7 Needs Attention menjadi "Restart {attempts} of {budget} at {time}." dengan syarat `attempts` ≤ `budget` (diterima lead 2026-11-10); teks spec 0022 diselaraskan lead lewat `/sync`. Dibangun di `AttentionRules` (langkah 4) dan teks tabel I7 spec 0022 diselaraskan 2026-11-10.
+- [x] Fitur 34 dan 35: setelah keduanya di `main`, hapus `// provisional: F34` dan `// provisional: F35` (Diagnose… dengan fokus, hint `stackly doctor`, `openOperation`). Selesai: tidak ada lagi `// provisional: F34` atau `F35` di kode (`DOCTOR_COMMAND` dihapus F34 langkah 11; Diagnose… memanggil `openDiagnostics(focus: .instance(id))` dan Show in Operations memanggil `openOperation(id)`), dicek 2026-11-10.
+- [ ] `/sync` setelah build: catat stage `backoff`, `InstanceFailureBanner`, `next_steps.rs`, dan aturan "saran port hanya lewat sheet Ports" di root `AGENTS.md` dan `apps/macos/AGENTS.md`. *(2026-11-10) Masih terbuka: `AGENTS.md` di luar `docs/specs/` (milik `/sync` lead).*
 
 ## Rationale
 
