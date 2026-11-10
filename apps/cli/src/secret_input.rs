@@ -469,6 +469,7 @@ fn interrupted() -> CliFailure {
         )),
         request_id: None,
         exit_override: Some(EXIT_INTERRUPTED),
+        hints: Vec::new(),
     }
 }
 

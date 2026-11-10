@@ -232,10 +232,19 @@ pub fn detail_of(instance: &InstanceSummary) -> InstanceDetail {
     detail
 }
 
-/// The answer of a scripted daemon to `instance.get_detail` and
-/// `instance.get_data_usage` for `instance`, and `None` for any other call.
+/// An `operation.list` answer with `items` and no next page.
+pub fn operations(items: Vec<stackly_protocol::operation::OperationSummary>) -> Step {
+    Step::Reply(Reply::OperationList(
+        stackly_protocol::operation::OperationPage { items, next: None },
+    ))
+}
+
+/// The answer of a scripted daemon to `instance.get_detail`,
+/// `instance.get_data_usage`, and `operation.list` (no operations) for
+/// `instance`, and `None` for any other call.
 pub fn detail_steps(call: &Call, instance: &InstanceSummary) -> Option<Vec<Step>> {
     match call {
+        Call::OperationList(_) => Some(vec![operations(Vec::new())]),
         Call::InstanceGetDetail(_) => Some(vec![Step::Reply(Reply::InstanceGetDetail(Box::new(
             detail_of(instance),
         )))]),

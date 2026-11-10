@@ -5,7 +5,9 @@
 //! transaction: a read transaction for reads, `BEGIN IMMEDIATE` for a
 //! commit. No transaction stays open between two commands (REQ-048).
 
+mod coded;
 mod column;
+mod health;
 mod journal;
 mod prune;
 mod read;
@@ -19,6 +21,7 @@ mod write;
 
 use std::fmt;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::JoinHandle;
 
@@ -30,14 +33,15 @@ use stackly_domain::{
     IdempotencyKey, Instance, InstanceFilter, InstanceId, InstanceName, InstancePathEntry,
     JournalView, Lease, LeaseFilter, Operation, OperationId, OperationJournal, OperationPage,
     OperationQuery, ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord,
-    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError, RestartPlan,
-    RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef, SecretReferenceFilter,
-    SecretReferenceView, SecretUse, SecretUser, Sha256Digest, StorageLocation, StorageLocationId,
-    Versioned, WriteBatch,
+    ProviderSourceKind, ProviderSourceRecord, PruneReport, QuickCheck, Registry, RegistryError,
+    RestartPlan, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretRef,
+    SecretReferenceFilter, SecretReferenceView, SecretUse, SecretUser, Sha256Digest,
+    StorageLocation, StorageLocationId, UnrecognizedValue, Versioned, WriteBatch,
 };
 use stackly_platform::Clock;
 
 use crate::error::StorageError;
+pub use coded::{CODED_COLUMNS, CodedColumn};
 pub(crate) use column::sql_error;
 use prune::{History, Limits};
 use read::InstanceSelect;
@@ -366,6 +370,17 @@ impl Registry for SqliteRegistry {
     fn audit_events(&self, query: AuditQuery) -> Result<Versioned<AuditPage>, RegistryError> {
         query.validate()?;
         self.read(move |tx| secret::audit_events(tx, &query))
+    }
+
+    fn quick_check(&self, stop: Arc<AtomicBool>) -> Result<QuickCheck, RegistryError> {
+        self.run(move |conn| health::quick_check(conn, stop))
+    }
+
+    fn scan_unrecognized(
+        &self,
+        stop: Arc<AtomicBool>,
+    ) -> Result<Vec<UnrecognizedValue>, RegistryError> {
+        self.run(move |conn| coded::scan_unrecognized(conn, stop))
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {

@@ -21,6 +21,7 @@ mod inspect;
 mod list;
 mod logs;
 mod metrics;
+pub mod next_steps;
 mod open;
 mod rename;
 pub mod render;

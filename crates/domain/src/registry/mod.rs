@@ -10,6 +10,7 @@ mod batch;
 mod config;
 mod error;
 mod guard;
+mod health;
 mod install;
 mod path;
 mod query;
@@ -19,6 +20,8 @@ mod secret;
 
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use jiff::Timestamp;
 use uuid::Uuid;
@@ -45,6 +48,10 @@ pub use config::{
 };
 pub use error::{BatchError, NotDeletableReason, RegistryError, ResourceRef};
 pub use guard::{CommitGuard, GuardDecision, GuardView, Guarded};
+pub use health::{
+    QUICK_CHECK_MESSAGES_MAX, QuickCheck, UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN,
+    UnrecognizedValue,
+};
 pub use install::{
     CODES_MAX, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
     DependencyManifestJson, SignatureInfoJson,
@@ -470,6 +477,40 @@ pub trait Registry: Send + Sync {
     /// Returns `InvalidQuery` for a limit outside 1 to 500, or `Corrupt`,
     /// `Busy`, `Unavailable`, or `Io`.
     fn audit_events(&self, query: AuditQuery) -> Result<Versioned<AuditPage>, RegistryError>;
+
+    /// Runs `PRAGMA quick_check` on the registry, in one read transaction
+    /// that writes nothing (spec 0034 AC-8). Setting `stop` interrupts it,
+    /// so a check past its time limit frees the registry for the next
+    /// call. The default answers `Unavailable`, for a registry without the
+    /// check.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Busy`, `Unavailable`, or `Io`, the last one also when
+    /// `stop` interrupted the check.
+    fn quick_check(&self, _stop: Arc<AtomicBool>) -> Result<QuickCheck, RegistryError> {
+        Err(RegistryError::Unavailable)
+    }
+
+    /// Lists the stored values that this build does not know in every
+    /// column of an open code set it reads, at most
+    /// [`UNRECOGNIZED_ROWS_PER_COLUMN`] rows per column, ordered by column
+    /// and then by row, in one read transaction that writes nothing (spec
+    /// 0034, *Pindai kode tidak dikenal*). Each value makes every read
+    /// that loads its row fail as `Corrupt`. Setting `stop` interrupts the
+    /// scan. The default answers `Unavailable`, for a registry without
+    /// the scan.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Busy`, `Unavailable`, or `Io`, the last one also when
+    /// `stop` interrupted the scan.
+    fn scan_unrecognized(
+        &self,
+        _stop: Arc<AtomicBool>,
+    ) -> Result<Vec<UnrecognizedValue>, RegistryError> {
+        Err(RegistryError::Unavailable)
+    }
 
     /// Applies every op of `batch` in one transaction, or none of them.
     ///

@@ -20,6 +20,7 @@ mod data;
 mod duplicate;
 mod duplicate_real;
 mod exit_codes;
+mod failure;
 mod get;
 mod inspect;
 mod list;

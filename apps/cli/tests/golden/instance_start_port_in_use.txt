@@ -1,0 +1,7 @@
+error: endpoint postgres is in use at 127.0.0.1:5432
+  code: supervisor.endpoint_in_use
+  hint: Stackly never moves a fixed port on its own. Pick another port for this endpoint, or stop the process that holds it.
+  operation: 0192f3a0-7c1e-7b2a-9d4e-5f6a7b8c9d04
+  hint: use a free port: stackly instance endpoint set orders-db --port postgres=5433
+  hint: read its logs: stackly instance logs orders-db
+  hint: start it again: stackly instance start orders-db

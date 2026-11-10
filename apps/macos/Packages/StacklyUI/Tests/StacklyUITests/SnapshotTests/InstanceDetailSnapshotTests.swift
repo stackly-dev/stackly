@@ -165,6 +165,23 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["NFR-012", "AC-068", "AC-010", "VAL-020"],
+                expected:
+                    "The failure banner of each state F1 to F7 (crash loop, port with Use Port or Change Port, after a port change, data in use, other, refused start, restart) renders in every variant without a cut label or code line"
+            ))
+        func detailOfEachFailureBanner() async throws {
+            for fixture in FixtureFailureBanner.allCases {
+                let rig = await rig(
+                    instances: FixtureScenario.instanceCases + [fixture.instance],
+                    prepare: { $0.script.instanceOperations = fixture.operations })
+                try await assertSnapshot(
+                    detail(rig, fixture.number),
+                    named: "instance-detail-failure-\(fixture.snapshotName)", size: Self.canvas)
+            }
+        }
+
+        @Test(
+            .evidence(
                 covers: ["NFR-012"],
                 expected:
                     "The detail of an instance that needs a secret turns Show Password and Copy off with the reason"
@@ -358,5 +375,18 @@ extension InstanceSummary {
             leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
             ownership: ownership, initialized: initialized, capabilities: capabilities,
             lastExit: lastExit, autostart: InstanceAutostart(policy: .atLogin, session: session))
+    }
+}
+
+extension FixtureFailureBanner {
+    /// The case name in the kebab case of snapshot names, such as `port-in-use`.
+    var snapshotName: String {
+        rawValue.reduce(into: "") { name, character in
+            if character.isUppercase {
+                name += "-" + character.lowercased()
+            } else {
+                name.append(character)
+            }
+        }
     }
 }

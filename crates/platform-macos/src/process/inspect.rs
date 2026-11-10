@@ -413,7 +413,7 @@ pub(super) fn bsd_info(pid: Pid) -> Result<BsdInfo, ProcessError> {
 /// The executable of a live process through `proc_pidpath`, or `None` when
 /// it is gone. Any other error, `ENOENT` for an executable unlinked under a
 /// live process included, is an error, never a different executable.
-fn executable(pid: Pid) -> Result<Option<PathBuf>, ProcessError> {
+pub(super) fn executable(pid: Pid) -> Result<Option<PathBuf>, ProcessError> {
     let capacity = usize::try_from(libc::PROC_PIDPATHINFO_MAXSIZE).unwrap_or(4096);
     let mut buffer = vec![0_u8; capacity];
     let size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
@@ -456,7 +456,7 @@ fn session(pid: Pid) -> Result<Option<Pid>, ProcessError> {
 }
 
 /// Why a descriptor listing has no answer.
-enum Listing {
+pub(super) enum Listing {
     /// `EPERM`: a process of another user.
     Denied,
     /// `ESRCH`: the process is gone.
@@ -464,7 +464,7 @@ enum Listing {
     Failed(ProcessError),
 }
 
-fn listing_error(op: &'static str) -> Listing {
+pub(super) fn listing_error(op: &'static str) -> Listing {
     let error = io::Error::last_os_error();
     match error.raw_os_error() {
         Some(libc::EPERM) => Listing::Denied,
@@ -473,7 +473,8 @@ fn listing_error(op: &'static str) -> Listing {
     }
 }
 
-fn list_fds(pid: Pid) -> Result<Vec<libc::proc_fdinfo>, Listing> {
+/// The open descriptors of `pid`, in the kernel's order.
+pub(super) fn list_fds(pid: Pid) -> Result<Vec<libc::proc_fdinfo>, Listing> {
     const OP: &str = "proc_pidinfo PROC_PIDLISTFDS";
     clear_errno();
     // SAFETY: a null buffer of size 0 only asks for the size needed.

@@ -64,7 +64,7 @@ rpassword = "7.5"
 # A TLS server for the fetcher test that refuses an unknown certificate
 # (spec 0018); the same version ureq already uses.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled", "hooks"] }
 schemars = "1.2"
 security-framework = "3.7"
 serde = { version = "1.0", features = ["derive"] }

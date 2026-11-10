@@ -17,6 +17,10 @@ use stackly_platform::{
 
 use crate::TestRoot;
 
+mod listeners;
+
+use listeners::FakeSocket;
+
 /// The first PID the fake hands out.
 const FIRST_PID: u32 = 50_000;
 /// Where the start times of spawned fake processes begin:
@@ -73,6 +77,8 @@ pub enum ProcessOp {
     OpenSpool,
     /// [`SpoolReader::release_below`] on a spool the fake opened.
     ReleaseBelow,
+    /// [`ListenerLookup::owners`](stackly_platform::ListenerLookup::owners).
+    ListenerOwners,
 }
 
 /// One call that reached a [`FakeProcessSupervision`], in the order it ran.
@@ -174,6 +180,9 @@ pub struct FakeSpawn {
 /// - Every lock and spool path must lie inside the test root or its run
 ///   folder; any other path fails with a `PermissionDenied` I/O error and
 ///   counts as a [violation](Self::violations).
+/// - It is the [`ListenerLookup`](stackly_platform::ListenerLookup) port
+///   too: [`listen`](Self::listen) makes a live process hold a socket, and
+///   a lookup lists the live processes of the fake's user that hold one.
 ///
 /// Every call lands in a log ([`calls`](Self::calls)), so a test can check
 /// that no discard reached a process that ran, that no signal reached a
@@ -231,6 +240,8 @@ struct State {
     survive_force_kill: Vec<Pid>,
     /// Fact changes the next `watch_exit` of a PID applies once it is armed.
     on_watch: Vec<(Pid, FactsChange)>,
+    /// Sockets a test made processes hold, for the listener lookup.
+    sockets: Vec<FakeSocket>,
     violations: usize,
 }
 
@@ -298,6 +309,7 @@ impl FakeProcessSupervision {
             die_suspended: None,
             survive_force_kill: Vec::new(),
             on_watch: Vec::new(),
+            sockets: Vec::new(),
             violations: 0,
         };
         Self {

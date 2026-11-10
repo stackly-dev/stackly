@@ -37,4 +37,4 @@ pub use open::{APPLICATION_ID, OpenOptions, OpenSummary, RegistryOpen, open_regi
 pub use recovery::{
     RECOVERY_REPORT_SCHEMA, RecoveryReason, RecoveryReport, ReportFile, ReportSnapshot,
 };
-pub use registry::{REGISTRY_QUEUE_CAPACITY, SqliteRegistry};
+pub use registry::{CODED_COLUMNS, CodedColumn, REGISTRY_QUEUE_CAPACITY, SqliteRegistry};

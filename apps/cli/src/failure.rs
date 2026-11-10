@@ -18,7 +18,8 @@ use crate::exit::{EXIT_INTERRUPTED, exit_code};
 
 /// An error the command ends with: the body for the envelope, the
 /// `requestId` of the daemon request that failed (`None` for an error the
-/// CLI found itself), and an exit code that overrides the category's.
+/// CLI found itself), an exit code that overrides the category's, and the
+/// hints the command adds to the error block for people.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CliFailure {
     /// The error, as the daemon sent it or as the CLI made it.
@@ -27,6 +28,10 @@ pub struct CliFailure {
     pub request_id: Option<String>,
     /// Set only by [`CliFailure::interrupted`], to 130.
     pub exit_override: Option<u8>,
+    /// Hints the command adds, written in the text error block after the
+    /// CLI's hints for the code; never in `--json` and never with
+    /// `--quiet`. Empty unless [`CliFailure::with_hints`] set them.
+    pub hints: Vec<String>,
 }
 
 impl CliFailure {
@@ -37,6 +42,7 @@ impl CliFailure {
             body: Box::new(body),
             request_id: None,
             exit_override: None,
+            hints: Vec::new(),
         }
     }
 
@@ -47,7 +53,17 @@ impl CliFailure {
             body: body.into(),
             request_id,
             exit_override: None,
+            hints: Vec::new(),
         }
+    }
+
+    /// This failure with `hints` added to its text error block, such as
+    /// the next steps of a failed start (spec 0033, AC-6). The body, and so
+    /// `--json`, never changes.
+    #[must_use]
+    pub fn with_hints(mut self, hints: impl IntoIterator<Item = String>) -> Self {
+        self.hints.extend(hints);
+        self
     }
 
     /// The exit code: the override when set, else the category's.
@@ -177,6 +193,7 @@ impl CliFailure {
             ),
             request_id: None,
             exit_override: Some(EXIT_INTERRUPTED),
+            hints: Vec::new(),
         }
     }
 
@@ -569,6 +586,7 @@ impl CliFailure {
             ),
             request_id: None,
             exit_override: Some(EXIT_INTERRUPTED),
+            hints: Vec::new(),
         }
     }
 

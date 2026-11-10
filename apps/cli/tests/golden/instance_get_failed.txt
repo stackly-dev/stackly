@@ -19,6 +19,7 @@ Health              unhealthy (crash_loop), checked <age>
 Process             -
 Restarts            5 of 5 in 1m, exhausted, 0 since created
 Last failure        crash_loop at 2026-10-20 09:03:00 +00:00, exit code 1
+Last operation      -
 Blocker             -
 Logs                available
 Dependents          erp-dev (dedicated, lease active), reporting (shared)
@@ -33,3 +34,7 @@ socket      postgresql://postgres:****@/postgres?host=/Users/test/Library/Applic
 Failure output:
   FATAL: could not open shared memory segment
   LOG: shutting down
+
+Next steps:
+  read its logs: stackly instance logs cache
+  start it again: stackly instance start cache

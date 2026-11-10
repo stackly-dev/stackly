@@ -11,12 +11,14 @@
 //! | `lock` | the instance lock |
 //! | `spool` | log spools and their reader |
 //! | `usage` | the PID list and the counters of the metrics sampler |
+//! | `listeners` | the processes of this user that hold a port (spec 0034) |
 //! | `boot` | the boot ID |
 //! | `sys` | declarations libc lacks, with layout asserts |
 
 pub(crate) mod boot;
 mod inspect;
 pub(crate) mod kill;
+mod listeners;
 mod lock;
 pub(crate) mod spawn;
 mod spool;
@@ -26,16 +28,17 @@ mod usage;
 mod watch;
 
 use std::fmt;
+use std::net::IpAddr;
 use std::os::fd::AsFd;
 use std::path::Path;
 use std::sync::Arc;
 
-use stackly_domain::{BootId, Pid, ProcessCounters, ProcessStart};
+use stackly_domain::{BootId, Pid, ProcessCounters, ProcessStart, Transport};
 use stackly_platform::{
-    ExitListener, ExitStatus, FileIdentity, HelperHandle, HoldsFile, LockOutcome, LockState,
-    MainHandle, OutputTarget, ProcessError, ProcessFacts, ProcessSupervision, ProviderSignal,
-    RequestPart, SignalTarget, SpawnRequest, SpoolReader, SpoolWriter, StdinSource, SuspendedChild,
-    UserId,
+    ExitListener, ExitStatus, FileIdentity, HelperHandle, HoldsFile, ListenerLookup, ListenerOwner,
+    LockOutcome, LockState, MainHandle, OutputTarget, ProcessError, ProcessFacts,
+    ProcessSupervision, ProviderSignal, RequestPart, SignalTarget, SpawnRequest, SpoolReader,
+    SpoolWriter, StdinSource, SuspendedChild, UserId,
 };
 
 use crate::identity::current_uid;
@@ -52,6 +55,9 @@ pub use inspect::KinfoFacts;
 /// before `kill(2)`, under the PID's mutex, and is refused when the start
 /// time, user, or session changed. Facts of another user's process come
 /// from `kinfo_proc`, so a reused PID is proven foreign.
+///
+/// It is also the [`ListenerLookup`] port (spec 0034): the processes of
+/// this user that hold a port, from their socket descriptors.
 ///
 /// Drop it only when the daemon stops: the watcher thread ends then, and
 /// the processes keep running.
@@ -322,5 +328,16 @@ impl ProcessSupervision for MacosProcessSupervision {
 
     fn open_spool(&self, path: &Path) -> Result<Option<Box<dyn SpoolReader>>, ProcessError> {
         spool::open_spool(path)
+    }
+}
+
+impl ListenerLookup for MacosProcessSupervision {
+    fn owners(
+        &self,
+        transport: Transport,
+        address: IpAddr,
+        port: u16,
+    ) -> Result<Vec<ListenerOwner>, ProcessError> {
+        listeners::owners(transport, address, port)
     }
 }

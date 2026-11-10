@@ -30,6 +30,8 @@ use stackly_platform::{Clock, instance_path_entries};
 use super::seed::{BackupSeed, RegistrySeed, seeded_observation};
 use super::stored_instance;
 
+mod health;
+
 /// The action of a seeded audit row (spec 0005, "Fake dan conformance").
 pub(crate) const SEEDED_AUDIT_ACTION: AuditAction = AuditAction::from_static("test.seed");
 /// The lengths of `executable_identity` the column's check accepts, in
@@ -80,6 +82,7 @@ pub struct FakeRegistry {
     loaded_at: Timestamp,
     state: Mutex<State>,
     next_fault: Mutex<Option<RegistryError>>,
+    health: Mutex<health::FakeHealth>,
 }
 
 impl fmt::Debug for FakeRegistry {
@@ -102,6 +105,7 @@ impl FakeRegistry {
             loaded_at,
             state: Mutex::new(State::new()),
             next_fault: Mutex::new(None),
+            health: Mutex::new(health::FakeHealth::default()),
         }
     }
 
@@ -619,6 +623,20 @@ impl Registry for FakeRegistry {
             let items = matching.into_iter().take(limit).cloned().collect();
             Ok(AuditPage { items, next })
         })
+    }
+
+    fn quick_check(
+        &self,
+        stop: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<stackly_domain::QuickCheck, RegistryError> {
+        self.answer_quick_check(&stop)
+    }
+
+    fn scan_unrecognized(
+        &self,
+        stop: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Vec<stackly_domain::UnrecognizedValue>, RegistryError> {
+        self.answer_scan(&stop)
     }
 
     fn operations(&self, query: OperationQuery) -> Result<Versioned<OperationPage>, RegistryError> {

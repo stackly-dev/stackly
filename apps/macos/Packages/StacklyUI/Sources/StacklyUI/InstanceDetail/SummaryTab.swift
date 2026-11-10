@@ -17,13 +17,16 @@ struct SummaryTab: View {
     let secrets: SecretsClient
     let home: String
     let enterSecrets: @MainActor ([SecretNeed]) -> Void
+    /// What the failure banner of spec 0033 reads and where its buttons go.
+    let failure: InstanceDetailBanner.Failure
     /// The actions of the "Still stopping." banner, or `nil` when it does not show.
     var stopping: InstanceDetailBanner.Stopping? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sectionGap) {
             InstanceDetailBanner(
-                summary: summary, action: action, detailError: model.detailError,
+                summary: summary, action: action, failure: failure,
+                detailError: model.detailError,
                 retryDetail: { Task { await model.reload() } }, enterSecrets: enterSecrets,
                 stopping: stopping)
             if let reason = action.disabledReason {
@@ -36,6 +39,13 @@ struct SummaryTab: View {
             $0.size.width
         } action: {
             width = $0
+        }
+        .task(id: summary.id) { await failure.model.open() }
+        .onChange(of: summary, initial: true) { _, new in
+            failure.model.observe(new)
+        }
+        .onChange(of: failure.center, initial: true) { _, new in
+            failure.model.observe(center: new)
         }
     }
 
