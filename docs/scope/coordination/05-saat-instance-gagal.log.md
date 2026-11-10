@@ -27,6 +27,7 @@
 | `2026-11-10` | Lead berjalan di `claude-fable-5-2` effort `medium`; sub sesi diminta `claude-opus-5-5` `xhigh` dan effort-nya diperiksa lewat `get_session` sesudah mulai. | `lead` |
 | `2026-11-10` | Spec 0035 diterima lead atas delegasi user (20 AC, cross check Sonnet 15 temuan: 13 diterapkan, 2 dipertahankan; K1 sampai K16 di `rationale.md`). F35 membangun lebih dulu, jadi nomor final: protokol 3.3 dan migrasi `0012`; F33 dan F34 mengambil nomor berikutnya menurut urutan merge. Worktree sub sesi ada di `~/worktrees/Stackly/`, bukan `.claude/worktrees/`. Langkah 10 Build plan 0035 (sesi GUI manual) masuk `05-saat-instance-gagal.manual.md`. | `lead` |
 | `2026-11-10` | `start_session` ditolak pada giliran yang dipicu pesan sesi lain (sama seperti scope 02 dan 04), jadi sesi architect yang sudah di-merge dipakai ulang sebagai developer fitur yang sama: `clear_session`, judul baru, brief lewat `SendMessage`. | `lead` |
+| `2026-11-10` | Spec 0033 diterima lead atas delegasi user (17 AC, tanpa perubahan kontrak atau migrasi; cross check Sonnet 17 temuan ditutup). Ikut diterima: isi I7 spec 0022 "Restart {attempts + 1} of {budget}" menjadi "{attempts}" dengan syarat `attempts` ≤ `budget`, karena `restart.attempts` sudah menghitung crash pemicu; dikerjakan milestone GUI F33 dan teks spec 0022 diselaraskan lewat `/sync`. Disampaikan ke user. | `lead` |
 
 ## Blocker terbuka
 
