@@ -5,6 +5,7 @@
 //! transaction: a read transaction for reads, `BEGIN IMMEDIATE` for a
 //! commit. No transaction stays open between two commands (REQ-048).
 
+mod coded;
 mod column;
 mod health;
 mod journal;
@@ -40,8 +41,8 @@ use stackly_domain::{
 use stackly_platform::Clock;
 
 use crate::error::StorageError;
+pub use coded::{CODED_COLUMNS, CodedColumn};
 pub(crate) use column::sql_error;
-pub use health::{CODED_COLUMNS, CodedColumn};
 use prune::{History, Limits};
 use read::InstanceSelect;
 
@@ -379,7 +380,7 @@ impl Registry for SqliteRegistry {
         &self,
         stop: Arc<AtomicBool>,
     ) -> Result<Vec<UnrecognizedValue>, RegistryError> {
-        self.run(move |conn| health::scan_unrecognized(conn, stop))
+        self.run(move |conn| coded::scan_unrecognized(conn, stop))
     }
 
     fn commit(&self, batch: WriteBatch) -> Result<Committed, BatchError> {
