@@ -22,6 +22,7 @@ use typeshare::typeshare;
 use crate::audit::{AuditPage, ListAuditParams};
 use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, ShutdownParams};
+use crate::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use crate::doctor::{DoctorParams, DoctorReport};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
@@ -274,6 +275,14 @@ pub enum Call {
     /// operation: it writes nothing and holds no lock.
     #[serde(rename = "doctor.run")]
     DoctorRun(DoctorParams),
+    /// Builds a diagnostic bundle in the daemon's cache and lists what it
+    /// holds (spec 0034). Not an operation.
+    #[serde(rename = "diagnostics.preview_bundle")]
+    DiagnosticsPreviewBundle,
+    /// Copies the zip of a preview exactly to a path the client chose
+    /// (spec 0034). Not an operation.
+    #[serde(rename = "diagnostics.export_bundle")]
+    DiagnosticsExportBundle(ExportBundleParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -461,6 +470,12 @@ pub enum Reply {
     /// The doctor report, one check per entry.
     #[serde(rename = "doctor.run")]
     DoctorRun(Box<DoctorReport>),
+    /// What the staged bundle holds.
+    #[serde(rename = "diagnostics.preview_bundle")]
+    DiagnosticsPreviewBundle(Box<BundlePreview>),
+    /// The file the bundle was copied to.
+    #[serde(rename = "diagnostics.export_bundle")]
+    DiagnosticsExportBundle(ExportedBundle),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -590,6 +605,8 @@ methods! {
     "instance.logs_unfollow" => InstanceLogsUnfollow(LogsUnfollowParams), recovery refused;
     "instance.prepare_terminal" => InstancePrepareTerminal(PrepareTerminalParams), recovery refused;
     "doctor.run" => DoctorRun(DoctorParams), recovery allowed;
+    "diagnostics.preview_bundle" => DiagnosticsPreviewBundle, recovery allowed;
+    "diagnostics.export_bundle" => DiagnosticsExportBundle(ExportBundleParams), recovery allowed;
 }
 
 impl Reply {
@@ -716,6 +733,12 @@ mod tests {
             }),
             Call::StorageGetCapacity,
             Call::DoctorRun(crate::doctor::DoctorParams::default()),
+            Call::DiagnosticsPreviewBundle,
+            Call::DiagnosticsExportBundle(crate::diagnostics::ExportBundleParams {
+                preview_id: uuid::Uuid::nil(),
+                destination: "/a.zip".to_owned(),
+                replace: false,
+            }),
             Call::RuntimeResolve(InstallRuntimeParams {
                 provider: "official/nats".to_owned(),
                 selector: "stable".to_owned(),

@@ -25,6 +25,7 @@ use stackly_protocol::daemon::{
     Capabilities, DaemonHealth, DaemonInfo, LaunchContextKind, ShutdownAccepted, ShutdownMode,
     ShutdownParams,
 };
+use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
@@ -383,6 +384,39 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, PrepareTerminalReply> {
         let _ = context;
         instance::prepare_terminal(core, params)
+    }
+
+    /// `diagnostics.preview_bundle` (spec 0034).
+    fn preview_bundle<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, BundlePreview> {
+        let _ = (core, context);
+        // provisional: F34 (spec 0034 step 10 replaces this with the handler)
+        Box::pin(async {
+            Err(Box::new(ErrorBody::new(
+                &stackly_protocol::codes::request::UNKNOWN_METHOD,
+                "diagnostics.preview_bundle is not served by this build yet",
+            )))
+        })
+    }
+
+    /// `diagnostics.export_bundle` (spec 0034).
+    fn export_bundle<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ExportBundleParams,
+    ) -> HandlerFuture<'a, ExportedBundle> {
+        let _ = (core, context, params);
+        // provisional: F34 (spec 0034 step 10 replaces this with the handler)
+        Box::pin(async {
+            Err(Box::new(ErrorBody::new(
+                &stackly_protocol::codes::request::UNKNOWN_METHOD,
+                "diagnostics.export_bundle is not served by this build yet",
+            )))
+        })
     }
 
     /// `doctor.run` (spec 0034).

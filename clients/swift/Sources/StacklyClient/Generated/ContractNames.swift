@@ -84,6 +84,8 @@ extension Call {
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		case .instancePrepareTerminal: "instance.prepare_terminal"
 		case .doctorRun: "doctor.run"
+		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
+		case .diagnosticsExportBundle: "diagnostics.export_bundle"
 		}
 	}
 }
@@ -151,6 +153,8 @@ extension Reply {
 		case .instanceLogsUnfollow: "instance.logs_unfollow"
 		case .instancePrepareTerminal: "instance.prepare_terminal"
 		case .doctorRun: "doctor.run"
+		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
+		case .diagnosticsExportBundle: "diagnostics.export_bundle"
 		}
 	}
 }

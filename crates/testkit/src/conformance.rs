@@ -73,6 +73,7 @@ pub fn fs_conformance(fs: &dyn Filesystem, root: &TestRoot) {
     runtime_files::check_open_read(fs, &base);
     runtime_files::check_open_append(fs, &base);
     runtime_files::check_rename_no_replace(fs, &base);
+    runtime_files::check_rename_replace(fs, &base);
     runtime_files::check_volume_space(fs, &base);
     runtime_files::check_volume_facts(fs, &base);
     runtime_files::check_tree_writer(fs, &base);

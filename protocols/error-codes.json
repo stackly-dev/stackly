@@ -73,6 +73,10 @@
       "owner": "spec 0022"
     },
     {
+      "name": "diagnostics",
+      "owner": "spec 0034"
+    },
+    {
       "name": "platform",
       "owner": "spec 0031"
     },
@@ -605,6 +609,58 @@
       ],
       "items": null,
       "summary": "the method needs a subsystem that is not ready while the daemon starts"
+    },
+    {
+      "code": "diagnostics.bundle_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the preview could not be built or staged; reason is no_space, permission, or io"
+    },
+    {
+      "code": "diagnostics.destination_exists",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "path"
+      ],
+      "items": null,
+      "summary": "something is at the destination and replace is false"
+    },
+    {
+      "code": "diagnostics.destination_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reason",
+        "path"
+      ],
+      "items": null,
+      "summary": "the destination is refused; reason is not_absolute, invalid_name, parent_missing, parent_not_directory, is_directory, or not_regular"
+    },
+    {
+      "code": "diagnostics.preview_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "previewId"
+      ],
+      "items": null,
+      "summary": "the preview is not staged: it expired, a newer one pushed it out, or stacklyd restarted"
+    },
+    {
+      "code": "diagnostics.write_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason",
+        "path"
+      ],
+      "items": null,
+      "summary": "the bundle could not be written to the destination; reason is no_space, permission, or io, and no partial file is left"
     },
     {
       "code": "events.too_many_subscriptions",

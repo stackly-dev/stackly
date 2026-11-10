@@ -991,6 +991,90 @@ public struct BlockingOperation: Codable, Sendable, Equatable {
 	}
 }
 
+/// What an entry of the bundle is. Open.
+public enum BundleEntryKind: String, Codable, Sendable, Equatable {
+	/// `README.txt`: what the bundle holds and leaves out.
+	case readme
+	/// `doctor.json`: the doctor report of the preview.
+	case doctor
+	/// `system.json`: versions, macOS, launch context, capacity, roots.
+	case system
+	/// `instances.json`: every instance, secrets only as references.
+	case instances
+	/// `runtimes.json`: every runtime.
+	case runtimes
+	/// `operations.json`: the newest operations and those that need
+	/// recovery.
+	case operations
+	/// `logs/stacklyd.log`: the tail of the daemon log.
+	case daemonLog = "daemon_log"
+	/// `logs/instances/<name>.log`: the tail of one instance log.
+	case instanceLog = "instance_log"
+	/// A file of `agent/`: the launch record or the start failure record.
+	case agent
+	/// A kind this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One entry of a preview.
+public struct BundleEntry: Codable, Sendable, Equatable {
+	/// Its path in the zip, such as `logs/stacklyd.log`.
+	public let path: String
+	/// What it is.
+	public let kind: BundleEntryKind
+	/// One sentence about it.
+	public let description: String
+	/// Its bytes before compression.
+	public let bytes: UInt64
+	/// Its lines, for a log.
+	public let lines: UInt64?
+	/// True when it holds less than its source had.
+	public let truncated: Bool
+
+	public init(path: String, kind: BundleEntryKind, description: String, bytes: UInt64, lines: UInt64?, truncated: Bool) {
+		self.path = path
+		self.kind = kind
+		self.description = description
+		self.bytes = bytes
+		self.lines = lines
+		self.truncated = truncated
+	}
+}
+
+/// Reply of `diagnostics.preview_bundle`: what the staged zip holds. The
+/// same bytes are what `diagnostics.export_bundle` writes.
+public struct BundlePreview: Codable, Sendable, Equatable {
+	/// The preview, for `diagnostics.export_bundle`.
+	public let previewId: UUID
+	/// When it was built.
+	public let createdAt: Date
+	/// When it can no longer be exported, 15 minutes later.
+	public let expiresAt: Date
+	/// `stackly-diagnostics-<YYYYMMDD>T<HHMMSS>Z.zip`, from `createdAt` in
+	/// UTC.
+	public let suggestedFileName: String
+	/// Its entries, in zip order.
+	public let entries: [BundleEntry]?
+	/// The bytes of all entries before compression.
+	public let totalBytes: UInt64
+	/// The size of the zip.
+	public let zipBytes: UInt64
+	/// True when the registry is in recovery mode, so the entries that need
+	/// it are left out.
+	public let recovery: Bool
+
+	public init(previewId: UUID, createdAt: Date, expiresAt: Date, suggestedFileName: String, entries: [BundleEntry]?, totalBytes: UInt64, zipBytes: UInt64, recovery: Bool) {
+		self.previewId = previewId
+		self.createdAt = createdAt
+		self.expiresAt = expiresAt
+		self.suggestedFileName = suggestedFileName
+		self.entries = entries
+		self.totalBytes = totalBytes
+		self.zipBytes = zipBytes
+		self.recovery = recovery
+	}
+}
+
 /// Params of `operation.cancel`.
 public struct CancelOperationParams: Codable, Sendable, Equatable {
 	/// The operation to cancel.
@@ -4721,6 +4805,42 @@ public struct EventProbe: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `diagnostics.export_bundle`.
+public struct ExportBundleParams: Codable, Sendable, Equatable {
+	/// The preview to copy.
+	public let previewId: UUID
+	/// The absolute path to write, at most 1024 bytes, without a `.` or
+	/// `..` component; its file name is at most 200 bytes and its parent
+	/// folder must exist. The daemon checks the rest and answers
+	/// `diagnostics.destination_invalid` with its reason.
+	public let destination: String
+	/// Whether a file or symlink already at `destination` is replaced; a
+	/// client sends true only after the user confirmed the replacement.
+	public let replace: Bool?
+
+	public init(previewId: UUID, destination: String, replace: Bool?) {
+		self.previewId = previewId
+		self.destination = destination
+		self.replace = replace
+	}
+}
+
+/// Reply of `diagnostics.export_bundle`.
+public struct ExportedBundle: Codable, Sendable, Equatable {
+	/// The file written, with its parent folder made canonical.
+	public let path: String
+	/// Its size.
+	public let bytes: UInt64
+	/// Its sha256, lowercase hex, the same as the staged preview's.
+	public let sha256: String
+
+	public init(path: String, bytes: UInt64, sha256: String) {
+		self.path = path
+		self.bytes = bytes
+		self.sha256 = sha256
+	}
+}
+
 /// Params of `instance.force_stop` (spec 0026): only for an instance that
 /// is still `stopping`.
 public struct ForceStopInstanceParams: Codable, Sendable, Equatable {
@@ -7337,6 +7457,12 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Runs the read only checks of the doctor (spec 0034). Not an
 	/// operation: it writes nothing and holds no lock.
 	case doctorRun(DoctorParams)
+	/// Builds a diagnostic bundle in the daemon's cache and lists what it
+	/// holds (spec 0034). Not an operation.
+	case diagnosticsPreviewBundle
+	/// Copies the zip of a preview exactly to a path the client chose
+	/// (spec 0034). Not an operation.
+	case diagnosticsExportBundle(ExportBundleParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -7397,7 +7523,9 @@ public enum Call: Codable, Sendable, Equatable {
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
 			instancePrepareTerminal = "instance.prepare_terminal",
-			doctorRun = "doctor.run"
+			doctorRun = "doctor.run",
+			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
+			diagnosticsExportBundle = "diagnostics.export_bundle"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -7683,6 +7811,14 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .doctorRun(content)
 					return
 				}
+			case .diagnosticsPreviewBundle:
+				self = .diagnosticsPreviewBundle
+				return
+			case .diagnosticsExportBundle:
+				if let content = try? container.decode(ExportBundleParams.self, forKey: .content) {
+					self = .diagnosticsExportBundle(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -7858,6 +7994,11 @@ public enum Call: Codable, Sendable, Equatable {
 		case .doctorRun(let content):
 			try container.encode(CodingKeys.doctorRun, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .diagnosticsPreviewBundle:
+			try container.encode(CodingKeys.diagnosticsPreviewBundle, forKey: .type)
+		case .diagnosticsExportBundle(let content):
+			try container.encode(CodingKeys.diagnosticsExportBundle, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -8004,6 +8145,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case instancePrepareTerminal(PrepareTerminalReply)
 	/// The doctor report, one check per entry.
 	case doctorRun(DoctorReport)
+	/// What the staged bundle holds.
+	case diagnosticsPreviewBundle(BundlePreview)
+	/// The file the bundle was copied to.
+	case diagnosticsExportBundle(ExportedBundle)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -8064,7 +8209,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			instanceLogsFollow = "instance.logs_follow",
 			instanceLogsUnfollow = "instance.logs_unfollow",
 			instancePrepareTerminal = "instance.prepare_terminal",
-			doctorRun = "doctor.run"
+			doctorRun = "doctor.run",
+			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
+			diagnosticsExportBundle = "diagnostics.export_bundle"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -8366,6 +8513,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .doctorRun(content)
 					return
 				}
+			case .diagnosticsPreviewBundle:
+				if let content = try? container.decode(BundlePreview.self, forKey: .content) {
+					self = .diagnosticsPreviewBundle(content)
+					return
+				}
+			case .diagnosticsExportBundle:
+				if let content = try? container.decode(ExportedBundle.self, forKey: .content) {
+					self = .diagnosticsExportBundle(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -8548,6 +8705,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .doctorRun(let content):
 			try container.encode(CodingKeys.doctorRun, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .diagnosticsPreviewBundle(let content):
+			try container.encode(CodingKeys.diagnosticsPreviewBundle, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .diagnosticsExportBundle(let content):
+			try container.encode(CodingKeys.diagnosticsExportBundle, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

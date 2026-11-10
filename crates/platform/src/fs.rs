@@ -21,9 +21,11 @@ pub const TREE_USAGE_MAX_DEPTH: usize = 32;
 ///
 /// No method follows a symlink in the last path component except
 /// [`canonicalize`](Self::canonicalize) and the volume queries, and no
-/// method deletes anything except [`remove_tree`](Self::remove_tree), the
-/// temporary file of a failed atomic write, and the bytes an
-/// [`AppendFile::truncate`] cuts off.
+/// method deletes anything except [`remove_tree`](Self::remove_tree),
+/// [`remove_file`](Self::remove_file), the file
+/// [`rename_replace`](Self::rename_replace) replaces, the temporary file of
+/// a failed atomic write, and the bytes an [`AppendFile::truncate`] cuts
+/// off.
 pub trait Filesystem: Send + Sync {
     /// Returns the absolute path with every symlink resolved and no `.` or
     /// `..` component.
@@ -171,6 +173,49 @@ pub trait Filesystem: Send + Sync {
     /// volumes, [`PlatformError::NotFound`] when `from` or the parent of
     /// `to` does not exist, and other variants when the move fails.
     fn rename_no_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError>;
+
+    /// Moves the entry at `from` over the file or symlink at `to` in one
+    /// atomic step, replacing it as itself (a symlink is replaced, never what
+    /// it points to), then syncs the parent of `to`. It never replaces a
+    /// folder. The export of a diagnostic bundle that the user confirmed as
+    /// a replacement uses it (spec 0034, AC-13).
+    ///
+    /// The default answers `Unsupported`, for a platform that has no export.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::CrossesDevice`] when the paths lie on
+    /// different volumes, [`PlatformError::NotFound`] when `from` or the
+    /// parent of `to` does not exist, and [`PlatformError::Io`] when `to`
+    /// is a folder or the move fails otherwise.
+    fn rename_replace(&self, from: &Path, to: &Path) -> Result<(), PlatformError> {
+        let _ = from;
+        Err(PlatformError::Io {
+            op: "rename_replace",
+            path: to.to_path_buf(),
+            kind: io::ErrorKind::Unsupported,
+            message: "this platform cannot replace a file by a rename".to_owned(),
+        })
+    }
+
+    /// Removes the file or symlink at `path` as itself, never what a symlink
+    /// points to, and never a folder: the partial file of a failed bundle
+    /// export, which lies outside the Stackly roots (spec 0034, AC-13).
+    ///
+    /// The default answers `Unsupported`, for a platform that has no export.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlatformError::NotFound`] when nothing is at `path`, and
+    /// [`PlatformError::Io`] when it is a folder or cannot be removed.
+    fn remove_file(&self, path: &Path) -> Result<(), PlatformError> {
+        Err(PlatformError::Io {
+            op: "remove_file",
+            path: path.to_path_buf(),
+            kind: io::ErrorKind::Unsupported,
+            message: "this platform cannot remove a single file".to_owned(),
+        })
+    }
 
     /// Returns how many bytes an unprivileged user can still write on the
     /// volume that holds `path`, which is

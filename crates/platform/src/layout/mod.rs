@@ -50,6 +50,9 @@ const AGENT_LAUNCH_RECORD_FILE: &str = "background-agent.json";
 /// data root (spec 0034, *Catatan gagal start daemon*). Public, because
 /// `stacklyd` names it under a data root it could not resolve fully.
 pub const DAEMON_START_FAILURE_RECORD_FILE: &str = "daemon-start-failure.json";
+/// Folder under the cache root that holds the staged bundle previews
+/// (spec 0034).
+const DIAGNOSTICS_CACHE_DIR: &str = "diagnostics";
 /// Folder under the data root that holds the file keychain of a root
 /// override (spec 0011).
 const KEYCHAIN_DIR: &str = "keychain";
@@ -138,6 +141,14 @@ impl DirectoryLayout {
     #[must_use]
     pub fn agent_launch_record(&self) -> PathBuf {
         self.roots.data().join(AGENT_LAUNCH_RECORD_FILE)
+    }
+
+    /// Returns `<cache>/diagnostics`, the staging folder of diagnostic
+    /// bundle previews, which the daemon empties at every start (spec 0034,
+    /// *Staging preview*).
+    #[must_use]
+    pub fn diagnostics_cache_dir(&self) -> PathBuf {
+        self.roots.cache().join(DIAGNOSTICS_CACHE_DIR)
     }
 
     /// Returns `<data>/daemon-start-failure.json`, which `stacklyd` writes
@@ -761,6 +772,16 @@ mod tests {
         assert_eq!(
             layout.agent_launch_record(),
             layout.roots().data().join("background-agent.json")
+        );
+    }
+
+    #[test]
+    fn the_diagnostics_staging_folder_is_in_the_cache_root() {
+        let layout = layout();
+
+        assert_eq!(
+            layout.diagnostics_cache_dir(),
+            layout.roots().cache().join("diagnostics")
         );
     }
 

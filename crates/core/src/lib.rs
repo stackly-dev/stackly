@@ -9,6 +9,7 @@
 
 pub mod catalog;
 mod daemon;
+pub mod diagnostics;
 pub mod doctor;
 mod error;
 pub mod instance;

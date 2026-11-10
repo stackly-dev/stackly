@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f12",
+    "error": {
+      "code": "diagnostics.preview_not_found",
+      "category": "not_found",
+      "message": "the bundle preview is not staged anymore",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "Preview the bundle again.",
+      "details": [
+        {
+          "key": "previewId",
+          "value": "0192f3a8-0000-7000-8000-0000000000b1"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

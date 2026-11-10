@@ -1,0 +1,12 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000f14",
+  "idempotencyKey": null,
+  "call": {
+    "type": "diagnostics.export_bundle",
+    "content": {
+      "previewId": "0192f3a8-0000-7000-8000-0000000000b1",
+      "destination": "",
+      "replace": false
+    }
+  }
+}

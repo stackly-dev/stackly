@@ -452,3 +452,91 @@ fn entry(path: &str) -> EntryPath {
 fn mode(bits: u32) -> FileMode {
     FileMode::new(bits).unwrap_or_else(|| fail("build a file mode", &format!("{bits:#o}")))
 }
+
+/// `rename_replace` and `remove_file` (spec 0034, AC-13): a replace moves a
+/// file over a file or a symlink, replacing the symlink as itself, and
+/// refuses a folder; a removal takes a file or a symlink as itself, refuses
+/// a folder, and answers `NotFound` for nothing.
+pub(super) fn check_rename_replace(fs: &dyn Filesystem, base: &Path) {
+    let dir = base.join("rename-replace");
+    must(
+        "create the rename_replace folder",
+        fs.create_dir_private(&dir),
+    );
+    let read = |path: &Path| must_io("read a replaced file", std::fs::read(path));
+
+    let (a, b) = (dir.join("a"), dir.join("b"));
+    must("write a file to move", fs.write_file_atomic(&a, b"A"));
+    must("write a file to replace", fs.write_file_atomic(&b, b"B"));
+    must("rename_replace replaces a file", fs.rename_replace(&a, &b));
+    expect_absent("rename_replace leaves no source", &a);
+    expect_eq("rename_replace moves the bytes", read(&b), b"A".to_vec());
+
+    let target = dir.join("target");
+    must(
+        "write a symlink target",
+        fs.write_file_atomic(&target, b"T"),
+    );
+    let link = dir.join("link");
+    must_io("create a symlink to replace", symlink(&target, &link));
+    let c = dir.join("c");
+    must(
+        "write a file to move over a symlink",
+        fs.write_file_atomic(&c, b"C"),
+    );
+    must(
+        "rename_replace replaces a symlink",
+        fs.rename_replace(&c, &link),
+    );
+    let kind = must("stat the replaced symlink", fs.symlink_metadata(&link)).map(|info| info.kind);
+    expect_eq(
+        "rename_replace replaces the symlink itself",
+        kind,
+        Some(FileKind::File),
+    );
+    expect_eq(
+        "rename_replace leaves the symlink target",
+        read(&target),
+        b"T".to_vec(),
+    );
+
+    let folder = dir.join("folder");
+    must("create a folder", fs.create_dir_private(&folder));
+    let d = dir.join("d");
+    must(
+        "write a file to move over a folder",
+        fs.write_file_atomic(&d, b"D"),
+    );
+    expect_err(
+        "rename_replace refuses a folder",
+        fs.rename_replace(&d, &folder),
+        |_| true,
+    );
+    expect_eq(
+        "a refused replace keeps the source",
+        read(&d),
+        b"D".to_vec(),
+    );
+
+    must("remove_file removes a file", fs.remove_file(&d));
+    expect_absent("remove_file leaves nothing", &d);
+    let dangling = dir.join("dangling");
+    must_io("create a symlink to remove", symlink(&target, &dangling));
+    must("remove_file removes a symlink", fs.remove_file(&dangling));
+    expect_absent("remove_file removes the symlink itself", &dangling);
+    expect_eq(
+        "remove_file leaves the symlink target",
+        read(&target),
+        b"T".to_vec(),
+    );
+    expect_err(
+        "remove_file refuses a folder",
+        fs.remove_file(&folder),
+        |_| true,
+    );
+    expect_err(
+        "remove_file answers NotFound for nothing",
+        fs.remove_file(&d),
+        |err| matches!(err, PlatformError::NotFound { .. }),
+    );
+}
