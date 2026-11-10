@@ -42,13 +42,13 @@ struct DoctorPresentationTests {
         .evidence(
             covers: ["REQ-019"],
             expected:
-                "A finding with evidence, an excerpt, or a remedy gets Details…; any other gets its route when this build has it, and none for open_storage_settings or no action"
+                "A finding with evidence, an excerpt, or a remedy gets Details…; any other gets its route, Open Settings included, and none without an action or a place for it"
         ))
     func eachFindingHasAtMostOneButton() throws {
         let mysqlLegacy = try DoctorFixture.mysqlLegacy
         let byTitle = Dictionary(
             uniqueKeysWithValues: rows(try DoctorFixture.mixed()).map { ($0.title, $0.button) })
-        #expect(byTitle["Data volume is filling"] == .some(nil))
+        #expect(byTitle["Data volume is filling"] == .route(.openStorageSettings))
         #expect(
             byTitle["Port conflict · mysql-legacy"]
                 == .route(
@@ -58,11 +58,12 @@ struct DoctorPresentationTests {
         #expect(byTitle["Start failed · pg-main"] == .details)
         #expect(byTitle["Scratch folder left behind"] == .some(nil))
 
-        let withSettings = DoctorRoutes(
-            available: DoctorRoutes.thisBuild.available.union([.openStorageSettings]))
-        let filling = rows(try DoctorFixture.mixed(), routes: withSettings)
+        // A route whose place a build lacks never shows.
+        let withoutSettings = DoctorRoutes(
+            available: DoctorRoutes.thisBuild.available.subtracting([.openStorageSettings]))
+        let filling = rows(try DoctorFixture.mixed(), routes: withoutSettings)
             .first { $0.title == "Data volume is filling" }
-        #expect(filling?.button == .route(.openStorageSettings))
+        #expect(filling?.button == .some(nil))
     }
 
     @Test(
@@ -193,7 +194,7 @@ struct DoctorPresentationTests {
         #expect(DoctorActionRoute(action(.showInstance)) == nil)
         #expect(DoctorActionRoute(action(.changePort, instance: id, endpoint: "db")) == nil)
         #expect(DoctorActionRoute(action(.showOperation, instance: id)) == nil)
-        #expect(DoctorRoutes.thisBuild.contains(.openStorageSettings) == false)
+        #expect(DoctorRoutes.thisBuild.contains(.openStorageSettings))
     }
 
     @Test(

@@ -16,12 +16,13 @@ struct DiagnosticsPage: View {
     var chooser: any BundleDestinationChoosing = SavePanelBundleDestination()
     /// Shows a saved bundle in Finder.
     var reveal: @MainActor (URL) -> Void = { OpenInPorts.system.opener.reveal($0) }
-    /// The routes this build has; `open_storage_settings` has none yet.
+    /// The routes this build has.
     var routes: DoctorRoutes = .thisBuild
 
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.openSettings) private var openSettings
     @State private var focus: DiagnosticsFocus?
     @State private var appliedRequest: UUID?
     @State private var bundle: BundleSession?
@@ -69,6 +70,8 @@ struct DiagnosticsPage: View {
             }
         }
         .task {
+            // A run needs a connection; Run Doctor and the caught up trigger start one later.
+            guard isConnected else { return }
             await daemon?.doctor.request(.appeared)
         }
         .onChange(of: navigator?.diagnosticsRequest?.id, initial: true) {
@@ -94,29 +97,19 @@ struct DiagnosticsPage: View {
         }
         appliedRequest = request.id
         focus = request.focus
-        if let doctor = daemon?.doctor {
+        if isConnected, let doctor = daemon?.doctor {
             Task { await doctor.request(.opened) }
         }
     }
 
-    /// The one place a finding's action goes (AC-18): a page, or the endpoints sheet with the
-    /// suggested port filled in, which changes nothing until Apply.
+    /// The one place a finding's action goes (AC-18).
     private func open(_ route: DoctorActionRoute, _ finding: DoctorFinding?) {
-        switch route {
-        case .showInstance(let id):
-            navigator?.openInstance(id)
-        case .reviewConfig(let id):
-            navigator?.openInstance(id, tab: .configuration)
-        case .changePort(let id, let endpoint, let port):
-            let source = InstanceEditSource(id: id, name: finding?.instance?.name ?? "")
-            navigator?.openInstance(
-                id, tab: .configuration, edit: .editPorts(source, prefill: [endpoint: port]))
-        case .showOperation(let id):
-            navigator?.openOperation(id)
-        case .openStorageSettings:
-            // No route in this build: `DoctorRoutes.thisBuild` leaves it out.
-            break
-        }
+        let openSettings = openSettings
+        DoctorRouter(
+            navigator: navigator, settingsTab: daemon?.settingsTab,
+            openSettings: { openSettings() }
+        )
+        .open(route, finding: finding)
     }
 
     private func openBundle() {

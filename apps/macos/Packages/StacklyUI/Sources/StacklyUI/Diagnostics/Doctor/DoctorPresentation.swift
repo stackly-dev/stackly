@@ -71,10 +71,9 @@ nonisolated public struct DoctorRoutes: Sendable, Equatable {
         self.available = available
     }
 
-    /// Every route this build has a page for. `open_storage_settings` is not one: the Settings
-    /// window cannot open a chosen tab yet, so that action does not show (spec 0034, AC-18).
+    /// Every route this build has a place for (spec 0034, AC-18).
     public static let thisBuild = DoctorRoutes(available: [
-        .showInstance, .reviewConfig, .changePort, .showOperation,
+        .showInstance, .reviewConfig, .changePort, .showOperation, .openStorageSettings,
     ])
 
     /// Whether `route` can be opened.

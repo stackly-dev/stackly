@@ -56,6 +56,14 @@ enum DoctorFixture {
         return try StacklyJSON.decoder().decode(DoctorReport.self, from: Data(json.utf8))
     }
 
+    /// A finding about `instance` with nothing else, for the router.
+    static func finding(instance: DoctorInstanceRef?) -> DoctorFinding {
+        DoctorFinding(
+            code: .portInUse, severity: .error, title: "Port conflict", explanation: "",
+            subject: nil, instance: instance, operationId: nil, details: nil, evidence: nil,
+            portOwner: nil, excerpt: nil, remedy: nil, action: nil)
+    }
+
     private static func report(_ name: String) throws -> DoctorReport {
         guard case .doctorRun(let report) = try ContractFixture.reply(name) else {
             throw ContractFixture.Mismatch(description: "\(name) is not a doctor.run reply")

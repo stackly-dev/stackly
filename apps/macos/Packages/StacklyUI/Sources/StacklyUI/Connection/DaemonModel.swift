@@ -113,6 +113,8 @@ public final class DaemonModel {
     public let restart: DaemonRestartModel
     /// The daemon's settings and storage locations, for the Settings window (spec 0032).
     public let settings: SettingsStore
+    /// The tab the Settings window shows, so another window can ask for one (spec 0034).
+    let settingsTab = SettingsTabSelection()
     /// Turn Off… of the background agent (spec 0031).
     public let turnOff: TurnOffModel
     /// The preview and the confirmed Stop All, for the menu bar (spec 0032, AC-6 to AC-8).
