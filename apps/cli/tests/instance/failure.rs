@@ -480,21 +480,25 @@ fn a_running_instance_shows_no_failure_block_but_keeps_last_operation_in_json() 
 
 /// A start that waits through two pauses: `lock`, `backoff` twice, `lock`,
 /// `backoff`, then `succeeded`.
+/// A running start in `stage` at `revision`.
+fn staged(stage: &str, revision: u64) -> OperationSummary {
+    let mut summary = op(
+        OperationKind::StartInstance,
+        OperationState::Running,
+        revision,
+        FAILED_AT,
+    );
+    summary.stage = Some(stage.to_owned());
+    summary
+}
+
+/// A start with two pauses, the first read twice. A pause commits only its
+/// stage, so both reads of it have the same revision.
 fn pausing() -> Vec<OperationSummary> {
-    let staged = |stage: &str, revision| {
-        let mut summary = op(
-            OperationKind::StartInstance,
-            OperationState::Running,
-            revision,
-            FAILED_AT,
-        );
-        summary.stage = Some(stage.to_owned());
-        summary
-    };
     vec![
         staged("lock", 2),
         staged("backoff", 3),
-        staged("backoff", 4),
+        staged("backoff", 3),
         staged("lock", 5),
         staged("backoff", 6),
         op(
@@ -550,6 +554,68 @@ fn wait_writes_the_backoff_line_once_per_pause_from_one_instance_get() {
         text.stderr
     );
     assert_eq!(text.stdout, "orders-db running, readiness ready\n");
+    ev.pass();
+}
+
+/// Spec 0033 AC-8: the stages between two pauses can pass between two
+/// reads, so the wait sees `backoff` and then `backoff` again; the newer
+/// revision is the next pause, which gets its own read and line.
+#[test]
+fn a_pause_right_after_a_pause_writes_its_own_backoff_line() {
+    let ev = evidence!(
+        covers = ["AC-068"],
+        kind = Kind::Fixture,
+        expected = "instance start --wait that reads the backoff stage at revision 3, again at revision 3, and then at revision 6 without the lock between them writes crashed, restart 2 of 5 and then crashed, restart 3 of 5, from one instance.get per pause",
+    );
+    let root = TestRoot::new().expect("a test root is made");
+    let states = vec![
+        staged("lock", 2),
+        staged("backoff", 3),
+        staged("backoff", 3),
+        staged("backoff", 6),
+        op(
+            OperationKind::StartInstance,
+            OperationState::Succeeded,
+            7,
+            FAILED_AT,
+        ),
+    ];
+    let play = data::scripted(start_reply(), states, Some(data::instance("")));
+    let daemon = ScriptedDaemon::serve(&root, move |call, ctx| match call {
+        Call::InstanceGet(_) if ctx.nth == 0 => vec![Step::Reply(Reply::InstanceGet(Box::new(
+            recovering(2, Some("2026-11-10T08:00:10Z")),
+        )))],
+        Call::InstanceGet(_) if ctx.nth == 1 => vec![Step::Reply(Reply::InstanceGet(Box::new(
+            recovering(3, Some("2026-11-10T08:00:14Z")),
+        )))],
+        other => play(other, ctx),
+    });
+
+    let text = run(root.path(), &["instance", "start", ID, "--wait"]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let progress: Vec<&str> = text
+        .stderr
+        .lines()
+        .skip(1)
+        .map(|line| line.split_once(' ').map_or(line, |(_, rest)| rest))
+        .collect();
+    assert_eq!(
+        progress,
+        [
+            "running lock",
+            "crashed, restart 2 of 5 at 2026-11-10 08:00:10 +00:00",
+            "crashed, restart 3 of 5 at 2026-11-10 08:00:14 +00:00",
+            "succeeded",
+        ],
+        "{}",
+        text.stderr
+    );
+    assert_eq!(
+        gets(&daemon),
+        3,
+        "one instance.get per pause, and one after the wait"
+    );
     ev.pass();
 }
 
@@ -617,7 +683,7 @@ fn a_real_crash_loop_ends_the_start_with_its_operation_and_inspect_shows_the_sam
     let ev = evidence!(
         covers = ["AC-068", "NFR-011"],
         kind = Kind::Fixture,
-        expected = "against a real stacklyd, instance start --wait of a fake that prints its fixture credential and crashes before ready writes the backoff line, then exits 7 with code supervisor.retry_budget_exhausted, the static hint, operation <uuid>, and the logs and start commands; inspect writes Last failure crash_loop with its exit code, Last operation with the same uuid, and Next steps, its JSON carries lastOperation and the failure time, and no output holds the credential",
+        expected = "against a real stacklyd, instance start --wait of a fake that prints its fixture credential and crashes before ready writes the backoff line of each of the five pauses in order, then exits 7 with code supervisor.retry_budget_exhausted, the static hint, operation <uuid>, and the logs and start commands; inspect writes Last failure crash_loop with its exit code, Last operation with the same uuid, and Next steps, its JSON carries lastOperation and the failure time, and no output holds the credential",
     );
     let root = TestRoot::new().expect("a test root");
     let runtime = crate::stacklyd::seed(&root);
@@ -673,9 +739,18 @@ fn a_real_crash_loop_ends_the_start_with_its_operation_and_inspect_shows_the_sam
         block.ends_with("  hint: start it again: stackly instance start leaky\n"),
         "{block}"
     );
-    assert!(
-        started.stderr.contains("crashed, restart 1 of 5"),
-        "the backoff line of the first pause: {}",
+    // AC-8: one line per pause, in order, even when a respawn lives too
+    // short for the wait to see its stages.
+    let pauses: Vec<&str> = started
+        .stderr
+        .lines()
+        .filter_map(|line| line.split_once("crashed, restart ").map(|(_, rest)| rest))
+        .map(|rest| rest.split_once(" at ").map_or(rest, |(count, _)| count))
+        .collect();
+    assert_eq!(
+        pauses,
+        ["1 of 5", "2 of 5", "3 of 5", "4 of 5", "5 of 5"],
+        "{}",
         started.stderr
     );
 

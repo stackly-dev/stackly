@@ -78,11 +78,15 @@ pub struct Update<'a> {
     pub note: Option<&'a str>,
 }
 
+/// The state, stage, and note of the last line [`ProgressMode::Lines`]
+/// wrote.
+type LineKey = (String, Option<String>, Option<String>);
+
 /// Draws progress updates in one [`ProgressMode`].
 #[derive(Debug)]
 pub struct Progress {
     mode: ProgressMode,
-    last: Option<(String, Option<String>)>,
+    last: Option<LineKey>,
 }
 
 impl Progress {
@@ -99,8 +103,9 @@ impl Progress {
     }
 
     /// Shows `update`: redraws the live line, or writes a line when the
-    /// state or the stage changed. A note takes the place of the state and
-    /// the stage in both.
+    /// state, the stage, or the note changed. A note takes the place of the
+    /// state and the stage in both, so a new note in the same stage, such as
+    /// the next pause of a start (spec 0033, AC-8), is a new line.
     pub fn show(&mut self, sink: &mut StderrSink, update: &Update<'_>) {
         match self.mode {
             ProgressMode::Off => {}
@@ -119,7 +124,11 @@ impl Progress {
                 sink.live(&fit(&escape_display(&text), LIVE_WIDTH));
             }
             ProgressMode::Lines => {
-                let key = (update.state.to_owned(), update.stage.map(str::to_owned));
+                let key = (
+                    update.state.to_owned(),
+                    update.stage.map(str::to_owned),
+                    update.note.map(str::to_owned),
+                );
                 if self.last.as_ref() == Some(&key) {
                     return;
                 }
@@ -275,6 +284,24 @@ mod tests {
         let mut live = Progress::new(ProgressMode::Live);
         live.show(&mut sink, &backoff(2));
         assert_eq!(out.text(), format!("\r\u{1b}[K{note} (2s)"));
+    }
+
+    /// Spec 0033 AC-8: two pauses seen one after the other, with no other
+    /// stage seen between them.
+    #[test]
+    fn a_new_note_in_the_same_stage_is_a_new_line() {
+        let second = "crashed, restart 2 of 5 at 2026-11-10 10:04:05 +07:00";
+        let third = "crashed, restart 3 of 5 at 2026-11-10 10:04:09 +07:00";
+        let backoff = |note, seconds| Update {
+            note: Some(note),
+            ..update("running", Some("backoff"), seconds)
+        };
+        let (mut sink, out) = sink();
+        let mut lines = Progress::new(ProgressMode::Lines);
+        for shown in [backoff(second, 1), backoff(second, 2), backoff(third, 3)] {
+            lines.show(&mut sink, &shown);
+        }
+        assert_eq!(out.text(), format!("1s {second}\n3s {third}\n"));
     }
 
     #[test]
