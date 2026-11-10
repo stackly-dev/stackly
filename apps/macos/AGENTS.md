@@ -61,6 +61,7 @@ cargo xtask ui-test           # XCUITest; needs Automation Mode turned on by the
 - Accent appears only through native controls, native links, and `StacklyColor.selectionRing` for a custom selection ring; `controlAccentColor` or `accentColor` outside `Tokens/StacklyColor.swift` fails the source rule (spec 0012).
 - A page under `.stacklyInspector` takes the size the column offers, since the component sets its frame; the page never sets its own `minWidth` (spec 0067).
 - A screen retries a failed load only through `ResourceStore.refresh()`, which waits for a running snapshot, and never adds its own reload loop; `ShellSync` reloads failed stores once on `.caughtUp` (spec 0013).
+- A screen opens another screen with a target through `ShellNavigator`: `openInstance(_:)`, `openOperation(_:)`, and `openDiagnostics(focus:)` leave a one shot request (`operationRequest`, `diagnosticsRequest`) that the page takes once; `ShellDestination` cases carry no target (specs 0034, 0035).
 - The Metrics tab polls `instance.get_metrics` every `intervalSeconds` only while it is on screen (`onAppear` and `onDisappear`), sends its `historyId` and `afterSeq`, and replaces the whole history on `historyReset` (spec 0028). The menu bar reads the shell's `DaemonModel` and opens no connection of its own (spec 0032).
 - Tests never rely on wall clock deadlines the main actor can starve: waits use `ResponsiveTimer`, process watchdogs run off the main actor, and source rule suites are `@Suite(.serialized) nonisolated` so their scans leave the main actor free.
 
@@ -96,6 +97,9 @@ MCP servers: XcodeBuildMCP (recommended)
 - [0031 Demand, autostart, dan login](../../docs/specs/0031-demand-autostart-login/index.md)
 - [0032 Menu bar dan Settings](../../docs/specs/0032-menu-bar-settings/index.md)
 - [0070 Buka instance di aplikasi klien](../../docs/specs/0070-buka-instance-aplikasi-klien/index.md)
+- [0033 Crash loop dan error start](../../docs/specs/0033-crash-loop-error-start/index.md)
+- [0034 Doctor dan diagnostic bundle](../../docs/specs/0034-doctor-diagnostic-bundle/index.md)
+- [0035 Operations, activity, dan audit](../../docs/specs/0035-operations-activity-audit/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
 
