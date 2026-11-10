@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -75,6 +76,24 @@ struct ShellStructureTests {
         #expect(online.isProminent)
 
         #expect(SidebarSection.operations.badge(counts: counts, isConnected: false) == nil)
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-019", "AC-019"],
+            expected:
+                "The Diagnostics badge counts the Error findings of the last doctor report while connected, with none for 0 or before a run"
+        ))
+    func diagnosticsBadgeCountsDoctorErrorsWhileConnected() throws {
+        let counts = SidebarCounts(doctorErrors: 3)
+        let online = try #require(
+            SidebarSection.diagnostics.badge(counts: counts, isConnected: true))
+        #expect(online.count == 3)
+        #expect(online.isProminent)
+        #expect(SidebarSection.diagnostics.badge(counts: counts, isConnected: false) == nil)
+        #expect(
+            SidebarSection.diagnostics.badge(
+                counts: SidebarCounts(doctorErrors: 0), isConnected: true) == nil)
     }
 
     @Test func otherSectionsHaveNoBadge() {

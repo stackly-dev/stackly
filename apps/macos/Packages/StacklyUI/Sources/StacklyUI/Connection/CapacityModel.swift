@@ -102,6 +102,18 @@ public final class CapacityModel {
         attempted = true
     }
 
+    /// Takes a report another reading carried, such as the `disk_space` check of the doctor
+    /// (spec 0034, AC-20), with the same rule as a reply: one older than the report held is
+    /// ignored.
+    /// - Parameter fresh: The report.
+    public func accept(_ fresh: CapacityReport) {
+        if let held = report, fresh.checkedAt < held.checkedAt { return }
+        report = fresh
+        failure = nil
+        unsupported = false
+        attempted = true
+    }
+
     /// Reads the disk now and again every 60 seconds, for as long as the task runs and the
     /// daemon is connected. The page runs it with `.task(id:)` on the connected state, so it
     /// starts again when the daemon comes back.

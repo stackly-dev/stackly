@@ -187,7 +187,7 @@ public struct OverviewPage: View {
         case .configuration(let id): navigator?.openInstance(id, tab: .configuration)
         case .operation(let id): navigator?.openOperation(id)
         case .operations: navigator?.show(.operations)
-        case .diagnostics: navigator?.show(.diagnostics)
+        case .diagnostics(let focus): navigator?.openDiagnostics(focus: focus)
         }
     }
 

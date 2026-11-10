@@ -223,7 +223,9 @@ nonisolated extension OnboardingCopy {
     static let commandExamplesLabel = "Example commands"
     /// The commands of the example block; commands of later features join with them
     /// (spec 0016, *Fitur yang belum ada*).
-    static let commandExamples = ["stackly daemon status", "stackly provider list"]
+    static let commandExamples = [
+        "stackly daemon status", "stackly provider list", "stackly doctor",
+    ]
     /// The example block as it shows: one command per line, each after `$ `.
     static var commandExamplesText: String {
         commandExamples.map { "$ " + $0 }.joined(separator: "\n")

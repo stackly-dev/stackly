@@ -1,4 +1,5 @@
 import Foundation
+import StacklyTestSupport
 import Testing
 
 @testable import StacklyUI
@@ -136,5 +137,48 @@ struct ShellNavigatorTests {
         #expect(navigator.section == .operations)
         #expect(navigator.operationRequest == nil)
         #expect(navigator.instancesRequest == nil)
+    }
+    @Test(
+        .evidence(
+            covers: ["REQ-019", "AC-019"],
+            expected:
+                "openDiagnostics shows Diagnostics with a new request that holds the focus, kept while Diagnostics shows and dropped with another section"
+        ))
+    func openDiagnosticsCarriesTheFocus() {
+        let navigator = ShellNavigator()
+        let id = UUID()
+        navigator.openDiagnostics(focus: .instance(id))
+        #expect(navigator.section == .diagnostics)
+        #expect(navigator.diagnosticsRequest?.focus == .instance(id))
+        let first = navigator.diagnosticsRequest
+        navigator.section = .diagnostics
+        #expect(navigator.diagnosticsRequest == first)
+        navigator.openDiagnostics(focus: .instance(id))
+        #expect(navigator.diagnosticsRequest != first)
+        navigator.show(.overview)
+        #expect(navigator.diagnosticsRequest == nil)
+        navigator.openDiagnostics(focus: nil)
+        #expect(navigator.diagnosticsRequest?.focus == nil)
+        #expect(navigator.section == .diagnostics)
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-019"],
+            expected:
+                "Use Port of a finding opens the instance on Configuration with the endpoints sheet and the suggested port filled in"
+        ))
+    func openInstanceCanAskForTheEndpointsSheet() {
+        let navigator = ShellNavigator()
+        let id = UUID()
+        let edit = InstanceEdit.editPorts(
+            InstanceEditSource(id: id, name: "pg-main"), prefill: ["db": 5433])
+        navigator.openInstance(id, tab: .configuration, edit: edit)
+        #expect(navigator.section == .instances)
+        #expect(navigator.instanceRequest?.instance == id)
+        #expect(navigator.instanceRequest?.tab == .configuration)
+        #expect(navigator.instanceRequest?.edit == edit)
+        navigator.openInstance(id)
+        #expect(navigator.instanceRequest?.edit == nil)
     }
 }
