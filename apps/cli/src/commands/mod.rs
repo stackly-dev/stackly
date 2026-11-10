@@ -7,6 +7,7 @@
 pub mod audit;
 pub mod completion;
 pub mod daemon;
+pub mod diagnostics;
 pub mod doctor;
 pub mod instance;
 pub mod manpage;
