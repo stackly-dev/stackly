@@ -160,12 +160,17 @@ nonisolated public struct StatusAppearance: Hashable, Sendable {
     ///   - state: The operation state.
     ///   - partial: Whether a succeeded operation finished only in part. Ignored for every
     ///     other state.
-    public static func operation(state: OperationStatus, partial: Bool) -> StatusAppearance {
+    ///   - continuing: Whether a cancel came after a step that can’t be undone, so the
+    ///     operation finishes on its own: "Finishing…" instead of "Cancelling…" (spec 0035).
+    ///     Ignored for every state but `cancelRequested`.
+    public static func operation(
+        state: OperationStatus, partial: Bool, continuing: Bool = false
+    ) -> StatusAppearance {
         let (label, tone): (String, Tone) =
             switch state {
             case .queued: ("Queued", .neutral)
             case .running: ("Running", .informative)
-            case .cancelRequested: ("Cancelling…", .caution)
+            case .cancelRequested: continuing ? ("Finishing…", .caution) : ("Cancelling…", .caution)
             case .succeeded: partial ? ("Partial", .caution) : ("Done", .neutral)
             case .failed: ("Failed", .critical)
             case .cancelled: ("Cancelled", .neutral)

@@ -185,6 +185,7 @@ public struct OverviewPage: View {
         switch destination {
         case .instance(let id): navigator?.openInstance(id)
         case .configuration(let id): navigator?.openInstance(id, tab: .configuration)
+        case .operation(let id): navigator?.openOperation(id)
         case .operations: navigator?.show(.operations)
         case .diagnostics: navigator?.show(.diagnostics)
         }
@@ -205,7 +206,8 @@ public struct OverviewPage: View {
             title: {
                 OperationTitle.title(for: $0, instanceNames: names, runtimes: runtimeNames)
             },
-            open: { navigator?.show(.operations) },
+            open: { navigator?.openOperation($0) },
+            showAll: { navigator?.show(.operations) },
             openDiagnostics: { navigator?.show(.diagnostics) })
     }
 

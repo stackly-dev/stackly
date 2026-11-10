@@ -5,6 +5,16 @@ import StacklyClient
 /// An operation as the shell keeps it: the summary DTO of spec 0007.
 public typealias OperationSnapshot = OperationSummary
 
+/// A change the ``OperationCenter`` applied, for a view that keeps its own list of operations,
+/// such as the history of the Operations page (spec 0035).
+public enum OperationCenterChange: Equatable, Sendable {
+    /// An operation changed: a newer revision from an event, or one that ended.
+    case operation(OperationSnapshot)
+    /// The center loaded a snapshot again (a resnapshot of `ShellSync`, or a refresh), so a
+    /// view reads its own data again.
+    case reloaded
+}
+
 /// The operations that have not ended, kept from snapshots plus `operation.` events
 /// (spec 0013, *Operation center*).
 /// Its store loads `operation.list` with `activeOnly` and follows `operation.state_changed`
@@ -27,6 +37,8 @@ public final class OperationCenter {
     /// The revision last sent to the watchers of each operation.
     @ObservationIgnored private var published: [UUID: UInt64] = [:]
     @ObservationIgnored private var lookingUp: Set<UUID> = []
+    @ObservationIgnored private var listeners:
+        [UUID: AsyncStream<OperationCenterChange>.Continuation] = [:]
     @ObservationIgnored private let fetchOne: (UUID) async throws(ClientError) -> OperationSnapshot?
     @ObservationIgnored private let now: () -> Date
 
@@ -136,6 +148,28 @@ public final class OperationCenter {
         return stream
     }
 
+    /// Every change the center applies from now on, for a view that keeps its own list
+    /// (spec 0035): each operation that changed or ended, and every snapshot loaded again.
+    /// Each call returns a stream of its own, fed until it is dropped.
+    public func changes() -> AsyncStream<OperationCenterChange> {
+        let (stream, continuation) = AsyncStream.makeStream(of: OperationCenterChange.self)
+        let token = UUID()
+        listeners[token] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { @MainActor in self?.listeners[token] = nil }
+        }
+        return stream
+    }
+
+    /// How many views follow ``changes()`` now, for tests.
+    var listenerCount: Int { listeners.count }
+
+    private func broadcast(_ change: OperationCenterChange) {
+        for continuation in listeners.values {
+            continuation.yield(change)
+        }
+    }
+
     private func stopWatching(_ id: UUID, token: UUID) {
         watchers[id]?[token] = nil
         if watchers[id]?.isEmpty == true {
@@ -149,6 +183,7 @@ public final class OperationCenter {
     private func storeDidApply(_ change: StoreChange<OperationSnapshot>) {
         switch change {
         case .changed(let operation):
+            broadcast(.operation(operation))
             if Self.isActive(operation.state) {
                 publish(operation)
             } else {
@@ -157,6 +192,7 @@ public final class OperationCenter {
         case .removed(let id):
             close(id)
         case .reloaded:
+            broadcast(.reloaded)
             for operation in store.items.values where Self.isActive(operation.state) == false {
                 end(operation)
             }
@@ -227,6 +263,7 @@ public final class OperationCenter {
             if Self.isActive(fetched.state) {
                 store.offer(fetched)
             } else {
+                broadcast(.operation(fetched))
                 end(fetched)
             }
         }
