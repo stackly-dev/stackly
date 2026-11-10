@@ -23,6 +23,9 @@
 //! the temporary identifiers of spec 0015, and the background agent port
 //! ([`BackgroundAgent`]) reads and changes the registration of the daemon's
 //! LaunchAgent.
+//!
+//! The listener lookup port ([`ListenerLookup`]) names the processes of the
+//! current user that hold a port, for the doctor (spec 0034).
 
 mod agent;
 pub mod bundle;
@@ -35,6 +38,7 @@ mod fs;
 mod identity;
 mod info;
 mod layout;
+mod listener;
 mod platform;
 mod private_dir;
 mod process;
@@ -71,6 +75,10 @@ pub use layout::{
     InstancePaths, LocationSet, ROOT_OVERRIDE_ENV, RUNTIME_ROOT_MAX, RootKind, RootSet,
     SOCKET_NAME_MAX, SOCKET_PATH_MAX, UnknownLocation, default_runtime_root, instance_path_entries,
     validate_root_override,
+};
+pub use listener::{
+    LISTENER_SCAN_DEADLINE, LISTENER_SCAN_MAX_PIDS, ListenerLookup, ListenerOwner,
+    UnsupportedListenerLookup, listener_serves,
 };
 pub use platform::Platform;
 pub use private_dir::{PrivateDirViolation, check_private_dir};

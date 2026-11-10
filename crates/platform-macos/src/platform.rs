@@ -89,7 +89,8 @@ impl MacosPlatform {
 
     /// Assembles the platform with roots the caller chose, without the
     /// default resolver, with [`MacosProcessSupervision`] as its process
-    /// port, with [`MacosFetcher`] as its download port, and with
+    /// port and its listener lookup port, with [`MacosFetcher`] as its
+    /// download port, and with
     /// [`MacosCodeSigning`] as its code signing port, and with
     /// [`MacosLoginSessionInfo`] as its login session port. Integration tests use
     /// it with a test root, so no folder is left in the real user temporary
@@ -100,6 +101,7 @@ impl MacosPlatform {
     /// Returns [`PlatformError::HostFactsUnavailable`] when the OS version
     /// of the host cannot be read.
     pub fn with_roots(roots: RootSet) -> Result<Platform, PlatformError> {
+        let processes = Arc::new(MacosProcessSupervision::new());
         Ok(Platform::new(
             Arc::new(FixedRoots::new(roots)),
             Arc::new(MacosFilesystem),
@@ -107,7 +109,8 @@ impl MacosPlatform {
             Arc::new(MacosIdentity),
             Arc::new(MacosPlatformInfo::read()?),
         )
-        .with_processes(Arc::new(MacosProcessSupervision::new()))
+        .with_processes(processes.clone())
+        .with_listeners(processes)
         .with_background_agent(Arc::new(MacosBackgroundAgent::unlocated()))
         .with_fetcher(Arc::new(MacosFetcher::new()))
         .with_code_signing(Arc::new(MacosCodeSigning::new()))

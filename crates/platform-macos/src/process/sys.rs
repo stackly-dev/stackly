@@ -29,6 +29,24 @@ pub(crate) const PROC_PGRP_ONLY: u32 = 2;
 /// `sys/fcntl.h`: no `SIGPIPE` for a write on this descriptor that finds
 /// the pipe closed, just `EPIPE`.
 pub(crate) const F_SETNOSIGPIPE: c_int = 73;
+/// `sys/proc_info.h`: the `proc_listpids` type that lists the processes of
+/// one effective user.
+pub(crate) const PROC_UID_ONLY: u32 = 4;
+/// `sys/proc_info.h`: the `proc_pidfdinfo` flavor that answers a
+/// [`socket_fdinfo`].
+pub(crate) const PROC_PIDFDSOCKETINFO: c_int = 3;
+/// `sys/proc_info.h`: `soi_kind` of an IP socket other than TCP, whose
+/// `soi_proto` is `pri_in`.
+pub(crate) const SOCKINFO_IN: c_int = 1;
+/// `sys/proc_info.h`: `soi_kind` of a TCP socket, whose `soi_proto` is
+/// `pri_tcp`.
+pub(crate) const SOCKINFO_TCP: c_int = 2;
+/// `sys/proc_info.h`: `tcpsi_state` of a socket listening for connections.
+pub(crate) const TSI_S_LISTEN: c_int = 1;
+/// `sys/proc_info.h`: `insi_vflag` bit of a socket with an IPv4 address.
+pub(crate) const INI_IPV4: u8 = 0x1;
+/// `sys/proc_info.h`: `insi_vflag` bit of a socket with an IPv6 address.
+pub(crate) const INI_IPV6: u8 = 0x2;
 
 /// `mach/mach_time.h`: `struct mach_timebase_info`, the ratio that turns
 /// mach time units into nanoseconds. libc declares it only as deprecated.
@@ -63,6 +81,133 @@ pub(crate) struct proc_fileinfo {
 pub(crate) struct vnode_fdinfowithpath {
     pub(crate) pfi: proc_fileinfo,
     pub(crate) pvip: libc::vnode_info_path,
+}
+
+/// `sys/proc_info.h`: `struct in4in6_addr`, an IPv4 address in the last
+/// four bytes of the 16 an IPv6 address takes.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct in4in6_addr {
+    pub(crate) i46a_pad32: [u32; 3],
+    pub(crate) i46a_addr4: libc::in_addr,
+}
+
+/// `sys/proc_info.h`: the anonymous union of `insi_faddr` and
+/// `insi_laddr`: the IPv4 form or the IPv6 form of one address.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) union in_sockinfo_addr {
+    pub(crate) ina_46: in4in6_addr,
+    pub(crate) ina_6: libc::in6_addr,
+}
+
+/// `sys/proc_info.h`: the anonymous struct `insi_v4`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct in_sockinfo_v4 {
+    pub(crate) in4_tos: c_uchar,
+}
+
+/// `sys/proc_info.h`: the anonymous struct `insi_v6`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct in_sockinfo_v6 {
+    pub(crate) in6_hlim: u8,
+    pub(crate) in6_cksum: c_int,
+    pub(crate) in6_ifindex: c_ushort,
+    pub(crate) in6_hops: c_short,
+}
+
+/// `sys/proc_info.h`: `struct in_sockinfo`, an IP socket. `insi_lport`
+/// holds the local port in network byte order.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct in_sockinfo {
+    pub(crate) insi_fport: c_int,
+    pub(crate) insi_lport: c_int,
+    pub(crate) insi_gencnt: u64,
+    pub(crate) insi_flags: u32,
+    pub(crate) insi_flow: u32,
+    pub(crate) insi_vflag: u8,
+    pub(crate) insi_ip_ttl: u8,
+    pub(crate) rfu_1: u32,
+    pub(crate) insi_faddr: in_sockinfo_addr,
+    pub(crate) insi_laddr: in_sockinfo_addr,
+    pub(crate) insi_v4: in_sockinfo_v4,
+    pub(crate) insi_v6: in_sockinfo_v6,
+}
+
+/// `sys/proc_info.h`: `struct tcp_sockinfo`, a TCP socket.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct tcp_sockinfo {
+    pub(crate) tcpsi_ini: in_sockinfo,
+    pub(crate) tcpsi_state: c_int,
+    pub(crate) tcpsi_timer: [c_int; 4],
+    pub(crate) tcpsi_mss: c_int,
+    pub(crate) tcpsi_flags: u32,
+    pub(crate) rfu_1: u32,
+    pub(crate) tcpsi_tp: u64,
+}
+
+/// `sys/proc_info.h`: the anonymous union `soi_proto`. Only the IP members
+/// are written out; `soi_size` gives it the size of its largest member,
+/// `struct un_sockinfo`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) union soi_proto {
+    pub(crate) pri_in: in_sockinfo,
+    pub(crate) pri_tcp: tcp_sockinfo,
+    pub(crate) soi_size: [u64; 66],
+}
+
+/// `sys/proc_info.h`: `struct sockbuf_info`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct sockbuf_info {
+    pub(crate) sbi_cc: u32,
+    pub(crate) sbi_hiwat: u32,
+    pub(crate) sbi_mbcnt: u32,
+    pub(crate) sbi_mbmax: u32,
+    pub(crate) sbi_lowat: u32,
+    pub(crate) sbi_flags: c_short,
+    pub(crate) sbi_timeo: c_short,
+}
+
+/// `sys/proc_info.h`: `struct socket_info`. `soi_kind` names the member of
+/// `soi_proto` the kernel filled.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct socket_info {
+    pub(crate) soi_stat: libc::vinfo_stat,
+    pub(crate) soi_so: u64,
+    pub(crate) soi_pcb: u64,
+    pub(crate) soi_type: c_int,
+    pub(crate) soi_protocol: c_int,
+    pub(crate) soi_family: c_int,
+    pub(crate) soi_options: c_short,
+    pub(crate) soi_linger: c_short,
+    pub(crate) soi_state: c_short,
+    pub(crate) soi_qlen: c_short,
+    pub(crate) soi_incqlen: c_short,
+    pub(crate) soi_qlimit: c_short,
+    pub(crate) soi_timeo: c_short,
+    pub(crate) soi_error: c_ushort,
+    pub(crate) soi_oobmark: u32,
+    pub(crate) soi_rcv: sockbuf_info,
+    pub(crate) soi_snd: sockbuf_info,
+    pub(crate) soi_kind: c_int,
+    pub(crate) rfu_1: u32,
+    pub(crate) soi_proto: soi_proto,
+}
+
+/// `sys/proc_info.h`: `struct socket_fdinfo`, which
+/// `PROC_PIDFDSOCKETINFO` fills.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct socket_fdinfo {
+    pub(crate) pfi: proc_fileinfo,
+    pub(crate) psi: socket_info,
 }
 
 /// `sys/vm.h`: `struct vmspace`, opaque padding in `eproc`.
@@ -198,6 +343,42 @@ const _: () = {
     assert!(offset_of!(vnode_fdinfowithpath, pvip) == 24);
     assert!(size_of::<libc::vnode_info_path>() == 1176);
     assert!(size_of::<libc::proc_bsdinfo>() == 136);
+
+    assert!(size_of::<socket_fdinfo>() == 792);
+    assert!(offset_of!(socket_fdinfo, psi) == 24);
+    assert!(size_of::<socket_info>() == 768);
+    assert!(size_of::<libc::vinfo_stat>() == 136);
+    assert!(size_of::<sockbuf_info>() == 24);
+    assert!(offset_of!(socket_info, soi_so) == 136);
+    assert!(offset_of!(socket_info, soi_type) == 152);
+    assert!(offset_of!(socket_info, soi_protocol) == 156);
+    assert!(offset_of!(socket_info, soi_family) == 160);
+    assert!(offset_of!(socket_info, soi_options) == 164);
+    assert!(offset_of!(socket_info, soi_oobmark) == 180);
+    assert!(offset_of!(socket_info, soi_rcv) == 184);
+    assert!(offset_of!(socket_info, soi_snd) == 208);
+    assert!(offset_of!(socket_info, soi_kind) == 232);
+    assert!(offset_of!(socket_info, soi_proto) == 240);
+    assert!(size_of::<soi_proto>() == 528);
+    assert!(size_of::<in_sockinfo>() == 80);
+    assert!(offset_of!(in_sockinfo, insi_lport) == 4);
+    assert!(offset_of!(in_sockinfo, insi_gencnt) == 8);
+    assert!(offset_of!(in_sockinfo, insi_flags) == 16);
+    assert!(offset_of!(in_sockinfo, insi_flow) == 20);
+    assert!(offset_of!(in_sockinfo, insi_vflag) == 24);
+    assert!(offset_of!(in_sockinfo, insi_ip_ttl) == 25);
+    assert!(offset_of!(in_sockinfo, rfu_1) == 28);
+    assert!(offset_of!(in_sockinfo, insi_faddr) == 32);
+    assert!(offset_of!(in_sockinfo, insi_laddr) == 48);
+    assert!(offset_of!(in_sockinfo, insi_v4) == 64);
+    assert!(offset_of!(in_sockinfo, insi_v6) == 68);
+    assert!(size_of::<in4in6_addr>() == 16);
+    assert!(offset_of!(in4in6_addr, i46a_addr4) == 12);
+    assert!(size_of::<tcp_sockinfo>() == 120);
+    assert!(offset_of!(tcp_sockinfo, tcpsi_state) == 80);
+    assert!(offset_of!(tcp_sockinfo, tcpsi_timer) == 84);
+    assert!(offset_of!(tcp_sockinfo, tcpsi_mss) == 100);
+    assert!(offset_of!(tcp_sockinfo, tcpsi_tp) == 112);
 
     assert!(size_of::<kinfo_proc>() == 648);
     assert!(size_of::<extern_proc>() == 296);

@@ -9,6 +9,7 @@ use crate::fs::Filesystem;
 use crate::identity::UserIdentity;
 use crate::info::PlatformInfo;
 use crate::layout::DirectoryResolver;
+use crate::listener::{ListenerLookup, UnsupportedListenerLookup};
 use crate::process::{ProcessSupervision, UnsupportedProcessSupervision};
 use crate::secret::{SecretStore, UnsupportedSecretStore};
 use crate::session::{LoginSessionInfo, UnsupportedLoginSessionInfo};
@@ -36,6 +37,7 @@ pub struct Platform {
     fetcher: Arc<dyn Fetcher>,
     code_signing: Arc<dyn CodeSigning>,
     login_session: Arc<dyn LoginSessionInfo>,
+    listeners: Arc<dyn ListenerLookup>,
 }
 
 impl Platform {
@@ -61,6 +63,7 @@ impl Platform {
         let fetcher = Arc::new(UnsupportedFetcher::new(os));
         let code_signing = Arc::new(UnsupportedCodeSigning::new(os));
         let login_session = Arc::new(UnsupportedLoginSessionInfo::new(os));
+        let listeners = Arc::new(UnsupportedListenerLookup::new(os));
         Self {
             directories,
             fs,
@@ -73,6 +76,7 @@ impl Platform {
             fetcher,
             code_signing,
             login_session,
+            listeners,
         }
     }
 
@@ -119,6 +123,15 @@ impl Platform {
     #[must_use]
     pub fn with_login_session(mut self, login_session: Arc<dyn LoginSessionInfo>) -> Self {
         self.login_session = login_session;
+        self
+    }
+
+    /// Returns a copy with `listeners` as the listener lookup port (spec
+    /// 0034). A platform without one answers every lookup with not
+    /// supported.
+    #[must_use]
+    pub fn with_listeners(mut self, listeners: Arc<dyn ListenerLookup>) -> Self {
+        self.listeners = listeners;
         self
     }
 
@@ -194,6 +207,12 @@ impl Platform {
     #[must_use]
     pub fn login_session(&self) -> &dyn LoginSessionInfo {
         &*self.login_session
+    }
+
+    /// Returns the listener lookup port.
+    #[must_use]
+    pub fn listeners(&self) -> &dyn ListenerLookup {
+        &*self.listeners
     }
 
     /// Returns the download port.
