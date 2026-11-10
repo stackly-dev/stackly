@@ -45,7 +45,8 @@
           }
         }
       ],
-      "startup": null
+      "startup": null,
+      "duplicateOf": null
     }
   }
 }

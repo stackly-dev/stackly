@@ -76,6 +76,7 @@ impl Draft {
                 })
                 .collect(),
             startup: None,
+            duplicate_of: None,
         }
     }
 

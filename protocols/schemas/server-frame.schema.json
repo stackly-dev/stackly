@@ -288,6 +288,227 @@
         }
       ]
     },
+    "AuditActorKind": {
+      "description": "Who did what a row records. Open.",
+      "oneOf": [
+        {
+          "description": "A person, through a client.",
+          "type": "string",
+          "const": "user"
+        },
+        {
+          "description": "Stackly itself, on its own.",
+          "type": "string",
+          "const": "daemon"
+        },
+        {
+          "description": "An actor this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "AuditDetail": {
+      "description": "One detail of a row: a camelCase key and its redacted value.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key, such as `errorCode` or `ports`.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value, at most 512 bytes; never a secret value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "AuditEventInfo": {
+      "description": "One audit row.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "What happened, such as `operation.finished` or `secret.reveal`.",
+          "type": "string"
+        },
+        "actor": {
+          "description": "Who acted.",
+          "$ref": "#/$defs/AuditActorKind"
+        },
+        "client": {
+          "description": "The kind of client that asked, from its handshake; absent for the\ndaemon's own actions and for rows written before Stackly kept it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClientKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "configRevision": {
+          "description": "The number of the instance's config revision it is about.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "details": {
+          "description": "The details, by key.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AuditDetail"
+          }
+        },
+        "id": {
+          "description": "The row's ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "instanceId": {
+          "description": "The instance it is about, also once the instance is removed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "occurredAt": {
+          "description": "When it happened.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "operationId": {
+          "description": "The operation it belongs to: the correlation ID that also names it in\nan error and in the logs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "operationKind": {
+          "description": "The kind of operation, on the `operation.*` actions.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OperationKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resource": {
+          "description": "What it was about: an instance, a runtime, an environment, or a\nsecret reference.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "result": {
+          "description": "How it ended.",
+          "$ref": "#/$defs/AuditResultKind"
+        }
+      },
+      "required": [
+        "id",
+        "occurredAt",
+        "actor",
+        "action",
+        "result"
+      ]
+    },
+    "AuditPage": {
+      "description": "Reply of `audit.list`: newest first, by time then ID.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "The rows on this page.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AuditEventInfo"
+          }
+        },
+        "next": {
+          "description": "The cursor of the next page, to send back as `before`; null on the\nlast page.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      }
+    },
+    "AuditResultKind": {
+      "description": "How what a row records ended. Open.",
+      "oneOf": [
+        {
+          "description": "It succeeded.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "It failed; the `errorCode` detail names why.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "The operation was cancelled.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "The operation needs recovery.",
+          "type": "string",
+          "const": "needs_recovery"
+        },
+        {
+          "description": "A result this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "AuditRetention": {
+      "description": "How long the daemon keeps audit rows (spec 0035).",
+      "type": "object",
+      "properties": {
+        "days": {
+          "description": "The days a row is kept: 7, 30, or 90.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxRows": {
+          "description": "The most rows kept, whatever their age.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "days",
+        "maxRows"
+      ]
+    },
     "AutostartSession": {
       "description": "Whether this login session still lets an instance that starts at login\nstart (spec 0031). Open.",
       "oneOf": [
@@ -335,6 +556,41 @@
         "operationId",
         "kind",
         "resumable"
+      ]
+    },
+    "CancelAvailability": {
+      "description": "Whether a cancel can still stop an operation safely (spec 0035,\n*Ketersediaan cancel*). Open: a client reads `unrecognized` as `none`.",
+      "oneOf": [
+        {
+          "description": "A cancel stops it and undoes what it did, or stops it safely.",
+          "type": "string",
+          "const": "available"
+        },
+        {
+          "description": "It is past a step that cannot be undone: a cancel would let it\ncontinue to a safe end, so a client turns Cancel off.",
+          "type": "string",
+          "const": "past_point_of_no_return"
+        },
+        {
+          "description": "A cancel was asked for and it winds down.",
+          "type": "string",
+          "const": "requested"
+        },
+        {
+          "description": "A cancel was asked for past a step that cannot be undone, so it\nfinishes safely.",
+          "type": "string",
+          "const": "continuing"
+        },
+        {
+          "description": "It ended or needs recovery; a cancel changes nothing.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "CancelDisposition": {
@@ -2353,6 +2609,18 @@
       "description": "Reply of `settings.get`, and of `settings.update` once it ended.",
       "type": "object",
       "properties": {
+        "auditRetention": {
+          "description": "How long audit rows are kept (spec 0035); absent from an older\ndaemon.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuditRetention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "defaultStartup": {
           "description": "The startup policy of an instance created without one.",
           "$ref": "#/$defs/StartupPolicyKind"
@@ -7231,6 +7499,18 @@
       "description": "One operation as every client sees it, in replies and in both\noperation events.",
       "type": "object",
       "properties": {
+        "cancel": {
+          "description": "Whether a cancel can still stop it safely now (spec 0035, AC-8).\nAbsent from an older daemon: then `queued` or `running` means\n`available`, `cancelRequestedAt` means `requested`, and anything\nelse `none`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CancelAvailability"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "cancelRequestedAt": {
           "description": "When a cancel was asked for.",
           "type": [
@@ -8813,6 +9093,23 @@
             "type": {
               "type": "string",
               "const": "operation.get_stats"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "One page of audit rows.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/AuditPage"
+            },
+            "type": {
+              "type": "string",
+              "const": "audit.list"
             }
           },
           "required": [

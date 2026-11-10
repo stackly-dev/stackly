@@ -142,7 +142,8 @@ fn the_flags_go_over_the_draft_and_copy_takes_the_reference_the_source_uses() {
                 "field": "superuserPassword",
                 "input": { "type": "copyFrom", "content": REFERENCE }
             }],
-            "startup": null
+            "startup": null,
+            "duplicateOf": null
         })
     );
     let value = envelope(&json);

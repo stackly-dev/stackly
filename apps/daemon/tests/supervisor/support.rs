@@ -466,6 +466,7 @@ impl Api {
                 input: SecretInput::Value(SecretText::new(TOKEN.to_owned())),
             }],
             startup: None,
+            duplicate_of: None,
         }
     }
 
@@ -550,6 +551,7 @@ impl Api {
             settings: draft.settings,
             secrets,
             startup: None,
+            duplicate_of: None,
         })
         .await
     }

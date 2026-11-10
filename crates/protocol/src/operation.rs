@@ -100,6 +100,35 @@ pub struct OperationSummary {
     pub updated_at: Timestamp,
     /// The operation's revision; every committed change raises it.
     pub revision: Revision,
+    /// Whether a cancel can still stop it safely now (spec 0035, AC-8).
+    /// Absent from an older daemon: then `queued` or `running` means
+    /// `available`, `cancelRequestedAt` means `requested`, and anything
+    /// else `none`.
+    #[serde(default)]
+    pub cancel: Option<CancelAvailability>,
+}
+
+/// Whether a cancel can still stop an operation safely (spec 0035,
+/// *Ketersediaan cancel*). Open: a client reads `unrecognized` as `none`.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CancelAvailability {
+    /// A cancel stops it and undoes what it did, or stops it safely.
+    Available,
+    /// It is past a step that cannot be undone: a cancel would let it
+    /// continue to a safe end, so a client turns Cancel off.
+    PastPointOfNoReturn,
+    /// A cancel was asked for and it winds down.
+    Requested,
+    /// A cancel was asked for past a step that cannot be undone, so it
+    /// finishes safely.
+    Continuing,
+    /// It ended or needs recovery; a cancel changes nothing.
+    None,
+    /// A value this build does not know. The daemon never sends it.
+    #[serde(other)]
+    Unrecognized,
 }
 
 /// What an operation does: the kind codes of spec 0004. Open: a newer

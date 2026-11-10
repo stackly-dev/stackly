@@ -1152,18 +1152,33 @@ async fn prune_once(
 ) -> Result<PruneReport, RegistryError> {
     let registry = registry.clone();
     let now = core.platform().clock().now();
-    tokio::task::spawn_blocking(move || registry.prune(&RetentionPolicy::DEFAULT, now))
-        .await
-        .unwrap_or(Err(RegistryError::Unavailable))
+    tokio::task::spawn_blocking(move || {
+        // The age of audit rows comes from the settings as they are now
+        // (spec 0035, AC-6); a settings read that fails keeps the default.
+        let policy = match registry.daemon_settings() {
+            Ok(settings) => {
+                RetentionPolicy::DEFAULT.with_audit_days(settings.value.audit_retention)
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, "cannot read the audit retention; pruning with the default");
+                RetentionPolicy::DEFAULT
+            }
+        };
+        registry.prune(&policy, now)
+    })
+    .await
+    .unwrap_or(Err(RegistryError::Unavailable))
 }
 
-/// Prunes every `interval` until the stop; a registry that stopped working
-/// is fatal, any other failure waits for the next run.
+/// Prunes every `interval`, and at once on [`DaemonCore::wake_prune`], until
+/// the stop; a registry that stopped working is fatal, any other failure
+/// waits for the next run.
 async fn prune_loop(core: Arc<DaemonCore>, interval: Duration) {
     loop {
         tokio::select! {
             () = core.stop_requested() => return,
             () = tokio::time::sleep(interval) => {}
+            () = core.prune_woken() => {}
         }
         let Some(registry) = core.registry() else {
             return;

@@ -35,7 +35,7 @@ nonisolated enum FixtureSettings {
             telemetry: telemetry, telemetryCopyVersion: 1,
             locations: DefaultLocations(data: data, logs: logs, cache: cache),
             logRetention: LogRetention(segmentsPerStream: 8, segmentMaxBytes: 1_048_576),
-            updatedAt: updatedAt)
+            auditRetention: nil, updatedAt: updatedAt)
     }
 
     /// What the daemon does with a patch: sets what it names and raises the revision.
@@ -48,7 +48,8 @@ nonisolated enum FixtureSettings {
             updateChannel: patch.updateChannel ?? settings.updateChannel,
             telemetry: patch.telemetry ?? settings.telemetry,
             telemetryCopyVersion: settings.telemetryCopyVersion, locations: settings.locations,
-            logRetention: settings.logRetention, updatedAt: settings.updatedAt)
+            logRetention: settings.logRetention, auditRetention: settings.auditRetention,
+            updatedAt: settings.updatedAt)
     }
 
     static func event(revision: UInt64) -> Event {
@@ -70,6 +71,7 @@ nonisolated enum FixtureSettings {
             revision: settings.revision + 1, defaultStartup: settings.defaultStartup,
             updateChannel: settings.updateChannel, telemetry: settings.telemetry,
             telemetryCopyVersion: settings.telemetryCopyVersion, locations: locations,
-            logRetention: settings.logRetention, updatedAt: settings.updatedAt)
+            logRetention: settings.logRetention, auditRetention: settings.auditRetention,
+            updatedAt: settings.updatedAt)
     }
 }

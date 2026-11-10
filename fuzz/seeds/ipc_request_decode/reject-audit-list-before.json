@@ -1,0 +1,13 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e04",
+  "idempotencyKey": null,
+  "call": {
+    "type": "audit.list",
+    "content": {
+      "instanceId": null,
+      "operationId": null,
+      "limit": null,
+      "before": "not-a-cursor"
+    }
+  }
+}

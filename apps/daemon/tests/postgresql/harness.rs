@@ -849,6 +849,7 @@ pub fn create_params_on(
             input: SecretInput::Value(SecretText::new(password.to_owned())),
         }],
         startup: None,
+        duplicate_of: None,
     }
 }
 

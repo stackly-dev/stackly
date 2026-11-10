@@ -45,7 +45,8 @@
           }
         }
       ],
-      "startup": "at_login"
+      "startup": "at_login",
+      "duplicateOf": null
     }
   }
 }

@@ -89,6 +89,7 @@ fn client_error(
                 })
                 .collect(),
             startup: None,
+            duplicate_of: None,
         };
         edit(&mut params);
         client

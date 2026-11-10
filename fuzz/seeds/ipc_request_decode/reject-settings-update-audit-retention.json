@@ -1,0 +1,16 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e07",
+  "idempotencyKey": "settings-retention-2",
+  "call": {
+    "type": "settings.update",
+    "content": {
+      "expectedRevision": 3,
+      "patch": {
+        "defaultStartup": null,
+        "updateChannel": null,
+        "telemetry": null,
+        "auditRetentionDays": 14
+      }
+    }
+  }
+}

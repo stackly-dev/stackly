@@ -123,6 +123,7 @@ fn create_sends_one_call_with_the_params_the_flags_map_to() {
             "settings": { "mode": "b", "kept": { "x": 1 }, "readyDelayMs": 1500 },
             "secrets": [],
             "startup": null,
+            "duplicateOf": null,
         })
     );
     let value = envelope(&json);

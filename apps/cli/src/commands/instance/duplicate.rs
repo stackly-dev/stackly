@@ -308,6 +308,7 @@ impl DuplicateArgs {
             settings: self.settings(form),
             secrets,
             startup: None,
+            duplicate_of: None,
         };
         // `--start` needs the create to end first, whatever `--wait` says.
         let mut run = self.run.clone();

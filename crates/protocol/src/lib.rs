@@ -18,6 +18,7 @@
 //! `Unrecognized` marked `#[serde(other)]`, never `Unknown`, because
 //! `unknown` is a real state in some enums.
 
+pub mod audit;
 pub mod catalog;
 pub mod codes;
 mod contract_digest;

@@ -764,6 +764,11 @@ pub struct CreateInstanceParams {
     /// 0031).
     #[serde(default)]
     pub startup: Option<StartupPolicyKind>,
+    /// The instance the Duplicate sheet copied (spec 0035, AC-18). The
+    /// audit row of the create names it while it exists; one that is gone
+    /// is ignored.
+    #[serde(default)]
+    pub duplicate_of: Option<Uuid>,
 }
 
 /// The field code of a text that must be 1 to `max` bytes, or `None`.
@@ -1197,6 +1202,7 @@ mod tests {
                 input: SecretInput::Generate,
             }],
             startup: None,
+            duplicate_of: None,
         }
     }
 

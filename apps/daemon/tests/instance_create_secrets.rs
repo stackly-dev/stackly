@@ -78,6 +78,7 @@ fn params(
         settings: SettingsDocument::new(serde_json::Map::new()),
         secrets,
         startup: None,
+        duplicate_of: None,
     }
 }
 

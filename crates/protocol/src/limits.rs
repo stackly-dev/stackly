@@ -48,6 +48,23 @@ pub const FIELD_PATH_MAX: usize = 256;
 /// test fails for a module level constant whose name holds `MAX` or `MIN`
 /// or ends in `_LEN` or `_DEFAULT` that this list does not name.
 pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
+    ("auditCursorMax", crate::audit::AUDIT_CURSOR_MAX as u64),
+    (
+        "auditListLimitDefault",
+        crate::audit::AUDIT_LIST_LIMIT_DEFAULT as u64,
+    ),
+    (
+        "auditListLimitMax",
+        crate::audit::AUDIT_LIST_LIMIT_MAX as u64,
+    ),
+    (
+        "auditListLimitMin",
+        crate::audit::AUDIT_LIST_LIMIT_MIN as u64,
+    ),
+    (
+        "auditPageBytesMax",
+        crate::audit::AUDIT_PAGE_BYTES_MAX as u64,
+    ),
     (
         "catalogProviderIdMax",
         crate::catalog::PROVIDER_ID_MAX as u64,
@@ -250,7 +267,8 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 22] = [
+    const SOURCES: [(&str, &str); 23] = [
+        ("audit", include_str!("audit.rs")),
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
         ("daemon", include_str!("daemon.rs")),

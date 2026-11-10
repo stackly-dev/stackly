@@ -1104,6 +1104,14 @@ async fn dispatch(
             .map(Reply::OperationList),
             None,
         ),
+        Call::AuditList(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.list_audit(c, x, p)
+            })
+            .await
+            .map(Reply::AuditList),
+            None,
+        ),
         Call::OperationCancel(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.cancel_operation(c, x, p)

@@ -8,7 +8,8 @@
       "patch": {
         "defaultStartup": "at_login",
         "updateChannel": null,
-        "telemetry": true
+        "telemetry": true,
+        "auditRetentionDays": null
       }
     }
   }

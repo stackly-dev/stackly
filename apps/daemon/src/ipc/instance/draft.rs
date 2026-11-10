@@ -132,7 +132,11 @@ pub(super) fn from_create(
         secret_values: Vec::new(),
         start: false,
         startup: startup_of(params.startup),
-        duplicate_of: None,
+        // A UUID that is not version 7 names no instance: ignored like one
+        // that is gone (spec 0035, AC-18).
+        duplicate_of: params
+            .duplicate_of
+            .and_then(|id| stackly_domain::InstanceId::from_uuid(id).ok()),
     };
     draft.secret_values = values
         .iter()

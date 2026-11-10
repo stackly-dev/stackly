@@ -20,7 +20,7 @@ use stackly_protocol::daemon::{
 };
 use stackly_protocol::secret::SecretStoreTarget;
 use stackly_storage::SqliteRegistry;
-use tokio::sync::watch;
+use tokio::sync::{Notify, watch};
 
 use crate::catalog;
 use crate::connection::Connections;
@@ -193,6 +193,9 @@ pub struct DaemonCore {
     agent_off: AtomicBool,
     /// Set while a planned restart's plan is committed in `stopping`.
     plan_stopping: Arc<AtomicBool>,
+    /// Wakes the prune loop before its interval, after a change of the
+    /// audit retention (spec 0035, AC-6).
+    prune_wake: Notify,
 }
 
 impl std::fmt::Debug for DaemonCore {
@@ -254,6 +257,7 @@ impl DaemonCore {
             shutdown: Arc::new(watch::Sender::new(None)),
             agent_off: AtomicBool::new(false),
             plan_stopping: Arc::new(AtomicBool::new(false)),
+            prune_wake: Notify::new(),
         }
     }
 
@@ -588,6 +592,19 @@ impl DaemonCore {
     /// Asks every loop to stop: the accept loop and the prune task.
     pub fn request_stop(&self) {
         self.stop.send_replace(true);
+    }
+
+    /// Runs the prune loop now instead of at its next interval; a wake while
+    /// a prune runs makes the next one start right after it (spec 0035,
+    /// AC-6). The settings handler calls it once a change of the audit
+    /// retention committed.
+    pub fn wake_prune(&self) {
+        self.prune_wake.notify_one();
+    }
+
+    /// Resolves at the next [`wake_prune`](Self::wake_prune).
+    pub async fn prune_woken(&self) {
+        self.prune_wake.notified().await;
     }
 
     /// Resolves once a stop was requested.

@@ -1,0 +1,31 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e05",
+    "reply": {
+      "type": "audit.list",
+      "content": {
+        "items": [
+          {
+            "id": "0192f3a6-0000-7000-8000-0000000000c9",
+            "occurredAt": "2026-11-10T08:00:00.000Z",
+            "actor": "robot",
+            "client": "web",
+            "action": "operation.paused",
+            "operationKind": "teleport_instance",
+            "operationId": "0192f3a4-0000-7000-8000-000000000009",
+            "resource": {
+              "kind": "volume",
+              "id": "vol-1"
+            },
+            "instanceId": null,
+            "configRevision": null,
+            "result": "skipped",
+            "details": []
+          }
+        ],
+        "next": null
+      }
+    }
+  }
+}

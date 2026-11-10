@@ -43,11 +43,17 @@ public final class SettingsStore {
         var patch: SettingsPatch {
             switch self {
             case .startup(let value):
-                SettingsPatch(defaultStartup: value, updateChannel: nil, telemetry: nil)
+                SettingsPatch(
+                    defaultStartup: value, updateChannel: nil, telemetry: nil,
+                    auditRetentionDays: nil)
             case .channel(let value):
-                SettingsPatch(defaultStartup: nil, updateChannel: value, telemetry: nil)
+                SettingsPatch(
+                    defaultStartup: nil, updateChannel: value, telemetry: nil,
+                    auditRetentionDays: nil)
             case .telemetry(let value):
-                SettingsPatch(defaultStartup: nil, updateChannel: nil, telemetry: value)
+                SettingsPatch(
+                    defaultStartup: nil, updateChannel: nil, telemetry: value,
+                    auditRetentionDays: nil)
             }
         }
     }

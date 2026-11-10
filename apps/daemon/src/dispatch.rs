@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use stackly_ipc::PeerCred;
 use stackly_protocol::ErrorBody;
+use stackly_protocol::audit::{AuditPage, ListAuditParams};
 use stackly_protocol::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use stackly_protocol::codes::daemon;
 use stackly_protocol::daemon::{
@@ -58,6 +59,7 @@ use stackly_protocol::settings::{
 use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
 use stackly_protocol::storage::CapacityReport;
 
+use crate::ipc::audit;
 use crate::ipc::instance;
 use crate::ipc::operation;
 use crate::ipc::operation::TestStartingMethod;
@@ -211,6 +213,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, OperationPage> {
         let _ = context;
         operation::list(core, params)
+    }
+
+    /// `audit.list` (spec 0035).
+    fn list_audit<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ListAuditParams,
+    ) -> HandlerFuture<'a, AuditPage> {
+        let _ = context;
+        audit::list(core, params)
     }
 
     /// `operation.cancel`.

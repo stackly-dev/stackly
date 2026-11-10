@@ -758,7 +758,7 @@ public final class CreateInstanceModel {
             provider: providerSelector ?? ProviderSelector(name: form.provider.name, revision: nil),
             runtimeId: runtimeID, endpoints: endpoints.compactMap(\.request),
             settings: schema.settings(), secrets: secrets,
-            startup: startAtLogin ? .atLogin : .manual)
+            startup: startAtLogin ? .atLogin : .manual, duplicateOf: nil)
         let outcome = await send(.instanceCreate(params), key)
         switch outcome {
         case .completed(let reply):

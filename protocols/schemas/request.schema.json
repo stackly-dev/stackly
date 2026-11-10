@@ -308,6 +308,23 @@
           ]
         },
         {
+          "description": "One page of audit rows, newest first (spec 0035).",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ListAuditParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "audit.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
           "description": "Every catalog entry with the facts about the catalog.",
           "type": "object",
           "properties": {
@@ -1193,6 +1210,15 @@
           ],
           "default": null
         },
+        "duplicateOf": {
+          "description": "The instance the Duplicate sheet copied (spec 0035, AC-18). The\naudit row of the create names it while it exists; one that is gone\nis ignored.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
         "endpoints": {
           "description": "One request per manifest endpoint that asks for a port.",
           "type": "array",
@@ -1582,6 +1608,48 @@
       "required": [
         "instanceId"
       ]
+    },
+    "ListAuditParams": {
+      "description": "Params of `audit.list`. The filters apply together.",
+      "type": "object",
+      "properties": {
+        "before": {
+          "description": "The `next` cursor of the previous page, sent back unchanged.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceId": {
+          "description": "Only rows about this instance, removed ones included.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "limit": {
+          "description": "Most rows on the page, 1 to 200; absent means 50.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "operationId": {
+          "description": "Only rows of this operation.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        }
+      }
     },
     "ListInstancesParams": {
       "description": "Params of `instance.list`.",
@@ -2720,6 +2788,16 @@
       "description": "A partial change of the settings. At least one field must be set.",
       "type": "object",
       "properties": {
+        "auditRetentionDays": {
+          "description": "How many days audit rows are kept: 7, 30, or 90 (spec 0035).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
         "defaultStartup": {
           "description": "The startup policy of instances created from now on.",
           "anyOf": [

@@ -473,6 +473,7 @@ impl RunCommand for CreateArgs {
             settings: self.settings(&form),
             secrets,
             startup: self.startup(),
+            duplicate_of: None,
         };
         // `--start` needs the create to end first, whatever `--wait` says.
         let mut run = self.run.clone();

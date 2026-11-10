@@ -192,7 +192,8 @@ struct SettingsStoreTests {
                     UpdateSettingsParams(
                         expectedRevision: 3,
                         patch: SettingsPatch(
-                            defaultStartup: .atLogin, updateChannel: nil, telemetry: nil))))
+                            defaultStartup: .atLogin, updateChannel: nil, telemetry: nil,
+                            auditRetentionDays: nil))))
         #expect(daemon.keys.last == "key-1")
     }
 

@@ -746,6 +746,46 @@ fn foreign_values_of_the_operation_enums_decode_as_unrecognized() {
         panic!("expected an operation.cancel reply");
     };
     assert_eq!(cancel.disposition, CancelDisposition::Unrecognized);
+    assert_eq!(
+        operation.cancel,
+        Some(stackly_protocol::operation::CancelAvailability::Unrecognized)
+    );
+}
+
+// covers: AC-17 (spec 0035)
+#[test]
+fn foreign_values_of_the_audit_enums_decode_as_unrecognized() {
+    let Reply::AuditList(page) = reply("frame-response-audit-list-unknown-values.json") else {
+        panic!("expected an audit.list reply");
+    };
+    let row = &page.items[0];
+    assert_eq!(
+        row.actor,
+        stackly_protocol::audit::AuditActorKind::Unrecognized
+    );
+    assert_eq!(
+        row.result,
+        stackly_protocol::audit::AuditResultKind::Unrecognized
+    );
+    assert_eq!(
+        row.client,
+        Some(stackly_protocol::handshake::ClientKind::Unrecognized)
+    );
+    assert_eq!(row.operation_kind, Some(OperationKind::Unrecognized));
+    assert_eq!(
+        row.resource.as_ref().map(|resource| resource.kind),
+        Some(ResourceKind::Unrecognized)
+    );
+    assert_eq!(page.next, None);
+
+    let Reply::AuditList(page) = reply("frame-response-audit-list.json") else {
+        panic!("expected an audit.list reply");
+    };
+    let next = page.next.as_deref().expect("the page has a next cursor");
+    assert!(
+        OperationCursor::parse(next).is_some(),
+        "the daemon writes an operation cursor"
+    );
 }
 
 #[test]

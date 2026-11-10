@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use typeshare::typeshare;
 
+use crate::audit::{AuditPage, ListAuditParams};
 use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, ShutdownParams};
 use crate::error::{ErrorBody, FieldError};
@@ -127,6 +128,9 @@ pub enum Call {
     /// The engine's counters and limits.
     #[serde(rename = "operation.get_stats")]
     OperationGetStats,
+    /// One page of audit rows, newest first (spec 0035).
+    #[serde(rename = "audit.list")]
+    AuditList(ListAuditParams),
     /// Every catalog entry with the facts about the catalog.
     #[serde(rename = "catalog.list_providers")]
     CatalogListProviders,
@@ -314,6 +318,9 @@ pub enum Reply {
     /// The engine's counters and limits.
     #[serde(rename = "operation.get_stats")]
     OperationGetStats(OperationStats),
+    /// One page of audit rows.
+    #[serde(rename = "audit.list")]
+    AuditList(AuditPage),
     /// Every catalog entry, in display order.
     #[serde(rename = "catalog.list_providers")]
     CatalogListProviders(ListProvidersReply),
@@ -530,6 +537,7 @@ methods! {
     "operation.resume" => OperationResume(ResumeOperationParams), recovery refused;
     "operation.abandon" => OperationAbandon(AbandonOperationParams), recovery refused;
     "operation.get_stats" => OperationGetStats, recovery refused;
+    "audit.list" => AuditList(ListAuditParams), recovery refused;
     "catalog.list_providers" => CatalogListProviders, recovery allowed;
     "catalog.get_provider" => CatalogGetProvider(GetProviderParams), recovery allowed;
     "secret.list" => SecretList(ListSecretsParams), recovery refused;
@@ -719,6 +727,7 @@ mod tests {
                 expected_revision: crate::wire::Revision::ZERO,
             }),
             Call::OperationGetStats,
+            Call::AuditList(crate::audit::ListAuditParams::default()),
         ];
         assert!(!refused.iter().any(Call::allowed_in_recovery));
         assert!(

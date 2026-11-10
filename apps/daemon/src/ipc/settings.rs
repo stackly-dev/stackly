@@ -19,11 +19,13 @@ use stackly_core::settings::{
     set_location_precheck, set_location_work, update_precheck, update_work,
 };
 use stackly_domain::{
-    DaemonSettings, JournalPayload, LocationKind as DomainKind, OperationId, OperationJournal,
-    OperationKind, OperationResource, Registry, RegistryError, ResourceRevision, SettingsPatch,
-    StartupPolicy, StorageLocation, UpdateChannel as DomainChannel,
+    AUDIT_MAX_ROWS, AuditRetentionDays, DaemonSettings, JournalPayload, LocationKind as DomainKind,
+    OperationId, OperationJournal, OperationKind, OperationResource, Registry, RegistryError,
+    ResourceRevision, SettingsPatch, StartupPolicy, StorageLocation,
+    UpdateChannel as DomainChannel,
 };
 use stackly_platform::FileKind;
+use stackly_protocol::audit::AuditRetention;
 use stackly_protocol::codes::{internal, request};
 use stackly_protocol::events::EventKind;
 use stackly_protocol::fingerprint::request_fingerprint;
@@ -122,11 +124,26 @@ fn patch_of(params: &UpdateSettingsParams) -> Result<SettingsPatch, Box<ErrorBod
         Some(UpdateChannel::Beta) => Some(DomainChannel::Beta),
         Some(UpdateChannel::Unrecognized) => return Err(invalid("patch.updateChannel")),
     };
+    let audit_retention = match params.patch.audit_retention_days {
+        None => None,
+        Some(days) => Some(AuditRetentionDays::from_days(days).ok_or_else(|| {
+            Box::new(
+                ErrorBody::new(
+                    &request::INVALID_PARAMS,
+                    "auditRetentionDays must be 7, 30, or 90",
+                )
+                .with_field(FieldError::new(
+                    "patch.auditRetentionDays",
+                    FieldCode::UnknownValue,
+                )),
+            )
+        })?),
+    };
     Ok(SettingsPatch {
         default_startup,
         update_channel,
         telemetry: params.patch.telemetry,
-        audit_retention: None,
+        audit_retention,
     })
 }
 
@@ -226,6 +243,10 @@ fn settings_view(
             segments_per_stream: Count::saturating(LOG_SEGMENTS_PER_STREAM as u64),
             segment_max_bytes: Count::saturating(LOG_SEGMENT_MAX_BYTES),
         },
+        audit_retention: Some(AuditRetention {
+            days: settings.audit_retention.days(),
+            max_rows: Count::saturating(u64::from(AUDIT_MAX_ROWS)),
+        }),
         updated_at: Timestamp::from(settings.updated_at),
     })
 }
@@ -289,6 +310,7 @@ pub fn update<'a>(
                 "defaultStartup": patch.default_startup.map(StartupPolicy::as_code),
                 "updateChannel": patch.update_channel.map(DomainChannel::as_code),
                 "telemetry": patch.telemetry,
+                "auditRetentionDays": patch.audit_retention.map(AuditRetentionDays::days),
             })
             .to_string(),
         );
@@ -321,6 +343,11 @@ pub fn update<'a>(
         )
         .await?;
         finish(core, &outcome).await?;
+        // A shorter retention drops older rows right away, not at the next
+        // daily prune (spec 0035, AC-6): only after the commit landed.
+        if patch.audit_retention.is_some() && matches!(outcome, StartOutcome::Accepted(_)) {
+            core.wake_prune();
+        }
         current_settings(core).await
     })
 }

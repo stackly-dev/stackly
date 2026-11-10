@@ -74,7 +74,7 @@
                 pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
                 trigger: OperationTriggerInfo(origin: .user, client: .gui),
                 createdAt: FixtureClock.now,
-                startedAt: nil, updatedAt: FixtureClock.now, revision: 1)
+                startedAt: nil, updatedAt: FixtureClock.now, revision: 1, cancel: nil)
         }
 
         /// The staged progress of an install operation in `state`.
