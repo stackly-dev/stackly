@@ -126,3 +126,30 @@ _Bagian ini ditulis untuk langkah Build plan 8: `InstanceTab.activity` sesudah M
 - AC-20 · grup Activity, picker, keterangan, konfirmasi, konflik revision; snapshot milik milestone 4
 - AC-13 · baris Activity dengan operation ID memanggil `openOperation`; temuan doctor milik fitur 34
 - AC-19 · milik milestone 4
+
+## Milestone 4: Views and evidence
+
+_Bagian ini ditulis untuk langkah Build plan 9 (fixture `FixtureOperations` dan `FixtureActivity` di `Fixtures/`, bacaan Activity di `PageRig`, retensi audit 30 hari di fixture Settings, dan snapshot). Suite `OperationsPageSnapshotTests` kini memakai `FixtureOperations` (ID operasi dengan awalan berbeda per baris, sehingga delapan karakter ID di tiap baris berbeda) dan referensi `operations-list` direkam ulang. Setiap snapshot direkam di varian light, dark, dan narrow (aturan snapshot `apps/macos/AGENTS.md`). Langkah 10 (sesi GUI manual) tidak dijalankan sesi developer; langkahnya ada di bawah dan di milestone 2 dan 3._
+
+### UI / manual
+
+- [ ] Langkah 10, sesi GUI di Mac ini dengan daemon asli dan provider fake di root sementara (`STACKLY_ROOT=$(mktemp -d)`, `cargo build -p stackly-fake-server`, `skeleton_seed`): install runtime fake lalu tunggu tahap Commit → baris Operations menulis "… · can’t be cancelled" dan Cancel mati → AC-11
+- [ ] Start instance yang port nya dipegang proses lain → baris gagal di Operations dengan Retry; tekan Retry → operasi start baru muncul di atas → AC-11
+- [ ] Buka operasi dari Overview (baris seksi Operations dan item O1) dan dari tab Activity (klik ganda baris) → halaman Operations dengan operasi itu terpilih dan inspector terbuka → AC-13, AC-15
+- [ ] Ganti port lalu bandingkan tab Activity dengan `stackly audit list --instance <nama>` → baris yang sama, urutan yang sama, tanpa nilai secret → AC-15
+- [ ] Ubah "Keep activity for" ke 7 days lewat dialog konfirmasi, lalu `stackly settings get` → 7 days → AC-20
+- [ ] Ulangi semua langkah di light dan dark → AC-11, AC-13, AC-15, AC-20
+- [ ] `cargo xtask snapshot review` lalu buka `target/snapshot-review/index.html` → PNG lama dan baru berdampingan untuk `OperationsPageSnapshotTests`, `InstanceActivitySnapshotTests`, `settings-storage-activity`, dan referensi detail yang direkam ulang karena tab Activity; tidak ada perubahan lain → AC-19
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter OperationsPageSnapshotTests` → 6 test lulus terhadap referensi tersimpan: `operations-list` (start berjalan dengan `StagedProgress`, install di Commit dengan Cancel mati dan "can’t be cancelled", "Finishing safely · Apply" untuk cancel `continuing`, start gagal dengan Retry, restore `needs_recovery`, create dibatalkan, stop selesai), `operations-inspector` (restore terpilih: langkah, item yang dibuat, recovery, Resume, Abandon…), `operations-empty`, `operations-load-failed` ("Couldn’t Load Operations" dengan Retry), `operations-unsupported` ("Operations Unavailable"), dan `operations-offline` (daftar terakhir dengan Cancel dan Retry mati) → AC-11, AC-12, AC-19
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter InstanceActivitySnapshotTests` → 5 test lulus: `activity-rows` (satu baris per action, gagal dengan kode berwarna kritis, By "App", "CLI", "Stackly", "Client", tanggal tahun lain), `activity-empty` ("No Activity Yet"), `activity-failed` ("Couldn’t Load Activity" dengan Retry), `activity-unsupported` ("Activity Unavailable"), dan `instance-detail-activity` (detail `pg17-dev` pada tab Activity di bawah picker lima tab) → AC-15, AC-19
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SettingsSnapshotTests` → lulus; `settings-storage-activity` (tab Storage setinggi seluruh form) menampilkan grup Activity di bawah Logs dengan "Keep activity for" 30 days dan keterangan batas 100,000 entri, dan `settings-offline` tanpa grup itu → AC-20
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter SnapshotTests` → seluruh snapshot lulus → AC-19
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus, termasuk `everyPageOutsideTheGalleryHasASnapshotSuite` → AC-19
+
+### Acceptance-criteria coverage
+
+- AC-19 · fixture dan snapshot halaman Operations (berjalan dengan tahap, Cancel nonaktif di commit, cancel `continuing`, gagal dengan Retry, `needs_recovery` dengan Resume dan Abandon, kosong, gagal dimuat, unsupported, offline, inspector terbuka) dan tab Activity (baris setiap action, kosong, gagal, unsupported), light, dark, dan narrow; perbandingan lewat `cargo xtask snapshot review` adalah langkah manual
+- AC-11, AC-13, AC-15, AC-20 · bagian tampilan di snapshot; sesi GUI langkah 10 tetap `NOT_RUN` sampai lead menjalankannya dari `docs/manual.md`
