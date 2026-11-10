@@ -9,6 +9,7 @@ mod audit_notes;
 mod common;
 mod config;
 mod data_compat;
+mod doctor;
 mod force_restart;
 mod init;
 mod integrity;

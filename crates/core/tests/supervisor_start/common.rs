@@ -421,6 +421,8 @@ impl Registry for FaultyRegistry {
         secret_uses_by(user: SecretUser) -> Result<stackly_domain::Versioned<Vec<stackly_domain::SecretUse>>, stackly_domain::RegistryError>;
         audit_events(query: stackly_domain::AuditQuery) -> Result<stackly_domain::Versioned<stackly_domain::AuditPage>, stackly_domain::RegistryError>;
         prune(policy: &stackly_domain::RetentionPolicy, now: jiff::Timestamp) -> Result<stackly_domain::PruneReport, stackly_domain::RegistryError>;
+        quick_check(stop: Arc<AtomicBool>) -> Result<stackly_domain::QuickCheck, stackly_domain::RegistryError>;
+        scan_unrecognized(stop: Arc<AtomicBool>) -> Result<Vec<stackly_domain::UnrecognizedValue>, stackly_domain::RegistryError>;
     }
 
     fn instance(
