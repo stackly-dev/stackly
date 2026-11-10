@@ -37,6 +37,34 @@ enum SettingsCopy {
     static let telemetryNote =
         "Stackly doesn’t collect usage statistics yet. Your choice is saved for when it does. Diagnostic bundles are never uploaded automatically."
 
+    /// The title of the audit retention row of the Storage tab (spec 0035, AC-20).
+    static let auditRetentionTitle = "Keep activity for"
+    /// The days the audit retention picker offers.
+    static let auditRetentionChoices: [UInt32] = [7, 30, 90]
+    /// The message of the confirmation for a shorter audit retention.
+    static let auditRetentionRemoveMessage =
+        "Older entries are removed now and can’t be brought back."
+
+    /// "7 days", a choice of the audit retention picker.
+    static func days(_ days: UInt32) -> String {
+        "\(days) days"
+    }
+
+    /// The note of the audit retention row: the most entries kept, from the daemon.
+    /// - Parameters:
+    ///   - maxRows: The most rows the daemon keeps, whatever their age.
+    ///   - locale: The locale of the window.
+    static func auditRetentionNote(maxRows: UInt64, locale: Locale) -> String {
+        let count = maxRows.formatted(.number.locale(locale))
+        return
+            "Up to \(count) entries. Older entries are removed every day and right after you change this."
+    }
+
+    /// The title of the confirmation for a shorter audit retention.
+    static func auditRetentionRemoveTitle(days: UInt32) -> String {
+        "Remove activity older than \(days) days?"
+    }
+
     /// The mode of a row owned by the daemon.
     /// - Parameters:
     ///   - isConnected: Whether the daemon answers now.

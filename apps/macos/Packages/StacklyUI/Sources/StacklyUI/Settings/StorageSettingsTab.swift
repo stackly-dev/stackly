@@ -4,9 +4,11 @@ import SwiftUI
 /// The Storage tab (spec 0032 AC-19, AC-21, AC-24): where the data, logs, and downloads of
 /// instances you create from now on go, with Change…, Use Default, and Reveal in Finder, and the
 /// read only line about how much of each log is kept. Nothing here moves or deletes data that
-/// is already on disk.
+/// is already on disk. The Activity group holds how long the audit is kept (spec 0035, AC-20);
+/// it shows only while the daemon answers and reports its audit retention.
 struct StorageSettingsTab: View {
     let model: DaemonModel
+    @Environment(\.locale) private var locale
     @State private var actions: StorageSettingsModel
 
     init(model: DaemonModel, actions: StorageSettingsModel? = nil) {
@@ -50,9 +52,39 @@ struct StorageSettingsTab: View {
                     }
                 }
             }
+            if SettingsAvailability.isShown(.auditRetention), mode == .live,
+                let retention = store.settings?.auditRetention
+            {
+                Section("Activity") {
+                    auditRetentionRow(retention)
+                }
+            }
         }
         .formStyle(.grouped)
         .stacklyConfirmation(item: $actions.confirmation)
+    }
+
+    /// Keep activity for: 7, 30, or 90 days, with the most entries the daemon keeps.
+    private func auditRetentionRow(_ retention: AuditRetention) -> some View {
+        DaemonSettingRow(
+            title: SettingsCopy.auditRetentionTitle,
+            note: SettingsCopy.auditRetentionNote(maxRows: retention.maxRows, locale: locale),
+            mode: mode, isSaving: store.saving?.field == .auditRetention,
+            notice: store.notices[.auditRetention]
+        ) {
+            Picker(
+                SettingsCopy.auditRetentionTitle,
+                selection: Binding(
+                    get: { store.auditRetentionDays ?? retention.days },
+                    set: { days in Task { await actions.setAuditRetention(days) } })
+            ) {
+                ForEach(SettingsCopy.auditRetentionChoices, id: \.self) { days in
+                    Text(SettingsCopy.days(days)).tag(days)
+                }
+            }
+            .fixedSize()
+        }
+        .disabled(store.saving != nil && store.saving?.field != .auditRetention)
     }
 
     private func rows(_ settings: DaemonSettingsView) -> [LocationRowContent] {

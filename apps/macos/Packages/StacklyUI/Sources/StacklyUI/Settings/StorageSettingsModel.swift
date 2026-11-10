@@ -3,7 +3,8 @@ import Observation
 import StacklyClient
 
 /// The actions of the Storage tab: Change… (a folder panel, then a confirmation, then
-/// `storage.set_location`), Use Default, and Reveal in Finder (spec 0032 AC-19).
+/// `storage.set_location`), Use Default, and Reveal in Finder (spec 0032 AC-19), and the
+/// Keep activity for picker (spec 0035, AC-20).
 @Observable
 final class StorageSettingsModel {
     /// The confirmation shown over the tab, or `nil`.
@@ -53,5 +54,25 @@ final class StorageSettingsModel {
     /// Reveal in Finder.
     func revealInFinder(_ path: String) {
         reveal(URL(fileURLWithPath: path))
+    }
+
+    /// Keep activity for: a longer time goes out at once; a shorter one removes entries, so
+    /// it asks first, with Cancel as the default button, and goes out only once confirmed.
+    /// The picker keeps showing the daemon's value until then. The change carries the revision
+    /// the window read, and a stale one shows "Changed elsewhere. Try again." (spec 0032).
+    /// - Parameter days: The days chosen: 7, 30, or 90.
+    func setAuditRetention(_ days: UInt32) async {
+        guard let current = store.auditRetentionDays, days != current else { return }
+        guard days < current else {
+            await store.apply(.auditRetention(days))
+            return
+        }
+        confirmation = ConfirmationRequest(
+            title: SettingsCopy.auditRetentionRemoveTitle(days: days),
+            message: SettingsCopy.auditRetentionRemoveMessage, actionTitle: "Remove",
+            role: .destructive,
+            perform: { [store] in
+                Task { await store.apply(.auditRetention(days)) }
+            })
     }
 }

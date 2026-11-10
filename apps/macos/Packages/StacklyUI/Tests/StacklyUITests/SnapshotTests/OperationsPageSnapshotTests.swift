@@ -5,87 +5,125 @@ import Testing
 
 @testable import StacklyUI
 
-/// The Operations page (spec 0035, AC-11): a list with a running start, an install past the
-/// step that can’t be undone, a failure, an operation that needs recovery, and one that is
-/// done; the empty page; and an older daemon. Step 9 of spec 0035 adds the full set of AC-19
-/// (fixtures `FixtureOperations`, the inspector, offline, cancel `continuing`).
+/// The Operations page in each state of spec 0035 AC-19, from ``FixtureOperations``: the list
+/// with a start running through its stages, an install past the step that can’t be undone with
+/// Cancel off, a cancel that finishes safely, a failed start with Retry, a restore that needs
+/// recovery, a cancelled create, and a stop that is done; the inspector open on the restore
+/// with Resume and Abandon; the empty page; a first load that failed; an older daemon; and the
+/// list while stacklyd is unreachable, with every mutation off.
 extension SnapshotTests {
     struct OperationsPageSnapshotTests {
         /// The page area with the inspector open, narrow at the 900 pt window.
         private static let withInspector = SnapshotSize.fitting(width: 1_044, narrowWidth: 664)
 
+        /// The page of a fixture over the instances of a ``PageRig``, so a failed start offers
+        /// Retry, with the operation `selected` open in the inspector, `height` points tall.
         @MainActor
         private static func page(
-            _ operations: [OperationSummary], center: OperationCenter = OperationsFake.center()
+            _ fixture: FixtureOperations.Case, selected: UUID? = nil, height: CGFloat = 748
         ) async -> some View {
-            let fake = OperationsFake()
-            fake.pages[nil] = OperationPage(items: operations, next: nil)
-            let model = OperationsPageModel(service: fake.service, center: center)
+            let rig = PageRig()
+            await rig.loadInstances()
+            let center = FixtureOperations.center(fixture)
+            await center.store.refresh()
+            let model = OperationsPageModel(
+                service: FixtureOperations.service(fixture), center: center)
             await model.history.reload()
+            if let selected {
+                await model.detail.load(selected, revision: nil)
+            }
+            let offline = fixture == .offline
             return OperationsPage(
-                model: model, operations: center, waiting: nil, hasConnection: true,
-                reconnect: {}, openDiagnostics: {}
+                model: model, operations: center, instances: rig.instances,
+                actions: rig.actions,
+                waiting: offline
+                    ? FailureContent(
+                        title: "Waiting for stacklyd", message: "stacklyd is unavailable.",
+                        code: nil)
+                    : nil,
+                hasConnection: offline == false, reconnect: {}, openDiagnostics: {},
+                selection: selected?.uuidString.lowercased() ?? ""
             )
-            .frame(height: 748)
-        }
-
-        @MainActor
-        private static var rows: [OperationSummary] {
-            [
-                OperationSample.make(
-                    6, kind: .startInstance, state: .running, stage: "spawn", cancel: .available),
-                OperationSample.make(
-                    5, kind: .installRuntime, instance: nil, state: .running, stage: "commit",
-                    progress: .counted(CountedProgress(done: 1, total: 2)),
-                    cancel: .pastPointOfNoReturn, pointOfNoReturnAt: OperationSample.base),
-                OperationSample.make(
-                    4, kind: .startInstance, state: .failed, cancel: CancelAvailability.none,
-                    failure: OperationSample.failure(
-                        "supervisor.endpoint_in_use", "port 5432 is held by another process")),
-                OperationSample.make(
-                    3, kind: .restoreInstance, state: .needsRecovery,
-                    cancel: CancelAvailability.none,
-                    recovery: OperationSample.recovery(.resume, actions: [.resume, .abandon])),
-                OperationSample.make(
-                    2, kind: .stopInstance, state: .succeeded, cancel: CancelAvailability.none),
-            ]
+            .environment(
+                \.mutationAvailability,
+                offline
+                    ? .blocked(reason: "stacklyd is unavailable", since: FixtureClock.now)
+                    : .available
+            )
+            .actionHost()
+            .frame(height: height)
         }
 
         @Test(
             .evidence(
                 covers: ["REQ-054", "NFR-012"],
                 expected:
-                    "the Operations page shows each row's note, time and ID, badge, progress, and an off Cancel past the point of no return"
+                    "the list shows a start with its stages, an install with an off Cancel past the point of no return, Finishing safely, a failed start with Retry, a restore that needs recovery, a cancelled create, and a finished stop"
             ))
         @MainActor
         func operationsWithEveryKindOfRow() async throws {
             try await assertSnapshot(
-                await Self.page(Self.rows), named: "operations-list", size: Self.withInspector)
+                await Self.page(.list), named: FixtureOperations.Case.list.rawValue,
+                size: Self.withInspector)
         }
 
         @Test(
             .evidence(
-                covers: ["NFR-012"], expected: "the empty Operations page says No Operations"))
+                covers: ["REQ-054", "NFR-012"],
+                expected:
+                    "the inspector of a restore that needs recovery shows its steps, created items, recovery, Resume, and Abandon"
+            ))
+        @MainActor
+        func operationsWithTheInspectorOpen() async throws {
+            try await assertSnapshot(
+                await Self.page(
+                    .inspector, selected: FixtureOperations.recoveryID, height: 1_240),
+                named: FixtureOperations.Case.inspector.rawValue, size: Self.withInspector)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-054", "NFR-012"],
+                expected: "the empty Operations page says No Operations"
+            ))
         @MainActor
         func operationsWithNone() async throws {
             try await assertSnapshot(
-                await Self.page([]), named: "operations-empty", size: Self.withInspector)
+                await Self.page(.empty), named: FixtureOperations.Case.empty.rawValue,
+                size: Self.withInspector)
         }
 
         @Test(
             .evidence(
-                covers: ["NFR-012"],
+                covers: ["REQ-054", "NFR-012"],
+                expected: "a first load that failed shows Couldn’t Load Operations with Retry"))
+        @MainActor
+        func operationsThatFailedToLoad() async throws {
+            try await assertSnapshot(
+                await Self.page(.loadFailed), named: FixtureOperations.Case.loadFailed.rawValue,
+                size: Self.withInspector)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-054", "NFR-012"],
                 expected: "an older daemon without operation.list shows Operations Unavailable"))
         @MainActor
         func operationsOfAnOlderDaemon() async throws {
-            let center = OperationCenter(
-                fetchPage: { _ throws(ClientError) in
-                    throw .rejected(OperationsFake.error("request.unknown_method"))
-                },
-                fetchOne: { _ throws(ClientError) in nil }, sleep: { _ in })
-            await center.store.refresh()
             try await assertSnapshot(
-                await Self.page([], center: center), named: "operations-unsupported",
+                await Self.page(.unsupported), named: FixtureOperations.Case.unsupported.rawValue,
+                size: Self.withInspector)
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-054", "NFR-012"],
+                expected:
+                    "while stacklyd is unreachable the last list stays with Cancel and Retry off"))
+        @MainActor
+        func operationsWhileOffline() async throws {
+            try await assertSnapshot(
+                await Self.page(.offline), named: FixtureOperations.Case.offline.rawValue,
                 size: Self.withInspector)
         }
     }

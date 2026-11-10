@@ -63,17 +63,19 @@
 
         // MARK: - Settings
 
-        /// The settings the daemon answers with.
+        /// The settings the daemon answers with; the audit is kept 30 days, up to 100,000
+        /// entries, unless `auditDays` says otherwise (`nil` for a daemon older than spec 0035).
         static func settingsView(
             revision: UInt64 = 3, startup: StartupPolicyKind = .manual,
             channel: UpdateChannel = .stable, telemetry: Bool = false,
-            locations: DefaultLocations = defaultLocations
+            locations: DefaultLocations = defaultLocations, auditDays: UInt32? = 30
         ) -> DaemonSettingsView {
             DaemonSettingsView(
                 revision: revision, defaultStartup: startup, updateChannel: channel,
                 telemetry: telemetry, telemetryCopyVersion: 1, locations: locations,
                 logRetention: LogRetention(segmentsPerStream: 8, segmentMaxBytes: 1_048_576),
-                auditRetention: nil, updatedAt: FixtureClock.daysAgo(2))
+                auditRetention: auditDays.map { AuditRetention(days: $0, maxRows: 100_000) },
+                updatedAt: FixtureClock.daysAgo(2))
         }
 
         /// A storage location.
