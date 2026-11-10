@@ -70,6 +70,7 @@ fn suggested_after(detail: &OperationDetail, port: u16) -> u16 {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_fixed_port_another_process_holds_fails_the_start_with_a_free_port_and_changes_nothing() {
+    // covers: spec 0033 AC-4, AC-5, AC-14 (endpoint_in_use at the endpoints stage)
     let ev = evidence!(
         covers = ["AC-010", "AC-055", "NFR-011"],
         kind = Kind::Fixture,
@@ -116,6 +117,7 @@ async fn a_fixed_port_another_process_holds_fails_the_start_with_a_free_port_and
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_fixed_port_another_instance_has_fails_with_a_conflict_and_a_free_port() {
+    // covers: spec 0033 AC-4, AC-5 (endpoint_conflict)
     let ev = evidence!(
         covers = ["AC-010", "AC-055"],
         kind = Kind::Fixture,
@@ -185,6 +187,7 @@ async fn a_fixed_port_another_instance_has_fails_with_a_conflict_and_a_free_port
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_port_taken_after_the_spawn_fails_the_start_with_endpoint_in_use_and_a_free_port() {
+    // covers: spec 0033 AC-4 (endpoint_in_use from the early exit)
     let ev = evidence!(
         covers = ["AC-010", "AC-055"],
         kind = Kind::Fixture,

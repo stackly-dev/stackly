@@ -40,6 +40,7 @@ struct FailureBannerContentTests {
                 "A recovering instance shows the caution banner with the restart that waits, its countdown, the excerpt, and Show Logs"
         ))
     func aRecoveringInstanceShowsTheRestartThatWaits() throws {
+        // covers: spec 0033 AC-12 (the restarting banner)
         let content = try resolve(.restarting)
         #expect(content.rule == .restarting)
         #expect(content.tone == .caution)
@@ -68,6 +69,7 @@ struct FailureBannerContentTests {
                 "A crash loop shows its title, the crash count and window, the hint, the code with the operation ID, the excerpt, and Retry first"
         ))
     func aCrashLoopShowsTheCountTheCodeAndTheOperation() throws {
+        // covers: spec 0033 AC-9 (the crash loop banner)
         let content = try resolve(.crashLoop)
         #expect(content.rule == .crashLoop)
         #expect(content.title == "Crash loop. Automatic restarts paused.")
@@ -100,6 +102,7 @@ struct FailureBannerContentTests {
                 "A start that failed on a port held by another process offers Use Port with the suggested port first"
         ))
     func aPortInUseOffersTheSuggestedPort() throws {
+        // covers: spec 0033 AC-10 (Use Port with the suggested port)
         let content = try resolve(.portInUse)
         let fix = PortFix(endpoint: "database", port: 5439)
         #expect(content.rule == .port)
@@ -114,6 +117,7 @@ struct FailureBannerContentTests {
     }
 
     @Test func aPortProblemFromTheSummaryAloneOffersChangePortWithoutAnOperation() throws {
+        // covers: spec 0033 AC-10 (Change Port… without a suggestion)
         let content = try resolve(.portWithoutOperation)
         #expect(content.rule == .port)
         #expect(content.title == "Couldn’t start: port in use")
@@ -165,6 +169,7 @@ struct FailureBannerContentTests {
                 "After a port change succeeded on a failed instance the banner hides the port button and asks for Retry"
         ))
     func aSuccessfulPortChangeHidesThePortButtonAndAsksForRetry() throws {
+        // covers: spec 0033 AC-10 (after a port change)
         let content = try resolve(.portsChanged)
         #expect(content.rule == .port)
         #expect(content.portsChanged)
@@ -186,6 +191,7 @@ struct FailureBannerContentTests {
     }
 
     @Test func anotherFailureUsesTheSentenceOfSpec0022() throws {
+        // covers: spec 0033 AC-11 (another cause uses InstanceFailureCopy)
         let content = try resolve(.failed)
         #expect(content.rule == .failed)
         #expect(content.title == "warehouse failed")
@@ -201,6 +207,7 @@ struct FailureBannerContentTests {
                 "A stopped instance whose start the daemon refused before its journal shows the error sentence and its operation"
         ))
     func aRefusedStartOfAStoppedInstanceShowsTheError() throws {
+        // covers: spec 0033 AC-11 (a refused start of a stopped instance)
         let content = try resolve(.startRefused)
         #expect(content.rule == .startRefused)
         #expect(content.title == "Couldn’t start inventory-db")
@@ -284,6 +291,7 @@ struct FailureBannerContentTests {
                 "A newer rename is passed over, while a newer stop, start, or port change hides the banner of a stopped instance"
         ))
     func newerOperationsHideTheBannerOfAStoppedInstanceExceptRename() throws {
+        // covers: spec 0033 AC-11 (which newer operations hide the banner)
         let fixture = FixtureFailureBanner.startRefused
         let refused = fixture.operations
         func newer(_ kind: OperationKind, _ state: OperationState) -> OperationSummary {
@@ -396,6 +404,7 @@ struct FailureBannerContentTests {
     // MARK: - Words
 
     @Test func theCountdownRoundsUpAndNeverGoesBelowZero() throws {
+        // covers: spec 0033 AC-12 (the countdown)
         let fixture = FixtureFailureBanner.restarting
         let next = try #require(fixture.instance.restart.nextAttemptAt)
         #expect(

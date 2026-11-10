@@ -170,6 +170,7 @@ extension SnapshotTests {
                     "The failure banner of each state F1 to F7 (crash loop, port with Use Port or Change Port, after a port change, data in use, other, refused start, restart) renders in every variant without a cut label or code line"
             ))
         func detailOfEachFailureBanner() async throws {
+            // covers: spec 0033 AC-17, AC-9 to AC-12 (every state of the Summary banner, light, dark, narrow)
             for fixture in FixtureFailureBanner.allCases {
                 let rig = await rig(
                     instances: FixtureScenario.instanceCases + [fixture.instance],
