@@ -249,6 +249,35 @@ fn an_instance_name_is_sent_as_its_id_and_an_unknown_name_exits_10_without_a_run
     assert_eq!(value["result"]["report"], Value::Null);
 }
 
+/// Spec 0034 AC-15: an `--instance` that names no instance ends with
+/// `cli.instance_not_found` and exit 10 after the client checks, and the
+/// text writes no summary line, so nothing reads as all clear for the
+/// daemon checks that never ran.
+#[test]
+fn an_unknown_instance_writes_the_client_checks_without_an_all_clear_line() {
+    let root = TestRoot::new().unwrap();
+    let daemon = daemon(&root, report());
+
+    let missing = run(root.path(), &["doctor", "--instance", "gamma"]);
+
+    assert_eq!(missing.code, Some(10), "{missing:?}");
+    assert!(sent(&daemon).is_empty(), "no doctor.run is sent");
+    let text = text_of(&root, &missing);
+    assert!(!text.contains("No issues"), "{text}");
+    assert!(!text.contains(" checks"), "{text}");
+    golden::check("doctor_unknown_instance.txt", &text);
+    assert!(
+        missing.stderr.contains("code: cli.instance_not_found"),
+        "{}",
+        missing.stderr
+    );
+    assert!(
+        missing.stderr.contains("no instance named gamma"),
+        "{}",
+        missing.stderr
+    );
+}
+
 /// Spec 0034 AC-15: `--check` takes the daemon checks by their snake_case
 /// ID and clap refuses a client check with exit 2.
 #[test]
@@ -381,6 +410,11 @@ fn an_older_daemon_without_the_doctor_keeps_the_client_checks_and_exits_5() {
         text.stdout
             .contains("Connection        OK      Connected to stacklyd 0.1.0"),
         "{}",
+        text.stdout
+    );
+    assert!(
+        !text.stdout.contains("No issues"),
+        "no all clear without the daemon's checks: {}",
         text.stdout
     );
     assert!(

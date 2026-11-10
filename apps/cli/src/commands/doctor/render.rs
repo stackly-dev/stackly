@@ -54,17 +54,27 @@ impl Render for DoctorResult {
                 write_check(out, check, &layout);
             }
         }
-        out.line("");
-        out.line(&self.footer());
+        if let Some(footer) = self.footer() {
+            out.line("");
+            out.line(&footer);
+        }
     }
 }
 
 impl DoctorResult {
     /// The last line: the errors and warnings, how many checks ran, and the
     /// run ID of the daemon's report.
-    fn footer(&self) -> String {
+    ///
+    /// `None` when the daemon's checks did not run and the client checks
+    /// found nothing, such as for an `--instance` that names no instance or
+    /// a daemon without the doctor: "No issues" would vouch for checks that
+    /// never ran. The error of the run says why they did not.
+    fn footer(&self) -> Option<String> {
         let errors = self.count(DoctorSeverity::Error);
         let warnings = self.count(DoctorSeverity::Warning);
+        if self.report.is_none() && errors == 0 && warnings == 0 {
+            return None;
+        }
         let issues = if errors == 0 && warnings == 0 {
             "No issues".to_owned()
         } else {
@@ -80,7 +90,7 @@ impl DoctorResult {
         if let Some(report) = &self.report {
             line.push_str(&format!(" · run {}", report.run_id));
         }
-        line
+        Some(line)
     }
 }
 
