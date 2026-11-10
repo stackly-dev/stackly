@@ -10,6 +10,7 @@ mod map;
 
 use std::time::Instant;
 
+use stackly_core::catalog::CatalogState;
 use stackly_core::doctor::{
     CapacityFailure, CapacityOutcome, DaemonFacts, DegradedSubsystem, DiskReading, DoctorError,
     DoctorMode, DoctorRequest, DoctorSources,
@@ -119,7 +120,11 @@ fn sources(core: &DaemonCore) -> DoctorSources {
             )
         })
         .collect();
-    DoctorSources::new(platform, layout, mode, DaemonFacts::new(degraded))
+    let catalog = core.catalog().and_then(|state| match state.as_ref() {
+        CatalogState::Loaded(catalog) => Some(std::sync::Arc::clone(catalog)),
+        _ => None,
+    });
+    DoctorSources::new(platform, layout, mode, DaemonFacts::new(degraded)).with_catalog(catalog)
 }
 
 /// The free space through `storage.get_capacity`, so the doctor shares its

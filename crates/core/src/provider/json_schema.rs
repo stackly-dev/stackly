@@ -29,6 +29,9 @@ pub(crate) const EXACT_VERSION: &str = r"^[0-9]+(\.[0-9]+)+([+-][0-9A-Za-z.]+)?$
 pub(crate) const MANIFEST_NAME: &str = "^[a-z][a-zA-Z0-9]{0,31}$";
 /// A `connection` entry name (spec 0021).
 pub(crate) const CONNECTION_NAME: &str = "^[a-z][a-z0-9_]{0,31}$";
+/// A failure code or readiness reason a remedy matches (`FailureCode` and
+/// `ReasonCode` of the domain).
+pub(crate) const CODE: &str = "^[a-z][a-z0-9_]{0,63}$";
 /// An endpoint name: a manifest name that is also a domain `EndpointName`.
 pub(crate) const ENDPOINT_NAME: &str = "^[a-z][a-z0-9]{0,31}$";
 /// An env key; the validator also refuses `PATH`, `HOME`, `TMPDIR`, and

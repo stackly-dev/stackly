@@ -4,8 +4,8 @@
 //! home folder is written `~`, before it gets here.
 
 use stackly_core::doctor::{
-    CheckReport, FindingFacts, IdentityReason, PathProblem, PortOwnerFacts, PortProblemKind,
-    RootProblem, SummaryFacts,
+    CheckReport, FindingFacts, IdentityReason, PathProblem, PidFileState, PortOwnerFacts,
+    PortProblemKind, RootProblem, SummaryFacts,
 };
 use stackly_core::supervisor::BindOutcome;
 use stackly_domain::CapacityLevel;
@@ -190,6 +190,32 @@ fn problem(shown: &Shown<'_>) -> String {
         DoctorFindingCode::CheckUnavailable => "Check unavailable",
     };
     text.to_owned()
+}
+
+/// What the PID file of a remedy says about its PID (spec 0034, *Entri
+/// PostgreSQL*), one or two sentences, or `None` for a file that is gone
+/// or holds no PID. `executable` is the process's executable with `~`, and
+/// `other_user` is true for a process of another user.
+pub(super) fn pid_file(
+    display_name: &str,
+    state: PidFileState,
+    pid: u32,
+    executable: Option<&str>,
+    other_user: bool,
+) -> Option<String> {
+    match state {
+        PidFileState::NotRunning => Some(format!("No process has PID {pid}. The file is stale.")),
+        PidFileState::OtherProcess if other_user => Some(format!(
+            "PID {pid} now belongs to a process of another user."
+        )),
+        PidFileState::OtherProcess => executable.map(|executable| {
+            format!("PID {pid} now belongs to {executable}, not {display_name}.")
+        }),
+        PidFileState::RuntimeProcess => Some(format!(
+            "PID {pid} is a {display_name} server from this runtime. Stop it before you remove the file."
+        )),
+        _ => None,
+    }
 }
 
 /// The explanation of a finding, one to three sentences.
@@ -456,6 +482,39 @@ pub(super) fn bytes(count: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pid_file_reads_like_the_postgresql_entry_of_spec_0034() {
+        let say = |state, executable, other_user| {
+            pid_file("PostgreSQL", state, 4242, executable, other_user)
+        };
+        assert_eq!(
+            say(PidFileState::NotRunning, None, false).as_deref(),
+            Some("No process has PID 4242. The file is stale.")
+        );
+        assert_eq!(
+            say(PidFileState::OtherProcess, Some("/bin/sleep"), false).as_deref(),
+            Some("PID 4242 now belongs to /bin/sleep, not PostgreSQL.")
+        );
+        assert_eq!(
+            say(
+                PidFileState::RuntimeProcess,
+                Some("~/x/bin/postgres"),
+                false
+            )
+            .as_deref(),
+            Some(
+                "PID 4242 is a PostgreSQL server from this runtime. Stop it before you remove the file."
+            )
+        );
+        assert_eq!(
+            say(PidFileState::OtherProcess, None, true).as_deref(),
+            Some("PID 4242 now belongs to a process of another user.")
+        );
+        assert_eq!(say(PidFileState::OtherProcess, None, false), None);
+        assert_eq!(say(PidFileState::Missing, None, false), None);
+        assert_eq!(say(PidFileState::Unreadable, None, false), None);
+    }
 
     #[test]
     fn bytes_read_like_finder() {

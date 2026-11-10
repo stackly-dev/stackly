@@ -197,6 +197,7 @@ pub fn interpolation(data: &[u8]) {
         ValuePosition::Managed,
         ValuePosition::ProbeText,
         ValuePosition::ProbeBoolean,
+        ValuePosition::RemedyText,
     ] {
         let Some(interp) = check_value(text, position, &env, &mut sink, "fuzz") else {
             continue;

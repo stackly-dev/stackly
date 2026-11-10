@@ -230,6 +230,9 @@ pub(crate) enum PathPosition {
     /// `traefik-routes`): a file inside `${instance.config}`, the only folder
     /// whose files Stackly renders itself.
     ProbeFile,
+    /// The `evidence.pidFile` of a remedy (spec 0034): a file inside
+    /// `${instance.data}` or `${instance.config}`.
+    RemedyPidFile,
 }
 
 /// Where a value string appears.
@@ -259,6 +262,11 @@ pub(crate) enum ValuePosition {
     /// The `executable` of an `openWith` terminal command: exactly one
     /// runtime executable token.
     OpenExecutable,
+    /// A `command`, `path`, or `evidence.pidFile` of a `remedies` entry
+    /// (spec 0034): the instance name, data, and config folders, endpoint
+    /// ports and socket folders, and the runtime executables; never a
+    /// secret or a setting.
+    RemedyText,
 }
 
 impl ValuePosition {
@@ -522,6 +530,9 @@ pub(crate) fn check_value(
     if position.is_open() {
         return check_open_value(text, position, env, issues, path);
     }
+    if position == ValuePosition::RemedyText {
+        return check_remedy_value(text, env, issues, path);
+    }
     let pieces = resolve_all(text, env, issues, path)?;
     let whole_token = pieces.len() == 1;
     let mut ok = true;
@@ -686,6 +697,7 @@ pub(crate) fn check_path(
     let refusal = match (position, base) {
         (PathPosition::LogFile, PathBase::Dir(InstanceDir::Logs))
         | (PathPosition::ProbeFile, PathBase::Dir(InstanceDir::Config))
+        | (PathPosition::RemedyPidFile, PathBase::Dir(InstanceDir::Data | InstanceDir::Config))
         | (
             PathPosition::Cwd | PathPosition::ConfigDestination { sensitive: false },
             PathBase::Dir(_),
@@ -705,8 +717,15 @@ pub(crate) fn check_path(
             "a probe reads only a file in ${{instance.config}}, not ${{instance.{}}}",
             dir.as_code()
         )),
+        (PathPosition::RemedyPidFile, PathBase::Dir(dir)) => Some(format!(
+            "a remedy reads only a PID file in ${{instance.data}} or ${{instance.config}}, not ${{instance.{}}}",
+            dir.as_code()
+        )),
         (
-            PathPosition::Cwd | PathPosition::LogFile | PathPosition::ProbeFile,
+            PathPosition::Cwd
+            | PathPosition::LogFile
+            | PathPosition::ProbeFile
+            | PathPosition::RemedyPidFile,
             PathBase::Secrets,
         ) => Some("instance.secrets cannot start this path".to_owned()),
     };
@@ -758,7 +777,9 @@ pub(crate) fn check_path(
     let count_ok = match position {
         PathPosition::Cwd => true,
         PathPosition::ConfigDestination { .. } => (1..=2).contains(&components.len()),
-        PathPosition::LogFile | PathPosition::ProbeFile => !components.is_empty(),
+        PathPosition::LogFile | PathPosition::ProbeFile | PathPosition::RemedyPidFile => {
+            !components.is_empty()
+        }
     };
     if !count_ok {
         let rule = match position {
@@ -766,6 +787,7 @@ pub(crate) fn check_path(
                 "a config destination needs one or two components after the folder token"
             }
             PathPosition::ProbeFile => "a probe file needs a file name after ${instance.config}",
+            PathPosition::RemedyPidFile => "a PID file needs a file name after its folder token",
             _ => "a log file needs a file name after ${instance.logs}",
         };
         issues.at(path, IssueCode::InvalidValue, rule);
@@ -1033,6 +1055,91 @@ fn check_open_value(
         ok = false;
     }
     ok.then_some(Interp { pieces })
+}
+
+/// Checks a `command`, `path`, or `evidence.pidFile` of a remedy (spec
+/// 0034, AC-10): `${instance.name}`, `${instance.data}`,
+/// `${instance.config}`, `${endpoint.<n>.port}`, `${endpoint.<n>.socketDir}`,
+/// `${runtime.executable}`, and `${runtime.executables.<alias>}`, so a
+/// remedy can never show a secret or a setting. `secret.*` is refused with
+/// `secret_not_allowed_here`, `settings.*` and every other token with
+/// `token_not_allowed_here`; an endpoint, alias, or folder the package does
+/// not have keeps the code of its resolution.
+fn check_remedy_value(
+    text: &str,
+    env: &TypeEnv<'_>,
+    issues: &mut FileIssues<'_>,
+    path: &str,
+) -> Option<Interp> {
+    let raw = match parse(text) {
+        Ok(raw) => raw,
+        Err(message) => {
+            issues.at(path, IssueCode::UnknownToken, message);
+            return None;
+        }
+    };
+    let mut ok = true;
+    let mut pieces = Vec::new();
+    for piece in raw {
+        let segments = match piece {
+            RawPiece::Literal(text) => {
+                pieces.push(Piece::Literal(text));
+                continue;
+            }
+            RawPiece::Token(segments) => segments,
+        };
+        let shown = segments.join(".");
+        match segments.first().map(String::as_str) {
+            Some("secret") => {
+                issues.at(
+                    path,
+                    IssueCode::SecretNotAllowedHere,
+                    format!("{shown} cannot be used in a remedy, which is shown as text"),
+                );
+                ok = false;
+                continue;
+            }
+            Some("settings") => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    format!("{shown} cannot be used in a remedy"),
+                );
+                ok = false;
+                continue;
+            }
+            _ => {}
+        }
+        match resolve(&segments, env) {
+            Ok((token, _)) if remedy_allows(&token) => pieces.push(Piece::Token(token)),
+            Ok((token, _)) => {
+                issues.at(
+                    path,
+                    IssueCode::TokenNotAllowedHere,
+                    format!("{token} cannot be used in a remedy"),
+                );
+                ok = false;
+            }
+            Err((code, message)) => {
+                issues.at(path, code, message);
+                ok = false;
+            }
+        }
+    }
+    ok.then_some(Interp { pieces })
+}
+
+/// Whether a remedy may use the token.
+const fn remedy_allows(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::InstanceName
+            | Token::InstanceDir(InstanceDir::Data | InstanceDir::Config)
+            | Token::EndpointPort(_)
+            | Token::EndpointSocketDir(_)
+            | Token::RuntimeExecutable
+            | Token::RuntimeAlias(_)
+    )
 }
 
 /// Whether an `openWith` position may use the token: the connection
