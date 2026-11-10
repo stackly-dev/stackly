@@ -1,0 +1,7 @@
+Connection        ERROR   stacklyd isn’t reachable
+                          No stacklyd answers at <socket>.
+Protocol          WARNING Protocol check unavailable
+                          The protocol is checked once stacklyd answers.
+Background agent  OK      Not used while STACKLY_ROOT is set
+
+1 error, 1 warning · 3 checks

@@ -1,0 +1,9 @@
+Connection        OK      Connected to stacklyd 0.1.0 over the Unix socket
+Protocol          OK      App and daemon both speak protocol <major>.<minor>
+Background agent  OK      Not used while STACKLY_ROOT is set
+
+stacklyd          OK      stacklyd 0.9.0 · protocol 3.4 · launchd
+Registry          OK      quick_check passed · schema 12
+Permissions       OK      All Stackly folders are private and writable by you.
+
+No issues · 6 checks · run 0192f3a7-0000-7000-8000-0000000000e1

@@ -1,0 +1,13 @@
+PATH                         SIZE               DESCRIPTION
+README.txt                   2 kB               What this bundle holds and what it leaves out.
+doctor.json                  18 kB              The doctor report of this preview.
+system.json                  1 kB               Stackly and protocol versions, macOS, the launch context, capacity, and the Stackly folders.
+instances.json               9 kB               Every instance with its provider, runtime, state, last failure, blockers, endpoints, and settings; secrets appear only as references.
+runtimes.json                2 kB               Every runtime with its software, version, source, state, digest, and folder.
+operations.json              48 kB              The 100 newest operations and every one that needs recovery.
+agent/background-agent.json  212 bytes          The launch record of the background agent.
+logs/stacklyd.log            412 kB, truncated  The last 2000 lines of the stacklyd log.
+logs/instances/pg-main.log   96 kB              The last 2000 log entries of pg-main, every stream.
+
+9 entries · 590 kB · 101 kB as a zip
+Secrets and connection strings are redacted. Paths in your home folder are shown as ~. Nothing is uploaded.

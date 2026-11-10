@@ -72,3 +72,9 @@ Dari laporan `chk-f34-m1` (2026-11-10).
 
 1. Hanya bila SDK macOS berganti: ukur ulang layout `struct socket_fdinfo`, `socket_info`, `in_sockinfo`, dan `tcp_sockinfo` dari `sys/proc_info.h` dengan program C kecil (`offsetof` dan `sizeof`, `xcrun clang -arch arm64`) dan cocokkan dengan assert `const` di `crates/platform-macos/src/process/sys.rs` (`socket_fdinfo` 792 byte, `psi` di 24, `soi_kind` di 232, `soi_proto` di 240 dengan ukuran 528, `in_sockinfo` 80 byte, `tcp_sockinfo` 120 byte dengan `tcpsi_state` di 80) (AC-5).
 2. Lintasan GUI nyata dan `binary_replaced` di bawah launchd adalah Manual A dan B milestone 5 fitur 34 (`BLOCKED` sampai dijalankan), ditulis saat milestone itu dibangun (AC-5, AC-8, AC-22).
+
+## F34 · `stackly doctor` (spec 0034, milestone 4)
+
+Dari laporan `dev-f34-m4` (2026-11-10).
+
+1. Di Terminal yang berwarna, jalankan `stackly doctor` terhadap daemon yang berjalan: tanda ✓, !, ✗ berwarna hijau, kuning, merah. `stackly doctor | cat`: kata OK, WARNING, ERROR tanpa kode ANSI (AC-15).

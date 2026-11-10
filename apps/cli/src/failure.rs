@@ -576,11 +576,6 @@ impl CliFailure {
     /// `cli.doctor_found_errors` (spec 0034): the doctor ran and found
     /// `errors` findings with severity Error and `warnings` with Warning.
     /// Exits 7; `stackly doctor` keeps the report in `result`.
-    // provisional: F34 (spec 0034 step 11, `stackly doctor`, calls it)
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "stackly doctor arrives in spec 0034 step 11")
-    )]
     #[must_use]
     pub fn doctor_found_errors(errors: u64, warnings: u64) -> Self {
         Self::local(

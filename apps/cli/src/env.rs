@@ -15,6 +15,7 @@ use std::sync::Arc;
 use stackly_platform::{ROOT_OVERRIDE_ENV, SystemClock};
 
 use crate::commands::daemon::agent::AgentEnv;
+use crate::commands::daemon::start_failure::StartFailureFile;
 use crate::commands::daemon::wait::FileRecords;
 use crate::failure::CliFailure;
 
@@ -32,7 +33,8 @@ pub struct Environment {
     pub no_input: bool,
     /// `TERM` is `dumb`.
     pub term_is_dumb: bool,
-    /// The background agent, the launch record, and the clock (spec 0015).
+    /// The background agent, the launch record, the record of a failed
+    /// daemon start, and the clock (spec 0015, spec 0034).
     pub agent: AgentEnv,
 }
 
@@ -49,7 +51,7 @@ pub struct Environment {
 pub fn read(executable: PathBuf) -> Result<Environment, CliFailure> {
     let root_override = std::env::var_os(ROOT_OVERRIDE_ENV);
     let has_override = root_override.is_some();
-    let (socket, uid) = platform::endpoint(root_override)?;
+    let (socket, uid, start_failure_record) = platform::endpoint(root_override)?;
     let no_input = parse_no_input(std::env::var_os(NO_INPUT_ENV).as_deref())?;
     let term_is_dumb = std::env::var_os("TERM").is_some_and(|term| term == "dumb");
     let (port, launch_record) = platform::agent(&executable, has_override)?;
@@ -59,7 +61,8 @@ pub fn read(executable: PathBuf) -> Result<Environment, CliFailure> {
         Arc::new(FileRecords::new(launch_record)),
         has_override,
         Arc::new(SystemClock),
-    );
+    )
+    .with_start_failures(StartFailureFile::new(Some(start_failure_record), uid));
     Ok(Environment {
         socket,
         uid,
@@ -152,9 +155,11 @@ mod platform {
         Ok((port, record))
     }
 
-    /// The socket path and the uid that must own it, from the same roots
-    /// the daemon resolves.
-    pub(super) fn endpoint(root_override: Option<OsString>) -> Result<(PathBuf, u32), CliFailure> {
+    /// The socket path, the uid that must own it, and the record of a
+    /// failed daemon start, from the same roots the daemon resolves.
+    pub(super) fn endpoint(
+        root_override: Option<OsString>,
+    ) -> Result<(PathBuf, u32, PathBuf), CliFailure> {
         let platform = MacosPlatform::new(root_override).map_err(|error| failure(&error))?;
         let roots = platform
             .directories()
@@ -173,7 +178,12 @@ mod platform {
                 ));
             }
         };
-        Ok((DirectoryLayout::new(roots).daemon_socket(), uid))
+        let layout = DirectoryLayout::new(roots);
+        Ok((
+            layout.daemon_socket(),
+            uid,
+            layout.daemon_start_failure_record(),
+        ))
     }
 
     fn failure(error: &PlatformError) -> CliFailure {
@@ -212,7 +222,9 @@ mod platform {
     }
 
     /// Only macOS has a daemon for now.
-    pub(super) fn endpoint(_root_override: Option<OsString>) -> Result<(PathBuf, u32), CliFailure> {
+    pub(super) fn endpoint(
+        _root_override: Option<OsString>,
+    ) -> Result<(PathBuf, u32, PathBuf), CliFailure> {
         Err(CliFailure::platform_unavailable(
             "unsupported_os",
             "the daemon only runs on macos for now",

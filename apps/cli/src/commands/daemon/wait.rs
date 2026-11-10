@@ -183,6 +183,13 @@ pub trait LaunchRecordSource: Send + Sync {
     /// `lastLaunchedAt`, or `None` when the file is missing, unreadable,
     /// above 4 KiB, or holds no valid RFC 3339 time.
     fn last_launched_at(&self) -> Option<jiff::Timestamp>;
+
+    /// `bundlePath`, the app bundle launchd last started the daemon from,
+    /// or `None` when the file is missing, unreadable, above 4 KiB, or
+    /// names no bundle.
+    fn bundle_path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// Ctrl+C, as the commands see it.
@@ -708,6 +715,22 @@ impl LaunchRecordSource for FileRecords {
     }
 
     fn last_launched_at(&self) -> Option<jiff::Timestamp> {
+        self.record()?.get("lastLaunchedAt")?.as_str()?.parse().ok()
+    }
+
+    fn bundle_path(&self) -> Option<PathBuf> {
+        self.record()?
+            .get("bundlePath")?
+            .as_str()
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+    }
+}
+
+impl FileRecords {
+    /// The record as JSON, or `None` when the file is missing, not a plain
+    /// file, above 4 KiB, or not JSON.
+    fn record(&self) -> Option<serde_json::Value> {
         use std::io::Read;
 
         let path = self.path.as_deref()?;
@@ -723,8 +746,7 @@ impl LaunchRecordSource for FileRecords {
         if bytes.len() as u64 > RECORD_MAX_LEN {
             return None;
         }
-        let record: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-        record.get("lastLaunchedAt")?.as_str()?.parse().ok()
+        serde_json::from_slice(&bytes).ok()
     }
 }
 
