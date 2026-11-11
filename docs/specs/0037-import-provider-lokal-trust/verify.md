@@ -51,3 +51,31 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Record evidence `na
 - AC-17 · bagian import dan remove: baris audit di commit yang sama lewat mesin operasi dengan `provider`, `providerRevision`, `packageSha256`, `manifestSha256`; `changes` di audit import dan approve milik milestone 2
 - AC-18 · lengkap: kenaikan major 4.0, method `recovery refused`, DTO, enum terbuka, kode, event, fixture Rust dan Swift, seed fuzz, migrasi 13, `CODED_COLUMNS`, `ProviderSourceKind::Local`
 - AC-4 · bagian core (milestone 2 menyambungkan gate di handler); AC-11 · `trusted_compatibility` di status dan kalimat izin di fixture; AC-5 sampai AC-8, AC-12, AC-14 sampai AC-16, AC-19 · milik milestone 2 sampai 4
+
+## Milestone 3: `stackly provider import`, `approve`, `revoke`, `remove`
+
+_Status 2026-11-11: langkah Build plan 9 dibangun (`dev-f37-m3`) terhadap kontrak 4.0 di `main` `743301d9`. Binary test `approve` dan `revoke` terhadap `stacklyd` nyata menunggu milestone 2 (langkah 6) di `main`, karena handler daemon nya masih menjawab `request.unknown_method`; perilaku keduanya sudah diuji terhadap daemon skrip dengan fixture `protocols/fixtures/provider/`._
+
+### UI / manual
+
+Tidak ada langkah yang butuh izin user di milestone ini. Pembacaan ulang copy CLI terhadap PRD AC-061 dilakukan `/check verify`:
+
+- [ ] Baca `apps/cli/src/commands/provider/copy.rs` dan golden `apps/cli/tests/golden/provider_import*.txt`, `provider_approve*.txt`, `provider_revoke.txt`, `provider_remove.txt`, `provider_list_local.txt`, `provider_inspect_local_*.txt` → publisher selalu "(not verified)", trust selalu "local, not verified", tidak ada klaim aman, terverifikasi, atau segar; daftar revocation selalu menyebut revision dan tanggal terbit catalog terpasang → AC-11, AC-8
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --bin stackly commands::provider` → lulus, termasuk `copy::tests` (kalimat izin sama persis dengan `approval-statement.txt`; tidak ada frasa "sandboxed", "safe to run", "verified publisher", "trusted publisher", "malware", "up to date", "latest" di copy CLI; label `changes` dan `uses`) dan `local::tests` (issue import dan finding yang dilewati dihitung error) → AC-11, AC-14
+- [ ] `cargo test -p stackly-cli --bin stackly confirm::` → lulus, termasuk `an_empty_consequence_leaves_no_blank_line` → AC-14
+- [ ] `cargo test -p stackly-cli --test provider trust::` → 17 test lulus terhadap daemon skrip: `import --dry-run` mengirim path absolut tanpa `.` atau `..` dan menulis preview (publisher "(not verified)", izin, catatan quarantine, catatan kaki import), `--json` = `ImportPreview`; preview tidak valid exit 2 `cli.provider_invalid` dengan baris finding dan issue di stderr dan `result` tetap ada; `import` mengirim `expectedPackageSha256` dari preview dengan idempotency key, tidak bertanya, `--json` = `ProviderDetail`; byte sama menulis "Already imported."; paket tidak valid exit 2 dan batas import exit 3 `provider.import_limit`, keduanya tanpa `provider.import`; `import --approve` tanpa `--yes` (tanpa TTY atau `--json`) exit 2 `cli.confirmation_required` sebelum `provider.import`; `import --approve --yes` merangkai `provider.import` lalu `provider.approve` dengan digest entri dan key sendiri; `approve --yes` mencetak baris identitas, izin, kalimat izin persis, dan catatan kaki ke stderr; `approve`, `revoke`, `remove` tanpa `--yes` exit 2 dengan hanya `catalog.get_provider`; di pty `n` exit 9 tanpa mutasi dan `y` menyetujui; entri yang sudah `approved` tanpa request; entri catalog exit 10 `provider.import_not_found` reason `not_local` sebelum bertanya; `revoke --yes` dan `remove` (pty, juga entri `invalid`) dengan pesan dialog; exit code tiap kode `provider.*` dan `manifest.invalid` dari kategorinya (4, 3, 2, 7, 10); `list` dengan kolom `TRUST`, `needs approval`/`revoked`, ", 3 imported", dan bagian "Revoked by this catalog (revision 1, published 2026-10-20):"; `inspect` entri lokal pending, berubah, approved, revoked, dan invalid → AC-14, AC-11
+- [ ] `cargo test -p stackly-cli --test provider trust_stacklyd` → terhadap `stacklyd` nyata (butuh `cargo build -p stacklyd`): salinan `acme-demo` di test root di preview, diimpor (`pending`, `local`), diimpor ulang ("Already imported."), tampil di `list` dan `inspect`, lalu di remove; folder paket tidak berubah → AC-14, AC-3, AC-9
+- [ ] `cargo test -p stackly-cli --test provider` → semua lulus, termasuk golden `provider_list*.txt` dan `provider_list.json` yang ditulis ulang dengan kolom `TRUST` dan `revocations` → AC-14
+- [ ] `cargo test -p stackly-cli` → semua lulus
+- [ ] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings` → bersih
+- [ ] `cargo xtask check-deps` dan `cargo xtask evidence check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-14 · lengkap di CLI: keempat subcommand memanggil method yang sama dengan GUI dan tidak membaca file paket; `--json` memberi `ImportPreview`, `ProviderDetail`, atau `RemovedProvider`; konfirmasi TTY dengan `cli.confirmation_required` tanpa request mutasi (juga sebelum `provider.import` untuk `import --approve`); `list` dan `inspect` menampilkan trust, approval, dan izin; exit code dari kategori. Binary test `approve` dan `revoke` terhadap `stacklyd` nyata menunggu milestone 2 di `main`
+- AC-11 · bagian CLI: kalimat izin persis dari fixture (test membaca file yang sama), publisher "(not verified)", trust "local, not verified", pindaian frasa terlarang atas copy CLI. Copy GUI milik milestone 4
+- AC-8 · bagian tampilan CLI: `list` dan `inspect` menyebut revision dan tanggal catalog terpasang, tanpa klaim kesegaran; isi revocation milik langkah 8
+- AC-1 sampai AC-7, AC-9, AC-10, AC-12, AC-13, AC-15 sampai AC-19 · milik milestone 1, 2, dan 4

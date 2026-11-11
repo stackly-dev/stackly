@@ -603,6 +603,22 @@ impl CliFailure {
         )
     }
 
+    /// `cli.provider_invalid` for `stackly provider import` (spec 0037):
+    /// the preview says the package can't be imported, with `errors` error
+    /// findings and import issues and `warnings` warning findings. Exits 2.
+    #[must_use]
+    pub fn provider_not_importable(errors: u64, warnings: u64) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::PROVIDER_INVALID,
+                "the provider package can't be imported",
+            )
+            .with_detail("errors", errors.to_string())
+            .with_detail("warnings", warnings.to_string())
+            .with_hint("Fix each finding above, then import again."),
+        )
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
     /// restart is sent or while it is sent, or `agent_call` after a macOS call that

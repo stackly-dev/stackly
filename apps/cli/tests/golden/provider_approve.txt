@@ -1,0 +1,6 @@
+Approved Acme Demo.
+ID        acme/demo
+Revision  1.0.0
+Trust     local, not verified
+Approval  approved
+Package   sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
