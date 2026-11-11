@@ -75,6 +75,7 @@ fn load(entry: &Path) -> (ValidatedPackage, Vec<Scenario>) {
     (package, scenarios)
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn every_frozen_revision_loads_with_its_digest_and_the_same_plans() {
     let ev = evidence!(
@@ -117,6 +118,7 @@ fn every_frozen_revision_loads_with_its_digest_and_the_same_plans() {
     ev.pass();
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn the_corpus_holds_nats_and_postgresql() {
     let names: Vec<String> = entries()
@@ -135,6 +137,7 @@ fn the_corpus_holds_nats_and_postgresql() {
     assert!(names.contains(&"postgresql".to_owned()), "{names:?}");
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn every_entry_holds_only_its_package_and_frozen_json() {
     for entry in entries() {

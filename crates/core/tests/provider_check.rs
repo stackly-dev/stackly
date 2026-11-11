@@ -112,6 +112,7 @@ fn findings(check: &PackageCheck) -> Vec<(FindingOrigin, String, String, IssueCo
         .collect()
 }
 
+// covers: AC-2, AC-3 (spec 0036)
 #[test]
 fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
     let ev = evidence!(
@@ -140,6 +141,7 @@ fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
     ev.pass();
 }
 
+// covers: AC-2 (spec 0036)
 #[test]
 fn the_fake_command_fixture_is_loadable_but_not_publishable() {
     let ev = evidence!(
@@ -174,6 +176,7 @@ fn the_fake_command_fixture_is_loadable_but_not_publishable() {
     ev.pass();
 }
 
+// covers: AC-1 (spec 0036)
 #[test]
 fn another_api_version_gives_one_finding_and_decodes_nothing_else() {
     let ev = evidence!(
@@ -221,6 +224,7 @@ fn another_api_version_gives_one_finding_and_decodes_nothing_else() {
     ev.pass();
 }
 
+// covers: AC-1 (spec 0036)
 #[test]
 fn an_api_version_that_is_not_a_string_or_is_missing_is_reported() {
     let copy = Copy::fake();
@@ -251,6 +255,7 @@ fn an_api_version_that_is_not_a_string_or_is_missing_is_reported() {
     );
 }
 
+// covers: AC-2 (spec 0036)
 #[test]
 fn a_package_that_cannot_be_read_or_validated_has_package_findings_only() {
     let copy = Copy::fake();
@@ -283,6 +288,7 @@ fn a_package_that_cannot_be_read_or_validated_has_package_findings_only() {
     assert_eq!(check.api_version.as_deref(), Some("stackly/v1alpha1"));
 }
 
+// covers: AC-3 (spec 0036)
 #[test]
 fn a_valid_scenarios_file_is_read_and_never_changes_the_digest() {
     let ev = evidence!(
@@ -317,6 +323,7 @@ fn a_valid_scenarios_file_is_read_and_never_changes_the_digest() {
     ev.pass();
 }
 
+// covers: AC-3 (spec 0036)
 #[test]
 fn every_broken_scenario_rule_is_a_scenarios_error() {
     let ev = evidence!(
@@ -381,6 +388,7 @@ fn every_broken_scenario_rule_is_a_scenarios_error() {
     ev.pass();
 }
 
+// covers: AC-3 (spec 0036)
 #[test]
 fn read_scenarios_refuses_large_linked_special_and_non_utf8_files() {
     let ev = evidence!(
@@ -438,6 +446,7 @@ fn read_scenarios_refuses_large_linked_special_and_non_utf8_files() {
     ev.pass();
 }
 
+// covers: AC-1, AC-2 (spec 0036)
 #[test]
 fn a_package_on_a_deprecated_version_still_loads_and_publishes_with_one_warning() {
     let ev = evidence!(

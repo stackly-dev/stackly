@@ -340,6 +340,7 @@ mod tests {
         fs::write(path, marker.to_string()).unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn a_marked_root_carries_the_marker_in_both_folders_and_survives_drop() {
         let root = TestRoot::new_marked("run-1").unwrap();
@@ -360,6 +361,7 @@ mod tests {
         }
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn remove_checked_removes_both_folders_of_its_own_run() {
         let root = TestRoot::new_marked("run-2").unwrap();
@@ -372,6 +374,7 @@ mod tests {
         assert!(!data.exists() && !run.exists());
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn a_root_of_another_run_or_without_a_marker_is_left_in_place() {
         let root = TestRoot::new_marked("run-3").unwrap();
@@ -396,6 +399,7 @@ mod tests {
         fs::remove_dir_all(&run).unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn a_marker_with_another_uid_or_schema_is_refused() {
         let root = TestRoot::new_marked("run-4").unwrap();
@@ -413,6 +417,7 @@ mod tests {
         fs::remove_dir_all(&run).unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn a_symlink_or_a_folder_outside_the_temporary_directory_is_refused() {
         let root = TestRoot::new_marked("run-5").unwrap();
@@ -455,6 +460,7 @@ mod tests {
         root.remove_checked().unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn a_folder_that_a_process_still_names_is_left_until_the_process_ends() {
         let root = TestRoot::new_marked("run-6").unwrap();
@@ -489,6 +495,7 @@ mod tests {
         remove_folder(&data, Folder::Data, Some("run-6")).unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn an_unmarked_root_is_refused_and_still_removed_on_drop() {
         let root = TestRoot::new().unwrap();
@@ -500,6 +507,7 @@ mod tests {
         assert!(!data.exists());
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn keep_data_keeps_the_data_folder_and_removes_the_run_folder() {
         let root = TestRoot::new_marked("run-7").unwrap();
@@ -511,6 +519,7 @@ mod tests {
         remove_folder(&data, Folder::Data, Some("run-7")).unwrap();
     }
 
+    // covers: AC-12 (spec 0036)
     #[test]
     fn sweep_removes_a_root_whose_run_is_gone_and_keeps_one_whose_run_lives() {
         let gone = TestRoot::new_marked("run-gone").unwrap();
