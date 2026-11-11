@@ -660,7 +660,7 @@ fn the_store_writes_a_private_copy_that_reads_back_with_the_package_digest() {
 
 // covers: AC-3 (spec 0037)
 #[test]
-fn the_store_compares_versions_json_and_reports_a_full_disk_and_a_wrong_digest() {
+fn the_store_repairs_a_changed_copy_and_reports_a_full_disk_and_a_wrong_digest() {
     let site = Site::new();
     let dir = site.copy(&fixture("acme-demo"), "acme-demo");
     let check = site.import(&dir, no_testing());
@@ -670,15 +670,15 @@ fn the_store_compares_versions_json_and_reports_a_full_disk_and_a_wrong_digest()
     let target = site.prepared.layout().provider_import_dir(&digest);
     fs::write(target.join("versions.json"), b"{}").unwrap();
 
-    let differs = store(&site, package.files(), &digest).unwrap_err();
+    // A store copy changed after its import is written again by an import
+    // of the same bytes (finding 3 of the milestone 1 verify).
+    let repaired = store(&site, package.files(), &digest).expect("the same bytes repair it");
+    assert!(repaired.wrote_files && !repaired.created_dir);
     assert_eq!(
-        differs,
-        StoreError::ExistingDiffers {
-            path: target.join("versions.json")
-        },
-        "an import compares versions.json too"
+        fs::read(target.join("versions.json")).unwrap(),
+        package.files().get("versions.json").unwrap(),
+        "an import compares versions.json too and writes it again"
     );
-    assert_eq!(differs.reason(), "existing_differs");
 
     let other: Sha256Digest = "ab".repeat(32).parse().unwrap();
     let mismatch = store(&site, package.files(), &other).unwrap_err();
@@ -692,5 +692,29 @@ fn the_store_compares_versions_json_and_reports_a_full_disk_and_a_wrong_digest()
     assert_eq!(
         store(&fresh, package.files(), &digest).unwrap_err(),
         StoreError::NoSpace
+    );
+}
+
+// covers: AC-12 (spec 0037), VAL-018
+#[test]
+fn a_manifest_cannot_declare_itself_trusted() {
+    let site = Site::new();
+    let dir = site.edited("acme-demo", "trusted", "provider.yaml", |text| {
+        text.replace(
+            "  executeRuntimeBinary: true\n",
+            "  executeRuntimeBinary: true\n  trusted: true\n",
+        )
+    });
+
+    let check = site.import(&dir, no_testing());
+
+    assert!(!check.valid());
+    assert!(
+        check
+            .findings()
+            .iter()
+            .any(|finding| finding.issue.code == IssueCode::UnknownField),
+        "{:?}",
+        check.findings()
     );
 }

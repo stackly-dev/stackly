@@ -24,7 +24,7 @@ use super::error::PinFailure;
 use super::evaluate::{ResolvedCreate, SecretPlan, evaluate_for};
 use super::facts::{CreateDeps, PackageSource, gather};
 use super::port;
-use crate::catalog::{CatalogEntry, CatalogState, PinError, pin_revision};
+use crate::catalog::{CatalogEntry, CatalogState, PinError};
 use crate::instance::create::compensator::INSTANCE_REGISTRATION;
 use crate::operation::{
     AuditNote, BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork,
@@ -288,6 +288,13 @@ async fn pin(
     if resolved.source == PackageSource::Pinned {
         return Ok(None);
     }
+    let local = match resolved.source {
+        PackageSource::LocalImport {
+            source_id,
+            approved_at,
+        } => Some((source_id, approved_at)),
+        _ => None,
+    };
     let key = resolved.package.key().clone();
     let failure = |error: PinError| {
         failed(PinFailure {
@@ -310,15 +317,28 @@ async fn pin(
             message: "the catalog no longer holds the provider".to_owned(),
         })
     })?;
-    let sources = Arc::clone(&deps.sources);
-    let source = blocking(move || sources.ensure())
-        .await?
-        .map_err(|_| failure(PinError::SourceUnrecorded))?;
+    // A local entry pins with its own source row and approval; the
+    // catalog's source recorder is not used for it (spec 0037).
+    let (source, meta) = match local {
+        Some((source_id, approved_at)) => (
+            source_id,
+            crate::catalog::PinMeta::local(key.provider().namespace(), approved_at),
+        ),
+        None => {
+            let sources = Arc::clone(&deps.sources);
+            let source = blocking(move || sources.ensure())
+                .await?
+                .map_err(|_| failure(PinError::SourceUnrecorded))?;
+            (source, crate::catalog::PinMeta::catalog())
+        }
+    };
     let platform = Arc::clone(ctx.platform());
     let layout = Arc::clone(ctx.layout());
-    let pinned = blocking(move || pin_revision(&platform, &layout, &entry, source))
-        .await?
-        .map_err(failure)?;
+    let pinned = blocking(move || {
+        crate::catalog::pin_revision_with(&platform, &layout, &entry, source, meta)
+    })
+    .await?
+    .map_err(failure)?;
     let registry = Arc::clone(ctx.registry());
     let known = blocking(move || registry.provider_revision(&key))
         .await?
@@ -671,6 +691,9 @@ async fn register(
         let resolved = resolved.clone();
         let created = Arc::clone(&created);
         Box::new(move |view| {
+            if let Some(error) = recheck_trust(view, &resolved)? {
+                return Ok(GuardDecision::Refuse(Box::new(error)));
+            }
             if let Some(error) = recheck_bound(view, &bound)? {
                 return Ok(GuardDecision::Refuse(Box::new(error)));
             }
@@ -733,6 +756,44 @@ async fn register(
     deps.supervisor.note_created(&instance);
     ctx.confirm_created(handle).await?;
     Ok(instance)
+}
+
+/// Checks the trust of the package again inside the guarded commit (spec
+/// 0037, *Gate trust*): a local entry's import row must still approve
+/// exactly its bytes, and a pinned revision must not be revoked, so a
+/// revoke that committed after the gate still stops the create.
+fn recheck_trust(
+    view: &dyn stackly_domain::GuardView,
+    resolved: &ResolvedCreate,
+) -> Result<Option<CreateError>, stackly_domain::RegistryError> {
+    let key = resolved.package.key();
+    let (verdict, package_sha256) = match resolved.source {
+        PackageSource::LocalImport { .. } => {
+            let digest = crate::catalog::local::package_sha256(resolved.package.files());
+            (
+                crate::catalog::guard_trust(view, key.provider(), &digest)?,
+                digest.to_string(),
+            )
+        }
+        PackageSource::Pinned => (
+            crate::catalog::guard_pinned_trust(view, None, key)?,
+            String::new(),
+        ),
+        PackageSource::BundledCatalog | PackageSource::DevelopmentCatalog => return Ok(None),
+    };
+    Ok(match verdict {
+        crate::catalog::TrustVerdict::ApprovalRequired => Some(CreateError::ApprovalRequired {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            package_sha256,
+        }),
+        crate::catalog::TrustVerdict::Revoked(info) => Some(CreateError::Revoked {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            info,
+        }),
+        _ => None,
+    })
 }
 
 /// Reads every bound reference through the guarded commit's own

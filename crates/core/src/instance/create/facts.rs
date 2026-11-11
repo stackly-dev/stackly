@@ -22,7 +22,10 @@ pub use crate::storage::LocationState;
 use super::draft::{CreateDraft, SecretSourceKind};
 use super::port::{PortFacts, gather_ports, slots};
 use crate::PreparedLayout;
-use crate::catalog::{CatalogEntry, CatalogLocation, CatalogState, UnavailableReason};
+use crate::catalog::{
+    CatalogEntry, CatalogLocation, CatalogState, RevokedInfo, TrustVerdict, UnavailableReason,
+    pinned_trust, require_entry_trust,
+};
 use crate::provider::{Category, NameCheck, ValidatedPackage, read_package};
 use crate::supervisor::PortProbe;
 
@@ -52,6 +55,14 @@ pub enum PackageSource {
     DevelopmentCatalog,
     /// A package already pinned in the data folder; create does not pin.
     Pinned,
+    /// An imported local provider whose stored bytes are approved (spec
+    /// 0037); create pins it with the import's source and approval.
+    LocalImport {
+        /// The `local` provider source row.
+        source_id: ProviderSourceId,
+        /// When the bytes were approved.
+        approved_at: jiff::Timestamp,
+    },
 }
 
 /// The package a draft resolved to.
@@ -85,6 +96,47 @@ pub enum ProviderProblem {
         /// `planned` or `invalid`.
         state: &'static str,
     },
+    /// A local entry whose stored bytes are not approved (spec 0037).
+    ApprovalRequired {
+        /// The provider.
+        provider: String,
+        /// Its revision label.
+        provider_revision: String,
+        /// The digest of its stored bytes.
+        package_sha256: String,
+    },
+    /// The revision is revoked, by the user or the installed catalog.
+    Revoked {
+        /// The provider.
+        provider: String,
+        /// The revoked revision label.
+        provider_revision: String,
+        /// Who revoked it and since when.
+        info: RevokedInfo,
+    },
+}
+
+/// The problem a trust verdict other than trusted gives, for the entry or
+/// pinned revision of `key`; `package_sha256` is the local entry's stored
+/// bytes, empty for a pinned revision.
+fn trust_problem(
+    verdict: TrustVerdict,
+    key: &stackly_domain::ProviderRevisionKey,
+    package_sha256: Option<&stackly_domain::Sha256Digest>,
+) -> Option<ProviderProblem> {
+    match verdict {
+        TrustVerdict::Trusted => None,
+        TrustVerdict::ApprovalRequired => Some(ProviderProblem::ApprovalRequired {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            package_sha256: package_sha256.map(ToString::to_string).unwrap_or_default(),
+        }),
+        TrustVerdict::Revoked(info) => Some(ProviderProblem::Revoked {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            info,
+        }),
+    }
 }
 
 /// Whether the runtime has every program the package runs.
@@ -342,9 +394,26 @@ pub fn resolve_package(
             if asked
                 .is_none_or(|revision| revision == entry.package.key().revision().to_string()) =>
         {
-            let source = match &catalog.meta().location {
-                CatalogLocation::Bundled(_) => PackageSource::BundledCatalog,
-                CatalogLocation::Development(_) => PackageSource::DevelopmentCatalog,
+            // The gate reads the import row again (spec 0037, *Gate trust*).
+            let verdict = require_entry_trust(catalog, registry, entry)?;
+            let local = entry.local().map(|info| &info.record);
+            if let Some(problem) = trust_problem(
+                verdict,
+                entry.package.key(),
+                local.map(|record| &record.package_sha256),
+            ) {
+                return Ok(Err(problem));
+            }
+            let source = match (local, &catalog.meta().location) {
+                (Some(record), _) => PackageSource::LocalImport {
+                    source_id: record.source_id,
+                    approved_at: record
+                        .decision
+                        .as_ref()
+                        .map_or(record.updated_at, |decision| decision.at),
+                },
+                (None, CatalogLocation::Bundled(_)) => PackageSource::BundledCatalog,
+                (None, CatalogLocation::Development(_)) => PackageSource::DevelopmentCatalog,
             };
             Ok(Ok(ProviderFound {
                 package: Arc::clone(&entry.package),
@@ -368,7 +437,13 @@ pub fn resolve_package(
             },
             CatalogState::Loaded(_) => ProviderProblem::NotFound,
         })),
-        (_, Some(revision)) => find_pinned(registry, platform, layout, provider, revision),
+        (_, Some(revision)) => {
+            let loaded = match catalog {
+                CatalogState::Loaded(catalog) => Some(catalog.as_ref()),
+                _ => None,
+            };
+            find_pinned(registry, platform, layout, provider, revision, loaded)
+        }
     }
 }
 
@@ -384,6 +459,7 @@ fn find_pinned(
     layout: &DirectoryLayout,
     provider: &str,
     revision: &str,
+    catalog: Option<&crate::catalog::Catalog>,
 ) -> Result<Result<ProviderFound, ProviderProblem>, GatherError> {
     let not_found = Ok(Err(ProviderProblem::NotFound));
     let Some((namespace, name)) = provider.split_once('/') else {
@@ -423,9 +499,16 @@ fn find_pinned(
     let key = package.key();
     let digest_matches = one.name.to_string_lossy() == key.manifest_sha256().to_string();
     let named = key.provider().to_string() == provider && key.revision().to_string() == revision;
-    let known = registry.provider_revision(key)?.value.is_some();
-    if !(digest_matches && named && known) {
+    let record = registry.provider_revision(key)?.value;
+    if !(digest_matches && named) {
         return not_found;
+    }
+    let Some(record) = record else {
+        return not_found;
+    };
+    // A revoked pinned revision creates nothing new (spec 0037, *Gate trust*).
+    if let Some(problem) = trust_problem(pinned_trust(catalog, key, &record), key, None) {
+        return Ok(Err(problem));
     }
     Ok(Ok(ProviderFound {
         display_name: package.manifest().display_name().to_owned(),

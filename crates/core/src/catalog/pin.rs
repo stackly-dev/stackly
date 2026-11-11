@@ -5,7 +5,8 @@
 
 use std::path::PathBuf;
 
-use stackly_domain::{ProviderRevisionRecord, ProviderSourceId};
+use jiff::Timestamp;
+use stackly_domain::{ProviderRevisionRecord, ProviderSourceId, TrustDecision};
 use stackly_platform::Platform;
 
 use super::model::ProviderEntry;
@@ -125,6 +126,58 @@ pub fn pin_revision(
     entry: &ProviderEntry,
     source: ProviderSourceId,
 ) -> Result<PinnedRevision, PinError> {
+    pin_revision_with(platform, prepared, entry, source, PinMeta::catalog())
+}
+
+/// The registry columns a pin records beside the revision (spec 0037,
+/// *Value sourcing*): `Stackly` without an approval for a catalog entry,
+/// the namespace with its approval for an imported local entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PinMeta {
+    /// The publisher column.
+    pub publisher: String,
+    /// The approval column.
+    pub approval: Option<TrustDecision>,
+    /// When the approval was decided.
+    pub approved_at: Option<Timestamp>,
+}
+
+impl PinMeta {
+    /// The columns of a catalog entry: publisher `Stackly`, no approval.
+    #[must_use]
+    pub fn catalog() -> Self {
+        Self {
+            publisher: PUBLISHER.to_owned(),
+            approval: None,
+            approved_at: None,
+        }
+    }
+
+    /// The columns of an approved local entry of namespace `namespace`,
+    /// approved at `approved_at`.
+    #[must_use]
+    pub fn local(namespace: &str, approved_at: Timestamp) -> Self {
+        Self {
+            publisher: namespace.to_owned(),
+            approval: Some(TrustDecision::Approved),
+            approved_at: Some(approved_at),
+        }
+    }
+}
+
+/// [`pin_revision`] with the registry columns of `meta`.
+///
+/// # Errors
+///
+/// The errors of [`pin_revision`].
+pub fn pin_revision_with(
+    platform: &Platform,
+    prepared: &PreparedLayout,
+    entry: &ProviderEntry,
+    source: ProviderSourceId,
+    meta: PinMeta,
+) -> Result<PinnedRevision, PinError> {
     let package = &entry.package;
     let key = package.key();
     let layout = prepared.layout();
@@ -140,10 +193,14 @@ pub fn pin_revision(
     let record = ProviderRevisionRecord::new(
         package.provider_revision().clone(),
         Some(SCHEMA_VERSION.to_owned()),
-        Some(PUBLISHER.to_owned()),
-        None,
+        Some(meta.publisher),
+        meta.approval,
     )
     .with_source_id(source);
+    let record = match meta.approved_at {
+        Some(at) => record.with_approved_at(at),
+        None => record,
+    };
     Ok(PinnedRevision {
         record,
         wrote_files: stored.wrote_files,

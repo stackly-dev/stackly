@@ -19,7 +19,7 @@ use super::assemble::{
     AssembleOptions, AssembledCatalog, SourceNote, SourcePlanned, SourceProvider, SourceSpec,
     assemble,
 };
-use super::index::{CATALOG_INDEX_FILE, CatalogIndex, package_dir};
+use super::index::{CATALOG_INDEX_FILE, CatalogIndex, IndexRevoked, package_dir};
 
 macro_rules! fixture_file {
     ($name:literal, $path:literal) => {
@@ -142,6 +142,7 @@ pub struct CatalogBuilder {
     allow_testing: bool,
     providers: Vec<(SourceProvider, PackageFiles)>,
     planned: Vec<SourcePlanned>,
+    revoked: Vec<IndexRevoked>,
 }
 
 impl Default for CatalogBuilder {
@@ -160,7 +161,34 @@ impl CatalogBuilder {
             allow_testing: false,
             providers: Vec::new(),
             planned: Vec::new(),
+            revoked: Vec::new(),
         }
+    }
+
+    /// Adds a `revoked` entry (spec 0037): `id` at `revision`, for every
+    /// digest unless `manifest_sha256` names one, since `since`
+    /// (`YYYY-MM-DD`).
+    ///
+    /// # Panics
+    ///
+    /// Panics when `since` is not a date; tests pass literals.
+    #[must_use]
+    pub fn revoked(
+        mut self,
+        id: &str,
+        revision: &str,
+        manifest_sha256: Option<&str>,
+        reason: &str,
+        since: &str,
+    ) -> Self {
+        self.revoked.push(IndexRevoked {
+            id: id.to_owned(),
+            revision: revision.to_owned(),
+            manifest_sha256: manifest_sha256.map(str::to_owned),
+            reason: reason.to_owned(),
+            since: since.parse().expect("a test revocation date is YYYY-MM-DD"),
+        });
+        self
     }
 
     /// Sets the catalog revision.
@@ -262,6 +290,7 @@ impl CatalogBuilder {
             published_at: self.published_at,
             providers: self.providers.iter().map(|(p, _)| p.clone()).collect(),
             planned: self.planned.clone(),
+            revoked: self.revoked.clone(),
         };
         assemble(
             &spec,

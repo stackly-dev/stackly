@@ -11,8 +11,7 @@ use serde::de::DeserializeOwned;
 use stackly_core::catalog::{
     Catalog, CatalogEntry, CatalogLocation, Installability, NotInstallableReason,
     OFFICIAL_NAMESPACE, ProviderEntry, SUMMARY_VERSIONS_MAX, TargetSupport, TrustVerdict,
-    UnavailableReason, category_code, entry_status_with_trust, entry_trust,
-    installability_with_trust, version_support,
+    UnavailableReason, category_code, entry_status, entry_trust, installability, version_support,
 };
 use stackly_core::provider::{ArtifactStatus, Issue, VersionArtifact};
 use stackly_domain::{ExactVersion, ProviderName, Target};
@@ -101,8 +100,12 @@ pub fn list_providers(
             .iter()
             .map(|entry| provider_summary(catalog, entry, host))
             .collect(),
-        // provisional: F37 step 8 (the catalog `revoked` list)
-        revocations: Vec::new(),
+        revocations: catalog
+            .revocations()
+            .iter()
+            .take(stackly_protocol::provider::REVOCATIONS_MAX)
+            .map(super::trust::catalog_revocation)
+            .collect(),
     }
 }
 
@@ -121,7 +124,7 @@ pub fn provider_summary(
     entry: &CatalogEntry,
     host: &HostFacts,
 ) -> dto::ProviderSummary {
-    let status = entry_status_with_trust(entry, host, &display_trust(catalog, entry));
+    let status = entry_status(entry, host, &display_trust(catalog, entry));
     let (_, catalog_trust) = source_and_trust(&catalog.meta().location);
     let local_record = match entry {
         CatalogEntry::Provider(provider) => provider.local().map(|info| &info.record),
@@ -271,22 +274,21 @@ fn catalog_version(
         .iter()
         .filter(|artifact| artifact.version == *version)
         .collect();
-    let install =
-        match installability_with_trust(entry, version, host, &entry_trust(catalog, provider)) {
-            Ok(Installability::Installable { .. }) => dto::InstallVerdict {
-                installable: true,
-                reason: None,
-            },
-            Ok(Installability::NotInstallable { reason, .. }) => dto::InstallVerdict {
-                installable: false,
-                reason: Some(wire(reason.as_code())),
-            },
-            // Every version of `provider.versions()` has an artifact.
-            Err(_) => dto::InstallVerdict {
-                installable: false,
-                reason: Some(wire(NotInstallableReason::NoBuildForHost.as_code())),
-            },
-        };
+    let install = match installability(entry, version, host, &entry_trust(catalog, provider)) {
+        Ok(Installability::Installable { .. }) => dto::InstallVerdict {
+            installable: true,
+            reason: None,
+        },
+        Ok(Installability::NotInstallable { reason, .. }) => dto::InstallVerdict {
+            installable: false,
+            reason: Some(wire(reason.as_code())),
+        },
+        // Every version of `provider.versions()` has an artifact.
+        Err(_) => dto::InstallVerdict {
+            installable: false,
+            reason: Some(wire(NotInstallableReason::NoBuildForHost.as_code())),
+        },
+    };
     dto::CatalogVersion {
         version: version.to_string(),
         line: artifacts

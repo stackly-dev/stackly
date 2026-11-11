@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use stackly_core::catalog::{
-    NotInstallableReason, ProviderEntry, SupportReason, TileColor, TileHint,
+    NotInstallableReason, ProviderEntry, SupportReason, TileColor, TileHint, TrustVerdict,
 };
 use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
 use stackly_core::runtime::compatibility::support_status;
@@ -116,7 +116,8 @@ fn catalog() -> ProviderEntry {
 }
 
 fn version_of(entry: &ProviderEntry, text: &str, host: &HostFacts) -> Result<String, ResolveError> {
-    resolve(entry, &selector(text), host).map(|found| found.artifact.version.to_string())
+    resolve(entry, &selector(text), host, &TrustVerdict::Trusted)
+        .map(|found| found.artifact.version.to_string())
 }
 
 #[test]
@@ -237,6 +238,7 @@ fn a_digest_selects_that_artifact_and_never_a_substitute() {
         &catalog,
         &selector(&format!("sha256:{}", sha('d'))),
         &host(),
+        &TrustVerdict::Trusted,
     );
     assert_eq!(
         linux,
@@ -275,7 +277,12 @@ fn a_digest_of_another_architecture_of_the_host_os_is_no_build_for_arch() {
         ),
     ]);
 
-    let result = resolve(&intel, &selector(&format!("sha256:{}", sha('b'))), &host());
+    let result = resolve(
+        &intel,
+        &selector(&format!("sha256:{}", sha('b'))),
+        &host(),
+        &TrustVerdict::Trusted,
+    );
 
     assert!(
         matches!(

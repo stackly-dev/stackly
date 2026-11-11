@@ -78,6 +78,7 @@ fn provider(provider: &FormProvider) -> dto::CreateProvider {
             PackageSource::BundledCatalog => dto::CreateProviderSource::BundledCatalog,
             PackageSource::DevelopmentCatalog => dto::CreateProviderSource::DevelopmentCatalog,
             PackageSource::Pinned => dto::CreateProviderSource::Pinned,
+            PackageSource::LocalImport { .. } => dto::CreateProviderSource::LocalImport,
         },
     }
 }
@@ -314,8 +315,8 @@ pub fn create_error(error: &CreateError, issues: &[FieldIssue]) -> ErrorBody {
     }
 }
 
-/// `body` with the static hint of its `instance.*` or `catalog.pin_failed`
-/// code, unless it carries one.
+/// `body` with the static hint of its `instance.*`, `provider.*`, or
+/// `catalog.pin_failed` code, unless it carries one.
 #[must_use]
 pub fn with_create_hint(body: ErrorBody) -> ErrorBody {
     if body.hint().is_some() {
@@ -323,6 +324,8 @@ pub fn with_create_hint(body: ErrorBody) -> ErrorBody {
     }
     let hint = if body.code().starts_with("instance.") {
         stackly_protocol::codes::instance::hint(body.code(), body.details())
+    } else if body.code().starts_with("provider.") {
+        stackly_protocol::codes::provider::hint(body.code(), body.details())
     } else if body.code() == stackly_protocol::codes::catalog::PIN_FAILED.code {
         stackly_protocol::codes::catalog::hint(body.code(), body.details())
     } else {

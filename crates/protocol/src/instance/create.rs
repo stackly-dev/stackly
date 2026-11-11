@@ -104,6 +104,9 @@ pub enum CreateProviderSource {
     DevelopmentCatalog,
     /// A package already pinned in the data folder.
     Pinned,
+    /// An imported local provider whose stored bytes are approved (spec
+    /// 0037); create pins it.
+    LocalImport,
     /// A source this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

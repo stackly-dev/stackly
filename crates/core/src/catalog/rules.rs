@@ -5,11 +5,11 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use stackly_domain::{Os, ProviderName};
+use stackly_domain::{Os, ProviderName, ProviderRevisionKey, RevisionLabel, Sha256Digest};
 
 use crate::provider::{ArtifactStatus, Category, ValidatedPackage};
 
-use super::index::{CatalogIndex, IndexPlatformNote};
+use super::index::{CatalogIndex, IndexPlatformNote, IndexRevoked};
 
 /// Most bytes of `catalog.json`.
 pub const INDEX_MAX_LEN: usize = 256 * 1024;
@@ -17,6 +17,10 @@ pub const INDEX_MAX_LEN: usize = 256 * 1024;
 pub const PROVIDERS_MAX: usize = 64;
 /// Most planned entries.
 pub const PLANNED_MAX: usize = 64;
+/// The most entries of the `revoked` list (spec 0037).
+pub const REVOKED_MAX: usize = 64;
+/// The longest `reason` of a `revoked` entry, in bytes.
+pub const REVOKED_REASON_MAX_LEN: usize = 256;
 /// Most artifacts in one provider's `versions.json`.
 pub const ARTIFACTS_MAX: usize = 32;
 /// Most dependencies of one artifact, once `versions.json` carries them
@@ -416,7 +420,88 @@ pub fn index_problems(index: &CatalogIndex) -> Vec<String> {
             ));
         }
     }
+    problems.extend(revoked_problems(&index.revoked));
     problems
+}
+
+/// Returns why the `revoked` list breaks a rule build and loader share
+/// (spec 0037, *Revocation di catalog*): more than [`REVOKED_MAX`]
+/// entries, entries out of (`id`, `revision`, `manifestSha256`) order or
+/// repeated, an ID that is not a provider name, a revision that is not a
+/// label, a digest that is not 64 lowercase hex characters, or a reason
+/// outside 1 to 256 bytes or with a control character.
+#[must_use]
+pub fn revoked_problems(revoked: &[IndexRevoked]) -> Vec<String> {
+    let mut problems = Vec::new();
+    if revoked.len() > REVOKED_MAX {
+        problems.push(format!("more than {REVOKED_MAX} revoked entries"));
+    }
+    if !revoked
+        .windows(2)
+        .all(|pair| pair[0].sort_key() < pair[1].sort_key())
+    {
+        problems
+            .push("revoked are not sorted by id, revision, and digest without repeats".to_owned());
+    }
+    for entry in revoked {
+        let id = &entry.id;
+        if id.parse::<ProviderName>().is_err() {
+            problems.push(format!("revoked entry {id} is not a provider ID"));
+        }
+        if entry.revision.parse::<RevisionLabel>().is_err() {
+            problems.push(format!(
+                "revoked entry {id} has a revision that is not a revision label"
+            ));
+        }
+        if let Some(digest) = &entry.manifest_sha256
+            && digest.parse::<Sha256Digest>().is_err()
+        {
+            problems.push(format!(
+                "revoked entry {id} has a manifestSha256 that is not 64 lowercase hex characters"
+            ));
+        }
+        if entry.reason.is_empty()
+            || entry.reason.len() > REVOKED_REASON_MAX_LEN
+            || entry.reason.chars().any(char::is_control)
+        {
+            problems.push(format!(
+                "revoked entry {id} needs a reason of 1 to 256 bytes without control characters"
+            ));
+        }
+    }
+    problems
+}
+
+/// Returns whether a `revoked` entry covers `key`: the same ID and
+/// revision, and no digest or the key's digest.
+#[must_use]
+pub fn revoked_covers(entry: &IndexRevoked, key: &ProviderRevisionKey) -> bool {
+    entry.id == key.provider().as_str()
+        && entry.revision == key.revision().as_str()
+        && entry
+            .manifest_sha256
+            .as_deref()
+            .is_none_or(|digest| digest == key.manifest_sha256().to_string())
+}
+
+/// Returns a problem for each provider entry of the same catalog that a
+/// `revoked` entry covers: a catalog never ships a revision it revokes.
+#[must_use]
+pub fn revoked_shipped_problems<'a>(
+    revoked: &[IndexRevoked],
+    shipped: impl IntoIterator<Item = &'a ProviderRevisionKey>,
+) -> Vec<String> {
+    shipped
+        .into_iter()
+        .filter(|key| revoked.iter().any(|entry| revoked_covers(entry, key)))
+        .map(|key| {
+            format!(
+                "revoked entry {} {} matches a provider entry of the same catalog",
+                key.provider(),
+                key.revision()
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -451,6 +536,7 @@ mod tests {
 
     fn index(providers: Vec<IndexProvider>, planned: Vec<IndexPlanned>) -> CatalogIndex {
         CatalogIndex {
+            revoked: Vec::new(),
             schema: super::super::index::CATALOG_SCHEMA.to_owned(),
             revision: 1,
             published_at: Timestamp::UNIX_EPOCH,

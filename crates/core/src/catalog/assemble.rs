@@ -10,10 +10,12 @@ use stackly_domain::{Os, ProviderName};
 
 use crate::provider::{PackageFiles, ValidatedPackage};
 
-use super::index::{CatalogIndex, IndexPlanned, IndexPlatformNote, content_sha256, provider_entry};
+use super::index::{
+    CatalogIndex, IndexPlanned, IndexPlatformNote, IndexRevoked, content_sha256, provider_entry,
+};
 use super::rules::{
     TileColor, default_mark, index_problems, is_mark, namespace_allowed, package_limits,
-    platform_note_problems,
+    platform_note_problems, revoked_shipped_problems,
 };
 
 /// A catalog source as written by maintainers (`providers/catalog.toml`),
@@ -28,6 +30,8 @@ pub struct SourceSpec {
     pub providers: Vec<SourceProvider>,
     /// Planned entries, without a package.
     pub planned: Vec<SourcePlanned>,
+    /// Revoked provider revisions (spec 0037, *Revocation di catalog*).
+    pub revoked: Vec<IndexRevoked>,
 }
 
 /// One `[[provider]]` of the source.
@@ -186,7 +190,23 @@ pub fn assemble(
             tile,
         });
     }
-    let index = CatalogIndex::new(spec.revision, spec.published_at, providers, planned);
+    if let Some(now) = options.not_after {
+        let today = now.to_zoned(jiff::tz::TimeZone::UTC).date();
+        for entry in &spec.revoked {
+            if entry.since > today {
+                problems.push(format!(
+                    "revoked entry {} since {} is in the future",
+                    entry.id, entry.since
+                ));
+            }
+        }
+    }
+    problems.extend(revoked_shipped_problems(
+        &spec.revoked,
+        packages.values().map(ValidatedPackage::key),
+    ));
+    let index = CatalogIndex::new(spec.revision, spec.published_at, providers, planned)
+        .with_revoked(spec.revoked.clone());
     problems.extend(index_problems(&index));
     if problems.is_empty() {
         copies.sort_by(|a, b| a.0.cmp(&b.0));
@@ -204,7 +224,7 @@ pub fn assemble(
 /// Recomputes the content digest an index should carry.
 #[must_use]
 pub fn expected_content_sha256(index: &CatalogIndex) -> String {
-    content_sha256(&index.providers, &index.planned)
+    content_sha256(&index.providers, &index.planned, &index.revoked)
 }
 
 fn tile_of(id: &str, code: Option<&str>, problems: &mut Vec<String>) -> TileColor {
@@ -312,6 +332,7 @@ mod tests {
 
     fn spec(providers: Vec<SourceProvider>, planned: Vec<SourcePlanned>) -> SourceSpec {
         SourceSpec {
+            revoked: Vec::new(),
             revision: 1,
             published_at: "2026-10-19T14:05:00Z".parse().unwrap(),
             providers,

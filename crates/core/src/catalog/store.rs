@@ -53,7 +53,8 @@ pub struct Stored {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum StoreError {
-    /// A file in the folder differs from the package. It is left as it is.
+    /// A file in the folder of a pin differs from the package. It is left
+    /// as it is.
     #[error("the stored copy of {} differs from the package", .path.display())]
     ExistingDiffers {
         /// The file.
@@ -140,17 +141,21 @@ pub(super) fn core_error(op: &'static str, path: &Path, error: &CoreError) -> St
 /// a symlink. A folder holding an entry the package does not is refused. A
 /// file that is not there is written atomically with mode 0600; one that is
 /// there is compared byte for byte (in [`StoreMode::Pinned`], except
-/// `versions.json`). The copy is then read back file by file and must
-/// match the mode's key or digest.
+/// `versions.json`). In [`StoreMode::Import`] a file that differs is
+/// written again atomically, since its folder is named by the digest of
+/// the package and the difference is a change made afterwards; in
+/// [`StoreMode::Pinned`] it is refused. The copy is then read back file by
+/// file and must match the mode's key or digest.
 ///
-/// It never deletes or overwrites a file. Concurrent writers of the same
-/// bytes write the same bytes and all succeed.
+/// It never deletes a file, and overwrites one only in an import as said.
+/// Concurrent writers of the same bytes write the same bytes and all
+/// succeed.
 ///
 /// # Errors
 ///
 /// Returns [`StoreError::UnsafePath`] for a path outside the owned roots, a
 /// symlink, a foreign entry, or a folder that is not private;
-/// [`StoreError::ExistingDiffers`] when a file differs; [`StoreError::NoSpace`]
+/// [`StoreError::ExistingDiffers`] when a file of a pin differs; [`StoreError::NoSpace`]
 /// and [`StoreError::Io`] when a port fails; and
 /// [`StoreError::DigestMismatch`] when the copy reads back otherwise.
 pub fn write_package(
@@ -214,7 +219,20 @@ pub fn write_package(
                 let max = info.len.max(bytes.len() as u64);
                 let stored = read_stored(fs, "read file", &target, max)?;
                 if stored != bytes {
-                    return Err(StoreError::ExistingDiffers { path: target });
+                    match mode {
+                        StoreMode::Pinned(_) => {
+                            return Err(StoreError::ExistingDiffers { path: target });
+                        }
+                        // The folder of an import is named by the digest of
+                        // these bytes, so a file that differs was changed
+                        // after the import: an import of the same bytes
+                        // writes it again (spec 0037 AC-3).
+                        StoreMode::Import(_) => {
+                            fs.write_file_atomic(&target, bytes)
+                                .map_err(|e| platform_error("write file", &target, &e))?;
+                            wrote_files = true;
+                        }
+                    }
                 }
             }
         }
