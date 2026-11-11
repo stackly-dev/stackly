@@ -2,8 +2,12 @@
 //! AC-13): each test runs `conformance::run` on a package folder, with a
 //! daemon in this process, and reads the report. They run one at a time
 //! behind one static mutex, because each starts a daemon and measures
-//! time. Every test is a fixture run on `stackly-fake-server`; the native
-//! tests per runtime line come with step 14.
+//! time. The fixture tests run `stackly-fake-server`; the native tests,
+//! one per runtime line (AC-15), are ignored and run the managed artifact
+//! from the runtime cache of `cargo xtask` with
+//! `cargo test -p stacklyd --test provider_conformance -- --ignored`. An
+//! artifact that is not in the cache ends such a test as `BLOCKED`, never
+//! as a download.
 #![cfg(target_os = "macos")]
 
 #[allow(
@@ -17,7 +21,7 @@ use std::sync::Mutex;
 
 use conformance::{Report, RunRequest, StepStatus, Verdict};
 use stackly_core::provider::scenarios::{Expect, Scenario};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Evidence, Kind, Source, evidence};
 use stackly_testkit::{ProcessTable, TestRoot};
 
 /// One run at a time.
@@ -75,7 +79,7 @@ fn assert_clean(report: &Report) {
         serde_json::json!([]),
         "{value:#}"
     );
-    assert_no_process_left();
+    assert_no_process_left(report);
 }
 
 /// The steps of a passing `ready` scenario, in the order of AC-9.
@@ -203,26 +207,23 @@ fn failure(report: &Report, name: &str) -> serde_json::Value {
 fn assert_failed_run_cleaned_up(report: &Report) {
     let value = report.value().expect("the report was built");
     assert_eq!(value["cleanup"]["rootRemoved"], true, "{value:#}");
-    assert_no_process_left();
+    assert_no_process_left(report);
 }
 
-/// Asserts that no process of the run is left on this Mac.
-fn assert_no_process_left() {
+/// Asserts that no process names a folder of the run's test root, whose
+/// ASCII names `ps` prints as they are. Other runs on this Mac, such as
+/// another session's, are not this test's business.
+fn assert_no_process_left(report: &Report) {
     let table = ProcessTable::snapshot().expect("ps runs");
-    // `ps` escapes the non ASCII letters of the data root name, so the
-    // search uses its ASCII parts: a process whose program lives in a test
-    // root, the runtime folder or the copy a rogue server made.
-    let left: Vec<_> = table
-        .entries()
+    let left: Vec<_> = report
+        .root_folders
         .iter()
-        .filter(|entry| {
-            entry.args.find("/Test Root ").is_some_and(|at| {
-                let program_root = &entry.args[..at];
-                program_root.contains("/stackly-test-") && !program_root.contains(' ')
-            })
-        })
+        .flat_map(|folder| table.under(folder))
         .collect();
     assert!(left.is_empty(), "processes outlived the run: {left:?}");
+    for folder in &report.root_folders {
+        assert!(!folder.exists(), "{} is left", folder.display());
+    }
 }
 
 // covers: AC-10 (spec 0036)
@@ -551,4 +552,92 @@ fn a_root_without_this_runs_marker_is_never_removed() {
     assert!(data.is_dir() && run.is_dir(), "both folders stay in place");
     std::fs::remove_dir_all(&data).expect("the test removes its own data folder");
     std::fs::remove_dir_all(&run).expect("the test removes its own run folder");
+}
+
+/// Runs line `line` of the repo package `name` natively and notes the
+/// report on `ev`: `BLOCKED` with the report's reason and owner, else the
+/// subject from the report's runtime, then the verdict.
+fn native(ev: &Evidence, name: &str, line: &str) {
+    let mut request = RunRequest::new(repo().join("providers").join(name), PathBuf::new());
+    request.line = Some(line.to_owned());
+    let (report, _out) = run_with(request);
+    let value = report.value().expect("the report was built");
+    if report.verdict() == Verdict::Blocked {
+        let reason = value["blocked"]["reason"].as_str().unwrap_or("blocked");
+        let owner = value["blocked"]["owner"]
+            .as_str()
+            .unwrap_or("runtime maintainer");
+        ev.blocked(reason, owner);
+        return;
+    }
+    assert_eq!(value["kind"], "native", "{value:#}");
+    let runtime = &value["runtime"];
+    ev.subject(
+        name,
+        runtime["version"]
+            .as_str()
+            .expect("a native run names its version"),
+        runtime["sha256"].as_str(),
+        Source::Managed,
+    );
+    assert_pass(&report);
+    assert_clean(&report);
+    let steps: Vec<String> = report
+        .scenarios
+        .iter()
+        .flat_map(|scenario| {
+            scenario.steps.iter().map(move |step| {
+                format!("{}:{}={}", scenario.name, step.name, step.status.as_str())
+            })
+        })
+        .collect();
+    ev.pass_with(&format!("verdict pass; {}", steps.join(", ")));
+}
+
+// covers: AC-15 (spec 0036)
+#[test]
+#[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
+fn nats_2_15_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/nats line 2.15 with the managed artifact from the runtime cache passes every step of its scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "nats", "2.15");
+}
+
+// covers: AC-15 (spec 0036)
+#[test]
+#[ignore = "native: needs the managed PostgreSQL 17.11 artifact in the runtime cache"]
+fn postgresql_17_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/postgresql line 17 with the managed artifact from the runtime cache passes every step of its scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "postgresql", "17");
+}
+
+// covers: AC-15 (spec 0036)
+#[test]
+#[ignore = "native: needs the managed PostgreSQL 18.6 artifact in the runtime cache"]
+fn postgresql_18_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/postgresql line 18 with the managed artifact from the runtime cache passes every step of its scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "postgresql", "18");
+}
+
+// covers: AC-15 (spec 0036)
+#[test]
+#[ignore = "native: needs the managed Traefik 3.7.15 artifact in the runtime cache"]
+fn traefik_3_7_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/traefik line 3.7 with the managed artifact from the runtime cache passes every step of its scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "traefik", "3.7");
 }

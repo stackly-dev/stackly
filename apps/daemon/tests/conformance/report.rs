@@ -58,6 +58,9 @@ pub struct Report {
     blocked: Option<(String, String)>,
     /// A signal stopped the run.
     pub interrupted: bool,
+    /// The two folders of the run's test root, once made; never written to
+    /// the report, so a test can check that nothing still names them.
+    pub root_folders: Vec<PathBuf>,
     written: Option<PathBuf>,
     value: Option<Value>,
 }
@@ -80,6 +83,7 @@ impl Report {
             cleanup: Cleanup::default(),
             blocked: None,
             interrupted: false,
+            root_folders: Vec::new(),
             written: None,
             value: None,
         }
