@@ -156,7 +156,7 @@ Bagian ini mencakup Build plan langkah 6 (paket `providers/example/`), langkah 7
 
 ## Milestone 3: Harness konformitas
 
-Bagian ini mencakup Build plan langkah 9 sampai 12. Langkah 13 (example `provider_harness`, `cargo xtask provider test` dengan `--cleanup` dan `--keep`, test `xtask` scaffold ke harness) menambah bagiannya sendiri; sampai itu harness dijalankan lewat test `provider_conformance`.
+Bagian ini mencakup Build plan langkah 9 sampai 13. Langkah 13 menambah example `provider_harness`, `cargo xtask provider test` dengan `--cleanup` dan `--keep`, dan test `xtask` scaffold ke harness.
 
 ### UI / manual
 
@@ -177,14 +177,40 @@ Bagian ini mencakup Build plan langkah 9 sampai 12. Langkah 13 (example `provide
 - [ ] `cargo test -p stackly-fake-server` → lulus tanpa perubahan; flag `--close-lock-fd`, `--re-exec`, `--background` default `false` dan hanya dipakai paket `testing/fake-rogue` (`apps/daemon/tests/conformance/packages/fake-rogue/`, `cargo xtask provider check <folder itu>` → baris `ok testing/fake-rogue 0.1.0 ...`) → AC-10
 - [ ] `cargo clippy -p stacklyd -p stackly-testkit -p stackly-fake-server --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check` → bersih
 
+- [ ] Langkah 13, dari checkout tanpa file untracked: `cargo xtask provider check providers/example` lalu `cargo xtask provider test providers/example` → baris `ok`, stderr berakhir `provider test report: <repo>/target/provider-test/<runId>/report.json`, exit 0, report `verdict: pass` dengan `runId` sama dengan nama folder nya; `git status --porcelain` sama sebelum dan sesudah → AC-9, AC-13
+- [ ] `cargo xtask provider test apps/daemon/tests/conformance/packages/fake-rogue --report <tmp>/r.json` → report di `<tmp>/r.json`, baris terakhir stderr menyebutnya → AC-13
+- [ ] Interupsi: jalankan `cargo xtask provider test providers/example --report <tmp>/i.json`, tunggu sampai proses `provider_harness` muncul (`ps -axo pid=,comm= | awk '$2 ~ /provider_harness$/'`), kirim satu `kill -INT <pid>` → stderr `provider_harness: stopping after the current step`, exit 130, report `interrupted: true`, `verdict: fail`, `cleanup.rootRemoved: true` → AC-13
+- [ ] `cargo xtask provider test --cleanup` → exit 0, baris terakhir stderr `provider test --cleanup: removed <n> folder(s)`; hanya root berpenanda milik uid ini yang `pid` nya mati yang terhapus (diuji `sweep_removes_a_root_whose_run_is_gone_and_keeps_one_whose_run_lives`) → AC-12
+- [ ] `cargo test -p xtask --test provider_test` → 2 test lulus: `a_scaffold_outside_the_repo_passes_check_and_test_without_changing_the_repo` (`provider new mytool --out <TestRoot>`, `provider check`, `provider test --report`, report `pass`, baris terakhir stderr, `git status --porcelain` repo sama) dan `cleanup_runs_alone_and_exits_0` → AC-14, AC-12
+- [ ] `cargo test -p stacklyd --example provider_harness` (unit test argumen) dan `cargo test -p xtask provider::harness` → lulus
+- [ ] `cargo xtask docs check` → `ok docs`; blok `bash` README paket contoh memuat `provider new`, `provider check`, dan `provider test` → AC-7
+
 ### Acceptance-criteria coverage
 
-- AC-9 · lengkap lewat test; `cargo xtask provider test providers/example` (exit 0 dan report di `<target dir>/provider-test/<runId>/`) menunggu langkah 13
-- AC-10, AC-11 · lengkap. Tafsiran AC-11: halaman `instance.logs_read` dibatasi 64 KiB satu batch log selain `limit: 1000`, jadi baris 100 byte memenuhi halaman di sekitar 197 baris; langkah `logs` mengulang sampai halaman penuh (1000 baris, atau kurang dengan cursor `earlier` yang menandakan masih ada baris lama), bukan sampai tepat 1000 baris
-- AC-12 · bagian testkit dan harness lengkap; `--cleanup` (`sweep_marked`) dan `--keep` (`keep_data`) lewat `xtask` menunggu langkah 13
-- AC-13 · bagian report lengkap (schema, sanitasi `~` dan `$TMPDIR`, tulis atomik); baris terakhir stderr, exit code 0/1/2/130, `interrupted` lewat sinyal, dan folder report default menunggu langkah 13
+- AC-9 · lengkap, lewat test dan `cargo xtask provider test providers/example`
+- AC-10, AC-11 · lengkap. AC-11 memakai tafsiran yang diterima lead (2026-11-11): halaman `instance.logs_read` dibatasi 64 KiB satu batch log selain `limit: 1000`; langkah `logs` mengulang sampai halaman penuh (1000 baris, atau kurang dengan cursor `earlier`)
+- AC-12 · lengkap; `--keep` menyimpan folder data lewat `keep_data` dan mencetak `kept <path>`
+- AC-13 · lengkap. `--report` yang relatif dihitung dari folder kerja; xtask membuat `runId` dan meneruskannya lewat `--run-id` supaya folder report default sama dengan `runId` report
+- AC-14 · lengkap
 - AC-1 · bagian harness lengkap
-- AC-14 · menunggu langkah 13; AC-15 · menunggu langkah 14
+- AC-15 · Milestone 4
+
+## Milestone 4: Konformitas native
+
+Bagian ini mencakup Build plan langkah 14: `nats_2_15_passes_conformance`, `postgresql_17_passes_conformance`, `postgresql_18_passes_conformance`, dan `traefik_3_7_passes_conformance` di `apps/daemon/tests/provider_conformance.rs`, masing masing `#[ignore = "native: ..."]` dengan guard evidence `Kind::Native` di badan fungsinya. Lulus harness tidak menambah `HANDOVER_PROVEN` (spec 0030); report keempatnya mencatat `handover: unproven`.
+
+### UI / manual
+
+- [ ] Run native dengan bukti (langkah manual user, AC-15): `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1` → empat test `PASS` dengan subject `nats 2.15.1`, `postgresql 17.11`, `postgresql 18.6`, `traefik 3.7.15` dan digest artefak dari `versions.json`; artefak yang tidak ada di cache xtask (`~/Library/Caches/dev.stackly.xtask/runtime/<sha256>`) membuat test nya `BLOCKED` dengan reason `artifact <id> is not in the runtime cache` dan owner `runtime maintainer`, tanpa unduhan. Saat build (2026-11-11) keempat artefak ada di cache, dan run langsung tanpa wrapper evidence (`cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1`) lulus 4 dari 4 dalam 76 detik; record evidence native yang resmi menunggu run dengan wrapper di atas.
+
+### Commands
+
+- [ ] `cargo test -p stacklyd --test provider_conformance` → 17 test fixture lulus, empat test native `ignored`
+- [ ] `cargo xtask evidence check` → bersih (penanda native ada di badan setiap test native)
+
+### Acceptance-criteria coverage
+
+- AC-15 · kode lengkap; bukti native resmi = langkah manual di atas
 
 ## Milestone 5: Spike dari paket
 
