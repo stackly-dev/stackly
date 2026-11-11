@@ -403,6 +403,10 @@ impl OperationWork for RemoveWork {
     }
 }
 
+/// What the import guard answers when the row holds the bytes of the import
+/// already: nothing to write, and not a failure.
+struct Unchanged;
+
 fn settled() -> WorkOutcome {
     WorkOutcome {
         result: OperationOutcome {
@@ -612,6 +616,15 @@ async fn run_import(
     let outcome = ctx
         .commit_guarded(Box::new(move |view| {
             let rows = view.provider_imports()?;
+            // Another import of these bytes committed first (eight imports
+            // at once): the row holds them already, so nothing is written
+            // and the operation still succeeds (spec 0037, *API surface*).
+            if rows
+                .iter()
+                .any(|row| row.provider == guard_provider && row.package_sha256 == digest)
+            {
+                return Ok(GuardDecision::Refuse(Box::new(Unchanged)));
+            }
             if let Some(limit) = import_limit(&rows, &guard_provider, written.package_bytes) {
                 return Ok(GuardDecision::Refuse(Box::new(ProviderOpError::Limit(
                     limit,
@@ -637,6 +650,7 @@ async fn run_import(
         .map_err(engine_registry)?;
     match outcome {
         Guarded::Committed(_) => {}
+        Guarded::Refused(reason) if reason.is::<Unchanged>() => {}
         Guarded::Refused(reason) => {
             return Err(failed(match reason.downcast::<ProviderOpError>() {
                 Ok(error) => *error,

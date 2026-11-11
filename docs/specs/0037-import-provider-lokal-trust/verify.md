@@ -430,3 +430,23 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Pakai root sementar
 - AC-8, AC-13, AC-15 · bagian otomatis lengkap; bukti `native` empat langkah di atas `NOT_RUN`, owner user
 - VAL-018 · kini punya guard `fixture` (`provider_trust.rs`, dua test AC-12)
 
+
+## Test suite `/test` dan fix 2026-11-11 (`tst-f37-test`, `dev-f37-fix2`)
+
+_Setiap AC-1 sampai AC-19 punya test yang menyebut ID nya; setiap titik tabel *Gate trust* punya test untuk `pending`, `revoked` by user, dan `revoked` by catalog, kecuali exec check `install_runtime` yang dicabut di tengah unduhan (hanya `pending` yang teruji, di `crates/core/tests/runtime_install.rs`)._
+
+### Commands
+
+- [x] `cargo test -p stackly-core --test catalog_local operation` → operasi `import_provider` di `FakePlatform`: refresh tepat sekali sesudah commit; disk penuh → `provider.store_failed` reason `no_space` tanpa baris, folder, atau refresh; disk penuh saat memperbaiki salinan → folder yang sudah ada tetap; guard menolak di batas 32 → salinan yang ia tulis dihapus kompensasi → AC-2, AC-3, AC-10
+- [x] `cargo test -p stacklyd --test provider_gate` → perbandingan byte baris `runtimes`, `instances`, `artifacts` dan folder instance, runtime, pinned, serta store sebelum dan sesudah revoke lalu remove, dengan start, restart, stop, dan ubah config sesudah revoke; race create lawan revoke di guard commit; antrian bersama `settings.update` dan stop all; pin asal lokal tanpa approval; `find_pinned` dicabut user dan catalog; replay → AC-4, AC-7, AC-8, AC-9, AC-18
+- [x] `cargo test -p stacklyd --test provider_import` → delapan import bersamaan (satu baris, `revision` 1, satu salinan); import ke 33 dan pengganti di batas; hint `provider.import_limit` dan `provider.import_not_found`; kesehatan `catalog` saat recovery; satu `catalog.changed` per operasi sebelum operasi selesai dan tidak ada untuk import yang gagal; 64 revocation dalam satu control frame → AC-2, AC-3, AC-10, AC-14
+- [x] `cargo test -p stackly-cli --test provider no_provider_golden` → tidak ada frasa terlarang di golden provider → AC-11
+
+### Fix yang masuk
+
+- `3a0041b5` `fix(core)`: import yang gagal sesudah membuat folder store (disk penuh) kini menghapus folder itu lewat kompensator; folder yang sudah ada sebelumnya tidak pernah diklaim.
+- `c716d173` `fix(core)`: guard import yang menemukan byte nya sudah tersimpan tidak menulis apa pun (temuan rendah 6 milestone 1); setiap import itu tetap operasi dengan baris audit dan tetap me refresh catalog.
+
+### Tafsiran replay (keputusan lead 2026-11-11, opsi C)
+
+Request `provider.import`, `provider.approve`, atau `provider.revoke` yang diulang dengan `idempotencyKey` yang sama tidak menjalankan operasi kedua dan menjawab dengan semantik snapshot spec 0007 *Idempotency*: detail provider saat ini (bukan salinan balasan pertama), `provider.import_not_found` bila entri sudah di remove, dan error operasi pertama bila operasi itu gagal. `provider.remove` menjawab `RemovedProvider` yang sama. Dikunci oleh `a_repeated_approve_or_revoke_answers_the_provider_as_it_is_now_and_import_not_found_after_a_remove`, `a_repeated_request_whose_first_operation_failed_answers_its_first_error`, dan `an_approve_and_a_revoke_repeated_with_their_key_run_no_second_operation`. Teks *API surface* diselaraskan architect.

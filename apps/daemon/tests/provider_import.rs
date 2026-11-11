@@ -1129,3 +1129,35 @@ fn a_full_catalog_with_64_revocations_lists_in_one_control_frame() {
     let len = serde_json::to_vec(&frame).expect("encodes").len();
     assert!(len < CONTROL_FRAME_MAX as usize, "{len} bytes");
 }
+
+// covers: AC-3 (spec 0037, *API surface*: "kalau baris sudah memuat
+// package_sha256 dan keputusan yang diminta, guard tidak menulis apa pun")
+#[tokio::test(flavor = "multi_thread")]
+async fn eight_imports_of_the_same_bytes_at_once_write_the_row_only_once() {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = package(&site, "acme-demo", "acme-demo");
+    let digest = preview(&api, &dir)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+
+    let replies = eight_imports(&site, &dir, &digest).await;
+
+    assert!(replies.iter().all(Result::is_ok), "{replies:?}");
+    let registry = daemon.core().registry().expect("the registry is open");
+    let row = registry
+        .provider_import(&"acme/demo".parse().expect("an id"))
+        .expect("reads")
+        .value
+        .expect("the row");
+    assert_eq!(
+        row.revision.get(),
+        1,
+        "the guard of every import after the first finds the bytes stored and writes nothing"
+    );
+    drop(api);
+    stop(daemon).await;
+}

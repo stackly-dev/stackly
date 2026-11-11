@@ -1455,3 +1455,148 @@ async fn a_pinned_revision_is_refused_through_find_pinned_when_the_user_or_the_c
     api.start_ready(created).await;
     api.stop_when_free(created).await;
 }
+
+/// The approval in the reply of a decision.
+fn approval_in(reply: Reply) -> Option<stackly_protocol::provider::ApprovalState> {
+    match reply {
+        Reply::ProviderApprove(detail) | Reply::ProviderRevoke(detail) => detail.summary.approval,
+        other => panic!("not a decision reply: {other:?}"),
+    }
+}
+
+// covers: AC-18 (spec 0037, *API surface*, snapshot semantics of spec 0007
+// *Idempotency* chosen by the lead for defect 2): a repeated approve or
+// revoke runs no second operation and answers the provider as it is now,
+// and after a remove it answers provider.import_not_found
+#[tokio::test(flavor = "multi_thread")]
+async fn a_repeated_approve_or_revoke_answers_the_provider_as_it_is_now_and_import_not_found_after_a_remove()
+ {
+    use stackly_domain::OperationKind;
+    use stackly_protocol::provider::ApprovalState;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    let (approve_key, revoke_key) = (key(), key());
+
+    let first = send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect("approves");
+    assert_eq!(approval_in(first), Some(ApprovalState::Approved));
+    send(&api, revoke_call(), &revoke_key)
+        .await
+        .expect("revokes");
+
+    let replayed = send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect("the replay answers");
+    assert_eq!(
+        approval_in(replayed),
+        Some(ApprovalState::Revoked),
+        "the replay answers the provider as it is now"
+    );
+    assert_eq!(audited(&daemon, OperationKind::ApproveProvider), 1);
+
+    approve(&api.client, &digest).await;
+    let replayed = send(&api, revoke_call(), &revoke_key)
+        .await
+        .expect("the replay answers");
+    assert_eq!(approval_in(replayed), Some(ApprovalState::Approved));
+    assert_eq!(audited(&daemon, OperationKind::RevokeProvider), 1);
+
+    call(
+        &api.client,
+        Call::ProviderRemove(ProviderTargetParams {
+            provider: LOCAL.to_owned(),
+        }),
+    )
+    .await
+    .expect("it removes");
+    for (call, key) in [
+        (approve_call(&digest), &approve_key),
+        (revoke_call(), &revoke_key),
+    ] {
+        let gone = send(&api, call, key)
+            .await
+            .expect_err("a replay after a remove has no provider to show");
+        assert_eq!(gone.code(), "provider.import_not_found");
+        assert_eq!(detail(&gone, "provider"), Some(LOCAL));
+    }
+    assert_eq!(audited(&daemon, OperationKind::ApproveProvider), 2);
+    assert_eq!(audited(&daemon, OperationKind::RevokeProvider), 1);
+}
+
+// covers: AC-18 (spec 0037, *API surface*; spec 0007 *Idempotency*): a
+// repeated request whose first operation failed answers that error again
+// and runs nothing
+#[tokio::test(flavor = "multi_thread")]
+async fn a_repeated_request_whose_first_operation_failed_answers_its_first_error() {
+    use stackly_domain::OperationKind;
+    use std::os::unix::fs::PermissionsExt as _;
+
+    // An approval the installed catalog refuses inside the operation.
+    let site = Site::new();
+    let daemon = site.start_with(revoking_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    let approve_key = key();
+    let first = send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect_err("the catalog revokes this revision");
+    assert_eq!(first.code(), "provider.revoked");
+    let again = send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect_err("the replay answers the first error");
+    assert_eq!(again.code(), first.code());
+    assert_eq!(detail(&again, "by"), Some("catalog"));
+    assert_eq!(again.operation_id(), first.operation_id());
+    let approvals = audited(&daemon, OperationKind::ApproveProvider);
+
+    // An import whose store could not be written: after the store is
+    // writable again, the same key still answers the first error.
+    let other = Site::new();
+    let other_daemon = other.start_with(fast_with_catalog()).await;
+    let other_api = other.api().await;
+    let store = other.prepared.layout().provider_imports_dir();
+    std::fs::create_dir_all(&store).expect("the store folder can be made");
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o500))
+        .expect("the store folder can be locked");
+    let dir = local_fake(other.root.path());
+    let preview = match other_api
+        .client
+        .call(Call::ProviderPreviewImport(PreviewImportParams {
+            path: dir.display().to_string(),
+        }))
+        .await
+        .expect("the preview answers")
+    {
+        Reply::ProviderPreviewImport(preview) => preview,
+        other => panic!("not a preview reply: {other:?}"),
+    };
+    let import_call = || {
+        Call::ProviderImport(ImportProviderParams {
+            path: dir.display().to_string(),
+            expected_package_sha256: preview.package_sha256.clone().expect("a digest"),
+        })
+    };
+    let import_key = key();
+    let failed = send(&other_api, import_call(), &import_key)
+        .await
+        .expect_err("the store cannot be written");
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700))
+        .expect("the store folder can be unlocked");
+    assert_eq!(failed.code(), "provider.store_failed");
+    let again = send(&other_api, import_call(), &import_key)
+        .await
+        .expect_err("the replay answers the first error, not a second import");
+    assert_eq!(again.code(), "provider.store_failed");
+    assert_eq!(again.operation_id(), failed.operation_id());
+    let registry = other_daemon
+        .core()
+        .registry()
+        .expect("the registry is open");
+    assert!(registry.provider_imports().expect("reads").value.is_empty());
+    assert_eq!(audited(&daemon, OperationKind::ApproveProvider), approvals);
+}
