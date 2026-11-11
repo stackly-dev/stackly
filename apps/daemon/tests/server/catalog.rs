@@ -613,6 +613,7 @@ async fn a_catalog_at_every_limit_fits_list_and_detail_replies_in_a_control_fram
                     tile: TileColor::Blue,
                 },
                 notes: vec![note(Os::Linux), note(Os::Windows)],
+                origin: stackly_core::catalog::EntryOrigin::Catalog,
             })
         })
         .collect();

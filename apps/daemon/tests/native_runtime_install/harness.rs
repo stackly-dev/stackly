@@ -239,6 +239,7 @@ impl Site {
                 tile: TileColor::Blue,
             },
             notes: Vec::new(),
+            origin: stackly_core::catalog::EntryOrigin::Catalog,
         });
         let mut config = DaemonConfig::default();
         config.catalog = Some(CatalogOverride::Preloaded(Catalog::for_tests(&[entry])));

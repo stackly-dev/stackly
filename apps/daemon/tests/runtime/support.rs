@@ -249,6 +249,7 @@ pub fn catalog(packages: Vec<ValidatedPackage>) -> Catalog {
                     tile: TileColor::Blue,
                 },
                 notes: Vec::new(),
+                origin: stackly_core::catalog::EntryOrigin::Catalog,
             })
         })
         .collect();

@@ -94,6 +94,7 @@ fn two_endpoint_catalog(scratch: &Path) -> Catalog {
             tile: TileColor::Blue,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     })])
 }
 

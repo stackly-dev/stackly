@@ -524,6 +524,7 @@ mod tests {
             package: Arc::new(package),
             tile: hint,
             notes,
+            origin: stackly_core::catalog::EntryOrigin::Catalog,
         })
     }
 
@@ -571,6 +572,7 @@ mod tests {
                 category,
                 tile: tile(mark, TileColor::Gray),
                 issues: vec![issue],
+                local: None,
             })
         };
         let entries = [
