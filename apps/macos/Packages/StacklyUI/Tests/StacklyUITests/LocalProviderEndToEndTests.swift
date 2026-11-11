@@ -125,17 +125,25 @@ struct LocalProviderEndToEndTests {
         catalog.providers?.first { $0.provider == local }
     }
 
-    /// Loads the detail of the local entry through the model the panel reads.
+    /// Loads the detail of the local entry through the model the panel reads. A
+    /// `catalog.changed` snapshot can drop the cache while a load is on its way, and the
+    /// page then loads again for the new epoch; this does the same, for up to 20 seconds.
     private static func loadedDetail(_ catalog: CatalogStore) async throws -> ProviderDetail {
-        let summary = try #require(Self.summary(catalog))
-        await catalog.detail.load(summary.provider, revision: summary.revision)
-        guard
-            case .loaded(let detail) = catalog.detail.phase(
-                for: summary.provider, revision: summary.revision)
-        else {
-            throw RigFailure(description: "the detail of \(local) did not load")
+        let deadline = ContinuousClock.now + .seconds(20)
+        while true {
+            if let summary = Self.summary(catalog) {
+                await catalog.detail.retry(summary.provider, revision: summary.revision)
+                if case .loaded(let detail) = catalog.detail.phase(
+                    for: summary.provider, revision: summary.revision)
+                {
+                    return detail
+                }
+            }
+            guard ContinuousClock.now < deadline else {
+                throw RigFailure(description: "the detail of \(local) did not load")
+            }
+            try await Task.sleep(for: .milliseconds(50))
         }
-        return detail
     }
 
     @Test(
