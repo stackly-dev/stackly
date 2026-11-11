@@ -23,6 +23,13 @@ generates it, keeps it in the Keychain, and hands it to `init` on stdin.
 
 ## Commands
 
+Start a new package from this one, then check it:
+
+```bash
+cargo xtask provider new mytool
+cargo xtask provider check providers/mytool
+```
+
 | Command | What it does |
 | --- | --- |
 | `cargo xtask provider new <name>` | Copies this package into `providers/<name>/` as `testing/<name>` |

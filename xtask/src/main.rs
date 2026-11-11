@@ -39,6 +39,9 @@ Tasks:
   provider freeze <dir>
                        Copy an official/ package revision into the compatibility
                        corpus in crates/core/tests/fixtures/compat/ on macOS
+  provider new <name> [--out <dir>]
+                       Copy providers/example into <dir>/<name>/ (default
+                       providers/<name>/) as testing/<name> and check it (macOS)
   catalog build --out <dir>
                        Build the bundled catalog from providers/catalog.toml into
                        <dir> (macOS reads the packages); exit 1 with one line per problem
