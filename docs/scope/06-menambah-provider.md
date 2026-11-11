@@ -14,7 +14,7 @@ Kebijakan kompatibilitas, deprecation, dan migrasi untuk schema `stackly/v1alpha
 
 - [ ] Design it (spec): `/architect provider SDK & test harness`
 
-### 37. Import provider lokal & trust · needs a decision · GA
+### 37. Import provider lokal & trust · in-progress · GA
 
 Import provider dari direktori atau paket lokal secara eksplisit, preview metadata tanpa menjalankan apa pun, lalu approval yang terikat ke publisher, revision, digest, dan capability. Revocation memblokir install baru tanpa menghapus data.
 
@@ -22,9 +22,20 @@ Import provider dari direktori atau paket lokal secara eksplisit, preview metada
 
 **Trace:** REQ-028, REQ-032, REQ-033, BR-020, VAL-018, PAGE-08, AC-032, AC-033, AC-061, AC-072, OQ-009, PRD bagian 21.4 dan 23
 
-- [ ] Design it (spec): `/architect import provider lokal & trust`
+**Pointer:** spec [0037](../specs/0037-import-provider-lokal-trust/index.md)
 
-### 38. Panduan kontributor & governance · needs a decision
+- [x] Design it (spec): `/architect import provider lokal & trust`
+- [ ] Build it: `/develop import provider lokal & trust`
+  - [ ] Local package into the catalog: `provider_imports` migration and registry ops, `package_sha256`, `Permissions`, import rules on `check_package`, the content addressed store, local entries in the catalog read model, the protocol major bump with all `provider.*` methods, DTOs, codes and `catalog.changed`, and the daemon handlers for preview, import and remove with audit and the quarantine report (spec 0037 AC-1, AC-2, AC-3, AC-9, AC-10, AC-13, AC-17, AC-18; build steps 1 to 5; needs feature 36: spec 0036 step 1 for steps 2, 3 and 5, and spec 0036 step 3 for step 4)
+  - [ ] Approval, revocation and the gate: `approve_provider` and `revoke_provider`, the trust gate at every listed point (runtime `select()`, forms, `resolve_package`, `gather_duplicate`, commit guards), the pin record for local entries, same software selection, and the `revoked` list in the bundled catalog (spec 0037 AC-4, AC-5, AC-6, AC-7, AC-8, AC-11, AC-12, AC-17, AC-19; build steps 6 to 8; after milestone 1)
+  - [ ] `stackly provider import`, `approve`, `revoke`, `remove`: subcommands, confirmation, the `TRUST` column and the local inspect section, goldens and binary tests (spec 0037 AC-14, AC-11; build step 9; after build step 4 for goldens; binary tests need milestone 2; after spec 0036 step 4; can run in parallel with milestones 2 and 4)
+  - [ ] Import and approval in the app: copy and appearance, the permissions list and local detail section, the Import Provider flow with its sheet, the approval sheet, revoke and remove dialogs, Settings Sources, the onboarding copy, snapshots, then evidence and the manual steps that need your eyes and hands (spec 0037 AC-11, AC-15, AC-16, AC-8, AC-13; build steps 10 to 13; after build step 4; step 13 after milestones 2 and 3; can run in parallel with milestones 2 and 3)
+- [ ] Verify it: `/check verify import provider lokal & trust`
+- [ ] Test it: `/test import provider lokal & trust`
+- [ ] Review it (fresh model): `/check review import provider lokal & trust`
+- [ ] Document it: `/document import provider lokal & trust`
+
+### 38. Panduan kontributor & governance · in-progress
 
 Dokumen dan aturan supaya orang lain bisa menyumbang provider: CONTRIBUTING, schema docs, provider template, security policy, Code of Conduct, issue dan PR template, serta pilihan lisensi project.
 
@@ -32,4 +43,13 @@ Dokumen dan aturan supaya orang lain bisa menyumbang provider: CONTRIBUTING, sch
 
 **Trace:** REQ-034, AC-034, OQ-013, JOURNEY-07, PRD bagian 39
 
-- [ ] Design it (spec): `/architect panduan kontributor & governance`
+**Pointer:** spec [0038](../specs/0038-panduan-kontributor-governance/index.md)
+
+- [x] Design it (spec): `/architect panduan kontributor & governance`
+- [ ] Build it: `/develop panduan kontributor & governance`
+  - [ ] License record, `cargo xtask docs check`, and the community files: `repository` and the README license clause, the docs checker with its broken fixture tests, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `GOVERNANCE.md`, the three issue forms with `config.yml`, the PR template, `CONTRIBUTING.md`, `LICENSE-NOTICES.md` for nats, postgresql, and traefik, and the README update (spec 0038 AC-1 to AC-4, AC-6, AC-7, AC-9, AC-13, AC-14; build steps 1 to 7; no prerequisite, can run next to the feature 36 build; AC-3 needs owner input I1 and AC-5 is a manual owner step)
+  - [ ] Provider guide and schema reference: the three reference pages with the schema coverage check, `docs/providers/README.md` with the walkthrough block, `authoring.md`, `testing.md`, `compatibility.md`, `review.md`, and the CONTRIBUTING provider section (spec 0038 AC-2, AC-10, AC-11; build steps 8 and 9; needs feature 36)
+  - [ ] `cargo xtask docs walkthrough` from a fresh clone, its tests, one full run, and the manual evidence record for AC-034 (spec 0038 AC-8; build step 10; needs feature 36, after the provider guide)
+  - [ ] Trying a provider locally: `docs/providers/trying-locally.md` with the approval statement check, trust terms aligned in `GOVERNANCE.md` and `review.md`, and the revocation sentences in `SECURITY.md` and `GOVERNANCE.md` (spec 0038 AC-12, AC-4, AC-6; build step 11; needs feature 37)
+- [ ] Verify it: `/check verify panduan kontributor & governance`
+- [ ] Test it: `/test panduan kontributor & governance`
