@@ -242,6 +242,16 @@ Perintah lain: `cargo test -p stackly-fake-server` (19 dan 36 test), `cargo clip
 6. Di run yang diinterupsi, langkah `leftovers` tercatat `fail` dengan durasi 0 dan tanpa reason, padahal ia tidak sempat berjalan; `cleanup` di report yang sama bersih.
 7. Example `provider_harness` keluar 2 untuk kesalahan argumen, sama dengan kode `blocked`; dan saat report gagal ditulis ia tetap mencetak baris `provider test report: <path>` untuk file yang tidak ada.
 
+### Fix sesudah verify 2026-11-11 (`dev-f36-fix`)
+
+Belum diverifikasi ulang oleh checker. Commit di `claude/arc-f36-spec-e2dee8`:
+
+- Temuan 1 (batas waktu langkah), `b9908248`: `Limits::of` membaca `ValidatedPackage::manifest().timings()`, accessor publik baru `Manifest::timings` dengan `ManifestTimings` di `crates/core/src/provider/timeouts.rs` (default spec 0009 sudah terisi), jadi gaya YAML blok atau satu baris sama saja. Pembaca baris `block_value` dan test nya dihapus. Test `step_limits_come_from_the_checked_manifest_in_any_yaml_style`: PostgreSQL init 180, readiness 120, stop 60, reload 30; NATS readiness 30 dengan init default 120.
+- Temuan 2 (`--scenario` tidak dikenal), `3a16bb1c`: nama yang tidak ada di paket membuat run berakhir `fail` di langkah `validate` (exit 1, kode `fail` spec ini) sebelum root dibuat, dengan `failure.message` `unknown scenario <nama>; the package has <nama>, ...`. Test `an_unknown_scenario_name_fails_at_validate_with_the_names_the_package_has`; probe `cargo xtask provider test providers/example --scenario nope` di bawah.
+- Temuan 3 (deprecated dan `loadable`), `9eed1691`: keputusan lead dijalankan: `loadable()` hanya menghitung finding origin `package` ber severity `error`, `publishable()` hanya `error`; origin `deprecated_api_version` tetap `package`. `check_package_with_versions` (doc hidden, hanya untuk test) menerima tabel versi yang disuntikkan. Test gabungan `a_package_on_a_deprecated_version_still_loads_and_publishes_with_one_warning` (`crates/core/tests/provider_check.rs`): `providers/fake` dengan `stackly/v1alpha1` deprecated tetap `loadable` dan `publishable` dengan tepat satu warning. Aturan import fitur 37: `ImportCheck::valid` (`catalog/local/rules.rs`) sudah hanya menghitung `error`, tetapi `catalog::local::load` (`load.rs`) masih menganggap setiap finding `package` membuat entri `invalid`; file itu milik `dev-f37-m2` dan sudah dikabari, tidak diubah di sini.
+- Temuan 6 (leftovers di run yang diinterupsi), `a1d43591`: sesudah sinyal, `leftovers` tercatat `skipped` dengan reason `a signal stopped the run; the cleanup checks for leftovers`, bukan `fail` 0 ms.
+- Temuan 7 bagian kedua (baris report saat gagal tulis), `a1d43591`: `provider_harness` hanya mencetak `provider test report: <path>` untuk report yang tertulis; selain itu baris terakhirnya `the report could not be written to <path>`. Bagian pertama temuan 7 (exit 2 untuk kesalahan argumen) tidak diubah.
+
 ### Acceptance-criteria coverage
 
 - AC-9 · lengkap, lewat test dan `cargo xtask provider test providers/example`
@@ -277,6 +287,13 @@ Bagian ini mencakup Build plan langkah 14: `nats_2_15_passes_conformance`, `post
 
 1. **`actual` tidak berformat seperti AC-15.** AC-15 meminta `<provider> <versi> ready in <ms> ms, stopped in <ms> ms`. Kode menulis `verdict pass; default:catalog=pass, default:runtime=pass, ...` (`apps/daemon/tests/provider_conformance.rs`, fungsi `native`). Perlu fix di kode, atau keputusan mengubah bunyi AC-15.
 2. Temuan 1 Milestone 3 (batas waktu langkah) berlaku juga di sini: ketiga paket native menulis `timeouts` di satu baris, jadi run native memakai batas default, bukan batas manifest.
+
+### Fix sesudah verify 2026-11-11 (`dev-f36-fix`)
+
+Belum diverifikasi ulang oleh checker.
+
+- Temuan 1 (`actual` AC-15), `a5a49b00`: fungsi `native` menulis `actual` lewat `actual()`: `<provider> <versi> ready in <ms> ms, stopped in <ms> ms` dari durasi langkah `start` dan `stop` skenario `default` (atau skenario pertama). `the_example_package_passes_conformance` memeriksa bentuk itu pada run fixture. Run native dari cache tanpa unduhan (`cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1`): 4 dari 4 lulus dalam 72 detik. Dengan `STACKLY_EVIDENCE_DIR` di folder sementara (bukan record resmi): `nats 2.15.1 ready in 836 ms, stopped in 218 ms` dan `postgresql 18.6 ready in 1149 ms, stopped in 218 ms`. Record native resmi tetap langkah manual user di atas.
+- Temuan 2: diperbaiki oleh fix temuan 1 Milestone 3; run native kini memakai batas manifest.
 
 ### Acceptance-criteria coverage
 

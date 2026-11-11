@@ -54,3 +54,42 @@ pub(crate) struct Timeouts {
     pub(crate) stop: u64,
     pub(crate) reload: u64,
 }
+
+/// The timing of a checked manifest that a caller outside the crate may
+/// read, such as the conformance harness of spec 0036: the `timeouts`
+/// block and the health cadence, with the spec 0009 defaults already
+/// filled in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ManifestTimings {
+    /// `timeouts.initSeconds`.
+    pub init_seconds: u64,
+    /// `timeouts.readinessSeconds`.
+    pub readiness_seconds: u64,
+    /// `timeouts.stopSeconds`.
+    pub stop_seconds: u64,
+    /// `timeouts.reloadSeconds`.
+    pub reload_seconds: u64,
+    /// `health.intervalSeconds`.
+    pub health_interval_seconds: u64,
+    /// `health.failureThreshold`.
+    pub health_failure_threshold: u8,
+    /// `health.attemptTimeoutMilliseconds`.
+    pub health_attempt_milliseconds: u64,
+}
+
+impl super::Manifest {
+    /// The timing of this manifest, whatever YAML style it was written in.
+    #[must_use]
+    pub const fn timings(&self) -> ManifestTimings {
+        ManifestTimings {
+            init_seconds: self.timeouts.init,
+            readiness_seconds: self.timeouts.readiness,
+            stop_seconds: self.timeouts.stop,
+            reload_seconds: self.timeouts.reload,
+            health_interval_seconds: self.health.interval_seconds,
+            health_failure_threshold: self.health.failure_threshold,
+            health_attempt_milliseconds: self.health.attempt_ms,
+        }
+    }
+}

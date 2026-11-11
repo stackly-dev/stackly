@@ -238,6 +238,11 @@ pub fn run(request: &RunRequest) -> Report {
         report.finish_and_write(&request.report_path);
         return report;
     }
+    if let Some(reason) = unknown_scenarios(request, &check) {
+        report.refuse_validate(&reason);
+        report.finish_and_write(&request.report_path);
+        return report;
+    }
     let scenarios = chosen_scenarios(request, &check);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -278,6 +283,38 @@ fn refusal(check: &PackageCheck) -> Option<String> {
         ));
     }
     None
+}
+
+/// Why `--scenario` names a scenario the package does not have, with the
+/// names it has; `None` when every name is known. A typo then fails at
+/// `validate` before any root is made, instead of a green run of nothing.
+fn unknown_scenarios(request: &RunRequest, check: &PackageCheck) -> Option<String> {
+    let all = request
+        .scenarios
+        .clone()
+        .unwrap_or_else(|| check.scenarios.clone());
+    let unknown: Vec<&str> = request
+        .only
+        .iter()
+        .filter(|name| {
+            !all.iter()
+                .any(|scenario| scenario.name.as_str() == name.as_str())
+        })
+        .map(String::as_str)
+        .collect();
+    if unknown.is_empty() {
+        return None;
+    }
+    let available: Vec<&str> = all.iter().map(|scenario| scenario.name.as_str()).collect();
+    Some(format!(
+        "unknown scenario {}; the package has {}",
+        unknown.join(", "),
+        if available.is_empty() {
+            "no scenarios".to_owned()
+        } else {
+            available.join(", ")
+        }
+    ))
 }
 
 /// The scenarios the run takes: the request's or the package's, filtered

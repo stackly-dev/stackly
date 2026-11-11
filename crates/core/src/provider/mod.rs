@@ -37,7 +37,7 @@ mod versions;
 
 pub use check::{
     ApiVersionStatus, ApiVersionSupport, Finding, FindingOrigin, PackageCheck,
-    SUPPORTED_API_VERSIONS, Severity, check_package,
+    SUPPORTED_API_VERSIONS, Severity, check_package, check_package_with_versions,
 };
 pub use connection::{
     CONNECTION_ENTRIES_MAX, CONNECTION_TEMPLATE_MAX, CONNECTION_TITLE_MAX, ConnectionSpec,
@@ -79,6 +79,7 @@ pub use settings::{
     Visibility,
 };
 pub use template::{OUTPUT_MAX_LEN, TemplateFormat};
+pub use timeouts::ManifestTimings;
 pub use validate::ValidatedPackage;
 pub use version_check::{
     VERSION_CHECK_ARGS_MAX, VERSION_CHECK_TIMEOUT_DEFAULT, VERSION_CHECK_TIMEOUT_MAX_SECONDS,

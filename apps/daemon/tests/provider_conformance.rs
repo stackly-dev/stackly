@@ -108,7 +108,7 @@ fn the_example_package_passes_conformance() {
     let ev = evidence!(
         covers = ["AC-029", "AC-034", "REQ-029"],
         kind = Kind::Fixture,
-        expected = "conformance::run on providers/example runs default and slow-ready through catalog to start_again over the socket with a daemon in process, writes a stackly.provider-conformance/v1 report with verdict pass, and leaves no process and no root",
+        expected = "conformance::run on providers/example runs default and slow-ready through catalog to start_again over the socket with a daemon in process, writes a stackly.provider-conformance/v1 report with verdict pass whose default start and stop steps give the AC-15 line example 1.0.0 ready in <ms> ms, stopped in <ms> ms, and leaves no process and no root",
     );
     let (report, _out) = run_package(&repo().join("providers/example"));
 
@@ -144,8 +144,30 @@ fn the_example_package_passes_conformance() {
         !text.contains("hello"),
         "a settings text value reached the report"
     );
+    let line = actual("example", "1.0.0", &report);
+    assert!(
+        has_native_actual_form(&line),
+        "the native actual has the AC-15 form: {line}"
+    );
     assert_clean(&report);
     ev.pass();
+}
+
+/// Whether `line` is `example 1.0.0 ready in <n> ms, stopped in <n> ms`
+/// with two whole numbers above zero.
+fn has_native_actual_form(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("example 1.0.0 ready in ") else {
+        return false;
+    };
+    let Some((ready, rest)) = rest.split_once(" ms, stopped in ") else {
+        return false;
+    };
+    let Some(stopped) = rest.strip_suffix(" ms") else {
+        return false;
+    };
+    [ready, stopped]
+        .iter()
+        .all(|n| n.parse::<u64>().is_ok_and(|n| n > 0))
 }
 
 // covers: AC-9 (spec 0036)
@@ -526,6 +548,78 @@ fn an_unsupported_api_version_ends_before_any_lifecycle() {
     ev.pass();
 }
 
+// covers: AC-9 (spec 0036)
+#[test]
+fn an_unknown_scenario_name_fails_at_validate_with_the_names_the_package_has() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a run of providers/example with --scenario nope ends at validate with verdict fail, a reason that names nope and the package's default and slow-ready scenarios, no scenario run, and no test root made",
+    );
+    let out = TestRoot::new().expect("a report folder can be created");
+    let mut request = RunRequest::new(
+        repo().join("providers/example"),
+        out.path().join("report.json"),
+    );
+    request.only = vec!["default".to_owned(), "nope".to_owned()];
+    let _serial = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let before = marked_roots();
+
+    let report = conformance::run(&request);
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let value = report.value().expect("the report was built");
+    assert_eq!(value["failure"]["step"], "validate", "{value:#}");
+    let reason = value["failure"]["message"].as_str().unwrap_or_default();
+    assert!(reason.contains("unknown scenario nope"), "{reason}");
+    assert!(
+        reason.contains("default") && reason.contains("slow-ready"),
+        "{reason}"
+    );
+    assert_eq!(value["scenarios"], serde_json::json!([]));
+    assert_eq!(marked_roots(), before, "no test root was made");
+    ev.pass();
+}
+
+// covers: AC-9 (spec 0036)
+#[test]
+fn step_limits_come_from_the_checked_manifest_in_any_yaml_style() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the step limits of providers/postgresql, whose timeouts block is one flow-style line, are init 180 s, readiness 120 s, stop 60 s, and reload 30 s as its manifest says, and providers/nats has readiness 30 s with the default init 120 s",
+    );
+    let limits = |name: &str| {
+        let check = stackly_core::provider::check_package(
+            &stackly_platform_macos::MacosFilesystem,
+            &repo().join("providers").join(name),
+            stackly_core::provider::NameCheck::FolderName,
+        );
+        conformance::steps::Limits::of(check.package.as_ref().expect("the package validates"))
+    };
+
+    let postgresql = limits("postgresql");
+    let nats = limits("nats");
+
+    let secs = std::time::Duration::from_secs;
+    assert_eq!(
+        (
+            postgresql.init,
+            postgresql.readiness,
+            postgresql.stop,
+            postgresql.reload
+        ),
+        (secs(180), secs(120), secs(60), secs(30))
+    );
+    assert_eq!(
+        (nats.init, nats.readiness, nats.stop),
+        (secs(120), secs(30), secs(30))
+    );
+    ev.pass();
+}
+
 // covers: AC-12 (spec 0036)
 #[test]
 fn a_root_without_this_runs_marker_is_never_removed() {
@@ -582,16 +676,27 @@ fn native(ev: &Evidence, name: &str, line: &str) {
     );
     assert_pass(&report);
     assert_clean(&report);
-    let steps: Vec<String> = report
-        .scenarios
-        .iter()
-        .flat_map(|scenario| {
-            scenario.steps.iter().map(move |step| {
-                format!("{}:{}={}", scenario.name, step.name, step.status.as_str())
-            })
-        })
-        .collect();
-    ev.pass_with(&format!("verdict pass; {}", steps.join(", ")));
+    let version = runtime["version"].as_str().unwrap_or_default();
+    ev.pass_with(&actual(name, version, &report));
+}
+
+/// The `actual` of a native record (AC-15): `<provider> <version> ready in
+/// <ms> ms, stopped in <ms> ms`, from the `start` and `stop` steps of the
+/// `default` scenario, or of the first scenario without one.
+fn actual(provider: &str, version: &str, report: &Report) -> String {
+    let scenario = report
+        .scenario("default")
+        .or_else(|| report.scenarios.first());
+    let duration = |step: &str| {
+        scenario
+            .and_then(|scenario| scenario.steps.iter().find(|s| s.name == step))
+            .map_or(0, |step| step.duration_ms)
+    };
+    format!(
+        "{provider} {version} ready in {} ms, stopped in {} ms",
+        duration("start"),
+        duration("stop")
+    )
 }
 
 // covers: AC-15 (spec 0036)

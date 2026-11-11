@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
 use stackly_core::PreparedLayout;
-use stackly_core::provider::ValidatedPackage;
 use stackly_core::provider::scenarios::{Expect, Scenario};
+use stackly_core::provider::{ManifestTimings, ValidatedPackage};
 use stackly_domain::Capability;
 use stackly_protocol::ErrorBody;
 use uuid::Uuid;
@@ -58,52 +58,27 @@ pub struct Limits {
 }
 
 impl Limits {
-    /// Reads the limits from the package's `provider.yaml`.
+    /// The limits of the package's checked manifest, whatever YAML style
+    /// its `timeouts` and `health` blocks use.
     #[must_use]
     pub fn of(package: &ValidatedPackage) -> Self {
-        let text = package
-            .files()
-            .get("provider.yaml")
-            .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
-            .unwrap_or_default();
-        let seconds = |block: &str, key: &str, default: u64| {
-            Duration::from_secs(block_value(&text, block, key).unwrap_or(default))
-        };
-        let interval = block_value(&text, "health", "intervalSeconds").unwrap_or(10);
-        let threshold = block_value(&text, "health", "failureThreshold").unwrap_or(3);
-        let attempt = block_value(&text, "health", "attemptTimeoutMilliseconds").unwrap_or(2000);
-        let health =
-            Duration::from_secs(interval * (threshold + 1)) + Duration::from_millis(attempt);
+        Self::from_timings(package.manifest().timings())
+    }
+
+    /// The limits of `timings`.
+    #[must_use]
+    pub fn from_timings(timings: ManifestTimings) -> Self {
+        let health = Duration::from_secs(
+            timings.health_interval_seconds * (u64::from(timings.health_failure_threshold) + 1),
+        ) + Duration::from_millis(timings.health_attempt_milliseconds);
         Self {
-            init: seconds("timeouts", "initSeconds", 120),
-            readiness: seconds("timeouts", "readinessSeconds", 60),
-            stop: seconds("timeouts", "stopSeconds", 30),
-            reload: seconds("timeouts", "reloadSeconds", 30),
+            init: Duration::from_secs(timings.init_seconds),
+            readiness: Duration::from_secs(timings.readiness_seconds),
+            stop: Duration::from_secs(timings.stop_seconds),
+            reload: Duration::from_secs(timings.reload_seconds),
             health: health.min(Duration::from_secs(120)),
         }
     }
-}
-
-/// The whole number `key: <n>` directly under the top level `block:` of a
-/// validated manifest written in block style; none when absent.
-fn block_value(text: &str, block: &str, key: &str) -> Option<u64> {
-    let mut inside = false;
-    for line in text.lines() {
-        if !line.starts_with(' ') && !line.trim().is_empty() {
-            inside = line.trim_end() == format!("{block}:");
-            continue;
-        }
-        if inside
-            && let Some(rest) = line.strip_prefix("  ")
-            && !rest.starts_with(' ')
-            && let Some(value) = rest
-                .strip_prefix(key)
-                .and_then(|rest| rest.strip_prefix(':'))
-        {
-            return value.trim().parse().ok();
-        }
-    }
-    None
 }
 
 /// The text of `key: <text>` directly under the top level `block:`.
@@ -262,8 +237,22 @@ pub async fn run_scenario(ctx: &Ctx, scenario: &Scenario) -> ScenarioResult {
         if let Some(first) = run.first.clone()
             && !run.steps.iter().any(|step| step.name == "leftovers")
         {
-            run.step("leftovers", Duration::from_secs(15), leftovers(ctx, &first))
-                .await;
+            if interrupted() {
+                // The check never ran; the run's cleanup looks for what is
+                // left instead, so this is no failure of the package.
+                run.steps.push(StepResult {
+                    name: "leftovers",
+                    status: StepStatus::Skipped,
+                    duration_ms: 0,
+                    detail: skipped_because(
+                        "a signal stopped the run; the cleanup checks for leftovers",
+                    ),
+                    failure: None,
+                });
+            } else {
+                run.step("leftovers", Duration::from_secs(15), leftovers(ctx, &first))
+                    .await;
+            }
         }
     }
     ScenarioResult {
@@ -1307,16 +1296,6 @@ pub async fn stop_everything(ctx: &Ctx) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_block_value_is_read_only_directly_under_its_block() {
-        let text = "timeouts:\n  initSeconds: 30\n  stopSeconds: 10\nreadiness:\n  probe: { type: http }\n  intervalMilliseconds: 100\nhealth:\n  probe:\n    intervalSeconds: 99\n  intervalSeconds: 5\n";
-
-        assert_eq!(block_value(text, "timeouts", "initSeconds"), Some(30));
-        assert_eq!(block_value(text, "timeouts", "reloadSeconds"), None);
-        assert_eq!(block_value(text, "health", "intervalSeconds"), Some(5));
-        assert_eq!(block_value(text, "readiness", "stopSeconds"), None);
-    }
 
     #[test]
     fn an_absolute_uri_has_a_scheme_and_a_rest() {

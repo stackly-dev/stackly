@@ -10,7 +10,8 @@
 //!
 //! It exits 0 for `pass`, 1 for `fail`, 2 for `blocked`, and 130 when a
 //! signal stopped the run, and its last stderr line is
-//! `provider test report: <absolute path>`. The first SIGINT or SIGTERM
+//! `provider test report: <absolute path>`, or `the report could not be
+//! written to <path>` when writing it failed. The first SIGINT or SIGTERM
 //! lets the run end its own way with `interrupted: true`; a second one
 //! exits at once and leaves the root for `--cleanup`.
 
@@ -139,8 +140,9 @@ mod macos {
                 }
                 if report.written().is_none() {
                     eprintln!("the report could not be written to {}", shown.display());
+                } else {
+                    eprintln!("provider test report: {}", shown.display());
                 }
-                eprintln!("provider test report: {}", shown.display());
                 let code = if report.interrupted {
                     INTERRUPTED_EXIT
                 } else {
