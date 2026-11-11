@@ -426,6 +426,31 @@ fn note(record: &ProviderImportRecord, changes: &[&'static str]) -> AuditNote {
     note
 }
 
+/// The permission change codes of `permissions` at `revision` against the
+/// last decision of `stored`, when that decision covers other bytes than
+/// `package_sha256`: the `changes` of the audit note of an import and an
+/// approval (spec 0037 AC-17). Empty without such a decision.
+fn decision_changes(
+    stored: Option<&ProviderImportRecord>,
+    package_sha256: &Sha256Digest,
+    permissions: &super::local::Permissions,
+    revision: &stackly_domain::RevisionLabel,
+) -> Vec<&'static str> {
+    let Some(decided) = stored
+        .and_then(|record| record.decision.as_ref())
+        .filter(|decided| decided.package_sha256 != *package_sha256)
+    else {
+        return Vec::new();
+    };
+    let Ok(previous) = super::local::Permissions::from_json(&decided.permissions_json) else {
+        return Vec::new();
+    };
+    super::local::permission_changes(&previous, &decided.provider_revision, permissions, revision)
+        .into_iter()
+        .map(super::local::PermissionChange::as_code)
+        .collect()
+}
+
 async fn blocking<T: Send + 'static>(
     job: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, WorkError> {
@@ -469,6 +494,7 @@ async fn run_import(
     }
     let files = package.files().clone();
     let key = package.key().clone();
+    let permissions = super::local::permissions(package);
     let software = package.software().clone();
     let versions_sha256: Sha256Digest = super::index::versions_sha256(package.files())
         .and_then(|text| text.parse().ok())
@@ -506,7 +532,13 @@ async fn run_import(
                 .await?;
         }
         Err(source) => {
-            tracing::warn!(error = %source, reason = source.reason(), "a provider package could not be stored");
+            // The store error names a path under the data root: the log
+            // gets the reason only, like the wire (AC-17).
+            tracing::warn!(
+                provider = %provider,
+                reason = source.reason(),
+                "a provider package could not be stored"
+            );
             ctx.not_created(item, ReasonCode::from_static("store_failed"))
                 .await?;
             return Err(failed(ProviderOpError::Store {
@@ -555,7 +587,15 @@ async fn run_import(
         now,
     )
     .with_quarantine(request.quarantined, request.quarantine_agent.clone());
-    ctx.set_audit_note(note(&record, &[]));
+    // The changes against the last decision, as the preview shows them.
+    let registry = Arc::clone(ctx.registry());
+    let read = provider.clone();
+    let stored = blocking(move || registry.provider_import(&read))
+        .await?
+        .map_err(|error| failed(ProviderOpError::Registry(error)))?
+        .value;
+    let changes = decision_changes(stored.as_ref(), &digest, &permissions, key.revision());
+    ctx.set_audit_note(note(&record, &changes));
     let written = record.clone();
     let guard_provider = provider.clone();
     let outcome = ctx
@@ -703,24 +743,8 @@ async fn run_approve(
         .await?
         .map_err(|error| failed(ProviderOpError::Registry(error)))?
         .value;
-    let mut changes: Vec<&'static str> = Vec::new();
     if let Some(record) = &stored {
-        if let Some(decided) = record
-            .decision
-            .as_ref()
-            .filter(|decided| decided.package_sha256 != expected)
-            && let Ok(previous) = super::local::Permissions::from_json(&decided.permissions_json)
-        {
-            changes = super::local::permission_changes(
-                &previous,
-                &decided.provider_revision,
-                &permissions,
-                key.revision(),
-            )
-            .into_iter()
-            .map(super::local::PermissionChange::as_code)
-            .collect();
-        }
+        let changes = decision_changes(Some(record), &expected, &permissions, key.revision());
         ctx.set_audit_note(note(record, &changes));
     }
     let now = ctx.platform().clock().now();

@@ -133,6 +133,10 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Record evidence `na
 
 _Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langkah 6 di commit sendiri; langkah 7 dan 8 di satu commit karena keduanya mengubah `catalog::trust`, `map::trust`, dan `provider_gate.rs` yang sama. Kontrak naik minor ke 4.1: `CreateProviderSource` mendapat `local_import`. Temuan 1 verify milestone 1 (paket `pending` bisa create dan start) ditutup gate langkah 7; revision yang sempat dipin lewat celah itu (`approval` null, sumber catalog, namespace selain `official`/`testing`) kini `ApprovalRequired` di `pinned_trust`, jadi create dari pin itu dan duplicate instance nya ditolak `provider.approval_required`._
 
+_Fix sesudah verify milestone 2 (`dev-f37-fix`, keputusan lead): (1) baris audit `import_provider` kini memuat `changes` terhadap keputusan terakhir atas byte lain, dihitung sama dengan approve (`decision_changes` di `crates/core/src/catalog/import.rs`), dan kosong pada import pertama; (2) `instance.provider_ambiguous` dari pemilihan menurut `software` (`details.candidates` tidak kosong) kini berpesan `no single approved provider runs this software; choose one of the candidates`, kodenya tetap; (3) baris `WARN` log daemon saat store gagal hanya memuat `provider` dan `reason`, tanpa path. Langkah cek nya:_
+
+- [ ] `cargo test -p stacklyd --test provider_gate -- the_audit_row a_pick` → 2 test lulus: import pertama tanpa `changes`, import revision `0.4.1` dengan host unduhan lain sesudah approve memuat `changes` dengan `revision` dan `download_hosts`; form tanpa `provider` dengan satu entri lokal `pending` memberi pesan di atas dengan `candidates` `acme/fake` → AC-17, AC-19
+
 ### UI / manual
 
 - [ ] Jaringan mati: matikan Wi-Fi dan kabel, lalu preview, import, approve, revoke, list, dan detail entri lokal, serta `runtime.resolve` entri yang dicabut catalog → perilaku sama dengan saat online, tidak ada permintaan jaringan → AC-8
