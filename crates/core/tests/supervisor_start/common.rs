@@ -401,6 +401,9 @@ impl Registry for FaultyRegistry {
     delegate! {
         provider_revision(key: &ProviderRevisionKey) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProviderRevisionRecord>>, stackly_domain::RegistryError>;
         provider_source_by_location(kind: stackly_domain::ProviderSourceKind, location: &str) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProviderSourceRecord>>, stackly_domain::RegistryError>;
+        provider_imports() -> Result<stackly_domain::Versioned<Vec<stackly_domain::ProviderImportRecord>>, stackly_domain::RegistryError>;
+        provider_import(provider: &stackly_domain::ProviderName) -> Result<stackly_domain::Versioned<Option<stackly_domain::ProviderImportRecord>>, stackly_domain::RegistryError>;
+        provider_has_approved_revision(provider: &stackly_domain::ProviderName) -> Result<stackly_domain::Versioned<bool>, stackly_domain::RegistryError>;
         artifact(sha256: &stackly_domain::Sha256Digest) -> Result<stackly_domain::Versioned<Option<stackly_domain::ArtifactRecord>>, stackly_domain::RegistryError>;
         runtime(id: stackly_domain::RuntimeId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Runtime>>, stackly_domain::RegistryError>;
         runtimes() -> Result<stackly_domain::Versioned<Vec<stackly_domain::Runtime>>, stackly_domain::RegistryError>;

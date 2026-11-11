@@ -11,6 +11,7 @@ mod detect;
 mod failure;
 mod fixture;
 mod health;
+mod imports;
 mod journal;
 mod locations;
 mod migrate;

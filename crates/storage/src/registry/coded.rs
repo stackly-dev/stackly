@@ -20,7 +20,7 @@ use rusqlite::{Connection, Transaction};
 use stackly_domain::{
     AuditActor, AuditResult, ConfigRevisionOrigin, ConfigRevisionStatus, OperationKind,
     ProviderSourceKind, ProviderSourceStatus, RecoveryCause, RecoveryHint, RegistryError,
-    UNRECOGNIZED_ROWS_PER_COLUMN, UnrecognizedValue,
+    TrustDecision, UNRECOGNIZED_ROWS_PER_COLUMN, UnrecognizedValue,
 };
 
 use super::column::sql_error;
@@ -115,6 +115,16 @@ pub const CODED_COLUMNS: &[CodedColumn] = &[
         table: "operations",
         column: "recovery_hint",
         known: || codes_of!(RecoveryHint),
+    },
+    CodedColumn {
+        table: "provider_imports",
+        column: "decision",
+        known: || codes_of!(TrustDecision),
+    },
+    CodedColumn {
+        table: "provider_revisions",
+        column: "approval",
+        known: || codes_of!(TrustDecision),
     },
     CodedColumn {
         table: "provider_sources",

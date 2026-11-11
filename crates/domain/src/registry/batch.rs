@@ -13,9 +13,11 @@ use crate::lease::Lease;
 use crate::location::{LocationKind, SettingsPatch, StorageLocation};
 use crate::operation::{CreatedRecord, JournalStep, LockKey, Operation, OperationJournal};
 use crate::process::ProcessObservation;
+use crate::provider::ProviderRevisionKey;
 use crate::registry::ConfigRevisionId;
 use crate::registry::config::ConfigRevisionRecord;
 use crate::registry::error::{RegistryError, ResourceRef};
+use crate::registry::import::{ImportDecision, ProviderImportRecord, TrustDecision};
 use crate::registry::record::{ArtifactRecord, ProviderRevisionRecord, ProviderSourceRecord};
 use crate::registry::secret::{
     AuditEventRecord, PlatformStoreKey, SecretFieldName, SecretReferenceRecord, SecretUser,
@@ -24,7 +26,7 @@ use crate::restart::RestartPlan;
 use crate::runtime::{InstallMode, Runtime};
 use crate::secret::{SecretRef, SecretStatus};
 use crate::session::{DaemonSession, SessionEndReason};
-use crate::value::{ResourceRevision, SessionId};
+use crate::value::{ProviderName, ResourceRevision, SessionId};
 
 /// The lowest revision a restored secret reference row carries: a row that
 /// was deleted had at least revision 1, and the restore raises it by 1.
@@ -398,6 +400,52 @@ pub enum WriteOp {
         /// When the change happens.
         at: Timestamp,
     },
+    /// Records or replaces the import row of `record.provider` (spec
+    /// 0037). With `expected` empty it inserts a row at revision 1 and
+    /// fails with `DuplicateResource` when the provider has one; otherwise
+    /// it replaces the row at `expected`, carrying `expected + 1`, and
+    /// fails with `NotFound` or `RevisionConflict`. Either way the decision
+    /// columns stay as stored (empty for a new row): only
+    /// [`WriteOp::DecideProviderImport`] changes a decision, and a record
+    /// that carries one fails with `Integrity`. `created_at` stays as
+    /// stored on a replace. Fails with `MissingReference` when the source
+    /// does not exist, and with `Integrity` when another row holds the
+    /// same package digest.
+    PutProviderImport {
+        /// The row after the write.
+        record: Box<ProviderImportRecord>,
+        /// The revision the caller read, empty for a new row.
+        expected: Option<ResourceRevision>,
+    },
+    /// Records a trust decision on an import row, raising its revision by
+    /// 1 and setting `updated_at` to the decision time. Fails with
+    /// `NotFound`.
+    DecideProviderImport {
+        /// The provider.
+        provider: ProviderName,
+        /// The decision.
+        decision: ImportDecision,
+    },
+    /// Deletes an import row. Fails with `NotFound`.
+    DeleteProviderImport(ProviderName),
+    /// Sets the approval and its time on the provider revision with `key`,
+    /// if one is recorded; none is not an error (spec 0037).
+    SetProviderRevisionApproval {
+        /// The revision.
+        key: ProviderRevisionKey,
+        /// The decision.
+        approval: TrustDecision,
+        /// When it was decided.
+        at: Timestamp,
+    },
+    /// Marks every `approved` provider revision of `provider` as `revoked`
+    /// at `at`; none is not an error (spec 0037).
+    RevokeProviderApprovals {
+        /// The provider.
+        provider: ProviderName,
+        /// When it was revoked.
+        at: Timestamp,
+    },
 }
 
 impl WriteOp {
@@ -467,6 +515,17 @@ impl WriteOp {
                 ResourceRef::DaemonSettings
             }
             Self::InsertStorageLocation(location) => ResourceRef::StorageLocation(location.id()),
+            Self::PutProviderImport { record, .. } => {
+                ResourceRef::ProviderImport(record.provider.clone())
+            }
+            Self::DecideProviderImport { provider, .. }
+            | Self::DeleteProviderImport(provider)
+            | Self::RevokeProviderApprovals { provider, .. } => {
+                ResourceRef::ProviderImport(provider.clone())
+            }
+            Self::SetProviderRevisionApproval { key, .. } => {
+                ResourceRef::ProviderRevision(Box::new(key.clone()))
+            }
         }
     }
 
@@ -509,6 +568,7 @@ impl WriteOp {
             | Self::UpdateSecretReference { record, .. }
             | Self::RestoreSecretReference(record) => Some(record.revision),
             Self::InsertProviderSource(record) => Some(record.revision),
+            Self::PutProviderImport { record, .. } => Some(record.revision),
             Self::InsertProviderRevision(_)
             | Self::InsertArtifact(_)
             | Self::InsertLease(_)
@@ -536,7 +596,11 @@ impl WriteOp {
             | Self::PruneSessions { .. }
             | Self::UpdateDaemonSettings { .. }
             | Self::InsertStorageLocation(_)
-            | Self::SetDefaultLocation { .. } => None,
+            | Self::SetDefaultLocation { .. }
+            | Self::DecideProviderImport { .. }
+            | Self::DeleteProviderImport(_)
+            | Self::SetProviderRevisionApproval { .. }
+            | Self::RevokeProviderApprovals { .. } => None,
         }
     }
 
@@ -550,6 +614,7 @@ impl WriteOp {
             | Self::UpdateEnvironment { expected, .. }
             | Self::UpdateOperation { expected, .. }
             | Self::UpdateSecretReference { expected, .. } => Some(*expected),
+            Self::PutProviderImport { expected, .. } => *expected,
             _ => None,
         }
     }

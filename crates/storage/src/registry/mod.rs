@@ -8,6 +8,7 @@
 mod coded;
 mod column;
 mod health;
+mod import;
 mod journal;
 mod prune;
 mod read;
@@ -170,6 +171,28 @@ impl Registry for SqliteRegistry {
     ) -> Result<Versioned<Option<ProviderSourceRecord>>, RegistryError> {
         let location = location.to_owned();
         self.read(move |tx| source::by_location(tx, kind, &location))
+    }
+
+    fn provider_imports(
+        &self,
+    ) -> Result<Versioned<Vec<stackly_domain::ProviderImportRecord>>, RegistryError> {
+        self.read(|tx| import::all(tx))
+    }
+
+    fn provider_import(
+        &self,
+        provider: &stackly_domain::ProviderName,
+    ) -> Result<Versioned<Option<stackly_domain::ProviderImportRecord>>, RegistryError> {
+        let provider = provider.clone();
+        self.read(move |tx| import::one(tx, &provider))
+    }
+
+    fn provider_has_approved_revision(
+        &self,
+        provider: &stackly_domain::ProviderName,
+    ) -> Result<Versioned<bool>, RegistryError> {
+        let provider = provider.clone();
+        self.read(move |tx| import::has_approved_revision(tx, &provider))
     }
 
     fn artifact(

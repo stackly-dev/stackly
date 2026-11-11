@@ -72,6 +72,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "audit_operation_fields",
         sql: include_str!("../migrations/0012_audit_operation_fields.sql"),
     },
+    Migration {
+        version: 13,
+        name: "provider_imports",
+        sql: include_str!("../migrations/0013_provider_imports.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -126,6 +131,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         12,
         "1b00ec6f9445027e1b3aeb4a82ff71ce0ba9f2e6cf9274b6beac72755b332d4d",
+    ),
+    (
+        13,
+        "4227517716f3d57b63206ea830542e0d7e2647eed3a9a1b833f9413aa76fd9f6",
     ),
 ];
 
@@ -352,7 +361,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 12);
+        assert_eq!(set.latest(), 13);
     }
 
     #[test]

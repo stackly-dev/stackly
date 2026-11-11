@@ -7,6 +7,7 @@ use crate::artifact_format::ArtifactFormat;
 use crate::code::code_enum;
 use crate::id::ProviderSourceId;
 use crate::provider::ProviderRevision;
+use crate::registry::import::TrustDecision;
 use crate::registry::install::{CompatibilityRecordRow, DependencyManifestJson, SignatureInfoJson};
 use crate::target::Target;
 use crate::value::{ExactVersion, ResourceRevision, Sha256Digest, SoftwareName};
@@ -21,6 +22,9 @@ code_enum! {
         Bundled => "bundled",
         /// The catalog of `STACKLY_CATALOG_DIR`, for development and tests.
         Development => "development",
+        /// Every imported local provider package (spec 0037): one row,
+        /// location `imports`.
+        Local => "local",
     }
 }
 
@@ -84,9 +88,6 @@ impl ProviderSourceRecord {
 }
 
 /// A provider revision with the columns the registry keeps for it.
-///
-/// A field a later feature fills (`approved_at`) is not here yet and is
-/// stored empty.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ProviderRevisionRecord {
@@ -96,8 +97,13 @@ pub struct ProviderRevisionRecord {
     pub schema_version: Option<String>,
     /// Who published it (feature 37).
     pub publisher: Option<String>,
-    /// Its approval code (feature 37).
-    pub approval: Option<String>,
+    /// Its trust decision (spec 0037): `approved` for a revision pinned
+    /// from an approved local import, `revoked` once that approval is
+    /// revoked, and empty for a revision trusted through the policy of its
+    /// source (bundled or development).
+    pub approval: Option<TrustDecision>,
+    /// When the approval was decided, set with `approval`.
+    pub approved_at: Option<Timestamp>,
     /// The source it was pinned from (feature 20).
     pub source_id: Option<ProviderSourceId>,
 }
@@ -109,15 +115,23 @@ impl ProviderRevisionRecord {
         revision: ProviderRevision,
         schema_version: Option<String>,
         publisher: Option<String>,
-        approval: Option<String>,
+        approval: Option<TrustDecision>,
     ) -> Self {
         Self {
             revision,
             schema_version,
             publisher,
             approval,
+            approved_at: None,
             source_id: None,
         }
+    }
+
+    /// Records when the approval was decided.
+    #[must_use]
+    pub const fn with_approved_at(mut self, at: Timestamp) -> Self {
+        self.approved_at = Some(at);
+        self
     }
 
     /// Names the source the revision was pinned from.

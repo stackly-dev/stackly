@@ -539,7 +539,10 @@ fn an_unknown_open_set_code_makes_the_whole_read_corrupt() {
         .unwrap()
         .value
         .unwrap();
-    assert_eq!(record.approval.as_deref(), Some("approved"));
+    assert_eq!(
+        record.approval,
+        Some(stackly_domain::TrustDecision::Approved)
+    );
 
     // Capabilities are an open set too: an unknown code fails the read.
     harness
