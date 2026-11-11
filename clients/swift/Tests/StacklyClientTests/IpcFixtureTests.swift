@@ -91,7 +91,8 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .doctorRun = $0 { true } else { false } })
         #expect(methods.contains(.diagnosticsPreviewBundle))
         #expect(methods.contains { if case .diagnosticsExportBundle = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 61)
+        #expect(methods.contains { if case .providerValidate = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 62)
     }
 
     private func check<Value: Codable & Equatable>(

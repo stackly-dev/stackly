@@ -154,6 +154,11 @@
       "major": 3,
       "minor": 5,
       "digest": "d684041f712b0dd67c20e13aff0fd52c793d452fdc69626a2a909c398454cda1"
+    },
+    {
+      "major": 3,
+      "minor": 6,
+      "digest": "9360304efb501cc05b4903a6f3b5fe8f8be4dc7a358e01dd992f4f1c6a1286dd"
     }
   ]
 }

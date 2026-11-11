@@ -38,6 +38,7 @@ pub mod limits;
 pub mod logs;
 pub mod message;
 pub mod operation;
+pub mod provider;
 pub mod restart;
 pub mod runtime;
 pub mod secret;

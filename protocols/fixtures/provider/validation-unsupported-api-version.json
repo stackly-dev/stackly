@@ -1,0 +1,26 @@
+{
+  "folder": "mytool",
+  "loadable": false,
+  "publishable": false,
+  "apiVersion": "stackly/v2",
+  "supportedApiVersions": [
+    {
+      "name": "stackly/v1alpha1",
+      "status": "current"
+    }
+  ],
+  "identity": null,
+  "findings": [
+    {
+      "severity": "error",
+      "origin": "package",
+      "file": "provider.yaml",
+      "location": "apiVersion",
+      "code": "unsupported_api_version",
+      "message": "apiVersion \"stackly/v2\" is not supported; this Stackly supports: stackly/v1alpha1",
+      "reason": null
+    }
+  ],
+  "findingCount": 1,
+  "omitted": 0
+}

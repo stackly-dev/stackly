@@ -94,6 +94,26 @@
         "operation"
       ]
     },
+    "ApiVersionStatus": {
+      "description": "The status of a supported `apiVersion`.",
+      "oneOf": [
+        {
+          "description": "The version for new packages.",
+          "type": "string",
+          "const": "current"
+        },
+        {
+          "description": "Still loads and runs, with one warning.",
+          "type": "string",
+          "const": "deprecated"
+        },
+        {
+          "description": "A status this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ArtifactDependency": {
       "description": "One dependency of an artifact.",
       "type": "object",
@@ -5047,6 +5067,51 @@
         }
       ]
     },
+    "FindingOrigin": {
+      "description": "Which rule set a [`ValidationFinding`] comes from.",
+      "oneOf": [
+        {
+          "description": "The package cannot load anywhere.",
+          "type": "string",
+          "const": "package"
+        },
+        {
+          "description": "A tightening for package authors; the package still loads.",
+          "type": "string",
+          "const": "authoring"
+        },
+        {
+          "description": "`tests/scenarios.yaml`.",
+          "type": "string",
+          "const": "scenarios"
+        },
+        {
+          "description": "An origin this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "FindingSeverity": {
+      "description": "How serious a [`ValidationFinding`] is.",
+      "oneOf": [
+        {
+          "description": "The package is not publishable.",
+          "type": "string",
+          "const": "error"
+        },
+        {
+          "description": "The package is publishable, but something should change.",
+          "type": "string",
+          "const": "warning"
+        },
+        {
+          "description": "A severity this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "FormField": {
       "description": "One settings field, typed from the settings schema in the order the\nschema declares it (VAL-012).",
       "type": "object",
@@ -8608,6 +8673,39 @@
         "origin"
       ]
     },
+    "PackageIdentity": {
+      "description": "Who a validated package is.",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "description": "`metadata.displayName`.",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "description": "The digest of the package files, lowercase hex.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "`metadata.id`, such as `official/nats`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "`metadata.revision`.",
+          "type": "string"
+        },
+        "software": {
+          "description": "The software it provides.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "revision",
+        "manifestSha256",
+        "software",
+        "displayName"
+      ]
+    },
     "PartialItem": {
       "description": "One item of a partial result, such as one leftover of an abandon.",
       "type": "object",
@@ -9745,6 +9843,81 @@
         "versionCount",
         "mark",
         "tile"
+      ]
+    },
+    "ProviderValidation": {
+      "description": "Reply of `provider.validate`.",
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "description": "The raw `apiVersion` string of `provider.yaml`, when the package\ncould be read and the field is a string.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "findingCount": {
+          "description": "Every finding, those left out included.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "findings": {
+          "description": "The first [`VALIDATION_FINDINGS_MAX`] findings: `package`, then\n`authoring`, then `scenarios`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValidationFinding"
+          }
+        },
+        "folder": {
+          "description": "The last component of the path.",
+          "type": "string"
+        },
+        "identity": {
+          "description": "Who the package is, when it validated.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackageIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "loadable": {
+          "description": "Whether the package loads: no finding has origin `package`.",
+          "type": "boolean"
+        },
+        "omitted": {
+          "description": "`findingCount` minus the length of `findings`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "publishable": {
+          "description": "Whether the package may be published: no finding is an error.",
+          "type": "boolean"
+        },
+        "supportedApiVersions": {
+          "description": "Every `apiVersion` this daemon loads.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SupportedApiVersion"
+          }
+        }
+      },
+      "required": [
+        "folder",
+        "loadable",
+        "publishable",
+        "supportedApiVersions",
+        "findings",
+        "findingCount",
+        "omitted"
       ]
     },
     "ReconcileFinding": {
@@ -11024,6 +11197,23 @@
             "type": {
               "type": "string",
               "const": "diagnostics.export_bundle"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What the validator found, even for a package that does not load.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderValidation"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.validate"
             }
           },
           "required": [
@@ -13243,6 +13433,24 @@
         }
       ]
     },
+    "SupportedApiVersion": {
+      "description": "One `apiVersion` the daemon loads.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The value, such as `stackly/v1alpha1`.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Whether new packages should use it.",
+          "$ref": "#/$defs/ApiVersionStatus"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ]
+    },
     "TargetArch": {
       "description": "An architecture of a target. Open.",
       "oneOf": [
@@ -13520,6 +13728,52 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "ValidationFinding": {
+      "description": "One problem the validator found.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The stable snake_case issue code of spec 0009.",
+          "type": "string"
+        },
+        "file": {
+          "description": "The package file, such as `provider.yaml` or\n`tests/scenarios.yaml`, or empty for the package as a whole.",
+          "type": "string"
+        },
+        "location": {
+          "description": "Where in the file: a field path, `line:column`, or `.`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "What is wrong, in English; never a secret or a settings value.",
+          "type": "string"
+        },
+        "origin": {
+          "description": "Which rule set found it.",
+          "$ref": "#/$defs/FindingOrigin"
+        },
+        "reason": {
+          "description": "A stable snake_case reason, for the codes that declare one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "severity": {
+          "description": "How serious it is.",
+          "$ref": "#/$defs/FindingSeverity"
+        }
+      },
+      "required": [
+        "severity",
+        "origin",
+        "file",
+        "location",
+        "code",
+        "message"
       ]
     }
   }

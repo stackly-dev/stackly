@@ -46,6 +46,7 @@ use stackly_protocol::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use stackly_protocol::provider::{ProviderValidateParams, ProviderValidation};
 use stackly_protocol::restart::RestartPreview;
 use stackly_protocol::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
@@ -70,7 +71,7 @@ use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::ipc::settings;
 use crate::ipc::stop_all;
-use crate::ipc::{diagnostics, doctor};
+use crate::ipc::{diagnostics, doctor, provider};
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -415,6 +416,17 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, DoctorReport> {
         let _ = context;
         doctor::run(core, params)
+    }
+
+    /// `provider.validate` (spec 0036).
+    fn validate_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ProviderValidateParams,
+    ) -> HandlerFuture<'a, ProviderValidation> {
+        let _ = context;
+        provider::validate(core, params)
     }
 
     /// `instance.get_data_usage`.
