@@ -2,7 +2,7 @@
 
 **Reviewed by**: Fable 5.2 (effort high), sesi baru yang belum pernah melihat implementasi. Kode ditulis Opus 5.5 (developer dan tester), jadi reviewer berbeda family dari penulis. Sesi utama membaca sendiri inti trust (core `catalog/import`, `store`, `trust`, `local/*`, handler `provider.*`, gate di install dan create, refresh snapshot). Tiga subagent Fable 5.2 membaca irisan lain secara read only: A (storage, domain, protocol, testkit), B (CLI), C (StacklyUI dan Swift client). Setiap temuan Major, dan setiap temuan irisan yang menyentuh batas trust, diperiksa ulang sesi utama langsung di kode sebelum ditulis di sini.
 **Scope**: `MODE=branch`, `BASE=main`, `MERGE_BASE=e5506e2c`, range `e5506e2c..349dc048`, dibatasi ke 46 commit ber subject "spec 0037" (`git log --oneline --no-merges e5506e2c..HEAD | grep -i 'spec 0037'`), 346 file. Range itu juga memuat spec 0036 dan 0038; hunk fitur lain diabaikan. Nomor baris mengacu ke `349dc048`. Tidak ada build atau test yang dijalankan; semua temuan berasal dari membaca kode, test, dan spec.
-**Verdict**: Changes requested
+**Verdict**: Approve with nits (sesudah konfirmasi fix di `1906ebc1..81a311d7`, lihat *Konfirmasi fix* di akhir file; vonis awal Changes requested)
 
 ## Summary
 
@@ -228,3 +228,41 @@ Yang belum tertutup, selain yang disebut di tiap temuan:
 - CLI: `import --approve` yang ditolak di TTY, `import --approve` dengan approve yang gagal, catatan preview untuk pengganti, salinan rusak, dicabut catalog, dan batas import, cabang catalog `revocation_text`, baris `invalid` lokal di `list`, path bukan UTF-8, dan zona selain UTC.
 - Storage dan protokol: batas nilai di temuan batas baris import, dua celah conformance, test hint provider, dan kasus `InvalidRevision` untuk `PutProviderImport`.
 - App: fase `choosing`, `loading`, dan `importing` tidak pernah diamati test; hasil `outcomeUnknown` dan `notSent`; Cancel saat request berjalan dan hasil basi; penjaga kirim ganda `isWorking`; kesegaran kunci (`newKey` konstan di test); banner "Changed since you revoked it"; `invalidate` saat detail sedang dimuat. State AC-15 tanpa snapshot: loading, unreadable, paket sama, dan entri `invalid` lokal.
+
+## Konfirmasi fix
+
+**Diperiksa oleh**: sesi review yang sama (Fable 5.2, effort high), 2026-11-11.
+**Range**: `1906ebc1..81a311d7` di `main`, 20 commit, 37 file. Dibaca dari diff dan kode sesudahnya; tidak ada build atau test yang dijalankan. Nomor baris di bagian ini mengacu ke `81a311d7`.
+**Vonis sesudah fix**: Approve with nits. Tidak ada Blocker atau Major yang tersisa, dan fix tidak memperkenalkan Blocker atau Major baru. Dua Minor baru dicatat di bawah.
+
+### Major
+
+| Temuan | Status | Bukti |
+| --- | --- | --- |
+| Major 1, remedy doctor dari paket lokal yang tidak dipercaya | resolved | `crates/core/src/doctor/checks/remedy.rs:59`. `catalog_package` kini memakai entri lokal hanya kalau kuncinya sama dengan `instance.provider_revision()` dan `entry_trust` nya `Trusted`; selain itu `find` jatuh ke paket pinned. Kunci memuat `manifest_sha256`, jadi snapshot yang basi pun hanya bisa memberi isi yang sama dengan paket pinned. Test `a_local_entry_of_another_revision_never_supplies_the_remedy_of_a_pinned_instance` (`crates/core/tests/supervisor_start/doctor.rs`) mencakup `pending` dan `revoked`. Aturannya tertulis di spec 0037 *Gate trust* dan spec 0034. |
+| Major 2, "New Instance…" tidak meminta provider panelnya | resolved | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/ProviderDetailPanel.swift:122` mengirim `provider`, dan `CreateInstance/CreateInstanceModel.swift:387` meneruskannya ke `getCreateForm` selama runtime yang dipilih menjalankan software itu. `instance.provider_ambiguous` kini mengisi `providerCandidates` (`:557`), sheet menampilkan satu baris per kandidat (`CreateInstance/NewInstanceSheet.swift:96`), dan `chooseProvider` (`:411`) mengulang form dengan ID itu. Create mengirim provider dari form yang dimuat, jadi instance dibuat dari provider yang sama. Test di `NewInstancePresenterTests.swift`. |
+| Major 3, panel detail tertahan di spinner | resolved | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/ProviderDetailModel.swift:31` dan `:74`: `inFlight` kini memuat epoch, jadi pemuatan epoch lama tidak menahan pemuatan epoch baru. `Catalog/CatalogStore.swift:210` (`SnapshotCoalescer`) menjalankan satu snapshot pada satu waktu untuk event dan reload, dan `:87` (`didApply`) hanya menerapkan balasan serta `invalidate()` untuk snapshot yang selesai. Test end to end kembali memakai satu `load`, dan `CatalogStoreTests.swift` menguji urutan invalidate saat pemuatan berjalan. |
+
+### Minor yang diperbaiki
+
+| Temuan | Status | Bukti |
+| --- | --- | --- |
+| Baris audit tanpa provider dan digest (`f7eba2c6`) | resolved | `crates/core/src/catalog/import.rs:496`, `:524`, `:700`, `:755`, `:776`, `:855`. Setiap pekerjaan memasang catatan awal dari request sebelum langkah pertama, lalu catatan lengkap sesudah paket terbaca. Test menegaskan `provider` dan `packageSha256` di baris gagal `store`. |
+| Install tanpa cek trust sebelum unduhan (`ff8533ae`) | resolved | `crates/core/src/runtime/install.rs:2125`, sebelum `begin_step(DOWNLOAD)`, juga saat operasi dilanjutkan. Test `an_install_from_a_revoked_local_entry_asks_for_no_byte`. |
+| Revoke sesudah `commit_stage` berakhir `needs_recovery` (`5ba3080e`) | resolved untuk jendela yang dilaporkan | `crates/core/src/runtime/install.rs:1766`: batch akhir tidak lagi membaca trust, jadi revoke sesudah cek commit membiarkan runtime terpasang dan operasi berhasil (tafsiran developer yang diterima lead; sejalan dengan *Security model*). Test `a_revoke_after_the_commit_check_keeps_the_runtime_and_the_install_succeeds`. Sisa di jendela sebelumnya dicatat sebagai Minor baru 1. |
+| Import yang commit membalas `not_imported` saat snapshot basi (`52b64bc9`) | resolved | `apps/daemon/src/ipc/provider_import.rs:313` (`detail_after`), dipakai import, approve, revoke, dan replay (`:411`, `:552`, `:705`, `:775`). Snapshot dipakai hanya kalau `revision` barisnya sama dengan registry; selain itu detail dibangun dari baris registry dan salinan store. Test `an_import_and_an_approval_answer_their_committed_state_while_the_snapshot_is_stale`. Butir kecil yang tidak diubah: `catalog.changed` tetap terbit saat refresh gagal (`apps/daemon/src/catalog.rs:196`). |
+| CLI `import --approve` menyetujui digest balasan (`ad58b5d5`) | resolved | `apps/cli/src/commands/provider/import.rs:137`: digest balasan dibandingkan dengan digest preview; bila berbeda berhenti dengan `provider.import_changed` (exit 3) dan hasil import tetap dibawa. Test `import_approve_stops_when_the_imported_bytes_are_not_the_previewed_ones`. |
+| CLI approve gagal membuang hasil import (`ad58b5d5`) | resolved | `apps/cli/src/commands/provider/approve.rs:108`: kegagalan approve sesudah import mengembalikan `partial`. Test `import_approve_keeps_the_imported_entry_when_the_daemon_refuses_the_approval`. |
+| Jawaban terlambat diterapkan sesudah Cancel (`22b77505`) | resolved untuk penulisan state | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/ProviderImportModel.swift:150` dan `Catalog/ProviderDecisionModel.swift:86`: jawaban untuk sheet yang sudah tutup atau berganti tidak menulis apa pun. Cancel tetap aktif menurut bunyi baru AC-15. Akibat yang tersisa dicatat sebagai Minor baru 2. |
+| Spinner tetap untuk folder yang tidak terbaca (`45459301`) | resolved | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/ImportProviderSheet.swift:69`, dengan snapshot `catalog-import-unreadable`. |
+| Baris Settings kehilangan tanggal import (`80057753`) | resolved | `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Settings/SettingsTabs.swift:176`: epoch detail masuk ID task. |
+| Tombol default dan Escape di sheet approve | resolved lewat spec | Keputusan lead: bunyi AC-15 dan *Layar* diselaraskan dengan Interaction policy (K27 di `rationale.md`); kode tidak berubah, dan Return tetap tidak menyetujui apa pun. |
+
+Minor lain dan semua Nit tidak diperbaiki dan dicatat sebagai Follow-up spec 0037 (keputusan lead atas delegasi user). Tidak satu pun menyentuh gate trust.
+
+### Temuan baru dari fix
+
+Tidak ada Blocker atau Major baru.
+
+- 🟡 **Minor baru 1**, `crates/core/src/runtime/install.rs:2250`. `recheck_local` di langkah `commit` berjalan sesudah `begin_step(...irreversible())` (`:2245`), yang langsung mencatat titik tanpa kembali (`crates/core/src/operation/context.rs:285`). Jadi revoke yang masuk selama `validate_binary` membuat cek itu gagal sesudah titik tanpa kembali, dan operasi berakhir `needs_recovery` walau folder belum dipindahkan. Ini sudah ada sebelum fix dan terlewat di review pertama; jendelanya (lama exec check) lebih lebar daripada yang sudah ditutup `5ba3080e`. Trust tetap benar: tidak ada baris runtime dan tidak ada folder terpasang. Usul fix: jalankan `recheck_local` sebelum `begin_step(COMMIT)`, supaya revoke di jendela itu menjadi kegagalan biasa yang dikompensasi. Tambah test dengan revoke saat exec check berjalan.
+- 🟡 **Minor baru 2**, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Catalog/ProviderDecisionModel.swift:86`. Cancel yang ditekan saat `provider.approve` masih berjalan kini menutup sheet, lalu approval tetap terjadi di daemon tanpa umpan balik apa pun; sebelumnya kartu "Approved X" masih tampil. State yang benar baru terlihat lewat refresh catalog. Pengguna sudah menekan Approve, jadi ini bukan approval tanpa persetujuan, tetapi Cancel yang sesudahnya tampak membatalkan padahal tidak. Usul fix: saat jawaban yang dibuang ternyata `.completed`, tetap tampilkan kartu umpan balik (misalnya "Approved X"), atau catat perilaku ini terang di *Layar*.
