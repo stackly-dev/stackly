@@ -10,7 +10,7 @@
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f36-spec` | architect | F36 `Design it (spec)`, spec `0036-provider-sdk-test-harness` | `06-menambah-provider.md` | `docs/specs/0036-provider-sdk-test-harness/` | `claude/arc-f36-spec-e2dee8` (sesi `local_31b0bc36`) | `fable-5-2 · high` | `aktif` |
-| `arc-f37-spec` | architect | F37 `Design it (spec)`, spec `0037-import-provider-lokal-trust` | `06-menambah-provider.md` | `docs/specs/0037-import-provider-lokal-trust/` | `claude/arc-f37-spec-659212` (sesi `local_4d9ccf53`) | `fable-5-2 · high` | `aktif` |
+| `arc-f37-spec` | architect | F37 `Design it (spec)`, spec `0037-import-provider-lokal-trust` | `06-menambah-provider.md` | `docs/specs/0037-import-provider-lokal-trust/` | `claude/arc-f37-spec-659212` (sesi `local_4d9ccf53`) | `fable-5-2 · high` | `merged` `67a4373e` |
 | `arc-f38-spec` | architect | F38 `Design it (spec)`, spec `0038-panduan-kontributor-governance` | `06-menambah-provider.md` | `docs/specs/0038-panduan-kontributor-governance/` | `claude/arc-f38-spec-f3bc3f` (sesi `local_6b00d572`) | `fable-5-2 · high` | `merged` `6652e19b` |
 | `dev-f38-m1` | developer | F38 milestone 1, langkah Build plan 1 sampai 7 (catatan lisensi, `cargo xtask docs check`, file komunitas) | `06-menambah-provider.md` | `xtask/` (modul `docs`, `main.rs`, `Cargo.toml`), `Cargo.toml` root (`repository`), `Cargo.lock`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `GOVERNANCE.md`, `CODE_OF_CONDUCT.md`, `.github/`, `providers/{nats,postgresql,traefik}/LICENSE-NOTICES.md`, `verify.md` 0038 | `claude/arc-f38-spec-f3bc3f` (sesi `local_6b00d572`, nama branch warisan) | `opus-5-5 · medium` | `dipakai ulang` · `aktif` |
 | `chk-f37-review` | checker (review) | F37 `Review it`, sesi cadangan yang belum melihat implementasi; menunggu brief | `06-menambah-provider.md` | `docs/reviews/` | `claude/chk-f37-review-7c8fc0` (sesi `local_0298dcff`) | `fable-5-2 · high` | `aktif` (standby) |
@@ -33,6 +33,7 @@
 
 ## Dicentang pada wave ini
 
+- F37 · `Design it (spec)` · laporan `arc-f37-spec` · `claude/arc-f37-spec-659212` → `67a4373e` · diff hanya `docs/specs/0037-import-provider-lokal-trust/`, tanpa marker konflik, Status `Proposed`, 19 AC · usulan update spec 0017, 0009, 0005, 0004, 0007, 0020, 0018, 0016, 0032, `ui-macos.md` untuk `/sync` atau `architect (update)` sebelum build (0017 dan 0007 paling perlu)
 - F38 · `Design it (spec)` · laporan `arc-f38-spec` · `claude/arc-f38-spec-f3bc3f` → `6652e19b` · diff hanya `docs/specs/0038-panduan-kontributor-governance/`, tanpa marker konflik, Status `Proposed`, 14 AC
 
 ## Riwayat wave

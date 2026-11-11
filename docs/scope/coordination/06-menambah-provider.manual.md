@@ -29,3 +29,12 @@ Dari laporan `arc-f38-spec` (2026-11-11). Semua langkah ini hanya bisa dilakukan
 9. Buka New issue dan pastikan tiga form tampil, issue kosong tidak ditawarkan, dan ada link "Report a security vulnerability".
 
 Hasil: tulis `PASS` atau `FAIL` per nomor. AC-5 tetap `BLOCKED` (`owner: user`) sampai nomor 6 `PASS`.
+
+## Fitur 37: import provider lokal dan trust (spec 0037)
+
+Dari laporan `arc-f37-spec` (2026-11-11). Teks lengkap ditulis `/develop` di `verify.md` spec 0037 bagian `### UI / manual` saat langkah 13; langkah ini baru bisa dijalankan setelah build fitur 37 selesai. Pakai root sementara (`STACKLY_ROOT`), tidak pernah Application Support asli, kecuali langkah 1 yang butuh agent terpasang.
+
+1. Import dari folder terlindung: dengan bundle dari `cargo xtask build-app --install` dan agent menyala, jalankan `stackly provider import ~/Downloads/<paket>` dan ulangi dari GUI. Harapan: berhasil, atau macOS menolak dan Stackly menampilkan `provider.import_unreadable` reason `permission_denied` dengan hint Files and Folders; tidak ada crash, tidak ada permintaan mematikan proteksi.
+2. Quarantine nyata: unduh paket contoh sebagai `.zip` lewat browser, buka dengan Finder, impor foldernya. Harapan: preview menampilkan catatan "This folder was downloaded from the internet…", import berhasil, `xattr -l` pada folder asal tetap menunjukkan `com.apple.quarantine`, salinan di `provider-imports/` tanpa atribut itu.
+3. Alur GUI lengkap: Import Provider… → sheet preview → Import → banner "Not approved yet" → Approve… (Cancel default, kalimat izin) → install runtime dan create instance → Revoke Approval… → create baru ditolak, instance lama tetap start → Remove…. Cek juga Settings › Sources › Imported providers dan langkah Catalog Trust onboarding.
+4. Jaringan mati: ulangi approve, revoke, start instance lama, dan `stackly provider list`. Harapan: semuanya sama, tidak ada teks "latest", "up to date", atau klaim revocation terkini; `runtime.install` baru gagal dengan `runtime.download_offline` biasa.
