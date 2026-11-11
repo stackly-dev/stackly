@@ -678,6 +678,7 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 
 ## Follow-up
 
+- [x] *Update spec lain*, butir spec 0017 dan spec 0007: diterapkan di spec 0017 (2026-11-11, *Tambahan fitur 37*) dan di spec 0007 (2026-11-11, baris `LockKey`, butir *Operasi provider*, dan empat baris tabel resume). Butir lain di *Update spec lain* (spec 0009, 0005, 0004, 0020, 0018, 0016, 0032, dan `ui-macos.md`) menunggu `/sync` akhir wave.
 - [ ] Begitu spec 0036 diterima: cocokkan *Kontrak dari spec 0036* dengan teks akhirnya (nama DTO finding, dan nomor langkah 1, 3, dan 4 yang dipakai prasyarat milestone 1 dan 3).
 - [ ] Lead: spec 0036 menaikkan minor protokol (`provider.validate`) dan spec ini menaikkan major; tetapkan urutan nomornya saat build.
 - [ ] Fitur 59: tampilkan diff `Permissions` (fungsi `permission_changes` spec ini) saat instance pindah provider revision, termasuk untuk provider `official`.
