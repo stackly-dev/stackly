@@ -4,15 +4,25 @@
 
 Journey PRD JOURNEY-07 untuk kontributor: scaffold, tulis manifest dan template, validasi lokal, beri trust eksplisit, jalankan test kontrak dan integrasi, lalu kirim PR. Fase ini sengaja datang sebelum stack enam service, supaya lima provider resmi berikutnya dibangun lewat jalur dan harness yang sama dengan kontributor.
 
-### 36. Provider SDK & test harness · needs a decision
+### 36. Provider SDK & test harness · in-progress
 
-Kebijakan kompatibilitas, deprecation, dan migrasi untuk schema `stackly/v1alpha1` yang dikunci fitur 9 (termasuk penambahan probe dan primitive baru secara additive), validator, template scaffold, dan test harness (`stackly provider validate`, `stackly provider test`) dengan fake server yang bisa delay ready, crash, dan spam log.
+Kebijakan kompatibilitas, deprecation, dan migrasi untuk schema `stackly/v1alpha1` yang dikunci fitur 9 (termasuk penambahan probe dan primitive baru secara additive), validator, template scaffold, dan test harness (`stackly provider validate`, `cargo xtask provider test`) dengan fake server yang bisa delay ready, crash, dan spam log.
 
 **Done when:** manifest dengan versi schema yang tidak didukung ditolak dengan penjelasan tanpa menjalankan lifecycle; provider fake server baru bisa install, create, start, health, dan tampil sebagai form di GUI tanpa perubahan Rust core atau SwiftUI; harness berjalan di test root ephemeral dan cleanup memeriksa ownership test run; harness menghasilkan report dari repository bersih.
 
 **Trace:** REQ-030, AC-029 (akhir), AC-030, AC-034, PRD bagian 21, 27, dan 32.3
 
-- [ ] Design it (spec): `/architect provider SDK & test harness`
+**Pointer:** spec [0036](../specs/0036-provider-sdk-test-harness/index.md)
+
+- [x] Design it (spec): `/architect provider SDK & test harness`
+- [ ] Build it: `/develop provider SDK & test harness`
+  - [ ] Validator dan kebijakan: `core::provider::check` dan `scenarios` (`SUPPORTED_API_VERSIONS`, `check_package`, `authoring_findings`, `tests/scenarios.yaml`, fuzz target `provider_scenarios`), `cargo xtask provider check` di atasnya, method `provider.validate` (minor protokol berikutnya) dengan handler daemon dan fixture kontrak, `stackly provider validate`, lalu corpus beku dengan `frozen_facts` dan `cargo xtask provider freeze` (spec 0036 AC-1 sampai AC-6; build step 1 sampai 5; needs fitur 9 dan 17, sudah done; fuzz 10 menit adalah langkah manual)
+  - [ ] Paket contoh, scaffold, dan form: `providers/example/` dengan skenario dan README, `cargo xtask provider new`, fixture form untuk setiap folder `providers/` dan test `StacklyUI` generik (spec 0036 AC-7, AC-8; build step 6 sampai 8; after milestone 1 step 1; needs fitur 20, sudah done; step 6 dan 8 bisa paralel dengan step 3 dan 4)
+  - [ ] Harness konformitas: `TestRoot` berpenanda di testkit, modul `apps/daemon/tests/conformance/` dengan langkah skenario dan report, kontrak proses dengan flag rogue fake server dan paket `fake-rogue`, skenario fault, example `provider_harness`, dan `cargo xtask provider test` dengan `--cleanup` dan `--keep` (spec 0036 AC-9 sampai AC-14, AC-1 bagian harness; build step 9 sampai 13; after milestone 2 step 6; needs milestone 1 step 1)
+  - [ ] Konformitas native: satu test native per line untuk `nats`, `postgresql` 17 dan 18, dan `traefik` di `provider_conformance.rs`; run nya setelah persetujuan kamu, `BLOCKED` tanpa artefak di cache xtask (spec 0036 AC-15; build step 14; after milestone 3)
+  - [ ] Spike dari paket: `PackageRecipe`, `closure_probes.rs`, fitur `test-support` dan `tokio` di `xtask`, entri `EXPOSE_ALLOWED`, penghapusan recipe NATS, PostgreSQL, dan Traefik, dan penanda `F36` (spec 0036 AC-16; build step 15; needs milestone 1 step 1 dan update spec 0003; bisa paralel dengan milestone 2 dan 3; run spike native setelah persetujuan kamu)
+- [ ] Verify it: `/check verify provider SDK & test harness`
+- [ ] Test it: `/test provider SDK & test harness`
 
 ### 37. Import provider lokal & trust · in-progress · GA
 

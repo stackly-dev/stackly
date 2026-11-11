@@ -26,7 +26,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [03-multi-versi-dan-instance.md](03-multi-versi-dan-instance.md) | Multi versi & instance (JOURNEY-02, JOURNEY-03) | 24 sampai 25 | 2 done |
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 done |
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 done |
-| [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 1 planned, 2 in-progress |
+| [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 3 in-progress |
 | [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 5 planned |
 | [08-environment-proyek.md](08-environment-proyek.md) | Environment proyek (JOURNEY-04) | 44 sampai 47 | 4 planned |
 | [09-backup-dan-restore.md](09-backup-dan-restore.md) | Backup & restore (JOURNEY-06) | 48 sampai 53 | 6 planned |
@@ -73,7 +73,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 33 | Crash loop & error start yang aman | Saat instance gagal | done |
 | 34 | Doctor & diagnostic bundle | Saat instance gagal | done |
 | 35 | Operations, activity & audit | Saat instance gagal | done |
-| 36 | Provider SDK & test harness | Menambah provider | planned |
+| 36 | Provider SDK & test harness | Menambah provider | in-progress |
 | 37 | Import provider lokal & trust | Menambah provider | in-progress |
 | 38 | Panduan kontributor & governance | Menambah provider | in-progress |
 | 39 | Provider NATS & JetStream | Stack enam service | planned |
