@@ -8,6 +8,9 @@
 //! never runs a command it finds in a doc. It prints `ok docs <n>` or one
 //! `path:line: message` line per problem, sorted by path and line, and exits
 //! 0 clean, 1 with problems, 2 when an input it needs cannot be read.
+//!
+//! `cargo xtask docs walkthrough [--keep]` runs the quick start block of
+//! `docs/providers/README.md` in a clean clone of `HEAD` ([`walkthrough`]).
 
 mod commands;
 mod forms;
@@ -16,6 +19,7 @@ mod markdown;
 mod notices;
 mod schema;
 mod text;
+mod walkthrough;
 
 use std::fmt;
 use std::fs;
@@ -47,6 +51,7 @@ pub const TRIAGE_LABELS: [&str; 5] = [
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     match args {
         ["check"] => Ok(check_command(root)),
+        ["walkthrough", rest @ ..] => walkthrough::command(root, rest),
         _ => bail!(
             "unknown docs task `{}`; see `cargo xtask help`",
             args.join(" ")

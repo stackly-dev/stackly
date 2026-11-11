@@ -33,6 +33,10 @@ Tasks:
   docs check           Check the public docs (links, placeholders, commands, schema
                        coverage, issue forms, LICENSE-NOTICES.md); exit 1 with one
                        line per problem, 2 when an input cannot be read
+  docs walkthrough [--keep]
+                       Run the quick start block of docs/providers/README.md in a
+                       clean clone of HEAD (needs 8 GiB free); exit 0 pass, 1 fail,
+                       2 blocked
   provider check [<dir>...]
                        Read and validate provider packages (default: every folder
                        in providers/) on macOS; exit 1 with one line per problem
