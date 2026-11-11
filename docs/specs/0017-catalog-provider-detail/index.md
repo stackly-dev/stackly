@@ -73,7 +73,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang. Contohnya decode
 | Resolusi selector (`@17`, `@stable`), download, verify, extract, commit, compatibility record PRD 32.2 dan fungsi `runtime::compatibility::support_status`, `HostFacts`, field `versions.json` tambahan (`compatibility`, `unpackedSize`, `entryCount`, `dependencies`, `stable`), tombol Get dan progress di kolom aksi matrix, status "{n} installed" di kartu, halaman Runtimes | fitur 18, spec 0018 |
 | Isi paket PostgreSQL dan pemindahannya dari planned ke provider | fitur 19 |
 | Pemanggil pin (create instance), tombol New Instance di panel detail, form dari settings schema dan capability | fitur 20 |
-| Import provider lokal, namespace lain, kind sumber `local`, trust approval, tombol Import Provider, event `catalog.changed` | fitur 37 |
+| Import provider lokal, namespace lain, kind sumber `local`, trust approval, tombol Import Provider, event `catalog.changed` | fitur 37, [spec 0037](../0037-import-provider-lokal-trust/index.md); bagian yang mengubah catalog ini dirangkum di *Tambahan fitur 37* |
 | Update app yang membawa catalog baru | fitur 61 |
 
 ### Sumber catalog di repo
@@ -168,7 +168,7 @@ tile = "teal"
 ```
 
 - `providers` dan `planned` diurutkan berdasarkan ID. Folder setiap entri provider selalu `packages/<namespace>/<nama>` yang diturunkan loader dari ID, jadi index tidak bisa menunjuk ke luar folder catalog.
-- **Digest isi**: `contentSha256` adalah SHA-256 atas serialisasi `serde_json` compact dari `CatalogContent { providers, planned }` (urutan field struct, entri terurut ID). `revision`, `publishedAt`, dan `contentSha256` sendiri tidak ikut. Karena `manifestSha256` dan `versionsSha256` ada di dalamnya, setiap perubahan paket atau `versions.json` mengubah digest ini.
+- **Digest isi**: `contentSha256` adalah SHA-256 atas serialisasi `serde_json` compact dari `CatalogContent { providers, planned }` (urutan field struct, entri terurut ID). `revision`, `publishedAt`, dan `contentSha256` sendiri tidak ikut. Karena `manifestSha256` dan `versionsSha256` ada di dalamnya, setiap perubahan paket atau `versions.json` mengubah digest ini. *Ditambah fitur 37 (spec 0037):* struct itu menjadi `CatalogContent { providers, planned, revoked }`, dengan `revoked` tidak ditulis saat kosong, jadi digest setiap revision yang sudah ada di ledger tidak berubah (*Tambahan fitur 37*).
 - `versionsSha256` dibutuhkan karena `manifest_sha256` spec 0009 sengaja tidak mencakup `versions.json`.
 - Catalog kosong (tanpa entri) valid; testkit memakainya sebagai default (*Lokasi catalog saat start*).
 
@@ -191,7 +191,7 @@ Semua dicek build dan loader. Batas teks dalam byte UTF 8.
 | Issue per entri `invalid` | 100 (batas `PackageError` spec 0009) |
 | `ProviderSummary.versions` | 16 pertama, plus `versionCount` |
 
-**Anggaran frame**: satu `ProviderSummary` paling besar sekitar 5 KiB (ID 127 B, nama 256 B, deskripsi 2 KiB, 16 versi kali 64 B, 8 lisensi kali 64 B, sisanya nama field), jadi list 128 entri sekitar 640 KiB. Detail paling besar sekitar 450 KiB (summary 5 KiB; 32 baris versi kali 3 sel dengan catatan 256 B sekitar 115 KiB; 32 artefak kali sekitar 1,5 KiB ditambah 24 dependency kali sekitar 300 B, sekitar 300 KiB; issue hanya untuk entri invalid yang tidak punya artefak). Keduanya di bawah `CONTROL_FRAME_MAX` 1 MiB; test di milestone 1 membangun catalog dengan semua batas penuh dan memeriksa ukuran frame nyatanya.
+**Anggaran frame**: satu `ProviderSummary` paling besar sekitar 5 KiB (ID 127 B, nama 256 B, deskripsi 2 KiB, 16 versi kali 64 B, 8 lisensi kali 64 B, sisanya nama field), jadi list 128 entri sekitar 640 KiB. Detail paling besar sekitar 450 KiB (summary 5 KiB; 32 baris versi kali 3 sel dengan catatan 256 B sekitar 115 KiB; 32 artefak kali sekitar 1,5 KiB ditambah 24 dependency kali sekitar 300 B, sekitar 300 KiB; issue hanya untuk entri invalid yang tidak punya artefak). Keduanya di bawah `CONTROL_FRAME_MAX` 1 MiB; test di milestone 1 membangun catalog dengan semua batas penuh dan memeriksa ukuran frame nyatanya. *Ditambah fitur 37 (spec 0037):* list bertambah paling banyak 32 entri lokal dan 64 `CatalogRevocation`; hitungan barunya ada di *Tambahan fitur 37*.
 
 ### Read model di daemon
 
@@ -235,12 +235,12 @@ impl ProviderEntry {
 ```
 
 - `load_catalog` membaca `catalog.json` lewat `read_file_limited` (256 KiB), memeriksa aturan index (AC-3), lalu setiap entri provider lewat `read_package` dan `from_files(.., NameCheck::FolderName)`, membandingkan `manifestSha256`, SHA-256 byte `versions.json` dari `PackageFiles`, `metadata.id`, namespace, dan batas per provider, sambil menjumlah byte paket (entri yang membuat jumlah melewati 16 MiB, dan semua entri sesudahnya dalam urutan ID, menjadi invalid). Entri yang gagal menjadi `InvalidEntry` dengan issue dari `PackageError` atau satu issue buatan loader, dengan kode `IssueCode` spec 0009 dan `file` serta `location` di *Issue loader*; `category` nya dari decode ketat bagian `metadata` saja (cara yang sama dengan `manifest_software` spec 0009) kalau bisa, selain itu `None`. Fungsi ini tidak pernah menulis, spawn, atau menyelesaikan secret.
-- Namespace yang diterima: `official`; `testing` hanya dengan `allow_testing_namespace`. Namespace lain (milik fitur 37) menjadi `namespace_not_allowed`.
+- Namespace yang diterima: `official`; `testing` hanya dengan `allow_testing_namespace`. Namespace lain (milik fitur 37) menjadi `namespace_not_allowed`. *Ditambah fitur 37 (spec 0037):* aturan ini tetap berlaku untuk `load_catalog`. Entri lokal ber namespace lain tidak pernah lewat fungsi ini; ia dimuat `catalog::local::load` dari store import lalu digabung (*Tambahan fitur 37*).
 - `Category`, `Os`, dan `SupportStatus` adalah tipe domain; `TileHint { mark: String, tile: TileColor }` dan `SupportReason` di `core::catalog::status`.
 - `SupportStatus` (baru, `stackly-domain::catalog`, kode snake_case stabil, `#[non_exhaustive]`): `planned`, `unverified`, `experimental`, `supported`, `unsupported`, `blocked` (PRD 5.1). Fitur 18 memakainya ulang untuk runtime terpasang.
 - `Catalog::for_tests` (fitur `test-support` core, sama dengan pola `ResolvedSecrets::for_tests`) membangun catalog dari entri yang sudah tervalidasi, termasuk paket `testing/`, untuk test di dalam proses fitur 17, 18, dan 20; `Catalog::for_tests(&[])` adalah catalog kosong yang valid. Meta nya tetap (revision 1, `publishedAt` dan `loadedAt` `2026-10-01T00:00:00Z`, lokasi `Development` dengan path `/stackly-test-catalog`, digest isi dari daftar kosong atau entri yang diberikan); test yang butuh meta lain memakai `for_tests_with_meta`. `DaemonConfig.catalog` menerimanya lewat `CatalogOverride::Preloaded(Catalog)` (daemon membungkusnya dalam `Arc`).
 - `stackly_core::catalog::testing::CatalogBuilder` (fitur `test-support` yang sama) menulis folder catalog yang valid di `TestRoot` untuk binary test: memakai tipe `catalog::index`, *Digest isi*, dan `ValidatedPackage::key()` yang sama dengan xtask, menerima paket `testing/` hanya kalau diminta, dan membawa paket fixture `official/linuxonly`, `official/intelonly`, dan `official/blockedhost` (file nya di `crates/core/tests/fixtures/catalog/`). `stackly-testkit` tidak boleh bergantung pada `stackly-core` (spec 0001), jadi builder ini tidak ada di testkit; `stacklyd` dan `stackly-cli` memakainya sebagai dev dependency.
-- `CatalogState` disimpan di state daemon sebagai `Arc` dan tidak berubah selama daemon berjalan; fitur 37 yang nanti menambah perubahan saat berjalan.
+- `CatalogState` disimpan di state daemon sebagai `Arc` dan tidak berubah selama daemon berjalan; fitur 37 yang nanti menambah perubahan saat berjalan. *Diputuskan spec 0037 (2026-11-11), dibangun fitur 37:* state itu menjadi snapshot yang bisa diganti (`RwLock<Arc<CatalogState>>`), catalog bawaan tetap dimuat sekali, dan hanya entri lokal yang berubah saat berjalan (*Tambahan fitur 37*).
 
 ### Issue loader
 
@@ -271,6 +271,7 @@ Daftar `capabilities` di detail dan teks CLI selalu dalam urutan ini, bukan urut
 | --- | --- | --- |
 | `Planned` | `planned` | `provider_planned` |
 | `Invalid` | `invalid` | `package_invalid` |
+| entri lokal yang verdict trust nya bukan `Trusted` *(ditambah fitur 37, spec 0037 Gate trust)* | `blocked` | `approval_required` atau `trust_revoked` |
 | gate `Installable` untuk minimal satu versi | `available` | kosong |
 | ada artefak `blocked` dengan target persis host | `blocked` | `artifact_blocked` (catatan dari `blocked.reason` artefak pertama) |
 | selain itu | `unsupported` | reason gate versi pertama: `fixture_only`, `no_build_for_arch`, atau `no_build_for_host` |
@@ -298,6 +299,7 @@ pub fn installability<'a>(entry: &'a CatalogEntry, version: &ExactVersion, host:
 - Urutan reason untuk entri provider: artefak host `blocked` berarti `artifact_blocked`; artefak host `fixture` berarti `fixture_only`; tidak ada artefak host tetapi ada artefak di OS host untuk arch lain berarti `no_build_for_arch`; selain itu `no_build_for_host`.
 - `available_targets` berisi target artefak `available` versi itu, urut teks `Target`, dan dikirim di detail `availableTargets` dipisah koma (kosong kalau tidak ada).
 - Pemanggil: `runtime.install` dan `runtime.resolve` fitur 18, tepat setelah resolusi selector dan sebelum `begin` operasi; test end to end penolakannya (`runtime_install_refuses_an_artifact_for_another_target`) ditulis fitur 18, dan milestone 4 spec ini menunggu test itu lulus. `stacklyd` juga memakai fungsi ini untuk `CatalogVersion.install`.
+- *Ditambah fitur 37 (spec 0037 Gate trust):* `installability` dan `provider_installability` mendapat parameter `trust: &TrustVerdict`, dan mengembalikan `NotInstallable` dengan reason baru `ApprovalRequired` (`approval_required`) atau `TrustRevoked` (`trust_revoked`) sebelum aturan lain. Entri catalog bawaan tanpa revocation selalu `Trusted`, jadi hasil untuk entri itu tidak berubah. Handler memetakan kedua reason itu ke `provider.approval_required` dan `provider.revoked` milik spec 0037, bukan ke `catalog.not_installable`.
 
 ### Kesehatan subsystem
 
@@ -368,9 +370,9 @@ pub struct CatalogIssue { file: String, location: String, code: String, message:
                           reason: Option<String> /* dari Issue.reason, hanya untuk kode yang punya daftar reason */ }
 ```
 
-Enum terbuka (masing masing diakhiri `Unrecognized`, Swift `.unrecognized` lewat `OpenEnums.swift`): `CatalogSourceKind` (`bundled`, `development`), `TrustLevel` (`official`, `development`), `ProviderCategory` (`database`, `messaging`, `analytics`, `cache`, `proxy`, `testing`), `CatalogEntryState` (`available`, `blocked`, `unsupported`, `planned`, `invalid`), `SupportStatus` (enam nilai domain), `SupportReason` (`untested`, `no_build`, `no_build_for_arch`, `no_build_for_host`, `platform_note`, `artifact_blocked`, `fixture_only`, `provider_planned`, `package_invalid`; fitur 18 menambah reason untuk `supported` dan `experimental`), `TargetOs` (`macos`, `linux`, `windows`), `TargetArch` (`aarch64`, `x86_64`), `ArtifactStatus` (`available`, `blocked`, `fixture`), `ProviderCapability` (`multi_instance`, `persistence`, `reload`, `metrics`, `tls`, `cold_backup`, `online_backup`, `logical_backup`), `DependencyKind` (`bundled`, `own`, `system`), `TileColor` (sepuluh nilai di *Sumber catalog di repo*). `CapabilityStatus` adalah DTO capability yang ditunggu spec 0012 dan 0013; fitur 20 memakainya ulang untuk form dan `UnsupportedContent.reason`.
+Enum terbuka (masing masing diakhiri `Unrecognized`, Swift `.unrecognized` lewat `OpenEnums.swift`): `CatalogSourceKind` (`bundled`, `development`), `TrustLevel` (`official`, `development`), `ProviderCategory` (`database`, `messaging`, `analytics`, `cache`, `proxy`, `testing`), `CatalogEntryState` (`available`, `blocked`, `unsupported`, `planned`, `invalid`), `SupportStatus` (enam nilai domain), `SupportReason` (`untested`, `no_build`, `no_build_for_arch`, `no_build_for_host`, `platform_note`, `artifact_blocked`, `fixture_only`, `provider_planned`, `package_invalid`; fitur 18 menambah reason untuk `supported` dan `experimental`), `TargetOs` (`macos`, `linux`, `windows`), `TargetArch` (`aarch64`, `x86_64`), `ArtifactStatus` (`available`, `blocked`, `fixture`), `ProviderCapability` (`multi_instance`, `persistence`, `reload`, `metrics`, `tls`, `cold_backup`, `online_backup`, `logical_backup`), `DependencyKind` (`bundled`, `own`, `system`), `TileColor` (sepuluh nilai di *Sumber catalog di repo*). `CapabilityStatus` adalah DTO capability yang ditunggu spec 0012 dan 0013; fitur 20 memakainya ulang untuk form dan `UnsupportedContent.reason`. *Ditambah fitur 37 (spec 0037):* `TrustLevel` mendapat `local` dan `SupportReason` mendapat `approval_required` serta `trust_revoked`; field DTO baru ada di *Tambahan fitur 37*.
 
-`sha256` artefak host adalah kunci yang dipakai aksi Get fitur 18 (runtime terpasang, operasi install yang berjalan, dan `expectedSha256`), jadi kolom aksi tidak perlu memanggil `runtime.resolve` per baris. `dependencies` bernilai null selama `versions.json` belum punya field itu (ditambah fitur 18), dan berupa daftar (boleh kosong) setelahnya. `installed_size` dari `unpackedSize` fitur 18, null sebelum itu. Tidak ada event di fitur ini: catalog tidak berubah selama daemon berjalan, dan reconnect setelah restart daemon (gap `server_restarted`) memuat ulang snapshot.
+`sha256` artefak host adalah kunci yang dipakai aksi Get fitur 18 (runtime terpasang, operasi install yang berjalan, dan `expectedSha256`), jadi kolom aksi tidak perlu memanggil `runtime.resolve` per baris. `dependencies` bernilai null selama `versions.json` belum punya field itu (ditambah fitur 18), dan berupa daftar (boleh kosong) setelahnya. `installed_size` dari `unpackedSize` fitur 18, null sebelum itu. Tidak ada event di fitur ini: catalog tidak berubah selama daemon berjalan, dan reconnect setelah restart daemon (gap `server_restarted`) memuat ulang snapshot. *Ditambah fitur 37 (spec 0037):* event `catalog.changed` terbit setiap kali snapshot catalog diganti sesudah operasi provider, dan `CatalogStore` memuat ulang list saat menerimanya (*Tambahan fitur 37*).
 
 Issue catalog sampai ke wire hanya lewat `ProviderDetail.issues` (DTO `CatalogIssue` milik spec ini), tidak pernah sebagai `ErrorBody.items` ber `kind` `issue`: tidak ada kode `catalog.*` yang membawa `items`. Jadi field `reason` di `CatalogIssue` ikut kenaikan minor fitur ini di langkah 5, sedangkan kunci `reason` di item `issue` `ErrorItem`, perubahan `ItemSpec`, dan minor nya tetap milik spec 0021 milestone 1 langkah 1 (keputusan lead D2).
 
@@ -507,19 +509,19 @@ Nilai `unrecognized` di enum terbuka lain ditampilkan sebagai teks netral, tidak
 ### Key invariants
 
 - Membaca catalog tidak pernah menulis file, menjalankan proses, menyentuh jaringan, atau menyelesaikan secret.
-- Catalog hanya memuat namespace `official`; namespace `testing` tidak pernah ada di catalog yang dibangun xtask dan tidak pernah dimuat daemon kecuali lewat opsi test di dalam proses.
+- Catalog hanya memuat namespace `official`; namespace `testing` tidak pernah ada di catalog yang dibangun xtask dan tidak pernah dimuat daemon kecuali lewat opsi test di dalam proses. *Ditambah fitur 37 (spec 0037):* kalimat ini berlaku untuk catalog bawaan. Entri lokal memakai namespace apa pun selain `official`, `testing`, dan `stackly`, dan tidak pernah ber `trust` `official`.
 - Setiap entri provider di catalog yang dimuat cocok dengan `manifestSha256` dan `versionsSha256` index nya; isi catalog yang berubah selalu disertai revision baru di ledger.
 - Status, reason, dan keputusan install hanya dihitung daemon; GUI dan CLI tidak pernah menurunkan status dari data mentah.
 - `supported` tidak pernah tampil tanpa compatibility record; tidak ada substitusi target atau emulasi diam diam.
 - `publishedAt` yang ditampilkan selalu tanggal dari catalog terpasang; tidak ada yang mengklaim catalog terbaru atau adanya catalog yang lebih baru.
-- Catalog tidak berubah selama satu run daemon.
+- Catalog bawaan tidak berubah selama satu run daemon. Entri lokal berubah hanya lewat operasi provider spec 0037 (`import_provider`, `approve_provider`, `revoke_provider`, `remove_provider_import`), yang mengganti snapshot catalog gabungan secara atomik dan menerbitkan `catalog.changed`. *(Diubah 2026-11-11, fitur 37, spec 0037; sebelumnya "Catalog tidak berubah selama satu run daemon.")*
 
 ### Security model
 
 - Ancaman utama: paket atau index yang diubah di dalam bundle, dan catalog palsu yang tampil sebagai official. Pertahanan baseline: segel code signature bundle macOS (spec 0015, signing terakhir dan dari dalam ke luar) ditambah `manifestSha256` dan `versionsSha256` per paket di index yang dicek daemon. Selama OQ-012 belum punya akun Apple Developer, build ditandatangani ad hoc, jadi segel hanya membuktikan "tidak berubah sejak build lokal ini"; pemeriksaan segel saat berjalan milik fitur 60 dan 63. Catalog bawaan tidak butuh hosting registry, jadi bagian hosting OQ-012 tidak menahan fitur ini.
 - Catalog dari `STACKLY_CATALOG_DIR` selalu berlabel `development`, tidak pernah `official`, di DTO, GUI, dan CLI.
 - Loader menolak symlink, file bukan file biasa, ukuran dan jumlah di atas batas, field asing, dan namespace di luar `official`; semua masukan lain sudah dijaga loader spec 0009. Total byte paket dibatasi 16 MiB supaya catalog tidak bisa menaikkan memori daemon jauh di atas anggaran NFR-003.
-- Tidak ada revocation list atau kunci signing catalog di baseline (OQ-009); catalog tidak pernah mengklaim revocation terkini. Sinkronisasi catalog online, trust root publik, dan revocation ada di Deferred (Public registry). Trust approval untuk paket lokal milik fitur 37.
+- Tidak ada revocation list atau kunci signing catalog di baseline (OQ-009); catalog tidak pernah mengklaim revocation terkini. Sinkronisasi catalog online, trust root publik, dan revocation ada di Deferred (Public registry). Trust approval untuk paket lokal milik fitur 37. *Ditambah fitur 37 (spec 0037 AC-8):* catalog bawaan boleh membawa daftar `revoked` (*Tambahan fitur 37*). Daftar itu setua catalog terpasang, tidak pernah diklaim terkini, tidak ditandatangani terpisah (segel bundle yang sama melindunginya), dan tidak menyentuh jaringan. Signing catalog, trust root publik, dan revocation online tetap Deferred, dan OQ-009 tetap terbuka untuk itu.
 - Semua method `catalog.*` hanya membaca dan tersedia untuk peer yang sudah lolos handshake spec 0006; tidak ada peran baru. Path folder catalog tidak pernah dikirim lewat wire.
 
 ### Configuration required
@@ -574,12 +576,77 @@ pub fn ensure_source(registry: &dyn Registry, clock: &dyn Clock, meta: &CatalogM
 | `status` | `active` | `active` |
 | `last_sync_at` | NULL (tidak ada sinkronisasi) | NULL |
 
-Kode `kind` dan `status` adalah set terbuka spec 0005; fitur 37 menambah `local` dan status lain.
+Kode `kind` dan `status` adalah set terbuka spec 0005; fitur 37 menambah `local` dan status lain. *Diputuskan spec 0037 (Model data):* kind `local` dengan tepat satu baris untuk semua import (`location` `imports`, `trust_root` NULL, `status` `active`), dan tidak ada status sumber baru, karena revocation melekat pada entri, bukan pada sumber.
 
 Tambahan spec lain untuk kontrak ini sudah diterapkan di `main` (2026-10-20) dan dibangun fitur 20:
 
 - **Spec 0005** (sudah di *Tambahan fitur 20* spec itu, tanpa migrasi karena tabel dan kolom sudah ada): `WriteOp::InsertProviderSource(ProviderSourceRecord)` dengan cek `DuplicateResource` untuk ID atau (`kind`, `location`); baca `provider_source_by_location(kind: &str, location: &str) -> Versioned<Option<ProviderSourceRecord>>`; `ProviderRevisionRecord.source_id: Option<ProviderSourceId>` dengan cek `MissingReference`; `ResourceRef::ProviderSource(ProviderSourceId)`; kode di tabel di atas.
 - **Spec 0004** (sudah di titik perluasan spec itu): ID `ProviderSourceId` (UUID v7) dan `ProviderSourceRecord { id, kind, location, trust_root, last_sync_at, status, revision, created_at, updated_at }` di modul `registry` domain.
+
+### Tambahan fitur 37
+
+Ditambah 2026-11-11 dari *Update spec lain* [spec 0037](../0037-import-provider-lokal-trust/index.md). Bagian ini mencatat apa yang berubah di catalog saat fitur 37 dibangun. Ini keputusan yang akan dibangun, bukan kode yang sudah ada: langkah Build plan nya ada di spec 0037 (langkah 3, 4, 5, 8, 9, dan 10), dan spec ini tidak mendapat langkah baru. ID AC spec ini tidak berubah. Aturan import, approval, gate trust, dan layar import adalah milik spec 0037; kalau teks di sini berbeda dengan spec 0037, spec 0037 yang menang untuk bagian itu.
+
+**Daftar `revoked`** (spec 0037 *Revocation di catalog*, AC-8, langkah 8). `providers/catalog.toml` dan `catalog.json` mendapat daftar opsional:
+
+```toml
+[[revoked]]
+id = "official/nats"
+revision = "1.0.0"
+manifest_sha256 = "<64 hex>"      # opsional; tanpa ini semua digest revision itu
+reason = "Starts with an insecure default; use revision 1.0.1 or later."
+since = 2026-11-20
+```
+
+```json
+"revoked": [ { "id": "official/nats", "revision": "1.0.0", "manifestSha256": null, "reason": "...", "since": "2026-11-20" } ]
+```
+
+| Field | Wajib | Aturan |
+| --- | --- | --- |
+| `revoked[].id` | ya | `ProviderName` dengan namespace apa pun |
+| `revoked[].revision` | ya | `RevisionLabel` provider revision yang dicabut |
+| `revoked[].manifest_sha256` | tidak | 64 hex huruf kecil; kalau kosong, entri cocok dengan semua digest revision itu |
+| `revoked[].reason` | ya | 1 sampai 256 byte tanpa karakter kontrol |
+| `revoked[].since` | ya | tanggal TOML; tidak boleh di masa depan saat build; di `catalog.json` ditulis `YYYY-MM-DD` |
+
+- Build dan loader memeriksa aturan yang sama: paling banyak 64 entri, urut (`id`, `revision`, `manifestSha256`), dan unik. Entri `revoked` tidak boleh cocok dengan revision sebuah entri `provider` di catalog yang sama. Pelanggaran membuat build gagal (exit 1, satu baris per masalah, seperti AC-1) dan membuat loader menandai catalog `index_invalid` (seperti AC-3).
+- Schema index tetap `stackly.catalog/v1`. Field `revoked` adalah field yang dikenal, jadi decode ketat AC-3 tetap berlaku untuk field asing lain. Catalog selalu dibaca daemon dari build yang sama, jadi tidak ada pembaca lama yang bertemu field ini.
+- `CatalogContent` menjadi `{ providers, planned, revoked }`, dengan `revoked` tidak diserialisasi saat kosong (`skip_serializing_if`). Jadi `contentSha256` setiap revision yang sudah ada di ledger tetap sama. Menambah entri `revoked` mengubah isi, sehingga butuh revision catalog baru di ledger seperti perubahan isi lain.
+- `Catalog::revocation(&self, key: &ProviderRevisionKey) -> Option<&Revocation>` dengan `Revocation { id, revision, manifest_sha256: Option<Sha256Digest>, reason, since }`. Entri cocok dengan sebuah kunci kalau `id` dan `revision` sama dan `manifestSha256` nya null atau sama dengan digest kunci.
+- Daftar ini hanya dievaluasi dari catalog yang dimuat. Ia tidak pernah disalin ke registry dan tidak diaudit. Kesegarannya setua catalog terpasang, dan `CatalogInfo.publishedAt` serta `outdated` (AC-8) sudah menyampaikan itu; tidak ada teks yang menyebut revocation terkini.
+
+**Catalog yang berubah saat daemon berjalan** (spec 0037 *Read model*, AC-10, langkah 3 dan 5).
+
+- Catalog bawaan tetap dimuat sekali saat start oleh `load_catalog` dan tidak pernah berubah selama satu run daemon. Daemon menyimpannya terpisah (`base: Arc<Catalog>`).
+- `ProviderEntry` mendapat `origin: EntryOrigin` (`Catalog` atau `Local(LocalInfo)`), dan `InvalidEntry` mendapat `local: Option<ProviderImportRecord>`. `Catalog::with_local(&self, local: Vec<CatalogEntry>) -> Catalog` membuat catalog gabungan: entri bawaan (dibagi lewat `Arc`) ditambah entri lokal, diurutkan ulang dengan *Urutan tampil*.
+- State daemon berubah dari `OnceLock<Arc<CatalogState>>` menjadi `RwLock<Arc<CatalogState>>` (std). Pembaca mengambil `Arc` saat itu dan tidak pernah memegang lock sambil bekerja, jadi request yang sedang berjalan tetap melihat snapshot lamanya. `CatalogState::Loaded` selalu berisi catalog gabungan.
+- Snapshot diganti hanya oleh `refresh_local` di `apps/daemon/src/catalog.rs`: saat start sesudah registry `Ready` (tanpa event), dan sebagai langkah terakhir pekerjaan setiap operasi provider, sesudah commit dan sebelum event selesai operasi. Setiap snapshot membawa generation registry yang ia baca, dan snapshot ber generation lebih kecil tidak pernah menimpa yang terpasang.
+- Entri lokal hanya dilayani saat catalog bawaan `Loaded`. Pada `NotConfigured` atau `Unavailable`, method `catalog.*` dan `provider.*` tetap menjawab `catalog.unavailable`. Dalam recovery mode registry, entri lokal tidak dimuat.
+- Kedua method `catalog.*` tetap dijawab dari memori dan tidak membaca registry (AC-4). Registry hanya dibaca saat `refresh_local` membangun snapshot.
+- *Kesehatan subsystem*: entri lokal `invalid` ikut hitungan `<n> catalog providers failed validation`. Refresh yang gagal membaca registry menambah bagian `degraded` `local providers not loaded: <kode>`, dan recovery mode menambah `local providers not loaded: registry recovery`.
+
+**Event `catalog.changed`** (spec 0037 *API surface*, AC-18, langkah 4). `EventKind::CatalogChanged(CatalogChanged { provider: Option<String>, change: CatalogChangeKind })` adalah event daemon tanpa resource dan tanpa revision, seperti `settings.changed`. `change` salah satu dari `imported`, `approved`, `revoked`, `removed`. Client tidak membaca isi catalog dari event; ia memanggil `catalog.list_providers` lagi. `CatalogStore` sudah mendaftarkan kind `catalog.` (*Layar Catalog (GUI)*), jadi ia cukup memanggil `refresh()` saat event itu datang, dan `ProviderDetailModel` membuang cache nya seperti saat resnapshot. Karena `EventKind` tertutup, event ini masuk bersama kenaikan major protokol fitur 37.
+
+**Trust dan DTO** (spec 0037 *API surface*; semua field baru opsional dengan `#[serde(default)]`).
+
+| Tambahan | Isi |
+| --- | --- |
+| `TrustLevel.local` | trust setiap entri lokal, termasuk yang `invalid`; label GUI "Local, not verified" dan teks CLI `local` |
+| `SupportReason.approval_required`, `trust_revoked` | reason gate dan `stateReason` untuk entri yang verdict trust nya bukan `Trusted` |
+| `ProviderSummary.approval: Option<ApprovalState>` | `pending`, `approved`, atau `revoked`; null untuk entri catalog bawaan |
+| `ProviderDetail.local: Option<LocalProviderInfo>` | data import dan keputusan terakhir; null untuk entri catalog bawaan |
+| `ProviderDetail.revocation: Option<RevocationInfo>` | terisi saat verdict trust entri itu `Revoked`, oleh user atau oleh catalog |
+| `CatalogInfo.localCount: Count` | jumlah entri lokal di snapshot |
+| `ListProvidersReply.revocations: Vec<CatalogRevocation>` | isi daftar `revoked` catalog terpasang, paling banyak 64 |
+
+Sumber nilai untuk entri lokal, melengkapi *Value sourcing*: `trust` selalu `local` (bukan `CatalogInfo.trust`); `publisher` adalah namespace paket dan selalu ditampilkan sebagai belum terverifikasi; `revision` di `ProviderSummary` tetap revision catalog; `mark` dan `tile` memakai default (dua karakter dari nama tampil, `gray`) tanpa catatan platform; sel host tidak pernah `supported` atau `experimental`, karena compatibility record paket lokal diabaikan (spec 0037 AC-11).
+
+**Batas dan anggaran frame.** Entri lokal dibatasi 32 dan total byte paket lokal 16 MiB (batas import spec 0037, di luar tabel *Batas catalog*, karena bergantung pada isi registry); batas per provider di *Batas catalog* berlaku juga untuk paket lokal. List paling besar menjadi 64 + 64 + 32 = 160 `ProviderSummary` kali sekitar 5 KiB (sekitar 800 KiB) ditambah 64 `CatalogRevocation` kali sekitar 600 B (sekitar 40 KiB), tetap di bawah `CONTROL_FRAME_MAX` 1 MiB. Test fitur 37 membangun kasus penuh itu dan memeriksa ukuran nyatanya (spec 0037 AC-10).
+
+**CLI** (spec 0037 *CLI*, AC-14, langkah 9). `stackly provider list` mendapat kolom `TRUST` (`official`, `development`, `local`); nilai `STATE` entri lokal memakai `needs approval`, `revoked`, atau state biasa; baris catalog ditambah `, <n> imported` saat `localCount` lebih dari 0; dan sesudah tabel ada bagian `Revoked by this catalog (revision <n>, published <tanggal>):` saat `revocations` tidak kosong. `stackly provider inspect` untuk entri lokal menambah baris publisher, trust, approval, import, digest paket, dan bagian izin. JSON tetap DTO yang sama.
+
+**Layar.** Tombol "Import Provider…", sheet import dan approval, seksi Permissions, dan banner approval ditetapkan spec 0037 *Layar*; kartu, matrix, capability, dan baris lain di panel detail tetap mengikuti spec ini.
 
 ## Build plan
 
@@ -626,7 +693,7 @@ Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu
 - Maintainer harus menaikkan `revision` dan `published_at` setiap paket atau `versions.json` berubah; ledger memaksanya, tetapi ini langkah tangan tambahan.
 - Sampai fitur 19 dan 23 selesai, catalog bawaan hanya berisi provider planned, dan setelah itu semua versi tampil Unverified sampai fitur 18 membawa compatibility record, berbeda dengan mockup yang menulis Tested.
 - Development butuh `cargo xtask catalog build` dan `STACKLY_CATALOG_DIR`; `cargo run -p stacklyd` biasa tidak punya catalog dan berstatus `degraded`.
-- Tile dan mark adalah data presentasi di `catalog.toml`, bukan di paket, jadi paket lokal fitur 37 butuh default sendiri.
+- Tile dan mark adalah data presentasi di `catalog.toml`, bukan di paket, jadi paket lokal fitur 37 butuh default sendiri. Diputuskan spec 0037: `mark` default dari nama tampil (aturan yang sama dengan baris `mark` di *Value sourcing*) dan `tile` `gray`.
 - Ambang 180 hari adalah pilihan produk tanpa data; terlalu cepat membuat banner yang mengganggu, terlalu lambat membuatnya tidak berguna.
 - Build menolak artefak yang butuh macOS lebih baru dari 27.0 sampai fitur 18 membawa cek versi OS saat berjalan.
 
@@ -634,7 +701,7 @@ Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap lebih dulu
 
 - Area kode `catalog`, subsystem `catalog`, variabel `STACKLY_CATALOG_DIR`, file `providers/catalog.toml` dan `providers/catalog-revisions.json`, perintah `cargo xtask catalog`, dan langkah baru di hook pre commit.
 - Kenaikan minor protokol untuk dua method dan DTO nya.
-- Tidak ada event catalog sampai fitur 37.
+- Tidak ada event catalog sampai fitur 37. Fitur 37 menambah `catalog.changed`, yang menaikkan major protokol karena `EventKind` tertutup (spec 0037 AC-18).
 
 **Aturan masuk catalog** (wajib diikuti fitur 19, 23, dan 40 sampai 43): sebuah provider pindah dari `planned` ke `provider` di `providers/catalog.toml` di commit yang sama dengan commit fitur pemiliknya yang membuktikan lifecycle nya end to end (install, create, start, readiness, stop lewat integration test di Mac ini): fitur 19 untuk PostgreSQL, fitur 23 untuk NATS, fitur 40 sampai 43 untuk Valkey, Traefik, MySQL, dan ClickHouse. Commit itu juga menaikkan `revision` dan `published_at` lalu menjalankan `cargo xtask catalog check --update`. Paket yang sudah ada di `providers/` tetapi belum lulus syarat itu (misalnya Traefik dari fitur 9) tetap planned.
 
@@ -654,7 +721,7 @@ Semua usulan spec ini ke spec lain sudah diterapkan di `main` (2026-10-20); daft
 - [ ] Fitur 18: setelah `HostFacts` ada, ganti penolakan build untuk `minOs` di atas 27.0 dengan cek saat berjalan (artefak itu menjadi `unsupported` di host yang lebih lama), lalu hapus `APP_MINIMUM_MACOS` dari aturan build.
 - [ ] Fitur 19, 23, dan 40 sampai 43: ikuti *Aturan masuk catalog*.
 - [ ] Fitur 20: ambil *Kontrak untuk fitur 20* (K-1, K-2, update spec 0004 dan 0005), panggil `pin_revision` di create instance, putuskan revision mana yang dipakai (saran: revision catalog saat create), dan tambah tombol New Instance di panel detail.
-- [ ] Fitur 37: namespace lain, kind sumber `local`, publisher dan trust untuk paket lokal, default tile, tombol Import Provider, event `catalog.changed`, dan cara entri lokal bergabung ke read model.
+- [x] Fitur 37: namespace lain, kind sumber `local`, publisher dan trust untuk paket lokal, default tile, tombol Import Provider, event `catalog.changed`, dan cara entri lokal bergabung ke read model. Diputuskan [spec 0037](../0037-import-provider-lokal-trust/index.md) dan diterapkan di spec 0017 (2026-11-11) di *Tambahan fitur 37*; kodenya dibangun fitur 37.
 - [ ] Fitur 16 (onboarding, langkah Catalog Trust): pakai `CatalogInfo.source`, `trust`, dan `publishedAt` dari spec ini.
 - [x] `ui-macos.md` (lewat `/scope`): catat selisih mockup yang diketahui untuk Catalog: Available netral bukan biru, Unverified bukan Tested sampai fitur 18, kartu planned tanpa opacity, dan MariaDB serta RabbitMQ tidak tampil. Diterapkan di `ui-macos.md` (2026-10-19).
 - [ ] `/sync` setelah build: catat `cargo xtask catalog build`, `catalog check`, ledger, `STACKLY_CATALOG_DIR`, dan langkah `cargo xtask catalog check` di hook pre commit (baris Pre commit di bagian Tooling) di root `AGENTS.md`, serta folder `Catalog/` di `apps/macos/AGENTS.md`.
