@@ -22,6 +22,7 @@ This repository has no CI, so please run the checks yourself and paste the outpu
 - [ ] `cargo xtask codegen --check`
 - [ ] `cargo xtask provider check`
 - [ ] `cargo xtask docs check`
+- [ ] Provider package changes: `cargo xtask provider test providers/<name>`
 - [ ] Changes to `providers/catalog.toml` or a package listed in it: `cargo xtask catalog check`
 - [ ] Swift changes: `swift test --package-path clients/swift`
 - [ ] Swift changes: `swift test --package-path apps/macos/Packages/StacklyUI`
@@ -33,7 +34,7 @@ Paste the output here.
 
 ## Provider checklist
 
-Only for a pull request that adds or changes a provider package.
+Only for a pull request that adds or changes a provider package. The maintainer follows the [provider review checklist](https://github.com/stackly-dev/stackly/blob/main/docs/providers/review.md).
 
 - [ ] `cargo xtask provider check` is clean for the package
 - [ ] The harness `report.json` from `cargo xtask provider test` is attached

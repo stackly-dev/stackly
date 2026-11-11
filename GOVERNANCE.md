@@ -24,7 +24,7 @@ Today one person holds every role. There is no `CODEOWNERS` file yet. When a sec
 ## Official and reviewed
 
 - `official` means the package lives in `providers/` in this repository under the `official/` namespace, has a provider owner, and ships in the bundled catalog or is listed there as planned.
-- `reviewed` means that revision of the package passed the maintainer's provider review when it was merged.
+- `reviewed` means that revision of the package passed the maintainer's [provider review checklist](docs/providers/review.md) when it was merged.
 
 Neither word means a package is free of risk forever, and a review covers one revision only. `reviewed` is a word for this process, not a label in the app.
 
@@ -61,7 +61,7 @@ Vulnerabilities never go into issues; see [SECURITY.md](SECURITY.md).
 
 ## Compatibility and deprecation
 
-The provider manifest format, `stackly/v1alpha1`, is defined in [spec 0009](docs/specs/0009-provider-engine-manifest-schema/index.md). A page for provider authors on schema compatibility and deprecation is not written yet; until it is, that spec is the reference.
+How the provider manifest format, `stackly/v1alpha1`, changes, and how a field is deprecated or a new `apiVersion` arrives, is in [docs/providers/compatibility.md](docs/providers/compatibility.md).
 
 The IPC protocol between the daemon, the CLI, and the app has its own version and contract digest ([spec 0006](docs/specs/0006-protokol-ipc-daemon/index.md)).
 

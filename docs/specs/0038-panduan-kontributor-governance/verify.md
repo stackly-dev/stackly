@@ -99,5 +99,26 @@ Tafsiran: Build plan langkah 8 berkata pemeriksaan (d) "menjadi wajib", sedangka
 - AC-9: pemeriksaan (d) sekarang wajib; test fixture rusaknya di `xtask/src/docs/schema.rs` (property, nilai enum, halaman hilang). Pemeriksaan lain tetap seperti Milestone 1.
 - AC-10: ketiga halaman rujukan dan (d) wajib, dibuktikan `docs check` bersih dan probe schema di atas.
 - AC-14: ketiga halaman berbahasa Inggris dan lolos (g); sisanya (tabel ringkas, satu H1) dijaga review di langkah UI / manual.
-- AC-2, AC-11: menunggu langkah 9 (butuh `cargo xtask provider test` di `main`).
+- AC-2, AC-11: langkah 9, lihat *Langkah 9* di bawah.
 - AC-8: menunggu langkah 10. AC-12: menunggu langkah 11 (fitur 37). AC-1, AC-3 sampai AC-7, AC-13: Milestone 1.
+
+### Langkah 9: panduan provider
+
+Ditambahkan sesudah `cargo xtask provider test` masuk `main` (`0cc879af`, spec 0036 langkah 13). Langkah ini ikut Milestone 2, karena kotak SCOPE nya mencakup langkah 8 dan 9.
+
+#### UI / manual
+
+- [ ] Buka `docs/providers/README.md` → untuk siapa; prasyarat (Mac Apple Silicon macOS 27, rustup dengan toolchain `rust-toolchain.toml`, Xcode Command Line Tools, tanpa unduhan runtime); komentar `<!-- docs-walkthrough -->` tepat di atas satu blok `bash` berisi persis empat perintah `cargo xtask provider check providers/example`, `cargo xtask provider test providers/example`, `cargo xtask provider new mytool`, `cargo xtask provider test providers/mytool`; satu kalimat letak report (`target/provider-test/<runId>/report.json`, baris terakhir stderr); tabel halaman lain; alur tujuh langkah PRD 39 → AC-8, AC-11
+- [ ] Buka `docs/providers/authoring.md` → layout paket spec 0009; `cargo xtask provider new <name>` menyalin `providers/example/` menjadi `testing/<name>` yang langsung valid; urutan mengisi `provider.yaml`, settings schema, template, `tests/scenarios.yaml` (satu satunya file `tests/` yang dibaca; tanpa file itu satu skenario `default`); bagian **Moving to the official catalog** dengan entri inventaris (`cargo xtask runtime pin`), ganti `metadata.id` dan `software`, `cargo xtask codegen`, `PROVIDER_WORDS`, fixture form `create_form_fixtures`, test native per line, `[[provider]]` di `providers/catalog.toml`, `cargo xtask provider freeze` (sesudah `[[provider]]`, karena freeze menolak paket di luar catalog), `LICENSE-NOTICES.md`, dan kenaikan `metadata.revision` → AC-11
+- [ ] Buka `docs/providers/testing.md` → `cargo xtask provider check` tanpa daemon dan `stackly provider validate <dir>` lewat daemon (exit 0 atau 2 `cli.provider_invalid`, hasil sama); `error` dan `warning`; origin `package`, `authoring`, `scenarios`; `loadable` dan `publishable`; `cargo xtask provider test` dengan `--line`, `--scenario`, `--report`, `--keep`; namespace `official` dan `testing` saja; setting fake server (`readyDelayMs`, `crashAfterMs`, `logLinesPerSecond`, …); report `stackly.provider-conformance/v1`; exit 0, 1, 2; `--cleanup`; root sementara dan daemon sendiri; bukti fixture dan native → AC-11
+- [ ] Buka `docs/providers/compatibility.md` → `current` dan `deprecated` (`deprecated_api_version`), `unsupported_api_version` ditolak tanpa lifecycle, tiga kelas perubahan, corpus beku, deprecation, migrasi `apiVersion` baru, sesuai spec 0036 *Kebijakan kompatibilitas* → AC-11
+- [ ] Buka `docs/providers/review.md` → peringatan membaca diff sebelum menjalankan apa pun; validator; report harness; bukti native dengan tiga perintah (`native_runtime`, `provider_conformance`, `native_launchd` hanya untuk handover); corpus `cargo xtask provider freeze`; sumber dan lisensi; keamanan (executable dari runtime, tanpa secret di argv, loopback, tanpa skrip); revision tidak berubah sesudah merge; `HANDOVER_PROVEN` hanya lewat test native launchd → AC-11
+- [ ] `CONTRIBUTING.md` bagian 4 punya blok `cargo xtask provider test providers/<name>`, dan bagian 6 berisi lima langkah ringkas dengan link ke `docs/providers/README.md`, `authoring.md`, `testing.md`, `review.md` → AC-2
+- [ ] `README.md` bagian `Contributing` menautkan `docs/providers/README.md`, dan baris Layout `docs/` menyebut `docs/providers/`; `GOVERNANCE.md` bagian 3 menautkan `review.md` dan bagian 6 menautkan `compatibility.md`; `providers/example/README.md` menautkan `docs/providers/README.md`; template PR punya kotak `cargo xtask provider test` di `Checks I ran locally` → AC-2, AC-6, AC-7, AC-14
+- [ ] Tidak ada halaman yang menyebut alur import fitur 37 atau `stackly provider test` → AC-11
+
+#### Commands
+
+- [ ] `cargo xtask docs check` → `ok docs 25`, exit 0 (20 file sebelumnya ditambah lima halaman baru) → AC-2, AC-9, AC-11
+- [ ] `cargo xtask provider check` → lima baris `ok` dengan digest yang sama seperti di `main` (README paket contoh tidak masuk digest) → AC-11
+- [ ] `cargo test -p xtask` → lulus, termasuk test scaffold yang menyalin `providers/example/README.md` → AC-11
