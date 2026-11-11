@@ -187,4 +187,61 @@ struct NewInstancePresenterTests {
         #expect(rig.service.formProviders == [nil, "beta/nats"])
         #expect(rig.model.providerCandidates.isEmpty)
     }
+
+    // covers: spec 0037 Layar (provider choice), review Major 2
+    @Test func theCandidateRowsKeepTheDaemonsOrderAndTakeNamesFromTheSnapshot() async throws {
+        let (presenter, rig) = await presenter()
+        let known = try #require(rig.runtimeRig.catalog.providers?.first)
+        let unknown = "zeta/unknown"
+        let refusal = ErrorBody(
+            code: "instance.provider_ambiguous", category: .conflict,
+            message: "no single approved provider runs this software; choose one of the candidates",
+            retryable: false, resource: nil, fields: nil, hint: nil,
+            details: [ErrorDetail(key: "candidates", value: "\(unknown),\(known.provider)")],
+            operationId: nil, rule: nil, items: nil)
+        rig.service.onForm = { _ throws(ClientError) in throw .rejected(refusal) }
+        presenter.present()
+        await settle("the refusal") { !rig.model.providerCandidates.isEmpty }
+
+        let rows = rig.model.providerCandidateRows
+        #expect(rows.map(\.id) == [unknown, known.provider])
+        #expect(rows[0].displayName == nil)
+        #expect(rows[0].trustLabel == nil)
+        #expect(rows[1].displayName == known.displayName)
+    }
+
+    // covers: spec 0037 Layar (provider choice), review Major 2
+    @Test func aTrustRefusalForAChosenCandidateShowsTheDaemonsMessageAndHint() async {
+        let (presenter, rig) = await presenter()
+        let ambiguous = ErrorBody(
+            code: "instance.provider_ambiguous", category: .conflict,
+            message: "no single approved provider runs this software; choose one of the candidates",
+            retryable: false, resource: nil, fields: nil, hint: nil,
+            details: [ErrorDetail(key: "candidates", value: "acme/nats")],
+            operationId: nil, rule: nil, items: nil)
+        let pending = ErrorBody(
+            code: "provider.approval_required", category: .conflict,
+            message: "provider acme/nats is not approved", retryable: false, resource: nil,
+            fields: nil, hint: "approve it with stackly provider approve acme/nats",
+            details: nil, operationId: nil, rule: nil, items: nil)
+        let service = rig.service
+        rig.service.onForm = { _ throws(ClientError) in
+            throw .rejected(service.formProviders.last == .some(nil) ? ambiguous : pending)
+        }
+        presenter.present(software: "nats")
+        await settle("the choice") { !rig.model.providerCandidates.isEmpty }
+
+        rig.model.chooseProvider("acme/nats")
+        await settle("the trust refusal") {
+            if case .formFailed(let failure) = rig.model.phase {
+                return failure.code == "provider.approval_required"
+            }
+            return false
+        }
+        #expect(rig.model.providerCandidates.isEmpty)
+        if case .formFailed(let failure) = rig.model.phase {
+            #expect(failure.message.contains("is not approved"))
+            #expect(failure.message.contains("stackly provider approve acme/nats"))
+        }
+    }
 }

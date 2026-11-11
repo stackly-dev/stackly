@@ -510,8 +510,46 @@ public final class CreateInstanceModel {
         providerCandidates = Self.candidates(of: error.body)
         phase = .formFailed(
             FailureContent(
-                title: "Couldn’t Load the Form", message: DaemonText.sentence(error.body.message),
+                title: "Couldn’t Load the Form", message: Self.failureMessage(error.body),
                 code: error.body.code))
+    }
+
+    /// The message of a form that could not load: the daemon's message, and for a trust
+    /// refusal of a provider (`provider.approval_required`, `provider.revoked`, spec 0037)
+    /// also its hint, which says how to approve it.
+    static func failureMessage(_ body: ErrorBody) -> String {
+        let message = DaemonText.sentence(body.message)
+        guard body.code == "provider.approval_required" || body.code == "provider.revoked",
+            let hint = body.hint
+        else { return message }
+        return "\(message) \(DaemonText.sentence(hint))"
+    }
+
+    /// One row of the provider choice (spec 0037, *Layar*): the display name from the catalog
+    /// snapshot, or the ID alone when the entry is not in it, the full ID, and for a local
+    /// entry its trust and approval labels.
+    public struct ProviderCandidate: Hashable, Sendable {
+        /// The full provider ID, such as `acme/nats`.
+        public let id: String
+        /// The display name, or `nil` when the entry is not in the snapshot.
+        public let displayName: String?
+        /// "Local, not verified · {approval}" for a local entry, else `nil`.
+        public let trustLabel: String?
+    }
+
+    /// The rows of ``providerCandidates``, in the daemon's order.
+    public var providerCandidateRows: [ProviderCandidate] {
+        providerCandidates.map { id in
+            let entry = catalog?.providers?.first { $0.provider == id }
+            let trust: String? = entry.flatMap { entry in
+                guard entry.trust == .local else { return nil }
+                let parts =
+                    [CatalogCopy.trustText(.local)]
+                    + (entry.approval.map { [ProviderTrustCopy.approvalLabel($0)] } ?? [])
+                return parts.joined(separator: " · ")
+            }
+            return ProviderCandidate(id: id, displayName: entry?.displayName, trustLabel: trust)
+        }
     }
 
     /// The providers of `instance.provider_ambiguous`, from its comma separated

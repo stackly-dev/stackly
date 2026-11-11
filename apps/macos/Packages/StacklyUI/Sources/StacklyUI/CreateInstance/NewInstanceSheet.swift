@@ -244,8 +244,9 @@ public struct NewInstanceSheet: View {
     }
 }
 
-/// The providers the daemon offers when it can't pick one (spec 0037, *Software yang sama*):
-/// choosing one reads its form.
+/// The providers the daemon offers when it can't pick one (spec 0037, *Layar*): one row per
+/// candidate in the daemon's order, with its display name, full ID, and for a local entry its
+/// trust and approval. Choosing one reads its form.
 private struct ProviderCandidatesSection: View {
     let model: CreateInstanceModel
 
@@ -253,8 +254,25 @@ private struct ProviderCandidatesSection: View {
         VStack(alignment: .leading, spacing: Spacing.s8) {
             Text("Choose a provider")
                 .font(.headline)
-            ForEach(model.providerCandidates, id: \.self) { candidate in
-                Button(candidate) { model.chooseProvider(candidate) }
+            ForEach(model.providerCandidateRows, id: \.id) { candidate in
+                Button {
+                    model.chooseProvider(candidate.id)
+                } label: {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text(candidate.displayName ?? candidate.id)
+                        if candidate.displayName != nil {
+                            Text(candidate.id)
+                                .font(.callout.monospaced())
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
+                        if let trust = candidate.trustLabel {
+                            Text(trust)
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
