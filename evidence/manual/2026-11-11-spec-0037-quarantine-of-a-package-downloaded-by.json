@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ca0c-4045-720a-892f-fa65f5641505",
+  "covers": [
+    "REQ-033",
+    "AC-033"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0037 quarantine of a package downloaded by a browser",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "a package zip downloaded by a browser and opened in Finder previews with quarantined true and the downloaded from the internet note, imports, keeps com.apple.quarantine on the source folder, and its copy in provider-imports has no quarantine attribute",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-11T09:59:22.948954Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-11-spec-0037-quarantine-of-a-package-downloaded-by.json",
+  "context": {
+    "sourceCommit": "04fbb908667233f12aa321d3e4b19e8cc66a13ea",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

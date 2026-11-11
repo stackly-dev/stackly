@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ca0c-3c16-70d0-b889-26d158c25336",
+  "covers": [
+    "REQ-033",
+    "AC-033"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0037 import from a protected folder by the LaunchAgent daemon",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "stackly provider import of a package in ~/Downloads, and the same import from the GUI, against the daemon of an installed bundle running as a LaunchAgent either succeeds or answers provider.import_unreadable reason permission_denied with the Files and Folders hint, with no crash and no request to turn off a protection",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-11T09:59:21.878526Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-11-spec-0037-import-from-a-protected-folder-by-the.json",
+  "context": {
+    "sourceCommit": "04fbb908667233f12aa321d3e4b19e8cc66a13ea",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

@@ -28,6 +28,7 @@ use stackly_protocol::provider::{
     PreviewImportParams, ProviderTargetParams,
 };
 use stackly_protocol::{Call, ErrorBody, Reply};
+use stackly_testkit::evidence::{Kind, evidence};
 use stacklyd::server::DaemonHandle;
 
 use crate::support::{Api, Site, fast_with_catalog, key};
@@ -200,6 +201,11 @@ async fn changes(
 // covers: AC-1 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_preview_reads_the_folder_and_writes_nothing() {
+    let ev = evidence!(
+        covers = ["AC-033", "REQ-033"],
+        kind = Kind::Fixture,
+        expected = "provider.preview_import reads a local package folder and answers its identity, digests, and permissions without writing a file, a registry row, or an audit row",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -248,6 +254,7 @@ async fn a_preview_reads_the_folder_and_writes_nothing() {
     assert_eq!(tree(site.root.path()), before, "nothing is written");
     drop(api);
     stop(daemon).await;
+    ev.pass();
 }
 
 // covers: AC-1, AC-2 (spec 0037)
@@ -300,6 +307,11 @@ async fn a_preview_answers_an_invalid_package_and_refuses_an_unreadable_folder()
 // covers: AC-3, AC-10, AC-17 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn an_import_stores_a_private_copy_shows_a_pending_local_entry_and_audits() {
+    let ev = evidence!(
+        covers = ["AC-033", "REQ-033"],
+        kind = Kind::Fixture,
+        expected = "provider.import stores a private copy, lists the entry as trust local, approval pending, and blocked with approval_required, audits once, and publishes catalog.changed imported",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -408,6 +420,7 @@ async fn an_import_stores_a_private_copy_shows_a_pending_local_entry_and_audits(
     assert_eq!(imports, 1, "the second import is not an operation");
     drop((api, events));
     stop(daemon).await;
+    ev.pass();
 }
 
 // covers: AC-3 (spec 0037)
@@ -445,6 +458,11 @@ async fn an_import_of_changed_bytes_is_refused_and_writes_nothing() {
 // covers: AC-9, AC-10 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_remove_deletes_the_row_and_its_copy_and_a_restart_loads_the_rest() {
+    let ev = evidence!(
+        covers = ["REQ-033"],
+        kind = Kind::Fixture,
+        expected = "provider.remove deletes the import row and its stored copy, refuses a catalog ID with provider.import_not_found, and a restart loads the remaining local entries",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -497,6 +515,7 @@ async fn a_remove_deletes_the_row_and_its_copy_and_a_restart_loads_the_rest() {
     assert_eq!(u64::from(list(&api).await.catalog.local_count), 0);
     drop(api);
     stop(daemon).await;
+    ev.pass();
 }
 
 // covers: AC-13 (spec 0037)

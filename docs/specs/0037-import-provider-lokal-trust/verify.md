@@ -186,7 +186,7 @@ Tidak ada langkah yang butuh izin user di milestone ini. Pembacaan ulang copy CL
 
 ## Milestone 4: Import and approval in the app
 
-_Status 2026-11-11: langkah Build plan 10 sampai 12 dibangun (`dev-f37-m4`), dari fixture `protocols/fixtures/provider/`. `provider.approve` dan `provider.revoke` di daemon masih menjawab `request.unknown_method` sampai milestone 2 masuk `main`, jadi approve dan revoke GUI baru diuji terhadap fixture; test integrasi Swift terhadap daemon nyata untuk keduanya menyusul. Langkah 13 (evidence `native` `NOT_RUN` dan langkah manual) menunggu milestone 2 dan 3._
+_Status 2026-11-11: langkah Build plan 10 sampai 12 dibangun (`dev-f37-m4`) dari fixture `protocols/fixtures/provider/`. Sesudah milestone 2 masuk `main` (`56287e5c`, protokol 4.1), `LocalProviderEndToEndTests` menjalankan model GUI terhadap `stacklyd` nyata; perilaku daemon sama dengan yang diasumsikan model dari fixture, jadi sumber StacklyUI tidak berubah. Langkah 13 ada di bagian sesudah milestone ini._
 
 Tafsiran yang diambil (teks AC tidak berubah):
 
@@ -220,6 +220,7 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build.
 - [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogLocalSnapshotTests|SettingsSnapshotTests|OnboardingSnapshotTests"` → lulus terhadap referensi: `catalog-import-preview`, `catalog-import-invalid`, `catalog-import-replaces`, `catalog-local-pending`, `catalog-local-changed`, `catalog-local-approved`, `catalog-local-revoked`, `catalog-local-catalog-revoked`, `catalog-approve-sheet` (light, dark, narrow), `settings-sources-imported` (light, dark), dan `onboarding-catalog-trust` yang direkam ulang → AC-15, AC-16
 - [ ] `cargo xtask snapshot review` → `target/snapshot-review/index.html` menampilkan PNG baru dan `onboarding-catalog-trust` lama dan baru untuk ditinjau
 - [ ] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI` → semua lulus (flaky beban yang dikenal diulang sendirian)
+- [ ] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --filter LocalProviderEndToEndTests` → lulus: terhadap `stacklyd` nyata (root `skeleton_seed`, catalog kosong `stackly-testkit` sebagai `STACKLY_CATALOG_DIR`) model GUI mengimpor salinan `providers/fake` sebagai `acme/fake` dengan `pending` dan badge "Needs Approval"; form dan create ditolak `provider.approval_required`; digest basi menutup sheet approve dengan umpan balik `provider.import_changed`; approve membuka gate (form ber `source` `local_import`, create berhasil); revoke dari panel membuat create baru ditolak `provider.revoked` `by` `user` dengan hint "existing instances still start" dan banner "Approval revoked" ber "Approve Again…", sedangkan instance lama tetap start dan stop; approve dari koneksi lain sampai ke `CatalogStore` lewat `catalog.changed` saja; remove menghilangkan entri → AC-4, AC-5, AC-7, AC-9, AC-15
 - [ ] `swift test --package-path clients/swift` → lulus
 - [ ] `cargo xtask build-app` → BUILD SUCCEEDED
 - [ ] `grep -rn "provisional: F37" apps/macos clients/swift` → tidak ada hasil
@@ -232,3 +233,27 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build.
 - AC-8 · bagian tampilan: banner "Revoked by the catalog" dengan revision dan tanggal terbit catalog terpasang, hitungan revocation di Settings, tanpa klaim kesegaran; isi revocation dari daemon milik milestone 2
 - AC-13 · bagian tampilan: catatan quarantine di sheet import
 - AC-1 sampai AC-7, AC-9, AC-10, AC-12, AC-14, AC-17 sampai AC-19 · milik milestone 1 sampai 3
+
+## Langkah 13: evidence and manual steps
+
+_Status 2026-11-11 (`dev-f37-m4`): guard evidence `fixture` ditambahkan pada test daemon fitur ini untuk ID PRD di *Trace PRD* (VAL-018 belum punya guard sama sekali): `provider_import.rs` (AC-033, REQ-033), `provider_trust.rs` (REQ-032, AC-032, AC-072, VAL-018), `provider_gate.rs` (AC-033, AC-072, REQ-032); test Swift membawa REQ-032, REQ-033, AC-033, AC-032, AC-061, AC-072, BR-020; CLI membawa REQ-028. PAGE-08 dan OQ-009 bukan ID yang diterima evidence (awalan hanya AC, REQ, NFR, VAL, BR), jadi PAGE-08 dibuktikan lewat snapshot dan langkah manual 3, dan OQ-009 tetap terbuka (*Security model*). Empat record `native` `NOT_RUN` di `evidence/manual/` menunggu langkah di bawah; owner semuanya user._
+
+### UI / manual
+
+Langkah ini butuh izin user dan tidak dijalankan sesi build. Pakai root sementara (`STACKLY_ROOT`), tidak pernah Application Support asli, kecuali langkah 1 yang butuh agent terpasang. Sesudah setiap langkah, isi record nya (`steps`, `actual`, `status`, `reviewer`, `finishedAt`) dan jalankan `cargo xtask evidence check`.
+
+- [ ] **Import dari folder terlindung** (record `evidence/manual/2026-11-11-spec-0037-import-from-a-protected-folder-by-the.json`, AC-033, REQ-033): pasang bundle dengan `cargo xtask build-app --install`, nyalakan agent, salin `crates/core/tests/fixtures/packages/acme-demo` ke `~/Downloads/acme-demo`, jalankan `stackly provider import ~/Downloads/acme-demo --dry-run` lalu tanpa `--dry-run`, dan ulangi lewat Catalog › "Import Provider…" di GUI → berhasil, atau macOS menolak dan Stackly menampilkan `provider.import_unreadable` reason `permission_denied` dengan hint yang menyebut Privacy & Security > Files and Folders; tidak ada crash dan tidak ada teks yang meminta mematikan proteksi → AC-1, AC-13
+- [ ] **Quarantine nyata** (record `evidence/manual/2026-11-11-spec-0037-quarantine-of-a-package-downloaded-by.json`, AC-033, REQ-033): unduh arsip `.zip` paket `acme-demo` lewat browser, buka dengan Finder, lalu preview dan import folder hasil ekstraknya → preview menampilkan `quarantined` true dengan nama agen dan catatan "This folder was downloaded from the internet. Stackly only reads its text files and never changes the folder."; import berhasil; `xattr -l <folder asal>/provider.yaml` sebelum dan sesudah sama dan masih memuat `com.apple.quarantine`; `xattr -l <data>/provider-imports/<packageSha256>/provider.yaml` tidak memuatnya → AC-13
+- [ ] **Alur GUI lengkap** (record `evidence/manual/2026-11-11-spec-0037-full-gui-flow-of-import-approval-revok.json`, REQ-032, REQ-033, AC-033, AC-061, AC-072; PAGE-08): app Debug di atas daemon nyata yang memuat milestone 2, root sementara, lalu delapan langkah rinci *Alur GUI* di bagian `### UI / manual` Milestone 4 di atas: Import Provider… → sheet preview → Import → banner "Not approved yet" → Approve… (Cancel default, kalimat izin persis `approval-statement.txt`) → install runtime dan create instance → Revoke Approval… → create baru ditolak dan instance lama tetap start → Remove…; plus Settings › Sources › Imported providers dan langkah Catalog Trust onboarding; plus tinjauan snapshot dengan `cargo xtask snapshot review` → AC-11, AC-15, AC-16
+- [ ] **Jaringan mati** (record `evidence/manual/2026-11-11-spec-0037-approval-and-revocation-with-the-netwo.json`, REQ-032, AC-072): matikan Wi-Fi dan kabel, lalu ulangi approve, revoke, start instance lama, preview, import, list, detail entri lokal, dan `stackly provider list` → semuanya sama dengan saat online; tidak ada teks "latest", "up to date", atau klaim daftar revocation terkini; yang tertulis hanya revision dan tanggal terbit catalog terpasang; `runtime.install` baru gagal hanya dengan `runtime.download_offline` biasa → AC-8
+
+### Commands
+
+- [ ] `cargo test -p stacklyd --test provider_import --test provider_trust --test provider_gate` → lulus dengan guard evidence `fixture` di sepuluh test (lihat status di atas) → AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12
+- [ ] `cargo xtask evidence check` → lulus, termasuk empat record `NOT_RUN` baru di `evidence/manual/`
+
+### Acceptance-criteria coverage
+
+- AC-8, AC-13, AC-15 · bagian otomatis lengkap; bukti `native` empat langkah di atas `NOT_RUN`, owner user
+- VAL-018 · kini punya guard `fixture` (`provider_trust.rs`, dua test AC-12)
+
