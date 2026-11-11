@@ -374,6 +374,7 @@ mod tests {
             .collect()
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn usage_lines_give_task_paths() {
         let paths = usage_paths(crate::USAGE);
@@ -395,6 +396,7 @@ mod tests {
         );
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn known_commands_pass_even_with_comments_assignments_and_cargo_run() {
         let block = "cargo xtask codegen --check   # fails when files drift\n\
@@ -406,6 +408,7 @@ mod tests {
         assert_eq!(problems(block), Vec::<String>::new());
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn an_unknown_xtask_task_is_one_problem() {
         assert_eq!(
@@ -418,6 +421,7 @@ mod tests {
         );
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn an_unknown_stackly_command_is_one_problem() {
         assert_eq!(
@@ -434,12 +438,14 @@ mod tests {
         );
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn only_bash_blocks_are_read() {
         let doc = Markdown::parse("```text\ncargo xtask nope\n```\n");
         assert!(tables().check("X.md", &doc).is_empty());
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn a_problem_names_the_line_of_the_command() {
         let repo = fixture::repo();
@@ -457,6 +463,7 @@ mod tests {
         );
     }
 
+    // covers: AC-2, AC-9 (spec 0038)
     #[test]
     fn pieces_split_outside_quotes_and_substitutions() {
         assert_eq!(

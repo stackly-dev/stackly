@@ -224,11 +224,13 @@ mod tests {
         fixture::lines(repo.path())
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_valid_form_and_config_have_no_problems() {
         assert_eq!(with(FORM), Vec::<String>::new());
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_form_without_body_is_one_problem() {
         let form = "name: Bug\ndescription: Something\nlabels: [needs-triage]\n";
@@ -238,6 +240,7 @@ mod tests {
         );
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_label_outside_the_triage_table_is_one_problem() {
         let form = FORM.replace("[needs-triage]", "[needs-triage, bug]");
@@ -247,6 +250,7 @@ mod tests {
         );
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_repeated_id_a_missing_label_and_empty_options_are_problems() {
         let form = FORM
@@ -271,6 +275,7 @@ mod tests {
         );
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_broken_link_or_placeholder_in_a_string_value_is_a_problem() {
         let form = FORM.replace("../../CONTRIBUTING.md) first.", "../../NOPE.md) first. TBD");
@@ -283,6 +288,7 @@ mod tests {
         );
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_config_with_blank_issues_and_no_advisory_link_has_two_problems() {
         let repo = fixture::repo();
@@ -300,6 +306,7 @@ mod tests {
         );
     }
 
+    // covers: AC-7, AC-9 (spec 0038)
     #[test]
     fn a_form_that_is_not_yaml_is_one_problem() {
         let lines = with("name: [unclosed\n");

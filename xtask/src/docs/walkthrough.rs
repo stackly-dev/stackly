@@ -529,6 +529,7 @@ mod tests {
 
     const GUIDE_TEXT: &str = "# Guide\n\n```bash\nnot this\n```\n\n<!-- docs-walkthrough -->\n```bash\ncargo xtask provider check providers/example\n# a comment\n\ncargo xtask provider test providers/example\ncargo xtask provider new mytool\ncargo xtask provider test providers/mytool\n```\n\n```bash\nnor this\n```\n";
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn the_block_is_the_first_bash_block_after_the_marker_without_comments() {
         let lines = block(GUIDE_TEXT).unwrap();
@@ -548,6 +549,7 @@ mod tests {
         );
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn a_guide_without_the_marker_or_its_block_is_refused() {
         assert!(block("# Guide\n\n```bash\ntrue\n```\n").is_err());
@@ -555,6 +557,7 @@ mod tests {
         assert!(block("<!-- docs-walkthrough -->\n```bash\n# only a comment\n```\n").is_err());
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn only_new_files_under_a_scaffolded_package_keep_the_clone_clean() {
         let names: BTreeSet<String> = ["mytool".to_owned()].into();
@@ -581,6 +584,7 @@ mod tests {
         fs::write(folder.join("report.json"), text).unwrap();
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn reports_must_be_one_per_test_line_and_passing() {
         let dir = tempfile::tempdir().unwrap();
@@ -610,6 +614,7 @@ mod tests {
         assert_eq!(check_reports(&dir.path().join("missing"), 0), Ok(0));
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn df_output_gives_the_available_bytes() {
         let out = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s1 100 40 60 40% /\n";
@@ -619,6 +624,12 @@ mod tests {
 
     /// A small committed git repo whose guide runs `lines`.
     fn repo(lines: &str) -> tempfile::TempDir {
+        repo_with(lines, &[])
+    }
+
+    /// A small committed git repo whose guide runs `lines`, with `files`
+    /// (path, text, executable) committed beside it.
+    fn repo_with(lines: &str, files: &[(&str, &str, bool)]) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         fs::create_dir_all(root.join("docs/providers")).unwrap();
@@ -627,6 +638,14 @@ mod tests {
             format!("# Guide\n\n{MARKER}\n```bash\n{lines}\n```\n"),
         )
         .unwrap();
+        for (rel, text, executable) in files {
+            let path = root.join(rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, text).unwrap();
+            if *executable {
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
         for args in [
             vec!["init", "--quiet"],
             vec!["add", "-A"],
@@ -658,6 +677,7 @@ mod tests {
         fs::read_dir(dir).unwrap().next().is_none()
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn a_block_whose_lines_pass_and_leave_the_clone_clean_passes_and_removes_the_temp_folder() {
         let repo = repo("test -d \"$STACKLY_ROOT\"\ntest \"$CARGO_INCREMENTAL\" = 0");
@@ -670,6 +690,7 @@ mod tests {
         assert!(is_empty(parent.path()));
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn a_failing_line_stops_the_block_with_exit_1_and_removes_the_temp_folder() {
         let repo = repo("false\ntouch never-run");
@@ -682,6 +703,7 @@ mod tests {
         assert!(is_empty(parent.path()));
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn a_change_outside_a_new_package_fails_the_walkthrough() {
         let repo = repo("touch stray.txt");
@@ -693,6 +715,7 @@ mod tests {
         );
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn too_little_free_space_blocks_before_any_clone() {
         let repo = repo("true");
@@ -704,6 +727,7 @@ mod tests {
         assert!(is_empty(parent.path()));
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn the_stackly_root_is_private_and_keep_leaves_the_folder() {
         let repo = repo(
@@ -717,6 +741,7 @@ mod tests {
         assert!(!is_empty(parent.path()));
     }
 
+    // covers: AC-8 (spec 0038)
     #[test]
     fn an_interrupt_stops_the_running_line_and_fails() {
         let repo = repo("sleep 30\ntouch never-run");
@@ -735,5 +760,221 @@ mod tests {
         timer.join().unwrap();
         assert!(started.elapsed() < Duration::from_secs(20));
         assert!(is_empty(parent.path()));
+    }
+
+    /// The one folder the walkthrough kept under `parent`.
+    fn kept(parent: &Path) -> PathBuf {
+        let mut entries: Vec<PathBuf> = fs::read_dir(parent)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(entries.len(), 1, "{entries:?}");
+        let folder = entries.remove(0);
+        assert!(
+            folder
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("stackly-walkthrough-")
+        );
+        folder
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn a_failing_line_never_runs_the_lines_after_it() {
+        let repo = repo("true\nfalse\ntouch never-run");
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        let mut opts = options(parent.path());
+        opts.keep = true;
+        assert_eq!(run(repo.path(), &opts, &flag), Outcome::Fail);
+        let clone = kept(parent.path()).join("stackly");
+        assert!(clone.join(GUIDE).is_file());
+        assert!(!clone.join("never-run").exists());
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn a_dirty_tree_runs_the_committed_head_without_its_uncommitted_changes() {
+        let repo = repo("test ! -e dirty.txt\ntest ! -e untracked.txt");
+        fs::write(repo.path().join("untracked.txt"), "x").unwrap();
+        fs::write(
+            repo.path().join(GUIDE),
+            format!("# Guide\n\n{MARKER}\n```bash\nfalse\n```\n"),
+        )
+        .unwrap();
+        fs::write(repo.path().join("dirty.txt"), "x").unwrap();
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        assert_eq!(
+            run(repo.path(), &options(parent.path()), &flag),
+            Outcome::Pass
+        );
+        assert!(is_empty(parent.path()));
+        // The walkthrough never touches the working tree it was started from.
+        assert!(repo.path().join("dirty.txt").is_file());
+        assert!(repo.path().join("untracked.txt").is_file());
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn a_guide_without_the_block_at_head_blocks_and_removes_the_temp_folder() {
+        let repo = repo("true");
+        fs::write(repo.path().join(GUIDE), "# Guide\n\nNo block.\n").unwrap();
+        git(repo.path(), &["add", "-A"]).unwrap();
+        git(
+            repo.path(),
+            &[
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@localhost",
+                "commit",
+                "--quiet",
+                "-m",
+                "drop the block",
+            ],
+        )
+        .unwrap();
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        assert_eq!(
+            run(repo.path(), &options(parent.path()), &flag),
+            Outcome::Blocked
+        );
+        assert!(is_empty(parent.path()));
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn an_interrupt_with_keep_leaves_the_clone_and_never_runs_the_next_line() {
+        let repo = repo("sleep 30\ntouch never-run");
+        let parent = tempfile::tempdir().unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+        let setter = Arc::clone(&flag);
+        let timer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            setter.store(true, Ordering::SeqCst);
+        });
+        let mut opts = options(parent.path());
+        opts.keep = true;
+        let started = std::time::Instant::now();
+        assert_eq!(run(repo.path(), &opts, &flag), Outcome::Fail);
+        timer.join().unwrap();
+        assert!(started.elapsed() < Duration::from_secs(20));
+        assert!(!kept(parent.path()).join("stackly/never-run").exists());
+    }
+
+    /// A fake `cargo` committed at `target/debug/cargo`, which the line
+    /// `PATH` finds first: `provider new <name>` writes a package file,
+    /// and `provider test` writes one report with `verdict`, or none when
+    /// `verdict` is empty.
+    fn fake_cargo(verdict: &str) -> String {
+        let report = if verdict.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "mkdir -p target/provider-test/run-$$ && printf '{{\"schema\":\"{REPORT_SCHEMA}\",\"verdict\":\"{verdict}\"}}' > target/provider-test/run-$$/report.json"
+            )
+        };
+        format!(
+            "#!/bin/sh\ncase \"$3\" in\n  new) mkdir -p \"providers/$4\" && echo id > \"providers/$4/provider.yaml\" ;;\n  test) {report} ;;\nesac\n"
+        )
+    }
+
+    const FOUR_LINES: &str = "cargo xtask provider check providers/example\ncargo xtask provider test providers/example\ncargo xtask provider new mytool\ncargo xtask provider test providers/mytool";
+
+    fn four_line_repo(verdict: &str) -> tempfile::TempDir {
+        let cargo = fake_cargo(verdict);
+        repo_with(
+            FOUR_LINES,
+            &[
+                ("target/debug/cargo", &cargo, true),
+                (".gitignore", "/target/provider-test/\n", false),
+            ],
+        )
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn the_four_line_quick_start_passes_with_one_passing_report_per_test_line() {
+        let repo = four_line_repo(REPORT_PASS);
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        let mut opts = options(parent.path());
+        opts.keep = true;
+        assert_eq!(run(repo.path(), &opts, &flag), Outcome::Pass);
+        let clone = kept(parent.path()).join("stackly");
+        assert_eq!(check_reports(&clone.join("target/provider-test"), 2), Ok(2));
+        assert!(clone.join("providers/mytool/provider.yaml").is_file());
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn a_harness_report_with_a_failing_verdict_fails_the_walkthrough() {
+        let repo = four_line_repo("fail");
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        assert_eq!(
+            run(repo.path(), &options(parent.path()), &flag),
+            Outcome::Fail
+        );
+        assert!(is_empty(parent.path()));
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn a_test_line_that_writes_no_report_fails_the_walkthrough() {
+        let repo = four_line_repo("");
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        assert_eq!(
+            run(repo.path(), &options(parent.path()), &flag),
+            Outcome::Fail
+        );
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn outcomes_map_to_exit_codes_0_1_and_2() {
+        assert_eq!(Outcome::Pass.exit_code(), ExitCode::SUCCESS);
+        assert_eq!(Outcome::Fail.exit_code(), ExitCode::FAILURE);
+        assert_eq!(Outcome::Blocked.exit_code(), ExitCode::from(2));
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn the_free_space_message_shows_sizes_in_gib_with_one_decimal() {
+        assert_eq!(gib(MIN_FREE_BYTES), "8.0 GiB");
+        assert_eq!(gib(3 * 1024 * 1024 * 1024 / 2), "1.5 GiB");
+    }
+
+    // covers: AC-8 (spec 0038)
+    #[test]
+    fn the_lines_see_only_the_documented_environment() {
+        let repo = repo(
+            "test -z \"$STACKLY_LOG\"\ntest -z \"$STACKLY_CATALOG_DIR\"\ntest \"$CARGO_PROFILE_DEV_DEBUG\" = 0\ncase \"$CARGO_TARGET_DIR\" in */stackly/target) true ;; *) false ;; esac\ncase \"$STACKLY_ROOT\" in */root) true ;; *) false ;; esac",
+        );
+        let parent = tempfile::tempdir().unwrap();
+        let flag = AtomicBool::new(false);
+        // `STACKLY_*` variables of the test process, if any, never reach a
+        // line, because the line environment is built from scratch.
+        let env = environment(Path::new("/x/stackly"), Path::new("/x/root"));
+        assert!(env.iter().all(|(key, _)| {
+            INHERITED.contains(&key.as_str())
+                || [
+                    "PATH",
+                    "STACKLY_ROOT",
+                    "CARGO_TARGET_DIR",
+                    "CARGO_PROFILE_DEV_DEBUG",
+                    "CARGO_INCREMENTAL",
+                ]
+                .contains(&key.as_str())
+        }));
+        assert_eq!(
+            run(repo.path(), &options(parent.path()), &flag),
+            Outcome::Pass
+        );
     }
 }
