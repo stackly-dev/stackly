@@ -528,6 +528,41 @@ fn an_unsupported_api_version_ends_before_any_lifecycle() {
 
 // covers: AC-9 (spec 0036)
 #[test]
+fn an_unknown_scenario_name_fails_at_validate_with_the_names_the_package_has() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "a run of providers/example with --scenario nope ends at validate with verdict fail, a reason that names nope and the package's default and slow-ready scenarios, no scenario run, and no test root made",
+    );
+    let out = TestRoot::new().expect("a report folder can be created");
+    let mut request = RunRequest::new(
+        repo().join("providers/example"),
+        out.path().join("report.json"),
+    );
+    request.only = vec!["default".to_owned(), "nope".to_owned()];
+    let _serial = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let before = marked_roots();
+
+    let report = conformance::run(&request);
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let value = report.value().expect("the report was built");
+    assert_eq!(value["failure"]["step"], "validate", "{value:#}");
+    let reason = value["failure"]["message"].as_str().unwrap_or_default();
+    assert!(reason.contains("unknown scenario nope"), "{reason}");
+    assert!(
+        reason.contains("default") && reason.contains("slow-ready"),
+        "{reason}"
+    );
+    assert_eq!(value["scenarios"], serde_json::json!([]));
+    assert_eq!(marked_roots(), before, "no test root was made");
+    ev.pass();
+}
+
+// covers: AC-9 (spec 0036)
+#[test]
 fn step_limits_come_from_the_checked_manifest_in_any_yaml_style() {
     let ev = evidence!(
         covers = ["REQ-029"],
