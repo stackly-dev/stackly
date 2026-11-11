@@ -164,12 +164,70 @@ Bagian ini mencakup Build plan langkah 15: `xtask/src/runtime/spike/package_reci
 
 ### Commands
 
-- [ ] `cargo test -p xtask --bin xtask runtime::spike::package_recipe` → 6 test lulus: `find_package` memetakan `nats`, `postgresql`, `traefik` ke folder paketnya dan `mysql`, `clickhouse`, `valkey` ke tidak ada; paket yang tidak `publishable` (`fake-command`) ditolak dengan `package fake-command is not publishable` dan paket tanpa `runtime.versionCheck` dengan `package has no versionCheck`; NATS dibangun dari paket (program `nats-server` di root artefak, `--config` ke file yang memuat kedua port yang dialokasikan, env kosong AC-6 utuh, `version_args` `--version`, versi `2.15.1` dari `pattern`); PostgreSQL 17 dan 18 merencanakan `initdb` dengan `-Upostgres` dan `materializeSecret`, start `bin/postgres`, password fixture ber awalan `stackly-fixture-credential-`, endpoint `socket` di folder run instance di bawah `/tmp/sk-*`, versi `17.11` dan `18.6` dari `postgres --version`; Traefik start dengan `--configFile` yang ada dan versi `3.7.15` dari baris `Version:`; paket fake menjalankan init (stdin secret), start, ready (probe HTTP lewat `stackly_core::supervisor::probe::run`), versi, dan stop SIGTERM terhadap `stackly-fake-server` sungguhan → AC-16
-- [ ] `cargo test -p xtask --bin xtask runtime::spike::closure_probes` → 5 test lulus tanpa server: PostgreSQL memilih empat probe dalam urutan tetap `icu`, `pgcrypto`, `lz4`, `zstd`, setiap panggilan memakai `psql -X -w -v ON_ERROR_STOP=1 -At -h <socket> -p <client> -U postgres -d postgres` (atau `pg_dump -w` dengan host, port, dan user yang sama) dengan `PGPASSWORD` dari `superuserPassword` dan tanpa `stackly_readiness`; probe `icu` mengirim `create database stackly_icu_probe template template0 locale_provider icu icu_locale 'und'` dan `select datlocprovider ...` dalam dua panggilan; keluar 0 dengan `i` berarti `PASS`, `b` atau `CREATE` yang gagal berarti `FAIL` dengan statement nya di `detail`, dan probe lain tetap berjalan; dump `zstd` kosong atau tidak ada `FAIL`; NATS memeriksa `/healthz?js-enabled-only=true` di port endpoint `monitoring`; Traefik dan Valkey tanpa probe → AC-16 (spec 0003 AC-7)
-- [ ] `cargo test -p xtask --bin xtask runtime::spike::providers` → lulus: recipe tulisan tangan MySQL, ClickHouse, dan Valkey tidak berubah (normalisasi versi dan `uses_socket_dir` sama), provider tanpa langkah gagal dengan `the spike has no steps for provider redis` → AC-16
-- [ ] `grep -rn "provisional: F36" xtask/src/runtime/` → kosong; `grep -rn "provisional: F4" xtask/src/runtime/spike/providers.rs` → tepat `F43` (ClickHouse), `F42` (MySQL), `F40` (Valkey) → AC-16
-- [ ] `cargo xtask check-deps` → lulus; `EXPOSE_ALLOWED` memuat satu entri baru `("xtask", ["runtime::spike::package_recipe"])` dengan komentar alasan, dan test `the_expose_allowlist_is_the_call_sites_that_exist` memuatnya → AC-16
-- [ ] `cargo test -p xtask --no-fail-fast` → lulus seluruhnya (test native `native_runtime` tetap `ignored` tanpa `--ignored`) → AC-16
+- [x] `cargo test -p xtask --bin xtask runtime::spike::package_recipe` → 6 test lulus: `find_package` memetakan `nats`, `postgresql`, `traefik` ke folder paketnya dan `mysql`, `clickhouse`, `valkey` ke tidak ada; paket yang tidak `publishable` (`fake-command`) ditolak dengan `package fake-command is not publishable` dan paket tanpa `runtime.versionCheck` dengan `package has no versionCheck`; NATS dibangun dari paket (program `nats-server` di root artefak, `--config` ke file yang memuat kedua port yang dialokasikan, env kosong AC-6 utuh, `version_args` `--version`, versi `2.15.1` dari `pattern`); PostgreSQL 17 dan 18 merencanakan `initdb` dengan `-Upostgres` dan `materializeSecret`, start `bin/postgres`, password fixture ber awalan `stackly-fixture-credential-`, endpoint `socket` di folder run instance di bawah `/tmp/sk-*`, versi `17.11` dan `18.6` dari `postgres --version`; Traefik start dengan `--configFile` yang ada dan versi `3.7.15` dari baris `Version:`; paket fake menjalankan init (stdin secret), start, ready (probe HTTP lewat `stackly_core::supervisor::probe::run`), versi, dan stop SIGTERM terhadap `stackly-fake-server` sungguhan → AC-16
+- [x] `cargo test -p xtask --bin xtask runtime::spike::closure_probes` → 5 test lulus tanpa server: PostgreSQL memilih empat probe dalam urutan tetap `icu`, `pgcrypto`, `lz4`, `zstd`, setiap panggilan memakai `psql -X -w -v ON_ERROR_STOP=1 -At -h <socket> -p <client> -U postgres -d postgres` (atau `pg_dump -w` dengan host, port, dan user yang sama) dengan `PGPASSWORD` dari `superuserPassword` dan tanpa `stackly_readiness`; probe `icu` mengirim `create database stackly_icu_probe template template0 locale_provider icu icu_locale 'und'` dan `select datlocprovider ...` dalam dua panggilan; keluar 0 dengan `i` berarti `PASS`, `b` atau `CREATE` yang gagal berarti `FAIL` dengan statement nya di `detail`, dan probe lain tetap berjalan; dump `zstd` kosong atau tidak ada `FAIL`; NATS memeriksa `/healthz?js-enabled-only=true` di port endpoint `monitoring`; Traefik dan Valkey tanpa probe → AC-16 (spec 0003 AC-7)
+- [x] `cargo test -p xtask --bin xtask runtime::spike::providers` → lulus: recipe tulisan tangan MySQL, ClickHouse, dan Valkey tidak berubah (normalisasi versi dan `uses_socket_dir` sama), provider tanpa langkah gagal dengan `the spike has no steps for provider redis` → AC-16
+- [x] `grep -rn "provisional: F36" xtask/src/runtime/` → kosong; `grep -rn "provisional: F4" xtask/src/runtime/spike/providers.rs` → tepat `F43` (ClickHouse), `F42` (MySQL), `F40` (Valkey) → AC-16
+- [x] `cargo xtask check-deps` → lulus; `EXPOSE_ALLOWED` memuat satu entri baru `("xtask", ["runtime::spike::package_recipe"])` dengan komentar alasan, dan test `the_expose_allowlist_is_the_call_sites_that_exist` memuatnya → AC-16
+- [x] `cargo test -p xtask --no-fail-fast` → lulus seluruhnya (test native `native_runtime` tetap `ignored` tanpa `--ignored`) → AC-16
+
+### Hasil /check verify 2026-11-11 (Milestone 5, commit f7f8519c)
+
+**Verdict: PASS untuk bagian kode AC-16.** Bukti native per provider `NOT_RUN`, owner user (langkah manual di atas tidak dijalankan: butuh izin user, sesi login GUI, dan bisa mengunduh serta mengganti bukti). Keenam langkah Commands dijalankan dengan `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0` dan lulus. Tidak ada temuan FAIL.
+
+| Perintah | Hasil |
+| --- | --- |
+| `cargo test -p xtask --bin xtask runtime::spike::package_recipe` | 6 lulus |
+| `cargo test -p xtask --bin xtask runtime::spike::closure_probes` | 5 lulus |
+| `cargo test -p xtask --bin xtask runtime::spike::providers` | 5 lulus |
+| `grep -rn "provisional: F36" xtask/src/runtime/` | kosong; `providers.rs` memuat tepat `F43` (ClickHouse), `F42` (MySQL), `F40` (Valkey) |
+| `cargo xtask check-deps` | 13 crate lulus; `the_expose_allowlist_is_the_call_sites_that_exist` lulus |
+| `cargo test -p xtask --no-fail-fast` | 520 unit test plus test integrasi lulus; 8 test `native_runtime` tetap `ignored` |
+| `cargo xtask runtime check` (tambahan) | `8 artifact(s), 7 evidence run(s), and 5 compatibility run(s) follow the rules` |
+| `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo fmt --all --check` (tambahan) | bersih |
+
+**AC-16 butir demi butir:**
+
+- Init, start, ready, versi, dan stop dibangun dari paket lewat `PackageRecipe`: terpenuhi di kode (`xtask/src/runtime/spike/package_recipe.rs`) dan di unit test pembentukan langkah untuk NATS, PostgreSQL 17 dan 18, dan Traefik.
+- Struct recipe NATS, PostgreSQL, dan Traefik dihapus: terpenuhi. `providers.rs` hanya berisi `ClickHouse`, `MySql`, dan `Valkey`, dan isinya tidak berubah selain tanda tangan `version_args`.
+- Hasil spike tetap `stackly.runtime-spike-result/v1` dengan field yang sama: terpenuhi, `result.rs` tidak berubah di commit ini.
+- Penanda `// provisional: F36` hilang; `F40`, `F42`, `F43` ada: terpenuhi.
+- `xtask` memakai `stackly-core` dengan `test-support`, dan `tokio` dengan fitur `rt`, `net`, `time`: terpenuhi.
+- `EXPOSE_ALLOWED`: satu entri baru `("xtask", ["runtime::spike::package_recipe"])` dengan komentar alasan. Ketiga panggilan `expose()` di `xtask/src` ada di modul itu saja (env plan, stdin langkah init, file secret 0600). Nilainya selalu `FIXTURE_CREDENTIAL_PREFIX` ditambah UUID buatan recipe itu sendiri. `closure_probes.rs` tidak memanggil `expose()`; ia menerima nilai fixture itu sebagai teks.
+- Test unit worker dengan paket fake: terpenuhi. Test menjalankan init (secret lewat stdin), start, ready lewat `stackly_core::supervisor::probe::run`, versi, dan stop SIGTERM terhadap `stackly-fake-server` sungguhan.
+
+**Sisa di sistem:** tidak ada folder `/tmp/sk-*` sebelum test, sesudah test `package_recipe`, dan sesudah `cargo test -p xtask` seluruhnya. Tidak ada proses `stackly-fake-server` baru; satu proses yang terlihat sudah ada sebelum run ini dan milik sesi lain (root nya di scratchpad sesi `dev-f70-m2`), jadi tidak disentuh.
+
+**Probe closure terhadap spec 0003** (dibaca di kode dan dibuktikan unit test tanpa server): superuser literal `postgres`; `psql -X -w -v ON_ERROR_STOP=1 -At -h <socket> -p <client> -U postgres -d postgres` dengan `PGPASSWORD` dari `superuserPassword`; probe `icu` membuat `stackly_icu_probe` lalu membaca `datlocprovider` dalam dua panggilan; urutan tetap `icu`, `pgcrypto`, `lz4`, `zstd`, dan setiap probe berjalan apa pun hasil probe lain; `pg_dump` memakai host, port, user, dan env yang sama; role `stackly_readiness` tidak dipakai; NATS memeriksa `/healthz?js-enabled-only=true` di endpoint `monitoring`.
+
+**Tafsiran developer yang dinilai** (semua diterima):
+
+- `uses_socket_dir` selalu `true`: diterima. Baris *context* spec 0036 menaruh root runtime di `/tmp/sk-<8 hex>` untuk setiap paket, jadi folder itu memang harus dibuat worker. Baris `uses_socket_dir` di tabel yang sama ("ada endpoint `unix` di paket") berseberangan dengan itu. Lihat temuan rendah 1.
+- Port dialokasikan di `init`: diterima, karena plan init sudah me-render config yang memuat port dan context harus sama di init dan start. Lihat temuan rendah 2.
+- `CleanEnv` AC-6 dulu, lalu env plan hanya untuk key yang belum diset: persis spec 0003 ("tambahan, bukan pengganti"). Validasi manifest juga menolak key `DYLD_` dan `LD_`, jadi plan tidak bisa menyelipkannya.
+- Folder instance dibuat mode 0700 sebelum init: diterima; ini yang daemon lakukan saat create, dan spike tidak punya daemon.
+- Nilai `psql` dibaca dari baris tak kosong terakhir stdout: diterima; dengan beberapa `-c`, `psql -At` juga mencetak tag perintah (`CREATE EXTENSION`, `INSERT 0 1`), jadi hasil ada di baris terakhir. `pg_dump -w`: diterima; sejalan dengan alasan `-w` di spec 0003.
+- Panggilan ketiga probe `icu` hanya informasi: persis spec 0003 (`datlocale` dan `datcollversion` bukan syarat lulus). Kalau panggilan itu gagal, `detail` tetap `stackly_icu_probe: provider i`.
+- `find_package` memilih `official/` lebih dulu: diterima. Lihat temuan rendah 3.
+- `SpikeFacts.settings` belum dibaca: sesuai petunjuk spec 0003 (probe memakai `postgres` secara tetap).
+
+**Yang hanya bisa dibuktikan run native** (jadi belum terbukti di sini):
+
+- `initdb` paket PostgreSQL 17 dan 18 benar benar jalan di context spike: password fixture lewat file secret, auth `scram-sha-256`, path data berisi spasi dan karakter non ASCII.
+- Probe readiness paket (lewat `probe::run`) lulus terhadap server sungguhan dalam 120 detik, untuk NATS, PostgreSQL, dan Traefik.
+- SQL probe `icu` diterima PostgreSQL 17 dan 18 (`create database ... locale_provider icu icu_locale 'und'`, kolom `datlocale`), dan tiga probe lain lulus lewat socket dengan password.
+- `observedVersion` dari binary sungguhan cocok dengan `pattern` paket (`2.15.1`, `17.11`, `18.6`, `3.7.15`).
+- Audit listener: hanya port loopback yang dialokasikan (dua untuk NATS dan Traefik, satu untuk PostgreSQL), termasuk risiko port yang dialokasikan di `init` dipakai proses lain sebelum start.
+- Audit runtime `lsof`, stop dalam 60 detik dengan sinyal dari paket, JetStream NATS, dan config Traefik di path berisi spasi.
+- Semua itu di bawah LaunchAgent dengan environment kosong AC-6.
+
+**Temuan rendah** (tidak menggagalkan AC-16):
+
+1. Spec 0036 tabel *Spike dari paket*: baris `uses_socket_dir` ("ada endpoint `unix` di paket") tidak cocok dengan baris *context* (root runtime selalu di `/tmp/sk-<8 hex>`). Kode mengikuti baris *context*. Saran: perbaiki baris `uses_socket_dir` lewat `/architect`.
+2. Spec 0003 *Langkah spike per provider* berkata port dialokasikan "tepat sebelum setiap start", dan komentar `Recipe::start` di `providers.rs` masih berkata `start` yang mengalokasikan port. `PackageRecipe` mengalokasikannya di `init`. Jeda antara alokasi dan bind jadi lebih panjang (selama `initdb`). Saran: catat pengecualian ini di spec 0003 dan di komentar trait.
+3. `find_package` mengenali paket `official/` dengan mencari teks `id: official/` di `provider.yaml` mentah, bukan dari ID hasil parse. Cukup untuk paket hari ini; teks yang sama di komentar atau field lain bisa menyesatkan.
+4. `PackageRecipe::probes` mengembalikan daftar kosong tanpa pesan kalau context gagal dibangun. Dalam praktik tidak terjangkau, karena `init` dan `start` sudah membangun context yang sama lebih dulu; tetapi kalau terjadi, spike PostgreSQL akan tampil tanpa probe AC-7, bukan `FAIL`.
+5. Stop lewat command (`StopPlan::Command`) dijalankan di salinan `Ctx`, jadi ekor log perintah stop itu tidak masuk hasil spike. Belum ada paket yang memakai stop lewat command.
 
 ### Acceptance-criteria coverage
 
