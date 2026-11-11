@@ -397,3 +397,72 @@ Bagian ini mencakup Build plan langkah 15: `xtask/src/runtime/spike/package_reci
 ### Acceptance-criteria coverage
 
 - AC-16 · lengkap di kode dan unit test; bukti native per provider menunggu langkah manual di atas (`NOT_RUN`, owner user)
+
+## Verify penuh fitur 36
+
+### Hasil `/check verify` 2026-11-11 (seluruh spec, commit `f1f43ea4`)
+
+**Verdict: PASS.** AC-1 sampai AC-16 terpenuhi di kode dan bukti fixture; tidak ada butir spec tanpa kode. Yang belum ada hanya langkah manual di daftar di bawah (`NOT_RUN`, owner user). Langkah Commands kelima milestone sudah dicentang di verify per milestone hari ini; di sini hanya yang tersentuh merge sesudahnya (protokol 4.0 fitur 37, CLI dan SwiftUI fitur 37, `dev-f36-fix`) yang dijalankan ulang, pada `main` `f1f43ea4`, dengan `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`.
+
+| Perintah (dijalankan ulang) | Hasil |
+| --- | --- |
+| `cargo xtask provider check`, `check-deps`, `codegen --check`, `docs check`, `fuzz seed` lalu `git status fuzz/seeds` | bersih |
+| `cargo test -p stackly-core --lib provider::` dan `--test provider_check --test provider_compat --test provider_packages --test provider_rules --test fuzz_regressions` | 127 dan 122 lulus |
+| `cargo test -p stackly-protocol --lib provider`, `--test provider_fixtures` | lulus |
+| `cargo test -p stacklyd --test provider_validate --test create_form_fixtures`, `--lib ipc::provider` | 7 dan 1 lulus |
+| `cargo test -p stackly-cli --test provider validate`, `--bin stackly provider` | 3 dan 14 lulus |
+| `cargo test -p xtask --test provider_check --test provider_test`, `--bin xtask provider::`, `--bin xtask runtime::spike` | 12, 16, dan 75 lulus |
+| `swift test` `StacklyUI` `EveryCreateFormFixtureTests\|SchemaFormModelTests`; `clients/swift` `ProviderValidateContractTests\|CreateContractTests` | 17 dan 12 lulus |
+| `cargo test -p stacklyd --test provider_conformance` (dijalankan di cek ulang fix pada `2bfc4941`; path fitur 36 tidak berubah sejak itu) | 18 lulus, 4 native `ignored` |
+| Probe `stackly provider validate` terhadap `stacklyd` nyata di root sementara, protokol 4.0 | contoh: `ok testing/example 0.1.0 287cdc78…`, exit 0; `stackly/v2`: satu baris `unsupported_api_version`, exit 2 `cli.provider_invalid`; hash isi root sama |
+| `cargo xtask provider test providers/example` | exit 0, `verdict: pass`, 16 langkah per skenario, `rootRemoved: true`, `git status --porcelain` sama |
+| `cargo xtask provider test` pada paket `acme/fakeish` yang `publishable` | exit 1, `validate: fail (the harness runs only the official and testing namespaces, not acme)`, tanpa root |
+
+**Verdict per AC:**
+
+| AC | Verdict | Bukti utama |
+| --- | --- | --- |
+| AC-1 | terpenuhi | satu finding `unsupported_api_version` di `check_package`, `provider.validate`, `provider check`, entri catalog `invalid`, dan harness (`validate`, tanpa root); probe daemon nyata |
+| AC-2 | terpenuhi | `provider_check` core; `fake-command` `loadable` tetapi tidak `publishable`. Sesudah keputusan lead, `loadable()` hanya menghitung `error` ber origin `package`; kalimat AC-2 belum mengikuti |
+| AC-3 | terpenuhi kecuali fuzz 10 menit | aturan file skenario lewat test dan probe; seed fuzz bersih. Fuzz 10 menit `NOT_RUN` |
+| AC-4 | terpenuhi | format baris, `warning: `, dan `not frozen` (probe Milestone 1) |
+| AC-5 | terpenuhi | kontrak, daemon, CLI, Swift; di atas protokol 4.0 |
+| AC-6 | terpenuhi | corpus `nats 1.0.1` dan `postgresql 1.0.2`; `provider_compat`; `freeze` menolak digest lain dan paket di luar `[[provider]]` |
+| AC-7 | terpenuhi | paket contoh, README dengan link ke `docs/providers/README.md`, scaffold tiga baris, scaffold lulus `provider test` |
+| AC-8 | terpenuhi, dengan satu catatan | fixture form per folder dan test `StacklyUI` generik. Catatan: paket baru di `providers/` juga butuh satu entri `PROVIDER_WORDS` di `xtask` dan satu baris `index.json`, jadi kalimat "tidak menambah kode Swift atau Rust" tepat untuk core dan SwiftUI, tidak untuk `xtask` |
+| AC-9 | terpenuhi | `provider test` contoh dan fake `pass`, 16 langkah berurutan; namespace lain ditolak di `validate` (probe di atas) |
+| AC-10 | terpenuhi | tiga test rogue, unit test `not_foreground` |
+| AC-11 | terpenuhi | tiga test fault, dengan bunyi "halaman penuh: 1000 baris atau 64 KiB" yang sudah diputuskan |
+| AC-12 | terpenuhi | `test_root` 14 test; probe `--keep`, `--cleanup`, folder tanpa penanda, penanda ber `pid` hidup |
+| AC-13 | terpenuhi, satu klausa tanpa bukti runtime | report, exit code 0, 1, 2, 130, baris terakhir stderr, tulis atomik (file sementara lalu rename). Checkout bersih: lihat di bawah. Klausa "tidak membuka koneksi selain ke loopback" tidak diukur saat run; hanya terbaca dari kode |
+| AC-14 | terpenuhi | `provider_test` xtask: scaffold di luar tree, `check`, `test`, `git status` sama |
+| AC-15 | terpenuhi di kode | empat test native, `actual` berformat AC-15, `BLOCKED` tanpa unduhan. Record evidence resmi `NOT_RUN` |
+| AC-16 | terpenuhi di kode | `PackageRecipe`, `closure_probes`, recipe lama hilang, penanda `F40`, `F42`, `F43`. Run spike native `NOT_RUN` |
+
+**Done when, kalimat demi kalimat:**
+
+1. "Manifest dengan versi schema yang tidak didukung ditolak dengan penjelasan tanpa menjalankan lifecycle": **terpenuhi** (AC-1). Pesan menyebut versi yang didukung; tidak ada root, proses, atau tulisan.
+2. "Provider fake server baru bisa install, create, start, health, dan tampil sebagai form di GUI tanpa perubahan Rust core atau SwiftUI": **terpenuhi di tingkat fixture.** Paket `providers/example/` dan paket hasil scaffold melewati langkah `runtime`, `form`, `create`, `start`, dan `health` harness. Commit yang menambah paket contoh (`d4198570`, `94b55c5b`, `0a5fb499`, `2f8c9d0d`, `74f4092d`, `847d8c96`) tidak menyentuh `crates/core/src`, `apps/daemon/src`, atau source `StacklyUI`: hanya folder paket, golden test, fixture, dan `xtask`. Form di GUI dibuktikan `EveryCreateFormFixtureTests` atas `create-form-example.json`. Sesi GUI nyata adalah langkah manual.
+3. "Harness berjalan di test root ephemeral dan cleanup memeriksa ownership test run": **terpenuhi** (AC-12).
+4. "Harness menghasilkan report dari repository bersih": **terpenuhi.** `cargo xtask docs walkthrough` (fitur 38, dijalankan checker pada `9a9e97fe`) membuat clone baru tanpa `target/` dan tanpa file untracked, lalu menjalankan `provider check providers/example` dan `provider test providers/example`: baris `ok`, report `pass`, dan `git status` clone hanya berisi paket hasil scaffold. Itu jalur yang sama dengan klausa checkout bersih AC-13, jadi clone kedua tidak dibuat. Yang tidak tercakup: tanpa cache crate cargo (jalur unduhan crate pertama).
+
+**Trace:** REQ-030 terpenuhi (AC-1, AC-2, AC-5, AC-6, AC-7, AC-9, *Kebijakan kompatibilitas*). AC-030 terpenuhi. AC-034 terpenuhi (AC-13, AC-14; record manual walkthrough ada di spec 0038). AC-029 (akhir) terpenuhi di tingkat fixture (AC-8, AC-9, AC-14); bukti native nya (AC-15) `NOT_RUN`.
+
+**Pencarian butir yang tertinggal:**
+
+- `// provisional: F36`: tidak ada lagi di repo. Penanda spike yang tersisa `F40`, `F42`, `F43`.
+- Test bernama di tabel spec: semuanya ada dan lulus.
+- Follow-up spec lain yang dijawab spec 0036 masih `[ ]` dan menunggu `/sync` atau `/architect`: spec 0009 baris "Fitur 36" (kebijakan kompatibilitas), spec 0010 baris "Fitur 36" (kontrak proses), spec 0023 baris "Fitur 36" (probe native), dan di spec 0036 sendiri baris update spec 0009, 0010, 0023, 0030, 0014, 0006, 0008, 0038, serta catatan `/sync` untuk `AGENTS.md` (perintah `provider new`, `provider test`, `provider freeze`). Spec 0014 tidak punya baris yang menyebut fitur 36. Baris spec 0030 ("Fitur 36 sampai 43") memang tetap terbuka sampai provider terakhir. Baris spec 0003 untuk run native tetap terbuka (owner user).
+- Kalimat spec 0036 yang belum mengikuti kode: AC-2 dan *Batas* tentang `loadable()` dan "tidak menambah `IssueCode`"; "`from_files` tidak berubah"; escape dan batas 128 karakter pesan; baris `uses_socket_dir`; urutan `remove_checked` dan report; field `failure` dan `scenarios: []` di report; `runId` dari xtask; bunyi AC-11 (64 KiB); AC-8 ("tidak menambah kode Swift atau Rust").
+
+**Langkah manual (tidak dijalankan):**
+
+| Langkah | Status | Reason | Owner |
+| --- | --- | --- | --- |
+| Fuzz 10 menit `cargo xtask fuzz run provider_scenarios --time 600` (AC-3) | `NOT_RUN` | langkah manual menurut brief; smoke run 30 detik developer lulus | user |
+| Record evidence native konformitas `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1` (AC-15, AC-029) | `NOT_RUN` | record resmi butuh run dengan wrapper oleh user; run langsung checker 4 dari 4 lulus dari cache, sebagai catatan | user |
+| Run spike native dari paket `cargo xtask evidence run --kind native -- cargo test -p xtask --test native_runtime -- --ignored` (AC-16, spec 0003 AC-7 probe `icu`) | `NOT_RUN` | butuh izin user dan sesi login GUI, bisa mengunduh dan mengganti bukti | user |
+| Sesi GUI nyata: form New Instance untuk paket contoh (Done when kalimat 2) | `NOT_RUN` | sesi GUI manual tidak boleh dijalankan sub sesi; test `StacklyUI` generik lulus | user |
+| Checkout bersih tanpa cache crate cargo (AC-13, klausa jaringan) | `NOT_RUN` | butuh unduhan crate dari jaringan; jalur dengan cache hangat terbukti lewat walkthrough | user |
+
+**Temuan rendah yang masih terbuka** (tidak menggagalkan AC): `leftovers` sesudah `restart` memakai process group lama (teks spec); `--keep` mencetak path ber `$TMPDIR`; `provider_harness` keluar 2 untuk kesalahan argumen; `program_path` masih membaca `runtime.executable` lewat pembaca baris; CLI mencetak baris `<n> more finding(s) not shown` yang belum ada di spec; `find_package` mengenali `official/` lewat teks; `PackageRecipe::probes` kosong tanpa pesan bila context gagal; ekor log stop lewat command tidak masuk hasil spike.
