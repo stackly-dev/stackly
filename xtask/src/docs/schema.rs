@@ -1,7 +1,7 @@
 //! Check (d) of `cargo xtask docs check` (spec 0038, AC-10): each reference
 //! page names, as a whole code span, every property name and every string
-//! enum value of its JSON Schema. The check runs, and the three pages must
-//! exist, once `docs/providers/README.md` exists; before that it is skipped.
+//! enum value of its JSON Schema. The three pages must exist, so a schema
+//! that gains a field without its page fails the check (build plan step 8).
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -13,11 +13,8 @@ use serde_json::Value;
 use super::Problem;
 use super::markdown::{Markdown, code_spans};
 
-/// The page whose presence turns the check on.
-const PROVIDER_GUIDE: &str = "docs/providers/README.md";
-
 /// Each schema and the reference page that covers it.
-const PAIRS: [(&str, &str); 3] = [
+pub const PAIRS: [(&str, &str); 3] = [
     (
         "schemas/provider/provider.v1alpha1.schema.json",
         "docs/providers/manifest-reference.md",
@@ -39,9 +36,6 @@ const PAIRS: [(&str, &str); 3] = [
 /// Returns an error when a schema the check needs cannot be read or is not
 /// JSON.
 pub fn check(root: &Path) -> Result<Vec<Problem>> {
-    if !root.join(PROVIDER_GUIDE).is_file() {
-        return Ok(Vec::new());
-    }
     let mut problems = Vec::new();
     for (schema_rel, page_rel) in PAIRS {
         let schema_path = root.join(schema_rel);
@@ -178,27 +172,34 @@ mod tests {
     }
 
     #[test]
-    fn coverage_is_skipped_until_the_provider_guide_exists() {
+    fn the_clean_fixture_covers_every_schema_name() {
         let repo = fixture::repo();
         assert!(fixture::lines(repo.path()).is_empty());
+    }
+
+    #[test]
+    fn a_missing_reference_page_is_one_problem_even_without_the_provider_guide() {
+        let repo = fixture::repo();
+        let root = repo.path();
+        assert!(!root.join("docs/providers/README.md").exists());
+        std::fs::remove_file(root.join("docs/providers/settings-reference.md")).expect("removed");
+        assert_eq!(
+            fixture::lines(root),
+            vec![
+                "docs/providers/settings-reference.md:1: reference page is missing; it must cover `schemas/provider/settings.v1alpha1.schema.json`"
+            ]
+        );
     }
 
     #[test]
     fn a_property_the_page_does_not_name_is_one_problem() {
         let repo = fixture::repo();
         let root = repo.path();
-        fixture::write(root, "docs/providers/README.md", "# Providers\n");
-        let schema = r#"{"properties":{"apiVersion":{"const":"stackly/v1alpha1"},"kind":{}}}"#;
-        for name in ["provider.v1alpha1", "settings.v1alpha1", "versions.v1"] {
-            fixture::write(
-                root,
-                &format!("schemas/provider/{name}.schema.json"),
-                schema,
-            );
-        }
-        let page = "# Reference\n\n`apiVersion` is `stackly/v1alpha1`. `kind` names it.\n";
-        fixture::write(root, "docs/providers/manifest-reference.md", page);
-        fixture::write(root, "docs/providers/settings-reference.md", page);
+        fixture::write(
+            root,
+            "schemas/provider/versions.v1.schema.json",
+            r#"{"properties":{"apiVersion":{"const":"stackly/v1alpha1"},"kind":{}}}"#,
+        );
         fixture::write(
             root,
             "docs/providers/versions-reference.md",
@@ -208,6 +209,28 @@ mod tests {
             fixture::lines(root),
             vec![
                 "docs/providers/versions-reference.md:1: property `kind` of `schemas/provider/versions.v1.schema.json` is not mentioned"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_enum_value_the_page_does_not_name_is_one_problem() {
+        let repo = fixture::repo();
+        let root = repo.path();
+        fixture::write(
+            root,
+            "schemas/provider/provider.v1alpha1.schema.json",
+            r#"{"properties":{"apiVersion":{"const":"stackly/v1alpha1"},"kind":{"enum":["app","shell"]}}}"#,
+        );
+        fixture::write(
+            root,
+            "docs/providers/manifest-reference.md",
+            "# Manifest\n\n`apiVersion` is `stackly/v1alpha1`; `kind` is `app`.\n",
+        );
+        assert_eq!(
+            fixture::lines(root),
+            vec![
+                "docs/providers/manifest-reference.md:1: enum value `shell` of `schemas/provider/provider.v1alpha1.schema.json` is not mentioned"
             ]
         );
     }

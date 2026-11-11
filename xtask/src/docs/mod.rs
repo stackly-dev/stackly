@@ -303,8 +303,8 @@ fn relative(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 pub(crate) mod fixture {
     //! A clean fixture repo for the docs check tests: one official package
-    //! with its notice, one testing package, an inventory, and the schemas
-    //! folder.
+    //! with its notice, one testing package, an inventory, and the three
+    //! provider schemas with a reference page that covers each.
 
     use std::fs;
     use std::path::Path;
@@ -347,7 +347,18 @@ pub(crate) mod fixture {
             "runtimes/inventory.toml",
             "[[artifact]]\nprovider = \"tool\"\norigin = \"upstream\"\nlicense = \"MIT\"\n",
         );
-        fs::create_dir_all(root.join("schemas/provider")).expect("schemas folder");
+        for (schema, page) in super::schema::PAIRS {
+            write(
+                root,
+                schema,
+                r#"{"properties":{"apiVersion":{"const":"stackly/v1alpha1"}}}"#,
+            );
+            write(
+                root,
+                page,
+                "# Reference\n\n`apiVersion` is always `stackly/v1alpha1`.\n",
+            );
+        }
         dir
     }
 
@@ -392,7 +403,7 @@ mod tests {
         let repo = fixture::repo();
         let outcome = fixture::run(repo.path());
         assert_eq!(outcome.problems, Vec::new());
-        assert_eq!(outcome.files, 3);
+        assert_eq!(outcome.files, 6);
     }
 
     #[test]
