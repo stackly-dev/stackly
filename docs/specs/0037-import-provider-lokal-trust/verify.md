@@ -450,3 +450,102 @@ _Setiap AC-1 sampai AC-19 punya test yang menyebut ID nya; setiap titik tabel *G
 ### Tafsiran replay (keputusan lead 2026-11-11, opsi C)
 
 Request `provider.import`, `provider.approve`, atau `provider.revoke` yang diulang dengan `idempotencyKey` yang sama tidak menjalankan operasi kedua dan menjawab dengan semantik snapshot spec 0007 *Idempotency*: detail provider saat ini (bukan salinan balasan pertama), `provider.import_not_found` bila entri sudah di remove, dan error operasi pertama bila operasi itu gagal. `provider.remove` menjawab `RemovedProvider` yang sama. Dikunci oleh `a_repeated_approve_or_revoke_answers_the_provider_as_it_is_now_and_import_not_found_after_a_remove`, `a_repeated_request_whose_first_operation_failed_answers_its_first_error`, dan `an_approve_and_a_revoke_repeated_with_their_key_run_no_second_operation`. Teks *API surface* diselaraskan architect.
+
+
+## Verify penuh fitur 37
+
+### Hasil `/check verify` 2026-11-11 (seluruh spec, commit `242b795b`)
+
+**Verdict: PASS.** Kesembilan belas AC terpenuhi untuk semua yang bisa dibangun dan dijalankan sesi, dan keenam kalimat **Done when** terpenuhi. Tidak ada `specced but missing`. Empat bukti `native` tetap `NOT_RUN` dengan owner user (GUI dengan mata, folder terlindung, quarantine dari unduhan browser, jaringan mati); menurut instruksi awal user itu tidak menghalangi PASS. Ada satu temuan rendah (baris audit import yang gagal tidak menyebut provider) dan satu catatan cakupan test.
+
+Milestone 1 sampai 4 dan Langkah 13 sudah PASS dan tidak diulang satu per satu. Yang diperiksa di sini adalah seluruh AC pada `main` sesudah merge terakhir, dengan fokus pada tiga perubahan yang belum pernah diperiksa (`3a0041b5`, `c716d173`, aturan replay opsi C) dan pada celah trust milestone 1.
+
+**Cara.** Tiga probe terhadap `stacklyd` dan `stackly` nyata hasil build `HEAD`, masing masing di `STACKLY_ROOT` sementara yang diisi `skeleton_seed` (runtime fake 0.1.0), dengan catalog development revision 11 di `STACKLY_CATALOG_DIR` (dan revision 12 dengan satu entri `revoked` untuk AC-8). Request dikirim lewat socket dan lewat CLI; registry dibaca dengan `sqlite3` read only. Tidak ada Application Support asli, tidak ada jaringan, tidak ada GUI, tidak ada unduhan. Semua daemon probe dihentikan dan semua root sementara dihapus. Record: `evidence/manual/2026-11-11-spec-0037-full-verify-import-approval-revocation.json` (`fixture`, `PASS`).
+
+| Perintah | Hasil |
+| --- | --- |
+| `cargo test -p stackly-core --test catalog_local` | 16 lulus, termasuk `a_full_disk_fails_the_import_with_no_space_and_leaves_no_row_folder_or_refresh`, `a_full_disk_during_a_repair_keeps_the_store_folder_that_was_there`, `an_import_the_commit_guard_refuses_at_the_limit_removes_the_folder_it_stored` |
+| `cargo test -p stacklyd --test provider_import --test provider_trust --test provider_gate` | 14, 4, dan 19 lulus, termasuk `eight_imports_of_the_same_bytes_at_once_write_the_row_only_once` dan tiga test replay |
+| `cargo test -p stackly-cli --test provider` | 34 lulus |
+| `cargo test -p stackly-core --test runtime_install` | 12 lulus |
+| `cargo test -p stackly-storage`, `-p stackly-domain`, `-p stackly-protocol` | 161, 338, dan 405 lulus |
+| `cargo test -p stackly-core` (seluruhnya) | 1587 lulus, 0 gagal, 1 diabaikan (46 binary test) |
+| `cargo test -p stacklyd` (seluruhnya) | 718 lulus, 0 gagal, 107 diabaikan (test `native` fitur lain yang butuh artefak runtime atau launchd) |
+| `cargo test -p stackly-cli` (seluruhnya) | 618 lulus, 0 gagal, 1 diabaikan |
+| `swift test --package-path clients/swift` | 281 test di 41 suite lulus |
+| `swift test --package-path apps/macos/Packages/StacklyUI --filter "ProviderTrustCopyTests\|ProviderImportModelTests\|CatalogStoreTests\|SettingsAvailabilityTests\|OnboardingCopyTests\|CatalogTrustContentTests\|CatalogLocalSnapshotTests\|LocalProviderEndToEndTests"` | 109 test di 9 suite lulus, termasuk snapshot `catalog-local-catalog-revoked` yang baru dan `LocalProviderEndToEndTests` terhadap `stacklyd` nyata |
+| `cargo clippy -p stackly-core -p stacklyd -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` | bersih |
+| `cargo xtask codegen --check`, `cargo xtask catalog check`, `cargo xtask provider check`, `cargo xtask evidence check` | 20 file sama; `ok catalog revision 11 7f4ebd23…`; lima baris `ok` dengan digest yang sama; 70 record manual, baseline valid |
+| `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` | lulus |
+
+**Empat hal yang berubah sesudah milestone, pada daemon nyata:**
+
+1. **Import yang gagal karena disk penuh (`3a0041b5`).** Seluruh `STACKLY_ROOT` diletakkan di disk image APFS 96 MB yang dipasang di scratchpad sesi, lalu volume itu diisi sampai penuh, jadi `ENOSPC` nya nyata.
+   - Import paket baru (`acme/bigc`, `versions.json` 1 MB) menjawab `provider.store_failed` reason `no_space` dengan pesan tetap `the provider package could not be stored`. Tidak ada folder `<data>/provider-imports/<digest>` yang tersisa, tidak ada baris `provider_imports`, tidak ada `catalog.changed`, dan item store di `operation_created` berakhir `compensated`.
+   - Import ulang byte yang sama untuk entri yang salinan store nya sudah diubah satu byte (folder sudah ada) juga menjawab `no_space`. Folder itu tetap ada dengan isi yang sama, baris dan keputusan `approved` nya tidak berubah, dan item store nya `not_owned` (`store_failed`).
+   - Baris `WARN` daemon hanya memuat `provider` dan `reason` (sebelumnya hanya dibaca di diff).
+   - Sesudah volume dikosongkan, kunci baru memperbaiki salinan itu dengan approval tetap `approved` dan mengimpor `acme/bigc`.
+   - Jalur pin tidak berubah: diff `3a0041b5` dan `c716d173` hanya menyentuh `crates/core/src/catalog/import.rs`, dan di root biasa create dari entri `approved` menulis salinan pinned 0700 dan 0600 yang sama byte dengan paketnya.
+2. **Guard import yang tidak menulis (`c716d173`).** Delapan `provider.import` atas byte yang sama dikirim serentak di delapan koneksi dengan delapan kunci: delapan balasan `ProviderDetail`, satu baris `provider_imports` ber `revision` 1, satu folder store, delapan operasi `succeeded`, delapan baris audit (masing masing dengan `provider` dan digest), dan delapan event `catalog.changed` `imported` (satu per operasi, seperti bunyi *API surface*).
+3. **Replay opsi C.** Semua cocok dengan teks *Request yang diulang*:
+   - approve, revoke, dan import yang diulang dengan kunci pertamanya sesudah revoke menjawab detail saat ini (`approval` `revoked`), tanpa operasi, baris audit, atau event kedua;
+   - import yang diulang sesudah folder asal dipindah tetap menjawab detail (kunci baru menjawab `provider.import_unreadable`);
+   - sesudah remove, ketiganya menjawab `provider.import_not_found` reason `not_imported`, dan remove yang diulang menjawab `RemovedProvider` yang sama;
+   - import yang operasi pertamanya gagal (`provider.store_failed` di disk penuh) menjawab error yang sama sesudah disk dikosongkan, tanpa operasi baru;
+   - approve yang dijawab tanpa operasi (sudah `approved`) tidak mengikat kuncinya: diulang sesudah revoke ia berjalan sebagai request baru;
+   - kunci yang sama dengan params lain ditolak `operation.idempotency_key_reused`.
+   - Tidak diprobe: request ulang yang menunggu operasi pertama yang masih berjalan (operasi provider selesai dalam milidetik).
+4. **Celah trust tetap tertutup.**
+   - `pending`: `runtime.resolve`, `runtime.install`, form dengan provider, dan create menjawab `provider.approval_required`; form tanpa provider menjawab `instance.provider_ambiguous` dengan `candidates` dan pesan baru. Tidak ada operasi, instance, runtime, atau proses anak daemon.
+   - `revoked` oleh user dan sesudah remove: semua titik itu, ditambah form dan create dari revision pinned serta form dan create duplicate, menjawab `provider.revoked`.
+   - Pin asal lokal tanpa approval (kolom `provider_revisions.approval` dikosongkan di registry root sementara saat daemon mati, meniru root dev sebelum gate ada): form, create, dan duplicate menjawab `provider.approval_required`.
+   - Dicabut catalog (revision 12): approve dan semua titik gate menjawab `provider.revoked` by `catalog` dengan `catalogRevision` 12 dan `since` 2026-11-01.
+   - Di setiap keadaan itu instance yang sudah ada tetap bisa `start`, `restart`, dan `stop`. Itu memang bunyi spec: gate hanya menutup install dan instance baru.
+
+**Verdict per AC:**
+
+| AC | Vonis | Bukti |
+| --- | --- | --- |
+| AC-1 preview | terpenuhi | Probe: preview `acme/fakeish` mengisi identitas, digest, izin, `quarantined`, dan `verdict`, tanpa operasi, baris audit, atau folder store; paket ber namespace `official` tetap menghasilkan preview dengan `importable` false; folder symlink dan folder yang tidak ada menjadi `provider.import_unreadable`. Test `catalog_local` dan `provider_import` untuk port dan `FakePlatform`. |
+| AC-2 aturan import | terpenuhi | Probe: `namespace_not_allowed`, path relatif dan path ber `..` ditolak `request.invalid_params`. Batas 32 dan 16 MiB, URL `http`, kategori `testing`: test `the_33rd_local_provider_…` dan `catalog_local`. |
+| AC-3 import | terpenuhi | Probe: digest lain `provider.import_changed`; store 0700 dan 0600; entri `local` `pending`; byte sama tanpa operasi, event, atau baris audit; entri `invalid` diperbaiki import ulang dengan keputusan utuh; delapan import serentak satu baris `revision` 1; disk penuh tanpa folder sisa; folder asal sama byte, mode, dan atributnya. |
+| AC-4 belum disetujui tidak berjalan | terpenuhi | Probe gate `pending` (lihat butir 4): tanpa operasi, instance, runtime, atau proses anak. Entri ber `state` `blocked` dengan `approval_required` atau `trust_revoked`, dan kolom install di inspect menulis `no (trust_revoked)`. Cek ulang di pekerjaan install: `runtime_install` (lihat catatan cakupan). |
+| AC-5 approval | terpenuhi | Probe: approve membuka `runtime.resolve` dan create; approve kedua tanpa operasi; digest salah `provider.import_changed`; entri yang dicabut catalog `provider.revoked`; baris pin kembali `approved` hanya untuk kunci yang tersimpan. |
+| AC-6 perubahan butuh approval ulang | terpenuhi | Probe: revision 0.2.0 menjadi `pending` dengan `changes` `revision`, `download_hosts`, `endpoints` di preview, detail, dan baris audit; baris pin lama dan instance tidak disentuh; byte pertama kembali `approved`. Kode `executables`, `downloads`, `content`: test core dan cek milestone 2. |
+| AC-7 revoke | terpenuhi | Probe: baris `runtimes`, `instances`, `artifacts` dan folder instance, runtime, pinned, serta store sama sebelum dan sesudah; semua gate tertutup termasuk pin; instance lama start, restart, stop; revoke kedua `provider.not_approved` (exit 3); approve lagi berhasil. |
+| AC-8 revocation catalog | terpenuhi | Probe catalog revision 12: `provider.revoked` by `catalog` dengan `catalogRevision` dan `since`, approve ditolak, tidak ada yang dihapus, instance lama start; `stackly provider list` menulis `Revoked by this catalog (revision 12, published 2026-11-11)`; tidak ada teks `latest` atau `up to date`. Tidak ada kode jaringan (`check-deps`). Langkah jaringan mati `NOT_RUN`, owner user. |
+| AC-9 remove | terpenuhi | Probe: entri hilang, baris pin `approved` menjadi `revoked` di langkah yang sama, folder store hilang, folder lain dan folder asal sama, instance lama start, create dan duplicate dari pin ditolak, approve sesudah remove exit 10. |
+| AC-10 read model dan event | terpenuhi | Probe: satu `catalog.changed` per operasi, sebelum operasi selesai, dan tidak ada untuk import yang gagal; restart memuat entri dan keputusannya tanpa operasi atau baris audit; folder store yang dihapus menjadi entri `invalid` `local` (`missing_file`), salinan yang diubah menjadi `import_digest_mismatch`; entri `invalid` ditolak gate (`catalog.not_installable`) dan keduanya diperbaiki import ulang byte yang sama dengan keputusan utuh. Recovery mode, generation, dan anggaran frame: test `provider_import`. |
+| AC-11 label jujur | terpenuhi | Probe: `trust` `local`, `Publisher acme (not verified)`, sel host `unverified (untested)`; CLI di pty mencetak kalimat izin persis seperti `approval-statement.txt`; 47 keluaran CLI tanpa frasa terlarang. `ProviderTrustCopyTests` dan golden CLI lulus. |
+| AC-12 VAL-018 | terpenuhi | Probe: daemon dengan `STACKLY_TRUST=1` dan `STACKLY_APPROVE_ALL=1` tetap memberi `pending`; `settings.update` dengan kunci `trust` ditolak `request.invalid_params`. `provider_trust` lulus. |
+| AC-13 quarantine | terpenuhi | Probe: `provider.yaml` asal diberi `com.apple.quarantine` dengan `xattr -w`; preview melaporkan `quarantined` true dan agen `Safari`; import berhasil; atribut asal tetap; salinan store tanpa atribut itu (hanya `com.apple.provenance` yang dipasang macOS sendiri). Tidak ada teks tentang Gatekeeper atau menghapus quarantine. Unduhan browser nyata dan folder terlindung `NOT_RUN`, owner user. |
+| AC-14 CLI | terpenuhi | Probe: `import --dry-run` (0 dan 2), `import --json`, `import --approve` tanpa `--yes` (2, tidak ada yang diimpor), `import --approve --yes`, `approve`, `revoke`, `remove` tanpa `--yes` (2) dan dengan `--yes --json` (DTO yang sama dengan socket), `Already imported.`, exit 3, 4, dan 10 sesuai kode. `cargo test -p stackly-cli --test provider` 34 lulus. |
+| AC-15 GUI Catalog | terpenuhi untuk bagian otomatis | `ProviderImportModelTests`, `CatalogStoreTests`, `CatalogLocalSnapshotTests` lulus terhadap referensi. Alur GUI dengan mata `NOT_RUN`, owner user. |
+| AC-16 Settings dan onboarding | terpenuhi untuk bagian otomatis | `SettingsAvailabilityTests`, `OnboardingCopyTests`, `CatalogTrustContentTests` lulus. Tinjauan mata `NOT_RUN`, owner user. |
+| AC-17 jejak | terpenuhi, satu temuan rendah | Probe: setiap operasi yang berhasil punya satu baris audit dengan `provider`, `providerRevision`, dua digest, dan `changes`; preview tanpa baris; `audit.list` menampilkan keempat jenis operasi; home ditulis `~` di preview, error, detail, dan tidak muncul di audit atau log. Temuan 1 di bawah untuk operasi yang gagal. |
+| AC-18 kontrak dan storage | terpenuhi | `codegen --check` bersih pada protokol 4.1; lima method `provider.*` bertanda `recovery refused`; migrasi `0013_provider_imports.sql`; dua kolom di `CODED_COLUMNS`; test protocol, storage, dan `clients/swift` lulus. |
+| AC-19 create dan pin | terpenuhi | Probe: create dari entri `approved` menulis `provider_revisions` dengan publisher `acme`, `approval` `approved`, `approved_at` terisi, dan `source_id` baris sumber `local` `imports`; satu satunya entri lokal yang belum `Trusted` menjawab `instance.provider_ambiguous` dengan `candidates`. |
+
+**Done when, kalimat demi kalimat:**
+
+1. *Provider lokal yang belum dipercaya bisa diperiksa, tapi executable dan init tidak berjalan*: terpenuhi. Preview, list, dan inspect menampilkan izin dan digest; setiap jalur install dan create ditolak, dan daemon tidak punya proses anak.
+2. *Revision baru yang meminta izin atau executable berbeda menunggu approval ulang*: terpenuhi. Revision 0.2.0 dengan host unduhan dan port lain menjadi `pending` dan gate menutup lagi.
+3. *Revocation tidak menghapus runtime atau data, saat offline tidak menghalangi start, dan tidak diklaim terkini*: terpenuhi untuk yang bisa dijalankan. Revoke, remove, dan revocation catalog tidak mengubah satu baris atau folder pun, instance lama tetap start, dan teksnya hanya menyebut revision serta tanggal terbit catalog. Fitur ini tidak punya kode jaringan; langkah dengan jaringan benar benar mati `NOT_RUN`, owner user.
+4. *Quarantine ditangani kebijakan fitur 3 tanpa meminta pengguna mematikannya*: terpenuhi. Stackly hanya membaca dan melaporkan atribut itu, dan tidak ada teks yang menyuruh mematikan proteksi.
+5. *Dialog izin menyatakan native executable berjalan dengan hak user*: terpenuhi. CLI mencetak kalimat fixture persis; sheet GUI dipegang `ProviderTrustCopyTests` dan snapshot `catalog-approve-sheet`.
+6. *`stackly provider import` setara dengan GUI*: terpenuhi. CLI dan model app memanggil method yang sama dan menerima DTO yang sama (`LocalProviderEndToEndTests` terhadap `stacklyd` nyata).
+
+**Temuan, berperingkat:**
+
+1. **Rendah.** Baris audit `import_provider` yang gagal di langkah `read` atau `store` tidak menyebut provider. Di probe disk penuh `safe_details` nya hanya `errorCode`, `message`, `reason`, `stage`, dan `state`. Sebabnya `set_audit_note` baru dipanggil di langkah `commit` (`crates/core/src/catalog/import.rs:613`), padahal provider, revision, dan digest sudah diketahui sesudah langkah `read`, dan dokumen `OperationContext::set_audit_note` meminta note dipasang sedini mungkin supaya baris kegagalan ikut membawanya. Operasi yang gagal tidak mengubah keputusan trust, jadi jejak keputusan AC-17 utuh. Usul: pasang note tanpa `changes` di akhir langkah `read`, lalu ganti di langkah `commit`.
+2. **Rendah, cakupan test** (sudah dicatat tester). Cek ulang trust di pekerjaan `install_runtime` hanya diuji dengan baris import yang tidak ada (`provider.approval_required`). Verdict `revoked` dan revoke yang masuk di antara exec check dan commit hanya dibaca di kode (`recheck_local` dan `final_batch` di `crates/core/src/runtime/install.rs`), dan kodenya menangani keduanya.
+3. **Info.** Tujuh dari delapan import serentak tidak mengubah data tetapi tetap menerbitkan `catalog.changed`. Itu bunyi *API surface* (refresh tetap dipanggil), jadi client memuat ulang list delapan kali. Tidak perlu tindakan.
+
+**Tetap `NOT_RUN`, owner user** (tidak dijalankan sesi; tidak menghalangi PASS): empat record `native` di `evidence/manual/` yang dibuat Langkah 13 (folder terlindung, quarantine dari unduhan browser, alur GUI lengkap, jaringan mati) dan langkah `### UI / manual` Milestone 1, 2, dan 4 di atas.
+
+### Acceptance-criteria coverage
+
+- AC-1 sampai AC-14, AC-17, AC-18, AC-19 · terpenuhi, dibuktikan test dan probe daemon nyata
+- AC-15, AC-16 · bagian otomatis terpenuhi; tinjauan GUI dengan mata `NOT_RUN`, owner user
+- AC-8, AC-13 · terpenuhi; bukti `native` jaringan mati, folder terlindung, dan quarantine unduhan browser `NOT_RUN`, owner user
+- Done when fitur 37 · keenam kalimat terpenuhi
