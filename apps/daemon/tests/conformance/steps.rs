@@ -1029,8 +1029,10 @@ fn absolute_uri(text: &str) -> bool {
 }
 
 async fn logs(ctx: &Ctx, id: Uuid) -> Outcome {
-    // A page of 1000 lines, or the same count twice in a row: the store
-    // holds no more yet.
+    // Repeats until one page is full: 1000 lines, or fewer because the
+    // page reached the 64 KiB batch limit while older lines are left (an
+    // `earlier` cursor). A store that holds less than a page ends when the
+    // count is the same twice in a row.
     let mut last = None;
     loop {
         let page = match ctx
@@ -1045,8 +1047,9 @@ async fn logs(ctx: &Ctx, id: Uuid) -> Outcome {
             Err(error) => return Outcome::Fail(error_failure(&error), None),
         };
         let lines = page["entries"].as_array().map_or(0, Vec::len);
-        if lines >= 1000 || last == Some(lines) {
-            return Outcome::Pass(detail(json!({ "lines": lines })));
+        let full = lines >= 1000 || !page["earlier"].is_null();
+        if full || last == Some(lines) {
+            return Outcome::Pass(detail(json!({ "lines": lines, "full": full })));
         }
         last = Some(lines);
         if interrupted() {

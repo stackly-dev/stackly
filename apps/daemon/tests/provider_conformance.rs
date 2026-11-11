@@ -319,3 +319,236 @@ fn a_server_that_goes_to_the_background_fails_start_and_leaves_nothing_behind() 
     assert_failed_run_cleaned_up(&report);
     ev.pass();
 }
+
+/// `providers/fake`, the package of the fault scenarios.
+fn fake_dir() -> PathBuf {
+    repo().join("providers/fake")
+}
+
+/// The `detail` of `step` in scenario `scenario`.
+fn step_detail(report: &Report, scenario: &str, step: &str) -> serde_json::Value {
+    report
+        .scenario(scenario)
+        .and_then(|result| result.step(step))
+        .and_then(|step| step.detail.clone())
+        .unwrap_or(serde_json::Value::Null)
+}
+
+// covers: AC-11 (spec 0036)
+#[test]
+fn a_slow_ready_scenario_passes_within_the_readiness_limit() {
+    let ev = evidence!(
+        covers = ["AC-029"],
+        kind = Kind::Fixture,
+        expected = "providers/fake with readyDelayMs 1500 passes every step, and its start step lasts at least 1500 ms",
+    );
+    let (report, _out) = run_scenario(
+        &fake_dir(),
+        scenario(
+            "slow-ready",
+            serde_json::json!({ "readyDelayMs": 1500 }),
+            Expect::Ready,
+        ),
+    );
+
+    assert_pass(&report);
+    let start = report
+        .scenario("slow-ready")
+        .and_then(|result| result.step("start"))
+        .expect("start ran");
+    assert!(
+        start.duration_ms >= 1500,
+        "start took {} ms",
+        start.duration_ms
+    );
+    assert_clean(&report);
+    ev.pass();
+}
+
+// covers: AC-11 (spec 0036)
+#[test]
+fn a_crashing_scenario_fails_at_start_unless_the_scenario_expects_it() {
+    let ev = evidence!(
+        covers = ["AC-029"],
+        kind = Kind::Fixture,
+        expected = "providers/fake that crashes 300 ms after start, before it is ready, passes with expect start_fails and fails at start with the operation error code when the scenario expects ready",
+    );
+    let crash = serde_json::json!({ "readyDelayMs": 60000, "crashAfterMs": 300 });
+
+    let (expected, _out) = run_scenario(
+        &fake_dir(),
+        scenario("crash-expected", crash.clone(), Expect::StartFails),
+    );
+    let (unexpected, _out2) = run_scenario(&fake_dir(), scenario("crash", crash, Expect::Ready));
+
+    assert_pass(&expected);
+    assert_eq!(
+        status(&expected, "crash-expected", "start"),
+        Some(StepStatus::Pass)
+    );
+    assert_eq!(
+        status(&expected, "crash-expected", "leftovers"),
+        Some(StepStatus::Pass)
+    );
+    assert_eq!(
+        status(&expected, "crash-expected", "health"),
+        Some(StepStatus::Skipped)
+    );
+    assert_clean(&expected);
+    assert_eq!(unexpected.verdict(), Verdict::Fail);
+    let failure = failure(&unexpected, "crash");
+    assert_eq!(failure["step"], "start", "{failure:#}");
+    assert!(
+        failure["code"].is_string(),
+        "the operation error code is noted: {failure:#}"
+    );
+    assert_failed_run_cleaned_up(&unexpected);
+    ev.pass();
+}
+
+// covers: AC-11 (spec 0036)
+#[test]
+fn a_log_spamming_scenario_still_completes() {
+    let ev = evidence!(
+        covers = ["AC-029"],
+        kind = Kind::Fixture,
+        expected = "providers/fake writing 2000 log lines a second passes every step, and the logs step reads a page of 1000 lines within its limit",
+    );
+    let (report, _out) = run_scenario(
+        &fake_dir(),
+        scenario(
+            "spam",
+            serde_json::json!({ "logLinesPerSecond": 2000 }),
+            Expect::Ready,
+        ),
+    );
+
+    assert_pass(&report);
+    // A page holds 1000 lines or the 64 KiB of one log batch, whichever is
+    // less; 100 byte lines fill the batch first.
+    let logs = step_detail(&report, "spam", "logs");
+    assert_eq!(logs["full"], true, "{logs:#}");
+    assert!(
+        logs["lines"].as_u64().is_some_and(|lines| lines >= 100),
+        "{logs:#}"
+    );
+    assert_clean(&report);
+    ev.pass();
+}
+
+/// Copies a package folder into `into/<name>` with `std::fs`, as setup.
+fn copy_package(from: &Path, into: &Path, name: &str) -> PathBuf {
+    let dest = into.join(name);
+    let mut pending = vec![(from.to_path_buf(), dest.clone())];
+    while let Some((source, target)) = pending.pop() {
+        std::fs::create_dir_all(&target).expect("a folder can be created");
+        for entry in std::fs::read_dir(&source).expect("the package lists") {
+            let entry = entry.expect("an entry reads");
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push((path, target.join(entry.file_name())));
+            } else {
+                std::fs::copy(&path, target.join(entry.file_name())).expect("a file copies");
+            }
+        }
+    }
+    dest
+}
+
+/// The marked roots of this uid now, by folder.
+fn marked_roots() -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let bases = [
+        std::env::temp_dir()
+            .canonicalize()
+            .expect("the temporary directory resolves"),
+        PathBuf::from("/private/tmp"),
+    ];
+    for base in bases {
+        for entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
+            if entry.path().join(stackly_testkit::MARKER_FILE).is_file() {
+                found.push(entry.path());
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+// covers: AC-1 (spec 0036, the harness part)
+#[test]
+fn an_unsupported_api_version_ends_before_any_lifecycle() {
+    let ev = evidence!(
+        covers = ["AC-030", "REQ-030"],
+        kind = Kind::Fixture,
+        expected = "a copy of providers/example with apiVersion stackly/v2 ends the run at validate with verdict fail, one unsupported_api_version finding that names stackly/v1alpha1, no scenario, and no test root made",
+    );
+    let source = TestRoot::new().expect("a source folder can be created");
+    let package = copy_package(&repo().join("providers/example"), source.path(), "example");
+    let manifest = package.join("provider.yaml");
+    let text = std::fs::read_to_string(&manifest).expect("the manifest reads");
+    std::fs::write(
+        &manifest,
+        text.replace("apiVersion: stackly/v1alpha1", "apiVersion: stackly/v2"),
+    )
+    .expect("the manifest is written");
+    let out = TestRoot::new().expect("a report folder can be created");
+    let request = RunRequest::new(package.clone(), out.path().join("report.json"));
+    let _serial = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let before = marked_roots();
+
+    let report = conformance::run(&request);
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let value = report.value().expect("the report was built");
+    assert_eq!(value["failure"]["step"], "validate", "{value:#}");
+    assert_eq!(value["scenarios"], serde_json::json!([]));
+    assert_eq!(value["runtime"], serde_json::Value::Null);
+    let findings = value["validation"]["findings"]
+        .as_array()
+        .expect("findings are listed");
+    assert_eq!(findings.len(), 1, "{findings:#?}");
+    assert_eq!(findings[0]["code"], "unsupported_api_version");
+    assert!(
+        findings[0]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("stackly/v1alpha1")),
+        "{findings:#?}"
+    );
+    assert_eq!(marked_roots(), before, "no test root was made");
+    assert!(
+        package.is_dir(),
+        "the package folder the user gave is never removed"
+    );
+    ev.pass();
+}
+
+// covers: AC-12 (spec 0036)
+#[test]
+fn a_root_without_this_runs_marker_is_never_removed() {
+    let _serial = SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let other = TestRoot::new_marked("another-run").expect("a marked root can be created");
+    let data = other.path().to_path_buf();
+    let run = other.run_dir().to_path_buf();
+    // The marker now names a run other than the one the handle was made
+    // with, the way a root of another harness run would.
+    let marker = data.join(stackly_testkit::MARKER_FILE);
+    let text = std::fs::read_to_string(&marker).expect("the marker reads");
+    std::fs::write(&marker, text.replace("another-run", "a-third-run"))
+        .expect("the marker is written");
+    std::fs::remove_file(run.join(stackly_testkit::MARKER_FILE)).expect("the run marker can go");
+
+    let refused = other
+        .remove_checked()
+        .expect_err("a root of another run is refused");
+
+    assert_eq!(refused.path, data);
+    assert_eq!(refused.reason, "the marker belongs to another run");
+    assert!(data.is_dir() && run.is_dir(), "both folders stay in place");
+    std::fs::remove_dir_all(&data).expect("the test removes its own data folder");
+    std::fs::remove_dir_all(&run).expect("the test removes its own run folder");
+}
