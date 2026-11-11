@@ -384,7 +384,7 @@ fn catalog_artifact(artifact: &VersionArtifact) -> dto::CatalogArtifact {
 }
 
 /// One issue of an invalid entry.
-fn catalog_issue(issue: &Issue) -> dto::CatalogIssue {
+pub(crate) fn catalog_issue(issue: &Issue) -> dto::CatalogIssue {
     dto::CatalogIssue {
         file: issue.file.clone(),
         location: issue.location.to_string(),

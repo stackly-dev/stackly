@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, RwLock};
 use std::time::Instant;
 
 use stackly_core::PreparedLayout;
@@ -45,6 +45,14 @@ pub enum Phase {
     Ready,
     /// A stop began.
     Stopping,
+}
+
+/// One catalog snapshot and the registry generation its local entries were
+/// read at.
+#[derive(Debug, Clone)]
+struct CatalogSnapshot {
+    state: Arc<CatalogState>,
+    generation: u64,
 }
 
 /// Where the registry stands (spec 0005).
@@ -164,7 +172,11 @@ pub struct DaemonCore {
     phase: Mutex<Phase>,
     registry_state: Mutex<RegistryState>,
     registry: Mutex<Option<SqliteRegistry>>,
-    catalog: OnceLock<Arc<CatalogState>>,
+    catalog: RwLock<Option<CatalogSnapshot>>,
+    catalog_base: OnceLock<Arc<CatalogState>>,
+    local_problem: Mutex<Option<String>>,
+    catalog_options: Mutex<stackly_core::catalog::CatalogOptions>,
+    catalog_refresher: OnceLock<Arc<dyn stackly_core::catalog::import::CatalogRefresher>>,
     catalog_source: Arc<catalog::CatalogSource>,
     catalog_accesses: AtomicU64,
     pinned_packages: PinnedPackages,
@@ -242,7 +254,11 @@ impl DaemonCore {
             phase: Mutex::new(Phase::Starting),
             registry_state: Mutex::new(RegistryState::Opening),
             registry: Mutex::new(None),
-            catalog: OnceLock::new(),
+            catalog: RwLock::new(None),
+            catalog_base: OnceLock::new(),
+            local_problem: Mutex::new(None),
+            catalog_options: Mutex::new(stackly_core::catalog::CatalogOptions::default()),
+            catalog_refresher: OnceLock::new(),
             catalog_source: Arc::new(catalog::CatalogSource::default()),
             catalog_accesses: AtomicU64::new(0),
             pinned_packages: PinnedPackages::default(),
@@ -507,11 +523,78 @@ impl DaemonCore {
         lock(&self.registry).take()
     }
 
-    /// The catalog the start slot loaded, or `None` while it loads.
+    /// The catalog snapshot of now: the bundled catalog with the local
+    /// entries of the last refresh (spec 0037, *Read model*), or `None`
+    /// while it loads. A reader keeps the `Arc` it got; a refresh never
+    /// changes it under the reader.
     #[must_use]
     pub fn catalog(&self) -> Option<Arc<CatalogState>> {
         self.catalog_accesses.fetch_add(1, Ordering::Relaxed);
-        self.catalog.get().cloned()
+        self.catalog
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+            .map(|snapshot| Arc::clone(&snapshot.state))
+    }
+
+    /// The catalog the start slot loaded, without local entries: the base
+    /// every refresh rebuilds the snapshot from.
+    #[must_use]
+    pub fn catalog_base(&self) -> Option<Arc<CatalogState>> {
+        self.catalog_base.get().cloned()
+    }
+
+    /// Replaces the snapshot with `state`, built from registry generation
+    /// `generation`, unless the snapshot in place was built from a newer
+    /// one. Returns whether it replaced it.
+    pub fn replace_catalog(&self, state: CatalogState, generation: u64) -> bool {
+        let mut current = self.catalog.write().unwrap_or_else(PoisonError::into_inner);
+        if current
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.generation > generation)
+        {
+            return false;
+        }
+        *current = Some(CatalogSnapshot {
+            state: Arc::new(state),
+            generation,
+        });
+        true
+    }
+
+    /// The loader options of this run's catalog; only tests accept the
+    /// `testing` namespace, and imports follow the same options.
+    #[must_use]
+    pub fn catalog_options(&self) -> stackly_core::catalog::CatalogOptions {
+        *lock(&self.catalog_options)
+    }
+
+    /// Records the loader options of this run's catalog.
+    pub fn set_catalog_options(&self, options: stackly_core::catalog::CatalogOptions) {
+        *lock(&self.catalog_options) = options;
+    }
+
+    /// The refresher provider operations call after they commit, once the
+    /// start slot set it.
+    #[must_use]
+    pub fn catalog_refresher(
+        &self,
+    ) -> Option<Arc<dyn stackly_core::catalog::import::CatalogRefresher>> {
+        self.catalog_refresher.get().cloned()
+    }
+
+    /// Sets the refresher; the first call wins.
+    pub fn set_catalog_refresher(
+        &self,
+        refresher: Arc<dyn stackly_core::catalog::import::CatalogRefresher>,
+    ) {
+        let _ = self.catalog_refresher.set(refresher);
+    }
+
+    /// Records why the local entries were not loaded, the `degraded` part
+    /// of the `catalog` subsystem, or clears it.
+    pub fn set_local_problem(&self, problem: Option<String>) {
+        *lock(&self.local_problem) = problem;
     }
 
     /// The row of the loaded catalog in `provider_sources` (spec 0020
@@ -599,10 +682,14 @@ impl DaemonCore {
         self.session.get().unwrap_or(&SessionStatus::Skipped)
     }
 
-    /// Records the catalog of this run. The first call wins: the catalog
-    /// never changes while the daemon runs.
+    /// Records the bundled catalog of this run and makes it the snapshot.
+    /// The first call wins: the bundled catalog never changes while the
+    /// daemon runs; only its local entries do, through
+    /// [`replace_catalog`](Self::replace_catalog).
     pub fn set_catalog(&self, state: CatalogState) {
-        let _ = self.catalog.set(Arc::new(state));
+        if self.catalog_base.set(Arc::new(state.clone())).is_ok() {
+            self.replace_catalog(state, 0);
+        }
     }
 
     /// Marks the socket listener working (`None`) or not, with a safe
@@ -775,8 +862,19 @@ impl DaemonCore {
             self.operations.health(),
             self.supervision.health(),
             catalog::health(
-                self.catalog.get().map(AsRef::as_ref),
-                self.catalog_source.degraded().as_deref(),
+                self.catalog().as_deref(),
+                Some(
+                    [
+                        self.catalog_source.degraded(),
+                        lock(&self.local_problem).clone(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join("; "),
+                )
+                .filter(|problems| !problems.is_empty())
+                .as_deref(),
             ),
             crate::ipc::logs::health(self.logs().map(|logs| logs.log().health())),
         ];

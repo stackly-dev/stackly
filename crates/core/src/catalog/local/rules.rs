@@ -99,13 +99,14 @@ pub fn check_importable(package: &ValidatedPackage, options: CatalogOptions) -> 
 }
 
 /// With the test option, an import may not take the ID of a catalog entry
-/// (spec 0037, *Aturan import*): the issue for that, if `id` is one.
+/// (spec 0037, *Aturan import*): the issue for that, if `id` is one. Local
+/// entries do not count: importing a provider again replaces its own entry.
 #[must_use]
 pub fn catalog_id_issue(catalog: &Catalog, id: &ProviderName) -> Option<Issue> {
     catalog
         .entries()
         .iter()
-        .any(|entry| entry.id() == id)
+        .any(|entry| !entry.is_local() && entry.id() == id)
         .then(|| {
             Issue::new(
                 "provider.yaml",

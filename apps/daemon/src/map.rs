@@ -358,6 +358,18 @@ pub fn package_error(error: &PackageError) -> ErrorBody {
     )
 }
 
+/// `manifest.invalid` for the package folder `package` with `issues`: a
+/// package an import refuses (spec 0037), whose findings and import issues
+/// are not a [`PackageError`].
+#[must_use]
+pub fn package_issues_error(package: &str, issues: &[Issue]) -> ErrorBody {
+    with_issues(
+        ErrorBody::new(&manifest::INVALID, "the provider package is invalid")
+            .with_detail("package", package),
+        issues,
+    )
+}
+
 /// The error body of settings that do not match their schema (spec 0009,
 /// AC-19): `provider.invalid_settings`. The issues name the fields, never
 /// their values.

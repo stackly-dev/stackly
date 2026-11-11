@@ -6,6 +6,7 @@
 //! network, or resolves a secret (REQ-033).
 
 mod assemble;
+pub mod import;
 mod index;
 mod install;
 mod load;

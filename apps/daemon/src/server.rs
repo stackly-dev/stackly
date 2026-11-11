@@ -387,6 +387,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         redactor,
         secret_target,
     ));
+    core.set_catalog_refresher(Arc::new(catalog::DaemonRefresher::new(&core)));
     core.storage()
         .set_read_timeout(config.capacity_read_timeout);
     if let Some(home) = config.home.clone() {
@@ -1004,6 +1005,9 @@ async fn start_slot(
     if matches!(core.registry_state(), RegistryState::Ready { .. }) {
         catalog::record_source(&core, core.catalog_source()).await;
     }
+    // The local entries join the snapshot once the registry is ready, with
+    // no event (spec 0037, *Read model*).
+    catalog::refresh_local(&core, None).await;
     core.mark_ready();
     // A stop that began during the start slot leaves the dispatcher closed:
     // what `recover` queued runs at the next start.
@@ -1066,6 +1070,11 @@ async fn recover_operations(
         core.prepared(),
         core.bus(),
         core.redactor(),
+    );
+    // The store folder an import makes (spec 0037).
+    engine.register_compensator(
+        stackly_core::catalog::import::STORE_COMPENSATOR,
+        Arc::new(stackly_core::catalog::import::StoreFolderCompensator),
     );
     engine.register_compensator(
         SECRET_REF_COMPENSATOR,
