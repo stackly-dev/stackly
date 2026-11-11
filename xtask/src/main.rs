@@ -36,6 +36,9 @@ Tasks:
   provider check [<dir>...]
                        Read and validate provider packages (default: every folder
                        in providers/) on macOS; exit 1 with one line per problem
+  provider new <name> [--out <dir>]
+                       Copy providers/example into <dir>/<name>/ (default
+                       providers/<name>/) as testing/<name> and check it (macOS)
   catalog build --out <dir>
                        Build the bundled catalog from providers/catalog.toml into
                        <dir> (macOS reads the packages); exit 1 with one line per problem

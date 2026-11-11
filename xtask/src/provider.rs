@@ -15,9 +15,12 @@ use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 
+mod scaffold;
+
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     match args {
         ["check", dirs @ ..] => check(root, dirs),
+        ["new", rest @ ..] => scaffold::run(root, rest),
         _ => bail!(
             "unknown provider task `{}`; see `cargo xtask help`",
             args.join(" ")
