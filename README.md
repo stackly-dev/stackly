@@ -50,13 +50,13 @@ swift test --package-path clients/swift
 | `clients/swift` | `StacklyClient`, the Swift side of the IPC contract |
 | `protocols/` | Generated JSON Schemas and the JSON fixtures shared by Rust and Swift tests |
 | `xtask/` | Repo tasks behind `cargo xtask` |
-| `docs/` | Scope, specs, and the UI mockup |
+| `docs/` | Scope, specs, the UI mockup, and the provider guide in `docs/providers/` |
 
 The architecture and its rules are in [spec 0001](docs/specs/0001-stack-arsitektur/index.md).
 
 ## Contributing
 
-Bug reports, provider proposals, provider packages, and docs fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); a provider package needs no Rust or Swift code ([Contributing a provider](CONTRIBUTING.md#contributing-a-provider)). Who looks after what is in [GOVERNANCE.md](GOVERNANCE.md).
+Bug reports, provider proposals, provider packages, and docs fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); a provider package needs no Rust or Swift code, and the [provider guide](docs/providers/README.md) walks you through one. Who looks after what is in [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Security
 

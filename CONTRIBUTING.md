@@ -48,6 +48,12 @@ cargo xtask provider check     # every provider package in providers/
 cargo xtask docs check         # links, commands, and the community files
 ```
 
+When you add or change a provider package, also run the conformance harness on it and attach its report:
+
+```bash
+cargo xtask provider test providers/<name>
+```
+
 When you change `providers/catalog.toml` or a package listed in it, also run:
 
 ```bash
@@ -79,13 +85,13 @@ cargo run -q -p stackly-cli -- daemon status --json
 
 ## Contributing a provider
 
-1. Read how a provider package is laid out: [spec 0009](docs/specs/0009-provider-engine-manifest-schema/index.md) and the existing packages in [`providers/`](providers/).
-2. Write your package in its own folder in `providers/`: `provider.yaml`, `schemas/settings.schema.json`, `templates/`, and `versions.json`.
-3. Check it with `cargo xtask provider check providers/<name>` until it is clean.
-4. Add `LICENSE-NOTICES.md` with the license of the runtime and where its binary comes from.
-5. Open a pull request and fill in the provider checklist of the template.
+The [provider guide](docs/providers/README.md) takes you from a clean clone to a pull request. In short:
 
-A step by step provider guide is not written yet; until it is, the spec and the existing packages are the reference.
+1. Start from the example with `cargo xtask provider new <name>` ([authoring.md](docs/providers/authoring.md)).
+2. Fill in `provider.yaml`, the settings schema, the templates, and `tests/scenarios.yaml`, using the reference pages.
+3. Run `cargo xtask provider check providers/<name>` until it prints `ok`.
+4. Run `cargo xtask provider test providers/<name>` until the verdict is `pass` ([testing.md](docs/providers/testing.md)).
+5. Open a pull request with the harness report and fill in the provider checklist of the template; the maintainer follows [review.md](docs/providers/review.md).
 
 ## Pull requests
 

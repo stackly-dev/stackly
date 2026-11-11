@@ -5,7 +5,7 @@
 and its namespace is `testing`, so it never ships in the app catalog.
 `cargo xtask provider new <name>` copies this folder into a new package
 `testing/<name>`, so every file here is also the starting point of a new
-provider. The provider guide is `docs/providers/README.md`.
+provider. The provider guide is [docs/providers/README.md](../../docs/providers/README.md).
 
 ## Files
 

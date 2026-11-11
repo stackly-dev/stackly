@@ -37,3 +37,17 @@ fn an_unknown_docs_task_is_refused() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unknown docs task `nope`"));
 }
+
+#[test]
+fn the_walkthrough_refuses_an_unknown_argument_before_it_clones() {
+    let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .current_dir(repo_root())
+        .args(["docs", "walkthrough", "--nope"])
+        .output()
+        .expect("the xtask binary runs");
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("usage: cargo xtask docs walkthrough [--keep]")
+    );
+}
