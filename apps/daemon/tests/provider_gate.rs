@@ -768,3 +768,611 @@ async fn a_snapshot_built_from_an_older_generation_never_replaces_a_newer_one() 
     );
     assert_eq!(revision(), 903);
 }
+
+/// Every file under `dir` with the SHA-256 of its bytes, and every folder,
+/// sorted; an absent folder is empty.
+fn content(dir: &Path) -> Vec<(String, String)> {
+    use sha2::{Digest as _, Sha256};
+    let mut found = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&next) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(dir)
+                .expect("under the folder")
+                .display()
+                .to_string();
+            let meta = std::fs::symlink_metadata(&path).expect("the entry has metadata");
+            if meta.is_dir() {
+                pending.push(path);
+                found.push((relative, "dir".to_owned()));
+            } else {
+                let bytes = std::fs::read(&path).expect("the file reads");
+                let digest: String = Sha256::digest(&bytes)
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                found.push((relative, digest));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// What revoke and remove must leave alone (spec 0037 AC-7, AC-9): the
+/// registry rows of runtimes, instances, and the runtime's artifact, and
+/// the bytes of the instance, runtime, and pinned package folders.
+#[derive(Debug, PartialEq, Eq)]
+struct Untouched {
+    runtimes: String,
+    instances: String,
+    artifact: String,
+    instances_dir: Vec<(String, String)>,
+    runtimes_dir: Vec<(String, String)>,
+    providers_dir: Vec<(String, String)>,
+}
+
+async fn untouched(site: &Site, api: &Api, daemon: &stacklyd::server::DaemonHandle) -> Untouched {
+    let registry = daemon.core().registry().expect("the registry is open");
+    let sha256 = match api
+        .client
+        .call(Call::RuntimeGet(
+            stackly_protocol::runtime::GetRuntimeParams {
+                runtime_id: api.runtime_id,
+            },
+        ))
+        .await
+        .expect("the runtime reads")
+    {
+        Reply::RuntimeGet(detail) => detail
+            .artifact
+            .map(|artifact| artifact.sha256)
+            .expect("the seeded runtime names its artifact"),
+        other => panic!("not a runtime reply: {other:?}"),
+    };
+    let layout = site.prepared.layout();
+    Untouched {
+        runtimes: format!("{:?}", registry.runtimes().expect("reads").value),
+        instances: format!(
+            "{:?}",
+            registry
+                .instances(InstanceFilter {
+                    include_retained: true,
+                })
+                .expect("reads")
+                .value
+        ),
+        artifact: format!(
+            "{:?}",
+            registry
+                .artifact(&sha256.parse().expect("a digest"))
+                .expect("reads")
+                .value
+        ),
+        instances_dir: content(&layout.instances_dir()),
+        runtimes_dir: content(&layout.runtimes_dir()),
+        providers_dir: content(&layout.providers_dir()),
+    }
+}
+
+/// The settings of the active config revision of `id` with `greeting` set.
+async fn apply_greeting(api: &Api, id: uuid::Uuid, greeting: &str) {
+    use stackly_protocol::instance::SettingsDocument;
+    use stackly_protocol::instance::config::{
+        ApplyConfigParams, ConfigChangeRequest, GetConfigParams,
+    };
+    let view = match api
+        .client
+        .call(Call::InstanceConfigGet(GetConfigParams { instance_id: id }))
+        .await
+        .expect("the config reads")
+    {
+        Reply::InstanceConfigGet(view) => *view,
+        other => panic!("not a config reply: {other:?}"),
+    };
+    let mut map = view.revision.values.as_map().clone();
+    map.insert("greeting".to_owned(), serde_json::json!(greeting));
+    let accepted = match call(
+        &api.client,
+        Call::InstanceConfigApply(ApplyConfigParams {
+            instance_id: id,
+            base_revision: view.revision.number,
+            change: ConfigChangeRequest::Settings(SettingsDocument::new(map)),
+            expected_revision: None,
+        }),
+    )
+    .await
+    .expect("a config change of an instance of a revoked provider is accepted")
+    {
+        Reply::InstanceConfigApply(accepted) => accepted
+            .accepted
+            .expect("a change of the greeting begins an operation"),
+        other => panic!("not an apply reply: {other:?}"),
+    };
+    let done = api.wait_final(accepted.operation.id).await;
+    assert_eq!(done.operation.state, OperationState::Succeeded, "{done:?}");
+}
+
+/// Creates an instance of the approved local entry and returns its ID.
+async fn create_local(api: &Api, name: &str) -> uuid::Uuid {
+    let accepted = api
+        .create(local_params(api, name))
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let done = api.wait_final(accepted.operation.id).await;
+    assert_eq!(done.operation.state, OperationState::Succeeded, "{done:?}");
+    accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<uuid::Uuid>().expect("an instance id"))
+        .expect("the operation names the instance")
+}
+
+// covers: AC-7, AC-9 (spec 0037; *Security model*, residual K25)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_revoke_and_a_remove_leave_runtimes_instances_artifacts_and_their_folders_byte_for_byte()
+{
+    let ev = evidence!(
+        covers = ["AC-072", "REQ-032"],
+        kind = Kind::Fixture,
+        expected = "provider.revoke and provider.remove leave the runtime, instance, and artifact rows and the instance, runtime, pinned, and store folders byte for byte as they were, the instance still starts, restarts, stops, and changes its config, and the runtime still serves another provider of its software",
+    );
+    let site = Site::new();
+    let _guard = support::reap_guard(&site.root);
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    approve(&api.client, &digest).await;
+    let created = create_local(&api, "kept").await;
+    let store = site
+        .prepared
+        .layout()
+        .provider_import_dir(&digest.parse().expect("a digest"));
+
+    let before = untouched(&site, &api, &daemon).await;
+    let store_before = content(&store);
+    revoke(&api.client).await;
+    assert_eq!(untouched(&site, &api, &daemon).await, before, "revoke");
+    assert_eq!(content(&store), store_before, "the store copy stays");
+
+    // The instance that exists still runs and changes (AC-7).
+    api.start_ready(created).await;
+    let restarted = api
+        .restart(created)
+        .await
+        .expect("the restart is accepted")
+        .accepted
+        .expect("a restart begins an operation");
+    let done = api.wait_final(restarted.operation.id).await;
+    assert_eq!(done.operation.state, OperationState::Succeeded, "{done:?}");
+    api.stop_when_free(created).await;
+    apply_greeting(&api, created, "still here").await;
+
+    let before = untouched(&site, &api, &daemon).await;
+    let removed = call(
+        &api.client,
+        Call::ProviderRemove(ProviderTargetParams {
+            provider: LOCAL.to_owned(),
+        }),
+    )
+    .await
+    .expect("it removes");
+    assert!(matches!(removed, Reply::ProviderRemove(_)), "{removed:?}");
+    assert_eq!(untouched(&site, &api, &daemon).await, before, "remove");
+    assert!(!store.exists(), "only the unreferenced store copy goes");
+
+    // After the remove the instance still starts, and the runtime the local
+    // entry used stays installed for the catalog entry of its software.
+    api.start_ready(created).await;
+    api.stop_when_free(created).await;
+    site.unpin_fake_package();
+    let other = api
+        .create(api.params("catalog-one", serde_json::json!({})))
+        .await
+        .expect("the catalog entry creates on the same runtime")
+        .accepted
+        .expect("a create starts an operation");
+    let done = api.wait_final(other.operation.id).await;
+    assert_eq!(done.operation.state, OperationState::Succeeded, "{done:?}");
+    ev.pass();
+}
+
+// covers: AC-4, AC-7 (spec 0037, *Gate trust*: the commit guard of
+// create_instance)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_revoke_that_races_a_create_either_follows_it_or_refuses_it_and_leaves_nothing_half_made()
+{
+    let site = Site::new();
+    let _guard = support::reap_guard(&site.root);
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let other = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+
+    for round in 0..6 {
+        approve(&api.client, &digest).await;
+        let name = format!("race-{round}");
+        let create = async {
+            match api.create(local_params(&api, &name)).await {
+                Ok(accepted) => {
+                    let accepted = accepted.accepted.expect("a create starts an operation");
+                    let done = api.wait_final(accepted.operation.id).await;
+                    if done.operation.state == OperationState::Succeeded {
+                        Ok(())
+                    } else {
+                        Err(Api::failure_code(&done))
+                    }
+                }
+                Err(error) => Err(error.code().to_owned()),
+            }
+        };
+        let (created, ()) = tokio::join!(create, revoke(&other.client));
+
+        let registry = daemon.core().registry().expect("the registry is open");
+        let instances = registry
+            .instances(InstanceFilter {
+                include_retained: true,
+            })
+            .expect("reads")
+            .value;
+        let named = instances
+            .iter()
+            .filter(|instance| instance.name().as_str() == name)
+            .count();
+        match created {
+            Ok(()) => {
+                assert_eq!(named, 1, "round {round}: the create landed");
+                let record = registry
+                    .provider_import(&LOCAL.parse::<ProviderName>().expect("an id"))
+                    .expect("reads")
+                    .value
+                    .expect("the import row");
+                let key = ProviderRevisionKey::new(
+                    record.provider.clone(),
+                    record.provider_revision.clone(),
+                    record.manifest_sha256,
+                );
+                let pinned = registry
+                    .provider_revision(&key)
+                    .expect("reads")
+                    .value
+                    .expect("the create pinned the revision");
+                assert_eq!(
+                    pinned.approval,
+                    Some(TrustDecision::Revoked),
+                    "round {round}: the revoke that followed the create revoked its pin"
+                );
+            }
+            Err(code) => {
+                assert_eq!(named, 0, "round {round}: a refused create left a row");
+                assert!(
+                    code == "provider.revoked" || code == "provider.approval_required",
+                    "round {round}: {code}"
+                );
+            }
+        }
+        let folders = std::fs::read_dir(site.prepared.layout().instances_dir())
+            .map(|entries| entries.count())
+            .unwrap_or(0);
+        assert_eq!(
+            folders,
+            instances.len(),
+            "round {round}: one instance folder per row, none half made"
+        );
+        assert!(
+            registry
+                .unfinished_operations()
+                .expect("reads")
+                .value
+                .is_empty(),
+            "round {round}: every operation ended"
+        );
+    }
+}
+
+// covers: AC-5, AC-7 (spec 0037, *API surface*: provider operations queue
+// behind the manager lock with settings.update and stop all, spec 0007)
+#[tokio::test(flavor = "multi_thread")]
+async fn provider_operations_queue_with_a_settings_update_and_a_stop_all_and_all_of_them_end() {
+    use stackly_protocol::settings::{SettingsPatch, UpdateSettingsParams};
+    use stackly_protocol::stop_all::StopAllParams;
+    let site = Site::new();
+    let _guard = support::reap_guard(&site.root);
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    approve(&api.client, &digest).await;
+    let running = create_local(&api, "queued").await;
+    let clients = [
+        site.api().await,
+        site.api().await,
+        site.api().await,
+        site.api().await,
+    ];
+
+    for round in 0..4_u32 {
+        api.start_ready(running).await;
+        let revision = match api
+            .client
+            .call(Call::SettingsGet)
+            .await
+            .expect("settings.get answers")
+        {
+            Reply::SettingsGet(view) => view.revision,
+            other => panic!("not a settings reply: {other:?}"),
+        };
+        let [first, second, third, fourth] = &clients;
+        let all = async {
+            tokio::join!(
+                call(
+                    &first.client,
+                    Call::ProviderApprove(DecideProviderParams {
+                        provider: LOCAL.to_owned(),
+                        expected_package_sha256: digest.clone(),
+                    }),
+                ),
+                call(
+                    &second.client,
+                    Call::ProviderRevoke(ProviderTargetParams {
+                        provider: LOCAL.to_owned(),
+                    }),
+                ),
+                call(
+                    &third.client,
+                    Call::SettingsUpdate(UpdateSettingsParams {
+                        expected_revision: revision,
+                        patch: SettingsPatch {
+                            audit_retention_days: Some(if round % 2 == 0 { 7 } else { 90 }),
+                            ..SettingsPatch::default()
+                        },
+                    }),
+                ),
+                call(
+                    &fourth.client,
+                    Call::InstanceStopAll(StopAllParams {
+                        expected_instance_ids: None,
+                    }),
+                ),
+            )
+        };
+        let (approved, revoked, updated, stopped) =
+            tokio::time::timeout(std::time::Duration::from_secs(60), all)
+                .await
+                .unwrap_or_else(|_| panic!("round {round}: a call never answered"));
+        if let Err(error) = &approved {
+            assert_eq!(error.code(), "provider.revoked", "round {round}");
+        }
+        if let Err(error) = &revoked {
+            assert_eq!(error.code(), "provider.not_approved", "round {round}");
+        }
+        updated.unwrap_or_else(|error| panic!("round {round}: settings.update: {error:?}"));
+        stopped.unwrap_or_else(|error| panic!("round {round}: stop all: {error:?}"));
+        let registry = daemon.core().registry().expect("the registry is open");
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !registry
+            .unfinished_operations()
+            .expect("reads")
+            .value
+            .is_empty()
+        {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "round {round}: an operation never ended"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        // The decision ends where the last of the two operations left it;
+        // approve it for the next round.
+        let _ = call(
+            &api.client,
+            Call::ProviderApprove(DecideProviderParams {
+                provider: LOCAL.to_owned(),
+                expected_package_sha256: digest.clone(),
+            }),
+        )
+        .await;
+    }
+}
+
+fn audited(daemon: &stacklyd::server::DaemonHandle, kind: stackly_domain::OperationKind) -> usize {
+    daemon
+        .core()
+        .registry()
+        .expect("the registry is open")
+        .audit_events(stackly_domain::AuditQuery::page(500, None))
+        .expect("reads")
+        .value
+        .items
+        .iter()
+        .filter(|row| row.operation_kind == Some(kind))
+        .count()
+}
+
+fn approve_call(digest: &str) -> Call {
+    Call::ProviderApprove(DecideProviderParams {
+        provider: LOCAL.to_owned(),
+        expected_package_sha256: digest.to_owned(),
+    })
+}
+
+fn revoke_call() -> Call {
+    Call::ProviderRevoke(ProviderTargetParams {
+        provider: LOCAL.to_owned(),
+    })
+}
+
+async fn send(api: &Api, call: Call, key: &str) -> Result<Reply, Box<ErrorBody>> {
+    api.client
+        .call_detailed(call, CallOptions::default().with_idempotency_key(key))
+        .await
+}
+
+// covers: AC-18 (spec 0037, *API surface*: a repeated request runs no
+// second operation)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_approve_and_a_revoke_repeated_with_their_key_run_no_second_operation() {
+    use stackly_domain::OperationKind;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    let (approve_key, revoke_key) = (key(), key());
+
+    send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect("approves");
+    send(&api, revoke_call(), &revoke_key)
+        .await
+        .expect("revokes");
+    send(&api, approve_call(&digest), &approve_key)
+        .await
+        .expect("the approval key answers again, not provider.revoked");
+    assert_eq!(audited(&daemon, OperationKind::ApproveProvider), 1);
+    approve(&api.client, &digest).await;
+    send(&api, revoke_call(), &revoke_key)
+        .await
+        .expect("the revoke key answers again, not an error");
+    assert_eq!(audited(&daemon, OperationKind::RevokeProvider), 1);
+    assert_eq!(audited(&daemon, OperationKind::ApproveProvider), 2);
+}
+
+// covers: AC-4 (spec 0037, *Gate trust*: a pinned revision of local origin
+// without an approval, finding 1 of the milestone 1 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pinned_revision_of_another_namespace_with_no_approval_needs_one() {
+    let site = Site::new();
+    let dir = local_fake(site.root.path());
+    // Pinned the way the milestone 1 gap pinned it: no publisher, no
+    // approval, no source, and no import row.
+    site.pin_package(&dir);
+    let _daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let before = instance_count(&site);
+
+    let form = api
+        .form_at(api.runtime_id, Some(LOCAL), Some("0.4.0"))
+        .await
+        .expect_err("the form of the pinned revision is refused");
+    assert_eq!(form.code(), "provider.approval_required");
+    let mut params = local_params(&api, "pinned");
+    params.provider.revision = Some("0.4.0".to_owned());
+    let create = api
+        .create(params)
+        .await
+        .expect_err("the create from the pinned revision is refused");
+    assert_eq!(create.code(), "provider.approval_required");
+    assert_eq!(detail(&create, "provider"), Some(LOCAL));
+
+    // A pinned revision of the testing namespace with no approval stays
+    // trusted through its source.
+    api.form_at(api.runtime_id, Some("testing/fake"), Some("0.4.0"))
+        .await
+        .expect("the seeded catalog pin builds a form");
+    assert_eq!(instance_count(&site), before);
+}
+
+/// A copy of the local package at revision 0.5.0, so the pin of 0.4.0 is
+/// no longer the entry and a create at 0.4.0 resolves through
+/// `find_pinned`.
+fn local_fake_next(root: &Path) -> PathBuf {
+    let from = local_fake(&root.join("next-source"));
+    let to = root.join("packages").join("acme").join("fake-next");
+    copy_dir(&from, &to);
+    let manifest = to.join("provider.yaml");
+    let text = std::fs::read_to_string(&manifest).expect("the manifest reads");
+    std::fs::write(
+        &manifest,
+        text.replace("revision: \"0.4.0\"", "revision: \"0.5.0\""),
+    )
+    .expect("the manifest writes");
+    to
+}
+
+// covers: AC-4, AC-7, AC-8 (spec 0037, *Gate trust*: create, form, and
+// duplicate from a pinned revision, revoked by the user and by the catalog)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pinned_revision_is_refused_through_find_pinned_when_the_user_or_the_catalog_revokes_it()
+{
+    let site = Site::new();
+    let _guard = support::reap_guard(&site.root);
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    approve(&api.client, &digest).await;
+    let created = create_local(&api, "pinned-old").await;
+    let next = local_fake_next(site.root.path());
+    let next_digest = import(&api.client, &next).await;
+    approve(&api.client, &next_digest).await;
+    let at_old = |api: &Api, name: &str| {
+        let mut params = local_params(api, name);
+        params.provider.revision = Some("0.4.0".to_owned());
+        params
+    };
+    let assert_pinned_refused = async |api: &Api, by: &str| {
+        let form = api
+            .form_at(api.runtime_id, Some(LOCAL), Some("0.4.0"))
+            .await
+            .expect_err("the form at the pinned revision is refused");
+        assert_eq!(form.code(), "provider.revoked", "form ({by})");
+        assert_eq!(detail(&form, "by"), Some(by), "form");
+        let create = api
+            .create(at_old(api, "again"))
+            .await
+            .expect_err("the create at the pinned revision is refused");
+        assert_eq!(create.code(), "provider.revoked", "create ({by})");
+        assert_eq!(detail(&create, "by"), Some(by), "create");
+        assert_eq!(detail(&create, "providerRevision"), Some("0.4.0"));
+        let duplicate = api
+            .duplicate_form(created)
+            .await
+            .expect_err("the duplicate of the pinned revision is refused");
+        assert_eq!(duplicate.code(), "provider.revoked", "duplicate ({by})");
+        assert_eq!(detail(&duplicate, "by"), Some(by), "duplicate");
+    };
+
+    // The user revokes: every approved revision of the provider is revoked.
+    revoke(&api.client).await;
+    assert_pinned_refused(&api, "user").await;
+    api.start_ready(created).await;
+    api.stop_when_free(created).await;
+
+    // Approving the current bytes again does not approve the old pin.
+    approve(&api.client, &next_digest).await;
+    assert_pinned_refused(&api, "user").await;
+
+    // The installed catalog revokes revision 0.4.0 too: after a restart
+    // with that catalog the pinned revision is refused by the catalog,
+    // which wins over the user's revoke.
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    let _daemon = site.start_with(revoking_catalog()).await;
+    let api = site.api().await;
+    assert_pinned_refused(&api, "catalog").await;
+    let refused = api
+        .create(at_old(&api, "catalog"))
+        .await
+        .expect_err("refused by the catalog");
+    assert_eq!(detail(&refused, "catalogRevision"), Some("1"));
+    assert_eq!(detail(&refused, "since"), Some("2026-09-01T00:00:00.000Z"));
+    // The instance of the revoked revision still starts (AC-8).
+    api.start_ready(created).await;
+    api.stop_when_free(created).await;
+}
