@@ -1,0 +1,48 @@
+name: Provider proposal
+description: Propose a new tool for Stackly to install and run.
+labels: [needs-triage, provider]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A provider is a package in `providers/` that tells Stackly how to install, configure, and run one tool. A simple provider needs no Rust or Swift code. See [CONTRIBUTING.md](https://github.com/stackly-dev/stackly/blob/main/CONTRIBUTING.md) first.
+  - type: input
+    id: software
+    attributes:
+      label: Software name
+    validations:
+      required: true
+  - type: input
+    id: upstream
+    attributes:
+      label: Upstream project link
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Upstream license
+      description: The SPDX identifier if you know it, for example `Apache-2.0`.
+    validations:
+      required: true
+  - type: dropdown
+    id: macos-binary
+    attributes:
+      label: Does upstream publish a binary for macOS on Apple Silicon (arm64)?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: owner
+    attributes:
+      label: Would you be the provider owner?
+      description: A provider owner answers the issues about the provider and keeps its versions current; see https://github.com/stackly-dev/stackly/blob/main/GOVERNANCE.md
+      options:
+        - "Yes"
+        - "No"
+        - Maybe, with help
+    validations:
+      required: true

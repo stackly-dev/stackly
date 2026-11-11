@@ -1,0 +1,28 @@
+name: Configuration help
+description: Ask how to set up or configure an instance.
+labels: [needs-triage, configuration]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste a password, a token, or another secret into this form. A diagnostic bundle from `stackly diagnostics export` is already redacted, but read it before you attach it.
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you tried
+      description: What you want to do, the commands or steps you ran, and what happened.
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      description: For example `official/nats`.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: The relevant part of your configuration, with every secret removed.
+      render: text
