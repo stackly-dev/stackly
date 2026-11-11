@@ -79,6 +79,7 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
     assert_eq!(
         ids,
         [
+            "testing/example",
             "testing/fake",
             "official/nats",
             "official/postgresql",

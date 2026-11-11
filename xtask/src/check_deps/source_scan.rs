@@ -146,8 +146,11 @@ const SYSTEM_PATH_RULE: &str = "stackly-platform-macos names only /usr/bin/codes
 /// Provider names the create code never writes (spec 0020, AC-21): one for
 /// each folder of `providers/` and each id of `providers/catalog.toml`,
 /// plus `postgres`, the common short form. A test keeps this list as long
-/// as the folder.
-pub const PROVIDER_WORDS: [&str; 8] = [
+/// as the folder. `example` is the example package of spec 0036, which the
+/// create code must not single out any more than `fake`; the word also
+/// matches plain English ("for example") in a string or a Swift code line,
+/// which the scanned create code has none of, and which it writes another way.
+pub const PROVIDER_WORDS: [&str; 9] = [
     "postgresql",
     "postgres",
     "mysql",
@@ -156,6 +159,7 @@ pub const PROVIDER_WORDS: [&str; 8] = [
     "clickhouse",
     "traefik",
     "fake",
+    "example",
 ];
 /// The modules of `stackly-core` that name no provider.
 const PROVIDER_FREE_MODULES: [&str; 1] = ["instance::create"];
@@ -1968,6 +1972,7 @@ mod tests {
             "MySQL",
             "traefik-config",
             "my_clickhouse_server",
+            "testing/example",
         ] {
             assert!(names_provider(text), "{text}");
         }
