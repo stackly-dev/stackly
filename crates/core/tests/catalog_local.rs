@@ -694,3 +694,27 @@ fn the_store_compares_versions_json_and_reports_a_full_disk_and_a_wrong_digest()
         StoreError::NoSpace
     );
 }
+
+// covers: AC-12 (spec 0037), VAL-018
+#[test]
+fn a_manifest_cannot_declare_itself_trusted() {
+    let site = Site::new();
+    let dir = site.edited("acme-demo", "trusted", "provider.yaml", |text| {
+        text.replace(
+            "  executeRuntimeBinary: true\n",
+            "  executeRuntimeBinary: true\n  trusted: true\n",
+        )
+    });
+
+    let check = site.import(&dir, no_testing());
+
+    assert!(!check.valid());
+    assert!(
+        check
+            .findings()
+            .iter()
+            .any(|finding| finding.issue.code == IssueCode::UnknownField),
+        "{:?}",
+        check.findings()
+    );
+}

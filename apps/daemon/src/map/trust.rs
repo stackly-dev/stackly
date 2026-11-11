@@ -278,6 +278,22 @@ pub fn revoked(provider: &str, provider_revision: &str, info: &RevokedInfo) -> E
     with_hint(body)
 }
 
+/// `body` with the static hint of its provider or catalog code, unless it
+/// has one: an operation's stored error and a precheck refusal reach the
+/// handler without the hint of their area.
+#[must_use]
+pub fn with_area_hint(body: ErrorBody) -> ErrorBody {
+    if body.hint().is_some() {
+        return body;
+    }
+    let hint = codes::hint(body.code(), body.details())
+        .or_else(|| stackly_protocol::codes::catalog::hint(body.code(), body.details()));
+    match hint {
+        Some(hint) => body.with_hint(hint),
+        None => body,
+    }
+}
+
 /// `body` with the static hint of its provider code.
 fn with_hint(body: ErrorBody) -> ErrorBody {
     match codes::hint(body.code(), body.details()) {

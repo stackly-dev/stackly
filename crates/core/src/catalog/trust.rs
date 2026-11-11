@@ -88,7 +88,10 @@ impl RevokedInfo {
 ///
 /// The installed catalog carries no `revoked` list yet, so none matches.
 // provisional: F37 step 8 (the catalog `revoked` list and `Catalog::revocation`)
-const fn catalog_revocation(_catalog: &Catalog, _key: &ProviderRevisionKey) -> Option<RevokedInfo> {
+pub(crate) const fn catalog_revocation(
+    _catalog: &Catalog,
+    _key: &ProviderRevisionKey,
+) -> Option<RevokedInfo> {
     None
 }
 

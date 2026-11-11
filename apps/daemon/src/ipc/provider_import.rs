@@ -59,18 +59,6 @@ fn registry_of(core: &DaemonCore) -> Result<SqliteRegistry, Box<ErrorBody>> {
     })
 }
 
-/// The answer of a method this build does not serve yet.
-// provisional: F37 step 6 (approve, revoke)
-fn not_served(method: &'static str) -> Box<ErrorBody> {
-    Box::new(
-        ErrorBody::new(
-            &request::UNKNOWN_METHOD,
-            format!("{method} is not served yet"),
-        )
-        .with_detail("method", method),
-    )
-}
-
 /// What reading a package folder found, before any rule of an import.
 struct Read {
     check: ImportCheck,
@@ -345,6 +333,19 @@ pub fn import<'a>(
     context: &RequestContext,
     params: ImportProviderParams,
 ) -> HandlerFuture<'a, Box<ProviderDetail>> {
+    let inner = import_inner(core, context, params);
+    Box::pin(async move {
+        inner
+            .await
+            .map_err(|error| Box::new(map::trust::with_area_hint(*error)))
+    })
+}
+
+fn import_inner<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ImportProviderParams,
+) -> HandlerFuture<'a, Box<ProviderDetail>> {
     let context = context.clone();
     Box::pin(async move {
         let catalog = crate::catalog::loaded(core)?;
@@ -460,26 +461,241 @@ pub fn import<'a>(
     })
 }
 
+/// The local entry `provider` of the snapshot, or the error a decision on
+/// it answers: `not_local` for a catalog entry, `not_imported` for none.
+fn local_entry<'c>(
+    catalog: &'c Catalog,
+    provider: &ProviderName,
+    registry_has_row: bool,
+) -> Result<Option<&'c CatalogEntry>, Box<ErrorBody>> {
+    match catalog.entry(provider) {
+        Some(entry) if !entry.is_local() => Err(Box::new(map::trust::import_not_found(
+            provider.as_str(),
+            "not_local",
+        ))),
+        Some(entry) => Ok(Some(entry)),
+        None if registry_has_row => Ok(None),
+        None => Err(Box::new(map::trust::import_not_found(
+            provider.as_str(),
+            "not_imported",
+        ))),
+    }
+}
+
+fn provider_param(text: &str) -> Result<ProviderName, Box<ErrorBody>> {
+    text.parse().map_err(|_| {
+        Box::new(ErrorBody::new(
+            &request::INVALID_PARAMS,
+            "provider is not a provider ID",
+        ))
+    })
+}
+
+async fn import_row(
+    registry: &SqliteRegistry,
+    provider: &ProviderName,
+) -> Result<Option<ProviderImportRecord>, Box<ErrorBody>> {
+    let registry = registry.clone();
+    let provider = provider.clone();
+    tokio::task::spawn_blocking(move || registry.provider_import(&provider))
+        .await
+        .map_err(|_| unexpected("the registry read stopped"))?
+        .map(|row| row.value)
+        .map_err(|error| Box::new(map::registry_error(&error)))
+}
+
+/// Starts a provider decision operation and waits for it.
+async fn run_decision(
+    core: &DaemonCore,
+    context: &RequestContext,
+    start: OperationStart<'_>,
+    kind: OperationKind,
+    provider: &ProviderName,
+    precheck: Box<dyn stackly_core::operation::Precheck>,
+    work: Box<dyn stackly_core::operation::OperationWork>,
+) -> Result<(), Box<ErrorBody>> {
+    let input = input_of(&serde_json::json!({ "provider": provider.as_str() }));
+    let lock = LockKey::Provider(provider.clone());
+    let request = move |origin: Origin| BeginRequest {
+        kind,
+        resource: OperationResource::Manager,
+        creates_resource: false,
+        extra_locks: vec![lock],
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin,
+        input,
+        work,
+        precheck: Some(precheck),
+    };
+    let outcome = start_operation(core, context, start, request).await?;
+    if let StartOutcome::Accepted(accepted) = &outcome {
+        wait_final(core, accepted.operation.id).await?;
+    }
+    Ok(())
+}
+
 /// `provider.approve`.
 pub fn approve<'a>(
-    _core: &'a DaemonCore,
-    _context: &RequestContext,
-    _params: DecideProviderParams,
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: DecideProviderParams,
 ) -> HandlerFuture<'a, Box<ProviderDetail>> {
-    Box::pin(async move { Err(not_served("provider.approve")) })
+    let context = context.clone();
+    Box::pin(async move {
+        let result = async {
+            let catalog = crate::catalog::loaded(core)?;
+            let registry = registry_of(core)?;
+            let refresher = core
+                .catalog_refresher()
+                .ok_or_else(|| unexpected("the catalog refresher is not set"))?;
+            let fingerprint = request_fingerprint(&Call::ProviderApprove(params.clone()));
+            let provider = provider_param(&params.provider)?;
+            let expected: stackly_domain::Sha256Digest =
+                params.expected_package_sha256.parse().map_err(|_| {
+                    Box::new(ErrorBody::new(
+                        &request::INVALID_PARAMS,
+                        "expectedPackageSha256 is not a digest",
+                    ))
+                })?;
+            let row = import_row(&registry, &provider).await?;
+            let entry = local_entry(&catalog, &provider, row.is_some())?;
+            let invalid = matches!(entry, Some(CatalogEntry::Invalid(_)));
+            let check_provider = provider.clone();
+            let precheck = Box::new(move || -> PrecheckOutcome {
+                use stackly_core::catalog::import::ProviderOpError;
+                let Some(row) = &row else {
+                    return PrecheckOutcome::Reject(Box::new(ProviderOpError::NotFound {
+                        provider: check_provider.to_string(),
+                        reason: "not_imported",
+                    }));
+                };
+                if row.package_sha256 != expected {
+                    return PrecheckOutcome::Reject(Box::new(ProviderOpError::Changed {
+                        provider: check_provider.to_string(),
+                        expected: expected.to_string(),
+                        actual: row.package_sha256.to_string(),
+                    }));
+                }
+                if invalid {
+                    return PrecheckOutcome::Reject(Box::new(ProviderOpError::PackageInvalid {
+                        provider: check_provider.to_string(),
+                    }));
+                }
+                if row.approval() == stackly_domain::ApprovalState::Approved {
+                    return PrecheckOutcome::NoOp(NoOpReply::nothing());
+                }
+                PrecheckOutcome::Proceed
+            }) as Box<dyn stackly_core::operation::Precheck>;
+            let work = stackly_core::catalog::import::approve_work(
+                provider.clone(),
+                expected,
+                Some(Arc::clone(&catalog)),
+                refresher,
+            );
+            run_decision(
+                core,
+                &context,
+                OperationStart::new(
+                    "provider.approve",
+                    context.idempotency_key.as_deref(),
+                    fingerprint,
+                ),
+                OperationKind::ApproveProvider,
+                &provider,
+                precheck,
+                work,
+            )
+            .await?;
+            detail_of(core, &provider)
+        }
+        .await;
+        result.map_err(|error| Box::new(map::trust::with_area_hint(*error)))
+    })
 }
 
 /// `provider.revoke`.
 pub fn revoke<'a>(
-    _core: &'a DaemonCore,
-    _context: &RequestContext,
-    _params: ProviderTargetParams,
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ProviderTargetParams,
 ) -> HandlerFuture<'a, Box<ProviderDetail>> {
-    Box::pin(async move { Err(not_served("provider.revoke")) })
+    let context = context.clone();
+    Box::pin(async move {
+        let result = async {
+            let catalog = crate::catalog::loaded(core)?;
+            let registry = registry_of(core)?;
+            let refresher = core
+                .catalog_refresher()
+                .ok_or_else(|| unexpected("the catalog refresher is not set"))?;
+            let fingerprint = request_fingerprint(&Call::ProviderRevoke(params.clone()));
+            let provider = provider_param(&params.provider)?;
+            let row = import_row(&registry, &provider).await?;
+            local_entry(&catalog, &provider, row.is_some())?;
+            let check_registry = registry.clone();
+            let check_provider = provider.clone();
+            let precheck = Box::new(move || -> PrecheckOutcome {
+                use stackly_core::catalog::import::ProviderOpError;
+                let Some(row) = &row else {
+                    return PrecheckOutcome::Reject(Box::new(ProviderOpError::NotFound {
+                        provider: check_provider.to_string(),
+                        reason: "not_imported",
+                    }));
+                };
+                let approved = row.decision.as_ref().is_some_and(|decided| {
+                    decided.decision == stackly_domain::TrustDecision::Approved
+                });
+                let pinned = match check_registry.provider_has_approved_revision(&check_provider) {
+                    Ok(found) => found.value,
+                    Err(error) => {
+                        return PrecheckOutcome::Reject(Box::new(ProviderOpError::Registry(error)));
+                    }
+                };
+                if !approved && !pinned {
+                    return PrecheckOutcome::Reject(Box::new(ProviderOpError::NotApproved {
+                        provider: check_provider.to_string(),
+                        approval: row.approval().as_code(),
+                    }));
+                }
+                PrecheckOutcome::Proceed
+            }) as Box<dyn stackly_core::operation::Precheck>;
+            let work = stackly_core::catalog::import::revoke_work(provider.clone(), refresher);
+            run_decision(
+                core,
+                &context,
+                OperationStart::new(
+                    "provider.revoke",
+                    context.idempotency_key.as_deref(),
+                    fingerprint,
+                ),
+                OperationKind::RevokeProvider,
+                &provider,
+                precheck,
+                work,
+            )
+            .await?;
+            detail_of(core, &provider)
+        }
+        .await;
+        result.map_err(|error| Box::new(map::trust::with_area_hint(*error)))
+    })
 }
 
 /// `provider.remove`.
 pub fn remove<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: ProviderTargetParams,
+) -> HandlerFuture<'a, RemovedProvider> {
+    let inner = remove_inner(core, context, params);
+    Box::pin(async move {
+        inner
+            .await
+            .map_err(|error| Box::new(map::trust::with_area_hint(*error)))
+    })
+}
+
+fn remove_inner<'a>(
     core: &'a DaemonCore,
     context: &RequestContext,
     params: ProviderTargetParams,
