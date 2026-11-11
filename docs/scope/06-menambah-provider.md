@@ -62,4 +62,4 @@ Dokumen dan aturan supaya orang lain bisa menyumbang provider: CONTRIBUTING, sch
   - [x] `cargo xtask docs walkthrough` from a fresh clone, its tests, one full run, and the manual evidence record for AC-034 (spec 0038 AC-8; build step 10; needs feature 36, after the provider guide)
   - [ ] Trying a provider locally: `docs/providers/trying-locally.md` with the approval statement check, trust terms aligned in `GOVERNANCE.md` and `review.md`, and the revocation sentences in `SECURITY.md` and `GOVERNANCE.md` (spec 0038 AC-12, AC-4, AC-6; build step 11; needs feature 37)
 - [ ] Verify it: `/check verify panduan kontributor & governance`
-- [ ] Test it: `/test panduan kontributor & governance`
+- [x] Test it: `/test panduan kontributor & governance`
