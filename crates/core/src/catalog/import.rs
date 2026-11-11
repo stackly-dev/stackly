@@ -116,8 +116,10 @@ pub enum ProviderOpError {
         /// `not_imported` or `not_local`.
         reason: &'static str,
     },
-    /// The store copy could not be written.
-    #[error("the provider package could not be stored: {source}")]
+    /// The store copy could not be written. The text is the fixed one of
+    /// the code table: the store error names paths under the data root, so
+    /// it reaches only the daemon log and the `reason` detail (AC-17).
+    #[error("the provider package could not be stored")]
     Store {
         /// The provider.
         provider: String,
@@ -504,6 +506,7 @@ async fn run_import(
                 .await?;
         }
         Err(source) => {
+            tracing::warn!(error = %source, reason = source.reason(), "a provider package could not be stored");
             ctx.not_created(item, ReasonCode::from_static("store_failed"))
                 .await?;
             return Err(failed(ProviderOpError::Store {

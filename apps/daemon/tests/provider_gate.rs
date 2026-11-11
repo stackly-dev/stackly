@@ -588,3 +588,62 @@ async fn a_pending_package_of_the_installed_software_creates_and_starts_nothing(
         "no pinned folder of the local package"
     );
 }
+
+// covers: AC-17 (spec 0037; finding 2 of the milestone 1 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_store_that_cannot_be_written_answers_the_fixed_text_without_a_path() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let store = site.prepared.layout().provider_imports_dir();
+    std::fs::create_dir_all(&store).expect("the store folder can be made");
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o500))
+        .expect("the store folder can be locked");
+    let dir = local_fake(site.root.path());
+    let preview = match api
+        .client
+        .call(Call::ProviderPreviewImport(PreviewImportParams {
+            path: dir.display().to_string(),
+        }))
+        .await
+        .expect("the preview answers")
+    {
+        Reply::ProviderPreviewImport(preview) => preview,
+        other => panic!("not a preview reply: {other:?}"),
+    };
+
+    let refused = call(
+        &api.client,
+        Call::ProviderImport(ImportProviderParams {
+            path: dir.display().to_string(),
+            expected_package_sha256: preview.package_sha256.expect("a digest"),
+        }),
+    )
+    .await
+    .expect_err("the store cannot be written");
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700))
+        .expect("the store folder can be unlocked");
+
+    assert_eq!(refused.code(), "provider.store_failed");
+    assert_eq!(
+        refused.message(),
+        "the provider package could not be stored"
+    );
+    assert!(detail(&refused, "reason").is_some());
+    let root = site.root.path().display().to_string();
+    let registry = daemon.core().registry().expect("the registry is open");
+    let rows = registry
+        .audit_events(stackly_domain::AuditQuery::page(500, None))
+        .expect("reads")
+        .value
+        .items;
+    let row = rows
+        .iter()
+        .find(|row| row.operation_kind == Some(stackly_domain::OperationKind::ImportProvider))
+        .expect("the failed import is audited");
+    for (key, value) in row.safe_details.iter() {
+        assert!(!value.contains(&root), "{key}: {value}");
+        assert!(!value.contains("/Users/"), "{key}: {value}");
+    }
+}
