@@ -269,7 +269,7 @@ App Debug dijalankan dari Xcode dengan `STACKLY_ROOT=$R` di scheme Stackly. Peri
 | record manual (AC-16) | `fixture` | manual | AC-001, AC-013, AC-029 | 10 |
 | sentinel fixture credential (AC-18) | `fixture` | automated | AC-016 | 12 |
 
-Semua record mulai `NOT_RUN`. Fake provider dan dummy server berarti `fixture` (spec 0002), jadi fitur ini tidak menulis record `native`: bukti native AC-013 datang dari fitur 19, 23, dan 30, dan AC-029 baru lengkap dengan form di fitur 20 dan harness konformitas fitur 36. Record fixture yang lulus bukan bukti runtime native.
+Semua record mulai `NOT_RUN`. Fake provider dan dummy server berarti `fixture` (spec 0002), jadi fitur ini tidak menulis record `native`: bukti native AC-013 datang dari fitur 19, 23, dan 30, dan AC-029 baru lengkap dengan form di fitur 20 dan harness konformitas fitur 36 *(dibangun fitur 36, 2026-11-11: spec 0036 AC-8, AC-9, dan AC-14 di tingkat fixture, AC-15 untuk bukti native)*. Record fixture yang lulus bukan bukti runtime native.
 
 ### Value sourcing
 
