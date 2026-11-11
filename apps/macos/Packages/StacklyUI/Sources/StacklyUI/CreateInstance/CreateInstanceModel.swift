@@ -102,6 +102,10 @@ public final class CreateInstanceModel {
     public private(set) var copyFromLabels: [String: String] = [:]
     /// The kinds of preflight row the failed stage points at, until the draft changes.
     public private(set) var failedStageKinds: Set<PreflightCheckKind> = []
+    /// The providers the daemon offers when it can't pick one for the runtime
+    /// (`instance.provider_ambiguous` with `details.candidates`, spec 0037, *Software yang
+    /// sama*); empty otherwise. ``chooseProvider(_:)`` reads the form of one of them.
+    public private(set) var providerCandidates: [String] = []
 
     // MARK: - Collaborators
 
@@ -119,6 +123,10 @@ public final class CreateInstanceModel {
     @ObservationIgnored private var sourceReferences: [String: String] = [:]
     @ObservationIgnored private var sourceLabels: [String: String] = [:]
     @ObservationIgnored private var providerSelector: ProviderSelector?
+    /// The provider the sheet was asked for, with the software it runs: the Catalog detail
+    /// panel of that entry, or a candidate the person chose. It names the provider of the form
+    /// only while the chosen runtime runs that software.
+    @ObservationIgnored private var requestedProvider: (software: String, provider: String)?
     @ObservationIgnored private var loadToken = UUID()
     @ObservationIgnored private var formTask: Task<Void, Never>?
     @ObservationIgnored private var listTask: Task<Void, Never>?
@@ -245,11 +253,17 @@ public final class CreateInstanceModel {
     // MARK: - Opening
 
     /// Opens the sheet: chooses a runtime and reads its form.
-    /// - Parameter software: The software to start on, as the Catalog detail panel asks, or
-    ///   `nil`. The runtime is the installed one of that software with the newest install.
-    public func begin(software: String? = nil) {
+    /// - Parameters:
+    ///   - software: The software to start on, as the Catalog detail panel asks, or `nil`. The
+    ///     runtime is the installed one of that software with the newest install.
+    ///   - provider: The provider whose form to read, as the Catalog detail panel of that entry
+    ///     asks (spec 0037), or `nil` for the one the daemon picks. It needs `software`.
+    public func begin(software: String? = nil, provider: String? = nil) {
         reset()
         mode = .create(software: software)
+        if let software, let provider {
+            requestedProvider = (software: software, provider: provider)
+        }
         category = .all
         if let software, let runtime = newest(of: software) {
             runtimeID = runtime.id
@@ -327,7 +341,9 @@ public final class CreateInstanceModel {
             runtimeID = nil
             startAtLogin = false
             startAtLoginChosen = false
+            requestedProvider = nil
         }
+        providerCandidates = []
         form = nil
         schema = nil
         name = ""
@@ -364,15 +380,39 @@ public final class CreateInstanceModel {
         phase = .loadingForm
         let token = loadToken
         let service = service
+        let provider = provider(for: runtimeID)
         formTask = Task { [weak self] in
             do throws(ClientError) {
-                let form = try await service.getCreateForm(runtimeId: runtimeID, provider: nil)
+                let form = try await service.getCreateForm(
+                    runtimeId: runtimeID, provider: provider)
                 self?.formLoaded(form, token: token)
             } catch {
                 self?.formFailed(error, token: token)
             }
         }
         startListLoad(token: token)
+    }
+
+    /// The provider to ask the form of for `runtimeID`: the requested one while the runtime
+    /// runs its software, else `nil`, so the daemon picks.
+    private func provider(for runtimeID: UUID) -> String? {
+        guard let requestedProvider, software(of: runtimeID) == requestedProvider.software
+        else { return nil }
+        return requestedProvider.provider
+    }
+
+    /// The software of the runtime `id`, or `nil` when it is not in the store.
+    private func software(of id: UUID) -> String? {
+        runtimes.runtimes.first { $0.id == id }?.software
+    }
+
+    /// Reads the form of `provider`, one of ``providerCandidates``, for the chosen runtime.
+    /// - Parameter provider: The full provider ID, such as `acme/nats`.
+    public func chooseProvider(_ provider: String) {
+        guard let runtimeID, let software = software(of: runtimeID) else { return }
+        requestedProvider = (software: software, provider: provider)
+        reset(keepRuntime: true)
+        startLoad()
     }
 
     /// Reads the form of the source and the Copy from list together. A list that cannot be
@@ -467,10 +507,21 @@ public final class CreateInstanceModel {
 
     private func formFailed(_ error: ClientError, token: UUID) {
         guard token == loadToken else { return }
+        providerCandidates = Self.candidates(of: error.body)
         phase = .formFailed(
             FailureContent(
                 title: "Couldn’t Load the Form", message: DaemonText.sentence(error.body.message),
                 code: error.body.code))
+    }
+
+    /// The providers of `instance.provider_ambiguous`, from its comma separated
+    /// `details.candidates`; empty for any other error.
+    static func candidates(of body: ErrorBody) -> [String] {
+        guard body.code == "instance.provider_ambiguous",
+            let value = body.details?.first(where: { $0.key == "candidates" })?.value
+        else { return [] }
+        return value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     private func secretsLoaded(_ items: [SecretRefSummary], token: UUID) {

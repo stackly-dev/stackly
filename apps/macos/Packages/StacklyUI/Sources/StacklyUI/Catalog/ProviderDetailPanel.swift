@@ -110,14 +110,16 @@ struct ProviderDetailPanel: View {
     }
 
     /// The New Instance… button (spec 0020, *Titik masuk*): it opens the sheet on the newest
-    /// installed runtime of this software, and says why it is off while none is installed.
+    /// installed runtime of this software with the form of this provider (spec 0037), and says
+    /// why it is off while none is installed.
     @ViewBuilder private var newInstanceButton: some View {
         if let newInstance, let runtimes, summary.state == .available {
             let software = summary.software
+            let provider = summary.provider
             ActionButton(
                 Self.newInstanceAction(
                     installed: runtimes.installedCount(software: software),
-                    present: { newInstance.present(software: software) }),
+                    present: { newInstance.present(software: software, provider: provider) }),
                 showsReason: true)
         }
     }

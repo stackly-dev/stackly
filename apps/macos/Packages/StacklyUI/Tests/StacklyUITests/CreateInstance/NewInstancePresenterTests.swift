@@ -129,4 +129,62 @@ struct NewInstancePresenterTests {
             presentation: presentation, select: { _ in }, reconnect: {})
         #expect(without[.newInstance] == nil)
     }
+
+    // covers: spec 0037 review, Major 2
+    @Test func theCatalogPanelOfAProviderAsksForTheFormOfThatProvider() async {
+        let (presenter, rig) = await presenter()
+        presenter.present(software: "nats", provider: "acme/nats")
+        await settle("the form") { rig.model.phase == .editing }
+        #expect(rig.service.formProviders == ["acme/nats"])
+
+        presenter.isPresented = false
+        presenter.present()
+        await settle("the second form") { rig.model.phase == .editing }
+        #expect(rig.service.formProviders == ["acme/nats", nil])
+    }
+
+    // covers: spec 0037 review, Major 2
+    @Test func aRuntimeOfAnotherSoftwareDropsTheRequestedProvider() async {
+        let (presenter, rig) = await presenter()
+        presenter.present(software: "nats", provider: "acme/nats")
+        await settle("the form") { rig.model.phase == .editing }
+        let other = rig.model.installedRuntimes.first { $0.software != "nats" }
+        rig.model.selectRuntime(other?.id)
+        await settle("the other form") { rig.service.formProviders.count == 2 }
+        #expect(rig.service.formProviders.last == .some(nil))
+    }
+
+    // covers: spec 0037 review, Major 2
+    @Test func anAmbiguousProviderOffersItsCandidatesAndChoosingOneReadsItsForm() async {
+        let (presenter, rig) = await presenter()
+        var body = ErrorBody.create(
+            "instance.provider_ambiguous",
+            "no single approved provider runs this software; choose one of the candidates")
+        body = ErrorBody(
+            code: body.code, category: body.category, message: body.message,
+            retryable: false, resource: nil, fields: nil, hint: nil,
+            details: [ErrorDetail(key: "candidates", value: "acme/nats,beta/nats")],
+            operationId: nil, rule: nil, items: nil)
+        let refusal = body
+        let service = rig.service
+        rig.service.onForm = { _ throws(ClientError) in
+            if service.formProviders.last == .some(nil) { throw .rejected(refusal) }
+            return FixtureCreateForm.database
+        }
+        presenter.present(software: "nats")
+        await settle("the refusal") {
+            if case .formFailed = rig.model.phase { return true }
+            return false
+        }
+        #expect(rig.model.providerCandidates == ["acme/nats", "beta/nats"])
+        if case .formFailed(let failure) = rig.model.phase {
+            #expect(failure.code == "instance.provider_ambiguous")
+            #expect(failure.message.contains("choose one of the candidates"))
+        }
+
+        rig.model.chooseProvider("beta/nats")
+        await settle("the chosen form") { rig.model.phase == .editing }
+        #expect(rig.service.formProviders == [nil, "beta/nats"])
+        #expect(rig.model.providerCandidates.isEmpty)
+    }
 }

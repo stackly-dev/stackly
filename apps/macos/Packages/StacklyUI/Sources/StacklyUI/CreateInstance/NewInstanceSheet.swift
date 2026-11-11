@@ -92,6 +92,9 @@ public struct NewInstanceSheet: View {
                             dismiss()
                             navigator?.show(.diagnostics)
                         })
+                    if !model.providerCandidates.isEmpty {
+                        ProviderCandidatesSection(model: model)
+                    }
                 case .choosingRuntime:
                     Text("No installed runtimes in this category.")
                         .font(.callout)
@@ -238,5 +241,22 @@ public struct NewInstanceSheet: View {
     private func clearDrafts() {
         for key in drafts.keys { drafts[key]?.clear() }
         drafts = [:]
+    }
+}
+
+/// The providers the daemon offers when it can't pick one (spec 0037, *Software yang sama*):
+/// choosing one reads its form.
+private struct ProviderCandidatesSection: View {
+    let model: CreateInstanceModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s8) {
+            Text("Choose a provider")
+                .font(.headline)
+            ForEach(model.providerCandidates, id: \.self) { candidate in
+                Button(candidate) { model.chooseProvider(candidate) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
