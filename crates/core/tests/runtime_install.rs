@@ -936,3 +936,101 @@ async fn a_catalog_that_moves_a_line_leaves_the_installed_runtime_alone_and_inst
     assert_eq!(other.version().as_str(), "2.15.2");
     ev.pass();
 }
+
+/// Records the local source and an import row of `rig.package` under
+/// `acme/nats` with `decision`, and returns the package digest the install
+/// input names.
+fn local_import(rig: &Harness, decision: stackly_domain::TrustDecision) -> Sha256Digest {
+    use stackly_core::catalog::local::{package_bytes, package_sha256};
+    use stackly_domain::{
+        ImportDecision, ProviderImportRecord, ProviderName, ProviderSourceId, ProviderSourceKind,
+        ProviderSourceRecord, WriteBatch, WriteOp,
+    };
+    let now = rig.fake.clock().now();
+    let provider: ProviderName = "acme/nats".parse().expect("an id");
+    let key = rig.package.key();
+    let digest = package_sha256(rig.package.files());
+    let source = ProviderSourceRecord::new(
+        ProviderSourceId::generate(),
+        ProviderSourceKind::Local,
+        "imports".to_owned(),
+        now,
+    );
+    let record = ProviderImportRecord::new(
+        provider.clone(),
+        source.id,
+        key.revision().clone(),
+        rig.package.software().clone(),
+        *key.manifest_sha256(),
+        *key.manifest_sha256(),
+        digest,
+        package_bytes(rig.package.files()),
+        "~/acme-nats".to_owned(),
+        now,
+    );
+    rig.registry
+        .commit(WriteBatch::new(vec![
+            WriteOp::InsertProviderSource(source),
+            WriteOp::PutProviderImport {
+                record: Box::new(record),
+                expected: None,
+            },
+            WriteOp::DecideProviderImport {
+                provider,
+                decision: ImportDecision::new(
+                    decision,
+                    digest,
+                    key.revision().clone(),
+                    "{}".to_owned(),
+                    now,
+                ),
+            },
+        ]))
+        .expect("the import row commits");
+    digest
+}
+
+/// Begins an install of `rig.package` as the local entry `acme/nats` with
+/// the stored bytes `digest`.
+async fn begin_local(rig: &Harness, digest: &Sha256Digest) -> OperationId {
+    let mut input = rig.input();
+    input.provider = "acme/nats".to_owned();
+    let input = input.from_local_import(digest);
+    let runtime = RuntimeId::generate();
+    let request = BeginRequest {
+        kind: OperationKind::InstallRuntime,
+        resource: OperationResource::Runtime(runtime),
+        creates_resource: true,
+        extra_locks: vec![LockKey::Artifact(rig.sha256)],
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin: Origin::Background,
+        input: input.to_payload().expect("the input fits the journal"),
+        work: install_runtime_work(rig.deps(), &input, runtime).expect("the work builds"),
+        precheck: None,
+    };
+    match rig.engine.begin(request).await {
+        Ok(BeginOutcome::Created(view)) => view.operation.id(),
+        other => panic!("expected a created operation: {other:?}"),
+    }
+}
+
+// covers: AC-4 (spec 0037, *Key invariants*; review of feature 37): a
+// revoke that lands before the work starts wins before the first byte is
+// asked for
+#[tokio::test]
+async fn an_install_from_a_revoked_local_entry_asks_for_no_byte() {
+    let rig = Harness::new().await;
+    let digest = local_import(&rig, stackly_domain::TrustDecision::Revoked);
+
+    let op = begin_local(&rig, &digest).await;
+    let detail = rig.wait(op, OperationState::Failed).await;
+
+    assert_eq!(failure_code(&detail), "provider.revoked");
+    assert!(
+        rig.fake.fetcher().requests().is_empty(),
+        "no download request reached a host"
+    );
+    assert!(rig.runtimes().is_empty());
+    assert!(!exists(&rig.runtime_dir()));
+}

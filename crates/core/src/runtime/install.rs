@@ -2135,6 +2135,10 @@ async fn run_install(work: InstallRuntimeWork, mut ctx: OperationContext) -> Wor
             finalize: None,
         });
     }
+    // A revoke that lands while the install waits in the queue, or before a
+    // resumed install downloads again, wins before the first byte is asked
+    // for (spec 0037, *Key invariants*).
+    recheck_local(&ctx, &plan).await?;
     let operation_id = ctx.id().to_string();
 
     // Download.
