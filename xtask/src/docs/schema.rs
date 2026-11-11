@@ -149,6 +149,7 @@ mod tests {
     use super::super::fixture;
     use super::names;
 
+    // covers: AC-9, AC-10 (spec 0038)
     #[test]
     fn names_walk_only_schema_positions() {
         let schema = json!({
@@ -171,12 +172,14 @@ mod tests {
         assert_eq!(values, vec!["a", "b", "c", "d"]);
     }
 
+    // covers: AC-9, AC-10 (spec 0038)
     #[test]
     fn the_clean_fixture_covers_every_schema_name() {
         let repo = fixture::repo();
         assert!(fixture::lines(repo.path()).is_empty());
     }
 
+    // covers: AC-9, AC-10 (spec 0038)
     #[test]
     fn a_missing_reference_page_is_one_problem_even_without_the_provider_guide() {
         let repo = fixture::repo();
@@ -191,6 +194,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-10 (spec 0038)
     #[test]
     fn a_property_the_page_does_not_name_is_one_problem() {
         let repo = fixture::repo();
@@ -213,6 +217,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-10 (spec 0038)
     #[test]
     fn an_enum_value_the_page_does_not_name_is_one_problem() {
         let repo = fixture::repo();

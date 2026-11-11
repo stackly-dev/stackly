@@ -219,6 +219,7 @@ fn metadata(path: &Path) -> Option<(String, String)> {
 mod tests {
     use super::super::fixture;
 
+    // covers: AC-9, AC-13 (spec 0038)
     #[test]
     fn a_missing_notice_is_one_problem_and_a_testing_package_needs_none() {
         let repo = fixture::repo();
@@ -232,6 +233,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-13 (spec 0038)
     #[test]
     fn an_unreadable_manifest_is_one_problem() {
         let repo = fixture::repo();
@@ -248,6 +250,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-13 (spec 0038)
     #[test]
     fn headings_out_of_order_are_one_problem() {
         let repo = fixture::repo();
@@ -264,6 +267,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-13 (spec 0038)
     #[test]
     fn a_wrong_license_and_a_wrong_origin_are_problems() {
         let repo = fixture::repo();
