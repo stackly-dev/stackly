@@ -549,3 +549,15 @@ Milestone 1 sampai 4 dan Langkah 13 sudah PASS dan tidak diulang satu per satu. 
 - AC-15, AC-16 · bagian otomatis terpenuhi; tinjauan GUI dengan mata `NOT_RUN`, owner user
 - AC-8, AC-13 · terpenuhi; bukti `native` jaringan mati, folder terlindung, dan quarantine unduhan browser `NOT_RUN`, owner user
 - Done when fitur 37 · keenam kalimat terpenuhi
+
+## Fix review (app)
+
+Perbaikan temuan review `docs/reviews/2026-11-11-f37-import-provider-lokal-trust.md` di StacklyUI (`dev-f37-fix4`). Tidak ada perubahan kontrak, crate Rust, atau file generated.
+
+| Temuan | Commit | Perbaikan | Test |
+| --- | --- | --- | --- |
+| Major 2, New Instance dari panel provider | `f6476a11` | `present(software:provider:)` dan `begin(software:provider:)` meneruskan `summary.provider` ke `getCreateForm(runtimeId:provider:)` selama runtime yang dipilih menjalankan software itu. `instance.provider_ambiguous` dengan `details.candidates` menampilkan pesan daemon dan daftar kandidat sebagai tombol; memilih satu (`chooseProvider`) membaca form provider itu | `NewInstancePresenterTests`: tiga test baru |
+| Major 3, panel tertahan di spinner | `b4fbd9df` | `inFlight` memakai kunci plus epoch, jadi load epoch lama tidak menahan load epoch baru. `catalog.changed` dan `reload()` lewat satu `SnapshotCoalescer` (permintaan selama snapshot berjalan menjadi satu snapshot tambahan, sinkron sehingga event yang tertahan buffer ikut bergabung). `fetchPage` hanya menyimpan balasan; `loaded.*` dan `detail.invalidate()` berjalan di `didApply(.reloaded)`, jadi generation yang digantikan tidak punya efek samping. Loop `retry` 20 detik di test end to end diganti satu load per epoch, seperti halaman | `CatalogStoreTests`: tiga test baru; `aLoadAfterInvalidateStartsAtOnceAndKeepsItsAnswer` gagal pada `ProviderDetailModel` lama (dicek) |
+| Minor, hasil sesudah Cancel | `a7ba802e` | Cancel nonaktif dengan alasan selama `provider.import` atau `provider.approve` berjalan; `cancel()` dan `cancelApprove()` tidak berbuat apa pun saat itu; sesudah `await` model memeriksa bahwa sheet masih yang mengirim | `ProviderImportModelTests`: tiga test baru |
+| Minor, spinner untuk `.unreadable` | `45459301` | Footer sibuk hanya untuk `.loading` | `onlyReadingAFolderShowsTheFooterSpinner`; snapshot baru `catalog-import-unreadable` (light, dark, narrow) |
+| Minor, tanggal import di Settings | `80057753` | ID task memuat `catalog.detail.epoch` | tanpa test baru (perilaku `.task(id:)` SwiftUI) |
