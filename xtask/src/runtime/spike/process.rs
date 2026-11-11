@@ -184,8 +184,21 @@ impl Finished {
 
 /// Runs a short command in its own process group and kills the group when
 /// it takes longer than `timeout`.
-pub fn run(mut command: Command, timeout: Duration) -> Result<Finished> {
+pub fn run(command: Command, timeout: Duration) -> Result<Finished> {
+    run_with_input(command, None, timeout)
+}
+
+/// [`run`], with `input` written to stdin and then closed when it is
+/// `Some` (the stdin of a package's initialize step, spec 0036).
+pub fn run_with_input(
+    mut command: Command,
+    input: Option<Vec<u8>>,
+    timeout: Duration,
+) -> Result<Finished> {
     let program = command.get_program().to_string_lossy().into_owned();
+    if input.is_some() {
+        command.stdin(Stdio::piped());
+    }
     let mut child = command
         .process_group(0)
         .stdout(Stdio::piped())
@@ -193,6 +206,12 @@ pub fn run(mut command: Command, timeout: Duration) -> Result<Finished> {
         .spawn()
         .with_context(|| format!("cannot run {program}"))?;
     track(child.id());
+    if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
+        thread::spawn(move || {
+            // Ignored: a child that exits early closes the pipe.
+            let _ = std::io::Write::write_all(&mut stdin, &bytes);
+        });
+    }
     let stdout = reader(child.stdout.take());
     let stderr = reader(child.stderr.take());
     let deadline = Instant::now() + timeout;

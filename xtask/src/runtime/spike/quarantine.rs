@@ -26,7 +26,7 @@ pub fn probe(
     root: &Path,
     clone: &Path,
     main: &str,
-    args: &[&str],
+    args: &[String],
     env: &CleanEnv,
 ) -> Result<Quarantine> {
     let status = Command::new(CP)

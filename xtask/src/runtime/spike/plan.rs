@@ -46,6 +46,9 @@ pub struct Plan {
     pub worker_timeout_secs: u64,
     /// Text every string in the result is cleaned of: `(from, to)`.
     pub redactions: Vec<Redaction>,
+    /// The repository checkout, whose `providers/` packages the recipe
+    /// is built from (spec 0036 AC-16).
+    pub repo: PathBuf,
 }
 
 /// One replacement applied to every string of the spike result.
