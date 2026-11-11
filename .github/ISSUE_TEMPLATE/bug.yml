@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Stackly does not work as expected.
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do not report a vulnerability here; use the private channel in [SECURITY.md](https://github.com/stackly-dev/stackly/blob/main/SECURITY.md).
+        Never paste a password, a token, or another secret into this form.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where do you think the problem is?
+      options:
+        - Core (app, daemon, CLI)
+        - A provider package
+        - An upstream runtime version
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: stackly-version
+    attributes:
+      label: Stackly version
+      description: The output of `stackly --version`, or the commit you built.
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider and runtime version
+      description: For example `official/postgresql` with PostgreSQL 18.6. Leave it empty if no provider is involved.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of stackly doctor
+      description: Optional. Read it before you paste it, and remove anything secret.
+      render: text
