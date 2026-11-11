@@ -8,6 +8,9 @@ import SwiftUI
 /// Cancel, and the primary action.
 /// - Return runs the primary action, except when it is destructive (then Return does
 ///   nothing) or when it is disabled or busy.
+/// - With `cancelIsDefault`, Cancel is drawn as the default button and the primary action
+///   as a plain one, for a sheet whose action the person must choose on purpose, such as
+///   approving a provider (spec 0037).
 /// - Escape runs Cancel. A sheet closes itself on Escape without running Cancel unless
 ///   `.interactiveDismissDisabled()` is set, so the sheet sets it (design.md, Sheet).
 /// - The sheet sets its own ``SwiftUI/View/actionHost()``, so a confirmation from inside
@@ -22,6 +25,7 @@ public struct StacklySheet<Content: View>: View {
     private let primary: StacklyAction
     private let cancel: StacklyAction?
     private let minWidth: CGFloat
+    private let cancelIsDefault: Bool
     private let content: Content
 
     /// Creates a sheet.
@@ -33,6 +37,8 @@ public struct StacklySheet<Content: View>: View {
     ///   - cancel: The Cancel action, or `nil` for a "Cancel" that closes the sheet. Give
     ///     one when Cancel means something else, such as cancelling an operation.
     ///   - minWidth: The minimum width of the sheet.
+    ///   - cancelIsDefault: Whether Cancel is the default button instead of the primary
+    ///     action.
     ///   - content: The body.
     public init(
         title: String,
@@ -41,6 +47,7 @@ public struct StacklySheet<Content: View>: View {
         primary: StacklyAction,
         cancel: StacklyAction? = nil,
         minWidth: CGFloat = 480,
+        cancelIsDefault: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -49,6 +56,7 @@ public struct StacklySheet<Content: View>: View {
         self.primary = primary
         self.cancel = cancel
         self.minWidth = minWidth
+        self.cancelIsDefault = cancelIsDefault
         self.content = content()
     }
 
@@ -56,7 +64,7 @@ public struct StacklySheet<Content: View>: View {
     public var body: some View {
         SheetLayout(
             title: title, subtitle: subtitle, tile: tile, primary: primary, cancel: cancel,
-            content: content
+            cancelIsDefault: cancelIsDefault, content: content
         )
         .frame(minWidth: minWidth)
         .background(StacklyColor.surfaceWindow)
@@ -106,6 +114,7 @@ private struct SheetLayout<Content: View>: View {
     let tile: TileSpec?
     let primary: StacklyAction
     let cancel: StacklyAction?
+    let cancelIsDefault: Bool
     let content: Content
 
     var body: some View {
@@ -175,10 +184,10 @@ private struct SheetLayout<Content: View>: View {
             Spacer(minLength: Spacing.s12)
             SheetFooterButton(
                 action: cancelAction, availability: cancelAction.availability(gate: gate),
-                role: .cancel, host: host, gate: gate)
+                role: .cancel, host: host, gate: gate, isDefault: cancelIsDefault)
             SheetFooterButton(
                 action: primary, availability: availability, role: .primary, host: host,
-                gate: gate)
+                gate: gate, isDefault: cancelIsDefault == false)
         }
         .padding(.top, Spacing.s12)
         .padding(.horizontal, Spacing.s22)
@@ -198,6 +207,8 @@ private struct SheetFooterButton: View {
     let role: Role
     let host: ActionHost?
     let gate: MutationAvailability
+    /// Whether the button is drawn as the default one.
+    var isDefault = true
 
     var body: some View {
         HStack(spacing: Spacing.s8) {
@@ -212,6 +223,10 @@ private struct SheetFooterButton: View {
 
     @ViewBuilder private var button: some View {
         switch role {
+        case .cancel where isDefault:
+            plainButton
+                .buttonStyle(.borderedProminent)
+                .disabled(availability != .enabled)
         case .cancel:
             plainButton
                 .buttonStyle(.bordered)
@@ -219,7 +234,7 @@ private struct SheetFooterButton: View {
                 .disabled(availability != .enabled)
 
         case .primary:
-            if action.role.isDestructive {
+            if action.role.isDestructive || isDefault == false {
                 plainButton
                     .buttonStyle(.bordered)
                     .disabled(availability != .enabled)

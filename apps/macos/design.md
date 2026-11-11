@@ -239,6 +239,23 @@ The mockup has five of these labels (Running, Stopped, Starting…, Stopping…,
 | `CatalogEntryState.invalid` | Invalid | `critical` | `xmark.circle.fill` | the package failed validation |
 | `CatalogEntryState.unrecognized` | Unrecognized State | `caution` | `questionmark.diamond.fill` | same as the `SupportStatus` row |
 
+### Local provider trust
+
+`CatalogAppearance.appearance(of: ApprovalState)` and `CatalogAppearance.badge(of:revoked:)` (spec 0037, *Tone dan label*). An imported provider is never `official` and never `positive`: approval is the person's decision about the bytes they saw, not a sign that the provider is safe, so Approved is `neutral`. The card and the detail header show "Needs Approval" while the entry waits for approval and "Revoked" when the person revoked it or the installed catalog revokes the revision; an approved entry shows its usual state. Every word lives in `ProviderTrustCopy`; the approval statement is the sentence of `protocols/fixtures/provider/approval-statement.txt`, and no text claims a sandbox, a safe or verified program or publisher, or a revocation list that is current.
+
+| Value | Label | Tone | Symbol | Note |
+|---|---|---|---|---|
+| `TrustLevel.local` | Local, not verified | `neutral` | | the Trust row; the card meta line is "{Category} · Local" |
+| `ApprovalState.pending` | Needs Approval | `caution` | `hand.raised.circle.fill` | |
+| `ApprovalState.approved` | Approved | `neutral` | `checkmark.circle` | not `positive` |
+| `ApprovalState.revoked` | Revoked | `caution` | `nosign` | also for a revocation by the catalog |
+| `ApprovalState.unrecognized` | Unrecognized State | `caution` | `questionmark.diamond.fill` | detail "Update Stackly to see this state" |
+| `SupportReason.approval_required` | Needs your approval. | | | reason text |
+| `SupportReason.trust_revoked` | Approval revoked. | | | reason text |
+| `RevocationSource`, `PermissionChange`, `ExecutableUse`, `ImportBlockReason`, `CatalogChangeKind` `.unrecognized` | Unknown | | | neutral text; `CatalogChangeKind` only reloads the catalog |
+
+The approve sheet draws Cancel as its default button (`StacklySheet(cancelIsDefault: true)`); Revoke and Remove confirm through the native dialog with Cancel as the default.
+
 Another open enum of the catalog shows as neutral text and is never guessed into a value: a category is "Other" (only under All), trust is "Unknown trust", the source is "Unknown source", a capability is "Unknown capability", an OS or architecture is "Unknown", and a reason is "Reason not recognized by this version of Stackly." (`CatalogCopy`).
 
 ### Runtime status

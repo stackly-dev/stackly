@@ -12,6 +12,9 @@ public enum ShellDestination: Hashable, Sendable {
     case instance(UUID)
     /// The Catalog.
     case catalog
+    /// The Catalog with a provider selected and its inspector open, such as an entry
+    /// Settings › Sources shows (spec 0037).
+    case provider(String)
     /// The Runtimes page.
     case runtimes
     /// The Operations page.
@@ -24,7 +27,7 @@ public enum ShellDestination: Hashable, Sendable {
         switch self {
         case .overview: .overview
         case .instances, .instance: .instances
-        case .catalog: .catalog
+        case .catalog, .provider: .catalog
         case .runtimes: .runtimes
         case .operations: .operations
         case .diagnostics: .diagnostics
@@ -74,6 +77,15 @@ public struct OperationRequest: Equatable, Sendable {
     public let operation: UUID
 }
 
+/// What the Catalog page is asked to select (spec 0037). Each request has its own ID, so
+/// asking again selects the provider again.
+public struct CatalogRequest: Equatable, Sendable {
+    /// The request's identity.
+    public let id = UUID()
+    /// The provider to select.
+    public let provider: String
+}
+
 /// A request to open Diagnostics with a focus (spec 0034, AC-20). Each request has its own
 /// ID, so asking again applies it again.
 public struct DiagnosticsRequest: Equatable, Sendable {
@@ -109,6 +121,9 @@ public final class ShellNavigator {
             if section != .diagnostics {
                 diagnosticsRequest = nil
             }
+            if section != .catalog {
+                catalogRequest = nil
+            }
         }
     }
     /// The last request for the Instances page, while the Instances section shows.
@@ -119,6 +134,8 @@ public final class ShellNavigator {
     public private(set) var operationRequest: OperationRequest?
     /// The last request to open Diagnostics, kept while Diagnostics shows.
     public private(set) var diagnosticsRequest: DiagnosticsRequest?
+    /// The last provider asked of the Catalog page, kept while the Catalog shows.
+    public private(set) var catalogRequest: CatalogRequest?
     /// Counts the times the person asked for the table of Instances again, such as a second
     /// click on its sidebar row: the page closes the detail page when it changes.
     public private(set) var instancesResets = 0
@@ -136,6 +153,8 @@ public final class ShellNavigator {
             instancesRequest = InstancesRequest(filter: filter, select: select)
         case .instance(let id):
             instanceRequest = InstanceRequest(instance: id)
+        case .provider(let id):
+            catalogRequest = CatalogRequest(provider: id)
         default:
             break
         }

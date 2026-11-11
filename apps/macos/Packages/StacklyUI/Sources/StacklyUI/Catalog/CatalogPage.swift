@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The Catalog screen (spec 0017, *Layar Catalog (GUI)*): a grid of provider cards with a
 /// category picker above it and a search field in the toolbar, and the chosen provider in
-/// the inspector.
+/// the inspector. Import Provider… in the toolbar imports a provider folder, and the panel of
+/// an imported provider approves, revokes, and removes it (spec 0037).
 /// The daemon decides every status and verdict; the page only shows the DTOs. Loading,
 /// failure, an unsupported daemon, an empty catalog, no search results, a stale catalog,
 /// and providers that failed validation all go through ``ViewState``. The page keeps its
@@ -12,6 +13,10 @@ public struct CatalogPage: View {
     @SceneStorage("catalog.selection") private var storedSelection = ""
     @SceneStorage("catalog.inspector") private var showsInspector = true
     @State private var filter = CatalogFilter()
+    @State private var importModel: ProviderImportModel?
+    @State private var decisions: ProviderDecisionModel
+    @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.shellNavigator) private var navigator
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
     @Environment(\.timeZone) private var timeZone
@@ -23,6 +28,7 @@ public struct CatalogPage: View {
     private let hasConnection: Bool
     private let reconnect: @MainActor () -> Void
     private let openDiagnostics: @MainActor () -> Void
+    private let folderPicker: any FolderPicking
 
     /// Creates the page.
     /// - Parameters:
@@ -50,8 +56,29 @@ public struct CatalogPage: View {
         selection: String = "",
         filter: CatalogFilter = CatalogFilter()
     ) {
+        self.init(
+            catalog: catalog, runtimes: runtimes, operations: operations, waiting: waiting,
+            hasConnection: hasConnection, reconnect: reconnect, openDiagnostics: openDiagnostics,
+            selection: selection, filter: filter, picker: OpenPanelFolderPicker())
+    }
+
+    /// Creates the page with the folder panel `picker`; tests and snapshots answer it.
+    init(
+        catalog: CatalogStore,
+        runtimes: RuntimeStore? = nil,
+        operations: OperationCenter? = nil,
+        waiting: FailureContent?,
+        hasConnection: Bool,
+        reconnect: @escaping @MainActor () -> Void,
+        openDiagnostics: @escaping @MainActor () -> Void,
+        selection: String = "",
+        filter: CatalogFilter = CatalogFilter(),
+        picker: any FolderPicking
+    ) {
         _storedSelection = SceneStorage(wrappedValue: selection, "catalog.selection")
         _filter = State(initialValue: filter)
+        _decisions = State(initialValue: catalog.makeDecisionModel())
+        self.folderPicker = picker
         self.catalog = catalog
         self.runtimes = runtimes
         self.operations = operations
@@ -88,6 +115,21 @@ public struct CatalogPage: View {
             inspector(selected: visible.first { $0.provider == selected })
         }
         .searchable(text: $filter.query, prompt: "Search providers")
+        .toolbar { importItem }
+        .sheet(isPresented: importSheetShown) {
+            if let importModel {
+                ImportProviderSheet(model: importModel)
+            }
+        }
+        .sheet(isPresented: approveSheetShown) {
+            ApproveProviderSheet(model: decisions)
+        }
+        .stacklyConfirmation(item: $decisions.confirmation)
+        .onChange(of: navigator?.catalogRequest?.id, initial: true) {
+            if let request = navigator?.catalogRequest {
+                select(request.provider)
+            }
+        }
 
         .pageChrome(
             title: SidebarSection.catalog.title,
@@ -107,6 +149,61 @@ public struct CatalogPage: View {
                 await catalog.detail.load(selected, revision: revision)
             }
         }
+    }
+
+    // MARK: - Import
+
+    /// Import Provider… (spec 0037, *Layar*): off with its reason while stacklyd is offline,
+    /// and gone when the daemon does not provide the catalog.
+    @ToolbarContentBuilder private var importItem: some ToolbarContent {
+        if catalog.store.unsupported == false {
+            ToolbarItem(placement: .primaryAction) {
+                Button(ProviderTrustCopy.importButton) { beginImport() }
+                    .disabled(reason: hasConnection ? nil : ProviderTrustCopy.offlineHelp)
+            }
+        }
+    }
+
+    private func beginImport() {
+        let model =
+            importModel
+            ?? catalog.makeImportModel(
+                picker: folderPicker,
+                imported: { [feedbackCenter] detail in
+                    select(detail.summary.provider)
+                    feedbackCenter?.show(
+                        .success(
+                            ProviderTrustCopy.imported(displayName: detail.summary.displayName)))
+                })
+        importModel = model
+        Task { await model.begin() }
+    }
+
+    /// Selects `provider` and opens the inspector, clearing a filter that would hide it.
+    private func select(_ provider: String) {
+        if let all = catalog.providers,
+            filter.apply(to: all).contains(where: { $0.provider == provider }) == false
+        {
+            filter = CatalogFilter()
+        }
+        storedSelection = provider
+        showsInspector = true
+    }
+
+    private var importSheetShown: Binding<Bool> {
+        Binding(
+            get: { importModel?.isPresented ?? false },
+            set: { shown in
+                if shown == false { importModel?.cancel() }
+            })
+    }
+
+    private var approveSheetShown: Binding<Bool> {
+        Binding(
+            get: { decisions.approval != nil },
+            set: { shown in
+                if shown == false { decisions.cancelApprove() }
+            })
     }
 
     /// The detail a selection asks for, so the task runs again when any part changes,
@@ -173,7 +270,8 @@ public struct CatalogPage: View {
                         await catalog.detail.retry(selected.provider, revision: selected.revision)
                     }
                 },
-                runtimes: runtimes, operations: operations)
+                runtimes: runtimes, operations: operations, catalog: info,
+                decisions: decisions)
         } else {
             InspectorPlaceholder(
                 title: "No Provider Selected", message: "Select a provider to see its details.")

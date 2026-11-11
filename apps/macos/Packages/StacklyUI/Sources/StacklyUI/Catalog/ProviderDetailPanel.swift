@@ -6,9 +6,11 @@ import SwiftUI
 /// capabilities, and the key value rows.
 /// The header, the description, and the reason come from the card's summary, so they show
 /// at once; the rest waits for `catalog.get_provider`. A planned provider has no matrix,
-/// no capability, and no button, only its note. An invalid one shows why it failed. The
-/// panel has no Import Provider button, which belongs to feature 37. Get lives in the version
-/// matrix (feature 18) and New Instance… under the description (feature 20).
+/// no capability, and no button, only its note. An invalid one shows why it failed. Get
+/// lives in the version matrix (feature 18) and New Instance… under the description
+/// (feature 20). An imported provider (spec 0037) adds its approval banner under the header,
+/// its own Publisher, Trust, Source, and Package rows, the Permissions section, and Revoke
+/// Approval… and Remove….
 struct ProviderDetailPanel: View {
     /// The most issues an invalid provider lists.
     static let issueLimit = 5
@@ -21,6 +23,14 @@ struct ProviderDetailPanel: View {
     var runtimes: RuntimeStore?
     /// The operation center, for the percent of a running install, or `nil`.
     var operations: OperationCenter?
+    /// The catalog of the last list, for the revocation banner, or `nil`.
+    var catalog: CatalogInfo?
+    /// Approve, revoke, and remove of a local provider, or `nil` for a panel without them.
+    var decisions: ProviderDecisionModel?
+
+    @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.calendar) private var calendar
+    @Environment(\.timeZone) private var timeZone
 
     @Environment(\.locale) private var locale
     @Environment(\.shellNavigator) private var navigator
@@ -34,7 +44,13 @@ struct ProviderDetailPanel: View {
                 tile: TileSpec(
                     mark: summary.mark, tile: summary.state == .planned ? .gray : summary.tile,
                     name: summary.displayName),
-                status: CatalogAppearance.appearance(of: summary.state))
+                status: CatalogAppearance.badge(
+                    of: summary, revoked: loadedDetail?.revocation != nil))
+            if let detail = loadedDetail, let decisions {
+                LocalProviderBanner(
+                    detail: detail, catalog: catalog,
+                    approve: { decisions.beginApprove(detail) })
+            }
             if let description = summary.description {
                 Text(description)
                     .font(.body)
@@ -69,6 +85,11 @@ struct ProviderDetailPanel: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
+    }
+
+    /// The detail, once it loaded.
+    private var loadedDetail: ProviderDetail? {
+        if case .loaded(let detail) = phase { detail } else { nil }
     }
 
     /// Why the last install of this provider did not start or did not finish: the daemon's
@@ -150,11 +171,31 @@ struct ProviderDetailPanel: View {
         }
     }
 
+    @ViewBuilder
     private func invalid(_ detail: ProviderDetail) -> some View {
         let issues = detail.issues ?? []
-        return StateBanner(
+        StateBanner(
             tone: .critical, title: "This provider failed validation", code: "manifest.invalid",
             items: Self.issueItems(issues))
+        if detail.summary.trust == .local {
+            localSection(detail)
+        }
+    }
+
+    /// The Permissions section and the buttons of a local provider.
+    @ViewBuilder
+    private func localSection(_ detail: ProviderDetail) -> some View {
+        if let decisions {
+            LocalProviderSection(
+                detail: detail,
+                isWorking: decisions.working.contains(detail.summary.provider),
+                revoke: { decisions.requestRevoke(detail, feedback: feedbackCenter) },
+                remove: { decisions.requestRemove(detail, feedback: feedbackCenter) })
+        } else if let permissions = detail.local?.permissions {
+            CardSection("Permissions") {
+                ProviderPermissionsList(permissions: permissions)
+            }
+        }
     }
 
     /// The first issues as banner items, named so that two issues never share a name.
@@ -175,7 +216,10 @@ struct ProviderDetailPanel: View {
     private func ready(_ detail: ProviderDetail) -> some View {
         let versions = detail.versions ?? []
         let notes = VersionMatrix.notes(of: versions)
-        let facts = ProviderFacts(detail: detail, host: host, locale: locale)
+        let facts = ProviderFacts(
+            detail: detail, host: host, locale: locale,
+            dateStyle: LocalProviderSection.dateStyle(
+                locale: locale, calendar: calendar, timeZone: timeZone))
         if versions.isEmpty == false {
             CardSection(
                 "Versions",
@@ -202,9 +246,15 @@ struct ProviderDetailPanel: View {
             LabeledContent("Dependencies", value: facts.dependencies)
             LabeledContent("Publisher", value: facts.publisher)
             LabeledContent("Revision", value: facts.revision)
+            if let package = facts.package {
+                LabeledContent("Package", value: package)
+            }
             LabeledContent("Trust", value: facts.trust)
         }
         .labeledContentStyle(.stackly)
+        if detail.summary.trust == .local {
+            localSection(detail)
+        }
     }
 
     @ViewBuilder

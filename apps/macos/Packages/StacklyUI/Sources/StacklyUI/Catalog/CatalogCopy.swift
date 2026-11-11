@@ -105,8 +105,11 @@ nonisolated public enum CatalogCopy {
             "Tested with this provider on this Mac."
         case .runtimeTested:
             "The runtime ran on this Mac; the provider is not tested with it yet."
-        // provisional: F37 step 10 (the copy of approval_required and trust_revoked)
-        case .approvalRequired, .trustRevoked, .unrecognized:
+        case .approvalRequired:
+            "Needs your approval."
+        case .trustRevoked:
+            "Approval revoked."
+        case .unrecognized:
             "Reason not recognized by this version of Stackly."
         }
     }
@@ -133,8 +136,8 @@ nonisolated public enum CatalogCopy {
         switch trust {
         case .official: "Official, bundled with Stackly"
         case .development: "Development catalog"
-        // provisional: F37 step 10 (the label of local trust)
-        case .local, .unrecognized: "Unknown trust"
+        case .local: "Local, not verified"
+        case .unrecognized: "Unknown trust"
         }
     }
 
@@ -143,8 +146,8 @@ nonisolated public enum CatalogCopy {
         switch trust {
         case .official: "Official"
         case .development: "Development catalog"
-        // provisional: F37 step 10 (the label of local trust)
-        case .local, .unrecognized: "Unknown trust"
+        case .local: "Local"
+        case .unrecognized: "Unknown trust"
         }
     }
 
@@ -196,10 +199,14 @@ nonisolated public enum CatalogCopy {
     public static let plannedNote =
         "This provider isn’t available yet. It will appear here once packaging and tests pass."
 
-    /// The meta line of a card, under the name.
+    /// The meta line of a card, under the name. An imported provider says "{Category} ·
+    /// Local" (spec 0037, *Layar*).
     /// - Parameter provider: The provider.
     public static func metaLine(of provider: ProviderSummary) -> String {
-        switch provider.state {
+        if provider.trust == .local, provider.state != .invalid {
+            return "\(categoryName(provider.category)) · Local"
+        }
+        return switch provider.state {
         case .planned: "Not in this release"
         case .invalid: "Failed validation"
         case .available, .blocked, .unsupported, .unrecognized:

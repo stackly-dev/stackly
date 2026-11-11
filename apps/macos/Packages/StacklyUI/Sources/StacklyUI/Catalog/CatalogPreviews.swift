@@ -40,7 +40,7 @@
                 description: description, state: state, stateReason: reason, stateNote: nil,
                 providerRevision: state == .planned || state == .invalid ? nil : "1.0.0",
                 publisher: "Stackly", trust: .official,
-                approval: nil,  // provisional: F37 step 10
+                approval: nil,
                 versions: versions,
                 versionCount: UInt64(versions.count), licenses: licenses, mark: mark, tile: tile)
         }
@@ -82,12 +82,12 @@
                             artifacts: ready ? [artifact] : [])
                     ],
                     platformNotes: [], note: nil, issues: [],
-                    local: nil, revocation: nil)  // provisional: F37 step 10
+                    local: nil, revocation: nil)
             case .planned:
                 return ProviderDetail(
                     summary: summary, software: nil, manifestSha256: nil, capabilities: [],
                     versions: [], platformNotes: [], note: nil, issues: [],
-                    local: nil, revocation: nil)  // provisional: F37 step 10
+                    local: nil, revocation: nil)
             case .invalid:
                 return ProviderDetail(
                     summary: summary, software: nil, manifestSha256: nil, capabilities: [],
@@ -98,7 +98,7 @@
                             code: "catalog_digest_mismatch",
                             message: "manifestSha256 does not match the package files", reason: nil)
                     ],
-                    local: nil, revocation: nil)  // provisional: F37 step 10
+                    local: nil, revocation: nil)
             }
         }
 
@@ -107,7 +107,7 @@
         static func store(providers: [ProviderSummary] = providers) async -> CatalogStore {
             let reply = ListProvidersReply(
                 catalog: .fixture, items: providers,
-                revocations: [])  // provisional: F37 step 10
+                revocations: [])
             let store = CatalogStore(
                 call: { call throws(ClientError) in
                     switch call {
