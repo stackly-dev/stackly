@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fake rogue provider settings",
+  "description": "The example settings plus three switches that break the process contract of spec 0010.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "title": "Greeting",
+      "description": "Text the server returns from GET /config.",
+      "maxLength": 256,
+      "default": "hello",
+      "x-stackly": {
+        "apply": "reload"
+      }
+    },
+    "readyDelayMs": {
+      "type": "integer",
+      "title": "Ready delay (ms)",
+      "description": "How long GET /ready answers 503 after start; 0 is ready at once.",
+      "minimum": 0,
+      "maximum": 60000,
+      "default": 0,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
+    },
+    "closeLockFd": {
+      "type": "boolean",
+      "title": "Close the lock fd",
+      "description": "Close fd 3, the instance lock, before listening.",
+      "default": false,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
+    },
+    "reExec": {
+      "type": "boolean",
+      "title": "Re-exec a copy",
+      "description": "Run a copy of the binary in place of the one Stackly started.",
+      "default": false,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
+    },
+    "background": {
+      "type": "boolean",
+      "title": "Go to the background",
+      "description": "Start a copy in the background and exit before listening.",
+      "default": false,
+      "x-stackly": {
+        "apply": "restart",
+        "visibility": "advanced"
+      }
+    },
+    "authToken": {
+      "type": "string",
+      "title": "Auth token",
+      "description": "Written into the sensitive config and passed to init on stdin.",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-stackly": {
+        "apply": "immutableAfterInit",
+        "secret": true
+      }
+    }
+  },
+  "required": [
+    "authToken"
+  ]
+}

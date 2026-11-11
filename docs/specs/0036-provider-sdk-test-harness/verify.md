@@ -154,6 +154,38 @@ Bagian ini mencakup Build plan langkah 6 (paket `providers/example/`), langkah 7
 - AC-3 · seed `example.scenarios.yaml` ada; fuzz 10 menit tetap langkah manual Milestone 1
 - AC-9 (paket contoh lulus harness) · menunggu langkah 10
 
+## Milestone 3: Harness konformitas
+
+Bagian ini mencakup Build plan langkah 9 sampai 12. Langkah 13 (example `provider_harness`, `cargo xtask provider test` dengan `--cleanup` dan `--keep`, test `xtask` scaffold ke harness) menambah bagiannya sendiri; sampai itu harness dijalankan lewat test `provider_conformance`.
+
+### UI / manual
+
+- Tidak ada langkah manual untuk langkah 9 sampai 12. Semua run memakai artefak `fixture` (`stackly-fake-server`), tanpa unduhan dan tanpa Keychain.
+
+### Commands
+
+- [ ] `cargo test -p stackly-testkit --lib test_root` → 14 test lulus: `TestRoot::new_marked` menulis `.stackly-test-run` (`stackly.test-run/v1`, `runId`, `uid`, `pid`, `createdAt`) di kedua folder dan tidak terhapus saat drop; `remove_checked` menghapus kedua folder run nya sendiri; penanda run lain, penanda hilang, `uid` lain, schema lain, symlink, folder bersarang, dan nama tanpa awalan ditolak dengan reason; folder yang argumennya masih dimuat sebuah proses ditolak sampai proses itu berakhir; `keep_data` menyimpan folder data dan menghapus folder run; `sweep_marked` menghapus root yang `pid` nya mati dan membiarkan yang hidup; root tanpa penanda ditolak dan tetap terhapus saat drop → AC-12 (bagian testkit)
+- [ ] `cargo build -p stackly-fake-server` lalu `cargo test -p stacklyd --test provider_conformance` → 17 test lulus, satu per satu lewat mutex statis, sekitar 70 detik → AC-9 sampai AC-12, AC-13 (bagian report), AC-1 (bagian harness)
+  - `the_example_package_passes_conformance`: skenario `default` dan `slow-ready` menjalankan 16 langkah persis dalam urutan AC-9; report `stackly.provider-conformance/v1`, `kind: fixture`, `runtime.source: fixture`, `handover: unproven`, `verdict: pass`, file report sama dengan nilai di memori, tidak memuat `$HOME` atau nilai settings teks; `cleanup.rootRemoved: true`, `processesLeft: []` → AC-9, AC-13
+  - `the_fake_package_passes_conformance`: skenario tersirat `default` lulus, `connection`, `reload`, dan `start_again` `pass` → AC-9
+  - `a_server_that_closes_fd_3_fails_the_process_contract`, `a_server_that_re_execs_fails_the_process_contract`: gagal di `process` dengan `lock_not_held` dan `re_exec`; `a_server_that_goes_to_the_background_fails_start_and_leaves_nothing_behind`: gagal di `start`, `leftovers` `fail` dengan reason `["lock_still_held", "process_left"]`, proses anak tercatat di `cleanup.processesLeft` lalu diakhiri; ketiganya `rootRemoved: true` dan tidak ada `stackly-fake-server` di root uji yang tersisa → AC-10
+  - unit test `conformance::process::tests` (empat test): dua sampel buatan dengan PID, `startedAt`, atau pemimpin group berbeda memberi `not_foreground`; fd 3 lain atau `adoptable: false` memberi `lock_not_held`; executable lain memberi `re_exec`; parser `lsof -F Di` → AC-10
+  - `a_slow_ready_scenario_passes_within_the_readiness_limit` (langkah `start` ≥ 1500 ms), `a_crashing_scenario_fails_at_start_unless_the_scenario_expects_it` (`readyDelayMs: 60000`, `crashAfterMs: 300`: `start_fails` lulus dengan `leftovers` `pass` dan `health` `skipped`; `ready` gagal di `start` dengan `failure.code` terisi), `a_log_spamming_scenario_still_completes` (`logLinesPerSecond: 2000`, halaman log penuh) → AC-11
+  - `an_unsupported_api_version_ends_before_any_lifecycle`: salinan paket contoh dengan `apiVersion: stackly/v2` berakhir di `validate` (`failure.step: validate`), satu finding `unsupported_api_version` yang menyebut `stackly/v1alpha1`, `scenarios: []`, `runtime: null`, tidak ada root berpenanda baru, folder paket tetap ada → AC-1 (bagian harness)
+  - `a_root_without_this_runs_marker_is_never_removed`: penanda dengan `runId` run lain membuat `remove_checked` menolak dengan `the marker belongs to another run` dan kedua folder tetap → AC-12
+- [ ] Sesudah run di atas: `ps -axww -o pid=,args= | awk '/\/stackly-test-[^ ]*\/Test Root / && !/awk/'` kosong, dan tidak ada folder `$TMPDIR/stackly-test-*` atau `/private/tmp/skt-*` yang memuat `.stackly-test-run` → AC-12
+- [ ] `cargo test -p stackly-fake-server` → lulus tanpa perubahan; flag `--close-lock-fd`, `--re-exec`, `--background` default `false` dan hanya dipakai paket `testing/fake-rogue` (`apps/daemon/tests/conformance/packages/fake-rogue/`, `cargo xtask provider check <folder itu>` → baris `ok testing/fake-rogue 0.1.0 ...`) → AC-10
+- [ ] `cargo clippy -p stacklyd -p stackly-testkit -p stackly-fake-server --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check` → bersih
+
+### Acceptance-criteria coverage
+
+- AC-9 · lengkap lewat test; `cargo xtask provider test providers/example` (exit 0 dan report di `<target dir>/provider-test/<runId>/`) menunggu langkah 13
+- AC-10, AC-11 · lengkap. Tafsiran AC-11: halaman `instance.logs_read` dibatasi 64 KiB satu batch log selain `limit: 1000`, jadi baris 100 byte memenuhi halaman di sekitar 197 baris; langkah `logs` mengulang sampai halaman penuh (1000 baris, atau kurang dengan cursor `earlier` yang menandakan masih ada baris lama), bukan sampai tepat 1000 baris
+- AC-12 · bagian testkit dan harness lengkap; `--cleanup` (`sweep_marked`) dan `--keep` (`keep_data`) lewat `xtask` menunggu langkah 13
+- AC-13 · bagian report lengkap (schema, sanitasi `~` dan `$TMPDIR`, tulis atomik); baris terakhir stderr, exit code 0/1/2/130, `interrupted` lewat sinyal, dan folder report default menunggu langkah 13
+- AC-1 · bagian harness lengkap
+- AC-14 · menunggu langkah 13; AC-15 · menunggu langkah 14
+
 ## Milestone 5: Spike dari paket
 
 Bagian ini mencakup Build plan langkah 15: `xtask/src/runtime/spike/package_recipe.rs` (`PackageRecipe`), `xtask/src/runtime/spike/closure_probes.rs`, tanda tangan baru `recipe(repo, provider) -> Result<Box<dyn Recipe>>` dan `version_args(&self) -> Vec<String>`, `tokio` di `xtask`, satu entri `EXPOSE_ALLOWED`, penghapusan recipe NATS, PostgreSQL, dan Traefik, dan penanda `// provisional: F40`, `F42`, `F43`.

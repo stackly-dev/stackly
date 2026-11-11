@@ -18,9 +18,11 @@
 //! - `serve --config=<file> --data=<dir> --port=<p> [--host=<ip>]
 //!   [--label=<text>] [--ready-delay-ms=<n>] [--crash-after-ms=<n>]
 //!   [--crash-exit-code=<c>] [--log-lines-per-second=<n>] [--log-line-bytes=<n>]
-//!   [--ignore-term=<bool>] [--leak-token=<bool>]` records its argv in `<dir>/argv-serve.json`
+//!   [--ignore-term=<bool>] [--leak-token=<bool>] [--close-lock-fd=<bool>]
+//!   [--re-exec=<bool>] [--background=<bool>]` records its argv in `<dir>/argv-serve.json`
 //!   and answers HTTP/1.1 on a loopback address until a signal, a crash, or
-//!   `POST /shutdown` ends it.
+//!   `POST /shutdown` ends it. The last three break the process contract of
+//!   spec 0010 on purpose, for the `testing/fake-rogue` package of spec 0036.
 //! - `shutdown --port=<p> [--host=<ip>]` sends `POST /shutdown` to a
 //!   running `serve`.
 //!
@@ -35,6 +37,7 @@
 mod args;
 mod http;
 mod init;
+mod rogue;
 mod serve;
 mod shutdown;
 
