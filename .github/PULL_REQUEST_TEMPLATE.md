@@ -22,7 +22,10 @@ This repository has no CI, so please run the checks yourself and paste the outpu
 - [ ] `cargo xtask codegen --check`
 - [ ] `cargo xtask provider check`
 - [ ] `cargo xtask docs check`
-- [ ] Swift changes only: `swift test` for the package I changed and `cargo xtask build-app`
+- [ ] Changes to `providers/catalog.toml` or a package listed in it: `cargo xtask catalog check`
+- [ ] Swift changes: `swift test --package-path clients/swift`
+- [ ] Swift changes: `swift test --package-path apps/macos/Packages/StacklyUI`
+- [ ] Swift changes: `cargo xtask build-app`
 
 ```text
 Paste the output here.

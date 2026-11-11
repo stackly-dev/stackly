@@ -23,7 +23,7 @@ Today one person holds every role. There is no `CODEOWNERS` file yet. When a sec
 
 ## Official and reviewed
 
-- `official` means the package lives in `providers/` in this repository under the `official/` namespace, has a provider owner, and ships in the bundled catalog.
+- `official` means the package lives in `providers/` in this repository under the `official/` namespace, has a provider owner, and ships in the bundled catalog or is listed there as planned.
 - `reviewed` means that revision of the package passed the maintainer's provider review when it was merged.
 
 Neither word means a package is free of risk forever, and a review covers one revision only. `reviewed` is a word for this process, not a label in the app.
@@ -34,7 +34,7 @@ Neither word means a package is free of risk forever, and a review covers one re
 | --- | --- | --- |
 | `official/nats` | @ojiepermana | In the bundled catalog |
 | `official/postgresql` | @ojiepermana | In the bundled catalog |
-| `official/traefik` | @ojiepermana | In the bundled catalog |
+| `official/traefik` | @ojiepermana | Package in this repository; listed as planned in the bundled catalog |
 
 A provider owner:
 
