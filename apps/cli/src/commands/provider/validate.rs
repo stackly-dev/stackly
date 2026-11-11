@@ -117,8 +117,12 @@ fn counts(validation: &ProviderValidation) -> (u64, u64) {
 
 /// `dir` joined to the current folder when relative, then normalized
 /// without touching the filesystem: `.` is dropped and `..` removes the
-/// component before it.
-fn absolute(dir: &Path) -> Result<PathBuf, CliFailure> {
+/// component before it. `import` uses it too.
+///
+/// # Errors
+///
+/// `cli.usage` when the current folder cannot be read.
+pub(super) fn absolute(dir: &Path) -> Result<PathBuf, CliFailure> {
     let joined = if dir.is_absolute() {
         dir.to_path_buf()
     } else {

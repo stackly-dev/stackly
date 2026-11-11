@@ -1,0 +1,18 @@
+Name               Acme Demo
+ID                 acme/demo
+Category           database
+Description        Demo server packaged by Acme for import tests.
+State              invalid
+Publisher          acme (not verified)
+Trust              local, not verified
+Provider revision  1.0.0
+Manifest           -
+Approval           needs approval
+Imported           2026-11-11 09:00:00 +00:00 from ~/providers/acme-demo
+                   This folder was downloaded from the internet. Stackly only reads its text files and never changes the folder.
+Package            sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, 4 kB
+
+Permissions: not available, the stored copy does not load
+
+FILE           LOCATION     CODE                    MESSAGE
+provider.yaml  metadata.id  import_digest_mismatch  the stored copy does not match the import record

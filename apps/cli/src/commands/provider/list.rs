@@ -1,20 +1,26 @@
 //! `stackly provider list` (spec 0017, AC-9): one line about the catalog,
 //! then a table of its providers. `--category` filters on the client, so
-//! the JSON `items` follow it too.
+//! the JSON `items` follow it too. Spec 0037 adds the `TRUST` column, the
+//! approval of local entries in `STATE`, the count of imported entries,
+//! and the revisions the installed catalog revokes.
 
 use clap::{Args, ValueEnum};
 use serde::Serialize;
 use stackly_protocol::catalog::{
     CatalogInfo, CatalogSourceKind, ListProvidersReply, ProviderCategory, ProviderSummary,
+    SupportReason, TrustLevel,
 };
+use stackly_protocol::provider::{ApprovalState, CatalogRevocation};
 use stackly_protocol::{Call, Reply, Timestamp};
 
+use super::local::esc;
 use super::render::state_tone;
 use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
 use crate::output::human::{Cell, HumanWriter, Render, wire_name};
+use crate::output::style::Tone;
 use crate::session::CallSpec;
 
 /// The catalog is older than this many days when `outdated` is set.
@@ -68,6 +74,8 @@ pub struct ProviderList {
     pub catalog: CatalogInfo,
     /// The entries that pass `--category`, in the daemon's order.
     pub items: Vec<ProviderSummary>,
+    /// The revisions the installed catalog revokes, not filtered.
+    pub revocations: Vec<CatalogRevocation>,
     #[serde(skip)]
     category: Option<CategoryArg>,
 }
@@ -99,6 +107,7 @@ impl ProviderList {
         Self {
             catalog: reply.catalog,
             items,
+            revocations: reply.revocations,
             category,
         }
     }
@@ -115,16 +124,46 @@ impl Render for ProviderList {
                 )),
                 None => out.line("No providers in the catalog."),
             }
-            return;
+        } else {
+            let rows: Vec<Vec<Cell>> = self.items.iter().map(row).collect();
+            out.table(
+                &[
+                    "provider", "name", "category", "state", "trust", "versions", "license",
+                ],
+                &rows,
+            );
         }
-        let rows: Vec<Vec<Cell>> = self.items.iter().map(row).collect();
-        out.table(
-            &[
-                "provider", "name", "category", "state", "versions", "license",
-            ],
-            &rows,
-        );
+        if !self.revocations.is_empty() {
+            out.line("");
+            out.line(&format!(
+                "Revoked by this catalog (revision {}, published {}):",
+                self.catalog.revision.get(),
+                super::local::date(out, self.catalog.published_at)
+            ));
+            for revocation in &self.revocations {
+                out.line(&revocation_line(revocation));
+            }
+        }
     }
+}
+
+/// `  <provider> <revision> since <date>: <reason>`, with the manifest
+/// digest when the revocation names one.
+fn revocation_line(revocation: &CatalogRevocation) -> String {
+    let mut line = format!(
+        "  {} {}",
+        esc(&revocation.provider),
+        esc(&revocation.provider_revision)
+    );
+    if let Some(digest) = &revocation.manifest_sha256 {
+        line.push_str(&format!(" (manifest sha256:{})", esc(digest)));
+    }
+    line.push_str(&format!(
+        " since {}: {}",
+        esc(&revocation.since),
+        esc(&revocation.reason)
+    ));
+    line
 }
 
 /// `Catalog: official, bundled, revision 4, published 2026-11-02 16:41
@@ -145,6 +184,10 @@ fn catalog_line(out: &HumanWriter, catalog: &CatalogInfo) -> String {
         catalog.revision.get(),
         minute(out, catalog.published_at)
     );
+    let local = catalog.local_count.get();
+    if local > 0 {
+        line.push_str(&format!(", {local} imported"));
+    }
     if catalog.outdated {
         line.push_str(&format!(
             ", older than {OUTDATED_DAYS} days; updating Stackly may bring a newer catalog"
@@ -166,18 +209,35 @@ fn minute(out: &HumanWriter, ts: Timestamp) -> String {
 
 /// One row of the table.
 fn row(item: &ProviderSummary) -> Vec<Cell> {
-    let mut state = wire_name(&item.state);
-    if let Some(reason) = &item.state_reason {
-        state.push_str(&format!(" ({})", wire_name(reason)));
-    }
     vec![
         Cell::text(&item.provider),
         Cell::text(&item.display_name),
         Cell::optional(item.category.as_ref().map(wire_name).as_deref()),
-        Cell::toned(&state, state_tone(item.state)),
+        state(item),
+        Cell::text(&wire_name(&item.trust)),
         Cell::text(&versions(item)),
         Cell::text(&item.licenses.join(", ")),
     ]
+}
+
+/// The state: `needs approval` or `revoked` for a local entry that is not
+/// approved or whose revision is revoked, else the state and its reason.
+fn state(item: &ProviderSummary) -> Cell {
+    if item.trust == TrustLevel::Local {
+        let revoked = item.approval == Some(ApprovalState::Revoked)
+            || item.state_reason == Some(SupportReason::TrustRevoked);
+        if revoked {
+            return Cell::toned("revoked", Tone::Caution);
+        }
+        if item.approval != Some(ApprovalState::Approved) {
+            return Cell::toned("needs approval", Tone::Caution);
+        }
+    }
+    let mut state = wire_name(&item.state);
+    if let Some(reason) = &item.state_reason {
+        state.push_str(&format!(" ({})", wire_name(reason)));
+    }
+    Cell::toned(&state, state_tone(item.state))
 }
 
 /// The versions with an artifact for this Mac, then `, +<n> more` for the

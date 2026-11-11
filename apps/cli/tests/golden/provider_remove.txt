@@ -1,0 +1,1 @@
+Removed acme/demo from the catalog. Existing instances can still start.

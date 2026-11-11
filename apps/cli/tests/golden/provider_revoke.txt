@@ -1,0 +1,6 @@
+Revoked the approval for Acme Demo. Existing instances can still start.
+ID        acme/demo
+Revision  1.0.0
+Trust     local, not verified
+Approval  revoked
+Package   sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
