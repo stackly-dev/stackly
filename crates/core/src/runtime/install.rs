@@ -1763,29 +1763,13 @@ pub fn final_batch(
     facts: &FinalFacts,
     registry: &dyn Registry,
 ) -> Result<FinalBatch, InstallError> {
-    // The approval of a local source is read first, so its generation
-    // guards the batch: a revoke that lands before the commit fails it.
-    let trust_generation = match &plan.local {
-        Some(local) => {
-            let (verdict, generation) = stored_trust(
-                registry,
-                &local.provider,
-                &local.package_sha256,
-            )
-            .map_err(|error| {
-                tracing::warn!(%error, "the registry could not be read for the final batch");
-                InstallError::Io {
-                    op: "read the registry",
-                    root: "data",
-                }
-            })?;
-            if let Some(error) = InstallError::of_trust(local, &verdict) {
-                return Err(error);
-            }
-            Some(generation)
-        }
-        None => None,
-    };
+    // The approval of a local source is decided by the check right before
+    // the commit stage moves the folder (`recheck_local`): the binary passed
+    // its exec check while the approval held, and a revoke never takes an
+    // installed runtime back (spec 0037, *Security model*). A revoke that
+    // lands after that check therefore no longer fails this batch, which
+    // would leave the moved folder without a row and the operation
+    // `needs_recovery` (review of feature 37).
     let read = registry.runtimes().map_err(|error| {
         tracing::warn!(%error, "the registry could not be read for the final batch");
         InstallError::Io {
@@ -1885,7 +1869,7 @@ pub fn final_batch(
         compatibility: plan.compatibility.clone(),
     });
     Ok(FinalBatch {
-        expected_generation: Some(trust_generation.unwrap_or(read.generation)),
+        expected_generation: Some(read.generation),
         ops: vec![
             WriteOp::InsertArtifact(record),
             WriteOp::InsertRuntime(runtime),
@@ -2135,6 +2119,10 @@ async fn run_install(work: InstallRuntimeWork, mut ctx: OperationContext) -> Wor
             finalize: None,
         });
     }
+    // A revoke that lands while the install waits in the queue, or before a
+    // resumed install downloads again, wins before the first byte is asked
+    // for (spec 0037, *Key invariants*).
+    recheck_local(&ctx, &plan).await?;
     let operation_id = ctx.id().to_string();
 
     // Download.

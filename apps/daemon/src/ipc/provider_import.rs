@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use stackly_core::catalog::import::{ImportRequest, import_work, remove_work};
 use stackly_core::catalog::local::{ImportCheck, Permissions, import_limit, permission_changes};
-use stackly_core::catalog::{Catalog, CatalogEntry};
+use stackly_core::catalog::{Catalog, CatalogEntry, CatalogState};
 use stackly_core::operation::{BeginRequest, BusyPolicy, NoOpReply, Origin, PrecheckOutcome};
 use stackly_core::provider::{NameCheck, check_package};
 use stackly_domain::{
@@ -304,6 +304,59 @@ fn detail_of(
     )))
 }
 
+/// The detail a provider method answers with once its operation ended. The
+/// snapshot answers when it holds the import row the registry holds now; a
+/// snapshot whose refresh failed after the commit (spec 0037, *Read model*)
+/// is stale, and then the detail is built from the registry rows and the
+/// store copies, so a committed import never answers `not_imported` and an
+/// approval never shows the state before it (review of feature 37).
+async fn detail_after(
+    core: &DaemonCore,
+    provider: &ProviderName,
+) -> Result<Box<ProviderDetail>, Box<ErrorBody>> {
+    let registry = registry_of(core)?;
+    let Some(row) = import_row(&registry, provider).await? else {
+        return detail_of(core, provider);
+    };
+    let catalog = crate::catalog::loaded(core)?;
+    let snapshot_row = match catalog.entry(provider) {
+        Some(CatalogEntry::Provider(entry)) => entry.local().map(|local| &local.record),
+        Some(CatalogEntry::Invalid(entry)) => entry.local.as_deref(),
+        _ => None,
+    };
+    if snapshot_row.is_some_and(|stored| stored.revision == row.revision) {
+        return detail_of(core, provider);
+    }
+    let Some(base) = core.catalog_base() else {
+        return detail_of(core, provider);
+    };
+    let CatalogState::Loaded(base) = base.as_ref() else {
+        return detail_of(core, provider);
+    };
+    let base = Arc::clone(base);
+    let platform = core.platform().clone();
+    let layout = core.prepared().layout().clone();
+    let read = registry.clone();
+    let fresh = tokio::task::spawn_blocking(move || {
+        stackly_core::catalog::local::load(platform.fs(), &read, &layout)
+            .map(|rows| base.with_local(rows.value))
+    })
+    .await
+    .map_err(|_| unexpected("the registry read stopped"))?
+    .map_err(|error| Box::new(map::registry_error(&error)))?;
+    let entry = fresh.entry(provider).ok_or_else(|| {
+        Box::new(map::trust::import_not_found(
+            provider.as_str(),
+            "not_imported",
+        ))
+    })?;
+    Ok(Box::new(map::catalog::provider_detail(
+        &fresh,
+        entry,
+        &core.platform().info().host_facts(),
+    )))
+}
+
 /// Waits until the operation is final; a failed one answers with its own
 /// error.
 async fn wait_final(core: &DaemonCore, operation: uuid::Uuid) -> Result<(), Box<ErrorBody>> {
@@ -355,7 +408,7 @@ async fn replayed(
                 .ok()
         })
         .ok_or_else(|| unexpected("the journal of the operation names no provider"))?;
-    detail_of(core, &provider).map(Some)
+    detail_after(core, &provider).await.map(Some)
 }
 
 fn input_of(value: &serde_json::Value) -> JournalPayload {
@@ -496,7 +549,7 @@ fn import_inner<'a>(
         if let StartOutcome::Accepted(accepted) = &outcome {
             wait_final(core, accepted.operation.id).await?;
         }
-        detail_of(core, &provider)
+        detail_after(core, &provider).await
     })
 }
 
@@ -649,7 +702,7 @@ pub fn approve<'a>(
                 work,
             )
             .await?;
-            detail_of(core, &provider)
+            detail_after(core, &provider).await
         }
         .await;
         result.map_err(|error| Box::new(map::trust::with_area_hint(*error)))
@@ -719,7 +772,7 @@ pub fn revoke<'a>(
                 work,
             )
             .await?;
-            detail_of(core, &provider)
+            detail_after(core, &provider).await
         }
         .await;
         result.map_err(|error| Box::new(map::trust::with_area_hint(*error)))
