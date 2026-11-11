@@ -121,6 +121,7 @@ async fn stop(daemon: DaemonHandle) {
         .await;
 }
 
+// covers: AC-5 (spec 0036)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_repository_package_is_publishable_with_its_identity_and_nothing_changes() {
     let ev = evidence!(
@@ -182,6 +183,7 @@ async fn a_repository_package_is_publishable_with_its_identity_and_nothing_chang
     ev.pass();
 }
 
+// covers: AC-1, AC-5 (spec 0036)
 #[tokio::test(flavor = "multi_thread")]
 async fn the_replies_match_the_contract_fixtures() {
     let ev = evidence!(
@@ -216,6 +218,7 @@ async fn the_replies_match_the_contract_fixtures() {
     ev.pass();
 }
 
+// covers: AC-5 (spec 0036)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_folder_that_is_missing_or_holds_too_much_is_still_a_reply() {
     let site = Site::new();
@@ -250,6 +253,7 @@ async fn a_folder_that_is_missing_or_holds_too_much_is_still_a_reply() {
     stop(daemon).await;
 }
 
+// covers: AC-5 (spec 0036)
 #[tokio::test(flavor = "multi_thread")]
 async fn only_a_path_that_is_not_absolute_is_an_error() {
     let site = Site::new();
@@ -272,6 +276,7 @@ async fn only_a_path_that_is_not_absolute_is_an_error() {
     stop(daemon).await;
 }
 
+// covers: AC-5 (spec 0036)
 #[tokio::test(flavor = "multi_thread")]
 async fn provider_validate_answers_in_recovery_mode() {
     let site = Site::new();
@@ -292,6 +297,7 @@ async fn provider_validate_answers_in_recovery_mode() {
     stop(daemon).await;
 }
 
+// covers: AC-1 (spec 0036)
 #[test]
 fn a_catalog_entry_with_another_api_version_is_invalid_with_that_one_issue() {
     let ev = evidence!(

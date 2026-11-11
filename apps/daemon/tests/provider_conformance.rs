@@ -620,6 +620,52 @@ fn step_limits_come_from_the_checked_manifest_in_any_yaml_style() {
     ev.pass();
 }
 
+// covers: AC-9 (spec 0036)
+#[test]
+fn every_official_package_has_the_step_and_health_limits_its_manifest_gives() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the harness step limits of providers/nats, providers/postgresql, and providers/traefik, whose timeouts blocks are flow-style lines, and of providers/fake, whose block is block style, are the manifest values with the spec 0009 defaults filled in, and each health limit is intervalSeconds times failureThreshold plus one, plus attemptTimeoutMilliseconds",
+    );
+    let limits = |name: &str| {
+        let check = stackly_core::provider::check_package(
+            &stackly_platform_macos::MacosFilesystem,
+            &repo().join("providers").join(name),
+            stackly_core::provider::NameCheck::FolderName,
+        );
+        let limits =
+            conformance::steps::Limits::of(check.package.as_ref().expect("the package validates"));
+        (
+            limits.init.as_secs(),
+            limits.readiness.as_secs(),
+            limits.stop.as_secs(),
+            limits.reload.as_secs(),
+            limits.health.as_millis(),
+        )
+    };
+
+    let found = ["nats", "postgresql", "traefik", "fake"].map(|name| (name, limits(name)));
+
+    // init, readiness, stop, reload in seconds; health in milliseconds.
+    assert_eq!(
+        found,
+        [
+            // timeouts { readinessSeconds: 30, stopSeconds: 30 }; no health block.
+            ("nats", (120, 30, 30, 30, 42_000)),
+            // timeouts { initSeconds: 180, readinessSeconds: 120, stopSeconds: 60,
+            // reloadSeconds: 30 }; health 10 s × 4 + 3000 ms.
+            ("postgresql", (180, 120, 60, 30, 43_000)),
+            // timeouts { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }.
+            ("traefik", (120, 30, 30, 30, 42_000)),
+            // block style: init 30, readiness 30, stop 10, reload 10; health
+            // 5 s × 4 + 2000 ms.
+            ("fake", (30, 30, 10, 10, 22_000)),
+        ]
+    );
+    ev.pass();
+}
+
 // covers: AC-12 (spec 0036)
 #[test]
 fn a_root_without_this_runs_marker_is_never_removed() {
