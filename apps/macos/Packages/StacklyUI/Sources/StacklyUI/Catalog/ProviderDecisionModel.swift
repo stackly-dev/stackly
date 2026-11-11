@@ -55,8 +55,10 @@ final class ProviderDecisionModel {
         approval = Approval(detail: detail)
     }
 
-    /// Closes the approve sheet without sending anything.
+    /// Closes the approve sheet without sending anything. While `provider.approve` is on its
+    /// way it does nothing, since the daemon can't take the approval back.
     func cancelApprove() {
+        guard approval?.isWorking != true else { return }
         approvalKey = nil
         approval = nil
     }
@@ -79,22 +81,31 @@ final class ProviderDecisionModel {
             .providerApprove(
                 DecideProviderParams(
                     provider: detail.summary.provider, expectedPackageSha256: digest)), key)
+        // Cancel is off while the approval runs; this guards the state anyway, so an answer
+        // never closes or writes to the sheet of another detail.
+        let isSameSheet = approval?.detail == detail
         switch outcome {
         case .completed:
-            approvalKey = nil
-            approval = nil
+            if isSameSheet {
+                approvalKey = nil
+                approval = nil
+            }
             feedback?.show(
                 .success(ProviderTrustCopy.approved(displayName: detail.summary.displayName)))
             await refresh()
         case .rejected(let body) where body.code == "provider.import_changed":
-            approvalKey = nil
-            approval = nil
+            if isSameSheet {
+                approvalKey = nil
+                approval = nil
+            }
             feedback?.show(.failure(body))
             await refresh()
         case .rejected(let body), .notSent(let body):
+            guard isSameSheet else { return }
             approvalKey = nil
             fail(body)
         case .outcomeUnknown(let body, _):
+            guard isSameSheet else { return }
             fail(body)
         }
     }

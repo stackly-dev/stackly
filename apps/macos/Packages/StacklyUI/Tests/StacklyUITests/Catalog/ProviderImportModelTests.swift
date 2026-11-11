@@ -15,6 +15,16 @@ struct ProviderImportModelTests {
         var outcome: MutationOutcome
         var reads: [Call] = []
         var sent: [(Call, String)] = []
+        /// Whether a mutation waits for ``release()`` before it answers.
+        var holdsSends = false
+        private(set) var held: [CheckedContinuation<Void, Never>] = []
+
+        /// Lets every held mutation answer.
+        func release() {
+            let all = held
+            held = []
+            for one in all { one.resume() }
+        }
 
         init(preview: Result<ImportPreview, ClientError>, outcome: MutationOutcome) {
             self.preview = preview
@@ -31,6 +41,7 @@ struct ProviderImportModelTests {
 
         func send(_ call: Call, _ key: String) async -> MutationOutcome {
             sent.append((call, key))
+            if holdsSends { await withCheckedContinuation { held.append($0) } }
             return outcome
         }
     }
@@ -312,5 +323,70 @@ struct ProviderImportModelTests {
             capabilities: [], managedFilesystem: ["data"], executables: [], secrets: [],
             endpoints: [], downloads: [], openWith: [])
         #expect(ProviderPermissionsList.groups(of: empty) == [.writes])
+    }
+
+    // MARK: - Cancel while a request runs (spec 0037 review)
+
+    // covers: spec 0037 review, Minor (late results after Cancel)
+    @Test func cancelIsOffWhileTheImportRunsAndItsAnswerLands() async throws {
+        let preview = try ProviderFixture.preview("pending")
+        let detail = try ProviderFixture.detail("pending")
+        let daemon = Daemon(
+            preview: .success(preview), outcome: .completed(.providerImport(detail)))
+        daemon.holdsSends = true
+        var importedDetail: ProviderDetail?
+        let model = model(daemon, imported: { importedDetail = $0 })
+        await model.begin()
+        let running = Task { await model.importPackage() }
+        await settle("the held import") { daemon.held.count == 1 }
+
+        #expect(model.canCancel == false)
+        model.cancel()
+        #expect(model.phase == .importing(preview, path: "/Users/me/providers/acme-demo"))
+
+        daemon.release()
+        await running.value
+        #expect(model.phase == .idle)
+        #expect(importedDetail == detail)
+        #expect(model.canCancel)
+    }
+
+    // covers: spec 0037 review, Minor (late results after Cancel)
+    @Test func cancelIsOffWhileTheApprovalRuns() async throws {
+        let detail = try ProviderFixture.detail("pending")
+        let daemon = Daemon(
+            preview: .failure(.notSent(ClientErrorCatalog.notConnected())),
+            outcome: .completed(.providerApprove(try ProviderFixture.detail("approved"))))
+        daemon.holdsSends = true
+        let model = decisions(daemon)
+        model.beginApprove(detail)
+        let running = Task { await model.confirmApprove(feedback: nil) }
+        await settle("the held approval") { daemon.held.count == 1 }
+
+        model.cancelApprove()
+        #expect(model.approval?.isWorking == true)
+
+        daemon.release()
+        await running.value
+        #expect(model.approval == nil)
+    }
+
+    // covers: spec 0037 review, Minor (late results after Cancel)
+    @Test func aRefusalNeverWritesToTheSheetOfAnotherProvider() async throws {
+        let detail = try ProviderFixture.detail("pending")
+        let other = try ProviderFixture.detail("revoked")
+        let daemon = Daemon(
+            preview: .failure(.notSent(ClientErrorCatalog.notConnected())),
+            outcome: .rejected(Self.rejection("provider.not_approved")))
+        daemon.holdsSends = true
+        let model = decisions(daemon)
+        model.beginApprove(detail)
+        let running = Task { await model.confirmApprove(feedback: nil) }
+        await settle("the held approval") { daemon.held.count == 1 }
+
+        model.approval = ProviderDecisionModel.Approval(detail: other)
+        daemon.release()
+        await running.value
+        #expect(model.approval == ProviderDecisionModel.Approval(detail: other))
     }
 }
