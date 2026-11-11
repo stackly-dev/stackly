@@ -401,6 +401,15 @@ Dari inventaris `docs/scope/coordination/02-instalasi-pertama.usulan-fondasi.md`
 
 Perubahan ini dibaca model lain (Sonnet 5.5, baca saja) sebelum commit. Semua butir inventaris dinilai sudah diterapkan dengan benar; perbaikan kata yang diusulkannya ikut diterapkan (urutan `--cleanup` dipisah dari *Rutin pembersihan* yang dipakai driver, nilai aturan 11 mengikuti spec 0018, dan baris Value sourcing serta *Perubahan `pin`* untuk kedua field baru).
 
+## Update 2026-11-11: spike dari paket provider (spec 0036)
+
+Update `/architect` (mode Update) yang menerapkan Follow-up [spec 0036](../0036-provider-sdk-test-harness/index.md) untuk spec ini. Spec 0036 sudah diterima lead atas delegasi user (2026-11-11), termasuk perubahan bunyi AC-5. Kode belum berubah: semuanya dibangun langkah 15 spec 0036. ID AC tetap.
+
+- **AC-5.** Kalimat lama berbunyi "versi yang dibaca dari binary yang berjalan". Untuk NATS dan Traefik itu sudah berarti menjalankan executable dengan argumen versi; untuk PostgreSQL itu berarti `show server_version` ke server yang sedang berjalan. `PackageRecipe` membaca versi lewat `runtime.versionCheck` paket untuk ketiganya, yaitu executable utama artefak dengan `args` nya. Yang dibuktikan tetap sama: artefak yang digest nya dipin melaporkan versi inventaris. Yang hilang untuk PostgreSQL adalah pembacaan dari server yang berjalan; readiness dan probe AC-7 tetap membuktikan server itu hidup. Alasan memilih `PackageRecipe` ada di Keputusan 5 rationale spec 0036.
+- **Yang tetap.** Semua AC lain, urutan langkah worker, audit, batas waktu, dan bentuk hasil. Probe closure tetap di xtask karena membuktikan isi artefak.
+- **Tafsiran yang diambil.** Spec 0036 menulis start memakai `env` dari plan. AC-6 spec ini tidak berubah, jadi `env` plan ditulis sebagai tambahan di atas environment kosong AC-6, bukan penggantinya.
+- **Benturan yang ditemukan.** `initdb` paket PostgreSQL memakai locale provider `builtin` (spec 0019), sedangkan probe `icu` AC-7 menuntut database `postgres` ber `datlocprovider = 'i'`. Spec 0036 menyatakan empat probe AC-7 tetap, jadi keduanya tidak bisa sama sama benar. Ini tidak dipaksakan di update ini: dicatat sebagai butir terbuka di *Spike dari paket provider* dan Follow-up, dan dikirim ke lead sebagai `needs-decision`. Rekomendasi: ubah probe `icu` supaya membuat database percobaan dengan `LOCALE_PROVIDER icu` dan memeriksa `datlocprovider` database itu, yang tetap membuktikan ICU bundel berfungsi tanpa bergantung pada locale default cluster. Runner up: PostgreSQL tetap memakai recipe tulisan tangan (alternatif yang sudah dicatat di keputusan 15 rationale spec 0036), dan AC-16 spec 0036 dipersempit ke NATS dan Traefik.
+
 ## Landscape scan 2026-10-17
 
 Cek web sekali saat wawancara (5 pencarian, 8 halaman). Yang tertulis "belum terkonfirmasi" dikonfirmasi saat `runtime pin`.
