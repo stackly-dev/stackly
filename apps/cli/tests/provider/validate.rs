@@ -30,6 +30,7 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
+// covers: AC-5 (spec 0036)
 #[test]
 fn a_publishable_package_prints_its_ok_line_and_exits_0() {
     let ev = evidence!(
@@ -61,6 +62,7 @@ fn a_publishable_package_prints_its_ok_line_and_exits_0() {
     ev.pass();
 }
 
+// covers: AC-1, AC-5 (spec 0036)
 #[test]
 fn a_package_that_is_not_publishable_exits_2_with_its_lines_and_the_result() {
     let ev = evidence!(
@@ -119,6 +121,7 @@ fn a_package_that_is_not_publishable_exits_2_with_its_lines_and_the_result() {
     ev.pass();
 }
 
+// covers: AC-2, AC-5 (spec 0036)
 #[test]
 fn an_authoring_finding_is_an_error_line_and_a_missing_folder_is_a_finding() {
     let root = TestRoot::new().expect("a test root");
@@ -159,4 +162,71 @@ fn an_authoring_finding_is_an_error_line_and_a_missing_folder_is_a_finding() {
         "{}",
         missing.stdout
     );
+}
+
+/// The `validation-publishable.json` reply with `stackly/v1alpha1` marked
+/// `deprecated` and the one warning `check_package` adds for it, the shape
+/// a daemon sends once the table has a deprecated version (spec 0036,
+/// *Versi dan status*).
+fn deprecated_reply() -> stackly_protocol::provider::ProviderValidation {
+    let path = repo().join("protocols/fixtures/provider/validation-publishable.json");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).expect("the fixture reads"))
+            .expect("the fixture is JSON");
+    value["supportedApiVersions"][0]["status"] = "deprecated".into();
+    value["findings"] = serde_json::json!([{
+        "severity": "warning",
+        "origin": "package",
+        "file": "provider.yaml",
+        "location": "apiVersion",
+        "code": "deprecated_api_version",
+        "message": "apiVersion \"stackly/v1alpha1\" is deprecated; new packages use: stackly/v1beta1",
+    }]);
+    value["findingCount"] = 1.into();
+    serde_json::from_value(value).expect("the deprecated reply decodes")
+}
+
+// covers: AC-1, AC-5 (spec 0036, *Versi dan status*: a deprecated version)
+#[test]
+fn a_warning_for_a_deprecated_version_prints_after_the_ok_line_and_still_exits_0() {
+    use stackly_protocol::{Call, Reply};
+
+    use crate::common::scripted::{ScriptedDaemon, Step};
+
+    let ev = evidence!(
+        covers = ["REQ-030"],
+        kind = Kind::Fixture,
+        expected = "against a daemon that answers provider.validate with a publishable package on a deprecated apiVersion and one deprecated_api_version warning, stackly provider validate prints the ok line, then warning: <folder>: <file> <location>: <code>: <message>, then 0 error(s), 1 warning(s), exits 0, and --json keeps the deprecated status and the warning severity in result",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let reply = deprecated_reply();
+    let _daemon = ScriptedDaemon::serve(&root, move |call, _| match call {
+        Call::ProviderValidate(_) => vec![Step::Reply(Reply::ProviderValidate(Box::new(
+            reply.clone(),
+        )))],
+        _ => Vec::new(),
+    });
+
+    let text = run(root.path(), &["provider", "validate", "/packages/nats"]);
+    let json = run(
+        root.path(),
+        &["provider", "validate", "/packages/nats", "--json"],
+    );
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    assert_eq!(
+        text.stdout,
+        "ok official/nats 1.0.1 8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe\n\
+         warning: nats: provider.yaml apiVersion: deprecated_api_version: apiVersion \"stackly/v1alpha1\" is deprecated; new packages use: stackly/v1beta1\n\
+         0 error(s), 1 warning(s)\n"
+    );
+    assert_eq!(json.code, Some(0), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(
+        value["result"]["supportedApiVersions"][0]["status"],
+        "deprecated"
+    );
+    assert_eq!(value["result"]["findings"][0]["severity"], "warning");
+    assert_eq!(value["result"]["publishable"], true);
+    ev.pass();
 }
