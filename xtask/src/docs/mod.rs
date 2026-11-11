@@ -403,6 +403,7 @@ pub(crate) mod fixture {
 mod tests {
     use super::fixture;
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn the_clean_fixture_has_no_problems_and_counts_its_files() {
         let repo = fixture::repo();
@@ -411,6 +412,7 @@ mod tests {
         assert_eq!(outcome.files, 6);
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn problems_are_sorted_by_path_then_line() {
         let repo = fixture::repo();
@@ -427,6 +429,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_missing_inventory_is_an_input_error_not_a_problem() {
         let repo = fixture::repo();
@@ -434,6 +437,7 @@ mod tests {
         assert!(super::check(repo.path(), &fixture::tables()).is_err());
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_missing_schemas_folder_is_an_input_error() {
         let repo = fixture::repo();

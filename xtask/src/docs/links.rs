@@ -173,6 +173,7 @@ mod tests {
     use super::super::fixture;
     use super::destinations;
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn inline_links_images_and_reference_definitions_are_found() {
         assert_eq!(
@@ -186,6 +187,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_link_to_a_missing_file_is_one_problem() {
         let repo = fixture::repo();
@@ -200,6 +202,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_wrong_anchor_is_one_problem_and_a_right_one_none() {
         let repo = fixture::repo();
@@ -214,6 +217,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn external_links_folders_and_links_in_code_are_not_checked() {
         let repo = fixture::repo();

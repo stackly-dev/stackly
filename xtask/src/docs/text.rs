@@ -169,6 +169,7 @@ mod tests {
     use super::super::fixture;
     use super::{html_tags, placeholders_in};
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn placeholders_are_whole_words_or_marker_texts() {
         assert_eq!(placeholders_in("a TODO b"), vec!["TODO"]);
@@ -179,6 +180,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_placeholder_outside_code_is_one_problem() {
         let repo = fixture::repo();
@@ -193,6 +195,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-14 (spec 0038)
     #[test]
     fn tags_other_than_a_and_comments_are_found() {
         assert_eq!(
@@ -202,6 +205,7 @@ mod tests {
         assert!(html_tags("a < b and 1<2").is_empty());
     }
 
+    // covers: AC-9, AC-14 (spec 0038)
     #[test]
     fn a_br_tag_is_one_problem_but_code_spans_and_autolinks_are_not() {
         let repo = fixture::repo();
@@ -216,6 +220,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-14 (spec 0038)
     #[test]
     fn a_fence_without_a_language_is_one_problem() {
         let repo = fixture::repo();
@@ -226,6 +231,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn the_code_of_conduct_gets_only_links_and_the_insert_marker() {
         let repo = fixture::repo();
@@ -240,6 +246,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9, AC-12 (spec 0038)
     #[test]
     fn the_approval_statement_must_be_quoted_word_for_word() {
         let repo = fixture::repo();
@@ -268,5 +275,51 @@ mod tests {
             lines.contains(&"docs/providers/trying-locally.md:1: the approval statement of `protocols/fixtures/provider/approval-statement.txt` is not quoted word for word".to_owned()),
             "{lines:?}"
         );
+    }
+
+    // covers: AC-9, AC-12 (spec 0038)
+    #[test]
+    fn a_statement_one_word_off_is_exactly_one_problem() {
+        let repo = fixture::repo();
+        fixture::write(
+            repo.path(),
+            "protocols/fixtures/provider/approval-statement.txt",
+            "This package can run the executables it names.\n",
+        );
+        fixture::write(
+            repo.path(),
+            "docs/providers/trying-locally.md",
+            "# Trying\n\n> This package can run the programs it names.\n",
+        );
+        assert_eq!(
+            fixture::lines(repo.path()),
+            vec![
+                "docs/providers/trying-locally.md:1: the approval statement of `protocols/fixtures/provider/approval-statement.txt` is not quoted word for word"
+            ]
+        );
+    }
+
+    // covers: AC-9, AC-12 (spec 0038)
+    #[test]
+    fn a_trying_locally_page_without_the_statement_fixture_is_one_problem() {
+        let repo = fixture::repo();
+        fixture::write(
+            repo.path(),
+            "docs/providers/trying-locally.md",
+            "# Trying\n\n> This package can run the executables it names.\n",
+        );
+        assert_eq!(
+            fixture::lines(repo.path()),
+            vec![
+                "docs/providers/trying-locally.md:1: `protocols/fixtures/provider/approval-statement.txt` is missing, so the approval statement cannot be checked"
+            ]
+        );
+    }
+
+    // covers: AC-9, AC-12 (spec 0038)
+    #[test]
+    fn no_trying_locally_page_needs_no_statement_fixture() {
+        let repo = fixture::repo();
+        assert!(fixture::lines(repo.path()).is_empty());
     }
 }
