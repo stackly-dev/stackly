@@ -9,10 +9,10 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `arc-f36-spec` | architect | F36 `Design it (spec)`, spec `0036-provider-sdk-test-harness` | `06-menambah-provider.md` | `docs/specs/0036-provider-sdk-test-harness/` | (diisi sesudah mulai) | `fable-5-2 · high` | `aktif` |
-| `arc-f37-spec` | architect | F37 `Design it (spec)`, spec `0037-import-provider-lokal-trust` | `06-menambah-provider.md` | `docs/specs/0037-import-provider-lokal-trust/` | (diisi sesudah mulai) | `fable-5-2 · high` | `aktif` |
-| `arc-f38-spec` | architect | F38 `Design it (spec)`, spec `0038-panduan-kontributor-governance` | `06-menambah-provider.md` | `docs/specs/0038-panduan-kontributor-governance/` | (diisi sesudah mulai) | `fable-5-2 · high` | `aktif` |
-| `chk-f37-review` | checker (review) | F37 `Review it`, sesi cadangan yang belum melihat implementasi; menunggu brief | `06-menambah-provider.md` | `docs/reviews/` | (diisi sesudah mulai) | `fable-5-2 · high` | `aktif` (standby) |
+| `arc-f36-spec` | architect | F36 `Design it (spec)`, spec `0036-provider-sdk-test-harness` | `06-menambah-provider.md` | `docs/specs/0036-provider-sdk-test-harness/` | `claude/arc-f36-spec-e2dee8` (sesi `local_31b0bc36`) | `fable-5-2 · high` | `aktif` |
+| `arc-f37-spec` | architect | F37 `Design it (spec)`, spec `0037-import-provider-lokal-trust` | `06-menambah-provider.md` | `docs/specs/0037-import-provider-lokal-trust/` | `claude/arc-f37-spec-659212` (sesi `local_4d9ccf53`) | `fable-5-2 · high` | `aktif` |
+| `arc-f38-spec` | architect | F38 `Design it (spec)`, spec `0038-panduan-kontributor-governance` | `06-menambah-provider.md` | `docs/specs/0038-panduan-kontributor-governance/` | `claude/arc-f38-spec-f3bc3f` (sesi `local_6b00d572`) | `fable-5-2 · high` | `aktif` |
+| `chk-f37-review` | checker (review) | F37 `Review it`, sesi cadangan yang belum melihat implementasi; menunggu brief | `06-menambah-provider.md` | `docs/reviews/` | `claude/chk-f37-review-7c8fc0` (sesi `local_0298dcff`) | `fable-5-2 · high` | `aktif` (standby) |
 
 ## Keputusan
 
