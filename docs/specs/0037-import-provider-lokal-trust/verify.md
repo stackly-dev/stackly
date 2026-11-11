@@ -135,7 +135,7 @@ _Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langk
 
 _Fix sesudah verify milestone 2 (`dev-f37-fix`, keputusan lead): (1) baris audit `import_provider` kini memuat `changes` terhadap keputusan terakhir atas byte lain, dihitung sama dengan approve (`decision_changes` di `crates/core/src/catalog/import.rs`), dan kosong pada import pertama; (2) `instance.provider_ambiguous` dari pemilihan menurut `software` (`details.candidates` tidak kosong) kini berpesan `no single approved provider runs this software; choose one of the candidates`, kodenya tetap; (3) baris `WARN` log daemon saat store gagal hanya memuat `provider` dan `reason`, tanpa path. Langkah cek nya:_
 
-- [ ] `cargo test -p stacklyd --test provider_gate -- the_audit_row a_pick` → 2 test lulus: import pertama tanpa `changes`, import revision `0.4.1` dengan host unduhan lain sesudah approve memuat `changes` dengan `revision` dan `download_hosts`; form tanpa `provider` dengan satu entri lokal `pending` memberi pesan di atas dengan `candidates` `acme/fake` → AC-17, AC-19
+- [x] `cargo test -p stacklyd --test provider_gate -- the_audit_row a_pick` → 2 test lulus: import pertama tanpa `changes`, import revision `0.4.1` dengan host unduhan lain sesudah approve memuat `changes` dengan `revision` dan `download_hosts`; form tanpa `provider` dengan satu entri lokal `pending` memberi pesan di atas dengan `candidates` `acme/fake` → AC-17, AC-19
 
 ### UI / manual
 
@@ -159,7 +159,7 @@ _Fix sesudah verify milestone 2 (`dev-f37-fix`, keputusan lead): (1) baris audit
 - [x] `swift test --package-path clients/swift` → lulus dengan versi 4.1 → AC-18
 - [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `protocols/contract-versions.json` mencatat 4.1
 - [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan cek target Windows → bersih
-- [ ] `cargo test -p stacklyd --test provider_gate a_snapshot` → `replace_catalog` menolak snapshot dari generation lebih tua, menjaga yang lebih baru, dan menerima generation sama → AC-10 (ditambahkan sesudah verify, commit `690889d2`; gerbang lead 9 test lulus)
+- [x] `cargo test -p stacklyd --test provider_gate a_snapshot` → `replace_catalog` menolak snapshot dari generation lebih tua, menjaga yang lebih baru, dan menerima generation sama → AC-10 (ditambahkan sesudah verify, commit `690889d2`; gerbang lead 9 test lulus)
 
 ### Hasil `/check verify` 2026-11-11 (Milestone 2, commit `7a62eb10`)
 
@@ -208,6 +208,21 @@ _Fix sesudah verify milestone 2 (`dev-f37-fix`, keputusan lead): (1) baris audit
 3. Rendah. Residual K25 (runtime yang dipasang lewat provider lokal tetap terpasang sesudah revoke) tidak bisa diprobe dengan fixture, karena tidak ada artefak nyata untuk provider lokal; yang terbukti: baris `runtimes` dan folder runtime tidak berubah oleh revoke dan remove.
 
 **Langkah manual (tidak dijalankan, `NOT_RUN`, owner user):** jaringan mati (AC-8); folder terlindung dan quarantine nyata (Milestone 1); alur GUI (Milestone 4).
+
+### Cek ulang fix AC-17 2026-11-11 (commit `dffd465f`, fix `1cd34477`)
+
+**Verdict: temuan 1 tertutup, AC-17 terpenuhi untuk import, approve, revoke, dan remove.** Dua butir rendah yang ikut diperbaiki juga tertutup. Dua kotak di atas (`the_audit_row a_pick` dan `a_snapshot`) dicentang.
+
+- `cargo test -p stacklyd --test provider_gate` → 11 lulus, 0 gagal, termasuk `the_audit_row...`, `a_pick...`, dan `a_snapshot...`.
+- **Probe `stacklyd` sungguhan** (root sementara, catalog development, paket `acme/fakeish`; daemon dihentikan dan root dihapus sesudahnya). Baris audit dibaca dari registry test root (`sqlite3 -readonly`) dan dari `stackly audit list --json`:
+  - Import pertama → baris `import_provider` dengan `provider`, `providerRevision` `0.1.0`, `packageSha256`, `manifestSha256`, tanpa `changes`.
+  - Sesudah approve, satu byte template diubah lalu diimpor → preview `changes: [content]`, baris audit `changes: content`.
+  - Revision `0.2.0` dengan host unduhan dan port lain diimpor → preview `changes: [revision, download_hosts, endpoints]`, baris audit `changes: revision,download_hosts,endpoints`, `providerRevision` `0.2.0`. Isi `changes` di audit sama dengan yang ditampilkan preview.
+  - Tidak ada baris audit yang memuat path home.
+- **Pesan `instance.provider_ambiguous`:** `stackly instance create probe --runtime fake@0.1.0` tanpa `--provider`, dengan satu entri lokal `pending` ber `software` sama → pesan `no single approved provider runs this software; choose one of the candidates`, `details.candidates` `acme/fakeish`, kode tetap, tidak ada instance dibuat.
+- **Baris `WARN` store:** dibaca di diff (`tracing::warn!` kini hanya membawa `provider` dan `reason`); tidak diprobe ulang dengan store yang gagal. Test `a_store` tetap lulus, dan log daemon probe ini tidak memuat path home.
+
+Catatan: `changes` dihitung terhadap keputusan terakhir atas byte lain (sama dengan approve). Import di atas entri yang belum pernah diputuskan tidak membawa `changes`; ini sesuai teks fix dan diterima.
 
 ### Acceptance-criteria coverage
 
