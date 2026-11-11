@@ -67,9 +67,16 @@ struct ImportProviderSheet: View {
         case .idle, .choosing, .loading, .unreadable:
             return StacklyAction(
                 id: "catalog.import.confirm", title: ProviderTrustCopy.importAction,
-                mutates: true, disabledReason: nil, isBusy: model.phase != .idle,
+                mutates: true, disabledReason: nil, isBusy: Self.isReading(model.phase),
                 perform: {})
         }
+    }
+
+    /// Whether the footer shows a spinner next to the Import that can't run yet: only while
+    /// the daemon reads the folder. A folder that can't be read is an end state.
+    static func isReading(_ phase: ProviderImportModel.Phase) -> Bool {
+        if case .loading = phase { return true }
+        return false
     }
 
     private func pathOf(_ phase: ProviderImportModel.Phase) -> String {

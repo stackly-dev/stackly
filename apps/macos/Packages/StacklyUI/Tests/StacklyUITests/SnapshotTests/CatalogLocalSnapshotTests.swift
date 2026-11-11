@@ -117,6 +117,33 @@ extension SnapshotTests {
                 size: Self.sheetSize)
         }
 
+        @Test(
+            .evidence(
+                covers: ["REQ-033", "NFR-012"],
+                expected:
+                    "The Import Provider sheet of a folder that can't be read says why, offers another folder, and shows no spinner in every variant"
+            ))
+        @MainActor
+        func theImportSheetOfAFolderThatCantBeRead() async throws {
+            try await Self.prime()
+            let model = ProviderImportModel(
+                picker: FixedFolderPicker(path: nil),
+                call: { _ throws(ClientError) in
+                    throw .rejected(
+                        ErrorBody(
+                            code: "provider.import_unreadable", category: .invalidInput,
+                            message: "the folder can't be read", retryable: false,
+                            resource: nil, fields: nil, hint: nil, details: nil,
+                            operationId: nil, rule: nil, items: nil))
+                },
+                send: { _, _ in .notSent(ClientErrorCatalog.notConnected()) },
+                imported: { _ in })
+            await model.read("/Users/me/providers/acme-demo")
+            try await assertSnapshot(
+                ImportProviderSheet(model: model), named: "catalog-import-unreadable",
+                size: Self.sheetSize)
+        }
+
         // MARK: - Detail panel
 
         @Test(

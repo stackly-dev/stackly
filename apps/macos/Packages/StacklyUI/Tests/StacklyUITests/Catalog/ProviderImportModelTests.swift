@@ -389,4 +389,14 @@ struct ProviderImportModelTests {
         await running.value
         #expect(model.approval == ProviderDecisionModel.Approval(detail: other))
     }
+
+    // covers: spec 0037 review, Minor (spinner of an unreadable folder)
+    @Test func onlyReadingAFolderShowsTheFooterSpinner() {
+        let path = "/Users/me/providers/acme-demo"
+        #expect(ImportProviderSheet.isReading(.loading(path: path)))
+        #expect(
+            ImportProviderSheet.isReading(
+                .unreadable(Self.rejection("provider.import_unreadable"), path: path)) == false)
+        #expect(ImportProviderSheet.isReading(.idle) == false)
+    }
 }
