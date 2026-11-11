@@ -34,8 +34,10 @@ Every finding has a severity and an origin.
 
 Two words sum this up:
 
-- **loadable**: no finding has origin `package`, so Stackly can read the package.
+- **loadable**: no `error` finding has origin `package`, so Stackly can read the package.
 - **publishable**: no finding is an `error`, so the package may be merged and shipped.
+
+A `warning`, such as `deprecated_api_version`, never makes a package unloadable or unpublishable. Only `cargo xtask provider check` without a folder fails on it, so a package in this repository never ships with one.
 
 ## The conformance harness
 
@@ -50,7 +52,7 @@ The process checks hold every provider to the same contract: the main process ke
 | Flag | What it does |
 | --- | --- |
 | `--line <line>` | Picks the runtime line when the package has more than one artifact |
-| `--scenario <name>` | Runs only that scenario; give it more than once for several |
+| `--scenario <name>` | Runs only that scenario; give it more than once for several. A name the package does not have fails the run at the `validate` step with exit 1, before any root is made, and the message names the scenarios the package has: `unknown scenario <name>; the package has <names>` |
 | `--report <file>` | Writes the report to that file instead of the default path |
 | `--keep` | Keeps the data folder of the temporary root, for you to look at; the run prints its path on a `kept` line, with the temporary folder written as `$TMPDIR` |
 
