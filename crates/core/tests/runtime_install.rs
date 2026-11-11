@@ -1034,3 +1034,57 @@ async fn an_install_from_a_revoked_local_entry_asks_for_no_byte() {
     assert!(rig.runtimes().is_empty());
     assert!(!exists(&rig.runtime_dir()));
 }
+
+// covers: AC-4, AC-7 (spec 0037, *Gate trust* and *Security model*; review
+// of feature 37): the check right before the commit stage decides; a revoke
+// that lands after it, while the folder moves, leaves the installed runtime
+// in place and the install succeeds instead of ending needs_recovery
+#[tokio::test]
+async fn a_revoke_after_the_commit_check_keeps_the_runtime_and_the_install_succeeds() {
+    use stackly_domain::{ImportDecision, TrustDecision, WriteBatch, WriteOp};
+    let rig = Harness::new().await;
+    let digest = local_import(&rig, TrustDecision::Approved);
+    rig.answer_checks(ExitStatus::Exited(0), "nats-server: v2.15.1\n");
+    // The first rename is the download moving its part file into the
+    // cache; the second is the commit stage moving the tree into place.
+    rig.fake
+        .fs()
+        .run_on_next(stackly_testkit::FsOp::RenameNoReplace, || {});
+    let registry = Arc::clone(&rig.registry);
+    let label = rig.package.key().revision().clone();
+    let at = rig.fake.clock().now();
+    rig.fake
+        .fs()
+        .run_on_next(stackly_testkit::FsOp::RenameNoReplace, move || {
+            registry
+                .commit(WriteBatch::new(vec![WriteOp::DecideProviderImport {
+                    provider: "acme/nats".parse().expect("an id"),
+                    decision: ImportDecision::new(
+                        TrustDecision::Revoked,
+                        digest,
+                        label,
+                        "{}".to_owned(),
+                        at,
+                    ),
+                }]))
+                .expect("the revoke commits");
+        });
+
+    let op = begin_local(&rig, &digest).await;
+    let detail = rig.wait(op, OperationState::Succeeded).await;
+
+    assert_eq!(detail.view.operation.state(), OperationState::Succeeded);
+    assert_eq!(rig.runtimes().len(), 1, "the runtime row is written");
+    assert!(exists(&rig.runtime_dir()));
+    let row = rig
+        .registry
+        .provider_import(&"acme/nats".parse().expect("an id"))
+        .expect("reads")
+        .value
+        .expect("the row");
+    assert_eq!(
+        row.approval(),
+        stackly_domain::ApprovalState::Revoked,
+        "the revoke landed during the install"
+    );
+}
