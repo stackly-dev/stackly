@@ -9,11 +9,13 @@ mod assemble;
 mod index;
 mod install;
 mod load;
+pub mod local;
 mod model;
 mod pin;
 mod rules;
 mod source;
 mod status;
+mod store;
 #[cfg(feature = "test-support")]
 pub mod testing;
 
@@ -50,3 +52,4 @@ pub use status::{
     CellStatus, EntryState, EntryStatus, MATRIX_OSES, SupportReason, TargetSupport, entry_status,
     version_support,
 };
+pub use store::{StoreError, StoreMode, Stored, write_package};

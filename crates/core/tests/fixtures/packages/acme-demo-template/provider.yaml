@@ -1,0 +1,64 @@
+# Fixture package of a local provider from outside the catalog (spec 0037):
+# namespace acme, an available artifact on a test host, a secret handed to
+# the process through env and a rendered config, an exec health probe, an
+# executable alias, and a terminal openWith entry.
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: acme/demo
+  software: demo
+  displayName: Acme Demo
+  revision: "1.0.0"
+  category: database
+  description: Demo server packaged by Acme for import tests.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+runtime:
+  executable: bin/demo-server
+  executionMode: foreground
+  versionCheck:
+    args: ["--version"]
+    pattern: '^demo-server ([0-9]+\.[0-9]+\.[0-9]+)$'
+capabilities:
+  multiInstance: true
+  persistence: true
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 7400 }
+configFiles:
+  demoConf:
+    template: templates/demo.conf.tmpl
+    format: yaml
+    destination: "${instance.secrets}/demo.conf"
+    sensitive: true
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: renderConfig, file: demoConf }
+  start:
+    executable: "${runtime.executable}"
+    args: ["--config", "${instance.secrets}/demo.conf", "--port", "${endpoint.client.port}"]
+    env:
+      DEMO_PASSWORD: "${secret.password}"
+  stop: { strategy: gracefulProcess, signal: term }
+readiness:
+  probe: { type: tcp, endpoint: client }
+health:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executables.demoCli}"
+      args: [ping]
+permissions:
+  managedFilesystem: [data, config, logs, temp, run]
+  executeRuntimeBinary: true
+  additionalExecutables:
+    demoCli: bin/demo-cli
+openWith:
+  - name: shell
+    title: Demo shell
+    kind: terminal
+    terminal:
+      executable: "${runtime.executables.demoCli}"
+      args: ["--port", "${endpoint.client.port}"]

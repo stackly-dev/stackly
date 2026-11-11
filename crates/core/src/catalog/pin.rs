@@ -3,30 +3,19 @@
 //! an instance keeps running with the exact package it was created with
 //! even when the catalog changes.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use stackly_domain::{ProviderRevisionRecord, ProviderSourceId};
-use stackly_platform::{FileKind, Filesystem, Platform, PlatformError};
+use stackly_platform::Platform;
 
 use super::model::ProviderEntry;
-use crate::provider::{NameCheck, PackageFiles, VERSIONS_MAX_LEN, ValidatedPackage};
-use crate::{CoreError, PreparedLayout, check_owned_path, ensure_private_dir};
+use super::store::{StoreError, StoreMode, write_package};
+use crate::PreparedLayout;
 
-/// The file `manifest_sha256` does not cover, so a copy that exists already
-/// is never compared: the first copy wins.
-const VERSIONS_FILE: &str = "versions.json";
-/// The most a pinned `versions.json` may hold when it is read back.
-const MAX_VERSIONS_LEN: u64 = VERSIONS_MAX_LEN;
 /// The `apiVersion` the pinned record names.
 const SCHEMA_VERSION: &str = "stackly/v1alpha1";
 /// The publisher of every package in the catalogs this build loads.
 const PUBLISHER: &str = "Stackly";
-/// How often a file is read when another pin keeps replacing it. A pin
-/// replaces a file only when it found the file missing, so each file is
-/// replaced at most once per pin that started before the first copy
-/// landed, and the engine runs at most 8 operations at once.
-const READ_ATTEMPTS: usize = 16;
 
 /// What [`pin_revision`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,36 +84,15 @@ impl PinError {
     }
 }
 
-fn platform_error(op: &'static str, path: &Path, error: &PlatformError) -> PinError {
-    match error {
-        PlatformError::NoSpace { .. } => PinError::NoSpace,
-        PlatformError::SymlinkInPath { .. } | PlatformError::NotARegularFile { .. } => {
-            PinError::UnsafePath {
-                path: path.to_path_buf(),
-            }
+impl From<StoreError> for PinError {
+    fn from(error: StoreError) -> Self {
+        match error {
+            StoreError::ExistingDiffers { path } => Self::ExistingDiffers { path },
+            StoreError::DigestMismatch => Self::DigestMismatch,
+            StoreError::UnsafePath { path } => Self::UnsafePath { path },
+            StoreError::NoSpace => Self::NoSpace,
+            StoreError::Io { op, path, message } => Self::Io { op, path, message },
         }
-        other => PinError::Io {
-            op,
-            path: path.to_path_buf(),
-            message: other.to_string(),
-        },
-    }
-}
-
-fn core_error(op: &'static str, path: &Path, error: &CoreError) -> PinError {
-    match error {
-        CoreError::RootNotPrivate { .. }
-        | CoreError::NotNormalized { .. }
-        | CoreError::OutsideOwnedRoots { .. }
-        | CoreError::IsOwnedRoot { .. } => PinError::UnsafePath {
-            path: path.to_path_buf(),
-        },
-        CoreError::Platform(error) => platform_error(op, path, error),
-        other => PinError::Io {
-            op,
-            path: path.to_path_buf(),
-            message: other.to_string(),
-        },
     }
 }
 
@@ -161,75 +129,14 @@ pub fn pin_revision(
     let key = package.key();
     let layout = prepared.layout();
     let dir = layout.provider_revision_dir(key);
-    check_owned_path(platform, prepared, &dir).map_err(|e| core_error("check path", &dir, &e))?;
-
-    let fs = platform.fs();
-    let user = platform
-        .identity()
-        .current_user()
-        .map_err(|e| platform_error("current user", &dir, &e))?;
-    let providers = layout.providers_dir();
-    let relative = dir
-        .strip_prefix(&providers)
-        .map_err(|_| PinError::UnsafePath { path: dir.clone() })?;
-    let mut folder = providers;
-    ensure_private_dir(fs, &folder, &user).map_err(|e| core_error("create folder", &folder, &e))?;
-    for part in relative.components() {
-        folder.push(part);
-        ensure_private_dir(fs, &folder, &user)
-            .map_err(|e| core_error("create folder", &folder, &e))?;
-    }
-
-    check_no_foreign_entries(platform, package, &dir)?;
-    let mut wrote_files = false;
-    for (path, bytes) in package.files().iter() {
-        let target = dir.join(path);
-        if let Some(parent) = target.parent()
-            && parent != dir
-        {
-            ensure_private_dir(fs, parent, &user)
-                .map_err(|e| core_error("create folder", parent, &e))?;
-        }
-        match fs
-            .symlink_metadata(&target)
-            .map_err(|e| platform_error("inspect file", &target, &e))?
-        {
-            None => {
-                fs.write_file_atomic(&target, bytes)
-                    .map_err(|e| platform_error("write file", &target, &e))?;
-                wrote_files = true;
-            }
-            Some(info) if info.kind != FileKind::File => {
-                return Err(PinError::UnsafePath { path: target });
-            }
-            Some(_) if path == VERSIONS_FILE => {}
-            Some(info) => {
-                let max = info.len.max(bytes.len() as u64);
-                let stored = read_pinned(fs, "read file", &target, max)?;
-                if stored != bytes {
-                    return Err(PinError::ExistingDiffers { path: target });
-                }
-            }
-        }
-    }
-
-    // Read back file by file: a folder listing could meet the temporary
-    // file of a pin running at the same time.
-    let mut stored = BTreeMap::new();
-    for (path, bytes) in package.files().iter() {
-        let target = dir.join(path);
-        let max = (bytes.len() as u64).max(MAX_VERSIONS_LEN);
-        let read = read_pinned(fs, "read back file", &target, max)?;
-        stored.insert(path.to_owned(), read);
-    }
-    let read_back = ValidatedPackage::from_files(
-        PackageFiles::new(package.files().folder().to_owned(), stored),
-        NameCheck::Skip,
-    )
-    .map_err(|_| PinError::DigestMismatch)?;
-    if read_back.key() != key {
-        return Err(PinError::DigestMismatch);
-    }
+    let stored = write_package(
+        platform,
+        prepared,
+        &layout.providers_dir(),
+        &dir,
+        package.files(),
+        StoreMode::Pinned(key),
+    )?;
     let record = ProviderRevisionRecord::new(
         package.provider_revision().clone(),
         Some(SCHEMA_VERSION.to_owned()),
@@ -239,100 +146,6 @@ pub fn pin_revision(
     .with_source_id(source);
     Ok(PinnedRevision {
         record,
-        wrote_files,
+        wrote_files: stored.wrote_files,
     })
-}
-
-/// Reads one file of the pinned folder.
-///
-/// Another pin of the same revision that found the file missing renames
-/// its own copy over it, with the same bytes and a new inode, and a
-/// `Filesystem` may report a read that meets that replace as
-/// [`PlatformError::NotARegularFile`]. When the path still holds a regular
-/// file afterwards, the read runs again, at most [`READ_ATTEMPTS`] times;
-/// a symlink or anything else there is [`PinError::UnsafePath`], and a file
-/// that never settles is [`PinError::Io`].
-fn read_pinned(
-    fs: &dyn Filesystem,
-    op: &'static str,
-    path: &Path,
-    max: u64,
-) -> Result<Vec<u8>, PinError> {
-    for _ in 0..READ_ATTEMPTS {
-        match fs.read_file_limited(path, max) {
-            Ok(bytes) => return Ok(bytes),
-            Err(PlatformError::NotARegularFile { .. }) => match fs.symlink_metadata(path) {
-                Ok(Some(info)) if info.kind == FileKind::File => {}
-                Ok(_) => {
-                    return Err(PinError::UnsafePath {
-                        path: path.to_path_buf(),
-                    });
-                }
-                Err(error) => return Err(platform_error(op, path, &error)),
-            },
-            Err(error) => return Err(platform_error(op, path, &error)),
-        }
-    }
-    Err(PinError::Io {
-        op,
-        path: path.to_path_buf(),
-        message: "the file kept being replaced while it was read".to_owned(),
-    })
-}
-
-/// Refuses a pinned folder that holds an entry the package does not: a
-/// symlink, a file or folder of another name. Nothing is touched.
-fn check_no_foreign_entries(
-    platform: &Platform,
-    package: &ValidatedPackage,
-    dir: &Path,
-) -> Result<(), PinError> {
-    let fs = platform.fs();
-    let mut expected: BTreeSet<PathBuf> = BTreeSet::new();
-    for (path, _) in package.files().iter() {
-        let mut so_far = dir.to_path_buf();
-        for part in Path::new(path).components() {
-            so_far.push(part);
-            expected.insert(so_far.clone());
-        }
-    }
-    let mut folders = vec![dir.to_path_buf()];
-    while let Some(folder) = folders.pop() {
-        let entries = match fs.read_dir(&folder) {
-            Ok(entries) => entries,
-            Err(PlatformError::NotFound { .. }) => continue,
-            Err(error) => return Err(platform_error("list folder", &folder, &error)),
-        };
-        for entry in entries {
-            let path = folder.join(&entry.name);
-            if entry.info.kind == FileKind::File && is_temp_of(&path, &expected) {
-                continue;
-            }
-            if entry.info.kind == FileKind::Symlink
-                || !expected.contains(&path)
-                || (entry.info.kind != FileKind::Dir && entry.info.kind != FileKind::File)
-            {
-                return Err(PinError::UnsafePath { path });
-            }
-            if entry.info.kind == FileKind::Dir {
-                folders.push(path);
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Whether `path` is the temporary file `write_file_atomic` makes beside an
-/// expected file, `.<name>.tmp-<pid>-<counter>`: a pin running at the same
-/// time owns it.
-fn is_temp_of(path: &Path, expected: &BTreeSet<PathBuf>) -> bool {
-    let (Some(parent), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str()))
-    else {
-        return false;
-    };
-    let Some(rest) = name.strip_prefix('.') else {
-        return false;
-    };
-    rest.split_once(".tmp-")
-        .is_some_and(|(base, _)| expected.contains(&parent.join(base)))
 }
