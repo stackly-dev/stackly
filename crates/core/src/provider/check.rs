@@ -142,6 +142,16 @@ impl Finding {
             issue,
         }
     }
+
+    /// Creates a warning finding.
+    #[must_use]
+    pub const fn warning(origin: FindingOrigin, issue: Issue) -> Self {
+        Self {
+            severity: Severity::Warning,
+            origin,
+            issue,
+        }
+    }
 }
 
 /// What [`check_package`] found in one package folder.
@@ -239,6 +249,10 @@ pub fn check_package(fs: &dyn Filesystem, dir: &Path, name_check: NameCheck) -> 
             return check;
         }
     };
+    check.findings.extend(deprecated_api_version(
+        check.api_version.as_deref(),
+        SUPPORTED_API_VERSIONS,
+    ));
     check.findings.extend(package.authoring_findings());
     match read_scenarios(fs, dir) {
         Ok(None) => check.scenarios = vec![Scenario::implied_default()],
@@ -273,6 +287,38 @@ fn raw_api_version(files: &PackageFiles) -> Option<String> {
     value.get("apiVersion")?.as_str().map(str::to_owned)
 }
 
+/// The one `warning` of a package whose `apiVersion` has the status
+/// [`ApiVersionStatus::Deprecated`] in `table`, at `provider.yaml` field
+/// `apiVersion`; none for a current or unknown version. `table` is
+/// [`SUPPORTED_API_VERSIONS`] outside tests.
+fn deprecated_api_version(
+    api_version: Option<&str>,
+    table: &[ApiVersionSupport],
+) -> Option<Finding> {
+    let name = api_version?;
+    let version = table.iter().find(|version| version.name == name)?;
+    if version.status != ApiVersionStatus::Deprecated {
+        return None;
+    }
+    let current: Vec<&str> = table
+        .iter()
+        .filter(|version| version.status == ApiVersionStatus::Current)
+        .map(|version| version.name)
+        .collect();
+    Some(Finding::warning(
+        FindingOrigin::Package,
+        Issue::new(
+            MANIFEST_FILE,
+            Location::Field("apiVersion".to_owned()),
+            IssueCode::DeprecatedApiVersion,
+            format!(
+                "apiVersion \"{name}\" is deprecated; new packages use: {}",
+                current.join(", ")
+            ),
+        ),
+    ))
+}
+
 /// The issue for an `apiVersion` this build does not load, at
 /// `provider.yaml` field `apiVersion`.
 pub(crate) fn unsupported_api_version_issue(value: Option<&str>) -> Issue {
@@ -299,6 +345,40 @@ mod tests {
         );
         assert!(is_supported_api_version("stackly/v1alpha1"));
         assert!(!is_supported_api_version("stackly/v2"));
+    }
+
+    #[test]
+    fn a_deprecated_api_version_gives_one_warning_naming_the_current_one() {
+        let table = [
+            ApiVersionSupport {
+                name: "stackly/v2",
+                status: ApiVersionStatus::Current,
+            },
+            ApiVersionSupport {
+                name: "stackly/v1alpha1",
+                status: ApiVersionStatus::Deprecated,
+            },
+        ];
+
+        let finding = deprecated_api_version(Some("stackly/v1alpha1"), &table)
+            .expect("a deprecated version warns");
+
+        assert_eq!(finding.severity, Severity::Warning);
+        assert_eq!(finding.origin, FindingOrigin::Package);
+        assert_eq!(finding.issue.code, IssueCode::DeprecatedApiVersion);
+        assert_eq!(finding.issue.file, MANIFEST_FILE);
+        assert_eq!(
+            finding.issue.message,
+            "apiVersion \"stackly/v1alpha1\" is deprecated; new packages use: stackly/v2"
+        );
+        assert_eq!(deprecated_api_version(Some("stackly/v2"), &table), None);
+        assert_eq!(deprecated_api_version(Some("stackly/v9"), &table), None);
+        assert_eq!(deprecated_api_version(None, &table), None);
+        assert_eq!(
+            deprecated_api_version(Some("stackly/v1alpha1"), SUPPORTED_API_VERSIONS),
+            None,
+            "nothing is deprecated in this build"
+        );
     }
 
     #[test]

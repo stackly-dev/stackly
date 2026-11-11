@@ -252,6 +252,7 @@ pub async fn run_prepared(
             return;
         }
     };
+    report.root_folders = vec![root.path().to_path_buf(), root.run_dir().to_path_buf()];
     let data_root = root.path().join(ROOT_NAME);
     let made = std::fs::create_dir(&data_root).and_then(|()| {
         std::fs::set_permissions(&data_root, std::fs::Permissions::from_mode(0o700))

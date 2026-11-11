@@ -39,6 +39,9 @@ macro_rules! issue_codes {
 issue_codes! {
     /// `apiVersion` is not `stackly/v1alpha1`.
     UnsupportedApiVersion => "unsupported_api_version",
+    /// `apiVersion` still loads but is deprecated (spec 0036, *Versi dan
+    /// status*); a warning, never an error.
+    DeprecatedApiVersion => "deprecated_api_version",
     /// `kind` is not `Provider`.
     UnknownKind => "unknown_kind",
     /// A field that the schema does not know.
@@ -385,7 +388,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 58);
+        assert_eq!(IssueCode::ALL.len(), 59);
     }
 
     #[test]
