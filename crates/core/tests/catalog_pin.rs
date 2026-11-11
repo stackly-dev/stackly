@@ -68,6 +68,7 @@ impl Site {
                     tile: TileColor::Cyan,
                 },
                 notes: Vec::new(),
+                origin: stackly_core::catalog::EntryOrigin::Catalog,
             },
         }
     }
@@ -604,6 +605,7 @@ impl SwapSite {
                     tile: TileColor::Cyan,
                 },
                 notes: Vec::new(),
+                origin: stackly_core::catalog::EntryOrigin::Catalog,
             },
             fs,
         }

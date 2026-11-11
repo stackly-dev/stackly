@@ -162,6 +162,9 @@ issue_codes! {
     /// A catalog entry over a catalog limit; the limit is in
     /// [`Issue::reason`] (spec 0017 loader).
     CatalogLimit => "catalog_limit",
+    /// The stored copy of an imported local package does not match its
+    /// import row (spec 0037 read model).
+    ImportDigestMismatch => "import_digest_mismatch",
     /// More than [`MAX_ISSUES`] issues; the rest were dropped.
     TooManyIssues => "too_many_issues",
 }
@@ -385,7 +388,7 @@ mod tests {
                 "{text}"
             );
         }
-        assert_eq!(IssueCode::ALL.len(), 58);
+        assert_eq!(IssueCode::ALL.len(), 59);
     }
 
     #[test]

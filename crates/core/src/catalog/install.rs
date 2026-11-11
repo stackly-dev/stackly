@@ -11,6 +11,7 @@ use crate::provider::{ArtifactStatus, VersionArtifact};
 
 use super::model::{CatalogEntry, ProviderEntry};
 use super::status::SupportReason;
+use super::trust::{TrustVerdict, snapshot_trust};
 
 /// Why the gate refuses a version. The codes are the same as the
 /// matching [`SupportReason`] codes.
@@ -31,6 +32,10 @@ pub enum NotInstallableReason {
     FixtureOnly,
     /// The artifact for this Mac needs a newer macOS than this Mac runs.
     RequiresNewerOs,
+    /// A local entry whose stored bytes no approval covers (spec 0037).
+    ApprovalRequired,
+    /// The approval was revoked, by the user or the installed catalog.
+    TrustRevoked,
 }
 
 impl NotInstallableReason {
@@ -45,6 +50,18 @@ impl NotInstallableReason {
             Self::ArtifactBlocked => SupportReason::ArtifactBlocked,
             Self::FixtureOnly => SupportReason::FixtureOnly,
             Self::RequiresNewerOs => SupportReason::RequiresNewerOs,
+            Self::ApprovalRequired => SupportReason::ApprovalRequired,
+            Self::TrustRevoked => SupportReason::TrustRevoked,
+        }
+    }
+
+    /// Returns the refusal a trust verdict other than trusted gives.
+    #[must_use]
+    pub const fn of_trust(trust: &TrustVerdict) -> Option<Self> {
+        match trust {
+            TrustVerdict::Trusted => None,
+            TrustVerdict::ApprovalRequired => Some(Self::ApprovalRequired),
+            TrustVerdict::Revoked(_) => Some(Self::TrustRevoked),
         }
     }
 
@@ -79,9 +96,31 @@ pub enum Installability<'a> {
 #[error("the version is not in the catalog entry")]
 pub struct VersionNotFound;
 
+/// Decides whether `version` of `entry` can be installed on `host`, with
+/// the trust verdict of a provider entry taken from the snapshot.
+///
+/// # Errors
+///
+/// Returns [`VersionNotFound`] when a provider entry has no artifact of
+/// `version`.
+// provisional: F37 step 5 (callers pass the verdict of `catalog::trust`)
+pub fn installability<'a>(
+    entry: &'a CatalogEntry,
+    version: &ExactVersion,
+    host: &HostFacts,
+) -> Result<Installability<'a>, VersionNotFound> {
+    let trust = match entry {
+        CatalogEntry::Provider(provider) => snapshot_trust(provider),
+        CatalogEntry::Planned(_) | CatalogEntry::Invalid(_) => TrustVerdict::Trusted,
+    };
+    installability_with_trust(entry, version, host, &trust)
+}
+
 /// Decides whether `version` of `entry` can be installed on `host`.
 ///
 /// Planned and invalid entries refuse every version. For a provider entry,
+/// a `trust` verdict other than trusted refuses first, with
+/// `approval_required` or `trust_revoked` (spec 0037, *Gate trust*). Then
 /// the artifact built for exactly the host's target decides: `available`
 /// installs, unless its `minOs` is above the macOS the host runs
 /// (`requires_newer_os`); `blocked` and `fixture` refuse. Without an artifact
@@ -92,10 +131,11 @@ pub struct VersionNotFound;
 ///
 /// Returns [`VersionNotFound`] when a provider entry has no artifact of
 /// `version`.
-pub fn installability<'a>(
+pub fn installability_with_trust<'a>(
     entry: &'a CatalogEntry,
     version: &ExactVersion,
     host: &HostFacts,
+    trust: &TrustVerdict,
 ) -> Result<Installability<'a>, VersionNotFound> {
     let refuse = |reason| Installability::NotInstallable {
         reason,
@@ -104,19 +144,38 @@ pub fn installability<'a>(
     match entry {
         CatalogEntry::Planned(_) => Ok(refuse(NotInstallableReason::ProviderPlanned)),
         CatalogEntry::Invalid(_) => Ok(refuse(NotInstallableReason::PackageInvalid)),
-        CatalogEntry::Provider(provider) => provider_installability(provider, version, host),
+        CatalogEntry::Provider(provider) => {
+            provider_installability_with_trust(provider, version, host, trust)
+        }
     }
 }
 
-/// [`installability`] for an entry already known to be a provider.
+/// [`installability`] for an entry already known to be a provider, with
+/// the trust verdict of the snapshot.
 ///
 /// # Errors
 ///
 /// Returns [`VersionNotFound`] when the entry has no artifact of `version`.
+// provisional: F37 step 7 (`runtime::resolve` takes the verdict of `require_entry_trust`)
 pub fn provider_installability<'a>(
     provider: &'a ProviderEntry,
     version: &ExactVersion,
     host: &HostFacts,
+) -> Result<Installability<'a>, VersionNotFound> {
+    provider_installability_with_trust(provider, version, host, &snapshot_trust(provider))
+}
+
+/// [`installability_with_trust`] for an entry already known to be a
+/// provider.
+///
+/// # Errors
+///
+/// Returns [`VersionNotFound`] when the entry has no artifact of `version`.
+pub fn provider_installability_with_trust<'a>(
+    provider: &'a ProviderEntry,
+    version: &ExactVersion,
+    host: &HostFacts,
+    trust: &TrustVerdict,
 ) -> Result<Installability<'a>, VersionNotFound> {
     let artifacts: Vec<&VersionArtifact> = provider
         .artifacts()
@@ -125,6 +184,12 @@ pub fn provider_installability<'a>(
         .collect();
     if artifacts.is_empty() {
         return Err(VersionNotFound);
+    }
+    if let Some(reason) = NotInstallableReason::of_trust(trust) {
+        return Ok(Installability::NotInstallable {
+            reason,
+            available_targets: Vec::new(),
+        });
     }
     let mut available_targets: Vec<Target> = artifacts
         .iter()
@@ -169,7 +234,7 @@ mod tests {
 
     use stackly_domain::ProviderName;
 
-    use super::super::model::{PlannedEntry, ProviderEntry, TileHint};
+    use super::super::model::{EntryOrigin, PlannedEntry, ProviderEntry, TileHint};
     use super::super::rules::TileColor;
     use super::super::testing::CatalogFixture;
     use super::*;
@@ -191,6 +256,7 @@ mod tests {
                 tile: TileColor::Gray,
             },
             notes: Vec::new(),
+            origin: EntryOrigin::Catalog,
         })
     }
 
@@ -295,6 +361,8 @@ mod tests {
             (NotInstallableReason::ArtifactBlocked, "artifact_blocked"),
             (NotInstallableReason::FixtureOnly, "fixture_only"),
             (NotInstallableReason::RequiresNewerOs, "requires_newer_os"),
+            (NotInstallableReason::ApprovalRequired, "approval_required"),
+            (NotInstallableReason::TrustRevoked, "trust_revoked"),
         ] {
             assert_eq!(reason.as_code(), code);
             assert_eq!(reason.support_reason().as_code(), code);

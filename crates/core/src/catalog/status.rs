@@ -11,8 +11,9 @@ use stackly_platform::HostFacts;
 use crate::provider::{ArtifactStatus, VersionArtifact};
 use crate::runtime::compatibility::support_status;
 
-use super::install::{Installability, NotInstallableReason, installability};
+use super::install::{Installability, NotInstallableReason, installability_with_trust};
 use super::model::{CatalogEntry, ProviderEntry};
+use super::trust::{TrustVerdict, snapshot_trust};
 
 /// The operating systems every version row of the matrix has a cell for,
 /// in order.
@@ -48,11 +49,15 @@ pub enum SupportReason {
     /// A passing runtime record on this macOS makes it experimental; the
     /// provider integration is not tested.
     RuntimeTested,
+    /// A local entry whose stored bytes no approval covers (spec 0037).
+    ApprovalRequired,
+    /// The approval was revoked, by the user or the installed catalog.
+    TrustRevoked,
 }
 
 impl SupportReason {
     /// Every reason.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Untested,
         Self::NoBuild,
         Self::NoBuildForArch,
@@ -65,6 +70,8 @@ impl SupportReason {
         Self::RequiresNewerOs,
         Self::ProviderTested,
         Self::RuntimeTested,
+        Self::ApprovalRequired,
+        Self::TrustRevoked,
     ];
 
     /// Returns the stable code, such as `no_build_for_arch`.
@@ -83,6 +90,8 @@ impl SupportReason {
             Self::RequiresNewerOs => "requires_newer_os",
             Self::ProviderTested => "provider_tested",
             Self::RuntimeTested => "runtime_tested",
+            Self::ApprovalRequired => "approval_required",
+            Self::TrustRevoked => "trust_revoked",
         }
     }
 }
@@ -163,10 +172,29 @@ pub struct TargetSupport {
     pub note: Option<String>,
 }
 
-/// Returns the state of an entry for `host`: from the install gate over
-/// every version of a provider entry (spec 0017, *Aturan status*).
+/// Returns the state of an entry for `host`, with the trust verdict of a
+/// provider entry taken from the snapshot.
+// provisional: F37 step 5 (callers pass the verdict of `catalog::entry_trust`)
 #[must_use]
 pub fn entry_status(entry: &CatalogEntry, host: &HostFacts) -> EntryStatus {
+    let trust = match entry {
+        CatalogEntry::Provider(provider) => snapshot_trust(provider),
+        CatalogEntry::Planned(_) | CatalogEntry::Invalid(_) => TrustVerdict::Trusted,
+    };
+    entry_status_with_trust(entry, host, &trust)
+}
+
+/// Returns the state of an entry for `host`: from the install gate over
+/// every version of a provider entry (spec 0017, *Aturan status*). A
+/// provider entry whose `trust` is not trusted is `blocked` with reason
+/// `approval_required` or `trust_revoked`, the rule right after `invalid`
+/// (spec 0037).
+#[must_use]
+pub fn entry_status_with_trust(
+    entry: &CatalogEntry,
+    host: &HostFacts,
+    trust: &TrustVerdict,
+) -> EntryStatus {
     let provider = match entry {
         CatalogEntry::Planned(_) => {
             return EntryStatus {
@@ -184,9 +212,16 @@ pub fn entry_status(entry: &CatalogEntry, host: &HostFacts) -> EntryStatus {
         }
         CatalogEntry::Provider(provider) => provider,
     };
+    if let Some(refusal) = NotInstallableReason::of_trust(trust) {
+        return EntryStatus {
+            state: EntryState::Blocked,
+            reason: Some(refusal.support_reason()),
+            note: None,
+        };
+    }
     let mut first_refusal = None;
     for version in provider.versions() {
-        match installability(entry, version, host) {
+        match installability_with_trust(entry, version, host, trust) {
             Ok(Installability::Installable { .. }) => {
                 return EntryStatus {
                     state: EntryState::Available,
@@ -249,7 +284,7 @@ fn host_cell_status(
 ) -> CellStatus {
     let verdict = support_status(
         artifact,
-        artifact.compatibility(),
+        entry.trusted_compatibility(artifact),
         Some(entry.package.key()),
         host,
     );
@@ -344,7 +379,7 @@ mod tests {
 
     use stackly_domain::ProviderName;
 
-    use super::super::model::{InvalidEntry, PlannedEntry, PlatformNote, TileHint};
+    use super::super::model::{EntryOrigin, InvalidEntry, PlannedEntry, PlatformNote, TileHint};
     use super::super::rules::TileColor;
     use super::super::testing::CatalogFixture;
     use super::*;
@@ -393,6 +428,7 @@ mod tests {
             package: Arc::new(package),
             tile: tile(),
             notes,
+            origin: EntryOrigin::Catalog,
         }
     }
 
@@ -629,6 +665,7 @@ mod tests {
             category: None,
             tile: tile(),
             issues: Vec::new(),
+            local: None,
         });
 
         assert_eq!(entry_status(&planned, &host()).state, EntryState::Planned);

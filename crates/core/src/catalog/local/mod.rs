@@ -1,16 +1,18 @@
 //! Local provider packages (spec 0037): the import rules, the package
-//! digest an approval binds, and the permission summary shown before an
-//! approval.
+//! digest an approval binds, the permission summary shown before an
+//! approval, and the loader of the stored copies into catalog entries.
 //!
 //! Nothing here writes a file, runs a process, touches the network, or
-//! resolves a secret; the rules are pure functions over a validated
-//! package and the registry rows a caller read.
+//! resolves a secret: the rules are pure functions over a validated
+//! package and the registry rows a caller read, and the loader only reads.
 
 mod digest;
+mod load;
 mod permissions;
 mod rules;
 
 pub use digest::{package_bytes, package_sha256};
+pub use load::load;
 pub use permissions::{
     DOWNLOAD_HOSTS_MAX, ExecutableUse, PERMISSIONS_SCHEMA, PermissionChange, Permissions,
     PermissionsJsonError, PermittedDownload, PermittedEndpoint, PermittedExecutable,
