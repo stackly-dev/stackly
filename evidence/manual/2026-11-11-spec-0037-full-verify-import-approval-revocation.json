@@ -1,0 +1,73 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1caf5-1429-7580-a198-cdec8221ebff",
+  "covers": [
+    "AC-033",
+    "AC-032",
+    "AC-072",
+    "REQ-032",
+    "REQ-033",
+    "REQ-028",
+    "VAL-018"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0037 full verify: import, approval, revocation, and repeated requests on a real stacklyd, with a real full disk",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "on a real stacklyd and stackly CLI in a temporary root, a local package that is not approved can be previewed and inspected but nothing installs, creates, or starts from it; another revision waits for approval again; revoke, remove, and a catalog revocation keep runtimes, instances, and data and existing instances still start; an import that fails on a full disk leaves no store folder of its own and keeps one that was there; eight imports at once leave one row at revision 1; a repeated request runs no second operation",
+  "actual": "Every check passed. Pending: preview wrote nothing and reported quarantined true with the agent Safari; the import answered trust local, approval pending; the store copy was 0700 and 0600 with no quarantine attribute and the origin folder kept its bytes, modes, and attributes; resolve, install, form, and create answered provider.approval_required, with no operation, instance, runtime, or child process; the two environment variables changed nothing. Approval: the CLI printed the fixture statement word for word; create wrote the pin row with publisher acme and approval approved; revision 0.2.0 became pending with changes revision, download_hosts, endpoints, also in its audit row, and the gate closed again; the first bytes came back approved. Eight imports: eight replies, one row at revision 1, one store folder, eight succeeded operations each with its audit row and one catalog.changed. Repeats: approve repeated after a revoke answered approval revoked with no second operation, audit row, or event; a moved origin folder did not matter; another params answered operation.idempotency_key_reused; after the remove the repeats answered provider.import_not_found reason not_imported and remove answered the same RemovedProvider. Revoke and remove: rows and data, runtime, and pinned folders were the same; every gate, also the pinned revision and duplicate, answered provider.revoked by user; the existing instance started, restarted, and stopped. The pin with no approval answered provider.approval_required for form, create, and duplicate. Catalog revocation: approve and every gate answered provider.revoked by catalog with catalog revision 12 and since 2026-11-01; the list named the catalog revision and its publish date; no CLI text said latest or up to date. Full disk: both imports answered provider.store_failed reason no_space; no folder of acme/bigc was left (its store item ended compensated), the folder that was there stayed with its changed bytes (item not_owned), no row changed, and no catalog.changed was published; the repeats answered the same error with no new operation; new keys repaired the first package with its approval kept and imported the second. Home: originPath was ~/pk/fakeish everywhere, and no audit row or log line held the home path; the CLI results were the same DTOs; after a restart the entry and its decision were the same; a deleted store folder gave an invalid local entry that the same bytes repaired with the approval kept. One low note: the audit row of an import that fails in its read or store step holds no provider or digest, because the note is set in the commit step.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "on commit 242b795b with a clean tree: `cargo build -p stacklyd -p stackly-cli -p stackly-fake-server` and `cargo build -p stacklyd --example skeleton_seed`; every probe ran a real stacklyd and the stackly CLI in its own temporary STACKLY_ROOT seeded by skeleton_seed (fake runtime 0.1.0), with a development catalog of revision 11 in STACKLY_CATALOG_DIR; requests went over the socket from a small length prefixed JSON client and from the CLI; the registry was read with sqlite3 in read only mode",
+    "pending: preview and import of a copy of the fake package with the ID acme/fakeish whose provider.yaml carried a com.apple.quarantine attribute written with xattr; then runtime.resolve, runtime.install, instance.get_create_form with and without the provider, and stackly instance create; the daemon ran with STACKLY_TRUST=1 and STACKLY_APPROVE_ALL=1 in its environment",
+    "approval: stackly provider approve on a pty answered y, the printed statement compared with protocols/fixtures/provider/approval-statement.txt; stackly instance create from the approved entry, start, restart, stop; import of revision 0.2.0 with another download host and port; import of the first bytes again",
+    "eight provider.import requests of the same bytes sent at once on eight connections with eight keys, with an events.subscribe connection open",
+    "repeated requests: import, approve, and revoke repeated with their first keys after a revoke, after the origin folder moved, and after a remove; remove repeated with its key; a key reused with other params; an approve that was answered without an operation repeated after a revoke",
+    "revoke and remove through the CLI with and without --yes, with the runtime, instance, and artifact rows and the data folders compared before and after; every gate again, also create and duplicate from the pinned revision; start, restart, and stop of the existing instance after each",
+    "with the daemon stopped, provider_revisions.approval of the pinned acme/fakeish row set to NULL in the temporary registry, to stand for a pin made before the gate existed; then form, create, and duplicate from that pin",
+    "restart with a catalog of revision 12 whose revoked list names acme/fakeish 0.1.0; preview, import, approve, every gate, the existing instance, stackly provider list and inspect",
+    "full disk: a 96 MB APFS disk image mounted in the session scratchpad held the whole STACKLY_ROOT; a package with a 1 MB versions.json was imported and approved, one byte of its stored copy was changed, the volume was filled, then a second package (acme/bigc) and the first package again were imported; after the volume was freed both requests were repeated with their first keys and then with new keys; the image was detached and deleted",
+    "a daemon with HOME set to a temporary folder that held the package: originPath in the preview, the unreadable folder error, the detail, the audit rows, and the daemon log; import --json, import --approve with and without --yes, approve, revoke, remove with --json; a restart; a restart after the store folder was deleted, then an import of the same bytes"
+  ],
+  "reviewer": "Claude Code (Claude Fable 5.2) as the checker of the full verify session chk-f37-verify ran the probes and read their output, the temporary registries, and the daemon logs; the user has not reviewed this record",
+  "startedAt": "2026-11-11T14:04:30.000000Z",
+  "finishedAt": "2026-11-11T14:12:10.000000Z",
+  "evidencePath": "evidence/manual/2026-11-11-spec-0037-full-verify-import-approval-revocation.json",
+  "context": {
+    "sourceCommit": "242b795b14dc679eed1e67b87823a845fac6799f",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}
