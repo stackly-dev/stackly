@@ -13,6 +13,10 @@
       "type": "OperationPage"
     },
     {
+      "file": "create-form-example.json",
+      "type": "CreateForm"
+    },
+    {
       "file": "create-form-fake.json",
       "type": "CreateForm"
     },
@@ -22,6 +26,10 @@
     },
     {
       "file": "create-form-postgresql.json",
+      "type": "CreateForm"
+    },
+    {
+      "file": "create-form-traefik.json",
       "type": "CreateForm"
     },
     {
