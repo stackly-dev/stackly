@@ -42,7 +42,7 @@ Import provider dari direktori atau paket lokal secara eksplisit, preview metada
   - [x] Import and approval in the app: copy and appearance, the permissions list and local detail section, the Import Provider flow with its sheet, the approval sheet, revoke and remove dialogs, Settings Sources, the onboarding copy, snapshots, then evidence and the manual steps that need your eyes and hands (spec 0037 AC-11, AC-15, AC-16, AC-8, AC-13; build steps 10 to 13; after build step 4; step 13 after milestones 2 and 3; can run in parallel with milestones 2 and 3)
 - [x] Verify it: `/check verify import provider lokal & trust`
 - [x] Test it: `/test import provider lokal & trust`
-- [ ] Review it (fresh model): `/check review import provider lokal & trust`
+- [x] Review it (fresh model): `/check review import provider lokal & trust`
 - [ ] Document it: `/document import provider lokal & trust`
 
 ### 38. Panduan kontributor & governance · in-progress
