@@ -275,10 +275,8 @@ impl Spike {
             s.result.min_os_measured = Some(minimum);
             Ok(())
         })?;
-        let recipe = self.step("recipe", |_| {
-            providers::recipe(&artifact.provider).with_context(|| {
-                format!("the spike has no steps for provider {}", artifact.provider)
-            })
+        let recipe = self.step("recipe", |s| {
+            providers::recipe(&s.plan.repo, &artifact.provider)
         })?;
         let mut ctx = self.step("init", |s| s.init(&root, &*recipe))?;
         let started = self.step("start", |_| {
@@ -304,7 +302,7 @@ impl Spike {
                     &root,
                     &s.layout.quarantine_dir(&artifact.id),
                     artifact.main_executable(),
-                    recipe.version_args(),
+                    &recipe.version_args(),
                     &ctx.env,
                 )?;
                 s.note = Some(format!("{}: {}", probe.outcome, probe.detail));
@@ -517,6 +515,8 @@ impl Spike {
         };
         let mut ctx = Ctx {
             artifact_root: root.to_path_buf(),
+            version: self.artifact.version.clone(),
+            line: self.artifact.line.clone(),
             executables: self.artifact.executables.clone(),
             data_dir: run_dir.join("data"),
             run_dir,

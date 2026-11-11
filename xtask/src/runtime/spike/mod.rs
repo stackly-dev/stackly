@@ -7,16 +7,19 @@
 //! and stops the provider and writes `stackly.runtime-spike-result/v1`.
 //! `--no-quarantine` is for the local run before a maintainer upload
 //! (AC-19); native tests never pass it. `--cleanup` and `--prune-cache`
-//! take the same lock as the driver.
-// provisional: F36 (the feature 36 harness builds the spike steps from the provider packages)
+//! take the same lock as the driver. A provider with a package in
+//! `providers/` runs from that package (spec 0036 AC-16).
 
 mod archive;
 mod audit;
 mod cleanup;
 mod closure;
+mod closure_probes;
 mod driver;
 mod launchd;
 mod lock;
+#[cfg(target_os = "macos")]
+mod package_recipe;
 mod plan;
 mod process;
 mod providers;
