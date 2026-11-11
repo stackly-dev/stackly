@@ -21,7 +21,7 @@ use super::interpolate::{
     ValuePosition, check_executable, check_literal, check_path, check_secret_file_name,
     check_socket_name, check_value, parse,
 };
-use super::issue::{FileIssues, IssueCode, Issues, MAX_ISSUES};
+use super::issue::{FileIssues, Issue, IssueCode, Issues, MAX_ISSUES};
 use super::names::{is_component, is_component_byte};
 use super::package::{MANIFEST_FILE, NameCheck, PackageFiles};
 use super::plan::{
@@ -31,6 +31,9 @@ use super::plan::{
 use super::probe::NativeProbeFailure;
 use super::probe::nats::{self, Exchange, Expectation, connect_bytes};
 use super::raw::{RawSettingsSchema, decode_json_text, parse_json};
+use super::scenarios::{
+    SCENARIO_NAME_MAX, SCENARIOS_FILE, SCENARIOS_MAX, SCENARIOS_MAX_LEN, Scenarios,
+};
 use super::settings::{SettingsSchema, parse_schema};
 use super::validate::{ValidatedPackage, sample_context};
 use crate::secret::ResolvedSecrets;
@@ -375,6 +378,76 @@ pub fn settings_schema(data: &[u8]) {
             Err(err) => assert!(!err.issues.is_empty(), "a rejected document has an issue"),
         }
     }
+}
+
+/// Target `provider_scenarios` (spec 0036, AC-3): `data` as the text of
+/// `tests/scenarios.yaml`, parsed and then validated against the fake
+/// package's settings schema.
+///
+/// # Panics
+///
+/// Panics when a rejection has no issue, too many, or one outside
+/// `tests/scenarios.yaml`; when an accepted file has no scenario, more than
+/// 16, or a name that is repeated, too long, or not an instance name; when
+/// a second parse differs; or when a settings issue is not under its
+/// scenario's `settings`.
+pub fn scenarios(data: &[u8]) {
+    let Ok(text) = std::str::from_utf8(data) else {
+        return;
+    };
+    if text.len() as u64 > SCENARIOS_MAX_LEN {
+        return;
+    }
+    let parsed = match Scenarios::parse(text) {
+        Ok(parsed) => parsed,
+        Err(issues) => {
+            check_scenario_issues(&issues);
+            return;
+        }
+    };
+    assert!(
+        (1..=SCENARIOS_MAX).contains(&parsed.len()),
+        "an accepted file has {} scenarios",
+        parsed.len()
+    );
+    let mut names = BTreeSet::new();
+    for scenario in &parsed {
+        let name = scenario.name.as_str();
+        assert!(names.insert(name), "scenario {name} is listed twice");
+        assert!(
+            name.chars().count() <= SCENARIO_NAME_MAX
+                && name.parse::<stackly_domain::InstanceName>().is_ok(),
+            "scenario name {name:?} breaks the name rule"
+        );
+        assert!(
+            scenario.settings.is_object(),
+            "scenario settings are not an object"
+        );
+    }
+    assert_eq!(
+        Scenarios::parse(text).as_ref(),
+        Ok(&parsed),
+        "a second parse differs"
+    );
+    if let Err(issues) = Scenarios::validate(&parsed, &fake_package().settings) {
+        check_scenario_issues(&issues);
+        for issue in &issues {
+            let location = issue.location.to_string();
+            assert!(
+                location.starts_with("scenarios[") && location.contains("].settings"),
+                "a settings issue at {location}"
+            );
+        }
+    }
+}
+
+fn check_scenario_issues(issues: &[Issue]) {
+    assert!(!issues.is_empty(), "a rejected scenarios file has an issue");
+    assert!(issues.len() <= MAX_ISSUES + 1, "issues are capped");
+    assert!(
+        issues.iter().all(|issue| issue.file == SCENARIOS_FILE),
+        "a scenarios issue names another file"
+    );
 }
 
 /// The files of an embedded package.
@@ -775,6 +848,7 @@ mod tests {
         template(&routes);
         settings_schema(FAKE[2].1.as_bytes());
         interpolation(b"--data=${instance.data}");
+        scenarios(b"schema: stackly.provider-scenarios/v1\nscenarios:\n  - name: default\n    settings: { greeting: x }\n  - name: bad\n    settings: { authToken: x, readyDelayMs: -1 }\n");
     }
 
     #[test]
@@ -814,6 +888,7 @@ mod tests {
             template(input);
             interpolation(input);
             settings_schema(input);
+            scenarios(input);
             nats_readiness_protocol(input);
         }
     }

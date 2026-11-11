@@ -73,6 +73,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "provider_scenarios"
+path = "fuzz_targets/provider_scenarios.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "nats_readiness_protocol"
 path = "fuzz_targets/nats_readiness_protocol.rs"
 test = false
