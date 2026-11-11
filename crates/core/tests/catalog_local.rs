@@ -718,3 +718,235 @@ fn a_manifest_cannot_declare_itself_trusted() {
         check.findings()
     );
 }
+
+/// The `import_provider` operation on the fake platform and the fake
+/// registry, with the store compensator the daemon registers and a
+/// refresher that records each call.
+mod operation {
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use stackly_core::catalog::import::{
+        CatalogRefresher, ImportRequest, LocalChange, STORE_COMPENSATOR, StoreFolderCompensator,
+        import_work,
+    };
+    use stackly_core::operation::testing::RecordingEvents;
+    use stackly_core::operation::{
+        BeginOutcome, BeginRequest, BoxFuture, BusyPolicy, EngineDeps, EngineLimits,
+        OperationDetailView, OperationEngine, Origin,
+    };
+    use stackly_core::secret::Redactor;
+    use stackly_domain::{
+        JournalPayload, LockKey, OperationJournal, OperationKind, OperationResource,
+        OperationState, Registry,
+    };
+    use stackly_platform::Clock as _;
+    use stackly_testkit::FakeRegistry;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct Recorder(Mutex<Vec<(String, LocalChange)>>);
+
+    impl CatalogRefresher for Recorder {
+        fn refresh(&self, provider: ProviderName, change: LocalChange) -> BoxFuture<'static, ()> {
+            self.0
+                .lock()
+                .expect("the recorder lock is not poisoned")
+                .push((provider.to_string(), change));
+            Box::pin(async {})
+        }
+    }
+
+    struct Rig {
+        site: Site,
+        registry: Arc<FakeRegistry>,
+        engine: OperationEngine,
+        refreshes: Arc<Recorder>,
+    }
+
+    impl Rig {
+        async fn new() -> Self {
+            let site = Site::new();
+            let registry = Arc::new(FakeRegistry::new(
+                Arc::new(site.fake.clock().clone()),
+                site.fake.clock().now(),
+            ));
+            let engine = OperationEngine::new(
+                EngineDeps {
+                    registry: Arc::clone(&registry) as Arc<dyn Registry>,
+                    platform: Arc::new(site.platform.clone()),
+                    layout: Arc::new(site.prepared.clone()),
+                    events: Arc::new(RecordingEvents::new()),
+                    redactor: Arc::new(Redactor::new()) as Arc<dyn stackly_core::operation::Redact>,
+                },
+                EngineLimits::default()
+                    .with_intervals(Duration::from_millis(100), Duration::from_millis(20)),
+            );
+            engine.register_compensator(STORE_COMPENSATOR, Arc::new(StoreFolderCompensator));
+            engine.recover().await.expect("an empty registry recovers");
+            engine.start();
+            Self {
+                site,
+                registry,
+                engine,
+                refreshes: Arc::new(Recorder::default()),
+            }
+        }
+
+        /// Begins an import of the package in `dir` with the digest the
+        /// preview showed, as the daemon's handler does, and waits until it
+        /// ends.
+        async fn import(&self, dir: &Path) -> (OperationDetailView, Sha256Digest) {
+            let check = self.site.import(dir, no_testing());
+            let digest = check.package_sha256.expect("the package has a digest");
+            let provider = check
+                .package()
+                .expect("it validates")
+                .key()
+                .provider()
+                .clone();
+            let request = ImportRequest::new(
+                provider.clone(),
+                dir.to_path_buf(),
+                digest,
+                "~/input/acme-demo".to_owned(),
+            );
+            let begin = BeginRequest {
+                kind: OperationKind::ImportProvider,
+                resource: OperationResource::Manager,
+                creates_resource: false,
+                extra_locks: vec![LockKey::Provider(provider)],
+                busy: BusyPolicy::Queue,
+                expected_revision: None,
+                origin: Origin::Background,
+                input: JournalPayload::new("{}".to_owned(), OperationJournal::INPUT_MAX)
+                    .expect("the input fits"),
+                work: import_work(
+                    request,
+                    Arc::clone(&self.refreshes) as Arc<dyn CatalogRefresher>,
+                ),
+                precheck: None,
+            };
+            let id = match self.engine.begin(begin).await {
+                Ok(BeginOutcome::Created(view)) => view.operation.id(),
+                other => panic!("expected a created operation: {other:?}"),
+            };
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+            loop {
+                if let Some(detail) = self.engine.get(id).await.expect("the registry reads")
+                    && matches!(
+                        detail.view.operation.state(),
+                        OperationState::Succeeded
+                            | OperationState::Failed
+                            | OperationState::Cancelled
+                            | OperationState::NeedsRecovery
+                    )
+                {
+                    return (detail, digest);
+                }
+                assert!(tokio::time::Instant::now() < deadline, "{id} did not end");
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }
+
+        fn refreshes(&self) -> Vec<(String, LocalChange)> {
+            self.refreshes
+                .0
+                .lock()
+                .expect("the recorder lock is not poisoned")
+                .clone()
+        }
+    }
+
+    fn failure(detail: &OperationDetailView) -> (String, Vec<(String, String)>) {
+        let error = detail
+            .view
+            .journal
+            .failure_error()
+            .expect("the failed operation stored its error");
+        (
+            error.code().to_string(),
+            error
+                .details()
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect(),
+        )
+    }
+
+    // covers: AC-3, AC-10 (spec 0037)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_import_operation_stores_commits_and_refreshes_the_catalog_exactly_once() {
+        let rig = Rig::new().await;
+        let dir = rig.site.copy(&fixture("acme-demo"), "acme-demo");
+
+        let (detail, digest) = rig.import(&dir).await;
+
+        assert_eq!(
+            detail.view.operation.state(),
+            OperationState::Succeeded,
+            "{detail:?}"
+        );
+        let rows = rig.registry.provider_imports().expect("reads").value;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].package_sha256, digest);
+        assert!(
+            rig.site
+                .prepared
+                .layout()
+                .provider_import_dir(&digest)
+                .is_dir()
+        );
+        assert_eq!(
+            rig.refreshes(),
+            [("acme/demo".to_owned(), LocalChange::Imported)],
+            "one refresh after the commit"
+        );
+    }
+
+    // covers: AC-2, AC-3 (spec 0037, *Store salinan*: a guard refusal after
+    // the store is compensated)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_import_the_commit_guard_refuses_at_the_limit_removes_the_folder_it_stored() {
+        let rig = Rig::new().await;
+        // 32 imports of other providers fill the count limit after the
+        // operation's work began.
+        let mut paths = Vec::new();
+        for n in 0..LOCAL_PROVIDERS_MAX {
+            let name = format!("p{n}");
+            paths.push(
+                rig.site
+                    .edited("acme-demo", &name, "provider.yaml", |text| {
+                        text.replace("id: acme/demo", &format!("id: acme/{name}"))
+                    }),
+            );
+        }
+        for path in &paths {
+            let (detail, _) = rig.import(path).await;
+            assert_eq!(detail.view.operation.state(), OperationState::Succeeded);
+        }
+        let refreshes = rig.refreshes().len();
+        let dir = rig.site.copy(&fixture("acme-demo"), "acme-demo");
+
+        let (detail, digest) = rig.import(&dir).await;
+
+        let (code, details) = failure(&detail);
+        assert_eq!(code, "provider.import_limit");
+        assert!(
+            details
+                .iter()
+                .any(|(key, value)| key == "limit" && value == "count"),
+            "{details:?}"
+        );
+        assert_eq!(
+            rig.registry.provider_imports().expect("reads").value.len(),
+            LOCAL_PROVIDERS_MAX
+        );
+        assert!(
+            fs::symlink_metadata(rig.site.prepared.layout().provider_import_dir(&digest)).is_err(),
+            "the compensation removed the copy the refused import stored"
+        );
+        assert_eq!(rig.refreshes().len(), refreshes, "no refresh");
+    }
+}
