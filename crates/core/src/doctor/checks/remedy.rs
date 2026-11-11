@@ -22,6 +22,7 @@ use stackly_platform::{PlatformError, ProcessError};
 
 use super::CheckContext;
 use crate::catalog::CatalogEntry;
+use crate::catalog::{TrustVerdict, entry_trust};
 use crate::doctor::types::{PidFileFacts, PidFileState, RemedyFacts};
 use crate::provider::{
     PlanContext, RemedySubject, ResolvedEndpoint, RuntimeContext, SettingsValues, ValidatedPackage,
@@ -51,13 +52,23 @@ pub(super) fn find(
     from_package(context, &pinned, &plan, subject).flatten()
 }
 
-/// The package of the instance's provider in the loaded catalog.
+/// The package of the instance's provider in the loaded catalog. A local
+/// entry is untrusted data until its stored bytes are approved (spec 0037),
+/// so it gives a remedy only when it is exactly the revision the instance
+/// pins and the catalog trusts it; otherwise the pinned package serves.
 fn catalog_package(context: &CheckContext, instance: &Instance) -> Option<ValidatedPackage> {
     let catalog = context.sources.catalog.as_ref()?;
-    match catalog.entry(instance.provider_revision().provider())? {
-        CatalogEntry::Provider(entry) => Some((*entry.package).clone()),
-        _ => None,
+    let CatalogEntry::Provider(entry) = catalog.entry(instance.provider_revision().provider())?
+    else {
+        return None;
+    };
+    if entry.local().is_some()
+        && (entry.package.key() != instance.provider_revision()
+            || !matches!(entry_trust(catalog, entry), TrustVerdict::Trusted))
+    {
+        return None;
     }
+    Some((*entry.package).clone())
 }
 
 /// The first entry of `package` that matches `subject`, rendered: `None`
