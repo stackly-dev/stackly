@@ -145,8 +145,8 @@ final class ProviderImportModel {
         phase = .importing(preview, path: path)
         let outcome = await send(
             .providerImport(ImportProviderParams(path: path, expectedPackageSha256: digest)), key)
-        // Cancel is off while the import runs, so the sheet is the one that sent it; this
-        // guards the state anyway, so an answer never lands on another sheet.
+        // Cancel closes the sheet while the import runs: an answer for a sheet that is gone,
+        // or for another folder, changes nothing.
         guard phase == .importing(preview, path: path) else { return }
         switch outcome {
         case .completed(.providerImport(let detail)):
@@ -164,17 +164,10 @@ final class ProviderImportModel {
         }
     }
 
-    /// Whether Cancel can close the sheet: not while `provider.import` is on its way, since
-    /// the daemon can't take it back.
-    var canCancel: Bool {
-        if case .importing = phase { return false }
-        return true
-    }
-
-    /// Closes the sheet, unless an import is on its way. A preview on its way is not
-    /// cancelled; its answer is dropped.
+    /// Closes the sheet without sending anything (spec 0037 AC-15: Cancel is always on). A
+    /// request on its way is not cancelled: the daemon still runs it, its answer is dropped,
+    /// and the catalog shows the real state through `catalog.changed`.
     func cancel() {
-        guard canCancel else { return }
         key = nil
         phase = .idle
     }

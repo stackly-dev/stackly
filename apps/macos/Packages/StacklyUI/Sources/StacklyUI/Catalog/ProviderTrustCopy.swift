@@ -34,10 +34,6 @@ nonisolated public enum ProviderTrustCopy {
 
     /// The note of a package whose bytes are the stored ones.
     public static let samePackage = "This exact package is already imported."
-    /// Why Cancel is off while `provider.import` is on its way.
-    public static let importRunning = "The import is on its way and can’t be cancelled."
-    /// Why Cancel is off while `provider.approve` is on its way.
-    public static let approveRunning = "The approval is on its way and can’t be cancelled."
 
     /// The note of a package whose bytes are the stored ones while the stored copy is
     /// damaged.

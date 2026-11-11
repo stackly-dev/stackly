@@ -20,7 +20,6 @@ struct ImportProviderSheet: View {
             primary: primary,
             cancel: StacklyAction(
                 id: "catalog.import.cancel", title: "Cancel", mutates: false,
-                disabledReason: model.canCancel ? nil : ProviderTrustCopy.importRunning,
                 perform: { model.cancel() }),
             minWidth: 520
         ) {

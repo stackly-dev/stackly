@@ -28,7 +28,6 @@ struct ApproveProviderSheet: View {
                     }),
                 cancel: StacklyAction(
                     id: "catalog.approve.cancel", title: "Cancel", mutates: false,
-                    disabledReason: approval.isWorking ? ProviderTrustCopy.approveRunning : nil,
                     perform: { model.cancelApprove() }),
                 minWidth: 520,
                 cancelIsDefault: true

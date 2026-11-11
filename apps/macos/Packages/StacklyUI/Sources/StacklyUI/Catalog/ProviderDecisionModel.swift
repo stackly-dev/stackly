@@ -55,10 +55,10 @@ final class ProviderDecisionModel {
         approval = Approval(detail: detail)
     }
 
-    /// Closes the approve sheet without sending anything. While `provider.approve` is on its
-    /// way it does nothing, since the daemon can't take the approval back.
+    /// Closes the approve sheet without sending anything (spec 0037 AC-15: Cancel is always
+    /// on). A `provider.approve` on its way still runs in the daemon; its answer is dropped,
+    /// and the catalog refresh shows the real state.
     func cancelApprove() {
-        guard approval?.isWorking != true else { return }
         approvalKey = nil
         approval = nil
     }
@@ -81,31 +81,28 @@ final class ProviderDecisionModel {
             .providerApprove(
                 DecideProviderParams(
                     provider: detail.summary.provider, expectedPackageSha256: digest)), key)
-        // Cancel is off while the approval runs; this guards the state anyway, so an answer
-        // never closes or writes to the sheet of another detail.
-        let isSameSheet = approval?.detail == detail
+        // Cancel may have closed the sheet, or another one opened: the answer then says
+        // nothing and writes nothing, and only the refresh shows what the daemon did.
+        guard approval?.detail == detail, approval?.isWorking == true else {
+            await refresh()
+            return
+        }
         switch outcome {
         case .completed:
-            if isSameSheet {
-                approvalKey = nil
-                approval = nil
-            }
+            approvalKey = nil
+            approval = nil
             feedback?.show(
                 .success(ProviderTrustCopy.approved(displayName: detail.summary.displayName)))
             await refresh()
         case .rejected(let body) where body.code == "provider.import_changed":
-            if isSameSheet {
-                approvalKey = nil
-                approval = nil
-            }
+            approvalKey = nil
+            approval = nil
             feedback?.show(.failure(body))
             await refresh()
         case .rejected(let body), .notSent(let body):
-            guard isSameSheet else { return }
             approvalKey = nil
             fail(body)
         case .outcomeUnknown(let body, _):
-            guard isSameSheet else { return }
             fail(body)
         }
     }
