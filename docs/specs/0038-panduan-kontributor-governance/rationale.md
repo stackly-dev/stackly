@@ -238,3 +238,5 @@ Cross check oleh model lain (2026-11-11) atas draf pertama. Semua temuan diterap
 10. AC-3 mencatat URL dan SHA-256 teks; AC-13 diperiksa mesin lewat (f); AC-14 menyebut bagian lint yang ditegakkan; aturan issue form dilengkapi.
 11. Daftar cek di `CONTRIBUTING.md` dan template PR mendapat `cargo xtask provider test` dan `cargo xtask catalog check`, dan aturan kenaikan revision dibatasi pada file yang masuk digest.
 12. `review.md` memperingatkan bahwa menjalankan test atau walkthrough pada branch PR menjalankan kode PR; aturan slug anchor dan versi yang didukung diperjelas.
+
+Sesudah cross check, kontrak `arc-f37-spec` masuk (2026-11-11): perintah import dan approval, batas namespace import (paket hasil scaffold tidak bisa diimpor), istilah trust dan approval, frasa terlarang, dan satu sumber kalimat izin. Itu menambah pemeriksaan (h) dan mengisi `trying-locally.md` serta bagian 3 `GOVERNANCE.md`.
