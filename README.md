@@ -6,7 +6,7 @@ Stackly installs, runs, and watches native developer tools (PostgreSQL, MySQL, N
 
 One Rust daemon per user (`stacklyd`) owns the registry and every process. The command line client (`stackly`) and the SwiftUI app only talk to it over a private Unix socket.
 
-**Status:** early scaffold. The workspace builds and both binaries print their version, but nothing is installed or run yet.
+**Status:** in development, with no release yet. Built from source, the daemon, the CLI, and the macOS app install and run PostgreSQL and NATS instances; Traefik has a first package, and the other tools are planned.
 
 ## Requirements
 
@@ -54,6 +54,20 @@ swift test --package-path clients/swift
 
 The architecture and its rules are in [spec 0001](docs/specs/0001-stack-arsitektur/index.md).
 
+## Contributing
+
+Bug reports, provider proposals, provider packages, and docs fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); a provider package needs no Rust or Swift code ([Contributing a provider](CONTRIBUTING.md#contributing-a-provider)). Who looks after what is in [GOVERNANCE.md](GOVERNANCE.md).
+
+## Security
+
+Please report a vulnerability privately, never in a public issue. [SECURITY.md](SECURITY.md) explains how and what happens next.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT), at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Stackly by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
+
+This license covers what the project writes in this repository. It does not cover the third party software Stackly installs and runs; the license and origin of each runtime are recorded in `runtimes/inventory.toml`.

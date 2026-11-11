@@ -4,6 +4,7 @@ mod build_app;
 mod catalog;
 mod check_deps;
 mod codegen;
+mod docs;
 mod evidence;
 mod fuzz;
 mod provider;
@@ -29,6 +30,9 @@ Tasks:
   codegen --amend      Same as codegen, but rewrite the digest recorded for the
                        current protocol version (only for a version not on main)
   check-deps           Check crate dependency direction and the unsafe policy
+  docs check           Check the public docs (links, placeholders, commands, schema
+                       coverage, issue forms, LICENSE-NOTICES.md); exit 1 with one
+                       line per problem, 2 when an input cannot be read
   provider check [<dir>...]
                        Read and validate provider packages (default: every folder
                        in providers/) on macOS; exit 1 with one line per problem
@@ -111,6 +115,7 @@ fn run() -> Result<ExitCode> {
         ["ui-test", rest @ ..] => ui_test::run(&root, rest),
         ["provider", rest @ ..] => provider::run(&root, rest),
         ["catalog", rest @ ..] => catalog::run(&root, rest),
+        ["docs", rest @ ..] => docs::run(&root, rest),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             Ok(ExitCode::SUCCESS)
