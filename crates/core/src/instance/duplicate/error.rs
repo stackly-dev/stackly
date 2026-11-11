@@ -44,6 +44,15 @@ pub enum DuplicateError {
         /// Who revoked it and since when.
         info: crate::catalog::RevokedInfo,
     },
+    /// The provider revision of the instance is of a local package nobody
+    /// approved (spec 0037), so no new instance is created from it.
+    #[error("{provider} is not approved")]
+    ApprovalRequired {
+        /// The provider.
+        provider: ProviderName,
+        /// The revision label.
+        revision: RevisionLabel,
+    },
     /// The package cannot run a second instance.
     #[error("{provider} runs one instance at a time, and {existing} is it")]
     CapabilityUnsupported {

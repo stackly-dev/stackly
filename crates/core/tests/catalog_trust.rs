@@ -393,7 +393,7 @@ fn a_commit_guard_sees_the_approval_of_exactly_the_bytes_it_was_built_from() {
 
 // covers: AC-7 (spec 0037)
 #[test]
-fn a_pinned_revision_is_revoked_only_by_its_own_approval_column() {
+fn a_pinned_revision_is_revoked_by_its_approval_column_and_a_local_one_needs_an_approval() {
     let site = Site::new();
     let at = site.fake.clock().now();
     let builder = ProviderRevisionBuilder::new()
@@ -401,15 +401,23 @@ fn a_pinned_revision_is_revoked_only_by_its_own_approval_column() {
         .software("demo");
     let key: ProviderRevisionKey = builder.key();
     let record = builder.record();
-    for approval in [None, Some(TrustDecision::Approved)] {
-        let mut record = record.clone();
-        record.approval = approval;
-        assert_eq!(
-            pinned_trust(None, &key, &record),
-            TrustVerdict::Trusted,
-            "{approval:?}"
-        );
-    }
+    let mut approved = record.clone();
+    approved.approval = Some(TrustDecision::Approved);
+    assert_eq!(pinned_trust(None, &key, &approved), TrustVerdict::Trusted);
+    // A revision outside the catalog namespaces without an approval was
+    // pinned from a local package nobody approved (the create gap of
+    // milestone 1): it needs one. A catalog revision needs none.
+    assert_eq!(
+        pinned_trust(None, &key, &record),
+        TrustVerdict::ApprovalRequired
+    );
+    let official = ProviderRevisionBuilder::new()
+        .provider("official/demo")
+        .software("demo");
+    assert_eq!(
+        pinned_trust(None, &official.key(), &official.record()),
+        TrustVerdict::Trusted
+    );
     let mut revoked = record.clone();
     revoked.approval = Some(TrustDecision::Revoked);
     revoked.approved_at = Some(at);

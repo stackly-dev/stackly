@@ -14,6 +14,7 @@ use stackly_domain::{
 };
 
 use super::model::{Catalog, LocalInfo, ProviderEntry};
+use super::rules::namespace_allowed;
 
 /// What the gate decides for an entry or a pinned revision.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,8 +187,9 @@ pub fn stored_trust(
 /// The verdict of a pinned revision, from its registry record, which the
 /// caller has just read: a matching catalog revocation first (none without
 /// a loaded catalog), then a `revoked` approval is a revocation by the user
-/// at `approved_at`; anything else is trusted, since a pinned copy never
-/// downloads.
+/// at `approved_at`. A revision outside the catalog namespaces without a
+/// recorded approval needs one; anything else is trusted, since a pinned
+/// copy never downloads.
 #[must_use]
 pub fn pinned_trust(
     catalog: Option<&Catalog>,
@@ -201,7 +203,13 @@ pub fn pinned_trust(
         Some(TrustDecision::Revoked) => TrustVerdict::Revoked(RevokedInfo::by_user(
             record.approved_at.unwrap_or(Timestamp::UNIX_EPOCH),
         )),
-        Some(TrustDecision::Approved) | None => TrustVerdict::Trusted,
+        Some(TrustDecision::Approved) => TrustVerdict::Trusted,
+        // A catalog only ships `official` (and, in tests, `testing`)
+        // packages, and a pin of a local entry always records its approval.
+        // A revision of another namespace without one was pinned from a
+        // local package that nobody approved: it is not trusted.
+        None if namespace_allowed(key.provider(), true) => TrustVerdict::Trusted,
+        None => TrustVerdict::ApprovalRequired,
     }
 }
 

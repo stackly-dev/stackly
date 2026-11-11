@@ -137,6 +137,16 @@ pub fn duplicate_error(error: &DuplicateError, source: Uuid) -> ErrorBody {
             revision,
             info,
         } => super::trust::revoked(&provider.to_string(), &revision.to_string(), info),
+        DuplicateError::ApprovalRequired { provider, revision } => {
+            create::with_create_hint(create::create_error(
+                &CreateError::ApprovalRequired {
+                    provider: provider.to_string(),
+                    provider_revision: revision.to_string(),
+                    package_sha256: String::new(),
+                },
+                &[],
+            ))
+        }
         DuplicateError::CapabilityUnsupported { provider, existing } => create::with_create_hint(
             ErrorBody::new(
                 &instance::CAPABILITY_UNSUPPORTED,

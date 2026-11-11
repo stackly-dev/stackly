@@ -172,11 +172,17 @@ impl OperationError for CreateError {
                 provider,
                 provider_revision,
                 package_sha256,
-            } => vec![
-                (key("provider"), provider.clone()),
-                (key("providerRevision"), provider_revision.clone()),
-                (key("packageSha256"), package_sha256.clone()),
-            ],
+            } => {
+                let mut details = vec![
+                    (key("provider"), provider.clone()),
+                    (key("providerRevision"), provider_revision.clone()),
+                ];
+                // A pinned revision has no stored package to name.
+                if !package_sha256.is_empty() {
+                    details.push((key("packageSha256"), package_sha256.clone()));
+                }
+                details
+            }
             Self::Revoked {
                 provider,
                 provider_revision,

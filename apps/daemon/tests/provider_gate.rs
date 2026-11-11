@@ -487,3 +487,104 @@ async fn an_installed_runtime_keeps_the_name_of_the_catalog_entry_of_its_softwar
     };
     assert_eq!(detail.summary.display_name, "Fake Provider");
 }
+
+/// The fast config with an empty installed catalog: no catalog entry runs
+/// the software of the seeded fake runtime, as in the milestone 1 verify
+/// probe.
+fn without_catalog_entry() -> stacklyd::server::DaemonConfig {
+    let mut config = support::fast();
+    config.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(
+        stackly_core::catalog::Catalog::for_tests(&[]),
+    ));
+    config
+}
+
+// covers: AC-4, AC-11 (spec 0037; finding 1 of the milestone 1 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_package_of_the_installed_software_creates_and_starts_nothing() {
+    let site = Site::new();
+    let daemon = site.start_with(without_catalog_entry()).await;
+    let api = site.api().await;
+    // An instance of the seeded fake package, to duplicate from.
+    let source = api.create_ready("source", serde_json::json!({})).await;
+    let before = instance_count(&site);
+    let dir = local_fake(site.root.path());
+    let _digest = import(&api.client, &dir).await;
+
+    // The form, with the provider and without it.
+    let named = api
+        .form(api.runtime_id, Some(LOCAL))
+        .await
+        .expect_err("the form of a pending entry is refused");
+    assert_eq!(named.code(), "provider.approval_required");
+    let picked = api
+        .form(api.runtime_id, None)
+        .await
+        .expect_err("a pending entry is never picked for the runtime");
+    assert_eq!(picked.code(), "instance.provider_ambiguous");
+    assert_eq!(detail(&picked, "candidates"), Some(LOCAL));
+
+    // The preflight, with and without a revision.
+    for revision in [Some("0.4.0".to_owned()), None] {
+        let mut draft = api.preflight_params("probe1", serde_json::json!({}));
+        draft.provider.name = LOCAL.to_owned();
+        draft.provider.revision = revision.clone();
+        match api.preflight(draft).await {
+            Ok(preflight) => {
+                assert!(!preflight.ready, "{revision:?}: {preflight:?}");
+                let codes: Vec<_> = preflight
+                    .checks
+                    .iter()
+                    .filter_map(|check| check.error.as_ref().map(|error| error.code().to_owned()))
+                    .collect();
+                assert!(
+                    codes
+                        .iter()
+                        .any(|code| code == "provider.approval_required"),
+                    "{revision:?}: {codes:?}"
+                );
+            }
+            Err(error) => assert_eq!(error.code(), "provider.approval_required"),
+        }
+
+        // The create, also as a duplicate of an existing instance.
+        let mut params = local_params(&api, "probe1");
+        params.provider.revision = revision.clone();
+        let refused = api.create(params).await.expect_err("the create is refused");
+        assert_eq!(refused.code(), "provider.approval_required", "{revision:?}");
+        let mut duplicate = local_params(&api, "probe2");
+        duplicate.provider.revision = revision.clone();
+        duplicate.duplicate_of = Some(source);
+        let refused = api
+            .create(duplicate)
+            .await
+            .expect_err("the duplicate is refused");
+        assert_eq!(refused.code(), "provider.approval_required", "{revision:?}");
+    }
+
+    // Nothing to start: no instance, no pin, no pinned folder.
+    drop(daemon);
+    assert_eq!(instance_count(&site), before);
+    let registry = site.open_registry();
+    let record = registry
+        .provider_import(&LOCAL.parse::<ProviderName>().expect("an id"))
+        .expect("reads")
+        .value
+        .expect("the import row");
+    let key = ProviderRevisionKey::new(
+        record.provider.clone(),
+        record.provider_revision.clone(),
+        record.manifest_sha256,
+    );
+    assert!(
+        registry
+            .provider_revision(&key)
+            .expect("reads")
+            .value
+            .is_none()
+    );
+    assert!(
+        !site.prepared.layout().providers_dir().join("acme").exists(),
+        "no pinned folder of the local package"
+    );
+}
