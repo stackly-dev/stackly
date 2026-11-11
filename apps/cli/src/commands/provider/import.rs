@@ -111,6 +111,7 @@ impl RunCommand for ImportArgs {
         if !same && shows_text(cx, false) {
             to_stderr(cx, |out| preview_text(out, &preview));
         }
+        let expected_shown = expected.clone();
         let detail = match import(cx, path, expected).await {
             Ok(detail) => detail,
             Err(failure) => return CommandOutput::failed(failure),
@@ -125,6 +126,24 @@ impl RunCommand for ImportArgs {
         }
         if shows_text(cx, false) {
             cx.output.stderr.line(&headline);
+        }
+        // The approval covers exactly the bytes this run previewed and
+        // showed: an import that answers other bytes (another import of the
+        // same ID committed in between) stops here, keeping what it imported.
+        let stored = detail
+            .local
+            .as_ref()
+            .map(|local| local.package_sha256.clone());
+        if stored.as_deref() != Some(expected_shown.as_str()) {
+            let failure = CliFailure::local(import_changed(
+                &detail.summary.provider,
+                &expected_shown,
+                stored.as_deref().unwrap_or(""),
+            ));
+            return CommandOutput::partial(
+                ImportResult::Imported(Outcome::new(headline, detail)),
+                failure,
+            );
         }
         let approved = approve_detail(cx, detail, self.yes, Some(headline)).await;
         CommandOutput {
@@ -175,6 +194,22 @@ fn dry_run(cx: &mut Context, preview: ImportPreview) -> CommandOutput<ImportResu
             }
             CommandOutput::partial(ImportResult::Preview(PreviewResult(preview)), failure)
         }
+    }
+}
+
+/// `provider.import_changed` for an import whose stored bytes are not the
+/// ones the preview showed, with the daemon's own wording and hint.
+fn import_changed(provider: &str, expected: &str, actual: &str) -> ErrorBody {
+    let body = ErrorBody::new(
+        &codes::IMPORT_CHANGED,
+        "the provider package changed since it was previewed",
+    )
+    .with_detail("provider", provider)
+    .with_detail("expected", expected)
+    .with_detail("actual", actual);
+    match codes::hint(codes::IMPORT_CHANGED.code, body.details()) {
+        Some(hint) => body.with_hint(hint),
+        None => body,
     }
 }
 

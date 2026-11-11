@@ -755,3 +755,80 @@ fn no_provider_golden_claims_a_sandbox_safety_a_verified_publisher_or_a_fresh_re
     }
     ev.pass();
 }
+
+// covers: AC-14, AC-5 (spec 0037; review of feature 37): `import --approve`
+// approves only the bytes this run previewed; an import that answers other
+// bytes stops before provider.approve and keeps the imported entry
+#[test]
+fn import_approve_stops_when_the_imported_bytes_are_not_the_previewed_ones() {
+    let mut other = trust_data::local("pending");
+    if let Some(local) = other.local.as_mut() {
+        local.package_sha256 = "e".repeat(64);
+    }
+    let (root, daemon, _) = serving(Script {
+        imported: other,
+        ..Script::default()
+    });
+
+    let json = run(
+        root.path(),
+        &[
+            "provider",
+            "import",
+            "/srv/x",
+            "--approve",
+            "--yes",
+            "--json",
+        ],
+    );
+
+    assert_eq!(json.code, Some(3), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "provider.import_changed");
+    assert_eq!(
+        value["result"]["local"]["packageSha256"],
+        "e".repeat(64),
+        "the imported entry stays the result"
+    );
+    assert_eq!(
+        calls(&daemon),
+        ["provider.preview_import", "provider.import"],
+        "no approval of bytes nobody previewed"
+    );
+}
+
+// covers: AC-14 (spec 0037; review of feature 37): a refused approval after
+// a committed import keeps the imported entry as the result
+#[test]
+fn import_approve_keeps_the_imported_entry_when_the_daemon_refuses_the_approval() {
+    let (root, daemon, _) = serving(Script {
+        fail_approve: Some(trust_data::daemon_error("provider.revoked", "unauthorized")),
+        ..Script::default()
+    });
+
+    let json = run(
+        root.path(),
+        &[
+            "provider",
+            "import",
+            "/srv/x",
+            "--approve",
+            "--yes",
+            "--json",
+        ],
+    );
+
+    assert_eq!(json.code, Some(4), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "provider.revoked");
+    assert_eq!(value["result"]["summary"]["provider"], "acme/demo");
+    assert_eq!(value["result"]["summary"]["approval"], "pending");
+    assert_eq!(
+        calls(&daemon),
+        [
+            "provider.preview_import",
+            "provider.import",
+            "provider.approve"
+        ]
+    );
+}
