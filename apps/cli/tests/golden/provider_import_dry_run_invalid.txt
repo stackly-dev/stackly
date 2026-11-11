@@ -1,0 +1,23 @@
+Name       Acme Demo
+ID         official/demo
+Revision   1.0.0
+Publisher  official (not verified)
+Category   database
+Software   demo
+Versions   1.0.0
+Package    sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+Size       4 kB, 4 files
+Folder     ~/providers/acme-demo
+
+Permissions:
+  Runs:
+    bin/demo-server (runtime): starts the server, runs once at install
+    bin/demo-cli (demoCli): runs health checks, opens in Terminal
+  Downloads:
+    demo-1.0.0-macos-aarch64 1.0.0 macos/aarch64, 1 MB from downloads.example.test, mirror.example.test
+      sha256:1111111111111111111111111111111111111111111111111111111111111111
+  Writes to: config, data, logs, run, temp
+  Receives secrets: password
+  Listens on: client (tcp, client), default port 7400
+  Opens: shell (terminal, demoCli)
+  Features: Multiple instances, Persistent data

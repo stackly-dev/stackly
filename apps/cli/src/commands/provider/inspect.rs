@@ -1,21 +1,25 @@
 //! `stackly provider inspect` (spec 0017, AC-9): one provider with its
 //! identity, capabilities, version matrix, and artifacts. The `result` is
-//! the `ProviderDetail` the daemon sent.
+//! the `ProviderDetail` the daemon sent. A local entry (spec 0037) adds
+//! its approval, import facts, permissions, and changes since the last
+//! decision, and its publisher and trust say not verified.
 
 use clap::Args;
 use serde::Serialize;
 use stackly_protocol::catalog::{
     CapabilityStatus, CatalogArtifact, CatalogIssue, CatalogVersion, GetProviderParams,
-    ProviderCapability, ProviderDetail, TargetSupport,
+    ProviderCapability, ProviderDetail, ProviderSummary, TargetSupport, TrustLevel,
 };
 use stackly_protocol::{Call, Reply};
 
 use super::render::{size_text, state_tone, support_tone};
+use super::{copy, local};
 use crate::commands::RunCommand;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
 use crate::output::human::{Cell, HumanWriter, Render, wire_name};
+use crate::output::style::Tone;
 use crate::session::CallSpec;
 
 /// The capabilities every provider has, in the words of the Catalog screen.
@@ -53,6 +57,16 @@ impl Render for ProviderInspect {
     fn render(&self, out: &mut HumanWriter) {
         let detail = &self.0;
         identity(out, detail);
+        if let Some(local) = &detail.local {
+            out.line("");
+            local::permission_lines(out, local.permissions.as_ref());
+            if !local.changes.is_empty() {
+                out.line(&format!(
+                    "Changes since your decision: {}",
+                    copy::change_labels(&local.changes)
+                ));
+            }
+        }
         if !detail.capabilities.is_empty() {
             out.line("");
             let rows: Vec<Vec<Cell>> = detail.capabilities.iter().map(capability).collect();
@@ -109,8 +123,8 @@ fn identity(out: &mut HumanWriter, detail: &ProviderDetail) {
             Cell::optional(summary.description.as_deref()),
         ),
         ("State", Cell::toned(&state, state_tone(summary.state))),
-        ("Publisher", Cell::optional(summary.publisher.as_deref())),
-        ("Trust", Cell::text(&wire_name(&summary.trust))),
+        ("Publisher", publisher(summary)),
+        ("Trust", trust(summary.trust)),
         (
             "Provider revision",
             Cell::optional(summary.provider_revision.as_deref()),
@@ -125,6 +139,13 @@ fn identity(out: &mut HumanWriter, detail: &ProviderDetail) {
             ),
         ),
     ];
+    rows.extend(local::local_rows(out, detail));
+    if let Some(revocation) = &detail.revocation {
+        rows.push((
+            "Revoked",
+            Cell::toned(&local::revocation_text(out, revocation), Tone::Caution),
+        ));
+    }
     if !detail.capabilities.is_empty() {
         rows.push(("Baseline", Cell::fixed(BASELINE)));
     }
@@ -132,6 +153,24 @@ fn identity(out: &mut HumanWriter, detail: &ProviderDetail) {
         rows.push(("Note", Cell::text(note)));
     }
     out.kv(&rows);
+}
+
+/// The publisher; a local entry's is its namespace, never verified.
+fn publisher(summary: &ProviderSummary) -> Cell {
+    match (&summary.publisher, summary.trust) {
+        (Some(publisher), TrustLevel::Local) => {
+            Cell::fixed(format!("{} (not verified)", local::esc(publisher)))
+        }
+        (publisher, _) => Cell::optional(publisher.as_deref()),
+    }
+}
+
+/// The trust level, with `local, not verified` for an imported entry.
+fn trust(trust: TrustLevel) -> Cell {
+    match trust {
+        TrustLevel::Local => Cell::fixed("local, not verified"),
+        other => Cell::text(&wire_name(&other)),
+    }
 }
 
 /// `<capability>  supported` or `not supported`.
@@ -147,7 +186,7 @@ fn capability(status: &CapabilityStatus) -> Vec<Cell> {
 }
 
 /// The label of a capability, as the Catalog screen writes it.
-const fn capability_label(capability: ProviderCapability) -> &'static str {
+pub(super) const fn capability_label(capability: ProviderCapability) -> &'static str {
     match capability {
         ProviderCapability::MultiInstance => "Multiple instances",
         ProviderCapability::Persistence => "Persistent data",

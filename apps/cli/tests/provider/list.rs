@@ -55,7 +55,7 @@ fn list_writes_the_catalog_line_the_table_and_the_json_result() {
             .expect("an object")
             .keys()
             .collect::<Vec<_>>(),
-        ["catalog", "items"]
+        ["catalog", "items", "revocations"]
     );
     assert_eq!(result["catalog"]["revision"], 1);
     assert_eq!(result["items"].as_array().expect("items").len(), 10);

@@ -1,0 +1,5 @@
+warning: provider.yaml apiVersion: unsupported_api_version: apiVersion "stackly/v1alpha0" is deprecated
+error: provider.yaml metadata.id: namespace_not_allowed: namespace official can't be imported
+error: the provider package can't be imported
+  code: cli.provider_invalid
+  hint: Fix each finding above, then import again.

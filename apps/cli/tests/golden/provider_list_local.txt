@@ -1,0 +1,18 @@
+Catalog: official, bundled, revision 1, published 2026-10-20 01:26 +00:00, 3 imported
+PROVIDER              NAME                CATEGORY   STATE                            TRUST     VERSIONS  LICENSE
+official/blockedhost  NATS Blocked Build  messaging  blocked (artifact_blocked)       official  -         -
+official/intelonly    NATS Intel Build    messaging  unsupported (no_build_for_arch)  official  -         -
+official/nats         NATS Server         messaging  available                        official  2.15.1    Apache-2.0
+official/broken       official/broken     cache      invalid (package_invalid)        official  -         -
+official/zenith       official/zenith     -          invalid (package_invalid)        official  -         -
+official/mysql        MySQL               database   planned (provider_planned)       official  -         -
+official/postgresql   PostgreSQL          database   planned (provider_planned)       official  -         -
+official/clickhouse   ClickHouse          analytics  planned (provider_planned)       official  -         -
+official/valkey       Valkey              cache      planned (provider_planned)       official  -         -
+official/traefik      Traefik             proxy      planned (provider_planned)       official  -         -
+acme/demo             Acme Demo           database   needs approval                   local     1.0.0     MIT
+acme/approved         Acme Demo           database   available                        local     1.0.0     MIT
+acme/revoked          Acme Demo           database   revoked                          local     1.0.0     MIT
+
+Revoked by this catalog (revision 1, published 2026-10-20):
+  official/nats 0.9.0 since 2026-10-01: Starts with an insecure default; use revision 1.0.0 or later.

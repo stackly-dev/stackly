@@ -26,7 +26,8 @@ pub struct ConfirmRequest<'a> {
     pub role: ConfirmRole,
     /// The question, such as `abandon operation <id>?`.
     pub question: &'a str,
-    /// What happens when the answer is yes.
+    /// What happens when the answer is yes; empty when the command
+    /// printed it already.
     pub consequence: &'a str,
 }
 
@@ -114,7 +115,9 @@ impl Confirm {
             ConfirmRole::Destructive => sink.styled(request.question, Tone::Critical.style()),
         };
         sink.line(&question);
-        sink.line(request.consequence);
+        if !request.consequence.is_empty() {
+            sink.line(request.consequence);
+        }
         sink.prompt("[y/N] ");
         let mut answer = String::new();
         let read = cx.input.read_line(&mut answer);
@@ -242,6 +245,24 @@ mod tests {
         )
         .unwrap();
         assert!(stderr.text().starts_with("abandon operation 1?\n"));
+    }
+
+    #[test]
+    fn an_empty_consequence_leaves_no_blank_line() {
+        let (mut cx, stderr) = context(true, "y\n");
+        let request = ConfirmRequest {
+            role: ConfirmRole::Standard,
+            question: "Approve acme/demo?",
+            consequence: "",
+        };
+        Confirm::ask(
+            &mut cx,
+            request,
+            approval(false, "--yes"),
+            OnNoninteractive::Fail,
+        )
+        .unwrap();
+        assert_eq!(stderr.text(), "Approve acme/demo?\n[y/N] ");
     }
 
     #[test]
