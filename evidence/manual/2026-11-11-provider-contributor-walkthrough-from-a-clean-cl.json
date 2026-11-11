@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1c98e-bc04-7271-91cc-3a7a3ff6c2b9",
+  "covers": [
+    "AC-034",
+    "REQ-034"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Provider contributor walkthrough from a clean clone",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "docs walkthrough exits 0 and the harness report exists",
+  "actual": "cargo xtask docs walkthrough exited 0 and printed `ok walkthrough 2fea6e6b020357a46cdef0ad528b4bda3970b85a 2`: all four lines of the docs-walkthrough block exited 0, the clone held two harness reports (testing/example and the scaffolded testing/mytool, each with scenarios default and slow-ready) with schema stackly.provider-conformance/v1 and verdict pass, git status in the clone listed only new files under providers/mytool/, and the temporary folder was gone afterwards. Wall time 136 s.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Checked out 2fea6e6b (clean) in worktree arc-f36-spec-e2dee8 on this Mac (macOS 27.0.1 build 26A434, Apple M1 Max), 26 GiB free on the data volume.",
+    "cargo build -q -p xtask, then ./target/debug/xtask docs walkthrough with CARGO_PROFILE_DEV_DEBUG=0 and CARGO_INCREMENTAL=0; the task cloned HEAD into $TMPDIR/stackly-walkthrough-*/stackly, made a 0700 STACKLY_ROOT next to it, and ran the four lines of the block in docs/providers/README.md in the clone with its own target folder. Cargo used the crates already in its cache; no runtime was downloaded.",
+    "Read the output (walkthrough.log in this record's folder, build lines left out, the temp path written as $TMPDIR): clone, run and ok per line, the two report paths, ok walkthrough <sha> 2, exit 0.",
+    "Afterwards no $TMPDIR/stackly-walkthrough-* folder was left."
+  ],
+  "reviewer": "Claude Opus 5.5 (session dev-f38-m2, for ojiepermana)",
+  "startedAt": "2026-11-11T07:42:17.092432Z",
+  "finishedAt": "2026-11-11T07:44:40Z",
+  "evidencePath": "evidence/manual/files/01a1c98e-bc04-7271-91cc-3a7a3ff6c2b9/",
+  "context": {
+    "sourceCommit": "2fea6e6b020357a46cdef0ad528b4bda3970b85a",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

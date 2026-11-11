@@ -122,3 +122,30 @@ Ditambahkan sesudah `cargo xtask provider test` masuk `main` (`0cc879af`, spec 0
 - [ ] `cargo xtask docs check` → `ok docs 25`, exit 0 (20 file sebelumnya ditambah lima halaman baru) → AC-2, AC-9, AC-11
 - [ ] `cargo xtask provider check` → lima baris `ok` dengan digest yang sama seperti di `main` (README paket contoh tidak masuk digest) → AC-11
 - [ ] `cargo test -p xtask` → lulus, termasuk test scaffold yang menyalin `providers/example/README.md` → AC-11
+
+## Milestone 3: `cargo xtask docs walkthrough` from a fresh clone
+
+Langkah Build plan 10: `cargo xtask docs walkthrough [--keep]` di `xtask/src/docs/walkthrough.rs`, baris `USAGE` di `xtask/src/main.rs`, test nya, satu run penuh, dan record manual AC-034 `evidence/manual/2026-11-11-provider-contributor-walkthrough-from-a-clean-cl.json`.
+
+Tafsiran: (1) nama field verdict report harness dibaca dari spec 0036 *Report*: `verdict` dengan nilai `pass`. (2) Pemeriksaan tree bersih memakai `git status --porcelain --untracked-files=all`, supaya setiap file baru disebut satu per satu dan diperiksa berada di bawah `providers/<name>/` dari baris `cargo xtask provider new <name>`. (3) Saran `cargo xtask provider test --cleanup` dicetak setiap kali run gagal atau terputus, karena perintah ini tidak bisa tahu apakah root harness tertinggal tanpa membaca root user lain. (4) Ruang bebas dibaca dari `df -Pk` (xtask tidak memakai `unsafe`), di folder temp sistem.
+
+### UI / manual
+
+- [ ] Dari root repo dengan tree bersih dan paling sedikit 8 GiB bebas di `$TMPDIR`: `cargo xtask docs walkthrough` → baris `clone <sha>`, lalu untuk keempat perintah blok walkthrough satu baris `run <perintah>` dan `ok`, lalu `ok walkthrough <sha> 2`, exit 0; folder `$TMPDIR/stackly-walkthrough-*` hilang sesudahnya. Butuh beberapa menit karena clone membangun xtask, `stackly-fake-server`, dan example `provider_harness` dari awal → AC-8
+- [ ] Jalankan lagi dan tekan Ctrl+C saat baris `cargo xtask provider test` berjalan → baris `fail interrupted` atau `fail <code>`, saran `cargo xtask provider test --cleanup` di stderr, exit 1, dan folder temp terhapus; `pgrep -f stackly-walkthrough` kosong → AC-8
+- [ ] Record `evidence/manual/2026-11-11-provider-contributor-walkthrough-from-a-clean-cl.json` berisi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt` dari run pada `sourceCommit` nya, dan `cargo xtask evidence check` menerimanya → AC-8
+
+### Commands
+
+- [ ] `cargo test -p xtask --bin xtask docs::walkthrough` → test lulus: blok adalah blok `bash` pertama sesudah penanda tanpa komentar; panduan tanpa penanda atau blok ditolak; status git hanya `??` di bawah paket hasil scaffold (`Cargo.lock` yang berubah atau file lain gagal); report harus satu per baris `provider test`, `stackly.provider-conformance/v1`, verdict `pass`; parse `df`; repo git fixture dengan baris yang lulus (exit 0, folder temp terhapus), baris `false` (berhenti di baris itu, exit 1, folder temp terhapus), file liar (exit 1), ruang bebas kurang (exit 2 tanpa clone), root 0700 dan `PATH` diawali `target/debug` clone dengan `--keep` (folder tetap ada), dan interupsi saat `sleep 30` (berhenti cepat, exit 1, folder terhapus) → AC-8
+- [ ] `cargo test -p xtask --test docs_check` → 3 test lulus, termasuk `docs walkthrough --nope` ditolak sebelum clone → AC-8
+- [ ] `cargo xtask help` → baris `docs walkthrough [--keep]` ada → AC-8
+- [ ] `cargo xtask docs check` → `ok docs 25` → AC-9
+- [ ] `cargo xtask evidence check` → menerima record AC-034 → AC-8
+- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-8: perintah, test fixture nya, satu run penuh, dan record manual di atas.
+- AC-12 dan bagian langkah 11 dari AC-4 dan AC-6: menunggu fitur 37.
+- AC lain: Milestone 1 dan 2.
