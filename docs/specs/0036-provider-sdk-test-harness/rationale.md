@@ -147,7 +147,7 @@ Semuanya opsi rekomendasi, untuk di `accept` lead:
 12. Spike memakai `PackageRecipe` untuk provider yang punya paket; recipe MySQL, ClickHouse, dan Valkey tetap sampai fitur 40, 42, dan 43.
 13. Test konformitas native tidak mengambil alih bukti BR-025; fitur 39 sampai 43 memutuskannya.
 14. Dokumen publik kebijakan ada di `docs/providers/` milik spec 0038; spec ini hanya menulis README paket contoh.
-15. `xtask` menyalakan fitur `test-support` core dan `spike/package_recipe.rs` masuk `EXPOSE_ALLOWED`, supaya spike bisa memberi secret fixture ke init paket (dari cross check, gap 9).
+15. `xtask` menyalakan fitur `test-support` core dan `spike/package_recipe.rs` masuk `EXPOSE_ALLOWED`, supaya spike bisa memberi secret fixture ke init paket (dari cross check, gap 9). Diterima lead 2026-11-11 dengan syarat hanya tooling dan hanya nilai fixture, dan boleh dibatalkan user. Alternatif kalau dibatalkan: `xtask` tidak menyalakan `test-support` dan tidak ada entri `EXPOSE_ALLOWED` baru; `PackageRecipe` hanya dipakai untuk paket yang init dan start nya tidak butuh secret (NATS dan Traefik), recipe PostgreSQL tetap tulisan tangan dengan penanda `// provisional: F36` diganti rujukan ke keputusan ini, dan AC-16 dipersempit ke dua provider itu.
 16. Fakta beku corpus dihitung satu fungsi core `frozen_facts` dengan *Context beku* sendiri, bukan *Context golden* spec 0009 (dari cross check, gap 12).
 17. Fixture form dibangun untuk setiap folder `providers/` dengan fakta runtime dari paket, jadi tiga fixture yang ada ditulis ulang sekali (dari cross check, gap 14).
 
