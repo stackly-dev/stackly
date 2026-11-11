@@ -1043,6 +1043,8 @@ area! {
             details ["format", "reason"], "the selected connection string cannot be built now, or the pinned package cannot be read (spec 0021)";
         DOCTOR_FOUND_ERRORS = "cli.doctor_found_errors", Failed, retryable false,
             details ["errors", "warnings"], "the doctor ran and found at least one error; the result holds the report (spec 0034)";
+        PROVIDER_INVALID = "cli.provider_invalid", InvalidInput, retryable false,
+            details ["errors", "warnings"], "the provider package is not publishable; the result holds the validation (spec 0036)";
     }
 }
 
@@ -1632,6 +1634,11 @@ mod tests {
             (
                 "cli.doctor_found_errors",
                 ErrorCategory::Failed,
+                &["errors", "warnings"],
+            ),
+            (
+                "cli.provider_invalid",
+                ErrorCategory::InvalidInput,
                 &["errors", "warnings"],
             ),
         ];

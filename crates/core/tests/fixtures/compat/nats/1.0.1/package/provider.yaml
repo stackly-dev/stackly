@@ -1,0 +1,68 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/nats
+  software: nats
+  displayName: NATS Server
+  revision: "1.0.1"
+  category: messaging
+  description: NATS messaging server with JetStream, one server per instance.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+runtime:
+  executable: nats-server
+  executionMode: foreground
+  versionCheck:
+    args: ["--version"]
+    pattern: '^nats-server: v([0-9]+\.[0-9]+\.[0-9]+)$'
+    timeoutSeconds: 10
+capabilities:
+  multiInstance: true
+  persistence: true
+  metrics: true
+  backup: [cold]
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 4222 }
+    monitoring: { transport: tcp, purpose: monitoring, defaultHost: "127.0.0.1", defaultPort: 8222 }
+configFiles:
+  natsConf:
+    template: templates/nats.conf.tmpl
+    format: natsConf
+    destination: "${instance.config}/nats.conf"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+  start:
+    executable: "${runtime.executable}"
+    args: ["--config", "${instance.config}/nats.conf"]
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: term }
+readiness:
+  probe:
+    type: native
+    name: nats-readiness
+    endpoint: client
+    params:
+      serverName: "${settings.serverName}"
+      jetstream: "${settings.jetstream}"
+timeouts: { readinessSeconds: 30, stopSeconds: 30 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, logs, temp]
+  executeRuntimeBinary: true
+connection:
+  - name: uri
+    title: Client URL
+    template: "nats://${endpoint.client.address}"
+  - name: monitoring
+    title: Monitoring URL
+    template: "http://${endpoint.monitoring.address}"
+openWith:
+  - name: monitoring
+    title: Monitoring
+    kind: browser
+    browser:
+      url: "http://${endpoint.monitoring.address}/"

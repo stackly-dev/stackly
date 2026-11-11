@@ -1,0 +1,12 @@
+# Written by Stackly from the official/nats provider; edits are replaced.
+server_name: {{ settings.serverName }}
+listen: {{ endpoint.client.address }}
+http: {{ endpoint.monitoring.address }}
+max_payload: {{ settings.maxPayloadBytes }}
+{{#if settings.jetstream}}
+jetstream {
+  store_dir: {{ instance.data }}
+  max_memory_store: {{ settings.jetstreamMaxMemoryBytes }}
+  max_file_store: {{ settings.jetstreamMaxFileBytes }}
+}
+{{/if}}
