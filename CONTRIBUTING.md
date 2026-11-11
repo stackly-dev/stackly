@@ -12,7 +12,7 @@ Thanks for helping. This guide covers what you need to send a change, from a cle
 
 ## Before you start
 
-- The project has adopted the Contributor Covenant, version 2.1, as its Code of Conduct.
+- Code of Conduct: the project will use the Contributor Covenant, version 2.1. Its file is added to the repository once a contact address for conduct reports is in place. Until then, be respectful and constructive with everyone, and raise a conduct concern with the core maintainer named in [GOVERNANCE.md](GOVERNANCE.md#roles).
 - Ask a question or start a discussion with one of the issue forms.
 - Never report a vulnerability in an issue. Use the private channel in [SECURITY.md](SECURITY.md).
 
