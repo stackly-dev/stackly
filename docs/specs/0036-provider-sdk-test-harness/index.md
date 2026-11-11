@@ -62,7 +62,7 @@ Kalau isi skill bertentangan dengan spec ini, spec yang menang.
 ### Batas dengan spec lain
 
 - Spec 0009 tetap pemilik schema manifest, loader, validasi, dan plan. Spec ini tidak mengubah `read_package` atau `from_files`, dan tidak menambah `IssueCode`. Yang berubah di area spec 0009 hanya teks pesan `unsupported_api_version` (AC-1).
-- Spec 0037 memakai `check_package` dan DTO `ProviderValidation` untuk preview import, dan memutuskan sendiri apakah import menolak atau memperingatkan finding `authoring`.
+- Spec 0037 memakai `check_package` (dengan `NameCheck::Skip`) dan bentuk `ValidationFinding` untuk preview import. Apakah import menolak atau memperingatkan finding `authoring` adalah keputusan spec 0037 (Follow-up spec 0009), bukan spec ini; spec 0037 memutuskan import menolak finding `error` ber origin `package` atau `authoring`, membuang finding `scenarios`, dan meneruskan finding `warning` ke preview.
 - Spec 0038 memiliki `docs/providers/` (panduan penulis, referensi schema, dan halaman kebijakan berbahasa Inggris yang merangkum *Kebijakan kompatibilitas*). Spec ini hanya menulis `providers/example/README.md`.
 - Spec 0003 tetap pemilik inventory, artefak, dan langkah spike di luar lifecycle provider. Spec 0018 tetap pemilik `runtime.install`; harness tidak menguji unduhan.
 - Spec 0030 tetap pemilik `HANDOVER_PROVEN`.
@@ -531,7 +531,7 @@ Urutan mengikuti pendekatan Journey: jalur kontributor dibangun berurutan dari m
 - [ ] Update spec 0009 (pemiliknya): baris Follow-up "Fitur 36" dicentang dengan rujukan ke *Kebijakan kompatibilitas* spec ini; komentar `tests/` di *Paket provider* menyebut `tests/scenarios.yaml`; `Issue.file` boleh bernilai `tests/scenarios.yaml`; pesan `unsupported_api_version` yang baru.
 - [ ] Update spec 0010, 0023, 0030, dan 0014 (pemiliknya): centang baris Follow-up "Fitur 36" masing masing dengan rujukan ke *Kontrak proses*, *Probe native*, *Handover*, dan AC-9 serta AC-14 spec ini.
 - [ ] Update spec 0006 dan 0008 (pemiliknya): method `provider.validate` (`recovery allowed`) dan perintah `stackly provider validate` dengan `cli.provider_invalid`.
-- [ ] Spec 0037: pakai `check_package` dan `ProviderValidation`; putuskan apakah import menolak finding `authoring`; putuskan apakah paket lokal ber namespace lain boleh diuji harness sesudah approval.
+- [ ] Spec 0037: pakai `check_package` dan bentuk `ValidationFinding` (sudah diputuskan di sana, termasuk bahwa import menolak finding `authoring`); yang masih terbuka: apakah paket lokal ber namespace lain boleh diuji harness sesudah approval.
 - [ ] Spec 0038: `docs/providers/` merangkum *Kebijakan kompatibilitas* dan alur lima perintah; `providers/example/README.md` menautkannya.
 - [ ] Fitur 39 sampai 43: setiap provider menambah paket lewat `cargo xtask provider new`, satu test native per line di `provider_conformance.rs`, dan `cargo xtask provider freeze`; fitur 40, 42, dan 43 menghapus recipe spike nya. Masing masing memutuskan apakah test BR-025 (`compatibility.json`, spec 0018) nya adalah test konformitas.
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` perintah `provider new`, `provider test`, `provider freeze`, aturan corpus, aturan `versions.json` tulisan tangan untuk namespace `testing`, bahwa `tests/scenarios.yaml` kini dibaca validator, harness, dan spike (loader tetap tidak membacanya), dan bahwa pengetatan penulis hanya lewat `authoring_findings()`.
