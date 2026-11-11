@@ -665,6 +665,9 @@ async fn a_store_that_cannot_be_written_answers_the_fixed_text_without_a_path() 
         .iter()
         .find(|row| row.operation_kind == Some(stackly_domain::OperationKind::ImportProvider))
         .expect("the failed import is audited");
+    // It names the provider and the bytes (AC-17, review of feature 37).
+    assert_eq!(row.safe_details.get("provider"), Some(LOCAL));
+    assert!(row.safe_details.get("packageSha256").is_some());
     for (key, value) in row.safe_details.iter() {
         assert!(!value.contains(&root), "{key}: {value}");
         assert!(!value.contains("/Users/"), "{key}: {value}");

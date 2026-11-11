@@ -14,9 +14,9 @@ use std::sync::Arc;
 
 use stackly_domain::{
     CompensatorName, CreatedItem, CreatedRecord, CustomItemKey, DetailKey, ErrorCodeName,
-    GuardDecision, Guarded, ProviderImportRecord, ProviderName, ProviderSourceId,
-    ProviderSourceKind, ProviderSourceRecord, ReasonCode, Registry, RegistryError, Sha256Digest,
-    StageName, WriteOp,
+    GuardDecision, Guarded, ProviderImportRecord, ProviderName, ProviderRevisionKey,
+    ProviderSourceId, ProviderSourceKind, ProviderSourceRecord, ReasonCode, Registry,
+    RegistryError, Sha256Digest, StageName, WriteOp,
 };
 use stackly_platform::Platform;
 
@@ -430,6 +430,28 @@ fn note(record: &ProviderImportRecord, changes: &[&'static str]) -> AuditNote {
     note
 }
 
+/// The audit note a provider operation carries from its first stage, before
+/// it has read the package: the provider and, when the request names one,
+/// the package digest, so an operation that fails at `read` or `store` still
+/// names what it worked on (spec 0037 AC-17, review of feature 37).
+fn early_note(provider: &ProviderName, package_sha256: Option<&Sha256Digest>) -> AuditNote {
+    let note = AuditNote::new(None).with("provider", provider.as_str());
+    match package_sha256 {
+        Some(digest) => note.with("packageSha256", *digest),
+        None => note,
+    }
+}
+
+/// The audit note once the package is read: [`early_note`] with its
+/// revision and manifest digest.
+fn read_note(key: &ProviderRevisionKey, package_sha256: &Sha256Digest) -> AuditNote {
+    AuditNote::new(None)
+        .with("provider", key.provider().as_str())
+        .with("providerRevision", key.revision().as_str())
+        .with("packageSha256", *package_sha256)
+        .with("manifestSha256", *key.manifest_sha256())
+}
+
 /// The permission change codes of `permissions` at `revision` against the
 /// last decision of `stored`, when that decision covers other bytes than
 /// `package_sha256`: the `changes` of the audit note of an import and an
@@ -471,6 +493,7 @@ async fn run_import(
     mut ctx: OperationContext,
 ) -> WorkResult {
     let provider = request.provider.clone();
+    ctx.set_audit_note(early_note(&provider, Some(&request.expected)));
     ctx.begin_step(StepSpec::new(READ)).await?;
     ctx.set_stage(READ).await?;
     let platform = Arc::clone(ctx.platform());
@@ -498,6 +521,7 @@ async fn run_import(
     }
     let files = package.files().clone();
     let key = package.key().clone();
+    ctx.set_audit_note(read_note(&key, &digest));
     let permissions = super::local::permissions(package);
     let software = package.software().clone();
     let versions_sha256: Sha256Digest = super::index::versions_sha256(package.files())
@@ -673,6 +697,7 @@ async fn run_remove(
     refresher: Arc<dyn CatalogRefresher>,
     mut ctx: OperationContext,
 ) -> WorkResult {
+    ctx.set_audit_note(early_note(&provider, None));
     ctx.begin_step(StepSpec::new(COMMIT)).await?;
     ctx.set_stage(COMMIT).await?;
     let registry = Arc::clone(ctx.registry());
@@ -727,6 +752,7 @@ async fn run_approve(
     refresher: Arc<dyn CatalogRefresher>,
     mut ctx: OperationContext,
 ) -> WorkResult {
+    ctx.set_audit_note(early_note(&provider, Some(&expected)));
     ctx.begin_step(StepSpec::new(READ)).await?;
     ctx.set_stage(READ).await?;
     // The permissions of the decision come from the store copy, never from
@@ -747,6 +773,7 @@ async fn run_approve(
             })
         })?;
     let key = package.key().clone();
+    ctx.set_audit_note(read_note(&key, &expected));
     let permissions = super::local::permissions(&package);
     if let Some(info) = catalog
         .as_deref()
@@ -825,6 +852,7 @@ async fn run_revoke(
     refresher: Arc<dyn CatalogRefresher>,
     mut ctx: OperationContext,
 ) -> WorkResult {
+    ctx.set_audit_note(early_note(&provider, None));
     ctx.begin_step(StepSpec::new(COMMIT)).await?;
     ctx.set_stage(COMMIT).await?;
     let registry = Arc::clone(ctx.registry());
