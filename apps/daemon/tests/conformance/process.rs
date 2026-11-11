@@ -141,26 +141,30 @@ fn group_members(pgid: u32) -> Vec<u32> {
         .unwrap_or_default()
 }
 
+/// The program name of `pid`, without its folder or arguments, from
+/// `ps -o comm=`; empty when the process is gone.
+#[must_use]
+pub fn command_name(pid: u32) -> String {
+    Command::new("/bin/ps")
+        .args(["-o", "comm=", "-p", &pid.to_string()])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .and_then(|path| {
+            Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_default()
+}
+
 /// `pid` and the program name without arguments, for the report.
 fn described(pids: &[u32]) -> Value {
     let rows: Vec<Value> = pids
         .iter()
-        .map(|pid| {
-            let command = Command::new("/bin/ps")
-                .args(["-o", "comm=", "-p", &pid.to_string()])
-                .stdin(Stdio::null())
-                .stderr(Stdio::null())
-                .output()
-                .ok()
-                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-                .and_then(|path| {
-                    Path::new(&path)
-                        .file_name()
-                        .map(|name| name.to_string_lossy().into_owned())
-                })
-                .unwrap_or_default();
-            json!({ "pid": pid, "command": command })
-        })
+        .map(|pid| json!({ "pid": pid, "command": command_name(*pid) }))
         .collect();
     Value::Array(rows)
 }

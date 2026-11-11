@@ -275,7 +275,9 @@ pub async fn run_prepared(
 struct Site {
     /// Reaps the processes under the data root on drop.
     reap: ReapGuard,
-    data_root: PathBuf,
+    /// The two folders of the test root, whose ASCII names `ps` prints as
+    /// they are.
+    folders: [PathBuf; 2],
     handle: DaemonHandle,
     _lock: DaemonLock,
     ctx: Ctx,
@@ -298,7 +300,9 @@ async fn open(
         .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
     let prepared =
         prepare_layout(&platform).map_err(|err| format!("the layout cannot be prepared: {err}"))?;
-    let reap = ReapGuard::new(data_root, prepared.layout().roots().runtime());
+    // `ps` writes the non ASCII bytes of the data root name escaped, so the
+    // guard matches on the ASCII folder of the test root that holds it.
+    let reap = ReapGuard::new(root.path(), prepared.layout().roots().runtime());
     let (runtime_id, sha256) = install(&platform, &prepared, package, picked, cache_file)?;
     let owner = LockOwner::new(
         std::process::id(),
@@ -363,7 +367,7 @@ async fn open(
     };
     Ok(Site {
         reap,
-        data_root: data_root.to_path_buf(),
+        folders: [root.path().to_path_buf(), root.run_dir().to_path_buf()],
         handle,
         _lock: lock,
         ctx,
@@ -482,21 +486,24 @@ async fn end_of_run(site: Site, report: &mut Report) {
         )
         .await;
     if let Ok(table) = ProcessTable::snapshot() {
-        for entry in table.under(&site.data_root) {
-            let command = entry
-                .args
-                .split(' ')
-                .next()
-                .and_then(|program| Path::new(program).file_name())
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
+        let mut seen = Vec::new();
+        for entry in site.folders.iter().flat_map(|folder| table.under(folder)) {
+            if seen.contains(&entry.pid) {
+                continue;
+            }
+            seen.push(entry.pid);
+            let command = super::process::command_name(entry.pid);
             report
                 .cleanup
                 .processes_left
                 .push(json!({ "pid": entry.pid, "command": command }));
         }
     }
-    if let Err(err) = site.reap.reap() {
+    let reaped = site
+        .reap
+        .reap()
+        .and_then(|_| ProcessTable::reap_under(&site.folders[1], stackly_testkit::REAP_GRACE));
+    if let Err(err) = reaped {
         report.cleanup.refused = Some(format!("a process outlived the reap: {err}"));
     }
     drop(site.reap);

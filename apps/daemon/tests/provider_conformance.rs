@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use conformance::{Report, RunRequest, StepStatus, Verdict};
+use stackly_core::provider::scenarios::{Expect, Scenario};
 use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{ProcessTable, TestRoot};
 
@@ -74,9 +75,7 @@ fn assert_clean(report: &Report) {
         serde_json::json!([]),
         "{value:#}"
     );
-    let table = ProcessTable::snapshot().expect("ps runs");
-    let left = table.containing_all(&["stackly-test-", conformance::site::ROOT_NAME]);
-    assert!(left.is_empty(), "processes outlived the run: {left:?}");
+    assert_no_process_left();
 }
 
 /// The steps of a passing `ready` scenario, in the order of AC-9.
@@ -166,5 +165,157 @@ fn the_fake_package_passes_conformance() {
         Some(StepStatus::Pass)
     );
     assert_clean(&report);
+    ev.pass();
+}
+
+/// A scenario for `RunRequest.scenarios`.
+fn scenario(name: &str, settings: serde_json::Value, expect: Expect) -> Scenario {
+    Scenario::new(
+        name.parse().expect("a valid scenario name"),
+        settings,
+        expect,
+    )
+}
+
+/// Runs `package_dir` with the one scenario `scenario`.
+fn run_scenario(package_dir: &Path, scenario: Scenario) -> (Report, TestRoot) {
+    let mut request = RunRequest::new(package_dir.to_path_buf(), PathBuf::new());
+    request.scenarios = Some(vec![scenario]);
+    run_with(request)
+}
+
+/// The rogue fixture package of spec 0036 (*Harness*).
+fn rogue_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/conformance/packages/fake-rogue")
+}
+
+/// The failure of scenario `name` as the report wrote it.
+fn failure(report: &Report, name: &str) -> serde_json::Value {
+    let value = report.value().expect("the report was built");
+    value["scenarios"]
+        .as_array()
+        .and_then(|scenarios| scenarios.iter().find(|scenario| scenario["name"] == name))
+        .map(|scenario| scenario["failure"].clone())
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// Asserts that a failed run still removed its root and left no process.
+fn assert_failed_run_cleaned_up(report: &Report) {
+    let value = report.value().expect("the report was built");
+    assert_eq!(value["cleanup"]["rootRemoved"], true, "{value:#}");
+    assert_no_process_left();
+}
+
+/// Asserts that no process of the run is left on this Mac.
+fn assert_no_process_left() {
+    let table = ProcessTable::snapshot().expect("ps runs");
+    // `ps` escapes the non ASCII letters of the data root name, so the
+    // search uses its ASCII parts: a process whose program lives in a test
+    // root, the runtime folder or the copy a rogue server made.
+    let left: Vec<_> = table
+        .entries()
+        .iter()
+        .filter(|entry| {
+            entry.args.find("/Test Root ").is_some_and(|at| {
+                let program_root = &entry.args[..at];
+                program_root.contains("/stackly-test-") && !program_root.contains(' ')
+            })
+        })
+        .collect();
+    assert!(left.is_empty(), "processes outlived the run: {left:?}");
+}
+
+// covers: AC-10 (spec 0036)
+#[test]
+fn a_server_that_closes_fd_3_fails_the_process_contract() {
+    let ev = evidence!(
+        covers = ["REQ-013"],
+        kind = Kind::Fixture,
+        expected = "testing/fake-rogue with closeLockFd fails the process step with lock_not_held, and the harness leaves no process behind",
+    );
+    let (report, _out) = run_scenario(
+        &rogue_dir(),
+        scenario(
+            "close-fd",
+            serde_json::json!({ "closeLockFd": true }),
+            Expect::Ready,
+        ),
+    );
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let failure = failure(&report, "close-fd");
+    assert_eq!(failure["step"], "process", "{failure:#}");
+    assert_eq!(failure["reason"], "lock_not_held", "{failure:#}");
+    assert_failed_run_cleaned_up(&report);
+    ev.pass();
+}
+
+// covers: AC-10 (spec 0036)
+#[test]
+fn a_server_that_re_execs_fails_the_process_contract() {
+    let ev = evidence!(
+        covers = ["REQ-013"],
+        kind = Kind::Fixture,
+        expected = "testing/fake-rogue with reExec fails the process step with re_exec, and the harness leaves no process behind",
+    );
+    let (report, _out) = run_scenario(
+        &rogue_dir(),
+        scenario(
+            "re-exec",
+            serde_json::json!({ "reExec": true }),
+            Expect::Ready,
+        ),
+    );
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let failure = failure(&report, "re-exec");
+    assert_eq!(failure["step"], "process", "{failure:#}");
+    assert_eq!(failure["reason"], "re_exec", "{failure:#}");
+    assert_failed_run_cleaned_up(&report);
+    ev.pass();
+}
+
+// covers: AC-10 (spec 0036)
+#[test]
+fn a_server_that_goes_to_the_background_fails_start_and_leaves_nothing_behind() {
+    let ev = evidence!(
+        covers = ["REQ-013"],
+        kind = Kind::Fixture,
+        expected = "testing/fake-rogue with background fails at start, leftovers records lock_still_held and process_left for the child it left, and the harness ends that child",
+    );
+    let (report, _out) = run_scenario(
+        &rogue_dir(),
+        scenario(
+            "background",
+            serde_json::json!({ "background": true }),
+            Expect::Ready,
+        ),
+    );
+
+    assert_eq!(report.verdict(), Verdict::Fail);
+    let failure = failure(&report, "background");
+    assert_eq!(failure["step"], "start", "{failure:#}");
+    let result = report.scenario("background").expect("the scenario ran");
+    let leftovers = result
+        .step("leftovers")
+        .expect("leftovers ran after the failed start");
+    assert_eq!(leftovers.status, StepStatus::Fail);
+    let reasons = &leftovers
+        .detail
+        .as_ref()
+        .expect("leftovers notes its reasons")["reasons"];
+    assert_eq!(
+        reasons,
+        &serde_json::json!(["lock_still_held", "process_left"]),
+        "{reasons:#}"
+    );
+    let left = &report.value().expect("the report was built")["cleanup"]["processesLeft"];
+    assert!(
+        left.as_array().is_some_and(|rows| rows
+            .iter()
+            .any(|row| row["command"] == "stackly-fake-server")),
+        "the child the server left is noted before it is ended: {left:#}"
+    );
+    assert_failed_run_cleaned_up(&report);
     ev.pass();
 }
