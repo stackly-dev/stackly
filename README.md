@@ -6,7 +6,7 @@ Stackly installs, runs, and watches native developer tools (PostgreSQL, MySQL, N
 
 One Rust daemon per user (`stacklyd`) owns the registry and every process. The command line client (`stackly`) and the SwiftUI app only talk to it over a private Unix socket.
 
-**Status:** early scaffold. The workspace builds and both binaries print their version, but nothing is installed or run yet.
+**Status:** in development, with no release yet. Built from source, the daemon, the CLI, and the macOS app install and run PostgreSQL and NATS instances; Traefik has a first package, and the other tools are planned.
 
 ## Requirements
 
@@ -53,6 +53,14 @@ swift test --package-path clients/swift
 | `docs/` | Scope, specs, and the UI mockup |
 
 The architecture and its rules are in [spec 0001](docs/specs/0001-stack-arsitektur/index.md).
+
+## Contributing
+
+Bug reports, provider proposals, provider packages, and docs fixes are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); a provider package needs no Rust or Swift code ([Contributing a provider](CONTRIBUTING.md#contributing-a-provider)). Who looks after what is in [GOVERNANCE.md](GOVERNANCE.md).
+
+## Security
+
+Please report a vulnerability privately, never in a public issue. [SECURITY.md](SECURITY.md) explains how and what happens next.
 
 ## License
 
