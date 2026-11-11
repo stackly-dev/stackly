@@ -65,6 +65,12 @@ impl std::fmt::Display for CreateError {
             Self::ProviderUnavailable { provider, .. } => {
                 write!(f, "{provider} can't be used to create instances")
             }
+            Self::ApprovalRequired { provider, .. } => write!(f, "{provider} is not approved"),
+            Self::Revoked {
+                provider,
+                provider_revision,
+                ..
+            } => write!(f, "{provider} {provider_revision} is revoked"),
             Self::CapabilityUnsupported { provider, .. } => {
                 write!(f, "{provider} runs one instance at a time")
             }
@@ -141,16 +147,47 @@ impl OperationError for CreateError {
         }
         match self {
             Self::CatalogUnavailable { reason } => vec![(key("reason"), (*reason).to_owned())],
-            Self::ProviderNotFound { provider, revision }
-            | Self::ProviderAmbiguous { provider, revision } => {
+            Self::ProviderNotFound { provider, revision } => {
                 let mut details = vec![(key("provider"), provider.clone())];
                 details.extend(revision.clone().map(|revision| (key("revision"), revision)));
+                details
+            }
+            Self::ProviderAmbiguous {
+                provider,
+                revision,
+                candidates,
+            } => {
+                let mut details = vec![(key("provider"), provider.clone())];
+                details.extend(revision.clone().map(|revision| (key("revision"), revision)));
+                if !candidates.is_empty() {
+                    details.push((key("candidates"), candidates.join(",")));
+                }
                 details
             }
             Self::ProviderUnavailable { provider, state } => vec![
                 (key("provider"), provider.clone()),
                 (key("state"), (*state).to_owned()),
             ],
+            Self::ApprovalRequired {
+                provider,
+                provider_revision,
+                package_sha256,
+            } => {
+                let mut details = vec![
+                    (key("provider"), provider.clone()),
+                    (key("providerRevision"), provider_revision.clone()),
+                ];
+                // A pinned revision has no stored package to name.
+                if !package_sha256.is_empty() {
+                    details.push((key("packageSha256"), package_sha256.clone()));
+                }
+                details
+            }
+            Self::Revoked {
+                provider,
+                provider_revision,
+                info,
+            } => crate::catalog::import::revoked_details(provider, provider_revision, info),
             Self::CapabilityUnsupported { provider, existing } => vec![
                 (key("capability"), "multi_instance".to_owned()),
                 (key("provider"), provider.clone()),

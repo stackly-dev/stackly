@@ -11,9 +11,9 @@ use stackly_platform::HostFacts;
 use crate::provider::{ArtifactStatus, VersionArtifact};
 use crate::runtime::compatibility::support_status;
 
-use super::install::{Installability, NotInstallableReason, installability_with_trust};
+use super::install::{Installability, NotInstallableReason, installability};
 use super::model::{CatalogEntry, ProviderEntry};
-use super::trust::{TrustVerdict, snapshot_trust};
+use super::trust::TrustVerdict;
 
 /// The operating systems every version row of the matrix has a cell for,
 /// in order.
@@ -172,29 +172,13 @@ pub struct TargetSupport {
     pub note: Option<String>,
 }
 
-/// Returns the state of an entry for `host`, with the trust verdict of a
-/// provider entry taken from the snapshot.
-// provisional: F37 step 5 (callers pass the verdict of `catalog::entry_trust`)
-#[must_use]
-pub fn entry_status(entry: &CatalogEntry, host: &HostFacts) -> EntryStatus {
-    let trust = match entry {
-        CatalogEntry::Provider(provider) => snapshot_trust(provider),
-        CatalogEntry::Planned(_) | CatalogEntry::Invalid(_) => TrustVerdict::Trusted,
-    };
-    entry_status_with_trust(entry, host, &trust)
-}
-
 /// Returns the state of an entry for `host`: from the install gate over
 /// every version of a provider entry (spec 0017, *Aturan status*). A
 /// provider entry whose `trust` is not trusted is `blocked` with reason
 /// `approval_required` or `trust_revoked`, the rule right after `invalid`
 /// (spec 0037).
 #[must_use]
-pub fn entry_status_with_trust(
-    entry: &CatalogEntry,
-    host: &HostFacts,
-    trust: &TrustVerdict,
-) -> EntryStatus {
+pub fn entry_status(entry: &CatalogEntry, host: &HostFacts, trust: &TrustVerdict) -> EntryStatus {
     let provider = match entry {
         CatalogEntry::Planned(_) => {
             return EntryStatus {
@@ -221,7 +205,7 @@ pub fn entry_status_with_trust(
     }
     let mut first_refusal = None;
     for version in provider.versions() {
-        match installability_with_trust(entry, version, host, trust) {
+        match installability(entry, version, host, trust) {
             Ok(Installability::Installable { .. }) => {
                 return EntryStatus {
                     state: EntryState::Available,
@@ -498,7 +482,11 @@ mod tests {
     }
 
     fn status_of(entry: ProviderEntry) -> EntryStatus {
-        entry_status(&CatalogEntry::Provider(entry), &host())
+        entry_status(
+            &CatalogEntry::Provider(entry),
+            &host(),
+            &TrustVerdict::Trusted,
+        )
     }
 
     #[test]
@@ -668,14 +656,20 @@ mod tests {
             local: None,
         });
 
-        assert_eq!(entry_status(&planned, &host()).state, EntryState::Planned);
         assert_eq!(
-            entry_status(&planned, &host()).reason,
+            entry_status(&planned, &host(), &TrustVerdict::Trusted).state,
+            EntryState::Planned
+        );
+        assert_eq!(
+            entry_status(&planned, &host(), &TrustVerdict::Trusted).reason,
             Some(SupportReason::ProviderPlanned)
         );
-        assert_eq!(entry_status(&invalid, &host()).state, EntryState::Invalid);
         assert_eq!(
-            entry_status(&invalid, &host()).reason,
+            entry_status(&invalid, &host(), &TrustVerdict::Trusted).state,
+            EntryState::Invalid
+        );
+        assert_eq!(
+            entry_status(&invalid, &host(), &TrustVerdict::Trusted).reason,
             Some(SupportReason::PackageInvalid)
         );
     }

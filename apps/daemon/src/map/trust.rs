@@ -9,7 +9,7 @@
 use stackly_core::catalog::local::{
     ExecutableUse, PermissionChange, Permissions, permission_changes,
 };
-use stackly_core::catalog::{RevokedInfo, TrustVerdict};
+use stackly_core::catalog::{ProviderEntry, Revocation, RevokedInfo, TrustVerdict};
 use stackly_domain::{ApprovalState, ProviderImportRecord, TrustDecision};
 use stackly_protocol::codes::provider as codes;
 use stackly_protocol::provider as dto;
@@ -173,6 +173,18 @@ pub fn revocation(info: &RevokedInfo) -> dto::RevocationInfo {
     }
 }
 
+/// One entry of the installed catalog's `revoked` list on the wire.
+#[must_use]
+pub fn catalog_revocation(revocation: &Revocation) -> dto::CatalogRevocation {
+    dto::CatalogRevocation {
+        provider: revocation.id.to_string(),
+        provider_revision: revocation.revision.to_string(),
+        manifest_sha256: revocation.manifest_sha256.map(|digest| digest.to_string()),
+        reason: revocation.reason.clone(),
+        since: revocation.since.to_string(),
+    }
+}
+
 /// The revocation of a verdict, when it is one.
 #[must_use]
 pub fn verdict_revocation(verdict: &TrustVerdict) -> Option<dto::RevocationInfo> {
@@ -276,6 +288,49 @@ pub fn revoked(provider: &str, provider_revision: &str, info: &RevokedInfo) -> E
         body = body.with_detail("catalogRevision", revision.to_string());
     }
     with_hint(body)
+}
+
+/// The refusal of the gate for `entry` under `verdict`, or `None` when the
+/// gate is open: `provider.approval_required` for the stored bytes of a
+/// local entry, `provider.revoked` with who revoked it and since when.
+#[must_use]
+pub fn verdict_refusal(entry: &ProviderEntry, verdict: &TrustVerdict) -> Option<ErrorBody> {
+    let key = entry.package.key();
+    match verdict {
+        TrustVerdict::Trusted => None,
+        TrustVerdict::Revoked(info) => Some(revoked(
+            key.provider().as_str(),
+            key.revision().as_str(),
+            info,
+        )),
+        _ => Some(match entry.local() {
+            Some(local) => approval_required(&local.record),
+            None => with_hint(
+                ErrorBody::new(
+                    &codes::APPROVAL_REQUIRED,
+                    format!("{} is not approved", key.provider()),
+                )
+                .with_detail("provider", key.provider().as_str())
+                .with_detail("providerRevision", key.revision().as_str()),
+            ),
+        }),
+    }
+}
+
+/// `body` with the static hint of its provider or catalog code, unless it
+/// has one: an operation's stored error and a precheck refusal reach the
+/// handler without the hint of their area.
+#[must_use]
+pub fn with_area_hint(body: ErrorBody) -> ErrorBody {
+    if body.hint().is_some() {
+        return body;
+    }
+    let hint = codes::hint(body.code(), body.details())
+        .or_else(|| stackly_protocol::codes::catalog::hint(body.code(), body.details()));
+    match hint {
+        Some(hint) => body.with_hint(hint),
+        None => body,
+    }
 }
 
 /// `body` with the static hint of its provider code.

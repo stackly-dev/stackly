@@ -18,11 +18,12 @@ use super::index::{
 };
 use super::model::{
     Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState, EntryOrigin,
-    InvalidEntry, PlannedEntry, PlatformNote, ProviderEntry, TileHint, UnavailableReason,
+    InvalidEntry, PlannedEntry, PlatformNote, ProviderEntry, Revocation, TileHint,
+    UnavailableReason,
 };
 use super::rules::{
     INDEX_MAX_LEN, LimitKind, PACKAGE_BYTES_MAX, category_from_code, index_problems,
-    namespace_allowed, package_limits,
+    namespace_allowed, package_limits, revoked_shipped_problems,
 };
 
 /// Loads the catalog in `location`.
@@ -111,7 +112,7 @@ fn load_with_budget(
     };
     // The digest is shown by `catalog.info` and logged, so it has to be the
     // digest of what was read, not only what the index claims.
-    if index.content_sha256 != content_sha256(&index.providers, &index.planned) {
+    if index.content_sha256 != content_sha256(&index.providers, &index.planned, &index.revoked) {
         return unavailable(
             UnavailableReason::IndexInvalid,
             "contentSha256 does not match the catalog content".into(),
@@ -153,16 +154,50 @@ fn load_with_budget(
             },
         }));
     }
-    CatalogState::Loaded(Arc::new(Catalog::new(
-        CatalogMeta {
-            revision: index.revision,
-            published_at: index.published_at,
-            content_sha256: digest,
-            location,
-            loaded_at: clock.now(),
-        },
-        entries,
-    )))
+    // A catalog never ships a revision it revokes (spec 0037).
+    let shipped: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            CatalogEntry::Provider(provider) => Some(provider.package.key()),
+            _ => None,
+        })
+        .collect();
+    if let Some(problem) = revoked_shipped_problems(&index.revoked, shipped)
+        .into_iter()
+        .next()
+    {
+        return unavailable(UnavailableReason::IndexInvalid, problem);
+    }
+    // `index_problems` already checked every field of the list.
+    let revocations = index
+        .revoked
+        .iter()
+        .filter_map(|entry| {
+            Some(Revocation::new(
+                entry.id.parse().ok()?,
+                entry.revision.parse().ok()?,
+                match &entry.manifest_sha256 {
+                    Some(digest) => Some(digest.parse().ok()?),
+                    None => None,
+                },
+                entry.reason.clone(),
+                entry.since,
+            ))
+        })
+        .collect();
+    CatalogState::Loaded(Arc::new(
+        Catalog::new(
+            CatalogMeta {
+                revision: index.revision,
+                published_at: index.published_at,
+                content_sha256: digest,
+                location,
+                loaded_at: clock.now(),
+            },
+            entries,
+        )
+        .with_revocations(revocations),
+    ))
 }
 
 /// The package bytes a catalog may hold together, and how many it holds.
@@ -332,6 +367,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use jiff::{SignedDuration, Timestamp};
+    use stackly_domain::ProviderRevisionKey;
     use stackly_testkit::{FakePlatform, TestRoot};
 
     use super::super::model::CATALOG_OUTDATED_AFTER;
@@ -699,7 +735,7 @@ mod tests {
         let parsed = CatalogIndex::from_json(text.as_bytes()).unwrap();
         // A well formed digest of other content: only the comparison can
         // catch it.
-        let other = content_sha256(&[], &[]);
+        let other = content_sha256(&[], &[], &[]);
         assert_ne!(parsed.content_sha256, other);
         std::fs::write(&index, text.replace(&parsed.content_sha256, &other)).unwrap();
 
@@ -793,7 +829,7 @@ mod tests {
         assert!(catalog.entries().is_empty());
         assert_eq!(
             catalog.meta().content_sha256.to_string(),
-            content_sha256(&[], &[])
+            content_sha256(&[], &[], &[])
         );
         assert_eq!(
             catalog.meta().published_at.to_string(),
@@ -830,7 +866,7 @@ mod tests {
             CatalogOptions::default(),
         ));
 
-        assert_eq!(index.content_sha256, content_sha256(&[], &[]));
+        assert_eq!(index.content_sha256, content_sha256(&[], &[], &[]));
         assert!(catalog.entries().is_empty());
     }
 
@@ -839,5 +875,190 @@ mod tests {
         for fixture in CatalogFixture::ALL {
             assert_eq!(fixture.package().key().provider().as_str(), fixture.id());
         }
+    }
+
+    // covers: AC-8 (spec 0037)
+    #[test]
+    fn a_revoked_list_loads_and_covers_only_its_keys_and_an_empty_one_is_not_written() {
+        let digest = "a".repeat(64);
+        let setup = setup(
+            &CatalogBuilder::new()
+                .revision(7)
+                .fixture(CatalogFixture::LinuxOnly)
+                .revoked(
+                    "official/gone",
+                    "1.0.0",
+                    None,
+                    "Insecure default.",
+                    "2026-09-01",
+                )
+                .revoked(
+                    "acme/demo",
+                    "1.0.0",
+                    Some(&digest),
+                    "Leaks its token.",
+                    "2026-09-02",
+                ),
+        );
+        let catalog = loaded(load(&setup, CatalogOptions::default()));
+
+        assert_eq!(catalog.revocations().len(), 2);
+        // Sorted by ID: acme first.
+        assert_eq!(catalog.revocations()[0].id.as_str(), "acme/demo");
+        let gone = ProviderRevisionKey::new(
+            "official/gone".parse().unwrap(),
+            "1.0.0".parse().unwrap(),
+            Sha256Digest::from_bytes([1; 32]),
+        );
+        let info = super::super::trust::catalog_revocation(&catalog, &gone)
+            .expect("every digest of the revision is revoked");
+        assert_eq!(info.by, super::super::trust::RevokedBy::Catalog);
+        assert_eq!(info.since.to_string(), "2026-09-01T00:00:00Z");
+        assert_eq!(info.reason.as_deref(), Some("Insecure default."));
+        assert_eq!(info.catalog_revision, Some(7));
+        let other_digest = ProviderRevisionKey::new(
+            "acme/demo".parse().unwrap(),
+            "1.0.0".parse().unwrap(),
+            Sha256Digest::from_bytes([1; 32]),
+        );
+        assert!(catalog.revocation(&other_digest).is_none());
+        let named = ProviderRevisionKey::new(
+            "acme/demo".parse().unwrap(),
+            "1.0.0".parse().unwrap(),
+            digest.parse().unwrap(),
+        );
+        assert!(catalog.revocation(&named).is_some());
+        let other_revision = ProviderRevisionKey::new(
+            "official/gone".parse().unwrap(),
+            "1.0.1".parse().unwrap(),
+            Sha256Digest::from_bytes([1; 32]),
+        );
+        assert!(catalog.revocation(&other_revision).is_none());
+        // A local snapshot keeps the list of the base catalog.
+        assert_eq!(catalog.with_local(Vec::new()).revocations().len(), 2);
+
+        let plain = CatalogBuilder::new()
+            .fixture(CatalogFixture::LinuxOnly)
+            .assemble()
+            .unwrap()
+            .index;
+        assert!(!plain.to_pretty_json().contains("revoked"));
+        assert_eq!(
+            plain.content_sha256,
+            content_sha256(&plain.providers, &plain.planned, &[])
+        );
+    }
+
+    // covers: AC-8 (spec 0037)
+    #[test]
+    fn a_revoked_entry_that_matches_a_shipped_provider_fails_the_build_and_the_load() {
+        let package = CatalogFixture::LinuxOnly.package();
+        let key = package.key();
+        let built = CatalogBuilder::new()
+            .fixture(CatalogFixture::LinuxOnly)
+            .revoked(
+                key.provider().as_str(),
+                key.revision().as_str(),
+                None,
+                "Insecure default.",
+                "2026-09-01",
+            )
+            .assemble()
+            .expect_err("a catalog never ships what it revokes");
+        assert!(
+            matches!(&built, super::super::testing::CatalogBuildError::Rules(lines)
+                if lines.iter().any(|line| line.contains("matches a provider entry"))),
+            "{built:?}"
+        );
+
+        // The same index written by hand fails the loader.
+        let setup = setup(&CatalogBuilder::new().fixture(CatalogFixture::LinuxOnly));
+        let path = setup.dir.join("catalog.json");
+        let index = CatalogIndex::from_json(&std::fs::read(&path).unwrap()).unwrap();
+        let index = index.with_revoked(vec![super::super::index::IndexRevoked {
+            id: key.provider().to_string(),
+            revision: key.revision().to_string(),
+            manifest_sha256: Some(key.manifest_sha256().to_string()),
+            reason: "Insecure default.".to_owned(),
+            since: "2026-09-01".parse().unwrap(),
+        }]);
+        std::fs::write(&path, index.to_pretty_json()).unwrap();
+
+        let (reason, detail) = unavailable(load(&setup, CatalogOptions::default()));
+        assert_eq!(reason, UnavailableReason::IndexInvalid);
+        assert!(detail.contains("matches a provider entry"), "{detail}");
+    }
+
+    // covers: AC-8 (spec 0037)
+    #[test]
+    fn a_revoked_list_out_of_its_rules_makes_the_index_invalid() {
+        let entry =
+            |id: &str, digest: Option<&str>, reason: &str| super::super::index::IndexRevoked {
+                id: id.to_owned(),
+                revision: "1.0.0".to_owned(),
+                manifest_sha256: digest.map(str::to_owned),
+                reason: reason.to_owned(),
+                since: "2026-09-01".parse().unwrap(),
+            };
+        let problems = |revoked: Vec<super::super::index::IndexRevoked>| {
+            super::super::rules::revoked_problems(&revoked)
+        };
+        assert!(problems(vec![entry("acme/a", None, "Why.")]).is_empty());
+        assert_eq!(
+            problems(vec![
+                entry("acme/b", None, "Why."),
+                entry("acme/a", None, "Why.")
+            ])
+            .len(),
+            1
+        );
+        assert_eq!(
+            problems(vec![
+                entry("acme/a", None, "Why."),
+                entry("acme/a", None, "Why.")
+            ])
+            .len(),
+            1
+        );
+        assert_eq!(problems(vec![entry("not an id", None, "Why.")]).len(), 1);
+        assert_eq!(
+            problems(vec![entry("acme/a", Some("ABC"), "Why.")]).len(),
+            1
+        );
+        assert_eq!(problems(vec![entry("acme/a", None, "")]).len(), 1);
+        assert_eq!(problems(vec![entry("acme/a", None, "two\nlines")]).len(), 1);
+        assert_eq!(
+            problems(vec![entry("acme/a", None, &"x".repeat(257))]).len(),
+            1
+        );
+        let many: Vec<_> = (0..65)
+            .map(|n| entry(&format!("acme/p{n:03}"), None, "Why."))
+            .collect();
+        assert_eq!(problems(many).len(), 1);
+
+        let future = CatalogBuilder::new().revoked("acme/a", "1.0.0", None, "Why.", "2026-12-01");
+        let spec_check = super::super::assemble::assemble(
+            &super::super::assemble::SourceSpec {
+                revision: 1,
+                published_at: Timestamp::constant(1_790_812_800, 0),
+                providers: Vec::new(),
+                planned: Vec::new(),
+                revoked: vec![entry("acme/a", None, "Why.")],
+            },
+            &BTreeMap::new(),
+            super::super::assemble::AssembleOptions {
+                allow_testing: false,
+                not_after: Some("2026-08-31T12:00:00Z".parse().unwrap()),
+            },
+        )
+        .expect_err("a revocation dated after the build is refused");
+        assert!(
+            spec_check.iter().any(|line| line.contains("in the future")),
+            "{spec_check:?}"
+        );
+        assert!(
+            future.assemble().is_ok(),
+            "the test builder has no build clock"
+        );
     }
 }

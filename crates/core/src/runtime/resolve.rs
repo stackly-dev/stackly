@@ -7,7 +7,8 @@ use stackly_domain::{ExactVersion, RuntimeLine, RuntimeSelector, Sha256Digest, T
 use stackly_platform::HostFacts;
 
 use crate::catalog::{
-    Installability, NotInstallableReason, ProviderEntry, VersionNotFound, provider_installability,
+    Installability, NotInstallableReason, ProviderEntry, TrustVerdict, VersionNotFound,
+    provider_installability,
 };
 use crate::provider::{ArtifactStatus, VersionArtifact};
 
@@ -89,6 +90,7 @@ pub fn resolve<'a>(
     entry: &'a ProviderEntry,
     selector: &RuntimeSelector,
     host: &HostFacts,
+    trust: &TrustVerdict,
 ) -> Result<Resolution<'a>, ResolveError> {
     let artifacts = entry.artifacts();
     let (version, wanted_digest) = match selector {
@@ -104,7 +106,7 @@ pub fn resolve<'a>(
         ),
         _ => return Err(unresolved(artifacts, UnresolvedReason::NoMatch)),
     };
-    let verdict = provider_installability(entry, &version, host)
+    let verdict = provider_installability(entry, &version, host, trust)
         .map_err(|VersionNotFound| unresolved(artifacts, UnresolvedReason::NoMatch))?;
     match verdict {
         Installability::Installable { artifact } => {

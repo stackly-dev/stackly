@@ -9,11 +9,12 @@
 
 use jiff::Timestamp;
 use stackly_domain::{
-    ApprovalState, GuardView, ProviderImportRecord, ProviderName, ProviderRevisionKey,
+    ApprovalState, Generation, GuardView, ProviderImportRecord, ProviderName, ProviderRevisionKey,
     ProviderRevisionRecord, Registry, RegistryError, Sha256Digest, TrustDecision,
 };
 
 use super::model::{Catalog, LocalInfo, ProviderEntry};
+use super::rules::namespace_allowed;
 
 /// What the gate decides for an entry or a pinned revision.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,12 +85,17 @@ impl RevokedInfo {
     }
 }
 
-/// The revocation of the installed catalog that matches `key`.
-///
-/// The installed catalog carries no `revoked` list yet, so none matches.
-// provisional: F37 step 8 (the catalog `revoked` list and `Catalog::revocation`)
-const fn catalog_revocation(_catalog: &Catalog, _key: &ProviderRevisionKey) -> Option<RevokedInfo> {
-    None
+/// The revocation of the installed catalog that matches `key`, as the
+/// verdict carries it: by the catalog, since midnight UTC of its date, with
+/// its reason and the catalog revision.
+#[must_use]
+pub fn catalog_revocation(catalog: &Catalog, key: &ProviderRevisionKey) -> Option<RevokedInfo> {
+    catalog.revocation(key).map(|revocation| RevokedInfo {
+        by: RevokedBy::Catalog,
+        since: revocation.since_instant(),
+        reason: Some(revocation.reason.clone()),
+        catalog_revision: Some(catalog.meta().revision),
+    })
 }
 
 /// The verdict of a local import row: `pending` needs an approval, a
@@ -157,11 +163,33 @@ pub fn require_entry_trust(
     Ok(fresh_trust(stored.as_ref(), &info.record.package_sha256))
 }
 
+/// The verdict of a local import read again from the registry for bytes an
+/// operation froze: the row of `provider` must still hold `package_sha256`
+/// and its approval. The `install_runtime` work calls it right before the
+/// first exec of a binary from a local entry.
+///
+/// # Errors
+///
+/// Returns the [`RegistryError`] of a failed read; the caller fails, never
+/// trusts.
+pub fn stored_trust(
+    registry: &dyn Registry,
+    provider: &ProviderName,
+    package_sha256: &Sha256Digest,
+) -> Result<(TrustVerdict, Generation), RegistryError> {
+    let stored = registry.provider_import(provider)?;
+    Ok((
+        fresh_trust(stored.value.as_ref(), package_sha256),
+        stored.generation,
+    ))
+}
+
 /// The verdict of a pinned revision, from its registry record, which the
 /// caller has just read: a matching catalog revocation first (none without
 /// a loaded catalog), then a `revoked` approval is a revocation by the user
-/// at `approved_at`; anything else is trusted, since a pinned copy never
-/// downloads.
+/// at `approved_at`. A revision outside the catalog namespaces without a
+/// recorded approval needs one; anything else is trusted, since a pinned
+/// copy never downloads.
 #[must_use]
 pub fn pinned_trust(
     catalog: Option<&Catalog>,
@@ -175,7 +203,13 @@ pub fn pinned_trust(
         Some(TrustDecision::Revoked) => TrustVerdict::Revoked(RevokedInfo::by_user(
             record.approved_at.unwrap_or(Timestamp::UNIX_EPOCH),
         )),
-        Some(TrustDecision::Approved) | None => TrustVerdict::Trusted,
+        Some(TrustDecision::Approved) => TrustVerdict::Trusted,
+        // A catalog only ships `official` (and, in tests, `testing`)
+        // packages, and a pin of a local entry always records its approval.
+        // A revision of another namespace without one was pinned from a
+        // local package that nobody approved: it is not trusted.
+        None if namespace_allowed(key.provider(), true) => TrustVerdict::Trusted,
+        None => TrustVerdict::ApprovalRequired,
     }
 }
 

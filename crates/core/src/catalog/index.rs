@@ -38,6 +38,38 @@ pub struct CatalogIndex {
     pub providers: Vec<IndexProvider>,
     /// Planned entries, sorted by ID.
     pub planned: Vec<IndexPlanned>,
+    /// Revoked provider revisions, sorted by ID, revision, and manifest
+    /// digest (spec 0037, *Revocation di catalog*). Left out when empty, so
+    /// an index without one keeps the bytes and the digest it had.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revoked: Vec<IndexRevoked>,
+}
+
+/// One revoked provider revision of the index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct IndexRevoked {
+    /// The provider ID, of any namespace.
+    pub id: String,
+    /// The revoked revision label.
+    pub revision: String,
+    /// The revoked manifest digest; `None` revokes every digest of the
+    /// revision.
+    #[serde(default)]
+    pub manifest_sha256: Option<String>,
+    /// Why, 1 to 256 bytes without control characters.
+    pub reason: String,
+    /// Since when, a date that was not in the future at build time.
+    pub since: jiff::civil::Date,
+}
+
+impl IndexRevoked {
+    /// The sort key of the list: ID, revision, then manifest digest, with
+    /// no digest first.
+    #[must_use]
+    pub fn sort_key(&self) -> (&str, &str, Option<&str>) {
+        (&self.id, &self.revision, self.manifest_sha256.as_deref())
+    }
 }
 
 /// One provider entry of the index: a package copy and its digests.
@@ -97,15 +129,26 @@ pub struct IndexPlatformNote {
 struct CatalogContent<'a> {
     providers: &'a [IndexProvider],
     planned: &'a [IndexPlanned],
+    #[serde(skip_serializing_if = "<[IndexRevoked]>::is_empty")]
+    revoked: &'a [IndexRevoked],
 }
 
 /// Returns the content digest of a catalog: the SHA-256, as lowercase hex,
-/// of the compact `serde_json` form of `{ providers, planned }` with each
-/// list sorted by ID. `revision`, `publishedAt`, and `contentSha256` are
-/// not part of it.
+/// of the compact `serde_json` form of `{ providers, planned, revoked }`
+/// with each list sorted, and `revoked` left out when empty, so the digest
+/// of a catalog without revocations is the one it had before spec 0037.
+/// `revision`, `publishedAt`, and `contentSha256` are not part of it.
 #[must_use]
-pub fn content_sha256(providers: &[IndexProvider], planned: &[IndexPlanned]) -> String {
-    let content = CatalogContent { providers, planned };
+pub fn content_sha256(
+    providers: &[IndexProvider],
+    planned: &[IndexPlanned],
+    revoked: &[IndexRevoked],
+) -> String {
+    let content = CatalogContent {
+        providers,
+        planned,
+        revoked,
+    };
     // Serializing plain strings, numbers, and lists to a Vec cannot fail.
     let bytes = serde_json::to_vec(&content).unwrap_or_default();
     hex(&Sha256::digest(bytes))
@@ -156,7 +199,7 @@ impl CatalogIndex {
     ) -> Self {
         providers.sort_by(|a, b| a.id.cmp(&b.id));
         planned.sort_by(|a, b| a.id.cmp(&b.id));
-        let content_sha256 = content_sha256(&providers, &planned);
+        let content_sha256 = content_sha256(&providers, &planned, &[]);
         Self {
             schema: CATALOG_SCHEMA.to_owned(),
             revision,
@@ -164,7 +207,18 @@ impl CatalogIndex {
             content_sha256,
             providers,
             planned,
+            revoked: Vec::new(),
         }
+    }
+
+    /// Sets the revoked list, sorted, and the content digest that covers
+    /// it.
+    #[must_use]
+    pub fn with_revoked(mut self, mut revoked: Vec<IndexRevoked>) -> Self {
+        revoked.sort_by(|a, b| a.sort_key().cmp(&b.sort_key()));
+        self.content_sha256 = content_sha256(&self.providers, &self.planned, &revoked);
+        self.revoked = revoked;
+        self
     }
 
     /// Writes the index as pretty JSON with an indent of 2 spaces and one
@@ -258,7 +312,7 @@ mod tests {
         assert_eq!(index.planned[0].id, "official/clickhouse");
         assert_eq!(
             index.content_sha256,
-            content_sha256(&index.providers, &index.planned)
+            content_sha256(&index.providers, &index.planned, &index.revoked)
         );
         assert_eq!(index.content_sha256.len(), 64);
     }

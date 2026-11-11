@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use jiff::{SignedDuration, Timestamp};
 use stackly_domain::{
-    CompatibilityRecordRow, ExactVersion, Os, ProviderImportRecord, ProviderName, Sha256Digest,
-    SupportStatus,
+    CompatibilityRecordRow, ExactVersion, Os, ProviderImportRecord, ProviderName,
+    ProviderRevisionKey, RevisionLabel, Sha256Digest, SupportStatus,
 };
 
 use crate::provider::{Category, Issue, ValidatedPackage, VersionArtifact};
@@ -323,11 +323,71 @@ pub struct CatalogMeta {
     pub loaded_at: Timestamp,
 }
 
-/// A loaded catalog: its facts and its entries in display order.
+/// One revoked provider revision of the installed catalog (spec 0037,
+/// *Revocation di catalog*). It is read from the loaded catalog only, never
+/// copied to the registry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Revocation {
+    /// The provider ID.
+    pub id: ProviderName,
+    /// The revoked revision label.
+    pub revision: RevisionLabel,
+    /// The revoked manifest digest; `None` covers every digest.
+    pub manifest_sha256: Option<Sha256Digest>,
+    /// Why.
+    pub reason: String,
+    /// Since when.
+    pub since: jiff::civil::Date,
+}
+
+impl Revocation {
+    /// A revocation of `id` at `revision`, for every digest unless
+    /// `manifest_sha256` names one.
+    #[must_use]
+    pub const fn new(
+        id: ProviderName,
+        revision: RevisionLabel,
+        manifest_sha256: Option<Sha256Digest>,
+        reason: String,
+        since: jiff::civil::Date,
+    ) -> Self {
+        Self {
+            id,
+            revision,
+            manifest_sha256,
+            reason,
+            since,
+        }
+    }
+
+    /// Returns whether it covers `key`: the same ID and revision, and no
+    /// digest or the key's.
+    #[must_use]
+    pub fn covers(&self, key: &ProviderRevisionKey) -> bool {
+        self.id == *key.provider()
+            && self.revision == *key.revision()
+            && self
+                .manifest_sha256
+                .is_none_or(|digest| digest == *key.manifest_sha256())
+    }
+
+    /// `since` as an instant: midnight UTC of the date.
+    #[must_use]
+    pub fn since_instant(&self) -> Timestamp {
+        self.since
+            .to_zoned(jiff::tz::TimeZone::UTC)
+            .map_or(Timestamp::UNIX_EPOCH, |zoned| zoned.timestamp())
+    }
+}
+
+/// A loaded catalog: its facts, its entries in display order, and its
+/// revocations.
 #[derive(Debug, Clone)]
 pub struct Catalog {
     meta: CatalogMeta,
     entries: Vec<CatalogEntry>,
+    revocations: Vec<Revocation>,
 }
 
 impl Catalog {
@@ -335,7 +395,32 @@ impl Catalog {
     /// *Urutan tampil*).
     pub(crate) fn new(meta: CatalogMeta, mut entries: Vec<CatalogEntry>) -> Self {
         entries.sort_by(display_order);
-        Self { meta, entries }
+        Self {
+            meta,
+            entries,
+            revocations: Vec::new(),
+        }
+    }
+
+    /// The catalog with `revocations` as its `revoked` list.
+    #[must_use]
+    pub fn with_revocations(mut self, revocations: Vec<Revocation>) -> Self {
+        self.revocations = revocations;
+        self
+    }
+
+    /// Returns the `revoked` list, in index order.
+    #[must_use]
+    pub fn revocations(&self) -> &[Revocation] {
+        &self.revocations
+    }
+
+    /// Returns the first revocation that covers `key`.
+    #[must_use]
+    pub fn revocation(&self, key: &ProviderRevisionKey) -> Option<&Revocation> {
+        self.revocations
+            .iter()
+            .find(|revocation| revocation.covers(key))
     }
 
     /// Builds a catalog from validated entries for tests, with fixed test
@@ -409,7 +494,7 @@ impl Catalog {
             .cloned()
             .collect();
         entries.extend(local);
-        Self::new(self.meta.clone(), entries)
+        Self::new(self.meta.clone(), entries).with_revocations(self.revocations.clone())
     }
 
     /// Returns how many entries are local, valid or not.
@@ -490,7 +575,7 @@ fn test_digest(entries: &[CatalogEntry]) -> Sha256Digest {
     }
     providers.sort_by(|a, b| a.id.cmp(&b.id));
     planned.sort_by(|a, b| a.id.cmp(&b.id));
-    content_sha256(&providers, &planned)
+    content_sha256(&providers, &planned, &[])
         .parse()
         .expect("content_sha256 is 64 lowercase hex characters")
 }

@@ -23,6 +23,7 @@ use stackly_platform::Platform;
 use super::local::{ImportCheck, ImportLimit, import_limit};
 use super::model::{Catalog, CatalogOptions};
 use super::store::{StoreError, StoreMode, write_package};
+use super::trust::RevokedInfo;
 use crate::PreparedLayout;
 use crate::operation::{
     AuditNote, BoxFuture, CompensationError, CompensationResult, CompensationScope, Compensator,
@@ -48,6 +49,9 @@ const IMPORT_CHANGED: ErrorCodeName = ErrorCodeName::from_static("provider.impor
 const IMPORT_LIMIT: ErrorCodeName = ErrorCodeName::from_static("provider.import_limit");
 const IMPORT_NOT_FOUND: ErrorCodeName = ErrorCodeName::from_static("provider.import_not_found");
 const STORE_FAILED: ErrorCodeName = ErrorCodeName::from_static("provider.store_failed");
+const NOT_APPROVED: ErrorCodeName = ErrorCodeName::from_static("provider.not_approved");
+const REVOKED: ErrorCodeName = ErrorCodeName::from_static("provider.revoked");
+const NOT_INSTALLABLE: ErrorCodeName = ErrorCodeName::from_static("catalog.not_installable");
 
 /// What happened to a provider, for the `catalog.changed` event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -112,13 +116,40 @@ pub enum ProviderOpError {
         /// `not_imported` or `not_local`.
         reason: &'static str,
     },
-    /// The store copy could not be written.
-    #[error("the provider package could not be stored: {source}")]
+    /// The store copy could not be written. The text is the fixed one of
+    /// the code table: the store error names paths under the data root, so
+    /// it reaches only the daemon log and the `reason` detail (AC-17).
+    #[error("the provider package could not be stored")]
     Store {
         /// The provider.
         provider: String,
         /// What failed.
         source: StoreError,
+    },
+    /// A revoke found no approval to revoke.
+    #[error("{provider} has no approval to revoke")]
+    NotApproved {
+        /// The provider.
+        provider: String,
+        /// Where its stored bytes stand, such as `pending`.
+        approval: &'static str,
+    },
+    /// The revision is revoked by the installed catalog, so it cannot be
+    /// approved.
+    #[error("{provider} {provider_revision} is revoked")]
+    Revoked {
+        /// The provider.
+        provider: String,
+        /// The revoked revision label.
+        provider_revision: String,
+        /// Who revoked it and since when.
+        info: RevokedInfo,
+    },
+    /// The stored copy does not load or match, so it cannot be approved.
+    #[error("the stored copy of {provider} failed validation")]
+    PackageInvalid {
+        /// The provider.
+        provider: String,
     },
     /// The registry failed.
     #[error("the registry failed: {0}")]
@@ -135,6 +166,9 @@ impl OperationError for ProviderOpError {
             Self::Limit(_) => IMPORT_LIMIT,
             Self::NotFound { .. } => IMPORT_NOT_FOUND,
             Self::Store { .. } => STORE_FAILED,
+            Self::NotApproved { .. } => NOT_APPROVED,
+            Self::Revoked { .. } => REVOKED,
+            Self::PackageInvalid { .. } => NOT_INSTALLABLE,
             Self::Registry(error) => registry_code(error),
             Self::Internal(_) => operation_codes::INTERNAL_UNEXPECTED,
         }
@@ -171,9 +205,48 @@ impl OperationError for ProviderOpError {
                 (key("provider"), provider.clone()),
                 (key("reason"), source.reason().to_owned()),
             ],
+            Self::NotApproved { provider, approval } => vec![
+                (key("provider"), provider.clone()),
+                (key("approval"), (*approval).to_owned()),
+            ],
+            Self::Revoked {
+                provider,
+                provider_revision,
+                info,
+            } => revoked_details(provider, provider_revision, info),
+            Self::PackageInvalid { provider } => vec![
+                (key("provider"), provider.clone()),
+                (key("reason"), "package_invalid".to_owned()),
+            ],
             Self::Registry(_) | Self::Internal(_) => Vec::new(),
         }
     }
+}
+
+/// The details of `provider.revoked` (spec 0037, *Kode error di wire*).
+#[must_use]
+pub fn revoked_details(
+    provider: &str,
+    provider_revision: &str,
+    info: &RevokedInfo,
+) -> Vec<(DetailKey, String)> {
+    let key = |text: &str| -> DetailKey {
+        text.parse()
+            .expect("the detail keys of spec 0037 are camelCase constants")
+    };
+    let mut details = vec![
+        (key("provider"), provider.to_owned()),
+        (key("providerRevision"), provider_revision.to_owned()),
+        (key("by"), info.by.as_code().to_owned()),
+        (
+            key("since"),
+            info.since.strftime("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+        ),
+    ];
+    if let Some(revision) = info.catalog_revision {
+        details.push((key("catalogRevision"), revision.to_string()));
+    }
+    details
 }
 
 fn failed(error: ProviderOpError) -> WorkError {
@@ -257,6 +330,55 @@ pub fn remove_work(
         provider,
         refresher,
     })
+}
+
+/// The `approve_provider` work: approves exactly the stored bytes with the
+/// digest `expected`, which the client showed. `catalog` is the catalog of
+/// this run, whose revocation of the revision refuses the approval.
+#[must_use]
+pub fn approve_work(
+    provider: ProviderName,
+    expected: Sha256Digest,
+    catalog: Option<Arc<Catalog>>,
+    refresher: Arc<dyn CatalogRefresher>,
+) -> Box<dyn OperationWork> {
+    Box::new(DecideWork {
+        provider,
+        approve: Some((expected, catalog)),
+        refresher,
+    })
+}
+
+/// The `revoke_provider` work.
+#[must_use]
+pub fn revoke_work(
+    provider: ProviderName,
+    refresher: Arc<dyn CatalogRefresher>,
+) -> Box<dyn OperationWork> {
+    Box::new(DecideWork {
+        provider,
+        approve: None,
+        refresher,
+    })
+}
+
+struct DecideWork {
+    provider: ProviderName,
+    approve: Option<(Sha256Digest, Option<Arc<Catalog>>)>,
+    refresher: Arc<dyn CatalogRefresher>,
+}
+
+impl OperationWork for DecideWork {
+    fn run(self: Box<Self>, ctx: OperationContext) -> BoxFuture<'static, WorkResult> {
+        Box::pin(async move {
+            match self.approve {
+                Some((expected, catalog)) => {
+                    run_approve(self.provider, expected, catalog, self.refresher, ctx).await
+                }
+                None => run_revoke(self.provider, self.refresher, ctx).await,
+            }
+        })
+    }
 }
 
 struct ImportWork {
@@ -384,6 +506,7 @@ async fn run_import(
                 .await?;
         }
         Err(source) => {
+            tracing::warn!(error = %source, reason = source.reason(), "a provider package could not be stored");
             ctx.not_created(item, ReasonCode::from_static("store_failed"))
                 .await?;
             return Err(failed(ProviderOpError::Store {
@@ -530,6 +653,200 @@ async fn run_remove(
     refresher.refresh(provider, LocalChange::Removed).await;
     ctx.finish_step(None).await?;
     Ok(settled())
+}
+
+async fn run_approve(
+    provider: ProviderName,
+    expected: Sha256Digest,
+    catalog: Option<Arc<Catalog>>,
+    refresher: Arc<dyn CatalogRefresher>,
+    mut ctx: OperationContext,
+) -> WorkResult {
+    ctx.begin_step(StepSpec::new(READ)).await?;
+    ctx.set_stage(READ).await?;
+    // The permissions of the decision come from the store copy, never from
+    // the client (spec 0037, *Value sourcing*).
+    let platform = Arc::clone(ctx.platform());
+    let layout = Arc::clone(ctx.layout());
+    let checked = blocking(move || {
+        let dir = layout.layout().provider_import_dir(&expected);
+        check_package(platform.fs(), &dir, NameCheck::Skip)
+    })
+    .await?;
+    let package = checked
+        .package
+        .filter(|package| super::local::package_sha256(package.files()) == expected)
+        .ok_or_else(|| {
+            failed(ProviderOpError::PackageInvalid {
+                provider: provider.to_string(),
+            })
+        })?;
+    let key = package.key().clone();
+    let permissions = super::local::permissions(&package);
+    if let Some(info) = catalog
+        .as_deref()
+        .and_then(|catalog| super::trust::catalog_revocation(catalog, &key))
+    {
+        return Err(failed(ProviderOpError::Revoked {
+            provider: provider.to_string(),
+            provider_revision: key.revision().to_string(),
+            info,
+        }));
+    }
+    ctx.finish_step(None).await?;
+
+    ctx.begin_step(StepSpec::new(COMMIT)).await?;
+    ctx.set_stage(COMMIT).await?;
+    let registry = Arc::clone(ctx.registry());
+    let read = provider.clone();
+    let stored = blocking(move || registry.provider_import(&read))
+        .await?
+        .map_err(|error| failed(ProviderOpError::Registry(error)))?
+        .value;
+    let mut changes: Vec<&'static str> = Vec::new();
+    if let Some(record) = &stored {
+        if let Some(decided) = record
+            .decision
+            .as_ref()
+            .filter(|decided| decided.package_sha256 != expected)
+            && let Ok(previous) = super::local::Permissions::from_json(&decided.permissions_json)
+        {
+            changes = super::local::permission_changes(
+                &previous,
+                &decided.provider_revision,
+                &permissions,
+                key.revision(),
+            )
+            .into_iter()
+            .map(super::local::PermissionChange::as_code)
+            .collect();
+        }
+        ctx.set_audit_note(note(record, &changes));
+    }
+    let now = ctx.platform().clock().now();
+    let permissions_json = permissions.to_json();
+    let guard_provider = provider.clone();
+    let guard_key = key.clone();
+    let outcome = ctx
+        .commit_guarded(Box::new(move |view| {
+            let Some(row) = view.provider_import(&guard_provider)? else {
+                return Ok(GuardDecision::Refuse(Box::new(ProviderOpError::NotFound {
+                    provider: guard_provider.to_string(),
+                    reason: "not_imported",
+                })));
+            };
+            if row.package_sha256 != expected {
+                return Ok(GuardDecision::Refuse(Box::new(ProviderOpError::Changed {
+                    provider: guard_provider.to_string(),
+                    expected: expected.to_string(),
+                    actual: row.package_sha256.to_string(),
+                })));
+            }
+            if row.approval() == stackly_domain::ApprovalState::Approved {
+                return Ok(GuardDecision::Write(Vec::new()));
+            }
+            Ok(GuardDecision::Write(vec![
+                WriteOp::DecideProviderImport {
+                    provider: guard_provider,
+                    decision: stackly_domain::ImportDecision::new(
+                        stackly_domain::TrustDecision::Approved,
+                        expected,
+                        guard_key.revision().clone(),
+                        permissions_json,
+                        now,
+                    ),
+                },
+                WriteOp::SetProviderRevisionApproval {
+                    key: guard_key,
+                    approval: stackly_domain::TrustDecision::Approved,
+                    at: now,
+                },
+            ]))
+        }))
+        .await
+        .map_err(engine_registry)?;
+    refused(outcome, "the approve guard refused")?;
+    refresher.refresh(provider, LocalChange::Approved).await;
+    ctx.finish_step(None).await?;
+    Ok(settled())
+}
+
+async fn run_revoke(
+    provider: ProviderName,
+    refresher: Arc<dyn CatalogRefresher>,
+    mut ctx: OperationContext,
+) -> WorkResult {
+    ctx.begin_step(StepSpec::new(COMMIT)).await?;
+    ctx.set_stage(COMMIT).await?;
+    let registry = Arc::clone(ctx.registry());
+    let read = provider.clone();
+    let stored = blocking(move || registry.provider_import(&read))
+        .await?
+        .map_err(|error| failed(ProviderOpError::Registry(error)))?
+        .value;
+    if let Some(record) = &stored {
+        ctx.set_audit_note(note(record, &[]));
+    }
+    let now = ctx.platform().clock().now();
+    let guard_provider = provider.clone();
+    let outcome = ctx
+        .commit_guarded(Box::new(move |view| {
+            let Some(row) = view.provider_import(&guard_provider)? else {
+                return Ok(GuardDecision::Refuse(Box::new(ProviderOpError::NotFound {
+                    provider: guard_provider.to_string(),
+                    reason: "not_imported",
+                })));
+            };
+            let approved_decision = row
+                .decision
+                .as_ref()
+                .filter(|decided| decided.decision == stackly_domain::TrustDecision::Approved);
+            if approved_decision.is_none()
+                && !view.provider_has_approved_revision(&guard_provider)?
+            {
+                return Ok(GuardDecision::Refuse(Box::new(
+                    ProviderOpError::NotApproved {
+                        provider: guard_provider.to_string(),
+                        approval: row.approval().as_code(),
+                    },
+                )));
+            }
+            let mut ops = Vec::new();
+            if let Some(decided) = approved_decision {
+                ops.push(WriteOp::DecideProviderImport {
+                    provider: guard_provider.clone(),
+                    decision: stackly_domain::ImportDecision::new(
+                        stackly_domain::TrustDecision::Revoked,
+                        decided.package_sha256,
+                        decided.provider_revision.clone(),
+                        decided.permissions_json.clone(),
+                        now,
+                    ),
+                });
+            }
+            ops.push(WriteOp::RevokeProviderApprovals {
+                provider: guard_provider,
+                at: now,
+            });
+            Ok(GuardDecision::Write(ops))
+        }))
+        .await
+        .map_err(engine_registry)?;
+    refused(outcome, "the revoke guard refused")?;
+    refresher.refresh(provider, LocalChange::Revoked).await;
+    ctx.finish_step(None).await?;
+    Ok(settled())
+}
+
+/// The error of a guard that refused, or nothing for a commit.
+fn refused(outcome: Guarded, fallback: &str) -> Result<(), WorkError> {
+    match outcome {
+        Guarded::Committed(_) => Ok(()),
+        Guarded::Refused(reason) => Err(failed(match reason.downcast::<ProviderOpError>() {
+            Ok(error) => *error,
+            Err(_) => ProviderOpError::Internal(fallback.to_owned()),
+        })),
+    }
 }
 
 /// The custom item key of the store folder of `digest`.

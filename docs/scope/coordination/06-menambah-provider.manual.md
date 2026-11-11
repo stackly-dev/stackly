@@ -30,6 +30,9 @@ Dari laporan `arc-f38-spec` (2026-11-11). Semua langkah ini hanya bisa dilakukan
 
 Hasil: tulis `PASS` atau `FAIL` per nomor. AC-5 tetap `BLOCKED` (`owner: user`) sampai nomor 6 `PASS`.
 
+5. Sesi GUI nyata untuk form paket contoh (Done when fitur 36 kalimat 2; dari `chk-f36-verify`): app Debug di atas daemon nyata di root sementara yang memuat `providers/example` (catalog pengembangan), buka Create Instance untuk provider Example dan pastikan form tampil dari schema paket tanpa kode khusus, lalu create, start, dan health `healthy`.
+6. Checkout bersih tanpa cache crate cargo (spec 0036 AC-13): ulangi langkah 4 dengan `CARGO_HOME` kosong; butuh unduhan crate. Walkthrough fitur 38 sudah membuktikan jalur yang sama dengan cache hangat.
+
 ## Fitur 37: import provider lokal dan trust (spec 0037)
 
 Dari laporan `arc-f37-spec` (2026-11-11). Teks lengkap ditulis `/develop` di `verify.md` spec 0037 bagian `### UI / manual` saat langkah 13; langkah ini baru bisa dijalankan setelah build fitur 37 selesai. Pakai root sementara (`STACKLY_ROOT`), tidak pernah Application Support asli, kecuali langkah 1 yang butuh agent terpasang.

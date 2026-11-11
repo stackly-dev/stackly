@@ -4,14 +4,17 @@
 //! to the wire `CreateForm`.
 
 use stackly_domain::{
-    CapabilitySet, Instance, InstanceName, ProviderName, RevisionLabel, Runtime, RuntimeState,
-    Sha256Digest,
+    CapabilitySet, Instance, InstanceName, ProviderName, Registry, RegistryError, RevisionLabel,
+    Runtime, RuntimeState, Sha256Digest,
 };
 
 use super::draft::NAME_SUGGESTION_MAX_SUFFIX;
 use super::facts::PackageSource;
 use super::port::slots;
-use crate::catalog::{CatalogEntry, CatalogLocation, CatalogMeta, CatalogState, ProviderEntry};
+use crate::catalog::{
+    CatalogEntry, CatalogLocation, CatalogMeta, CatalogState, ProviderEntry, TrustVerdict,
+    require_entry_trust,
+};
 use crate::provider::{
     Category, EndpointPurpose, EndpointTransport, SettingField, ValidatedPackage,
 };
@@ -87,12 +90,35 @@ pub enum FormError {
     },
     /// No entry matches.
     ProviderNotFound,
-    /// More than one entry matches.
-    ProviderAmbiguous,
+    /// More than one entry matches; the client asks the user to pick one
+    /// of `candidates` (spec 0037, *Software yang sama*).
+    ProviderAmbiguous {
+        /// The IDs of the matching entries, at most
+        /// [`CANDIDATES_MAX`](FormError::CANDIDATES_MAX).
+        candidates: Vec<String>,
+    },
     /// The entry is planned or invalid.
     ProviderUnavailable {
         /// `planned` or `invalid`.
         state: &'static str,
+    },
+    /// A local entry whose stored bytes are not approved (spec 0037).
+    ApprovalRequired {
+        /// The provider.
+        provider: String,
+        /// Its revision label.
+        provider_revision: String,
+        /// The digest of its stored bytes.
+        package_sha256: String,
+    },
+    /// The revision is revoked (spec 0037).
+    Revoked {
+        /// The provider.
+        provider: String,
+        /// The revoked revision label.
+        provider_revision: String,
+        /// Who revoked it and since when.
+        info: crate::catalog::RevokedInfo,
     },
     /// The provider runs other software than the runtime.
     RuntimeMismatch,
@@ -101,6 +127,11 @@ pub enum FormError {
         /// Its state.
         state: &'static str,
     },
+}
+
+impl FormError {
+    /// The most candidates an ambiguous choice names.
+    pub const CANDIDATES_MAX: usize = 8;
 }
 
 /// Picks the catalog entry a form is built from: the entry named `provider`
@@ -150,20 +181,91 @@ pub fn select_provider<'a>(
             }
         }
         None => {
-            let mut matching = catalog.entries().iter().filter_map(|entry| match entry {
-                CatalogEntry::Provider(entry) if entry.package.software() == runtime.software() => {
-                    Some(entry)
+            // Spec 0037, *Software yang sama*: a catalog entry of the
+            // software wins; without one, the only trusted local entry;
+            // anything else is for the user to choose.
+            let matching: Vec<&ProviderEntry> = catalog
+                .entries()
+                .iter()
+                .filter_map(|entry| match entry {
+                    CatalogEntry::Provider(entry)
+                        if entry.package.software() == runtime.software() =>
+                    {
+                        Some(entry)
+                    }
+                    _ => None,
+                })
+                .collect();
+            let from_catalog: Vec<&ProviderEntry> = matching
+                .iter()
+                .copied()
+                .filter(|entry| entry.local().is_none())
+                .collect();
+            let trusted_local: Vec<&ProviderEntry> = matching
+                .iter()
+                .copied()
+                .filter(|entry| {
+                    entry.local().is_some()
+                        && crate::catalog::entry_trust(catalog, entry).is_trusted()
+                })
+                .collect();
+            match (from_catalog.as_slice(), trusted_local.as_slice()) {
+                ([one], _) | ([], [one]) => *one,
+                ([], []) if matching.is_empty() => return Err(FormError::ProviderNotFound),
+                (several, _) => {
+                    let pool = if several.is_empty() {
+                        &matching
+                    } else {
+                        &from_catalog
+                    };
+                    return Err(FormError::ProviderAmbiguous {
+                        candidates: pool
+                            .iter()
+                            .take(FormError::CANDIDATES_MAX)
+                            .map(|entry| entry.package.key().provider().to_string())
+                            .collect(),
+                    });
                 }
-                _ => None,
-            });
-            let first = matching.next().ok_or(FormError::ProviderNotFound)?;
-            if matching.next().is_some() {
-                return Err(FormError::ProviderAmbiguous);
             }
-            first
         }
     };
     Ok((entry, catalog.meta()))
+}
+
+/// The trust gate of a form without a revision, after [`select_provider`]
+/// and before [`build_form`] (spec 0037, *Gate trust*): a local entry's
+/// import row is read again from `registry`.
+///
+/// # Errors
+///
+/// Returns the [`RegistryError`] of a failed read. The inner result is
+/// [`FormError::ApprovalRequired`] or [`FormError::Revoked`] for a verdict
+/// that is not trusted.
+pub fn form_trust(
+    catalog: &CatalogState,
+    registry: &dyn Registry,
+    entry: &ProviderEntry,
+) -> Result<Result<(), FormError>, RegistryError> {
+    let CatalogState::Loaded(catalog) = catalog else {
+        return Ok(Ok(()));
+    };
+    let key = entry.package.key();
+    Ok(match require_entry_trust(catalog, registry, entry)? {
+        TrustVerdict::Trusted => Ok(()),
+        TrustVerdict::Revoked(info) => Err(FormError::Revoked {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            info,
+        }),
+        _ => Err(FormError::ApprovalRequired {
+            provider: key.provider().to_string(),
+            provider_revision: key.revision().to_string(),
+            package_sha256: entry
+                .local()
+                .map(|local| local.record.package_sha256.to_string())
+                .unwrap_or_default(),
+        }),
+    })
 }
 
 /// Builds the form of `entry` for `runtime`. `taken` are the names of the
@@ -175,9 +277,17 @@ pub fn build_form(
     taken: &[InstanceName],
     meta: &CatalogMeta,
 ) -> CreateFormModel {
-    let source = match meta.location {
-        CatalogLocation::Bundled(_) => PackageSource::BundledCatalog,
-        CatalogLocation::Development(_) => PackageSource::DevelopmentCatalog,
+    let source = match (entry.local(), &meta.location) {
+        (Some(info), _) => PackageSource::LocalImport {
+            source_id: info.record.source_id,
+            approved_at: info
+                .record
+                .decision
+                .as_ref()
+                .map_or(info.record.updated_at, |decision| decision.at),
+        },
+        (None, CatalogLocation::Bundled(_)) => PackageSource::BundledCatalog,
+        (None, CatalogLocation::Development(_)) => PackageSource::DevelopmentCatalog,
     };
     build_form_from_package(
         &entry.package,
