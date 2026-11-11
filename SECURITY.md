@@ -51,7 +51,7 @@ These are targets, not promises: one maintainer runs this project today.
 1. The security contact confirms the report and reproduces it in a test root, never in a real Stackly setup.
 2. The security contact opens a draft GitHub Security Advisory and invites you to it.
 3. The fix is built in the temporary private fork of that advisory, with the same local checks as any pull request.
-4. For a problem in a provider package, a new package revision is published and the affected revision is pulled from the bundled catalog. For a runtime artifact, a new build gets a new inventory entry.
+4. For a problem in a provider package, a new package revision is published and the affected revision is pulled from the bundled catalog. When users may already have it, the affected revision is also added to the catalog's `revoked` list, which reaches them with the fixed release: Stackly then refuses new installs and instances from it, and existing instances and their data stay. For a runtime artifact, a new build gets a new inventory entry.
 5. The fix is released, then the advisory is published. When a released version is affected, we request a CVE through GitHub.
 6. You are credited in the advisory, unless you ask us not to.
 7. `CHANGELOG.md` gets an entry under `Security`.

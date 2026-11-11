@@ -6,6 +6,8 @@ A maintainer works through this list before merging a pull request that adds or 
 
 Running the tests, the harness, or `cargo xtask docs walkthrough` on the branch of a pull request runs the code of that pull request on your Mac: build scripts, tests, and the runtime the package starts. Read the whole diff before you run anything, and stop at anything outside the package folder that you did not expect.
 
+Never import the package of a pull request into your own Stackly before the review is done: importing and approving it lets it run its programs with your account. Review the package in a test root with the validator and the harness. When you do try it in the app later, it shows as a `local` provider ("Local, not verified") with an approval of `pending`, `approved`, or `revoked` ([trying-locally.md](trying-locally.md)); `reviewed` stays a word for this checklist, not a label in the app.
+
 ## Validator
 
 - [ ] `cargo xtask provider check providers/<name>` prints `ok` with no warning.
@@ -62,6 +64,7 @@ A contributor's pull request does not need to bring native evidence; a missing a
 
 - [ ] A change to a file that counts toward the package digest (`provider.yaml`, `schemas/settings.schema.json`, the templates) raises `metadata.revision`.
 - [ ] A revision that is already on `main` never changes after the merge.
+- [ ] A revision withdrawn for a security problem is also added to the `revoked` list of `providers/catalog.toml`, with a reason and a date, so the next release refuses new installs and instances from it ([SECURITY.md](../../SECURITY.md#our-process)).
 
 ## Daemon restart handover
 
