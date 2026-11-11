@@ -175,17 +175,18 @@ pub struct PackageCheck {
 }
 
 impl PackageCheck {
-    /// Returns whether the package loads: no finding has origin `package`.
+    /// Returns whether the package loads: no finding with origin
+    /// `package` is an error. A `warning`, such as
+    /// `deprecated_api_version`, never makes a package unloadable.
     #[must_use]
     pub fn loadable(&self) -> bool {
-        !self
-            .findings
-            .iter()
-            .any(|finding| finding.origin == FindingOrigin::Package)
+        !self.findings.iter().any(|finding| {
+            finding.origin == FindingOrigin::Package && finding.severity == Severity::Error
+        })
     }
 
     /// Returns whether the package may be published: no finding is an
-    /// error.
+    /// error. Warnings never count.
     #[must_use]
     pub fn publishable(&self) -> bool {
         !self
@@ -223,6 +224,21 @@ impl ValidatedPackage {
 /// [`Filesystem::read_file_limited`] are called.
 #[must_use]
 pub fn check_package(fs: &dyn Filesystem, dir: &Path, name_check: NameCheck) -> PackageCheck {
+    check_package_with_versions(fs, dir, name_check, SUPPORTED_API_VERSIONS)
+}
+
+/// [`check_package`] with `versions` in place of
+/// [`SUPPORTED_API_VERSIONS`] for the `deprecated_api_version` warning, so
+/// a test can mark the one loadable version deprecated. Only tests call
+/// it; the loader itself still loads only the versions this build knows.
+#[doc(hidden)]
+#[must_use]
+pub fn check_package_with_versions(
+    fs: &dyn Filesystem,
+    dir: &Path,
+    name_check: NameCheck,
+    versions: &[ApiVersionSupport],
+) -> PackageCheck {
     let mut check = PackageCheck {
         folder: dir
             .file_name()
@@ -251,7 +267,7 @@ pub fn check_package(fs: &dyn Filesystem, dir: &Path, name_check: NameCheck) -> 
     };
     check.findings.extend(deprecated_api_version(
         check.api_version.as_deref(),
-        SUPPORTED_API_VERSIONS,
+        versions,
     ));
     check.findings.extend(package.authoring_findings());
     match read_scenarios(fs, dir) {

@@ -8,9 +8,9 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    Expect, FindingOrigin, IssueCode, NameCheck, PackageCheck, PackageFiles,
-    SUPPORTED_API_VERSIONS, Severity, ValidatedPackage, check_package, read_package,
-    read_scenarios,
+    ApiVersionStatus, ApiVersionSupport, Expect, FindingOrigin, IssueCode, NameCheck, PackageCheck,
+    PackageFiles, SUPPORTED_API_VERSIONS, Severity, ValidatedPackage, check_package,
+    check_package_with_versions, read_package, read_scenarios,
 };
 use stackly_evidence::{Kind, evidence};
 use stackly_testkit::{FakePlatform, TestRoot, make_fifo};
@@ -435,5 +435,43 @@ fn read_scenarios_refuses_large_linked_special_and_non_utf8_files() {
     symlink(&real_tests, linked.dir.join("tests")).unwrap();
     assert_eq!(code(&linked), IssueCode::SymlinkNotAllowed);
     assert!(!linked.check().publishable());
+    ev.pass();
+}
+
+#[test]
+fn a_package_on_a_deprecated_version_still_loads_and_publishes_with_one_warning() {
+    let ev = evidence!(
+        covers = ["REQ-030"],
+        kind = Kind::Fixture,
+        expected = "with a version table that marks stackly/v1alpha1 deprecated and stackly/v2 current, check_package on providers/fake gives one deprecated_api_version warning with origin package, and the package is still loadable and publishable with its scenarios",
+    );
+    let copy = Copy::fake();
+    let table = [
+        ApiVersionSupport {
+            name: "stackly/v1alpha1",
+            status: ApiVersionStatus::Deprecated,
+        },
+        ApiVersionSupport {
+            name: "stackly/v2",
+            status: ApiVersionStatus::Current,
+        },
+    ];
+    let platform = FakePlatform::new(&copy.root);
+
+    let check =
+        check_package_with_versions(platform.fs(), &copy.dir, NameCheck::FolderName, &table);
+
+    assert_eq!(check.findings.len(), 1, "{:#?}", check.findings);
+    let finding = &check.findings[0];
+    assert_eq!(finding.severity, Severity::Warning);
+    assert_eq!(finding.origin, FindingOrigin::Package);
+    assert_eq!(finding.issue.code, IssueCode::DeprecatedApiVersion);
+    assert!(
+        check.loadable(),
+        "a warning never makes a package unloadable"
+    );
+    assert!(check.publishable(), "a warning never blocks publishing");
+    assert!(check.package.is_some());
+    assert!(!check.scenarios.is_empty());
     ev.pass();
 }

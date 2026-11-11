@@ -37,7 +37,7 @@ mod versions;
 
 pub use check::{
     ApiVersionStatus, ApiVersionSupport, Finding, FindingOrigin, PackageCheck,
-    SUPPORTED_API_VERSIONS, Severity, check_package,
+    SUPPORTED_API_VERSIONS, Severity, check_package, check_package_with_versions,
 };
 pub use connection::{
     CONNECTION_ENTRIES_MAX, CONNECTION_TEMPLATE_MAX, CONNECTION_TITLE_MAX, ConnectionSpec,
