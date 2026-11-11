@@ -28,6 +28,7 @@ use stackly_protocol::provider::{
 };
 use stackly_protocol::runtime::InstallRuntimeParams;
 use stackly_protocol::{Call, ErrorBody, Reply};
+use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::support::{Api, Site, fast_with_catalog, key};
 
@@ -223,6 +224,11 @@ fn instance_count(site: &Site) -> usize {
 // covers: AC-4, AC-11, AC-19 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pending_local_entry_is_refused_at_every_gate_and_creates_nothing() {
+    let ev = evidence!(
+        covers = ["AC-033", "REQ-032"],
+        kind = Kind::Fixture,
+        expected = "a pending local entry is refused with provider.approval_required at install, resolve, both forms, and create, and no operation, spawn, download, or instance follows",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -262,11 +268,17 @@ async fn a_pending_local_entry_is_refused_at_every_gate_and_creates_nothing() {
             .is_none(),
         "nothing was pinned"
     );
+    ev.pass();
 }
 
 // covers: AC-4, AC-7, AC-19 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn an_approved_local_entry_pins_as_local_and_a_revoke_closes_create_and_duplicate() {
+    let ev = evidence!(
+        covers = ["AC-072", "REQ-032"],
+        kind = Kind::Fixture,
+        expected = "an approved local entry builds a local_import form and creates an instance pinned as approved, and a revoke refuses create and duplicate with provider.revoked while the instance still starts",
+    );
     let site = Site::new();
     let _guard = support::reap_guard(&site.root);
     let daemon = site.start_with(fast_with_catalog()).await;
@@ -334,6 +346,7 @@ async fn an_approved_local_entry_pins_as_local_and_a_revoke_closes_create_and_du
     let started = api.start_ready(created).await;
     assert_eq!(started.id, created);
     api.stop_when_free(created).await;
+    ev.pass();
 }
 
 // covers: AC-2, AC-18 (spec 0037, *API surface*: a replay answers first)
@@ -403,6 +416,11 @@ fn revoking_catalog() -> stacklyd::server::DaemonConfig {
 // covers: AC-8 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_revision_the_installed_catalog_revokes_is_listed_shown_and_refused_by_catalog() {
+    let ev = evidence!(
+        covers = ["AC-072"],
+        kind = Kind::Fixture,
+        expected = "a revision the installed catalog revokes is listed in revocations, shown with the catalog revision and since, and refused with provider.revoked by catalog",
+    );
     let site = Site::new();
     let _daemon = site.start_with(revoking_catalog()).await;
     let api = site.api().await;
@@ -460,6 +478,7 @@ async fn a_revision_the_installed_catalog_revokes_is_listed_shown_and_refused_by
     assert_eq!(detail(&refused, "since"), Some("2026-09-01T00:00:00.000Z"));
 
     assert_gate_refuses(&api, "provider.revoked").await;
+    ev.pass();
 }
 
 // covers: AC-11 (spec 0037, *Software yang sama*)

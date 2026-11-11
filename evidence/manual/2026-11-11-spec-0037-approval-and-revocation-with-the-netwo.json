@@ -1,0 +1,57 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ca0c-488c-7237-b6c4-faa6637488f3",
+  "covers": [
+    "REQ-032",
+    "AC-072"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0037 approval and revocation with the network off",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "with Wi-Fi and cable off, approve, revoke, starting an existing instance, and stackly provider list behave as online, no text says latest, up to date, or a current revocation list, and a new runtime.install fails only with runtime.download_offline",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-11T09:59:25.067903Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-11-spec-0037-approval-and-revocation-with-the-netwo.json",
+  "context": {
+    "sourceCommit": "04fbb908667233f12aa321d3e4b19e8cc66a13ea",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

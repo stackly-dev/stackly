@@ -1,0 +1,60 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ca0c-4465-75e3-a05b-6d14ff3730a3",
+  "covers": [
+    "REQ-032",
+    "REQ-033",
+    "AC-033",
+    "AC-061",
+    "AC-072"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0037 full GUI flow of import, approval, revoke, and remove",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "in the Debug app on a real daemon: Import Provider, the preview sheet, Import, the Not approved yet banner, Approve with Cancel as default and the exact approval statement, install and create, Revoke Approval refusing a new create while the old instance starts, Remove, Settings Sources Imported providers, and the Catalog Trust onboarding step all behave as spec 0037 Layar and Copy say",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-11T09:59:24.005348Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-11-spec-0037-full-gui-flow-of-import-approval-revok.json",
+  "context": {
+    "sourceCommit": "04fbb908667233f12aa321d3e4b19e8cc66a13ea",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

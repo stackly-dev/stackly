@@ -51,8 +51,13 @@ final class SkeletonRig {
 
     /// Seeds a fresh root, starts the daemon on it, and opens the second connection.
     ///
-    /// - Parameter recordsEvidence: Whether the test carries the evidence trait.
-    static func start(recordsEvidence: Bool) async throws -> SkeletonRig {
+    /// - Parameters:
+    ///   - recordsEvidence: Whether the test carries the evidence trait.
+    ///   - environment: Variables added to the daemon's environment, such as
+    ///     `STACKLY_CATALOG_DIR`.
+    static func start(recordsEvidence: Bool, environment: [String: String] = [:]) async throws
+        -> SkeletonRig
+    {
         let seedBinary = Self.seedBinaryURL
         let seedPath = seedBinary.path(percentEncoded: false)
         guard FileManager.default.isExecutableFile(atPath: seedPath) else {
@@ -67,7 +72,7 @@ final class SkeletonRig {
                 "no stackly-fake-server binary at \(fakeServer); build it with cargo build -p stackly-fake-server",
                 owner: "feature 14", recordsEvidence: recordsEvidence)
         }
-        let daemon = try LiveDaemon(recordsEvidence: recordsEvidence)
+        let daemon = try LiveDaemon(recordsEvidence: recordsEvidence, environment: environment)
         let outcome = try await ProcessRunner.run(
             seedBinary, arguments: ["--root", daemon.root, "--json"], timeout: .seconds(60))
         guard outcome.status == 0, outcome.timedOut == false else {
@@ -88,9 +93,10 @@ final class SkeletonRig {
 
     /// Runs `body` on a fresh rig and always shuts the rig down afterwards.
     static func run<Result>(
-        recordsEvidence: Bool, _ body: (SkeletonRig) async throws -> Result
+        recordsEvidence: Bool, environment: [String: String] = [:],
+        _ body: (SkeletonRig) async throws -> Result
     ) async throws -> Result {
-        let rig = try await start(recordsEvidence: recordsEvidence)
+        let rig = try await start(recordsEvidence: recordsEvidence, environment: environment)
         do {
             let result = try await body(rig)
             await rig.shutDown()
@@ -169,7 +175,7 @@ final class SkeletonRig {
 
     /// Sends `call`, again with the same key while the daemon answers `daemon.starting`
     /// (its supervisor is still reconciling), for at most 20 seconds.
-    private func send(_ call: Call, key: String? = nil) async throws -> Reply {
+    func send(_ call: Call, key: String? = nil) async throws -> Reply {
         let deadline = ContinuousClock.now + .seconds(20)
         while true {
             do {
@@ -302,7 +308,7 @@ final class SkeletonRig {
         }
     }
 
-    private func requireSucceeded(_ id: UUID, _ what: String) async throws {
+    func requireSucceeded(_ id: UUID, _ what: String) async throws {
         let deadline = ContinuousClock.now + .seconds(60)
         while true {
             let reply = try await send(.operationGet(GetOperationParams(operationId: id)))
@@ -371,7 +377,12 @@ final class SkeletonRig {
         return SourceTree.url(of: "target/debug/examples/skeleton_seed")
     }
 
-    private static func newKey() -> String {
+    /// Adds an instance another part of the test created, so ``shutDown()`` stops it.
+    func adopt(_ id: UUID) {
+        createdInstances.append(id)
+    }
+
+    static func newKey() -> String {
         UUID().uuidString.lowercased()
     }
 }

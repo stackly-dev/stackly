@@ -24,6 +24,7 @@ use stackly_protocol::provider::{
     PermissionChange, PreviewImportParams, ProviderTargetParams, RevocationSource,
 };
 use stackly_protocol::{Call, ErrorBody, Reply};
+use stackly_testkit::evidence::{Kind, evidence};
 use stackly_testkit::{EMPTY_CATALOG_JSON, TestRoot};
 use stacklyd::server::DaemonHandle;
 
@@ -166,6 +167,11 @@ fn audited(daemon: &DaemonHandle, kind: OperationKind) -> usize {
 // covers: AC-5, AC-17 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn an_approval_binds_the_shown_bytes_opens_the_gate_and_runs_once() {
+    let ev = evidence!(
+        covers = ["REQ-032"],
+        kind = Kind::Fixture,
+        expected = "provider.approve refuses another digest with provider.import_changed, approves exactly the shown bytes, opens the gate, and answers a repeated approval without an operation",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -215,11 +221,17 @@ async fn an_approval_binds_the_shown_bytes_opens_the_gate_and_runs_once() {
     assert_eq!(detail_of(&catalog_entry, "reason"), Some("not_local"));
     drop((api, events));
     stop(daemon).await;
+    ev.pass();
 }
 
 // covers: AC-6, AC-7, AC-17 (spec 0037)
 #[tokio::test(flavor = "multi_thread")]
 async fn a_revoke_closes_the_gate_and_a_decision_follows_its_bytes() {
+    let ev = evidence!(
+        covers = ["AC-032", "AC-072", "REQ-032"],
+        kind = Kind::Fixture,
+        expected = "provider.revoke closes the gate with provider.revoked by user, a package with other bytes is pending again, and importing the decided bytes again brings the decision back",
+    );
     let site = Site::new();
     let daemon = site.start_with(fast_with_catalog()).await;
     let api = site.api().await;
@@ -285,15 +297,22 @@ async fn a_revoke_closes_the_gate_and_a_decision_follows_its_bytes() {
     assert_eq!(back.summary.approval, Some(ApprovalState::Revoked));
     drop(api);
     stop(daemon).await;
+    ev.pass();
 }
 
 // covers: AC-12 (spec 0037), VAL-018
 #[test]
 fn a_settings_patch_with_a_trust_key_is_refused_before_it_reaches_the_daemon() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "a settings patch with a trust key is refused as invalid params, so trust never changes through settings",
+    );
     let request = br#"{"requestId":"0192f3a1-0000-7000-8000-000000000001","idempotencyKey":"0192f3a1-0000-7000-8000-000000000002","call":{"type":"settings.update","content":{"expectedRevision":1,"patch":{"trust":"all"}}}}"#;
     let refused = stackly_protocol::json::decode_request(request)
         .expect_err("the daemon refuses a trust key");
     assert_eq!(refused.error.code(), "request.invalid_params");
+    ev.pass();
 }
 
 /// Kills and reaps the daemon a test started itself.
@@ -309,6 +328,11 @@ impl Drop for Child {
 // covers: AC-12 (spec 0037), VAL-018
 #[test]
 fn a_daemon_started_with_trust_variables_still_imports_pending() {
+    let ev = evidence!(
+        covers = ["VAL-018"],
+        kind = Kind::Fixture,
+        expected = "a stacklyd started with STACKLY_TRUST=1 and STACKLY_APPROVE_ALL=1 still imports a local package as pending",
+    );
     let root = TestRoot::new().expect("a test root");
     let paths = common::daemon_paths(&root);
     let catalog = root.path().join("catalog");
@@ -363,4 +387,5 @@ fn a_daemon_started_with_trust_variables_still_imports_pending() {
         }
     });
     assert_eq!(detail.summary.approval, Some(ApprovalState::Pending));
+    ev.pass();
 }
