@@ -156,6 +156,8 @@ struct CatalogTrustContentTests {
             }
         }
         #expect(OnboardingCopy.catalogNote.localizedCaseInsensitiveContains("community") == false)
+        #expect(
+            OnboardingCopy.catalogImportNote.localizedCaseInsensitiveContains("community") == false)
     }
 
     @Test func theTrustNoteIsTheTable() {

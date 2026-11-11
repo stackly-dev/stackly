@@ -258,7 +258,8 @@
                     onboardingFinished: false, expectedPresence: nil)
             case .menubarNormal, .menubarFailed, .menubarOfflineLastKnown, .menubarMany,
                 .menubarEmpty, .menubarStopPreview, .menubarStopPartial, .settingsGeneral,
-                .settingsInstancesDenied, .settingsSources, .settingsStorageCustom,
+                .settingsInstancesDenied, .settingsSources, .settingsSourcesImported,
+                .settingsStorageCustom,
                 .settingsUpdates, .settingsOffline, .settingsConflict:
                 return menuBarSettings(id)
             }

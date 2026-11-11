@@ -162,4 +162,37 @@ struct CatalogStoreTests {
             store.detail.phase(for: "official/nats", revision: 1)
                 == .loaded(try CatalogFixture.detail("nats")))
     }
+
+    // MARK: - Local providers (spec 0037)
+
+    @Test(
+        .evidence(
+            covers: ["REQ-033"],
+            expected: "catalog.changed makes the catalog store load a snapshot again"
+        ))
+    func catalogChangedLoadsTheCatalogAgain() async throws {
+        let store = script.store()
+        await store.store.resnapshot()
+        #expect(script.listCalls == 1)
+        store.store.receive(
+            Event(
+                subscriptionId: 1, sequence: 1, at: Date(timeIntervalSince1970: 100),
+                resource: nil, revision: nil,
+                kind: .catalogChanged(CatalogChanged(provider: "acme/demo", change: .imported))))
+        try await waitUntil { script.listCalls == 2 }
+    }
+
+    @Test func aSnapshotKeepsTheRevocationsAndTheImportedProviders() async throws {
+        let local = try ProviderFixture.detail("pending").summary
+        let revocation = CatalogRevocation(
+            provider: "official/nats", providerRevision: "1.0.0", manifestSha256: nil,
+            reason: "Starts with an insecure default.", since: "2026-11-05")
+        let list = try #require(script.list)
+        script.list = ListProvidersReply(
+            catalog: list.catalog, items: (list.items ?? []) + [local], revocations: [revocation])
+        let store = script.store()
+        await store.store.resnapshot()
+        #expect(store.revocations == [revocation])
+        #expect(store.localProviders?.map(\.provider) == ["acme/demo"])
+    }
 }

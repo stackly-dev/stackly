@@ -187,12 +187,83 @@
                 providerRevision: "2026.10.1",
                 publisher: "Stackly",
                 trust: .official,
-                approval: nil,  // provisional: F37 step 10
+                approval: nil,
                 versions: versions,
                 versionCount: UInt64(versions.count),
                 licenses: nil,
                 mark: mark,
                 tile: tile)
+        }
+    }
+
+    nonisolated extension ProviderSummary {
+        /// An imported provider (spec 0037): trust `local`, blocked while it waits for
+        /// approval or lost it, and available once approved.
+        public static func fixtureLocal(
+            provider: String = "acme/demo",
+            displayName: String = "Acme Demo",
+            approval: ApprovalState = .pending
+        ) -> ProviderSummary {
+            let reason: SupportReason? =
+                switch approval {
+                case .pending, .unrecognized: .approvalRequired
+                case .revoked: .trustRevoked
+                case .approved: nil
+                }
+            return ProviderSummary(
+                provider: provider,
+                revision: 1,
+                displayName: displayName,
+                software: provider.split(separator: "/").last.map(String.init),
+                category: .database,
+                description: "Demo server packaged by Acme for import tests.",
+                state: approval == .approved ? .available : .blocked,
+                stateReason: reason,
+                stateNote: nil,
+                providerRevision: "1.0.0",
+                publisher: ProviderTrustCopy.namespace(of: provider),
+                trust: .local,
+                approval: approval,
+                versions: ["1.0.0"],
+                versionCount: 1,
+                licenses: ["MIT"],
+                mark: ProviderMark.defaultMark(for: displayName),
+                tile: .gray)
+        }
+    }
+
+    nonisolated extension ProviderDetail {
+        /// The detail of an imported provider, imported `importedAt` with no permissions to
+        /// list beyond one program.
+        public static func fixtureLocal(
+            _ summary: ProviderSummary, importedAt: Date = FixtureClock.daysAgo(1)
+        ) -> ProviderDetail {
+            ProviderDetail(
+                summary: summary,
+                software: summary.software,
+                manifestSha256: String(repeating: "d", count: 64),
+                capabilities: [],
+                versions: [],
+                platformNotes: [],
+                note: nil,
+                issues: [],
+                local: LocalProviderInfo(
+                    importedAt: importedAt,
+                    originPath: "~/providers/acme-demo",
+                    quarantined: false,
+                    versionsSha256: String(repeating: "e", count: 64),
+                    packageSha256: String(repeating: "f", count: 64),
+                    packageBytes: 4096,
+                    decision: nil,
+                    permissions: ProviderPermissions(
+                        capabilities: [], managedFilesystem: ["data"],
+                        executables: [
+                            PermissionExecutable(
+                                name: "runtime", path: "bin/demo-server", uses: [.start])
+                        ],
+                        secrets: [], endpoints: [], downloads: [], openWith: []),
+                    changes: []),
+                revocation: nil)
         }
     }
 

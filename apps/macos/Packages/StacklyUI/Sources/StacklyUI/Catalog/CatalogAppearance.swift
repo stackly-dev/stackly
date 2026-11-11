@@ -54,6 +54,47 @@ nonisolated public enum CatalogAppearance {
         }
     }
 
+    /// The appearance of the approval of a local provider (spec 0037, *Tone dan label*).
+    /// Approved is `neutral`, not `positive`: an approval is the person's decision, not a
+    /// sign that the provider is safe.
+    public static func appearance(of approval: ApprovalState) -> StatusAppearance {
+        switch approval {
+        case .pending:
+            StatusAppearance(
+                label: "Needs Approval", tone: .caution, symbol: "hand.raised.circle.fill")
+        case .approved:
+            StatusAppearance(label: "Approved", tone: .neutral, symbol: "checkmark.circle")
+        case .revoked:
+            StatusAppearance(label: "Revoked", tone: .caution, symbol: "nosign")
+        case .unrecognized:
+            unrecognized
+        }
+    }
+
+    /// The badge of a provider on its card and in the detail header: "Needs Approval" or
+    /// "Revoked" for a local provider that waits for approval or lost it (also when the
+    /// catalog revokes it), else the badge of its state.
+    /// - Parameters:
+    ///   - summary: The provider.
+    ///   - revoked: Whether the detail carries a revocation, which the summary only shows
+    ///     through its reason.
+    public static func badge(of summary: ProviderSummary, revoked: Bool = false)
+        -> StatusAppearance
+    {
+        if summary.state != .invalid {
+            if revoked || summary.stateReason == .trustRevoked || summary.approval == .revoked {
+                return appearance(of: ApprovalState.revoked)
+            }
+            if summary.approval == .pending {
+                return appearance(of: ApprovalState.pending)
+            }
+            if summary.approval == .unrecognized {
+                return appearance(of: ApprovalState.unrecognized)
+            }
+        }
+        return appearance(of: summary.state)
+    }
+
     /// "Unrecognized State": the state a newer daemon sent that this build does not know.
     static var unrecognized: StatusAppearance {
         StatusAppearance(

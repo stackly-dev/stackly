@@ -42,7 +42,8 @@ struct StacklyApp: App {
             SettingsRoot(
                 model: appDelegate.runtime.model, preferences: appDelegate.runtime.preferences,
                 loginItem: appDelegate.runtime.loginItem,
-                notifications: appDelegate.runtime.notifications)
+                notifications: appDelegate.runtime.notifications,
+                showInCatalog: { appDelegate.runtime.showInCatalog($0) })
         }
 
         #if DEBUG

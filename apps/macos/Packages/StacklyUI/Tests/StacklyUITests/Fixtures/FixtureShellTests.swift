@@ -41,6 +41,7 @@ struct FixtureShellTests {
         .settingsGeneral: nil,
         .settingsInstancesDenied: nil,
         .settingsSources: nil,
+        .settingsSourcesImported: nil,
         .settingsStorageCustom: nil,
         .settingsUpdates: nil,
         .settingsOffline: "Can’t connect to stacklyd.",

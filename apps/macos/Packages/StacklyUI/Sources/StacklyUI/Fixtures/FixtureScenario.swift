@@ -90,6 +90,8 @@
             case settingsInstancesDenied = "settings-instances-denied"
             /// The Sources tab.
             case settingsSources = "settings-sources"
+            /// The Sources tab with imported providers and catalog revocations (spec 0037).
+            case settingsSourcesImported = "settings-sources-imported"
             /// The Storage tab with custom, old, and unreachable locations.
             case settingsStorageCustom = "settings-storage-custom"
             /// The Updates tab with the beta channel and statistics turned on.

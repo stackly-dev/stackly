@@ -1,0 +1,6 @@
+Imported Acme Demo. Approve it before you install anything.
+ID        acme/demo
+Revision  1.0.0
+Trust     local, not verified
+Approval  needs approval
+Package   sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff

@@ -88,7 +88,7 @@ struct OnboardingCopyTests {
         )
         #expect(
             OnboardingCopy.catalogSubtitle
-                == "Providers describe how to install and run each server. Only trusted sources appear in the catalog."
+                == "Providers describe how to install and run each server. Stackly only installs and runs providers from sources you trust."
         )
         #expect(
             OnboardingCopy.commandLineSubtitle
@@ -221,6 +221,10 @@ struct OnboardingCopyTests {
         #expect(
             OnboardingCopy.catalogNote
                 == "Trust tells you where a provider comes from. It isn’t a sandbox: every server runs with your user’s permissions."
+        )
+        #expect(
+            OnboardingCopy.catalogImportNote
+                == "You can import a provider from a folder later in Catalog. It stays blocked until you approve it."
         )
     }
 

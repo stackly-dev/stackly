@@ -1,0 +1,44 @@
+Name               Acme Demo
+ID                 acme/demo
+Category           database
+Description        Demo server packaged by Acme for import tests.
+State              blocked (approval_required)
+Publisher          acme (not verified)
+Trust              local, not verified
+Provider revision  1.0.0
+Manifest           sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+Approval           needs approval (you approved revision 0.9.0 on 2026-11-10 08:00:00 +00:00)
+Imported           2026-11-11 09:00:00 +00:00 from ~/providers/acme-demo
+                   This folder was downloaded from the internet. Stackly only reads its text files and never changes the folder.
+Package            sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, 4 kB
+Baseline           lifecycle, readiness probe, logs
+
+Permissions:
+  Runs:
+    bin/demo-server (runtime): starts the server, runs once at install
+    bin/demo-cli (demoCli): runs health checks, opens in Terminal
+  Downloads:
+    demo-1.0.0-macos-aarch64 1.0.0 macos/aarch64, 1 MB from downloads.example.test, mirror.example.test
+      sha256:1111111111111111111111111111111111111111111111111111111111111111
+  Writes to: config, data, logs, run, temp
+  Receives secrets: password
+  Listens on: client (tcp, client), default port 7400
+  Opens: shell (terminal, demoCli)
+  Features: Multiple instances, Persistent data
+Changes since your decision: revision, files it downloads
+
+CAPABILITY              SUPPORT
+Multiple instances      supported
+Persistent data         supported
+Reload without restart  not supported
+Metrics                 supported
+TLS                     not supported
+Cold backup             supported
+Online backup           not supported
+Logical backup          not supported
+
+VERSION  MACOS                  LINUX                   WINDOWS                                                    INSTALL
+1.0.0    unverified (untested)  unsupported (no_build)  planned (Windows builds are planned for a later release.)  no (approval_required)
+
+ARTIFACT                  TARGET         STATUS     DOWNLOAD  DISK  MIN OS  LICENSE  SOURCE
+demo-1.0.0-macos-aarch64  macos/aarch64  available  1 MB      -     13.0    MIT      https://downloads.example.test/demo/1.0.0/demo-1.0.0-macos-aarch64.tar.gz

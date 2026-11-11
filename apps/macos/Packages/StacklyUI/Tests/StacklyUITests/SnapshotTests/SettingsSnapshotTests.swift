@@ -92,6 +92,25 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["REQ-033", "NFR-012"],
+                expected:
+                    "The Sources tab lists the imported providers with their approval and import date, the catalog revocations, and Import Provider…"
+            ))
+        @MainActor
+        func sourcesImported() async throws {
+            let runtime = try await Self.runtime(.settingsSourcesImported)
+            let catalog = runtime.model.catalog
+            try await waitUntil { catalog.localProviders?.isEmpty == false }
+            for provider in catalog.localProviders ?? [] {
+                await catalog.detail.load(provider.provider, revision: provider.revision)
+            }
+            try await Self.snapshot(
+                SourcesSettingsTab(model: runtime.model, showInCatalog: { _ in }), runtime,
+                named: "settings-sources-imported")
+        }
+
+        @Test(
+            .evidence(
                 covers: ["REQ-046", "NFR-012"],
                 expected:
                     "The Storage tab shows custom folders, the old ones still used, the unreachable one, and the log retention"

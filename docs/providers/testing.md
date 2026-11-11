@@ -43,7 +43,7 @@ Two words sum this up:
 cargo xtask provider test providers/mytool
 ```
 
-`cargo xtask provider test <dir>` builds `stackly-fake-server`, starts its own daemon inside a temporary root, and runs every scenario of the package through the same IPC calls the app uses. Per scenario it validates the package, finds it in the catalog, installs the runtime, reads the create form, creates an instance, starts it, waits for `healthy`, reads the connection strings, checks the process, reads the logs, starts a second instance when `multiInstance` is on, reloads when `reload` is on, restarts, stops, checks that nothing is left, and starts the stopped instance again on the same data.
+`cargo xtask provider test <dir>` builds `stackly-fake-server`, starts its own daemon inside a temporary root, and runs every scenario of the package through the same IPC calls the app uses. It validates the package and installs the runtime once per run, while it prepares the root. Per scenario it finds the package in the catalog, checks that the runtime is installed, reads the create form, creates an instance, starts it, waits for `healthy`, reads the connection strings, checks the process, reads the logs, starts a second instance when `multiInstance` is on, reloads when `reload` is on, restarts, stops, checks that nothing is left, and starts the stopped instance again on the same data.
 
 The process checks hold every provider to the same contract: the main process keeps the instance lock open on fd 3, does not re execute itself, stays in the foreground, and leaves no process, lock, or open port behind after a stop.
 
@@ -52,7 +52,7 @@ The process checks hold every provider to the same contract: the main process ke
 | `--line <line>` | Picks the runtime line when the package has more than one artifact |
 | `--scenario <name>` | Runs only that scenario; give it more than once for several |
 | `--report <file>` | Writes the report to that file instead of the default path |
-| `--keep` | Keeps the data folder of the temporary root, for you to look at |
+| `--keep` | Keeps the data folder of the temporary root, for you to look at; the run prints its path on a `kept` line, with the temporary folder written as `$TMPDIR` |
 
 The harness accepts packages in the `official` and `testing` namespaces only. It never downloads anything: a `testing` package runs on `stackly-fake-server`, and an official package needs its artifact in the runtime cache already, otherwise the verdict is `blocked`.
 
@@ -63,6 +63,7 @@ The harness accepts packages in the `official` and `testing` namespaces only. It
 | 0 | `pass`: every scenario passed and the root was cleaned up |
 | 1 | `fail`: a scenario, the validation, or the cleanup failed |
 | 2 | `blocked`: the run could not start, for example a runtime that is not in the cache |
+| 130 | Interrupted: the first Ctrl+C stops the run in order, writes the report with `interrupted: true`, cleans up the root, and exits 130 |
 
 ### The report
 
@@ -90,6 +91,8 @@ When a run is cut short (a second Ctrl+C, a crash), its root stays behind. Remov
 ```bash
 cargo xtask provider test --cleanup
 ```
+
+The same command also removes the data folders that `--keep` left, since their runs have ended.
 
 ### Scenarios that exercise failures
 

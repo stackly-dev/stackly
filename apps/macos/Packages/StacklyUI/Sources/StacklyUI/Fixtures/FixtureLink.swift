@@ -155,6 +155,7 @@
                 }
                 return .operationGet(OperationDetail(operation: found, steps: nil, created: nil))
             case .catalogListProviders:
+                if case .reply(let reply) = scenario.replies[call.methodName] { return reply }
                 return .catalogListProviders(
                     ListProvidersReply(
                         catalog: .fixture, items: scenario.providers, revocations: []))
