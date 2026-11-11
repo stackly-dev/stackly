@@ -4,7 +4,7 @@
 
 Journey PRD JOURNEY-07 untuk kontributor: scaffold, tulis manifest dan template, validasi lokal, beri trust eksplisit, jalankan test kontrak dan integrasi, lalu kirim PR. Fase ini sengaja datang sebelum stack enam service, supaya lima provider resmi berikutnya dibangun lewat jalur dan harness yang sama dengan kontributor.
 
-### 36. Provider SDK & test harness · in-progress
+### 36. Provider SDK & test harness · done
 
 Kebijakan kompatibilitas, deprecation, dan migrasi untuk schema `stackly/v1alpha1` yang dikunci fitur 9 (termasuk penambahan probe dan primitive baru secara additive), validator, template scaffold, dan test harness (`stackly provider validate`, `cargo xtask provider test`) dengan fake server yang bisa delay ready, crash, dan spam log.
 
@@ -24,7 +24,7 @@ Kebijakan kompatibilitas, deprecation, dan migrasi untuk schema `stackly/v1alpha
 - [x] Verify it: `/check verify provider SDK & test harness`
 - [x] Test it: `/test provider SDK & test harness`
 
-### 37. Import provider lokal & trust · in-progress · GA
+### 37. Import provider lokal & trust · done · GA
 
 Import provider dari direktori atau paket lokal secara eksplisit, preview metadata tanpa menjalankan apa pun, lalu approval yang terikat ke publisher, revision, digest, dan capability. Revocation memblokir install baru tanpa menghapus data.
 
@@ -43,9 +43,9 @@ Import provider dari direktori atau paket lokal secara eksplisit, preview metada
 - [x] Verify it: `/check verify import provider lokal & trust`
 - [x] Test it: `/test import provider lokal & trust`
 - [x] Review it (fresh model): `/check review import provider lokal & trust`
-- [ ] Document it: `/document import provider lokal & trust`
+- [x] Document it: `/document import provider lokal & trust`
 
-### 38. Panduan kontributor & governance · in-progress
+### 38. Panduan kontributor & governance · done
 
 Dokumen dan aturan supaya orang lain bisa menyumbang provider: CONTRIBUTING, schema docs, provider template, security policy, Code of Conduct, issue dan PR template, serta pilihan lisensi project.
 
