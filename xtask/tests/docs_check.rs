@@ -51,3 +51,28 @@ fn the_walkthrough_refuses_an_unknown_argument_before_it_clones() {
             .contains("usage: cargo xtask docs walkthrough [--keep]")
     );
 }
+
+// covers: AC-12 (spec 0038)
+#[test]
+fn the_trying_locally_page_quotes_the_approval_statement_of_the_fixture() {
+    let read = |rel: &str| {
+        std::fs::read_to_string(repo_root().join(rel)).expect("the file is in the repo")
+    };
+    let words = |text: &str| {
+        text.lines()
+            .map(|line| line.trim_start().trim_start_matches('>'))
+            .flat_map(str::split_whitespace)
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let page = words(&read("docs/providers/trying-locally.md"));
+    let statement = words(&read("protocols/fixtures/provider/approval-statement.txt"));
+    assert!(
+        page.contains(&statement),
+        "the page does not quote: {statement}"
+    );
+    // The page says plainly that a scaffolded package cannot be imported,
+    // and that a pull request is never imported before its review.
+    assert!(page.contains("cannot be imported"));
+    assert!(page.contains("before the review is done"));
+}

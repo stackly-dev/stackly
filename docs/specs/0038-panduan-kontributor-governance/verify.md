@@ -199,3 +199,27 @@ Tafsiran: (1) nama field verdict report harness dibaca dari spec 0036 *Report*: 
 - AC-8: perintah, test fixture nya, satu run penuh, dan record manual di atas.
 - AC-12 dan bagian langkah 11 dari AC-4 dan AC-6: menunggu fitur 37.
 - AC lain: Milestone 1 dan 2.
+
+## Milestone 4: Trying a provider locally
+
+Langkah Build plan 11 (`dev-f38-m4`): `docs/providers/trying-locally.md`, istilah trust di `GOVERNANCE.md` bagian *Official and reviewed* dan `docs/providers/review.md`, kalimat revocation di `SECURITY.md` (*Our process*, langkah 4) dan `GOVERNANCE.md` (*Provider owners*), link dari `docs/providers/README.md` dan `CONTRIBUTING.md`. Pemeriksaan (h) sudah dibangun di milestone 1 (`xtask/src/docs/text.rs`, `approval_statement`) dan mulai berlaku begitu halamannya ada; milestone ini menambah satu test end to end atas halaman nyata.
+
+Tafsiran: (1) perintah, flag, exit code, dan kalimat di halaman itu dibaca dari kode di `main` (`apps/cli/src/commands/provider/`, `copy.rs`) dan spec 0037 AC-14, bukan dari mockup. (2) Paket ber namespace `official` dicoba lewat catalog development (`cargo xtask catalog build` dan `STACKLY_CATALOG_DIR`, spec 0017), sesuai *Dokumen provider*. (3) Tidak ada kalimat "latest" atau "up to date" tentang revocation; daftar `revoked` selalu disebut sebagai daftar catalog di versi Stackly yang dijalankan, dan signing serta revocation online disebut Deferred.
+
+### UI / manual
+
+- [ ] Baca `docs/providers/trying-locally.md` terhadap perilaku `stackly provider import`, `approve`, `revoke`, `remove`, `list`, dan `inspect` di `main` (test `apps/cli/tests/provider/trust_stacklyd.rs` membuktikan exit code dan state nya terhadap `stacklyd` nyata) → AC-12
+- [ ] Baca `GOVERNANCE.md`, `SECURITY.md`, dan `docs/providers/review.md`: istilah trust `official`, `development`, `local` ("Local, not verified"), approval `pending`, `approved`, `revoked`; tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", "safe to run", dan tidak ada klaim revocation terkini → AC-4, AC-6
+
+### Commands
+
+- [ ] `cargo xtask docs check` → `ok docs 26` (pemeriksaan (h) berjalan atas halaman baru) → AC-9, AC-12
+- [ ] `cargo test -p xtask --test docs_check` → 4 test lulus, termasuk `the_trying_locally_page_quotes_the_approval_statement_of_the_fixture` (kalimat izin fixture utuh di halaman, kalimat paket scaffold tidak bisa diimpor, dan larangan mengimpor paket PR sebelum review) → AC-12
+- [ ] `cargo test -p xtask --bin xtask docs::text` → lulus, termasuk `the_approval_statement_must_be_quoted_word_for_word` (kalimat yang beda satu kata menjadi satu masalah) → AC-12
+- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo fmt --all --check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-12 · lengkap: alur import, preview, approve, `--approve --yes`, revoke, remove, list, inspect dengan nama perintah spec 0037; padanan GUI; batas import (namespace, 32 provider, 16 MiB, validator tanpa error, artefak `https` dan `sha256` asli); paket scaffold `testing/<name>` tidak bisa diimpor; approval mengikat `packageSha256`; tabel state approval; quarantine hanya dibaca; exit code; kalimat izin kata demi kata (pemeriksaan (h)); larangan mengimpor paket PR sebelum review
+- AC-4 · bagian langkah 11: langkah 4 *Our process* menyebut daftar `revoked` catalog
+- AC-6 · bagian langkah 11: istilah trust di *Official and reviewed* dan alur revocation di *Provider owners*

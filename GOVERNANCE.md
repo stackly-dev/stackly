@@ -28,6 +28,8 @@ Today one person holds every role. There is no `CODEOWNERS` file yet. When a sec
 
 Neither word means a package is free of risk forever, and a review covers one revision only. `reviewed` is a word for this process, not a label in the app.
 
+The app labels where a provider comes from with its trust: `official` (the bundled catalog), `development` (a development catalog folder), or `local` ("Local, not verified", a package imported from a folder). A local provider also has an approval: `pending`, `approved`, or `revoked`. The verbs are import, approve, revoke, and remove ([trying-locally.md](docs/providers/trying-locally.md)). An approval says that the person who approved it accepts what the package runs; it says nothing about who wrote it, so a local publisher is always shown as not verified.
+
 ## Provider owners
 
 | Provider | Owner | Status |
@@ -45,6 +47,8 @@ A provider owner:
 To become a provider owner, get a provider pull request accepted and say that you are willing to look after it.
 
 When an owner stops responding, the provider is marked as having no owner. After that it may be pulled from the bundled catalog. Pulling a provider never deletes user data.
+
+A revision that must not be used any more is listed in the `revoked` list of the bundled catalog, with a reason and a date. Stackly then refuses to install from that revision or create new instances from it, and refuses to approve it. Existing instances keep starting, and their data and runtimes stay. The list is the one in the catalog of the Stackly version a user runs: it reaches users with a new release, and Stackly never fetches it online (signing and online revocation are deferred).
 
 ## Issue triage
 

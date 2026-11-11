@@ -93,6 +93,8 @@ The [provider guide](docs/providers/README.md) takes you from a clean clone to a
 4. Run `cargo xtask provider test providers/<name>` until the verdict is `pass` ([testing.md](docs/providers/testing.md)).
 5. Open a pull request with the harness report and fill in the provider checklist of the template; the maintainer follows [review.md](docs/providers/review.md).
 
+To see your package in your own Stackly before that, import it under a namespace of your own and approve it ([trying-locally.md](docs/providers/trying-locally.md)).
+
 ## Pull requests
 
 - One change per pull request, on a branch from `main`.

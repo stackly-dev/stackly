@@ -39,6 +39,7 @@ Each test run writes a report to `target/provider-test/<runId>/report.json` and 
 | [testing.md](testing.md) | The validator, the conformance harness, its report, and native evidence |
 | [compatibility.md](compatibility.md) | How the manifest format changes, deprecation, and migration |
 | [review.md](review.md) | The checklist a maintainer follows before merging a provider |
+| [trying-locally.md](trying-locally.md) | Importing your package into your own Stackly, approving it, and revoking or removing it |
 
 ## From idea to merged provider
 
