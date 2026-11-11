@@ -23,12 +23,17 @@ final class LiveDaemon {
     let endpoint: SocketEndpoint
     private let binary: URL
     private var process: Process?
+    /// Variables added to the daemon's environment, such as `STACKLY_CATALOG_DIR`.
+    private let environment: [String: String]
 
     /// Makes the root without starting the daemon. A missing binary ends the test: as
     /// `BLOCKED` evidence when the test records evidence, else cancelled.
     ///
-    /// - Parameter recordsEvidence: Whether the test carries the evidence trait.
-    init(recordsEvidence: Bool) throws {
+    /// - Parameters:
+    ///   - recordsEvidence: Whether the test carries the evidence trait.
+    ///   - environment: Variables added to the daemon's environment.
+    init(recordsEvidence: Bool, environment: [String: String] = [:]) throws {
+        self.environment = environment
         binary = Self.binaryURL
         let path = binary.path(percentEncoded: false)
         guard FileManager.default.isExecutableFile(atPath: path) else {
@@ -67,7 +72,9 @@ final class LiveDaemon {
     func start() async throws {
         let process = Process()
         process.executableURL = binary
-        process.environment = ["STACKLY_ROOT": root, "PATH": "/usr/bin:/bin"]
+        process.environment = environment.merging(
+            ["STACKLY_ROOT": root, "PATH": "/usr/bin:/bin"], uniquingKeysWith: { _, fixed in fixed }
+        )
         FileManager.default.createFile(atPath: logPath, contents: nil)
         let log = FileHandle(forWritingAtPath: logPath)
         try log?.seekToEnd()
