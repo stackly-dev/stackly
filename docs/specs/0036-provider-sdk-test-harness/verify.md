@@ -164,8 +164,8 @@ Bagian ini mencakup Build plan langkah 9 sampai 13. Langkah 13 menambah example 
 
 ### Commands
 
-- [ ] `cargo test -p stackly-testkit --lib test_root` → 14 test lulus: `TestRoot::new_marked` menulis `.stackly-test-run` (`stackly.test-run/v1`, `runId`, `uid`, `pid`, `createdAt`) di kedua folder dan tidak terhapus saat drop; `remove_checked` menghapus kedua folder run nya sendiri; penanda run lain, penanda hilang, `uid` lain, schema lain, symlink, folder bersarang, dan nama tanpa awalan ditolak dengan reason; folder yang argumennya masih dimuat sebuah proses ditolak sampai proses itu berakhir; `keep_data` menyimpan folder data dan menghapus folder run; `sweep_marked` menghapus root yang `pid` nya mati dan membiarkan yang hidup; root tanpa penanda ditolak dan tetap terhapus saat drop → AC-12 (bagian testkit)
-- [ ] `cargo build -p stackly-fake-server` lalu `cargo test -p stacklyd --test provider_conformance` → 17 test lulus, satu per satu lewat mutex statis, sekitar 70 detik → AC-9 sampai AC-12, AC-13 (bagian report), AC-1 (bagian harness)
+- [x] `cargo test -p stackly-testkit --lib test_root` → 14 test lulus: `TestRoot::new_marked` menulis `.stackly-test-run` (`stackly.test-run/v1`, `runId`, `uid`, `pid`, `createdAt`) di kedua folder dan tidak terhapus saat drop; `remove_checked` menghapus kedua folder run nya sendiri; penanda run lain, penanda hilang, `uid` lain, schema lain, symlink, folder bersarang, dan nama tanpa awalan ditolak dengan reason; folder yang argumennya masih dimuat sebuah proses ditolak sampai proses itu berakhir; `keep_data` menyimpan folder data dan menghapus folder run; `sweep_marked` menghapus root yang `pid` nya mati dan membiarkan yang hidup; root tanpa penanda ditolak dan tetap terhapus saat drop → AC-12 (bagian testkit)
+- [x] `cargo build -p stackly-fake-server` lalu `cargo test -p stacklyd --test provider_conformance` → 17 test lulus, satu per satu lewat mutex statis, sekitar 70 detik → AC-9 sampai AC-12, AC-13 (bagian report), AC-1 (bagian harness)
   - `the_example_package_passes_conformance`: skenario `default` dan `slow-ready` menjalankan 16 langkah persis dalam urutan AC-9; report `stackly.provider-conformance/v1`, `kind: fixture`, `runtime.source: fixture`, `handover: unproven`, `verdict: pass`, file report sama dengan nilai di memori, tidak memuat `$HOME` atau nilai settings teks; `cleanup.rootRemoved: true`, `processesLeft: []` → AC-9, AC-13
   - `the_fake_package_passes_conformance`: skenario tersirat `default` lulus, `connection`, `reload`, dan `start_again` `pass` → AC-9
   - `a_server_that_closes_fd_3_fails_the_process_contract`, `a_server_that_re_execs_fails_the_process_contract`: gagal di `process` dengan `lock_not_held` dan `re_exec`; `a_server_that_goes_to_the_background_fails_start_and_leaves_nothing_behind`: gagal di `start`, `leftovers` `fail` dengan reason `["lock_still_held", "process_left"]`, proses anak tercatat di `cleanup.processesLeft` lalu diakhiri; ketiganya `rootRemoved: true` dan tidak ada `stackly-fake-server` di root uji yang tersisa → AC-10
@@ -173,17 +173,74 @@ Bagian ini mencakup Build plan langkah 9 sampai 13. Langkah 13 menambah example 
   - `a_slow_ready_scenario_passes_within_the_readiness_limit` (langkah `start` ≥ 1500 ms), `a_crashing_scenario_fails_at_start_unless_the_scenario_expects_it` (`readyDelayMs: 60000`, `crashAfterMs: 300`: `start_fails` lulus dengan `leftovers` `pass` dan `health` `skipped`; `ready` gagal di `start` dengan `failure.code` terisi), `a_log_spamming_scenario_still_completes` (`logLinesPerSecond: 2000`, halaman log penuh) → AC-11
   - `an_unsupported_api_version_ends_before_any_lifecycle`: salinan paket contoh dengan `apiVersion: stackly/v2` berakhir di `validate` (`failure.step: validate`), satu finding `unsupported_api_version` yang menyebut `stackly/v1alpha1`, `scenarios: []`, `runtime: null`, tidak ada root berpenanda baru, folder paket tetap ada → AC-1 (bagian harness)
   - `a_root_without_this_runs_marker_is_never_removed`: penanda dengan `runId` run lain membuat `remove_checked` menolak dengan `the marker belongs to another run` dan kedua folder tetap → AC-12
-- [ ] Sesudah run di atas: `ps -axww -o pid=,args= | awk '/\/stackly-test-[^ ]*\/Test Root / && !/awk/'` kosong, dan tidak ada folder `$TMPDIR/stackly-test-*` atau `/private/tmp/skt-*` yang memuat `.stackly-test-run` → AC-12
-- [ ] `cargo test -p stackly-fake-server` → lulus tanpa perubahan; flag `--close-lock-fd`, `--re-exec`, `--background` default `false` dan hanya dipakai paket `testing/fake-rogue` (`apps/daemon/tests/conformance/packages/fake-rogue/`, `cargo xtask provider check <folder itu>` → baris `ok testing/fake-rogue 0.1.0 ...`) → AC-10
-- [ ] `cargo clippy -p stacklyd -p stackly-testkit -p stackly-fake-server --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check` → bersih
+- [x] Sesudah run di atas: `ps -axww -o pid=,args= | awk '/\/stackly-test-[^ ]*\/Test Root / && !/awk/'` kosong, dan tidak ada folder `$TMPDIR/stackly-test-*` atau `/private/tmp/skt-*` yang memuat `.stackly-test-run` → AC-12
+- [x] `cargo test -p stackly-fake-server` → lulus tanpa perubahan; flag `--close-lock-fd`, `--re-exec`, `--background` default `false` dan hanya dipakai paket `testing/fake-rogue` (`apps/daemon/tests/conformance/packages/fake-rogue/`, `cargo xtask provider check <folder itu>` → baris `ok testing/fake-rogue 0.1.0 ...`) → AC-10
+- [x] `cargo clippy -p stacklyd -p stackly-testkit -p stackly-fake-server --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check` → bersih
 
-- [ ] Langkah 13, dari checkout tanpa file untracked: `cargo xtask provider check providers/example` lalu `cargo xtask provider test providers/example` → baris `ok`, stderr berakhir `provider test report: <repo>/target/provider-test/<runId>/report.json`, exit 0, report `verdict: pass` dengan `runId` sama dengan nama folder nya; `git status --porcelain` sama sebelum dan sesudah → AC-9, AC-13
-- [ ] `cargo xtask provider test apps/daemon/tests/conformance/packages/fake-rogue --report <tmp>/r.json` → report di `<tmp>/r.json`, baris terakhir stderr menyebutnya → AC-13
-- [ ] Interupsi: jalankan `cargo xtask provider test providers/example --report <tmp>/i.json`, tunggu sampai proses `provider_harness` muncul (`ps -axo pid=,comm= | awk '$2 ~ /provider_harness$/'`), kirim satu `kill -INT <pid>` → stderr `provider_harness: stopping after the current step`, exit 130, report `interrupted: true`, `verdict: fail`, `cleanup.rootRemoved: true` → AC-13
-- [ ] `cargo xtask provider test --cleanup` → exit 0, baris terakhir stderr `provider test --cleanup: removed <n> folder(s)`; hanya root berpenanda milik uid ini yang `pid` nya mati yang terhapus (diuji `sweep_removes_a_root_whose_run_is_gone_and_keeps_one_whose_run_lives`) → AC-12
-- [ ] `cargo test -p xtask --test provider_test` → 2 test lulus: `a_scaffold_outside_the_repo_passes_check_and_test_without_changing_the_repo` (`provider new mytool --out <TestRoot>`, `provider check`, `provider test --report`, report `pass`, baris terakhir stderr, `git status --porcelain` repo sama) dan `cleanup_runs_alone_and_exits_0` → AC-14, AC-12
-- [ ] `cargo test -p stacklyd --example provider_harness` (unit test argumen) dan `cargo test -p xtask provider::harness` → lulus
-- [ ] `cargo xtask docs check` → `ok docs`; blok `bash` README paket contoh memuat `provider new`, `provider check`, dan `provider test` → AC-7
+- [x] Langkah 13, dari checkout tanpa file untracked: `cargo xtask provider check providers/example` lalu `cargo xtask provider test providers/example` → baris `ok`, stderr berakhir `provider test report: <repo>/target/provider-test/<runId>/report.json`, exit 0, report `verdict: pass` dengan `runId` sama dengan nama folder nya; `git status --porcelain` sama sebelum dan sesudah → AC-9, AC-13
+- [x] `cargo xtask provider test apps/daemon/tests/conformance/packages/fake-rogue --report <tmp>/r.json` → report di `<tmp>/r.json`, baris terakhir stderr menyebutnya → AC-13
+- [x] Interupsi: jalankan `cargo xtask provider test providers/example --report <tmp>/i.json`, tunggu sampai proses `provider_harness` muncul (`ps -axo pid=,comm= | awk '$2 ~ /provider_harness$/'`), kirim satu `kill -INT <pid>` → stderr `provider_harness: stopping after the current step`, exit 130, report `interrupted: true`, `verdict: fail`, `cleanup.rootRemoved: true` → AC-13
+- [x] `cargo xtask provider test --cleanup` → exit 0, baris terakhir stderr `provider test --cleanup: removed <n> folder(s)`; hanya root berpenanda milik uid ini yang `pid` nya mati yang terhapus (diuji `sweep_removes_a_root_whose_run_is_gone_and_keeps_one_whose_run_lives`) → AC-12
+- [x] `cargo test -p xtask --test provider_test` → 2 test lulus: `a_scaffold_outside_the_repo_passes_check_and_test_without_changing_the_repo` (`provider new mytool --out <TestRoot>`, `provider check`, `provider test --report`, report `pass`, baris terakhir stderr, `git status --porcelain` repo sama) dan `cleanup_runs_alone_and_exits_0` → AC-14, AC-12
+- [x] `cargo test -p stacklyd --example provider_harness` (unit test argumen) dan `cargo test -p xtask provider::harness` → lulus
+- [x] `cargo xtask docs check` → `ok docs`; blok `bash` README paket contoh memuat `provider new`, `provider check`, dan `provider test` → AC-7
+
+### Hasil /check verify 2026-11-11 (Milestone 3, commit 5343f0c7)
+
+**Verdict: FAIL pada satu butir** (batas waktu langkah, temuan 1). Semua AC lain di milestone ini terpenuhi dengan bukti. Ke 12 langkah Commands dijalankan dengan `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0` dan lulus. Diverifikasi pada `5343f0c7`; `main` sesudah itu menambah fitur 37, yang tidak dibaca dan tidak diuji di sini.
+
+| AC | Verdict | Bukti |
+| --- | --- | --- |
+| AC-9 | terpenuhi, kecuali batas waktu langkah (temuan 1) | `provider_conformance` 17 test lulus (74 detik); `cargo xtask provider test providers/example` dan `providers/fake` exit 0, `verdict: pass`, 16 langkah per skenario dalam urutan AC-9 |
+| AC-10 | terpenuhi | tiga test rogue dan empat unit test `conformance::process`; `provider check` paket `fake-rogue` → `ok testing/fake-rogue 0.1.0 b564c4ad…` |
+| AC-11 | terpenuhi (dengan bunyi "satu halaman penuh: 1000 baris atau batas 64 KiB" yang sudah diputuskan) | tiga test fault lulus |
+| AC-12 | terpenuhi | `test_root` 14 test; probe `--keep` dan `--cleanup` di bawah; tidak ada root berpenanda atau proses dari run ini yang tersisa |
+| AC-13 | terpenuhi | probe report, exit code, baris terakhir stderr, dan interupsi di bawah |
+| AC-14 | terpenuhi | `cargo test -p xtask --test provider_test` 2 test (45 detik) |
+| AC-1 (harness) | terpenuhi | test `an_unsupported_api_version_ends_before_any_lifecycle` dan probe di bawah |
+| AC-7 (scaffold lulus `provider test`) | terpenuhi | probe `provider new probetool` lalu `provider test` di bawah; `docs check` → `ok docs 20`, blok `bash` README memuat `new`, `check`, `test` |
+
+Perintah lain: `cargo test -p stackly-fake-server` (19 dan 36 test), `cargo clippy -p stacklyd -p stackly-testkit -p stackly-fake-server --all-targets --locked -- -D warnings`, `cargo xtask check-deps` (13 crate), `cargo xtask evidence check` (63 record manual, baseline sah), `cargo test -p stacklyd --example provider_harness` (8 test), `cargo test -p xtask provider::harness` (1 test), `cargo fmt --all --check`: semua bersih.
+
+**Probe** (semua dengan artefak `fixture`; sisa diperiksa per `runId` karena sesi lain menjalankan test di Mac yang sama; proses `stackly-fake-server` PID 39307 milik sesi lain tidak disentuh dan tidak dihitung):
+
+- `cargo xtask provider test providers/example` → exit 0; stderr berakhir `default: pass`, `slow-ready: pass`, `verdict: pass`, `provider test report: <repo>/target/provider-test/01a1c989-…/report.json`; `runId` report sama dengan nama folder; `kind: fixture`, `handover: unproven`, `cleanup.rootRemoved: true`, `processesLeft: []`; report tidak memuat `/Users/` atau teks `hello`; `sourceCommit` terisi, `dirty: false`; `git status --porcelain` sama sebelum dan sesudah. `providers/fake` → exit 0, `verdict: pass`, `handover: proven`.
+- `cargo xtask provider new probetool` → `ok testing/probetool 0.1.0 80c6c4d0…`; `cargo xtask provider test providers/probetool --report <scratchpad>/probetool.json` → exit 0, dua skenario `pass`, report di path itu. Folder dihapus, `git status` bersih.
+- Paket `fake-rogue` dengan `--report <scratchpad>/r.json` → exit 0, report di path itu, baris terakhir stderr menyebutnya.
+- `--keep` → exit 0, stderr `kept $TMPDIR/stackly-test-Hsiqn5`, folder data tetap ada dengan penanda `runId` run itu, folder run `/private/tmp/skt-*` hilang, `cleanup.kept` terisi dan `rootRemoved: false`. Lalu `cargo xtask provider test --cleanup` → exit 0, stdout `removed .../stackly-test-Hsiqn5`, stderr `provider test --cleanup: removed 1 folder(s)`. Tiga folder palsu di sampingnya tidak tersentuh: `$TMPDIR/stackly-test-chkfake` dan `/private/tmp/skt-chkfake` tanpa penanda, dan `$TMPDIR/stackly-test-chklive` dengan penanda ber `pid` hidup. Ketiganya lalu dihapus tangan.
+- Interupsi: `kill -INT` ke proses `provider_harness` di tengah langkah `second_instance` → stderr `provider_harness: stopping after the current step`, exit 130 dalam satu detik, report `interrupted: true`, `verdict: fail`, `failure.reason: interrupted`, `cleanup.rootRemoved: true`; tidak ada root ber `runId` itu dan tidak ada proses dari run itu yang tersisa.
+- Salinan paket contoh dengan `apiVersion: stackly/v2` → exit 1, `validate: fail`, satu finding `unsupported_api_version`, `scenarios: []`, `runtime: null`, tidak ada root berpenanda baru, folder paket tetap ada.
+- `cargo xtask provider test providers/postgresql` tanpa `--line` → exit 2, `blocked: the package has more than one runnable line; pick one of 18, 17`. Salinan `nats` dengan `sha256` artefak yang tidak ada di cache → exit 2, `blocked: artifact nats-2.15.1-macos-aarch64 is not in the runtime cache`, owner `runtime maintainer`, tanpa unduhan dan tanpa root.
+
+**Cek ulang dua fix dari temuan Milestone 1:**
+
+- `provider freeze` menolak paket yang bukan `[[provider]]` (`eeac71a7`): **PASS**. `cargo xtask provider freeze providers/traefik` → exit 1, `official/traefik is not a [[provider]] of providers/catalog.toml ...`, `git status` sama, corpus tetap `nats` dan `postgresql`, tidak ada `.partial`. `providers/nats` tetap `already frozen`. `cargo test -p xtask freeze` 4 test.
+- Finding `warning` untuk `apiVersion` `deprecated` (`2a29ff89`): **sebagian**. Finding `deprecated_api_version` berseveritas `warning` dibuat (unit test, `IssueCode::ALL` kini 59, `codegen --check` tetap 20 file). Tetapi lihat temuan 3.
+
+**Tafsiran developer yang dinilai:**
+
+- `ReapGuard` dan pencarian sisa proses lewat folder ASCII `stackly-test-*` dan `skt-*`, dan hanya dua folder root run itu: diterima; `ps` memang menulis ulang byte non ASCII (terlihat di output `ps` saat verify).
+- `leftovers` untuk start gagal memakai process group pemegang `instance.lock` bila `lastFailure` tidak memberi PID: diterima; lebih ketat dari teks spec, bukan lebih longgar.
+- Timeout dibaca dari `provider.yaml` lewat pembaca baris kecil: **tidak diterima**, lihat temuan 1.
+- Panggilan socket sebagai JSON yang di decode ke `Call`: diterima; nama method yang salah ditolak sebelum dikirim.
+- `remove_checked` dijalankan sebelum report ditulis: diterima; tanpa itu `cleanup.rootRemoved` tidak bisa diisi. Urutan di spec perlu disesuaikan.
+- Report paket yang ditolak di `validate` punya `scenarios: []` dan field `failure` di tingkat atas: diterima; perlu masuk tabel *Report*.
+- `runId` dibuat xtask dan diteruskan lewat `--run-id`: diterima; folder report default jadi sama dengan `runId`.
+- xtask mengabaikan SIGINT dan SIGTERM selama harness berjalan: diterima; handler dipasang lewat `ctrlc`, jadi proses anak tidak mewarisi sinyal yang diabaikan.
+- Owner `BLOCKED` `runtime maintainer` untuk artefak yang tidak ada di cache: persis teks spec.
+
+**Temuan yang perlu fix atau keputusan:**
+
+1. **Batas waktu langkah tidak dibaca dari manifest untuk ketiga paket resmi** (`apps/daemon/tests/conformance/steps.rs`, `Limits::of` dan `block_value`). Pembaca itu hanya mengenali blok YAML bergaya blok (baris `timeouts:` lalu key ber indent dua spasi). `providers/nats`, `providers/postgresql`, dan `providers/traefik` menulis `timeouts: { ... }` di satu baris, jadi nilainya tidak terbaca dan harness memakai default (init 120, readiness 60, stop 30, reload 30). Untuk PostgreSQL manifest berkata init 180, readiness 120, stop 60; jadi langkah `create`, `start`, dan `stop` dibatasi lebih pendek dari yang paket izinkan (150, 70, dan 40 detik, bukan 210, 130, dan 70). Untuk NATS dan Traefik batas `start` jadi lebih longgar (70, bukan 40 detik). Ini menyimpang dari tabel *Langkah skenario* dan *Value sourcing* ("blok `timeouts`, `readiness`, dan `health` manifest"). Di Mac ini semua run tetap lulus, tetapi di mesin lambat PostgreSQL bisa gagal palsu. Saran: ambil nilai dari model `ValidatedPackage` atau dari plan, bukan dari teks; test `a_block_value_is_read_only_directly_under_its_block` hanya menguji gaya blok.
+2. **`--scenario <nama yang tidak ada>` berakhir `verdict: pass`, exit 0, dengan `scenarios: []`.** Probe: `cargo xtask provider test providers/example --scenario nope`. Salah ketik nama skenario memberi hasil hijau tanpa satu pun langkah berjalan. Saran: nama yang tidak dikenal menjadi kesalahan argumen atau `fail` di `validate`.
+3. **Finding `deprecated_api_version` ber origin `package`, sedangkan `loadable()` berarti "tidak ada finding origin `package`"** (AC-2, `crates/core/src/provider/check.rs`). Begitu ada versi `deprecated`, paket yang memakainya akan `publishable: true` tetapi `loadable: false`, padahal tabel *Versi dan status* berkata paket itu "masih termuat dan berjalan". Hari ini tidak terpicu, dan tidak ada test yang memeriksa `loadable()` bersama warning itu. Saran: beri origin `authoring`, atau buat `loadable()` hanya menghitung `error`; lalu catat pilihan itu di spec. Kalimat spec "tidak menambah `IssueCode`" juga perlu disesuaikan dengan kode baru ini.
+
+**Temuan rendah:**
+
+4. `leftovers` sesudah `stop` memakai process group dari sampel pertama (sebelum `restart`), sesuai *Value sourcing*. Sesudah `restart` proses utama punya group baru, jadi anak yang tertinggal dari proses hasil restart hanya tertangkap lewat pemeriksaan lock dan port, sampai `start_again` membaca group yang baru. Ini kelemahan teks spec, bukan kode.
+5. `--keep` mencetak `kept $TMPDIR/stackly-test-…`, yaitu path yang sudah disanitasi, bukan path literal. Bisa dipakai di shell yang sama, tetapi AC-12 berkata "mencetak path nya".
+6. Di run yang diinterupsi, langkah `leftovers` tercatat `fail` dengan durasi 0 dan tanpa reason, padahal ia tidak sempat berjalan; `cleanup` di report yang sama bersih.
+7. Example `provider_harness` keluar 2 untuk kesalahan argumen, sama dengan kode `blocked`; dan saat report gagal ditulis ia tetap mencetak baris `provider test report: <path>` untuk file yang tidak ada.
 
 ### Acceptance-criteria coverage
 
@@ -205,8 +262,21 @@ Bagian ini mencakup Build plan langkah 14: `nats_2_15_passes_conformance`, `post
 
 ### Commands
 
-- [ ] `cargo test -p stacklyd --test provider_conformance` → 17 test fixture lulus, empat test native `ignored`
-- [ ] `cargo xtask evidence check` → bersih (penanda native ada di badan setiap test native)
+- [x] `cargo test -p stacklyd --test provider_conformance` → 17 test fixture lulus, empat test native `ignored`
+- [x] `cargo xtask evidence check` → bersih (penanda native ada di badan setiap test native)
+
+### Hasil /check verify 2026-11-11 (Milestone 4, commit 5343f0c7)
+
+**Verdict: FAIL pada satu klausa AC-15** (format `actual`, temuan 1). Sisanya terpenuhi di kode. Record evidence native resmi tetap `NOT_RUN`, owner user (langkah manual di atas).
+
+- `cargo test -p stacklyd --test provider_conformance` → 17 test fixture lulus, empat test native `ignored`. `cargo xtask evidence check` → bersih.
+- Catatan run langsung, bukan record: atas izin lead, `cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1` dijalankan dari cache runtime, tanpa wrapper evidence dan tanpa unduhan. Hasil: 4 dari 4 lulus dalam 72,6 detik (`nats_2_15`, `postgresql_17`, `postgresql_18`, `traefik_3_7`). Daftar proses `nats-server`, `postgres`, dan `traefik` sama sebelum dan sesudah (layanan Homebrew dan Herd milik user tidak tersentuh), tidak ada root berpenanda tersisa, `git status` bersih.
+- AC-15 butir demi butir: satu test native per line dengan `#[ignore = "native: ..."]` dan `covers = ["AC-029", "REQ-029"]`: terpenuhi. Subject dari versi `runtime.get` dan digest artefak: terpenuhi di kode (`ev.subject(name, version, sha256, Source::Managed)`). `BLOCKED` tanpa unduhan untuk artefak yang tidak ada di cache: terpenuhi (probe salinan `nats` di Milestone 3). `handover` hanya `proven` atau `unproven`, tanpa menambah `HANDOVER_PROVEN`: terpenuhi.
+
+**Temuan:**
+
+1. **`actual` tidak berformat seperti AC-15.** AC-15 meminta `<provider> <versi> ready in <ms> ms, stopped in <ms> ms`. Kode menulis `verdict pass; default:catalog=pass, default:runtime=pass, ...` (`apps/daemon/tests/provider_conformance.rs`, fungsi `native`). Perlu fix di kode, atau keputusan mengubah bunyi AC-15.
+2. Temuan 1 Milestone 3 (batas waktu langkah) berlaku juga di sini: ketiga paket native menulis `timeouts` di satu baris, jadi run native memakai batas default, bukan batas manifest.
 
 ### Acceptance-criteria coverage
 
