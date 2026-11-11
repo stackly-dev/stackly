@@ -70,3 +70,34 @@ Verdict: **PASS** untuk AC-6 dan untuk Milestone 1 di luar langkah pemilik repo 
 - AC-12: menunggu langkah 11 (fitur 37).
 - AC-13: tiga `LICENSE-NOTICES.md`, pemeriksaan (f), dan digest paket yang tidak berubah.
 - AC-14: `docs check` pemeriksaan (g) dan isi `README.md`. Baris tabel Layout `docs/` yang menyebut `docs/providers/` ditunda ke langkah 9, karena folder itu belum ada.
+
+## Milestone 2: Provider guide and schema reference
+
+Langkah Build plan 8 saja: tiga halaman rujukan schema dan pemeriksaan (d) menjadi wajib. Langkah 9 (`docs/providers/README.md` dengan blok walkthrough, `authoring.md`, `testing.md`, `compatibility.md`, `review.md`, bagian 6 `CONTRIBUTING.md`) menyusul setelah `cargo xtask provider test` ada di `main` (spec 0036 langkah 13), karena pemeriksaan (c) menolak perintah yang belum ada.
+
+Tafsiran: Build plan langkah 8 berkata pemeriksaan (d) "menjadi wajib", sedangkan *`cargo xtask docs`* (d) berkata pemeriksaan berjalan sejak `docs/providers/README.md` ada. Langkah 8 datang sebelum `README.md` itu (langkah 9), jadi (d) sekarang berjalan tanpa syarat dan ketiga halaman wajib ada; kalimat spec tetap benar sesudah langkah 9.
+
+### UI / manual
+
+- [ ] Buka `docs/providers/manifest-reference.md` → bahasa Inggris; bagian per blok manifest (`metadata`, `compatibility`, `runtime`, `capabilities`, `resources`, `configFiles`, `lifecycle` dengan command, langkah initialize, `stop`, `reload`, `readiness` dan `health` dengan empat jenis probe, `timeouts`, `logs`, `backup`, `permissions`, `connection`, `openWith`, `remedies`) dan tabel token; setiap field dengan arti, wajib atau tidak, dan batasnya sesuai spec 0009, spec 0034 (`remedies`), dan spec 0070 (`openWith`); `apiVersion` menyebut `SUPPORTED_API_VERSIONS` dan `unsupported_api_version`; link ke `schemas/provider/provider.v1alpha1.schema.json` → AC-10, AC-14
+- [ ] Buka `docs/providers/settings-reference.md` → root, field, item array, `x-stackly` (`apply`, `visibility`, `secret`, `printableOnly`, `managed`, `key`), dan cara daemon memeriksa nilai, sesuai spec 0009 *Settings schema*; link ke `schemas/provider/settings.v1alpha1.schema.json` → AC-10, AC-14
+- [ ] Buka `docs/providers/versions-reference.md` → root, artefak dengan tiga status (`available`, `blocked`, `fixture`) dan field yang wajib serta terlarang per status, `dependencies`, dan record `compatibility`, sesuai spec 0009 *`versions.json`* dan `crates/core/src/provider/versions.rs`; kalimat bahwa paket official tidak menulis file ini dengan tangan (`cargo xtask codegen`); link ke `schemas/provider/versions.v1.schema.json` → AC-10, AC-14
+- [ ] Setiap blok contoh di ketiga halaman menyebut file sumbernya dan cocok (atau berupa potongan yang disingkat) dengan file itu di `providers/` (`postgresql`, `nats`, `traefik`, `example`); tidak ada manifest karangan, dan tidak ada perintah yang belum ada (`cargo xtask provider test`, alur import fitur 37) → AC-10
+
+### Commands
+
+- [ ] `cargo xtask docs check` → `ok docs 20`, exit 0 (17 file Milestone 1 ditambah tiga halaman rujukan) → AC-9, AC-10, AC-14
+- [ ] `cargo test -p xtask --bin xtask docs::schema` → test lulus: fixture bersih tanpa masalah, halaman yang hilang adalah satu masalah walau `docs/providers/README.md` belum ada, property yang tidak disebut dan nilai enum yang tidak disebut masing masing satu baris dengan namanya, dan penelusuran hanya posisi schema → AC-9, AC-10
+- [ ] `cargo test -p xtask --test docs_check` → 2 test lulus; repo nyata bersih dengan (d) wajib → AC-9, AC-10
+- [ ] Tambah sementara property `ticket` dengan `enum: ["open", "wontfix"]` ke `$defs.Blocked` di `schemas/provider/versions.v1.schema.json`, jalankan `cargo xtask docs check` → tiga baris `docs/providers/versions-reference.md:1: ...` untuk `open`, `wontfix`, dan `ticket`, exit 1; kembalikan dengan `git checkout -- schemas/provider/versions.v1.schema.json` → AC-10
+- [ ] Pindahkan sementara `docs/providers/settings-reference.md` ke luar repo → `docs/providers/settings-reference.md:1: reference page is missing; it must cover `schemas/provider/settings.v1alpha1.schema.json`` ditambah dua baris link dari dua halaman lain, exit 1; kembalikan → AC-10
+- [ ] `cargo xtask codegen --check` → bersih, jadi nama yang diperiksa adalah schema hasil codegen saat ini → AC-10
+- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-9: pemeriksaan (d) sekarang wajib; test fixture rusaknya di `xtask/src/docs/schema.rs` (property, nilai enum, halaman hilang). Pemeriksaan lain tetap seperti Milestone 1.
+- AC-10: ketiga halaman rujukan dan (d) wajib, dibuktikan `docs check` bersih dan probe schema di atas.
+- AC-14: ketiga halaman berbahasa Inggris dan lolos (g); sisanya (tabel ringkas, satu H1) dijaga review di langkah UI / manual.
+- AC-2, AC-11: menunggu langkah 9 (butuh `cargo xtask provider test` di `main`).
+- AC-8: menunggu langkah 10. AC-12: menunggu langkah 11 (fitur 37). AC-1, AC-3 sampai AC-7, AC-13: Milestone 1.
