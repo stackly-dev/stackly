@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod redact;
 pub mod runtime;
 pub mod socket;
+pub mod trust;
 
 use std::path::Path;
 

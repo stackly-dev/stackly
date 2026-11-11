@@ -13,6 +13,7 @@ use typeshare::typeshare;
 
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
+use crate::provider::{ApprovalState, CatalogRevocation, LocalProviderInfo, RevocationInfo};
 use crate::wire::{Count, Revision, Timestamp};
 
 /// The longest `GetProviderParams.provider`, in bytes.
@@ -70,6 +71,11 @@ pub struct ListProvidersReply {
     /// category, display name, and ID.
     #[serde(default)]
     pub items: Vec<ProviderSummary>,
+    /// The `revoked` list of the installed catalog, at most
+    /// [`REVOCATIONS_MAX`](crate::provider::REVOCATIONS_MAX) (spec 0037). It
+    /// is as old as the catalog, never a current list.
+    #[serde(default)]
+    pub revocations: Vec<CatalogRevocation>,
 }
 
 /// The facts about the catalog the daemon loaded.
@@ -97,6 +103,9 @@ pub struct CatalogInfo {
     pub outdated: bool,
     /// How many entries failed validation.
     pub invalid_count: Count,
+    /// How many entries are imported local providers (spec 0037).
+    #[serde(default)]
+    pub local_count: Count,
 }
 
 /// An OS and architecture pair.
@@ -148,8 +157,13 @@ pub struct ProviderSummary {
     /// Who publishes the package: `Stackly` for the `official` namespace.
     #[serde(default)]
     pub publisher: Option<String>,
-    /// How far the entry is trusted, the same as the catalog's.
+    /// How far the entry is trusted: the catalog's, or `local` for an
+    /// imported provider.
     pub trust: TrustLevel,
+    /// Where an imported provider's stored bytes stand; null for a catalog
+    /// entry (spec 0037).
+    #[serde(default)]
+    pub approval: Option<ApprovalState>,
     /// The first 16 exact versions with an `available` artifact for this
     /// Mac, in `versions.json` order.
     #[serde(default)]
@@ -197,6 +211,14 @@ pub struct ProviderDetail {
     /// What failed validation; only for invalid entries.
     #[serde(default)]
     pub issues: Vec<CatalogIssue>,
+    /// The import facts and last decision of a local entry; null for a
+    /// catalog entry (spec 0037).
+    #[serde(default)]
+    pub local: Option<LocalProviderInfo>,
+    /// Set while the entry's trust verdict is revoked, by the user or the
+    /// installed catalog (spec 0037).
+    #[serde(default)]
+    pub revocation: Option<RevocationInfo>,
 }
 
 /// Whether a provider has one capability.
@@ -381,6 +403,8 @@ pub enum TrustLevel {
     Official,
     /// A development catalog, never shown as official.
     Development,
+    /// An imported local provider, never verified (spec 0037).
+    Local,
     /// A trust level this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,
@@ -482,6 +506,11 @@ pub enum SupportReason {
     /// A passing runtime record for this macOS major and architecture
     /// decides (spec 0018).
     RuntimeTested,
+    /// A local entry whose stored bytes no approval covers (spec 0037).
+    ApprovalRequired,
+    /// The approval was revoked, by the user or the installed catalog
+    /// (spec 0037).
+    TrustRevoked,
     /// A reason this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

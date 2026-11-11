@@ -49,7 +49,10 @@ use crate::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
-use crate::provider::{ProviderValidateParams, ProviderValidation};
+use crate::provider::{
+    DecideProviderParams, ImportPreview, ImportProviderParams, PreviewImportParams,
+    ProviderTargetParams, ProviderValidateParams, ProviderValidation, RemovedProvider,
+};
 use crate::restart::RestartPreview;
 use crate::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
@@ -288,6 +291,25 @@ pub enum Call {
     /// 0036). Not an operation: it reads the folder and writes nothing.
     #[serde(rename = "provider.validate")]
     ProviderValidate(ProviderValidateParams),
+    /// Reads a local provider package folder and answers what importing it
+    /// would bring in (spec 0037). Not an operation: it writes nothing.
+    #[serde(rename = "provider.preview_import")]
+    ProviderPreviewImport(PreviewImportParams),
+    /// Imports a local provider package: an `import_provider` operation.
+    #[serde(rename = "provider.import")]
+    ProviderImport(ImportProviderParams),
+    /// Approves exactly the stored bytes of an imported provider: an
+    /// `approve_provider` operation.
+    #[serde(rename = "provider.approve")]
+    ProviderApprove(DecideProviderParams),
+    /// Revokes the approval of an imported provider: a `revoke_provider`
+    /// operation.
+    #[serde(rename = "provider.revoke")]
+    ProviderRevoke(ProviderTargetParams),
+    /// Removes an imported provider from the catalog: a
+    /// `remove_provider_import` operation.
+    #[serde(rename = "provider.remove")]
+    ProviderRemove(ProviderTargetParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -484,6 +506,21 @@ pub enum Reply {
     /// What the validator found, even for a package that does not load.
     #[serde(rename = "provider.validate")]
     ProviderValidate(Box<ProviderValidation>),
+    /// What importing the folder would bring in.
+    #[serde(rename = "provider.preview_import")]
+    ProviderPreviewImport(Box<ImportPreview>),
+    /// The imported entry after the operation.
+    #[serde(rename = "provider.import")]
+    ProviderImport(Box<ProviderDetail>),
+    /// The approved entry.
+    #[serde(rename = "provider.approve")]
+    ProviderApprove(Box<ProviderDetail>),
+    /// The entry after the revocation.
+    #[serde(rename = "provider.revoke")]
+    ProviderRevoke(Box<ProviderDetail>),
+    /// The removed provider.
+    #[serde(rename = "provider.remove")]
+    ProviderRemove(RemovedProvider),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -616,6 +653,11 @@ methods! {
     "diagnostics.preview_bundle" => DiagnosticsPreviewBundle, recovery allowed;
     "diagnostics.export_bundle" => DiagnosticsExportBundle(ExportBundleParams), recovery allowed;
     "provider.validate" => ProviderValidate(ProviderValidateParams), recovery allowed;
+    "provider.preview_import" => ProviderPreviewImport(PreviewImportParams), recovery refused;
+    "provider.import" => ProviderImport(ImportProviderParams), recovery refused;
+    "provider.approve" => ProviderApprove(DecideProviderParams), recovery refused;
+    "provider.revoke" => ProviderRevoke(ProviderTargetParams), recovery refused;
+    "provider.remove" => ProviderRemove(ProviderTargetParams), recovery refused;
 }
 
 impl Reply {
@@ -760,6 +802,23 @@ mod tests {
         assert!(allowed.iter().all(Call::allowed_in_recovery));
         let operation_id = uuid::Uuid::nil();
         let refused = [
+            Call::ProviderPreviewImport(PreviewImportParams {
+                path: "/a/acme-demo".to_owned(),
+            }),
+            Call::ProviderImport(ImportProviderParams {
+                path: "/a/acme-demo".to_owned(),
+                expected_package_sha256: "a".repeat(64),
+            }),
+            Call::ProviderApprove(DecideProviderParams {
+                provider: "acme/demo".to_owned(),
+                expected_package_sha256: "a".repeat(64),
+            }),
+            Call::ProviderRevoke(ProviderTargetParams {
+                provider: "acme/demo".to_owned(),
+            }),
+            Call::ProviderRemove(ProviderTargetParams {
+                provider: "acme/demo".to_owned(),
+            }),
             Call::OperationGet(GetOperationParams { operation_id }),
             Call::OperationList(ListOperationsParams::default()),
             Call::OperationCancel(CancelOperationParams { operation_id }),

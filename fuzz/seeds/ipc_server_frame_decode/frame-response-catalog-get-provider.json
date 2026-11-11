@@ -26,7 +26,8 @@
             "Apache-2.0"
           ],
           "mark": "Na",
-          "tile": "green"
+          "tile": "green",
+          "approval": null
         },
         "software": "nats",
         "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe",
@@ -124,7 +125,9 @@
           }
         ],
         "note": null,
-        "issues": []
+        "issues": [],
+        "local": null,
+        "revocation": null
       }
     }
   }

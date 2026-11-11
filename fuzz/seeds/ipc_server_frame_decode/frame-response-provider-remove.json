@@ -1,0 +1,12 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f54",
+    "reply": {
+      "type": "provider.remove",
+      "content": {
+        "provider": "acme/demo"
+      }
+    }
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "summary": {
+    "provider": "acme/demo",
+    "revision": 1,
+    "displayName": "Acme Demo",
+    "software": "demo",
+    "category": "database",
+    "description": "Demo server packaged by Acme for import tests.",
+    "state": "blocked",
+    "stateReason": "trust_revoked",
+    "stateNote": null,
+    "providerRevision": "1.0.0",
+    "publisher": "acme",
+    "trust": "local",
+    "approval": "revoked",
+    "versions": [
+      "1.0.0"
+    ],
+    "versionCount": 1,
+    "licenses": [
+      "MIT"
+    ],
+    "mark": "Ac",
+    "tile": "gray"
+  },
+  "software": "demo",
+  "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": false
+    },
+    {
+      "capability": "metrics",
+      "supported": true
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "versions": [
+    {
+      "version": "1.0.0",
+      "line": "1.0",
+      "support": [
+        {
+          "os": "macos",
+          "arches": [
+            "aarch64"
+          ],
+          "status": "unverified",
+          "reason": "untested",
+          "note": null
+        },
+        {
+          "os": "linux",
+          "arches": [],
+          "status": "unsupported",
+          "reason": "no_build",
+          "note": null
+        },
+        {
+          "os": "windows",
+          "arches": [],
+          "status": "planned",
+          "reason": "platform_note",
+          "note": "Windows builds are planned for a later release."
+        }
+      ],
+      "install": {
+        "installable": false,
+        "reason": "trust_revoked"
+      },
+      "artifacts": [
+        {
+          "id": "demo-1.0.0-macos-aarch64",
+          "os": "macos",
+          "arch": "aarch64",
+          "status": "available",
+          "sha256": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "minOs": "13.0",
+          "downloadSize": 1048576,
+          "installedSize": null,
+          "license": "MIT",
+          "licenseUrl": "https://downloads.example.test/demo/LICENSE",
+          "source": "https://downloads.example.test/demo/1.0.0/demo-1.0.0-macos-aarch64.tar.gz",
+          "blockedReason": null,
+          "dependencies": null
+        }
+      ]
+    }
+  ],
+  "platformNotes": [],
+  "note": null,
+  "issues": [],
+  "local": {
+    "importedAt": "2026-11-11T09:00:00.000Z",
+    "originPath": "~/providers/acme-demo",
+    "quarantined": true,
+    "versionsSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "packageBytes": 4096,
+    "decision": {
+      "decision": "revoked",
+      "decidedAt": "2026-11-11T09:05:00.000Z",
+      "providerRevision": "1.0.0",
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "permissions": {
+      "capabilities": [
+        "multi_instance",
+        "persistence"
+      ],
+      "managedFilesystem": [
+        "config",
+        "data",
+        "logs",
+        "run",
+        "temp"
+      ],
+      "executables": [
+        {
+          "name": "runtime",
+          "path": "bin/demo-server",
+          "uses": [
+            "start",
+            "version_check"
+          ]
+        },
+        {
+          "name": "demoCli",
+          "path": "bin/demo-cli",
+          "uses": [
+            "probe",
+            "open_with"
+          ]
+        }
+      ],
+      "secrets": [
+        "password"
+      ],
+      "endpoints": [
+        {
+          "name": "client",
+          "transport": "tcp",
+          "purpose": "client",
+          "defaultPort": 7400
+        }
+      ],
+      "downloads": [
+        {
+          "artifact": "demo-1.0.0-macos-aarch64",
+          "version": "1.0.0",
+          "os": "macos",
+          "arch": "aarch64",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "size": 1048576,
+          "hosts": [
+            "downloads.example.test",
+            "mirror.example.test"
+          ],
+          "signingPolicy": "keep_or_adhoc"
+        }
+      ],
+      "openWith": [
+        {
+          "name": "shell",
+          "kind": "terminal",
+          "target": "demoCli"
+        }
+      ]
+    },
+    "changes": []
+  },
+  "revocation": {
+    "by": "user",
+    "since": "2026-11-11T09:05:00.000Z",
+    "reason": null,
+    "catalogRevision": null
+  }
+}

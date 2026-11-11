@@ -815,7 +815,8 @@
       "retryable": false,
       "details": [
         "provider",
-        "revision"
+        "revision",
+        "candidates"
       ],
       "items": null,
       "summary": "more than one package digest matches the provider and revision"
@@ -1323,6 +1324,18 @@
       "summary": "the client speaks another protocol major"
     },
     {
+      "code": "provider.approval_required",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "provider",
+        "providerRevision",
+        "packageSha256"
+      ],
+      "items": null,
+      "summary": "the stored bytes of the local provider are not approved"
+    },
+    {
       "code": "provider.endpoint_not_loopback",
       "category": "invalid_input",
       "retryable": false,
@@ -1331,6 +1344,51 @@
       ],
       "items": null,
       "summary": "an endpoint of the instance is not on a loopback address"
+    },
+    {
+      "code": "provider.import_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "provider",
+        "expected",
+        "actual"
+      ],
+      "items": null,
+      "summary": "the package or the import changed since the client previewed it"
+    },
+    {
+      "code": "provider.import_limit",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "limit",
+        "max"
+      ],
+      "items": null,
+      "summary": "the import would pass the limit of imported providers or bytes"
+    },
+    {
+      "code": "provider.import_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "provider",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the provider is not an imported local provider"
+    },
+    {
+      "code": "provider.import_unreadable",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "path",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the provider folder can't be read"
     },
     {
       "code": "provider.invalid_settings",
@@ -1354,6 +1412,17 @@
       "summary": "the settings do not match the provider's settings schema, and items lists each issue"
     },
     {
+      "code": "provider.not_approved",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "provider",
+        "approval"
+      ],
+      "items": null,
+      "summary": "the provider has no approval to revoke"
+    },
+    {
       "code": "provider.plan_invalid",
       "category": "invalid_input",
       "retryable": false,
@@ -1374,6 +1443,31 @@
       ],
       "items": null,
       "summary": "a rendered config file does not parse or is too large"
+    },
+    {
+      "code": "provider.revoked",
+      "category": "unauthorized",
+      "retryable": false,
+      "details": [
+        "provider",
+        "providerRevision",
+        "by",
+        "since",
+        "catalogRevision"
+      ],
+      "items": null,
+      "summary": "the provider revision is revoked by the user or the installed catalog"
+    },
+    {
+      "code": "provider.store_failed",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "provider",
+        "reason"
+      ],
+      "items": null,
+      "summary": "the store copy of the package could not be written"
     },
     {
       "code": "provider.unrepresentable_value",

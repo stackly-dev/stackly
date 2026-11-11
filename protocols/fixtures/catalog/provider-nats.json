@@ -12,6 +12,7 @@
     "providerRevision": "1.0.1",
     "publisher": "Stackly",
     "trust": "official",
+    "approval": null,
     "versions": [
       "2.15.1"
     ],
@@ -118,5 +119,7 @@
     }
   ],
   "note": null,
-  "issues": []
+  "issues": [],
+  "local": null,
+  "revocation": null
 }

@@ -89,6 +89,18 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	/// Restart the daemon with a plan (spec 0030); its resource is the
 	/// manager.
 	case daemonRestart = "daemon_restart"
+	/// Import a local provider package (spec 0037); its resource is the
+	/// manager.
+	case importProvider = "import_provider"
+	/// Approve the stored bytes of an imported provider (spec 0037); its
+	/// resource is the manager.
+	case approveProvider = "approve_provider"
+	/// Revoke the approval of an imported provider (spec 0037); its
+	/// resource is the manager.
+	case revokeProvider = "revoke_provider"
+	/// Remove an imported provider (spec 0037); its resource is the
+	/// manager.
+	case removeProviderImport = "remove_provider_import"
 	/// A kind this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -1305,6 +1317,34 @@ public struct CatalogArtifact: Codable, Sendable, Equatable {
 	}
 }
 
+/// What happened in a `catalog.changed` event. Open.
+public enum CatalogChangeKind: String, Codable, Sendable, Equatable {
+	/// A package was imported.
+	case imported
+	/// An import was approved.
+	case approved
+	/// An approval was revoked.
+	case revoked
+	/// An import was removed.
+	case removed
+	/// A change this build does not know.
+	case unrecognized
+}
+
+/// Content of the `catalog.changed` event: an operation changed the local
+/// entries, so a client reads `catalog.list_providers` again.
+public struct CatalogChanged: Codable, Sendable, Equatable {
+	/// The provider that changed.
+	public let provider: String?
+	/// What happened to it.
+	public let change: CatalogChangeKind
+
+	public init(provider: String?, change: CatalogChangeKind) {
+		self.provider = provider
+		self.change = change
+	}
+}
+
 /// Where a catalog came from. Open.
 public enum CatalogSourceKind: String, Codable, Sendable, Equatable {
 	/// The catalog inside the app bundle.
@@ -1321,6 +1361,8 @@ public enum TrustLevel: String, Codable, Sendable, Equatable {
 	case official
 	/// A development catalog, never shown as official.
 	case development
+	/// An imported local provider, never verified (spec 0037).
+	case local
 	/// A trust level this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -1360,8 +1402,10 @@ public struct CatalogInfo: Codable, Sendable, Equatable {
 	public let outdated: Bool
 	/// How many entries failed validation.
 	public let invalidCount: UInt64
+	/// How many entries are imported local providers (spec 0037).
+	public let localCount: UInt64?
 
-	public init(revision: UInt64, publishedAt: Date, loadedAt: Date, contentSha256: String, source: CatalogSourceKind, trust: TrustLevel, host: HostTarget, outdated: Bool, invalidCount: UInt64) {
+	public init(revision: UInt64, publishedAt: Date, loadedAt: Date, contentSha256: String, source: CatalogSourceKind, trust: TrustLevel, host: HostTarget, outdated: Bool, invalidCount: UInt64, localCount: UInt64?) {
 		self.revision = revision
 		self.publishedAt = publishedAt
 		self.loadedAt = loadedAt
@@ -1371,6 +1415,7 @@ public struct CatalogInfo: Codable, Sendable, Equatable {
 		self.host = host
 		self.outdated = outdated
 		self.invalidCount = invalidCount
+		self.localCount = localCount
 	}
 }
 
@@ -1394,6 +1439,28 @@ public struct CatalogIssue: Codable, Sendable, Equatable {
 		self.code = code
 		self.message = message
 		self.reason = reason
+	}
+}
+
+/// One entry of the installed catalog's `revoked` list.
+public struct CatalogRevocation: Codable, Sendable, Equatable {
+	/// The provider ID.
+	public let provider: String
+	/// The revoked revision label.
+	public let providerRevision: String
+	/// The revoked manifest digest; null for every digest of the revision.
+	public let manifestSha256: String?
+	/// Why.
+	public let reason: String
+	/// Since when, `YYYY-MM-DD`.
+	public let since: String
+
+	public init(provider: String, providerRevision: String, manifestSha256: String?, reason: String, since: String) {
+		self.provider = provider
+		self.providerRevision = providerRevision
+		self.manifestSha256 = manifestSha256
+		self.reason = reason
+		self.since = since
 	}
 }
 
@@ -1444,6 +1511,11 @@ public enum SupportReason: String, Codable, Sendable, Equatable {
 	/// A passing runtime record for this macOS major and architecture
 	/// decides (spec 0018).
 	case runtimeTested = "runtime_tested"
+	/// A local entry whose stored bytes no approval covers (spec 0037).
+	case approvalRequired = "approval_required"
+	/// The approval was revoked, by the user or the installed catalog
+	/// (spec 0037).
+	case trustRevoked = "trust_revoked"
 	/// A reason this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -3617,6 +3689,19 @@ public struct DataUsageReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `provider.approve`, an `approve_provider` operation.
+public struct DecideProviderParams: Codable, Sendable, Equatable {
+	/// The imported provider, with its namespace.
+	public let provider: String
+	/// The `local.packageSha256` of the detail the client showed.
+	public let expectedPackageSha256: String
+
+	public init(provider: String, expectedPackageSha256: String) {
+		self.provider = provider
+		self.expectedPackageSha256 = expectedPackageSha256
+	}
+}
+
 /// Params of `secret.delete`.
 public struct DeleteSecretParams: Codable, Sendable, Equatable {
 	/// The reference.
@@ -4607,6 +4692,10 @@ public enum EventKind: Codable, Sendable, Equatable {
 	/// daemon event: no resource, no revision; clients read `settings.get`
 	/// again.
 	case settingsChanged(SettingsChanged)
+	/// The local entries of the catalog changed after a provider operation
+	/// (spec 0037). A daemon event: no resource, no revision; clients read
+	/// `catalog.list_providers` again.
+	case catalogChanged(CatalogChanged)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case eventsGap = "events.gap",
@@ -4620,7 +4709,8 @@ public enum EventKind: Codable, Sendable, Equatable {
 			daemonReconciling = "daemon.reconciling",
 			runtimeStateChanged = "runtime.state_changed",
 			daemonRestartPlan = "daemon.restart_plan",
-			settingsChanged = "settings.changed"
+			settingsChanged = "settings.changed",
+			catalogChanged = "catalog.changed"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -4689,6 +4779,11 @@ public enum EventKind: Codable, Sendable, Equatable {
 					self = .settingsChanged(content)
 					return
 				}
+			case .catalogChanged:
+				if let content = try? container.decode(CatalogChanged.self, forKey: .content) {
+					self = .catalogChanged(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(EventKind.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EventKind"))
@@ -4731,6 +4826,9 @@ public enum EventKind: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .settingsChanged(let content):
 			try container.encode(CodingKeys.settingsChanged, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .catalogChanged(let content):
+			try container.encode(CodingKeys.catalogChanged, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -4802,6 +4900,40 @@ public struct EventProbe: Codable, Sendable, Equatable {
 		self.subscriptionId = subscriptionId
 		self.sequence = sequence
 		self.kind = kind
+	}
+}
+
+/// Where an imported provider's stored bytes stand. Open.
+public enum ApprovalState: String, Codable, Sendable, Equatable {
+	/// No decision covers the stored bytes.
+	case pending
+	/// The stored bytes are approved.
+	case approved
+	/// The approval of the stored bytes was revoked.
+	case revoked
+	/// A state this build does not know.
+	case unrecognized
+}
+
+/// The stored import of the same provider ID.
+public struct ExistingImport: Codable, Sendable, Equatable {
+	/// Its `metadata.revision`.
+	public let providerRevision: String
+	/// Its package digest.
+	public let packageSha256: String
+	/// Where its stored bytes stand.
+	public let approval: ApprovalState
+	/// Whether the previewed folder holds exactly these bytes.
+	public let samePackage: Bool
+	/// Whether its store copy loads and matches.
+	public let storedCopyValid: Bool
+
+	public init(providerRevision: String, packageSha256: String, approval: ApprovalState, samePackage: Bool, storedCopyValid: Bool) {
+		self.providerRevision = providerRevision
+		self.packageSha256 = packageSha256
+		self.approval = approval
+		self.samePackage = samePackage
+		self.storedCopyValid = storedCopyValid
 	}
 }
 
@@ -5095,6 +5227,373 @@ public struct IdentityBlocker: Codable, Sendable, Equatable {
 	public init(evidence: IdentityEvidence, observedAt: Date) {
 		self.evidence = evidence
 		self.observedAt = observedAt
+	}
+}
+
+/// Where a package runs a program. Open.
+public enum ExecutableUse: String, Codable, Sendable, Equatable {
+	/// It starts the server.
+	case start
+	/// It runs during setup.
+	case initialize
+	/// It runs on stop.
+	case stop
+	/// It runs on reload.
+	case reload
+	/// It runs health checks.
+	case probe
+	/// It runs once at install.
+	case versionCheck = "version_check"
+	/// It opens in Terminal.
+	case openWith = "open_with"
+	/// A use this build does not know.
+	case unrecognized
+}
+
+/// One program a package runs.
+public struct PermissionExecutable: Codable, Sendable, Equatable {
+	/// `runtime` or the alias.
+	public let name: String
+	/// The path under the runtime root.
+	public let path: String
+	/// Where the manifest runs it.
+	public let uses: [ExecutableUse]?
+
+	public init(name: String, path: String, uses: [ExecutableUse]?) {
+		self.name = name
+		self.path = path
+		self.uses = uses
+	}
+}
+
+/// One endpoint a package declares.
+public struct PermissionEndpoint: Codable, Sendable, Equatable {
+	/// The endpoint name.
+	public let name: String
+	/// `tcp`, `udp`, or `unix`.
+	public let transport: String
+	/// `client`, `monitoring`, or `admin`.
+	public let purpose: String
+	/// The suggested port of an IP endpoint.
+	public let defaultPort: UInt16?
+
+	public init(name: String, transport: String, purpose: String, defaultPort: UInt16?) {
+		self.name = name
+		self.transport = transport
+		self.purpose = purpose
+		self.defaultPort = defaultPort
+	}
+}
+
+/// One artifact a package may download.
+public struct PermissionDownload: Codable, Sendable, Equatable {
+	/// The artifact ID.
+	public let artifact: String
+	/// The exact version.
+	public let version: String
+	/// The OS it is built for.
+	public let os: TargetOs
+	/// The architecture it is built for.
+	public let arch: TargetArch
+	/// The SHA-256 the package author wrote for it.
+	public let sha256: String
+	/// The download size in bytes.
+	public let size: UInt64
+	/// The unique hosts of its URLs, at most 8.
+	public let hosts: [String]?
+	/// The signing policy code, such as `keep_or_adhoc`.
+	public let signingPolicy: String
+
+	public init(artifact: String, version: String, os: TargetOs, arch: TargetArch, sha256: String, size: UInt64, hosts: [String]?, signingPolicy: String) {
+		self.artifact = artifact
+		self.version = version
+		self.os = os
+		self.arch = arch
+		self.sha256 = sha256
+		self.size = size
+		self.hosts = hosts
+		self.signingPolicy = signingPolicy
+	}
+}
+
+/// One `openWith` entry of a package.
+public struct PermissionOpenWith: Codable, Sendable, Equatable {
+	/// The entry name.
+	public let name: String
+	/// `app`, `terminal`, `browser`, or `reveal`.
+	public let kind: String
+	/// The first bundle ID of an `app` entry or the executable of a
+	/// `terminal` entry.
+	public let target: String?
+
+	public init(name: String, kind: String, target: String?) {
+		self.name = name
+		self.kind = kind
+		self.target = target
+	}
+}
+
+/// What a package may do (spec 0037, *Ringkasan izin*), for display and
+/// comparison only.
+public struct ProviderPermissions: Codable, Sendable, Equatable {
+	/// The supported capabilities, in the capability order of spec 0017.
+	public let capabilities: [ProviderCapability]?
+	/// The folders it writes: `data`, `config`, `logs`, `temp`, `run`.
+	public let managedFilesystem: [String]?
+	/// The programs it runs.
+	public let executables: [PermissionExecutable]?
+	/// The secret fields it hands to a process.
+	public let secrets: [String]?
+	/// The endpoints it declares.
+	public let endpoints: [PermissionEndpoint]?
+	/// The artifacts it may download.
+	public let downloads: [PermissionDownload]?
+	/// The `openWith` entries.
+	public let openWith: [PermissionOpenWith]?
+
+	public init(capabilities: [ProviderCapability]?, managedFilesystem: [String]?, executables: [PermissionExecutable]?, secrets: [String]?, endpoints: [PermissionEndpoint]?, downloads: [PermissionDownload]?, openWith: [PermissionOpenWith]?) {
+		self.capabilities = capabilities
+		self.managedFilesystem = managedFilesystem
+		self.executables = executables
+		self.secrets = secrets
+		self.endpoints = endpoints
+		self.downloads = downloads
+		self.openWith = openWith
+	}
+}
+
+/// How serious a [`ValidationFinding`] is.
+public enum FindingSeverity: String, Codable, Sendable, Equatable {
+	/// The package is not publishable.
+	case error
+	/// The package is publishable, but something should change.
+	case warning
+	/// A severity this build does not know.
+	case unrecognized
+}
+
+/// Which rule set a [`ValidationFinding`] comes from.
+public enum FindingOrigin: String, Codable, Sendable, Equatable {
+	/// The package cannot load anywhere.
+	case package
+	/// A tightening for package authors; the package still loads.
+	case authoring
+	/// `tests/scenarios.yaml`.
+	case scenarios
+	/// An origin this build does not know.
+	case unrecognized
+}
+
+/// One problem the validator found.
+public struct ValidationFinding: Codable, Sendable, Equatable {
+	/// How serious it is.
+	public let severity: FindingSeverity
+	/// Which rule set found it.
+	public let origin: FindingOrigin
+	/// The package file, such as `provider.yaml` or
+	/// `tests/scenarios.yaml`, or empty for the package as a whole.
+	public let file: String
+	/// Where in the file: a field path, `line:column`, or `.`.
+	public let location: String
+	/// The stable snake_case issue code of spec 0009.
+	public let code: String
+	/// What is wrong, in English; never a secret or a settings value.
+	public let message: String
+	/// A stable snake_case reason, for the codes that declare one.
+	public let reason: String?
+
+	public init(severity: FindingSeverity, origin: FindingOrigin, file: String, location: String, code: String, message: String, reason: String?) {
+		self.severity = severity
+		self.origin = origin
+		self.file = file
+		self.location = location
+		self.code = code
+		self.message = message
+		self.reason = reason
+	}
+}
+
+/// Why a package cannot be imported. Open.
+public enum ImportBlockReason: String, Codable, Sendable, Equatable {
+	/// A validator error or an import rule.
+	case packageInvalid = "package_invalid"
+	/// An import limit.
+	case importLimit = "import_limit"
+	/// A reason this build does not know.
+	case unrecognized
+}
+
+/// Whether a previewed package can be imported.
+public struct ImportVerdict: Codable, Sendable, Equatable {
+	/// True when no `package` or `authoring` finding is an error, no
+	/// import issue holds, and the import limits allow it.
+	public let importable: Bool
+	/// Why not, when not importable.
+	public let reason: ImportBlockReason?
+
+	public init(importable: Bool, reason: ImportBlockReason?) {
+		self.importable = importable
+		self.reason = reason
+	}
+}
+
+/// What differs from the last decision (spec 0037, *Kode perubahan*). Open.
+public enum PermissionChange: String, Codable, Sendable, Equatable {
+	/// The revision label.
+	case revision
+	/// The programs it runs.
+	case executables
+	/// The files it downloads.
+	case downloads
+	/// The download hosts.
+	case downloadHosts = "download_hosts"
+	/// The capabilities.
+	case capabilities
+	/// The folders it writes.
+	case filesystem
+	/// The secrets it receives.
+	case secrets
+	/// The endpoints.
+	case endpoints
+	/// The apps it opens.
+	case openWith = "open_with"
+	/// Other bytes only.
+	case content
+	/// A change this build does not know.
+	case unrecognized
+}
+
+/// Who revoked a revision. Open.
+public enum RevocationSource: String, Codable, Sendable, Equatable {
+	/// The user.
+	case user
+	/// The installed catalog.
+	case catalog
+	/// A source this build does not know.
+	case unrecognized
+}
+
+/// When and by whom a revision was revoked.
+public struct RevocationInfo: Codable, Sendable, Equatable {
+	/// Who revoked it.
+	public let by: RevocationSource
+	/// Since when.
+	public let since: Date
+	/// The catalog's reason.
+	public let reason: String?
+	/// The revision of the catalog that revokes it.
+	public let catalogRevision: UInt64?
+
+	public init(by: RevocationSource, since: Date, reason: String?, catalogRevision: UInt64?) {
+		self.by = by
+		self.since = since
+		self.reason = reason
+		self.catalogRevision = catalogRevision
+	}
+}
+
+/// Reply of `provider.preview_import`: what importing the folder would
+/// bring in. It reads the folder and writes nothing.
+public struct ImportPreview: Codable, Sendable, Equatable {
+	/// `metadata.id`, when it reads.
+	public let provider: String?
+	/// `metadata.displayName`, when it reads.
+	public let displayName: String?
+	/// `metadata.software`, when it reads.
+	public let software: String?
+	/// `metadata.category`, when it reads.
+	public let category: ProviderCategory?
+	/// `metadata.description`, when it reads.
+	public let description: String?
+	/// `metadata.revision`, when it reads.
+	public let providerRevision: String?
+	/// The namespace of `metadata.id`, never verified.
+	public let publisher: String?
+	/// The manifest digest, when the package validated.
+	public let manifestSha256: String?
+	/// The `versions.json` digest, when the file was read.
+	public let versionsSha256: String?
+	/// The digest of every package file, the bytes an approval binds, when
+	/// the files were read.
+	public let packageSha256: String?
+	/// The bytes of every package file together.
+	public let packageBytes: UInt64
+	/// How many files the package has.
+	public let fileCount: UInt64
+	/// The folder, with the home folder written `~`.
+	public let originPath: String
+	/// Whether `provider.yaml` carries a quarantine attribute; null when
+	/// the attribute could not be read.
+	public let quarantined: Bool?
+	/// The agent that set the attribute, when it was read.
+	public let quarantineAgent: String?
+	/// The exact versions, first [`PREVIEW_VERSIONS_MAX`].
+	public let versions: [String]?
+	/// How many exact versions there are.
+	public let versionCount: UInt64
+	/// What the package may run, read, and download; null when it does not
+	/// validate.
+	public let permissions: ProviderPermissions?
+	/// The first [`PREVIEW_FINDINGS_MAX`] validator findings, without the
+	/// `scenarios` ones.
+	public let findings: [ValidationFinding]?
+	/// Findings left out of `findings`.
+	public let omittedFindings: UInt64
+	/// What the import rules refuse.
+	public let importIssues: [CatalogIssue]?
+	/// Whether it can be imported.
+	public let verdict: ImportVerdict
+	/// The import of the same provider ID that is stored now, if any.
+	public let existing: ExistingImport?
+	/// What differs from the last decision on that provider; empty without
+	/// a decision.
+	public let changes: [PermissionChange]?
+	/// The revocation of the installed catalog for this package's key.
+	public let revocation: RevocationInfo?
+
+	public init(provider: String?, displayName: String?, software: String?, category: ProviderCategory?, description: String?, providerRevision: String?, publisher: String?, manifestSha256: String?, versionsSha256: String?, packageSha256: String?, packageBytes: UInt64, fileCount: UInt64, originPath: String, quarantined: Bool?, quarantineAgent: String?, versions: [String]?, versionCount: UInt64, permissions: ProviderPermissions?, findings: [ValidationFinding]?, omittedFindings: UInt64, importIssues: [CatalogIssue]?, verdict: ImportVerdict, existing: ExistingImport?, changes: [PermissionChange]?, revocation: RevocationInfo?) {
+		self.provider = provider
+		self.displayName = displayName
+		self.software = software
+		self.category = category
+		self.description = description
+		self.providerRevision = providerRevision
+		self.publisher = publisher
+		self.manifestSha256 = manifestSha256
+		self.versionsSha256 = versionsSha256
+		self.packageSha256 = packageSha256
+		self.packageBytes = packageBytes
+		self.fileCount = fileCount
+		self.originPath = originPath
+		self.quarantined = quarantined
+		self.quarantineAgent = quarantineAgent
+		self.versions = versions
+		self.versionCount = versionCount
+		self.permissions = permissions
+		self.findings = findings
+		self.omittedFindings = omittedFindings
+		self.importIssues = importIssues
+		self.verdict = verdict
+		self.existing = existing
+		self.changes = changes
+		self.revocation = revocation
+	}
+}
+
+/// Params of `provider.import`, an `import_provider` operation; the
+/// request carries the `idempotencyKey`.
+public struct ImportProviderParams: Codable, Sendable, Equatable {
+	/// The absolute path of the package folder, as for
+	/// [`PreviewImportParams`].
+	public let path: String
+	/// The `packageSha256` of the preview the client showed; the import is
+	/// refused with `provider.import_changed` when the folder now holds
+	/// other bytes.
+	public let expectedPackageSha256: String
+
+	public init(path: String, expectedPackageSha256: String) {
+		self.path = path
+		self.expectedPackageSha256 = expectedPackageSha256
 	}
 }
 
@@ -6085,8 +6584,12 @@ public struct ProviderSummary: Codable, Sendable, Equatable {
 	public let providerRevision: String?
 	/// Who publishes the package: `Stackly` for the `official` namespace.
 	public let publisher: String?
-	/// How far the entry is trusted, the same as the catalog's.
+	/// How far the entry is trusted: the catalog's, or `local` for an
+	/// imported provider.
 	public let trust: TrustLevel
+	/// Where an imported provider's stored bytes stand; null for a catalog
+	/// entry (spec 0037).
+	public let approval: ApprovalState?
 	/// The first 16 exact versions with an `available` artifact for this
 	/// Mac, in `versions.json` order.
 	public let versions: [String]?
@@ -6099,7 +6602,7 @@ public struct ProviderSummary: Codable, Sendable, Equatable {
 	/// The tile color.
 	public let tile: TileColor
 
-	public init(provider: String, revision: UInt64, displayName: String, software: String?, category: ProviderCategory?, description: String?, state: CatalogEntryState, stateReason: SupportReason?, stateNote: String?, providerRevision: String?, publisher: String?, trust: TrustLevel, versions: [String]?, versionCount: UInt64, licenses: [String]?, mark: String, tile: TileColor) {
+	public init(provider: String, revision: UInt64, displayName: String, software: String?, category: ProviderCategory?, description: String?, state: CatalogEntryState, stateReason: SupportReason?, stateNote: String?, providerRevision: String?, publisher: String?, trust: TrustLevel, approval: ApprovalState?, versions: [String]?, versionCount: UInt64, licenses: [String]?, mark: String, tile: TileColor) {
 		self.provider = provider
 		self.revision = revision
 		self.displayName = displayName
@@ -6112,6 +6615,7 @@ public struct ProviderSummary: Codable, Sendable, Equatable {
 		self.providerRevision = providerRevision
 		self.publisher = publisher
 		self.trust = trust
+		self.approval = approval
 		self.versions = versions
 		self.versionCount = versionCount
 		self.licenses = licenses
@@ -6128,10 +6632,15 @@ public struct ListProvidersReply: Codable, Sendable, Equatable {
 	/// Provider and invalid entries first, planned entries last; then
 	/// category, display name, and ID.
 	public let items: [ProviderSummary]?
+	/// The `revoked` list of the installed catalog, at most
+	/// [`REVOCATIONS_MAX`](crate::provider::REVOCATIONS_MAX) (spec 0037). It
+	/// is as old as the catalog, never a current list.
+	public let revocations: [CatalogRevocation]?
 
-	public init(catalog: CatalogInfo, items: [ProviderSummary]?) {
+	public init(catalog: CatalogInfo, items: [ProviderSummary]?, revocations: [CatalogRevocation]?) {
 		self.catalog = catalog
 		self.items = items
+		self.revocations = revocations
 	}
 }
 
@@ -6248,6 +6757,61 @@ public struct ListSecretsReply: Codable, Sendable, Equatable {
 	public init(items: [SecretRefSummary]?, store: SecretStoreStatus) {
 		self.items = items
 		self.store = store
+	}
+}
+
+/// One trust decision.
+public struct TrustDecisionInfo: Codable, Sendable, Equatable {
+	/// `approved` or `revoked`.
+	public let decision: ApprovalState
+	/// When it was decided.
+	public let decidedAt: Date
+	/// The revision label of the bytes it covers.
+	public let providerRevision: String
+	/// The digest of the bytes it covers.
+	public let packageSha256: String
+
+	public init(decision: ApprovalState, decidedAt: Date, providerRevision: String, packageSha256: String) {
+		self.decision = decision
+		self.decidedAt = decidedAt
+		self.providerRevision = providerRevision
+		self.packageSha256 = packageSha256
+	}
+}
+
+/// The import facts and last decision of a local entry, in
+/// `ProviderDetail.local`.
+public struct LocalProviderInfo: Codable, Sendable, Equatable {
+	/// When the last import committed.
+	public let importedAt: Date
+	/// The folder it was imported from, with the home folder written `~`.
+	public let originPath: String
+	/// Whether the origin `provider.yaml` carried a quarantine attribute.
+	public let quarantined: Bool?
+	/// The digest of its `versions.json`.
+	public let versionsSha256: String
+	/// The digest of the stored bytes, which `provider.approve` sends back.
+	public let packageSha256: String
+	/// The bytes of the stored package.
+	public let packageBytes: UInt64
+	/// The last decision, on these or other bytes.
+	public let decision: TrustDecisionInfo?
+	/// What the stored package may do; null for an invalid entry.
+	public let permissions: ProviderPermissions?
+	/// What differs from the last decision, only while `pending` with a
+	/// decision.
+	public let changes: [PermissionChange]?
+
+	public init(importedAt: Date, originPath: String, quarantined: Bool?, versionsSha256: String, packageSha256: String, packageBytes: UInt64, decision: TrustDecisionInfo?, permissions: ProviderPermissions?, changes: [PermissionChange]?) {
+		self.importedAt = importedAt
+		self.originPath = originPath
+		self.quarantined = quarantined
+		self.versionsSha256 = versionsSha256
+		self.packageSha256 = packageSha256
+		self.packageBytes = packageBytes
+		self.decision = decision
+		self.permissions = permissions
+		self.changes = changes
 	}
 }
 
@@ -7281,6 +7845,17 @@ public struct PrepareTerminalReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `provider.preview_import`.
+public struct PreviewImportParams: Codable, Sendable, Equatable {
+	/// The absolute path of the package folder: 1 to [`IMPORT_PATH_MAX`]
+	/// bytes, without a `.` or `..` component.
+	public let path: String
+
+	public init(path: String) {
+		self.path = path
+	}
+}
+
 /// Reply of `catalog.get_provider`: one entry with its versions, its
 /// artifacts, and what is wrong with it.
 public struct ProviderDetail: Codable, Sendable, Equatable {
@@ -7303,8 +7878,14 @@ public struct ProviderDetail: Codable, Sendable, Equatable {
 	public let note: String?
 	/// What failed validation; only for invalid entries.
 	public let issues: [CatalogIssue]?
+	/// The import facts and last decision of a local entry; null for a
+	/// catalog entry (spec 0037).
+	public let local: LocalProviderInfo?
+	/// Set while the entry's trust verdict is revoked, by the user or the
+	/// installed catalog (spec 0037).
+	public let revocation: RevocationInfo?
 
-	public init(summary: ProviderSummary, software: String?, manifestSha256: String?, capabilities: [CapabilityStatus]?, versions: [CatalogVersion]?, platformNotes: [PlatformNoteDto]?, note: String?, issues: [CatalogIssue]?) {
+	public init(summary: ProviderSummary, software: String?, manifestSha256: String?, capabilities: [CapabilityStatus]?, versions: [CatalogVersion]?, platformNotes: [PlatformNoteDto]?, note: String?, issues: [CatalogIssue]?, local: LocalProviderInfo?, revocation: RevocationInfo?) {
 		self.summary = summary
 		self.software = software
 		self.manifestSha256 = manifestSha256
@@ -7313,6 +7894,18 @@ public struct ProviderDetail: Codable, Sendable, Equatable {
 		self.platformNotes = platformNotes
 		self.note = note
 		self.issues = issues
+		self.local = local
+		self.revocation = revocation
+	}
+}
+
+/// Params of `provider.revoke` and `provider.remove`.
+public struct ProviderTargetParams: Codable, Sendable, Equatable {
+	/// The imported provider, with its namespace.
+	public let provider: String
+
+	public init(provider: String) {
+		self.provider = provider
 	}
 }
 
@@ -7347,57 +7940,6 @@ public struct SupportedApiVersion: Codable, Sendable, Equatable {
 	public init(name: String, status: ApiVersionStatus) {
 		self.name = name
 		self.status = status
-	}
-}
-
-/// How serious a [`ValidationFinding`] is.
-public enum FindingSeverity: String, Codable, Sendable, Equatable {
-	/// The package is not publishable.
-	case error
-	/// The package is publishable, but something should change.
-	case warning
-	/// A severity this build does not know.
-	case unrecognized
-}
-
-/// Which rule set a [`ValidationFinding`] comes from.
-public enum FindingOrigin: String, Codable, Sendable, Equatable {
-	/// The package cannot load anywhere.
-	case package
-	/// A tightening for package authors; the package still loads.
-	case authoring
-	/// `tests/scenarios.yaml`.
-	case scenarios
-	/// An origin this build does not know.
-	case unrecognized
-}
-
-/// One problem the validator found.
-public struct ValidationFinding: Codable, Sendable, Equatable {
-	/// How serious it is.
-	public let severity: FindingSeverity
-	/// Which rule set found it.
-	public let origin: FindingOrigin
-	/// The package file, such as `provider.yaml` or
-	/// `tests/scenarios.yaml`, or empty for the package as a whole.
-	public let file: String
-	/// Where in the file: a field path, `line:column`, or `.`.
-	public let location: String
-	/// The stable snake_case issue code of spec 0009.
-	public let code: String
-	/// What is wrong, in English; never a secret or a settings value.
-	public let message: String
-	/// A stable snake_case reason, for the codes that declare one.
-	public let reason: String?
-
-	public init(severity: FindingSeverity, origin: FindingOrigin, file: String, location: String, code: String, message: String, reason: String?) {
-		self.severity = severity
-		self.origin = origin
-		self.file = file
-		self.location = location
-		self.code = code
-		self.message = message
-		self.reason = reason
 	}
 }
 
@@ -7448,6 +7990,16 @@ public struct ReloadInstanceParams: Codable, Sendable, Equatable {
 	public init(instanceId: UUID, expectedRevision: UInt64?) {
 		self.instanceId = instanceId
 		self.expectedRevision = expectedRevision
+	}
+}
+
+/// Reply of `provider.remove`.
+public struct RemovedProvider: Codable, Sendable, Equatable {
+	/// The provider that was removed.
+	public let provider: String
+
+	public init(provider: String) {
+		self.provider = provider
 	}
 }
 
@@ -7609,6 +8161,20 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Checks a provider package folder with the shared validator (spec
 	/// 0036). Not an operation: it reads the folder and writes nothing.
 	case providerValidate(ProviderValidateParams)
+	/// Reads a local provider package folder and answers what importing it
+	/// would bring in (spec 0037). Not an operation: it writes nothing.
+	case providerPreviewImport(PreviewImportParams)
+	/// Imports a local provider package: an `import_provider` operation.
+	case providerImport(ImportProviderParams)
+	/// Approves exactly the stored bytes of an imported provider: an
+	/// `approve_provider` operation.
+	case providerApprove(DecideProviderParams)
+	/// Revokes the approval of an imported provider: a `revoke_provider`
+	/// operation.
+	case providerRevoke(ProviderTargetParams)
+	/// Removes an imported provider from the catalog: a
+	/// `remove_provider_import` operation.
+	case providerRemove(ProviderTargetParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -7672,7 +8238,12 @@ public enum Call: Codable, Sendable, Equatable {
 			doctorRun = "doctor.run",
 			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
 			diagnosticsExportBundle = "diagnostics.export_bundle",
-			providerValidate = "provider.validate"
+			providerValidate = "provider.validate",
+			providerPreviewImport = "provider.preview_import",
+			providerImport = "provider.import",
+			providerApprove = "provider.approve",
+			providerRevoke = "provider.revoke",
+			providerRemove = "provider.remove"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -7971,6 +8542,31 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .providerValidate(content)
 					return
 				}
+			case .providerPreviewImport:
+				if let content = try? container.decode(PreviewImportParams.self, forKey: .content) {
+					self = .providerPreviewImport(content)
+					return
+				}
+			case .providerImport:
+				if let content = try? container.decode(ImportProviderParams.self, forKey: .content) {
+					self = .providerImport(content)
+					return
+				}
+			case .providerApprove:
+				if let content = try? container.decode(DecideProviderParams.self, forKey: .content) {
+					self = .providerApprove(content)
+					return
+				}
+			case .providerRevoke:
+				if let content = try? container.decode(ProviderTargetParams.self, forKey: .content) {
+					self = .providerRevoke(content)
+					return
+				}
+			case .providerRemove:
+				if let content = try? container.decode(ProviderTargetParams.self, forKey: .content) {
+					self = .providerRemove(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -8154,6 +8750,21 @@ public enum Call: Codable, Sendable, Equatable {
 		case .providerValidate(let content):
 			try container.encode(CodingKeys.providerValidate, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .providerPreviewImport(let content):
+			try container.encode(CodingKeys.providerPreviewImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerImport(let content):
+			try container.encode(CodingKeys.providerImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerApprove(let content):
+			try container.encode(CodingKeys.providerApprove, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerRevoke(let content):
+			try container.encode(CodingKeys.providerRevoke, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerRemove(let content):
+			try container.encode(CodingKeys.providerRemove, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -8306,6 +8917,16 @@ public enum Reply: Codable, Sendable, Equatable {
 	case diagnosticsExportBundle(ExportedBundle)
 	/// What the validator found, even for a package that does not load.
 	case providerValidate(ProviderValidation)
+	/// What importing the folder would bring in.
+	case providerPreviewImport(ImportPreview)
+	/// The imported entry after the operation.
+	case providerImport(ProviderDetail)
+	/// The approved entry.
+	case providerApprove(ProviderDetail)
+	/// The entry after the revocation.
+	case providerRevoke(ProviderDetail)
+	/// The removed provider.
+	case providerRemove(RemovedProvider)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -8369,7 +8990,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			doctorRun = "doctor.run",
 			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
 			diagnosticsExportBundle = "diagnostics.export_bundle",
-			providerValidate = "provider.validate"
+			providerValidate = "provider.validate",
+			providerPreviewImport = "provider.preview_import",
+			providerImport = "provider.import",
+			providerApprove = "provider.approve",
+			providerRevoke = "provider.revoke",
+			providerRemove = "provider.remove"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -8686,6 +9312,31 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .providerValidate(content)
 					return
 				}
+			case .providerPreviewImport:
+				if let content = try? container.decode(ImportPreview.self, forKey: .content) {
+					self = .providerPreviewImport(content)
+					return
+				}
+			case .providerImport:
+				if let content = try? container.decode(ProviderDetail.self, forKey: .content) {
+					self = .providerImport(content)
+					return
+				}
+			case .providerApprove:
+				if let content = try? container.decode(ProviderDetail.self, forKey: .content) {
+					self = .providerApprove(content)
+					return
+				}
+			case .providerRevoke:
+				if let content = try? container.decode(ProviderDetail.self, forKey: .content) {
+					self = .providerRevoke(content)
+					return
+				}
+			case .providerRemove:
+				if let content = try? container.decode(RemovedProvider.self, forKey: .content) {
+					self = .providerRemove(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -8877,6 +9528,21 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .providerValidate(let content):
 			try container.encode(CodingKeys.providerValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerPreviewImport(let content):
+			try container.encode(CodingKeys.providerPreviewImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerImport(let content):
+			try container.encode(CodingKeys.providerImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerApprove(let content):
+			try container.encode(CodingKeys.providerApprove, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerRevoke(let content):
+			try container.encode(CodingKeys.providerRevoke, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerRemove(let content):
+			try container.encode(CodingKeys.providerRemove, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

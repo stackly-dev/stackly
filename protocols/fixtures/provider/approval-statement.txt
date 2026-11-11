@@ -1,0 +1,1 @@
+This provider runs native programs on your Mac with your user account’s permissions. Stackly does not sandbox them, so they can read and change the same files you can. A matching checksum only shows that a download was not altered. It does not show that the program is safe.

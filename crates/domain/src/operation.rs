@@ -258,6 +258,18 @@ code_enum! {
         /// Restart the daemon with a plan (spec 0030); its resource is the
         /// manager.
         DaemonRestart => "daemon_restart",
+        /// Import a local provider package (spec 0037); its resource is the
+        /// manager, with `LockKey::Provider` among its extra locks.
+        ImportProvider => "import_provider",
+        /// Approve exactly the stored bytes of an imported provider (spec
+        /// 0037); its resource is the manager.
+        ApproveProvider => "approve_provider",
+        /// Revoke the approval of an imported provider (spec 0037); its
+        /// resource is the manager.
+        RevokeProvider => "revoke_provider",
+        /// Remove an imported provider (spec 0037); its resource is the
+        /// manager.
+        RemoveProviderImport => "remove_provider_import",
     }
 }
 

@@ -12,6 +12,7 @@
     "providerRevision": null,
     "publisher": "Stackly",
     "trust": "official",
+    "approval": null,
     "versions": [],
     "versionCount": 0,
     "licenses": [],
@@ -24,5 +25,7 @@
   "versions": [],
   "platformNotes": [],
   "note": "Planned for a later release.",
-  "issues": []
+  "issues": [],
+  "local": null,
+  "revocation": null
 }

@@ -17,6 +17,7 @@ use crate::instance::{
 };
 use crate::json::{FieldCode, Validate};
 use crate::operation::OperationSummary;
+use crate::provider::CatalogChanged;
 use crate::restart::RestartPlanView;
 use crate::secret::SecretChanged;
 use crate::settings::SettingsChanged;
@@ -111,6 +112,11 @@ pub enum EventKind {
     /// again.
     #[serde(rename = "settings.changed")]
     SettingsChanged(SettingsChanged),
+    /// The local entries of the catalog changed after a provider operation
+    /// (spec 0037). A daemon event: no resource, no revision; clients read
+    /// `catalog.list_providers` again.
+    #[serde(rename = "catalog.changed")]
+    CatalogChanged(CatalogChanged),
 }
 
 /// Lists every event kind once, giving `EventKind::KINDS` and
@@ -146,6 +152,7 @@ event_kinds! {
     "runtime.state_changed" => RuntimeStateChanged;
     "daemon.restart_plan" => DaemonRestartPlan;
     "settings.changed" => SettingsChanged;
+    "catalog.changed" => CatalogChanged;
 }
 
 impl EventKind {

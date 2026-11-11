@@ -1,0 +1,17 @@
+{
+  "type": "event",
+  "content": {
+    "subscriptionId": 1,
+    "sequence": 141,
+    "at": "2026-11-11T09:00:00.000Z",
+    "resource": null,
+    "revision": null,
+    "kind": {
+      "type": "catalog.changed",
+      "content": {
+        "provider": "acme/demo",
+        "change": "imported"
+      }
+    }
+  }
+}

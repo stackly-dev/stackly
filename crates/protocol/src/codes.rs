@@ -320,7 +320,9 @@ area! {
 
 area! {
     /// Provider engine codes (spec 0009, *Kode error di wire*): settings
-    /// and the plans built from a validated package.
+    /// and the plans built from a validated package; and the import and
+    /// trust codes of local providers (spec 0037), each with a static hint
+    /// from [`provider::hint`](self::provider::hint).
     pub mod provider = "provider", owner "spec 0009" {
         INVALID_SETTINGS = "provider.invalid_settings", InvalidInput, retryable false,
             details ["issueCount", "omitted"],
@@ -336,6 +338,75 @@ area! {
             details ["position", "reason"], "an argument or a path of the plan breaks a plan rule";
         RENDER_FAILED = "provider.render_failed", Failed, retryable false,
             details ["configFile", "reason"], "a rendered config file does not parse or is too large";
+        IMPORT_UNREADABLE = "provider.import_unreadable", InvalidInput, retryable false,
+            details ["path", "reason"], "the provider folder can't be read";
+        IMPORT_CHANGED = "provider.import_changed", Conflict, retryable false,
+            details ["provider", "expected", "actual"], "the package or the import changed since the client previewed it";
+        IMPORT_LIMIT = "provider.import_limit", Conflict, retryable false,
+            details ["limit", "max"], "the import would pass the limit of imported providers or bytes";
+        IMPORT_NOT_FOUND = "provider.import_not_found", NotFound, retryable false,
+            details ["provider", "reason"], "the provider is not an imported local provider";
+        APPROVAL_REQUIRED = "provider.approval_required", Unauthorized, retryable false,
+            details ["provider", "providerRevision", "packageSha256"], "the stored bytes of the local provider are not approved";
+        REVOKED = "provider.revoked", Unauthorized, retryable false,
+            details ["provider", "providerRevision", "by", "since", "catalogRevision"], "the provider revision is revoked by the user or the installed catalog";
+        NOT_APPROVED = "provider.not_approved", Conflict, retryable false,
+            details ["provider", "approval"], "the provider has no approval to revoke";
+        STORE_FAILED = "provider.store_failed", Failed, retryable false,
+            details ["provider", "reason"], "the store copy of the package could not be written";
+
+        @functions
+
+        /// The static hint of a provider import or trust error (spec 0037,
+        /// *Kode error di wire*), chosen from its code and the values of its
+        /// `details`; `None` for the spec 0009 codes and codes outside the
+        /// area. A hint never holds a value.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            let detail = |key: &str| {
+                details
+                    .iter()
+                    .find(|detail| detail.key() == key)
+                    .map(crate::error::ErrorDetail::value)
+            };
+            if code == IMPORT_UNREADABLE.code {
+                return Some(if detail("reason") == Some("permission_denied") {
+                    "macOS did not let stacklyd read this folder; move it outside Desktop, Documents, and Downloads, or allow Stackly in Privacy & Security > Files and Folders"
+                } else {
+                    "choose the folder that contains provider.yaml"
+                });
+            }
+            if code == IMPORT_CHANGED.code {
+                return Some("preview the package again before you continue");
+            }
+            if code == IMPORT_LIMIT.code {
+                return Some("remove an imported provider first");
+            }
+            if code == IMPORT_NOT_FOUND.code {
+                return Some(if detail("reason") == Some("not_local") {
+                    "this provider comes from the catalog and has no approval to change"
+                } else {
+                    "run stackly provider list to see imported providers"
+                });
+            }
+            if code == APPROVAL_REQUIRED.code {
+                return Some("review it with stackly provider inspect, then run stackly provider approve");
+            }
+            if code == REVOKED.code {
+                return match detail("by")? {
+                    "user" => Some("existing instances still start; approve the provider again to allow new installs"),
+                    "catalog" => Some("the catalog bundled with this version of Stackly revokes this revision; existing instances still start"),
+                    _ => None,
+                };
+            }
+            if code == NOT_APPROVED.code {
+                return Some("remove the provider instead if you no longer want it");
+            }
+            if code == STORE_FAILED.code {
+                return Some("run stackly doctor");
+            }
+            None
+        }
     }
 }
 
@@ -765,7 +836,7 @@ area! {
         PROVIDER_NOT_FOUND = "instance.provider_not_found", NotFound, retryable false,
             details ["provider", "revision"], "no pinned package or provider revision with that name";
         PROVIDER_AMBIGUOUS = "instance.provider_ambiguous", Conflict, retryable false,
-            details ["provider", "revision"], "more than one package digest matches the provider and revision";
+            details ["provider", "revision", "candidates"], "more than one package digest matches the provider and revision";
         RUNTIME_NOT_FOUND = "instance.runtime_not_found", NotFound, retryable false,
             details ["runtimeId"], "no runtime with that id";
         RUNTIME_MISMATCH = "instance.runtime_mismatch", Conflict, retryable false,
@@ -2385,6 +2456,60 @@ mod tests {
                 "provider.render_failed",
                 ErrorCategory::Failed,
                 &["configFile", "reason"],
+                None,
+            ),
+            (
+                "provider.import_unreadable",
+                ErrorCategory::InvalidInput,
+                &["path", "reason"],
+                None,
+            ),
+            (
+                "provider.import_changed",
+                ErrorCategory::Conflict,
+                &["provider", "expected", "actual"],
+                None,
+            ),
+            (
+                "provider.import_limit",
+                ErrorCategory::Conflict,
+                &["limit", "max"],
+                None,
+            ),
+            (
+                "provider.import_not_found",
+                ErrorCategory::NotFound,
+                &["provider", "reason"],
+                None,
+            ),
+            (
+                "provider.approval_required",
+                ErrorCategory::Unauthorized,
+                &["provider", "providerRevision", "packageSha256"],
+                None,
+            ),
+            (
+                "provider.revoked",
+                ErrorCategory::Unauthorized,
+                &[
+                    "provider",
+                    "providerRevision",
+                    "by",
+                    "since",
+                    "catalogRevision",
+                ],
+                None,
+            ),
+            (
+                "provider.not_approved",
+                ErrorCategory::Conflict,
+                &["provider", "approval"],
+                None,
+            ),
+            (
+                "provider.store_failed",
+                ErrorCategory::Failed,
+                &["provider", "reason"],
                 None,
             ),
         ];

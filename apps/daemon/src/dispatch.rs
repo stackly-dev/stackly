@@ -46,7 +46,10 @@ use stackly_protocol::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
-use stackly_protocol::provider::{ProviderValidateParams, ProviderValidation};
+use stackly_protocol::provider::{
+    DecideProviderParams, ImportPreview, ImportProviderParams, PreviewImportParams,
+    ProviderTargetParams, ProviderValidateParams, ProviderValidation, RemovedProvider,
+};
 use stackly_protocol::restart::RestartPreview;
 use stackly_protocol::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
@@ -71,7 +74,7 @@ use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::ipc::settings;
 use crate::ipc::stop_all;
-use crate::ipc::{diagnostics, doctor, provider};
+use crate::ipc::{diagnostics, doctor, provider, provider_import};
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -427,6 +430,57 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, ProviderValidation> {
         let _ = context;
         provider::validate(core, params)
+    }
+
+    /// `provider.preview_import` (spec 0037).
+    fn preview_import_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: PreviewImportParams,
+    ) -> HandlerFuture<'a, Box<ImportPreview>> {
+        let _ = context;
+        provider_import::preview(core, params)
+    }
+
+    /// `provider.import` (spec 0037).
+    fn import_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ImportProviderParams,
+    ) -> HandlerFuture<'a, Box<ProviderDetail>> {
+        provider_import::import(core, context, params)
+    }
+
+    /// `provider.approve` (spec 0037).
+    fn approve_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: DecideProviderParams,
+    ) -> HandlerFuture<'a, Box<ProviderDetail>> {
+        provider_import::approve(core, context, params)
+    }
+
+    /// `provider.revoke` (spec 0037).
+    fn revoke_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ProviderTargetParams,
+    ) -> HandlerFuture<'a, Box<ProviderDetail>> {
+        provider_import::revoke(core, context, params)
+    }
+
+    /// `provider.remove` (spec 0037).
+    fn remove_provider<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ProviderTargetParams,
+    ) -> HandlerFuture<'a, RemovedProvider> {
+        provider_import::remove(core, context, params)
     }
 
     /// `instance.get_data_usage`.

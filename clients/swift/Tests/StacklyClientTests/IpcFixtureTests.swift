@@ -92,7 +92,12 @@ struct IpcFixtureTests {
         #expect(methods.contains(.diagnosticsPreviewBundle))
         #expect(methods.contains { if case .diagnosticsExportBundle = $0 { true } else { false } })
         #expect(methods.contains { if case .providerValidate = $0 { true } else { false } })
-        #expect(Set(methods.map(\.methodName)).count == 62)
+        #expect(methods.contains { if case .providerPreviewImport = $0 { true } else { false } })
+        #expect(methods.contains { if case .providerImport = $0 { true } else { false } })
+        #expect(methods.contains { if case .providerApprove = $0 { true } else { false } })
+        #expect(methods.contains { if case .providerRevoke = $0 { true } else { false } })
+        #expect(methods.contains { if case .providerRemove = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 67)
     }
 
     private func check<Value: Codable & Equatable>(

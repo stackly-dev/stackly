@@ -70,7 +70,7 @@ struct ProviderErrorContractTests {
         let codes = catalog.codes.filter {
             $0.code.hasPrefix("manifest.") || $0.code.hasPrefix("provider.")
         }
-        #expect(codes.count == 7)
+        #expect(codes.count == 15)
         #expect(codes.allSatisfy { $0.retryable == false })
         for code in ["manifest.invalid", "provider.invalid_settings"] {
             let items = try #require(codes.first { $0.code == code }?.items, "\(code)")

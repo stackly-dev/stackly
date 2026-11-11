@@ -1276,6 +1276,46 @@ async fn dispatch(
             .map(|validation| Reply::ProviderValidate(Box::new(validation))),
             None,
         ),
+        Call::ProviderPreviewImport(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.preview_import_provider(c, x, p)
+            })
+            .await
+            .map(Reply::ProviderPreviewImport),
+            None,
+        ),
+        Call::ProviderImport(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.import_provider(c, x, p)
+            })
+            .await
+            .map(Reply::ProviderImport),
+            None,
+        ),
+        Call::ProviderApprove(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.approve_provider(c, x, p)
+            })
+            .await
+            .map(Reply::ProviderApprove),
+            None,
+        ),
+        Call::ProviderRevoke(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.revoke_provider(c, x, p)
+            })
+            .await
+            .map(Reply::ProviderRevoke),
+            None,
+        ),
+        Call::ProviderRemove(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.remove_provider(c, x, p)
+            })
+            .await
+            .map(Reply::ProviderRemove),
+            None,
+        ),
         Call::InstanceGetDataUsage(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_data_usage(c, x, p)

@@ -9,6 +9,7 @@ pub mod instance;
 pub mod logs;
 pub mod operation;
 pub mod provider;
+pub mod provider_import;
 pub mod restart;
 pub mod runtime;
 pub mod secret;
