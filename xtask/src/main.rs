@@ -36,6 +36,9 @@ Tasks:
   provider check [<dir>...]
                        Read and validate provider packages (default: every folder
                        in providers/) on macOS; exit 1 with one line per problem
+  provider freeze <dir>
+                       Copy an official/ package revision into the compatibility
+                       corpus in crates/core/tests/fixtures/compat/ on macOS
   catalog build --out <dir>
                        Build the bundled catalog from providers/catalog.toml into
                        <dir> (macOS reads the packages); exit 1 with one line per problem

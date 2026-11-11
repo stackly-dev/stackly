@@ -1,0 +1,18 @@
+{
+  "schema": "stackly.provider-frozen/v1",
+  "provider": "official/nats",
+  "revision": "1.0.1",
+  "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe",
+  "startArgs": [
+    "--config",
+    "/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/nats.conf"
+  ],
+  "startEnvKeys": [
+    "HOME",
+    "PATH",
+    "TMPDIR"
+  ],
+  "rendered": {
+    "natsConf": "19eb0774070cbb3a91a92192232f2220de9035437f208ecb86794626d1d41639"
+  }
+}

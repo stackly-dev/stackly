@@ -8,7 +8,13 @@
 //! <message>` line and no `ok` line, every warning prints the same line
 //! after `warning: `, and the task exits 1 when a package is not
 //! publishable. Without folders it checks every folder in `providers/`,
-//! where a warning fails the check too.
+//! where a warning fails the check too, and every `[[provider]]` of
+//! `providers/catalog.toml` must have a corpus entry with its digest.
+//!
+//! `cargo xtask provider freeze <dir>` writes that entry ([`freeze`]).
+
+#[cfg(target_os = "macos")]
+mod freeze;
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -18,6 +24,7 @@ use anyhow::{Result, bail};
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     match args {
         ["check", dirs @ ..] => check(root, dirs),
+        ["freeze", dir] => freeze_task(root, dir),
         _ => bail!(
             "unknown provider task `{}`; see `cargo xtask help`",
             args.join(" ")
@@ -35,7 +42,10 @@ fn check(root: &Path, dirs: &[&str]) -> Result<ExitCode> {
         let cwd = std::env::current_dir().context("cannot read the current directory")?;
         dirs.iter().map(|dir| cwd.join(dir)).collect()
     };
-    let report = macos::check_packages(&packages, dirs.is_empty());
+    let mut report = macos::check_packages(&packages, dirs.is_empty());
+    if dirs.is_empty() {
+        not_frozen(root, &mut report)?;
+    }
     for line in &report.lines {
         println!("{line}");
     }
@@ -49,6 +59,62 @@ fn check(root: &Path, dirs: &[&str]) -> Result<ExitCode> {
         packages.len()
     );
     Ok(ExitCode::FAILURE)
+}
+
+/// Adds one `not frozen` line, and one problem, for every `[[provider]]` of
+/// the catalog whose package in `providers/` is publishable but has no
+/// corpus entry with its digest (spec 0036, AC-4).
+#[cfg(target_os = "macos")]
+fn not_frozen(root: &Path, report: &mut macos::Report) -> Result<()> {
+    use stackly_core::provider::{NameCheck, check_package};
+    use stackly_platform_macos::MacosFilesystem;
+
+    let corpus = root.join(freeze::CORPUS_DIR);
+    for id in freeze::catalog_providers(root)? {
+        let folder = id.rsplit('/').next().unwrap_or(&id).to_owned();
+        let check = check_package(
+            &MacosFilesystem,
+            &root.join("providers").join(&folder),
+            NameCheck::FolderName,
+        );
+        let Some(package) = check.package.as_ref().filter(|_| check.publishable()) else {
+            continue;
+        };
+        if !freeze::is_frozen(&corpus, package) {
+            report.lines.push(format!(
+                "{folder}: not frozen: run cargo xtask provider freeze providers/{folder}"
+            ));
+            report.problems += 1;
+            report.failed += 1;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn freeze_task(root: &Path, dir: &str) -> Result<ExitCode> {
+    use anyhow::Context;
+
+    let cwd = std::env::current_dir().context("cannot read the current directory")?;
+    match freeze::freeze(&root.join(freeze::CORPUS_DIR), &cwd.join(dir)) {
+        Ok(freeze::Frozen::Written(entry)) => {
+            println!("frozen {}", entry.display());
+            Ok(ExitCode::SUCCESS)
+        }
+        Ok(freeze::Frozen::Already(entry)) => {
+            println!("already frozen {}", entry.display());
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(err) => {
+            eprintln!("provider freeze: {err:#}");
+            Ok(ExitCode::FAILURE)
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn freeze_task(_root: &Path, _dir: &str) -> Result<ExitCode> {
+    bail!("provider freeze runs on macOS only, because it reads packages through MacosFilesystem")
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -180,5 +246,62 @@ mod macos {
                 report.lines
             );
         }
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod not_frozen_tests {
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn a_catalog_provider_without_a_corpus_entry_is_one_not_frozen_problem() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let providers = root.path().join("providers");
+        fs::create_dir_all(providers.join("nats")).unwrap();
+        for entry in walk(&repo.join("providers/nats")) {
+            let relative = entry.strip_prefix(repo.join("providers/nats")).unwrap();
+            let target = providers.join("nats").join(relative);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::copy(&entry, &target).unwrap();
+        }
+        fs::write(
+            providers.join("catalog.toml"),
+            "[[provider]]\nid = \"official/nats\"\n",
+        )
+        .unwrap();
+        let mut report = macos::Report::default();
+
+        not_frozen(root.path(), &mut report).unwrap();
+
+        assert_eq!(
+            report.lines,
+            ["nats: not frozen: run cargo xtask provider freeze providers/nats"]
+        );
+        assert_eq!((report.problems, report.failed), (1, 1));
+
+        freeze::freeze(
+            &root.path().join(freeze::CORPUS_DIR),
+            &providers.join("nats"),
+        )
+        .unwrap();
+        let mut report = macos::Report::default();
+        not_frozen(root.path(), &mut report).unwrap();
+        assert!(report.lines.is_empty(), "{:?}", report.lines);
+    }
+
+    fn walk(dir: &Path) -> Vec<std::path::PathBuf> {
+        let mut files = Vec::new();
+        for entry in fs::read_dir(dir).expect("the package folder lists") {
+            let path = entry.expect("a package entry reads").path();
+            if path.is_dir() {
+                files.extend(walk(&path));
+            } else {
+                files.push(path);
+            }
+        }
+        files
     }
 }

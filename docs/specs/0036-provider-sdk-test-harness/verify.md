@@ -4,7 +4,7 @@ _Langkah diturunkan dari acceptance criteria spec 0036. `/check verify` menjalan
 
 ## Milestone 1: Validator dan kebijakan
 
-Bagian ini mencakup Build plan langkah 1 (`core::provider::check` dan `core::provider::scenarios`), langkah 2 (`cargo xtask provider check` di atas `check_package`), dan langkah 3 (`provider.validate`, protokol 3.6). Langkah 4 dan 5 menambah barisnya sendiri di bawah.
+Bagian ini mencakup Build plan langkah 1 (`core::provider::check` dan `core::provider::scenarios`), langkah 2 (`cargo xtask provider check` di atas `check_package`), langkah 3 (`provider.validate`, protokol 3.6), langkah 4 (`stackly provider validate`), dan langkah 5 (corpus kompatibilitas dan `cargo xtask provider freeze`).
 
 ### UI / manual
 
@@ -28,15 +28,24 @@ Bagian ini mencakup Build plan langkah 1 (`core::provider::check` dan `core::pro
 - [ ] `swift test --package-path clients/swift` → lulus, termasuk `ProviderValidateContractTests` (5 test: request, frame balasan, tiga fixture, nilai asing `.unrecognized`), `IpcFixtureTests` (62 method), dan `ContractTests` (protokol 3.6) → AC-5
 - [ ] `cargo xtask fuzz seed` lalu `git status --short fuzz/seeds` → bersih; seed `ipc_request_decode` dan `ipc_server_frame_decode` memuat ketiga frame `provider.validate` → AC-5
 - [ ] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` dan `cargo xtask check-deps` → lulus; `check` dan `scenarios` hanya memakai port `Filesystem` → AC-2
+- [ ] `cargo test -p stackly-cli --test provider validate` → 3 test lulus terhadap `stacklyd` sungguhan: `providers/nats` mencetak `ok official/nats <revision> <sha256>` lalu `0 error(s), 0 warning(s)`, exit 0, dan `--json` berisi `ProviderValidation` di `result`; salinan `stackly/v2` yang diberikan sebagai path relatif `./pkgs/../pkgs/./mytool` dari folder kerja lain mencetak tepat satu baris `mytool: provider.yaml apiVersion: unsupported_api_version: ...` dan `1 error(s), 0 warning(s)`, exit 2 dengan `cli.provider_invalid` (kategori `invalid_input`, detail `errors` 1 dan `warnings` 0) dan `result` tetap terisi; `fake-command` mencetak baris `token_not_allowed_here` tanpa baris `ok`, dan folder yang tidak ada memberi finding `missing_file`, keduanya exit 2 → AC-5 (bagian CLI), AC-1
+- [ ] `cargo test -p stackly-cli --bin stackly` → lulus, termasuk normalisasi path leksikal (`.` dibuang, `..` melipat komponen sebelumnya, tanpa menyentuh filesystem) dan satu konstruktor per kode `cli.*` (`cli.provider_invalid` ada) → AC-5
+- [ ] `cargo test -p stackly-protocol --lib codes` → tabel kode `cli` spec 0008 memuat `cli.provider_invalid` (`invalid_input`, detail `errors`, `warnings`); `cargo xtask codegen --check` lulus dan `protocols/error-codes.json` memuatnya → AC-5
+- [ ] `cargo test -p stackly-core --test provider_compat` → 3 test lulus: setiap entri `crates/core/tests/fixtures/compat/<nama>/<revision>/` (kini `nats/1.0.1` dan `postgresql/1.0.2`) termuat dengan `NameCheck::Skip` dari salinan di test root, `manifest_sha256` sama dengan `frozen.json`, dan `frozen_facts` (argv start, nama key env start, SHA-256 config yang dirender dalam *Context beku*) sama persis dengan `frozen.json`; setiap entri hanya berisi `package/` dan `frozen.json` → AC-6
+- [ ] `cargo xtask provider freeze providers/nats` → `already frozen <repo>/crates/core/tests/fixtures/compat/nats/1.0.1`, exit 0, tanpa perubahan `git status`; `cargo xtask provider freeze providers/fake` → exit 1 `only official/ packages are frozen` → AC-6
+- [ ] `cargo test -p xtask --test provider_check` → 9 test lulus, termasuk freeze ulang yang tidak mengubah apa pun, `testing/` yang ditolak, dan salinan `nats` dengan byte lain di revision sama yang ditolak dengan `raise metadata.revision` → AC-6
+- [ ] `cargo test -p xtask freeze` dan `cargo test -p xtask not_frozen` → lulus: entri baru berisi byte paket dan `frozen.json`, freeze kedua `already frozen`, digest lain di revision sama ditolak tanpa menulis dan tanpa folder `.partial` tersisa, `testing/` dan paket yang tidak `publishable` ditolak tanpa menulis; `[[provider]]` tanpa entri corpus memberi tepat satu baris `nats: not frozen: run cargo xtask provider freeze providers/nats` dan hilang sesudah freeze → AC-4, AC-6
+- [ ] Probe: ubah satu karakter di `providers/nats/templates/nats.conf.tmpl` tanpa menaikkan revision, jalankan `cargo xtask provider check` → baris `nats: not frozen: run cargo xtask provider freeze providers/nats`, exit 1; kembalikan → exit 0 lagi → AC-4
 
 ### Acceptance-criteria coverage
 
 - AC-1 · bagian core (tabel, pesan, satu finding di `check_package` dan `from_files`), xtask (`cargo xtask provider check`), method (`provider.validate`), dan catalog (entri `invalid` dengan satu issue); bagian harness menunggu langkah 12
 - AC-2 · lengkap
 - AC-3 · lengkap kecuali fuzz 10 menit (langkah manual di atas); seed dari `providers/example` menunggu langkah 6
-- AC-4 · tanpa pemeriksaan `not frozen`, yang menunggu langkah 5
-- AC-5 · bagian daemon dan kontrak; `stackly provider validate` dan `cli.provider_invalid` menunggu langkah 4
-- AC-6 sampai AC-16 · belum, milik langkah 5 dan seterusnya
+- AC-4 · lengkap, termasuk pemeriksaan `not frozen` tanpa argumen folder
+- AC-5 · lengkap (daemon, kontrak, dan CLI)
+- AC-6 · lengkap untuk `official/nats` dan `official/postgresql`; paket lain yang naik ke `[[provider]]` dibekukan saat itu (pemeriksaan `not frozen` menjaganya)
+- AC-7 sampai AC-16 · milik milestone berikutnya
 
 ## Milestone 2: Paket contoh, scaffold, dan form
 

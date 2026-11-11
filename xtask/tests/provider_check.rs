@@ -79,6 +79,7 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
     assert_eq!(
         ids,
         [
+            "testing/example",
             "testing/fake",
             "official/nats",
             "official/postgresql",
@@ -254,4 +255,44 @@ fn a_broken_scenarios_file_is_an_error_line_and_no_ok_line() {
         "{}",
         lines[0]
     );
+}
+
+/// `cargo xtask provider freeze <dir>`, from the repo root.
+fn provider_freeze(dir: &Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .current_dir(repo_root())
+        .args(["provider", "freeze"])
+        .arg(dir)
+        .output()
+        .expect("the xtask binary runs")
+}
+
+#[test]
+fn freezing_a_frozen_revision_again_changes_nothing_and_a_testing_package_is_refused() {
+    let nats = provider_freeze(&repo_root().join("providers/nats"));
+    let fake = provider_freeze(&repo_root().join("providers/fake"));
+
+    assert_eq!(nats.status.code(), Some(0), "{nats:?}");
+    let stdout = String::from_utf8_lossy(&nats.stdout);
+    assert!(stdout.starts_with("already frozen "), "{stdout}");
+    assert!(stdout.trim_end().ends_with("compat/nats/1.0.1"), "{stdout}");
+    assert_eq!(fake.status.code(), Some(1), "{fake:?}");
+    assert!(
+        String::from_utf8_lossy(&fake.stderr).contains("only official/ packages are frozen"),
+        "{fake:?}"
+    );
+}
+
+#[test]
+fn a_copy_of_a_frozen_revision_with_other_bytes_is_refused() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = broken_copy(&root, "nats", &|text| {
+        text.replacen("displayName: NATS Server", "displayName: NATS", 1)
+    });
+
+    let output = provider_freeze(&copy);
+
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("raise metadata.revision"), "{stderr}");
 }
