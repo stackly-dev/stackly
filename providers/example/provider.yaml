@@ -1,0 +1,69 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: testing/example
+  software: fake
+  displayName: Example
+  revision: "0.1.0"
+  category: testing
+  description: The smallest complete provider package, and the template of cargo xtask provider new.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+  dataMarker:
+    file: FAKE_VERSION
+    pattern: "([0-9]+\\.[0-9]+)"
+runtime:
+  executable: stackly-fake-server
+  executionMode: foreground
+  versionCheck:
+    args: ["version"]
+    pattern: '^stackly-fake-server ([0-9]+\.[0-9]+\.[0-9]+)$'
+    timeoutSeconds: 10
+capabilities:
+  reload: true
+  multiInstance: true
+  persistence: true
+resources:
+  endpoints:
+    http: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 18090 }
+configFiles:
+  serverConfig:
+    template: templates/server.json.tmpl
+    format: json
+    destination: "${instance.secrets}/server.json"
+    sensitive: true
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - primitive: runExecutable
+      executable: "${runtime.executable}"
+      args:
+        - init
+        - "--data=${instance.data}"
+        - --token-stdin
+      stdin: { secret: authToken }
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - serve
+      - "--config=${instance.secrets}/server.json"
+      - "--data=${instance.data}"
+      - "--port=${endpoint.http.port}"
+      - "--ready-delay-ms=${settings.readyDelayMs}"
+  stop: { strategy: gracefulProcess, signal: term }
+  reload:
+    render: [serverConfig]
+    action: signal
+    signal: hup
+readiness:
+  probe: { type: http, endpoint: http, path: /ready }
+health:
+  probe: { type: http, endpoint: http, path: /health }
+permissions:
+  managedFilesystem: [data, config, logs, temp, run]
+  executeRuntimeBinary: true
+connection:
+  - name: config
+    title: Config endpoint
+    template: "http://${endpoint.http.address}/config"

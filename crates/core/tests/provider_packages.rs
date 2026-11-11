@@ -1,5 +1,6 @@
 //! The provider engine on real packages: `providers/fake`,
-//! `providers/nats`, `providers/traefik`, and the `fake-command` fixture are
+//! `providers/example`, `providers/nats`, `providers/traefik`, and the
+//! `fake-command` fixture are
 //! copied into a `TestRoot`, read through the `Filesystem` port of
 //! `FakePlatform`, validated, and planned against the fixed golden context
 //! of spec 0009 ("Context golden").
@@ -14,7 +15,8 @@ use std::path::{Path, PathBuf};
 use stackly_core::provider::{
     Command, EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
     PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject, ResolvedEndpoint,
-    RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage, read_package, render_remedy,
+    RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage, check_package, read_package,
+    render_remedy, scenarios::Expect,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
 use stackly_domain::{
@@ -39,6 +41,10 @@ fn repo_root() -> PathBuf {
 
 fn fake_dir() -> PathBuf {
     repo_root().join("providers/fake")
+}
+
+fn example_dir() -> PathBuf {
+    repo_root().join("providers/example")
 }
 
 fn nats_dir() -> PathBuf {
@@ -273,6 +279,12 @@ fn every_repo_package_reads_its_version_from_the_literal_output_of_its_binary() 
             "0.1.0",
         ),
         (
+            example_dir(),
+            "version",
+            "stackly-fake-server 0.1.0\n",
+            "0.1.0",
+        ),
+        (
             nats_dir(),
             "--version",
             "nats-server: v2.15.1\r\n",
@@ -381,6 +393,133 @@ fn fake_plans_match_the_golden_files() {
     for (config, text) in rendered(&package, &init.steps) {
         assert_golden("fake", &format!("render-{config}.txt"), &text);
     }
+}
+
+fn example_settings() -> serde_json::Value {
+    serde_json::json!({ "authToken": GOLDEN_SECRET_REF })
+}
+
+// covers: AC-7 (spec 0036, *Paket contoh*)
+#[test]
+fn the_example_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-029", "REQ-030"],
+        kind = Kind::Fixture,
+        expected = "providers/example copied into a test root reads through the Filesystem port without a write and validates as testing/example 0.1.0 on software fake",
+    );
+    let package = validated(&example_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "testing/example");
+    assert_eq!(key.revision().as_str(), "0.1.0");
+    assert_eq!(package.software().as_str(), "fake");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::Reload,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    let fields: Vec<(String, bool)> = package
+        .settings_schema()
+        .fields()
+        .map(|field| (field.name().to_string(), field.is_secret()))
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            ("greeting".to_owned(), false),
+            ("readyDelayMs".to_owned(), false),
+            ("authToken".to_owned(), true),
+        ]
+    );
+    ev.pass();
+}
+
+// covers: AC-7, AC-3 (spec 0036, *Paket contoh*: two scenarios, default and slow-ready)
+#[test]
+fn the_example_package_is_publishable_with_its_two_scenarios() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = root.path().join("providers/example");
+    copy_dir(&example_dir(), &copy);
+    let platform = FakePlatform::new(&root);
+
+    let check = check_package(platform.fs(), &copy, NameCheck::FolderName);
+
+    assert!(check.findings.is_empty(), "{:#?}", check.findings);
+    assert!(check.publishable());
+    let scenarios: Vec<(&str, &serde_json::Value, Expect)> = check
+        .scenarios
+        .iter()
+        .map(|scenario| (scenario.name.as_str(), &scenario.settings, scenario.expect))
+        .collect();
+    assert_eq!(
+        scenarios,
+        [
+            ("default", &serde_json::json!({}), Expect::Ready),
+            (
+                "slow-ready",
+                &serde_json::json!({ "readyDelayMs": 1500 }),
+                Expect::Ready
+            ),
+        ]
+    );
+}
+
+// covers: AC-7 (spec 0036, *Paket contoh*: the fake artifact test applies to the example too)
+#[test]
+fn the_example_package_has_the_artifacts_of_the_fake_package() {
+    let read = |dir: PathBuf| -> serde_json::Value {
+        serde_json::from_slice(&fs::read(dir.join("versions.json")).expect("versions.json reads"))
+            .expect("versions.json is JSON")
+    };
+    let example = read(example_dir());
+    let fake = read(fake_dir());
+
+    assert_eq!(example["software"], "fake");
+    assert_eq!(
+        example["artifacts"], fake["artifacts"],
+        "the example runs the same stackly-fake-server artifact as providers/fake, whose version the provider_no_shell test ties to the crate"
+    );
+}
+
+// covers: AC-7 (spec 0036, *Paket contoh*)
+#[test]
+fn example_plans_match_the_golden_files() {
+    let package = validated(&example_dir());
+    let context = golden_context(&package, example_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the example init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the example run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the example reload plan builds");
+
+    assert_golden("example", "init.json", &pretty(&init));
+    assert_golden("example", "run.json", &pretty(&run));
+    assert_golden("example", "reload.json", &pretty(&reload));
+    assert!(
+        rendered(&package, &init.steps).is_empty(),
+        "initialize renders nothing; the run renders serverConfig before the spawn"
+    );
+    let renders = rendered(&package, &run.render);
+    assert_eq!(
+        renders
+            .iter()
+            .map(|(config, _)| config.as_str())
+            .collect::<Vec<_>>(),
+        ["serverConfig"]
+    );
+    assert_golden("example", "render-serverConfig.txt", &renders[0].1);
 }
 
 #[test]
@@ -693,6 +832,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
         ]
     );
     assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
+    assert_eq!(entries(&example_dir()), [pair("config", "Config endpoint")]);
     assert!(entries(&traefik_dir()).is_empty());
     ev.pass();
 }
@@ -842,6 +982,7 @@ fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
 fn every_package_initializes_with_endpoints_that_have_no_port() {
     let packages = [
         ("fake", fake_dir(), fake_settings()),
+        ("example", example_dir(), example_settings()),
         ("nats", nats_dir(), serde_json::json!({})),
         ("postgresql", postgresql_dir(), postgresql_settings()),
         ("traefik", traefik_dir(), traefik_settings(1)),
@@ -873,7 +1014,7 @@ fn every_folder_in_providers_has_no_init_port_issue() {
         );
         checked += 1;
     }
-    assert!(checked >= 4, "only {checked} package folders found");
+    assert!(checked >= 5, "only {checked} package folders found");
 }
 
 /// The first `count` of the three example routes of the golden context.
