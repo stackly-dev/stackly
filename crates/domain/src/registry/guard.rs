@@ -13,6 +13,7 @@ use crate::operation::{JournalView, Operation};
 use crate::provider::ProviderRevisionKey;
 use crate::registry::batch::{Committed, WriteOp};
 use crate::registry::error::RegistryError;
+use crate::registry::import::ProviderImportRecord;
 use crate::registry::query::{InstanceFilter, LeaseFilter};
 use crate::registry::record::ProviderRevisionRecord;
 use crate::registry::secret::SecretReferenceView;
@@ -20,6 +21,7 @@ use crate::restart::RestartPlan;
 use crate::runtime::Runtime;
 use crate::secret::SecretRef;
 use crate::session::DaemonSession;
+use crate::value::ProviderName;
 
 /// What a commit guard may read: the registry inside the guarded commit's
 /// own write transaction. Reads see every batch committed before the
@@ -118,6 +120,37 @@ pub trait GuardView {
         &self,
         reference: &SecretRef,
     ) -> Result<Option<SecretReferenceView>, RegistryError>;
+
+    /// Returns every import row, read inside the guarded commit, in the
+    /// order of [`Registry::provider_imports`](crate::Registry::provider_imports)
+    /// (spec 0037).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_imports(&self) -> Result<Vec<ProviderImportRecord>, RegistryError>;
+
+    /// Returns the import row of one provider, read inside the guarded
+    /// commit (spec 0037).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_import(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Option<ProviderImportRecord>, RegistryError>;
+
+    /// Returns whether any provider revision of `provider` is `approved`,
+    /// read inside the guarded commit (spec 0037).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_has_approved_revision(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<bool, RegistryError>;
 }
 
 /// What a guard decided after reading.

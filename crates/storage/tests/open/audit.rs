@@ -54,7 +54,7 @@ fn a_version_11_registry_migrates_with_every_row_and_null_operation_fields() {
     let kept = |counts: Vec<(String, i64)>| -> Vec<(String, i64)> {
         counts
             .into_iter()
-            .filter(|(table, _)| table != "schema_migrations")
+            .filter(|(table, _)| table != "schema_migrations" && table != "provider_imports")
             .collect()
     };
     assert_eq!(kept(row_counts(&conn)), kept(before), "every row stays");
@@ -183,7 +183,7 @@ fn the_version_12_fixture_reads_its_operation_rows_and_retention() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(12));
     let (registry, summary) = ready(harness.open());
-    assert_eq!(summary.migrated_from, None);
+    assert_eq!(summary.migrated_from, Some(12));
 
     assert_eq!(
         registry.daemon_settings().unwrap().value.audit_retention,

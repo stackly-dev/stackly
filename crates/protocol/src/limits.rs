@@ -132,6 +132,7 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     ("fieldPathMax", FIELD_PATH_MAX as u64),
     ("frameHeaderLen", crate::frame::HEADER_LEN as u64),
     ("idempotencyKeyMax", IDEMPOTENCY_KEY_MAX as u64),
+    ("importPathMax", crate::provider::IMPORT_PATH_MAX as u64),
     (
         "instanceCursorMax",
         crate::instance::INSTANCE_CURSOR_MAX as u64,
@@ -197,12 +198,25 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
         "operationPageBytesMax",
         crate::operation::OPERATION_PAGE_BYTES_MAX as u64,
     ),
+    (
+        "previewFindingsMax",
+        crate::provider::PREVIEW_FINDINGS_MAX as u64,
+    ),
+    (
+        "previewImportIssuesMax",
+        crate::provider::PREVIEW_IMPORT_ISSUES_MAX as u64,
+    ),
+    (
+        "previewVersionsMax",
+        crate::provider::PREVIEW_VERSIONS_MAX as u64,
+    ),
     ("providerPathMax", crate::provider::PROVIDER_PATH_MAX as u64),
     (
         "providerRevisionMax",
         crate::instance::PROVIDER_REVISION_MAX as u64,
     ),
     ("requestIdMax", REQUEST_ID_MAX as u64),
+    ("revocationsMax", crate::provider::REVOCATIONS_MAX as u64),
     (
         "runtimeListLimitDefault",
         crate::runtime::RUNTIME_LIST_LIMIT_DEFAULT,

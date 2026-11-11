@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Acme demo settings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "title": "Greeting",
+      "maxLength": 64,
+      "default": "hello",
+      "x-stackly": { "apply": "restart" }
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "maxLength": 128,
+      "x-stackly": { "apply": "immutableAfterInit", "secret": true }
+    }
+  },
+  "required": ["password"]
+}

@@ -1068,6 +1068,7 @@ pub fn fake_catalog() -> stackly_core::catalog::Catalog {
             tile: TileColor::Blue,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     })])
 }
 
@@ -1164,6 +1165,7 @@ pub fn catalog_of(dir: &Path) -> stackly_core::catalog::Catalog {
             tile: TileColor::Blue,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     })])
 }
 

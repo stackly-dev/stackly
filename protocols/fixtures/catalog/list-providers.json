@@ -11,7 +11,8 @@
       "arch": "aarch64"
     },
     "outdated": false,
-    "invalidCount": 2
+    "invalidCount": 2,
+    "localCount": 0
   },
   "items": [
     {
@@ -27,6 +28,7 @@
       "providerRevision": "1.0.0",
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -46,6 +48,7 @@
       "providerRevision": "1.0.0",
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -65,6 +68,7 @@
       "providerRevision": "1.0.1",
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [
         "2.15.1"
       ],
@@ -88,6 +92,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -107,6 +112,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -126,6 +132,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -145,6 +152,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -164,6 +172,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -183,6 +192,7 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
@@ -202,11 +212,13 @@
       "providerRevision": null,
       "publisher": "Stackly",
       "trust": "official",
+      "approval": null,
       "versions": [],
       "versionCount": 0,
       "licenses": [],
       "mark": "Tr",
       "tile": "cyan"
     }
-  ]
+  ],
+  "revocations": []
 }

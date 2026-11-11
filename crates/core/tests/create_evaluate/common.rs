@@ -176,6 +176,7 @@ impl Site {
                 tile: TileColor::Blue,
             },
             notes: Vec::new(),
+            origin: stackly_core::catalog::EntryOrigin::Catalog,
         };
         let catalog =
             CatalogState::Loaded(Arc::new(Catalog::for_tests(&[CatalogEntry::Provider(

@@ -20,7 +20,8 @@ use stackly_domain::{
     OperationResource, Ownership, PortRequest, Progress, ProviderRevision, ProviderRevisionKey,
     ProviderRevisionRecord, ProviderSourceId, RegistryError, RelativePath, ResourceRef, Runtime,
     RuntimeId, RuntimeLine, RuntimeReferences, Sha256Digest, StorageLocationId, StoredEnvironment,
-    StoredInstance, StoredLease, StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
+    StoredInstance, StoredLease, StoredOperation, StoredRuntime, Target, Transport, TrustDecision,
+    UnixEndpoint,
 };
 
 use super::column::{Cells, collect, corrupt, exists, first, inconsistent, sql_error, ts};
@@ -59,7 +60,8 @@ pub(super) fn provider_revision(
     first(
         conn,
         "SELECT provider, revision, manifest_sha256, software, schema_version, publisher, \
-         capabilities, line_compatibility, approval, source_id FROM provider_revisions \
+         capabilities, line_compatibility, approval, approved_at, source_id \
+         FROM provider_revisions \
          WHERE provider = ?1 AND revision = ?2 AND manifest_sha256 = ?3",
         (
             key.provider().as_str(),
@@ -68,6 +70,9 @@ pub(super) fn provider_revision(
         ),
         "provider_revisions",
         |cells| {
+            // The approval is read first, so a foreign code fails the read
+            // on its own column.
+            let approval = cells.opt_parse::<TrustDecision>("approval")?;
             let key = ProviderRevisionKey::new(
                 cells.parse("provider")?,
                 cells.parse("revision")?,
@@ -83,8 +88,12 @@ pub(super) fn provider_revision(
                 revision,
                 cells.opt_text("schema_version")?,
                 cells.opt_text("publisher")?,
-                cells.opt_text("approval")?,
+                approval,
             );
+            let record = match cells.opt_ts("approved_at")? {
+                Some(at) => record.with_approved_at(at),
+                None => record,
+            };
             Ok(match cells.opt_parse::<ProviderSourceId>("source_id")? {
                 Some(source) => record.with_source_id(source),
                 None => record,

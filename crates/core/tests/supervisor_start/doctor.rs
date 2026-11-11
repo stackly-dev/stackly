@@ -1272,6 +1272,7 @@ async fn the_catalog_revision_of_the_provider_comes_before_the_pinned_package() 
             tile: TileColor::Blue,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     })]);
 
     let reading = capacity(&rig, TB, TB / 2);

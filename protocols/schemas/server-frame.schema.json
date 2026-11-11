@@ -114,6 +114,31 @@
         }
       ]
     },
+    "ApprovalState": {
+      "description": "Where an imported provider's stored bytes stand. Open.",
+      "oneOf": [
+        {
+          "description": "No decision covers the stored bytes.",
+          "type": "string",
+          "const": "pending"
+        },
+        {
+          "description": "The stored bytes are approved.",
+          "type": "string",
+          "const": "approved"
+        },
+        {
+          "description": "The approval of the stored bytes was revoked.",
+          "type": "string",
+          "const": "revoked"
+        },
+        {
+          "description": "A state this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "ArtifactDependency": {
       "description": "One dependency of an artifact.",
       "type": "object",
@@ -1058,6 +1083,57 @@
         "status"
       ]
     },
+    "CatalogChangeKind": {
+      "description": "What happened in a `catalog.changed` event. Open.",
+      "oneOf": [
+        {
+          "description": "A package was imported.",
+          "type": "string",
+          "const": "imported"
+        },
+        {
+          "description": "An import was approved.",
+          "type": "string",
+          "const": "approved"
+        },
+        {
+          "description": "An approval was revoked.",
+          "type": "string",
+          "const": "revoked"
+        },
+        {
+          "description": "An import was removed.",
+          "type": "string",
+          "const": "removed"
+        },
+        {
+          "description": "A change this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "CatalogChanged": {
+      "description": "Content of the `catalog.changed` event: an operation changed the local\nentries, so a client reads `catalog.list_providers` again.",
+      "type": "object",
+      "properties": {
+        "change": {
+          "description": "What happened to it.",
+          "$ref": "#/$defs/CatalogChangeKind"
+        },
+        "provider": {
+          "description": "The provider that changed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "change"
+      ]
+    },
     "CatalogEntryState": {
       "description": "What this Mac can do with a catalog entry. Open.",
       "oneOf": [
@@ -1116,6 +1192,14 @@
           "description": "When the daemon loaded it, for diagnostics.",
           "type": "string",
           "format": "date-time"
+        },
+        "localCount": {
+          "description": "How many entries are imported local providers (spec 0037).",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0
         },
         "outdated": {
           "description": "Whether the catalog was published more than 180 days before the\nrequest.",
@@ -1188,6 +1272,42 @@
         "location",
         "code",
         "message"
+      ]
+    },
+    "CatalogRevocation": {
+      "description": "One entry of the installed catalog's `revoked` list.",
+      "type": "object",
+      "properties": {
+        "manifestSha256": {
+          "description": "The revoked manifest digest; null for every digest of the revision.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "provider": {
+          "description": "The provider ID.",
+          "type": "string"
+        },
+        "providerRevision": {
+          "description": "The revoked revision label.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why.",
+          "type": "string"
+        },
+        "since": {
+          "description": "Since when, `YYYY-MM-DD`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "providerRevision",
+        "reason",
+        "since"
       ]
     },
     "CatalogSourceKind": {
@@ -4909,6 +5029,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The local entries of the catalog changed after a provider operation\n(spec 0037). A daemon event: no resource, no revision; clients read\n`catalog.list_providers` again.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/CatalogChanged"
+            },
+            "type": {
+              "type": "string",
+              "const": "catalog.changed"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -4936,6 +5073,84 @@
       "required": [
         "path",
         "kind"
+      ]
+    },
+    "ExecutableUse": {
+      "description": "Where a package runs a program. Open.",
+      "oneOf": [
+        {
+          "description": "It starts the server.",
+          "type": "string",
+          "const": "start"
+        },
+        {
+          "description": "It runs during setup.",
+          "type": "string",
+          "const": "initialize"
+        },
+        {
+          "description": "It runs on stop.",
+          "type": "string",
+          "const": "stop"
+        },
+        {
+          "description": "It runs on reload.",
+          "type": "string",
+          "const": "reload"
+        },
+        {
+          "description": "It runs health checks.",
+          "type": "string",
+          "const": "probe"
+        },
+        {
+          "description": "It runs once at install.",
+          "type": "string",
+          "const": "version_check"
+        },
+        {
+          "description": "It opens in Terminal.",
+          "type": "string",
+          "const": "open_with"
+        },
+        {
+          "description": "A use this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ExistingImport": {
+      "description": "The stored import of the same provider ID.",
+      "type": "object",
+      "properties": {
+        "approval": {
+          "description": "Where its stored bytes stand.",
+          "$ref": "#/$defs/ApprovalState"
+        },
+        "packageSha256": {
+          "description": "Its package digest.",
+          "type": "string"
+        },
+        "providerRevision": {
+          "description": "Its `metadata.revision`.",
+          "type": "string"
+        },
+        "samePackage": {
+          "description": "Whether the previewed folder holds exactly these bytes.",
+          "type": "boolean"
+        },
+        "storedCopyValid": {
+          "description": "Whether its store copy loads and matches.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "providerRevision",
+        "packageSha256",
+        "approval",
+        "samePackage",
+        "storedCopyValid"
       ]
     },
     "ExportedBundle": {
@@ -5638,6 +5853,269 @@
       },
       "required": [
         "stopped"
+      ]
+    },
+    "ImportBlockReason": {
+      "description": "Why a package cannot be imported. Open.",
+      "oneOf": [
+        {
+          "description": "A validator error or an import rule.",
+          "type": "string",
+          "const": "package_invalid"
+        },
+        {
+          "description": "An import limit.",
+          "type": "string",
+          "const": "import_limit"
+        },
+        {
+          "description": "A reason this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ImportPreview": {
+      "description": "Reply of `provider.preview_import`: what importing the folder would\nbring in. It reads the folder and writes nothing.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "description": "`metadata.category`, when it reads.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "changes": {
+          "description": "What differs from the last decision on that provider; empty without\na decision.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionChange"
+          }
+        },
+        "description": {
+          "description": "`metadata.description`, when it reads.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "displayName": {
+          "description": "`metadata.displayName`, when it reads.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "existing": {
+          "description": "The import of the same provider ID that is stored now, if any.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExistingImport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fileCount": {
+          "description": "How many files the package has.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "findings": {
+          "description": "The first [`PREVIEW_FINDINGS_MAX`] validator findings, without the\n`scenarios` ones.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ValidationFinding"
+          }
+        },
+        "importIssues": {
+          "description": "What the import rules refuse.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CatalogIssue"
+          }
+        },
+        "manifestSha256": {
+          "description": "The manifest digest, when the package validated.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "omittedFindings": {
+          "description": "Findings left out of `findings`.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "originPath": {
+          "description": "The folder, with the home folder written `~`.",
+          "type": "string"
+        },
+        "packageBytes": {
+          "description": "The bytes of every package file together.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "packageSha256": {
+          "description": "The digest of every package file, the bytes an approval binds, when\nthe files were read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "permissions": {
+          "description": "What the package may run, read, and download; null when it does not\nvalidate.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provider": {
+          "description": "`metadata.id`, when it reads.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "providerRevision": {
+          "description": "`metadata.revision`, when it reads.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "publisher": {
+          "description": "The namespace of `metadata.id`, never verified.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "quarantineAgent": {
+          "description": "The agent that set the attribute, when it was read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "quarantined": {
+          "description": "Whether `provider.yaml` carries a quarantine attribute; null when\nthe attribute could not be read.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "revocation": {
+          "description": "The revocation of the installed catalog for this package's key.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevocationInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "software": {
+          "description": "`metadata.software`, when it reads.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "verdict": {
+          "description": "Whether it can be imported.",
+          "$ref": "#/$defs/ImportVerdict"
+        },
+        "versionCount": {
+          "description": "How many exact versions there are.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "versions": {
+          "description": "The exact versions, first [`PREVIEW_VERSIONS_MAX`].",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "versionsSha256": {
+          "description": "The `versions.json` digest, when the file was read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "packageBytes",
+        "fileCount",
+        "originPath",
+        "versionCount",
+        "omittedFindings",
+        "verdict"
+      ]
+    },
+    "ImportVerdict": {
+      "description": "Whether a previewed package can be imported.",
+      "type": "object",
+      "properties": {
+        "importable": {
+          "description": "True when no `package` or `authoring` finding is an error, no\nimport issue holds, and the import limits allow it.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why not, when not importable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImportBlockReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "importable"
       ]
     },
     "InstallModeKind": {
@@ -6880,6 +7358,14 @@
           "items": {
             "$ref": "#/$defs/ProviderSummary"
           }
+        },
+        "revocations": {
+          "description": "The `revoked` list of the installed catalog, at most\n[`REVOCATIONS_MAX`](crate::provider::REVOCATIONS_MAX) (spec 0037). It\nis as old as the catalog, never a current list.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CatalogRevocation"
+          }
         }
       },
       "required": [
@@ -6905,6 +7391,83 @@
       },
       "required": [
         "store"
+      ]
+    },
+    "LocalProviderInfo": {
+      "description": "The import facts and last decision of a local entry, in\n`ProviderDetail.local`.",
+      "type": "object",
+      "properties": {
+        "changes": {
+          "description": "What differs from the last decision, only while `pending` with a\ndecision.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionChange"
+          }
+        },
+        "decision": {
+          "description": "The last decision, on these or other bytes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrustDecisionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "importedAt": {
+          "description": "When the last import committed.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "originPath": {
+          "description": "The folder it was imported from, with the home folder written `~`.",
+          "type": "string"
+        },
+        "packageBytes": {
+          "description": "The bytes of the stored package.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "packageSha256": {
+          "description": "The digest of the stored bytes, which `provider.approve` sends back.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "What the stored package may do; null for an invalid entry.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderPermissions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quarantined": {
+          "description": "Whether the origin `provider.yaml` carried a quarantine attribute.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "versionsSha256": {
+          "description": "The digest of its `versions.json`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "importedAt",
+        "originPath",
+        "versionsSha256",
+        "packageSha256",
+        "packageBytes"
       ]
     },
     "LocationKind": {
@@ -8228,6 +8791,26 @@
           "const": "daemon_restart"
         },
         {
+          "description": "Import a local provider package (spec 0037); its resource is the\nmanager.",
+          "type": "string",
+          "const": "import_provider"
+        },
+        {
+          "description": "Approve the stored bytes of an imported provider (spec 0037); its\nresource is the manager.",
+          "type": "string",
+          "const": "approve_provider"
+        },
+        {
+          "description": "Revoke the approval of an imported provider (spec 0037); its\nresource is the manager.",
+          "type": "string",
+          "const": "revoke_provider"
+        },
+        {
+          "description": "Remove an imported provider (spec 0037); its resource is the\nmanager.",
+          "type": "string",
+          "const": "remove_provider_import"
+        },
+        {
           "description": "A kind this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
@@ -8772,6 +9355,206 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PermissionChange": {
+      "description": "What differs from the last decision (spec 0037, *Kode perubahan*). Open.",
+      "oneOf": [
+        {
+          "description": "The revision label.",
+          "type": "string",
+          "const": "revision"
+        },
+        {
+          "description": "The programs it runs.",
+          "type": "string",
+          "const": "executables"
+        },
+        {
+          "description": "The files it downloads.",
+          "type": "string",
+          "const": "downloads"
+        },
+        {
+          "description": "The download hosts.",
+          "type": "string",
+          "const": "download_hosts"
+        },
+        {
+          "description": "The capabilities.",
+          "type": "string",
+          "const": "capabilities"
+        },
+        {
+          "description": "The folders it writes.",
+          "type": "string",
+          "const": "filesystem"
+        },
+        {
+          "description": "The secrets it receives.",
+          "type": "string",
+          "const": "secrets"
+        },
+        {
+          "description": "The endpoints.",
+          "type": "string",
+          "const": "endpoints"
+        },
+        {
+          "description": "The apps it opens.",
+          "type": "string",
+          "const": "open_with"
+        },
+        {
+          "description": "Other bytes only.",
+          "type": "string",
+          "const": "content"
+        },
+        {
+          "description": "A change this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PermissionDownload": {
+      "description": "One artifact a package may download.",
+      "type": "object",
+      "properties": {
+        "arch": {
+          "description": "The architecture it is built for.",
+          "$ref": "#/$defs/TargetArch"
+        },
+        "artifact": {
+          "description": "The artifact ID.",
+          "type": "string"
+        },
+        "hosts": {
+          "description": "The unique hosts of its URLs, at most 8.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "os": {
+          "description": "The OS it is built for.",
+          "$ref": "#/$defs/TargetOs"
+        },
+        "sha256": {
+          "description": "The SHA-256 the package author wrote for it.",
+          "type": "string"
+        },
+        "signingPolicy": {
+          "description": "The signing policy code, such as `keep_or_adhoc`.",
+          "type": "string"
+        },
+        "size": {
+          "description": "The download size in bytes.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "version": {
+          "description": "The exact version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact",
+        "version",
+        "os",
+        "arch",
+        "sha256",
+        "size",
+        "signingPolicy"
+      ]
+    },
+    "PermissionEndpoint": {
+      "description": "One endpoint a package declares.",
+      "type": "object",
+      "properties": {
+        "defaultPort": {
+          "description": "The suggested port of an IP endpoint.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "name": {
+          "description": "The endpoint name.",
+          "type": "string"
+        },
+        "purpose": {
+          "description": "`client`, `monitoring`, or `admin`.",
+          "type": "string"
+        },
+        "transport": {
+          "description": "`tcp`, `udp`, or `unix`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "purpose"
+      ]
+    },
+    "PermissionExecutable": {
+      "description": "One program a package runs.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "`runtime` or the alias.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The path under the runtime root.",
+          "type": "string"
+        },
+        "uses": {
+          "description": "Where the manifest runs it.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExecutableUse"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ]
+    },
+    "PermissionOpenWith": {
+      "description": "One `openWith` entry of a package.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "`app`, `terminal`, `browser`, or `reveal`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The entry name.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The first bundle ID of an `app` entry or the executable of a\n`terminal` entry.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "kind"
       ]
     },
     "PidFileEvidence": {
@@ -9595,6 +10378,18 @@
             "$ref": "#/$defs/CatalogIssue"
           }
         },
+        "local": {
+          "description": "The import facts and last decision of a local entry; null for a\ncatalog entry (spec 0037).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalProviderInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "manifestSha256": {
           "description": "The digest of the provider package, 64 lowercase hex characters;\nnull for planned and invalid entries.",
           "type": [
@@ -9618,6 +10413,18 @@
           "items": {
             "$ref": "#/$defs/PlatformNoteDto"
           }
+        },
+        "revocation": {
+          "description": "Set while the entry's trust verdict is revoked, by the user or the\ninstalled catalog (spec 0037).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RevocationInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "software": {
           "description": "The software the provider runs; null for planned and invalid\nentries.",
@@ -9643,6 +10450,68 @@
       "required": [
         "summary"
       ]
+    },
+    "ProviderPermissions": {
+      "description": "What a package may do (spec 0037, *Ringkasan izin*), for display and\ncomparison only.",
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "The supported capabilities, in the capability order of spec 0017.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProviderCapability"
+          }
+        },
+        "downloads": {
+          "description": "The artifacts it may download.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionDownload"
+          }
+        },
+        "endpoints": {
+          "description": "The endpoints it declares.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionEndpoint"
+          }
+        },
+        "executables": {
+          "description": "The programs it runs.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionExecutable"
+          }
+        },
+        "managedFilesystem": {
+          "description": "The folders it writes: `data`, `config`, `logs`, `temp`, `run`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "openWith": {
+          "description": "The `openWith` entries.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PermissionOpenWith"
+          }
+        },
+        "secrets": {
+          "description": "The secret fields it hands to a process.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "ProviderPin": {
       "description": "The package an instance runs, pinned when it was created.",
@@ -9715,6 +10584,18 @@
       "description": "One catalog entry as a card or a list row shows it.",
       "type": "object",
       "properties": {
+        "approval": {
+          "description": "Where an imported provider's stored bytes stand; null for a catalog\nentry (spec 0037).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApprovalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "category": {
           "description": "The category; null only for an invalid entry whose manifest\nmetadata does not decode.",
           "anyOf": [
@@ -9815,7 +10696,7 @@
           "$ref": "#/$defs/TileColor"
         },
         "trust": {
-          "description": "How far the entry is trusted, the same as the catalog's.",
+          "description": "How far the entry is trusted: the catalog's, or `local` for an\nimported provider.",
           "$ref": "#/$defs/TrustLevel"
         },
         "versionCount": {
@@ -10170,6 +11051,19 @@
       },
       "required": [
         "text"
+      ]
+    },
+    "RemovedProvider": {
+      "description": "Reply of `provider.remove`.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "The provider that was removed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
       ]
     },
     "Reply": {
@@ -11220,6 +12114,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "What importing the folder would bring in.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ImportPreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.preview_import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The imported entry after the operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The approved entry.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.approve"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The entry after the revocation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.revoke"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The removed provider.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RemovedProvider"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.remove"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -11702,6 +12681,64 @@
       "required": [
         "reference",
         "value"
+      ]
+    },
+    "RevocationInfo": {
+      "description": "When and by whom a revision was revoked.",
+      "type": "object",
+      "properties": {
+        "by": {
+          "description": "Who revoked it.",
+          "$ref": "#/$defs/RevocationSource"
+        },
+        "catalogRevision": {
+          "description": "The revision of the catalog that revokes it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "reason": {
+          "description": "The catalog's reason.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "since": {
+          "description": "Since when.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "by",
+        "since"
+      ]
+    },
+    "RevocationSource": {
+      "description": "Who revoked a revision. Open.",
+      "oneOf": [
+        {
+          "description": "The user.",
+          "type": "string",
+          "const": "user"
+        },
+        {
+          "description": "The installed catalog.",
+          "type": "string",
+          "const": "catalog"
+        },
+        {
+          "description": "A source this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "RuntimeDetail": {
@@ -13387,6 +14424,16 @@
           "const": "runtime_tested"
         },
         {
+          "description": "A local entry whose stored bytes no approval covers (spec 0037).",
+          "type": "string",
+          "const": "approval_required"
+        },
+        {
+          "description": "The approval was revoked, by the user or the installed catalog\n(spec 0037).",
+          "type": "string",
+          "const": "trust_revoked"
+        },
+        {
           "description": "A reason this build does not know. The daemon never sends it.",
           "type": "string",
           "const": "unrecognized"
@@ -13622,6 +14669,35 @@
         }
       ]
     },
+    "TrustDecisionInfo": {
+      "description": "One trust decision.",
+      "type": "object",
+      "properties": {
+        "decidedAt": {
+          "description": "When it was decided.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "decision": {
+          "description": "`approved` or `revoked`.",
+          "$ref": "#/$defs/ApprovalState"
+        },
+        "packageSha256": {
+          "description": "The digest of the bytes it covers.",
+          "type": "string"
+        },
+        "providerRevision": {
+          "description": "The revision label of the bytes it covers.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "decidedAt",
+        "providerRevision",
+        "packageSha256"
+      ]
+    },
     "TrustLevel": {
       "description": "How far a catalog is trusted. Open.",
       "oneOf": [
@@ -13634,6 +14710,11 @@
           "description": "A development catalog, never shown as official.",
           "type": "string",
           "const": "development"
+        },
+        {
+          "description": "An imported local provider, never verified (spec 0037).",
+          "type": "string",
+          "const": "local"
         },
         {
           "description": "A trust level this build does not know. The daemon never sends it.",

@@ -7,11 +7,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use jiff::{SignedDuration, Timestamp};
-use stackly_domain::{ExactVersion, Os, ProviderName, Sha256Digest, SupportStatus};
+use stackly_domain::{
+    CompatibilityRecordRow, ExactVersion, Os, ProviderImportRecord, ProviderName, Sha256Digest,
+    SupportStatus,
+};
 
 use crate::provider::{Category, Issue, ValidatedPackage, VersionArtifact};
 
-use super::rules::TileColor;
+use super::local::Permissions;
+use super::rules::{TileColor, default_mark};
 
 /// How old a catalog may be before it is outdated: 180 days.
 pub const CATALOG_OUTDATED_AFTER: SignedDuration = SignedDuration::from_hours(180 * 24);
@@ -105,6 +109,48 @@ pub struct PlatformNote {
     pub note: String,
 }
 
+impl TileHint {
+    /// The tile of a local entry (spec 0037, *Read model*): the default
+    /// mark of its display name, in gray.
+    #[must_use]
+    pub fn local(display_name: &str) -> Self {
+        Self {
+            mark: default_mark(display_name),
+            tile: TileColor::Gray,
+        }
+    }
+}
+
+/// Where a provider entry comes from (spec 0037, *Read model*).
+#[derive(Debug, Clone)]
+pub enum EntryOrigin {
+    /// The bundled or development catalog.
+    Catalog,
+    /// An imported local package, read from its store copy.
+    Local(Box<LocalInfo>),
+}
+
+/// What a local entry carries beside its package.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LocalInfo {
+    /// Its import row, as the snapshot read it.
+    pub record: ProviderImportRecord,
+    /// The permissions of the stored package.
+    pub permissions: Permissions,
+}
+
+impl LocalInfo {
+    /// Bundles an import row with the permissions of its stored package.
+    #[must_use]
+    pub const fn new(record: ProviderImportRecord, permissions: Permissions) -> Self {
+        Self {
+            record,
+            permissions,
+        }
+    }
+}
+
 /// A provider with a validated package.
 #[derive(Debug, Clone)]
 pub struct ProviderEntry {
@@ -114,9 +160,37 @@ pub struct ProviderEntry {
     pub tile: TileHint,
     /// Its platform notes, by OS.
     pub notes: Vec<PlatformNote>,
+    /// Where it comes from.
+    pub origin: EntryOrigin,
 }
 
 impl ProviderEntry {
+    /// Returns the import facts of a local entry, and none for a catalog
+    /// entry.
+    #[must_use]
+    pub fn local(&self) -> Option<&LocalInfo> {
+        match &self.origin {
+            EntryOrigin::Catalog => None,
+            EntryOrigin::Local(info) => Some(info),
+        }
+    }
+
+    /// Returns the compatibility records of `artifact` that Stackly trusts:
+    /// those of a catalog entry, and none for a local entry, whose records
+    /// the package author wrote (spec 0037 AC-11). A local entry is never
+    /// `supported` or `experimental`, and an install from it copies no
+    /// record.
+    #[must_use]
+    pub fn trusted_compatibility<'a>(
+        &self,
+        artifact: &'a VersionArtifact,
+    ) -> &'a [CompatibilityRecordRow] {
+        match self.origin {
+            EntryOrigin::Catalog => artifact.compatibility(),
+            EntryOrigin::Local(_) => &[],
+        }
+    }
+
     /// Returns the artifacts of its `versions.json`, in file order.
     #[must_use]
     pub fn artifacts(&self) -> &[VersionArtifact] {
@@ -165,6 +239,10 @@ pub struct InvalidEntry {
     pub tile: TileHint,
     /// What is wrong, at most `MAX_ISSUES` plus one `too_many_issues`.
     pub issues: Vec<Issue>,
+    /// The import row of a local entry whose store copy does not load or
+    /// match, so it keeps trust `local` and can be removed or imported
+    /// again (spec 0037); none for a catalog entry.
+    pub local: Option<Box<ProviderImportRecord>>,
 }
 
 /// One entry of the catalog.
@@ -206,6 +284,16 @@ impl CatalogEntry {
             Self::Provider(entry) => entry.package.manifest().display_name().to_owned(),
             Self::Planned(entry) => entry.display_name.clone(),
             Self::Invalid(entry) => entry.id.to_string(),
+        }
+    }
+
+    /// Returns whether it is a local entry, valid or not.
+    #[must_use]
+    pub const fn is_local(&self) -> bool {
+        match self {
+            Self::Provider(entry) => matches!(entry.origin, EntryOrigin::Local(_)),
+            Self::Invalid(entry) => entry.local.is_some(),
+            Self::Planned(_) => false,
         }
     }
 
@@ -306,6 +394,28 @@ impl Catalog {
             .map(CatalogEntry::id)
             .filter(|id| id.name() == name)
             .collect()
+    }
+
+    /// Returns a new catalog of this one's catalog entries (shared, their
+    /// packages behind `Arc`) and `local`, in display order (spec 0037,
+    /// *Read model*). Local entries this catalog held already are left
+    /// out, so the base catalog stays the one source of catalog entries.
+    #[must_use]
+    pub fn with_local(&self, local: Vec<CatalogEntry>) -> Self {
+        let mut entries: Vec<CatalogEntry> = self
+            .entries
+            .iter()
+            .filter(|entry| !entry.is_local())
+            .cloned()
+            .collect();
+        entries.extend(local);
+        Self::new(self.meta.clone(), entries)
+    }
+
+    /// Returns how many entries are local, valid or not.
+    #[must_use]
+    pub fn local_count(&self) -> usize {
+        self.entries.iter().filter(|entry| entry.is_local()).count()
     }
 
     /// Returns how many entries failed a rule.

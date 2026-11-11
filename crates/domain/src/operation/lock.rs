@@ -8,15 +8,15 @@ use std::str::FromStr;
 use crate::error::{ValueError, ValueKind};
 use crate::id::{EnvironmentId, InstanceId, RuntimeId};
 use crate::operation::OperationResource;
-use crate::value::{EnvironmentName, InstanceName, Sha256Digest};
+use crate::value::{EnvironmentName, InstanceName, ProviderName, Sha256Digest};
 
 /// One thing an operation locks while it runs. Two operations that share a
 /// key never run at the same time.
 ///
 /// The text form is `<kind>:<value>`: `runtime:<id>`, `instance:<id>`,
 /// `environment:<id>`, `manager:self`, `artifact:<sha256>`,
-/// `instance_name:<name>`, `environment_name:<name>`, and
-/// `external_root:<path>`. The registry stores it in `operation_locks`
+/// `instance_name:<name>`, `environment_name:<name>`,
+/// `external_root:<path>`, and `provider:<id>`. The registry stores it in `operation_locks`
 /// only to rebuild the lock table after a restart.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
@@ -38,6 +38,10 @@ pub enum LockKey {
     /// The canonical folder of an external runtime. Build it with
     /// [`LockKey::external_root`], which checks the path.
     ExternalRoot(PathBuf),
+    /// A provider ID, while a provider operation imports, approves,
+    /// revokes, or removes it (spec 0037). Provider operations run on the
+    /// manager resource and add this key through `extra_locks`.
+    Provider(ProviderName),
 }
 
 impl LockKey {
@@ -80,6 +84,7 @@ impl LockKey {
             Self::InstanceName(_) => "instance_name",
             Self::EnvironmentName(_) => "environment_name",
             Self::ExternalRoot(_) => "external_root",
+            Self::Provider(_) => "provider",
         }
     }
 
@@ -96,6 +101,7 @@ impl LockKey {
             Self::InstanceName(name) => name.to_string(),
             Self::EnvironmentName(name) => name.to_string(),
             Self::ExternalRoot(path) => path.to_str()?.to_owned(),
+            Self::Provider(name) => name.to_string(),
         };
         Some(format!("{}:{value}", self.kind_code()))
     }
@@ -134,6 +140,7 @@ impl FromStr for LockKey {
             "instance_name" => Self::InstanceName(value.parse()?),
             "environment_name" => Self::EnvironmentName(value.parse()?),
             "external_root" => Self::external_root(value)?,
+            "provider" => Self::Provider(value.parse()?),
             _ => return Err(invalid()),
         };
         Ok(key)
@@ -180,6 +187,7 @@ mod tests {
             LockKey::InstanceName("orders-db".parse().unwrap()),
             LockKey::EnvironmentName("shop".parse().unwrap()),
             LockKey::external_root("/Users/me/pg/17").unwrap(),
+            LockKey::Provider("acme/demo".parse().unwrap()),
         ];
 
         for key in keys {
@@ -189,6 +197,12 @@ mod tests {
             assert!(text.starts_with(&format!("{}:", key.kind_code())));
         }
         assert_eq!(LockKey::Manager.to_text().as_deref(), Some("manager:self"));
+        assert_eq!(
+            LockKey::Provider("acme/demo".parse().unwrap())
+                .to_text()
+                .as_deref(),
+            Some("provider:acme/demo")
+        );
     }
 
     #[test]
@@ -216,6 +230,8 @@ mod tests {
             "external_root:relative/path",
             "external_root:/a/../b",
             "instance_name:Orders",
+            "provider:acme",
+            "provider:Acme/demo",
         ] {
             assert!(text.parse::<LockKey>().is_err(), "{text:?}");
         }

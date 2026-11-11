@@ -121,6 +121,7 @@ struct ContractTests {
                 "operation.progress", "secret.changed", "instance.state_changed",
                 "instance.health_changed", "instance.removed", "daemon.reconciling",
                 "runtime.state_changed", "daemon.restart_plan", "settings.changed",
+                "catalog.changed",
             ])
         let calls: [Call] = [
             .daemonGetInfo, .daemonGetHealth, .daemonGetCapabilities,
@@ -135,6 +136,6 @@ struct ContractTests {
     }
 
     @Test func protocolIsTwoPointTwo() {
-        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 3, minor: 6))
+        #expect(ContractInfo.protocolVersion == ProtocolVersion(major: 4, minor: 0))
     }
 }

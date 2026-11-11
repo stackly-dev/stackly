@@ -2,16 +2,20 @@
 //! subsystem*, *Lokasi catalog saat start*): the catalog the start slot
 //! loads once, its health, and the two `catalog` methods.
 //!
-//! The catalog never changes while the daemon runs. Loading it reads files
-//! only; it never writes, spawns, or resolves a secret.
+//! The bundled catalog never changes while the daemon runs; its local
+//! entries do, through [`refresh_local`] after a provider operation (spec
+//! 0037, *Read model*). Loading either reads files and the registry only;
+//! it never writes, spawns, or resolves a secret.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
 
+use stackly_core::catalog::import::{CatalogRefresher, LocalChange};
 use stackly_core::catalog::{
     Catalog, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState, ensure_source,
     load_catalog,
 };
 use stackly_core::instance::create::SourceRecorder;
+use stackly_core::operation::BoxFuture;
 use stackly_domain::{ProviderName, ProviderSourceId, Registry, RegistryError};
 use stackly_platform::Clock;
 use stackly_protocol::ErrorBody;
@@ -22,7 +26,7 @@ use stackly_storage::SqliteRegistry;
 
 use crate::dispatch::HandlerFuture;
 use crate::map;
-use crate::state::DaemonCore;
+use crate::state::{DaemonCore, RegistryState};
 
 /// The health detail of a daemon without a catalog folder.
 pub const NOT_CONFIGURED_DETAIL: &str =
@@ -60,6 +64,7 @@ pub async fn load(
         Some(CatalogOverride::Location { location, options }) => (location, options),
         None => (location, CatalogOptions::default()),
     };
+    core.set_catalog_options(options);
     let Some(location) = location else {
         return CatalogState::NotConfigured;
     };
@@ -171,6 +176,95 @@ impl CatalogSource {
                 Err(error)
             }
         }
+    }
+}
+
+/// Rebuilds the catalog snapshot from the bundled catalog and the import
+/// rows of the registry, and replaces it unless a snapshot of a newer
+/// generation is in place (spec 0037, *Read model*). With `change`, the
+/// `catalog.changed` event goes out after the replace; the start slot
+/// passes none.
+///
+/// Local entries load only while the bundled catalog is loaded and the
+/// registry is ready. A registry in recovery or a failed read keeps the
+/// snapshot as it is and records why in the `catalog` subsystem health;
+/// the gates stay right because they read the registry themselves.
+pub async fn refresh_local(core: &DaemonCore, change: Option<(ProviderName, LocalChange)>) {
+    if let Some(problem) = load_local(core).await {
+        core.set_local_problem(Some(problem));
+    }
+    if let Some((provider, change)) = change {
+        core.bus()
+            .publish_daemon(stackly_protocol::events::EventKind::CatalogChanged(
+                stackly_protocol::provider::CatalogChanged {
+                    provider: Some(provider.to_string()),
+                    change: map::catalog::wire(change.as_code()),
+                },
+            ));
+    }
+}
+
+/// Loads the local entries into a new snapshot; the problem to record when
+/// it could not.
+async fn load_local(core: &DaemonCore) -> Option<String> {
+    let base = core.catalog_base()?;
+    let CatalogState::Loaded(base) = base.as_ref() else {
+        return None;
+    };
+    match core.registry_state() {
+        RegistryState::Ready { .. } => {}
+        RegistryState::Recovery { .. } => {
+            return Some("local providers not loaded: registry recovery".to_owned());
+        }
+        _ => return None,
+    }
+    let registry = core.registry()?;
+    let platform = core.platform().clone();
+    let layout = core.prepared().layout().clone();
+    let base = Arc::clone(base);
+    let loaded = tokio::task::spawn_blocking(move || {
+        stackly_core::catalog::local::load(platform.fs(), &registry, &layout)
+            .map(|rows| (base.with_local(rows.value), rows.generation.get()))
+    })
+    .await;
+    match loaded {
+        Ok(Ok((catalog, generation))) => {
+            core.replace_catalog(CatalogState::Loaded(Arc::new(catalog)), generation);
+            core.set_local_problem(None);
+            None
+        }
+        Ok(Err(error)) => Some(format!(
+            "local providers not loaded: {}",
+            map::registry_error(&error).code()
+        )),
+        Err(_) => Some("local providers not loaded: task stopped".to_owned()),
+    }
+}
+
+/// The refresher the provider operations call as their last step. It holds
+/// the core weakly, so a queued operation never keeps it alive past a stop.
+pub struct DaemonRefresher {
+    core: Weak<DaemonCore>,
+}
+
+impl DaemonRefresher {
+    /// A refresher of `core`'s snapshot.
+    #[must_use]
+    pub fn new(core: &Arc<DaemonCore>) -> Self {
+        Self {
+            core: Arc::downgrade(core),
+        }
+    }
+}
+
+impl CatalogRefresher for DaemonRefresher {
+    fn refresh(&self, provider: ProviderName, change: LocalChange) -> BoxFuture<'static, ()> {
+        let core = self.core.upgrade();
+        Box::pin(async move {
+            if let Some(core) = core {
+                refresh_local(&core, Some((provider, change))).await;
+            }
+        })
     }
 }
 

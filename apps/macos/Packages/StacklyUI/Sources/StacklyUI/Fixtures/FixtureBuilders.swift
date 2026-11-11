@@ -187,6 +187,7 @@
                 providerRevision: "2026.10.1",
                 publisher: "Stackly",
                 trust: .official,
+                approval: nil,  // provisional: F37 step 10
                 versions: versions,
                 versionCount: UInt64(versions.count),
                 licenses: nil,
@@ -206,7 +207,7 @@
             trust: .official,
             host: HostTarget(os: .macos, arch: .aarch64),
             outdated: false,
-            invalidCount: 0)
+            invalidCount: 0, localCount: 0)
     }
 
     nonisolated extension HandshakeAccepted {

@@ -6,16 +6,20 @@
 //! network, or resolves a secret (REQ-033).
 
 mod assemble;
+pub mod import;
 mod index;
 mod install;
 mod load;
+pub mod local;
 mod model;
 mod pin;
 mod rules;
 mod source;
 mod status;
+mod store;
 #[cfg(feature = "test-support")]
 pub mod testing;
+mod trust;
 
 pub use assemble::{
     AssembleOptions, AssembledCatalog, SourceNote, SourcePlanned, SourceProvider, SourceSpec,
@@ -28,13 +32,14 @@ pub use index::{
     versions_sha256,
 };
 pub use install::{
-    Installability, NotInstallableReason, VersionNotFound, installability, provider_installability,
+    Installability, NotInstallableReason, VersionNotFound, installability,
+    installability_with_trust, provider_installability, provider_installability_with_trust,
 };
 pub use load::load_catalog;
 pub use model::{
     CATALOG_OUTDATED_AFTER, Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions,
-    CatalogState, InvalidEntry, PlannedEntry, PlatformNote, ProviderEntry, TileHint,
-    UnavailableReason,
+    CatalogState, EntryOrigin, InvalidEntry, LocalInfo, PlannedEntry, PlatformNote, ProviderEntry,
+    TileHint, UnavailableReason,
 };
 pub use pin::{PinError, PinnedRevision, pin_revision};
 pub use rules::{
@@ -48,5 +53,10 @@ pub use rules::{
 pub use source::{BUNDLED_LOCATION, BUNDLED_TRUST_ROOT, ensure_source};
 pub use status::{
     CellStatus, EntryState, EntryStatus, MATRIX_OSES, SupportReason, TargetSupport, entry_status,
-    version_support,
+    entry_status_with_trust, version_support,
+};
+pub use store::{StoreError, StoreMode, Stored, write_package};
+pub use trust::{
+    RevokedBy, RevokedInfo, TrustVerdict, entry_trust, guard_pinned_trust, guard_trust,
+    pinned_trust, record_trust, require_entry_trust,
 };

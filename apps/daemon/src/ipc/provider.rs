@@ -86,7 +86,7 @@ pub(crate) fn validation(check: &PackageCheck) -> ProviderValidation {
     }
 }
 
-fn finding(finding: &Finding) -> ValidationFinding {
+pub(crate) fn finding(finding: &Finding) -> ValidationFinding {
     let issue = &finding.issue;
     ValidationFinding {
         severity: match finding.severity {

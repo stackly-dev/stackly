@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod redact;
 pub mod runtime;
 pub mod socket;
+pub mod trust;
 
 use std::path::Path;
 
@@ -354,6 +355,18 @@ pub fn package_error(error: &PackageError) -> ErrorBody {
         ErrorBody::new(&manifest::INVALID, "the provider package is invalid")
             .with_detail("package", error.package.as_str()),
         &error.issues,
+    )
+}
+
+/// `manifest.invalid` for the package folder `package` with `issues`: a
+/// package an import refuses (spec 0037), whose findings and import issues
+/// are not a [`PackageError`].
+#[must_use]
+pub fn package_issues_error(package: &str, issues: &[Issue]) -> ErrorBody {
+    with_issues(
+        ErrorBody::new(&manifest::INVALID, "the provider package is invalid")
+            .with_detail("package", package),
+        issues,
     )
 }
 

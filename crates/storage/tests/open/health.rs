@@ -10,8 +10,9 @@ use std::sync::atomic::AtomicBool;
 
 use rusqlite::Connection;
 use stackly_domain::{
-    AuditQuery, InstanceId, OperationId, ProviderSourceKind, QuickCheck, Registry, RegistryError,
-    UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN, UnrecognizedValue,
+    AuditQuery, InstanceId, OperationId, ProviderRevisionKey, ProviderSourceKind, QuickCheck,
+    Registry, RegistryError, UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN,
+    UnrecognizedValue,
 };
 use stackly_storage::{CODED_COLUMNS, CodedColumn, MigrationSet, SqliteRegistry};
 use stackly_testkit::evidence::{Kind, evidence};
@@ -47,11 +48,6 @@ const FREE_CODE_COLUMNS: &[(&str, &str, &str)] = &[
     ("operation_steps", "name", "a StageName takes any code"),
     ("operations", "failure_code", "a FailureCode takes any code"),
     ("operations", "stage", "a StageName takes any code"),
-    (
-        "provider_revisions",
-        "approval",
-        "read as free text until feature 37",
-    ),
     (
         "schema_migrations",
         "name",
@@ -165,6 +161,30 @@ fn probe(setup: &Setup, side: &Connection, entry: &CodedColumn, row_id: i64) -> 
                     .parse()
                     .expect("the fixture stores operation IDs");
             registry.operation(operation).map(drop)
+        }
+        "provider_imports" => registry.provider_imports().map(drop),
+        "provider_revisions" => {
+            let key: ProviderRevisionKey = format!(
+                "{}@{}#{}",
+                text(
+                    side,
+                    "SELECT provider FROM provider_revisions WHERE rowid = ?1",
+                    row_id
+                ),
+                text(
+                    side,
+                    "SELECT revision FROM provider_revisions WHERE rowid = ?1",
+                    row_id
+                ),
+                text(
+                    side,
+                    "SELECT manifest_sha256 FROM provider_revisions WHERE rowid = ?1",
+                    row_id
+                ),
+            )
+            .parse()
+            .expect("the fixture stores provider revision keys");
+            registry.provider_revision(&key).map(drop)
         }
         "provider_sources" => {
             // The read selects by kind, so it is the stored kind of the

@@ -199,6 +199,21 @@ impl DirectoryLayout {
         self.roots.data().join("providers")
     }
 
+    /// Returns the store of imported local provider packages,
+    /// `provider-imports/` under data (spec 0037, *Store salinan*). It is
+    /// not a standard folder: the first import creates it.
+    #[must_use]
+    pub fn provider_imports_dir(&self) -> PathBuf {
+        self.roots.data().join("provider-imports")
+    }
+
+    /// Returns the folder of one imported package copy, named by its
+    /// package digest: `provider-imports/<package sha256>/`.
+    #[must_use]
+    pub fn provider_import_dir(&self, package_sha256: &Sha256Digest) -> PathBuf {
+        self.provider_imports_dir().join(package_sha256.to_string())
+    }
+
     /// Returns one provider revision's folder,
     /// `providers/<namespace>/<name>/<revision>/<manifest sha256>/`.
     #[must_use]
@@ -850,6 +865,22 @@ mod tests {
                 .join("postgresql")
                 .join("2026.10.1")
                 .join(DIGEST)
+        );
+    }
+
+    #[test]
+    fn an_imported_package_lives_under_provider_imports_by_its_digest() {
+        let layout = layout();
+        let digest: Sha256Digest = DIGEST.parse().unwrap();
+
+        assert_eq!(
+            layout.provider_import_dir(&digest),
+            layout.roots().data().join("provider-imports").join(DIGEST)
+        );
+        assert!(
+            !layout
+                .standard_dirs()
+                .contains(&layout.provider_imports_dir())
         );
     }
 

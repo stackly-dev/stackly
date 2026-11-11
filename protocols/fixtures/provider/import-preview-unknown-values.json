@@ -1,0 +1,108 @@
+{
+  "provider": "acme/demo",
+  "displayName": "Acme Demo",
+  "software": "demo",
+  "category": "mystery",
+  "description": "Demo server packaged by Acme for import tests.",
+  "providerRevision": "1.0.0",
+  "publisher": "acme",
+  "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "versionsSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "packageBytes": 4096,
+  "fileCount": 4,
+  "originPath": "~/providers/acme-demo",
+  "quarantined": true,
+  "quarantineAgent": "Safari",
+  "versions": [
+    "1.0.0"
+  ],
+  "versionCount": 1,
+  "permissions": {
+    "capabilities": [
+      "persistence",
+      "teleport"
+    ],
+    "managedFilesystem": [
+      "config",
+      "data",
+      "logs",
+      "run",
+      "temp"
+    ],
+    "executables": [
+      {
+        "name": "runtime",
+        "path": "bin/demo-server",
+        "uses": [
+          "start",
+          "backup"
+        ]
+      },
+      {
+        "name": "demoCli",
+        "path": "bin/demo-cli",
+        "uses": [
+          "probe",
+          "open_with"
+        ]
+      }
+    ],
+    "secrets": [
+      "password"
+    ],
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "purpose": "client",
+        "defaultPort": 7400
+      }
+    ],
+    "downloads": [
+      {
+        "artifact": "demo-1.0.0-macos-aarch64",
+        "version": "1.0.0",
+        "os": "macos",
+        "arch": "aarch64",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1048576,
+        "hosts": [
+          "downloads.example.test",
+          "mirror.example.test"
+        ],
+        "signingPolicy": "keep_or_adhoc"
+      }
+    ],
+    "openWith": [
+      {
+        "name": "shell",
+        "kind": "terminal",
+        "target": "demoCli"
+      }
+    ]
+  },
+  "findings": [],
+  "omittedFindings": 0,
+  "importIssues": [],
+  "verdict": {
+    "importable": false,
+    "reason": "too_big"
+  },
+  "existing": {
+    "providerRevision": "1.0.0",
+    "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "approval": "frozen",
+    "samePackage": true,
+    "storedCopyValid": true
+  },
+  "changes": [
+    "network"
+  ],
+  "revocation": {
+    "by": "vendor",
+    "since": "2026-11-11T09:00:00.000Z",
+    "reason": null,
+    "catalogRevision": null
+  }
+}

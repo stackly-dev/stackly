@@ -13,17 +13,18 @@ use stackly_domain::{
     AuditPage, AuditQuery, AuditResult, BackupId, BatchError, CommitGuard, Committed,
     ConfigRevisionId, ConfigRevisionRecord, ConfigRevisionStatus, CreatedRecord, CreatedSeq,
     CreatedState, DaemonSession, DaemonSettings, EndpointRequests, Environment, EnvironmentId,
-    Generation, GuardDecision, GuardView, Guarded, IdempotencyKey, InstallMode, Instance,
-    InstanceFilter, InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry, JournalStep,
-    JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind, LockKey,
-    NotDeletableReason, Operation, OperationCursor, OperationId, OperationJournal, OperationPage,
-    OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
-    ProcessObservation, ProviderRevisionKey, ProviderRevisionRecord, ProviderSourceId,
-    ProviderSourceKind, ProviderSourceRecord, PruneReport, Registry, RegistryError, ResourceRef,
-    ResourceRevision, RestartPlan, RestartPlanId, RetentionPolicy, Runtime, RuntimeId,
-    RuntimeReferences, SecretFieldName, SecretRef, SecretReferenceFilter, SecretReferenceRecord,
-    SecretReferenceView, SecretStatus, SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq,
-    StorageLocation, StorageLocationId, Versioned, WriteBatch, WriteOp,
+    Generation, GuardDecision, GuardView, Guarded, IdempotencyKey, ImportDecision, InstallMode,
+    Instance, InstanceFilter, InstanceId, InstanceLifecycle, InstanceName, InstancePathEntry,
+    JournalStep, JournalView, Lease, LeaseFilter, LeaseHolder, LeaseId, LeaseState, LocationKind,
+    LockKey, NotDeletableReason, Operation, OperationCursor, OperationId, OperationJournal,
+    OperationPage, OperationQuery, OperationResource, OperationState, Ownership, PlatformStoreKey,
+    ProcessObservation, ProviderImportRecord, ProviderName, ProviderRevisionKey,
+    ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind, ProviderSourceRecord,
+    PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision, RestartPlan,
+    RestartPlanId, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretFieldName,
+    SecretRef, SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView, SecretStatus,
+    SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq, StorageLocation, StorageLocationId,
+    TrustDecision, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -252,6 +253,24 @@ impl GuardView for StateView<'_> {
             .get(reference)
             .map(|record| self.state.secret_view(record)))
     }
+
+    fn provider_imports(&self) -> Result<Vec<ProviderImportRecord>, RegistryError> {
+        Ok(self.state.provider_imports.values().cloned().collect())
+    }
+
+    fn provider_import(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Option<ProviderImportRecord>, RegistryError> {
+        Ok(self.state.provider_imports.get(provider).cloned())
+    }
+
+    fn provider_has_approved_revision(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<bool, RegistryError> {
+        Ok(self.state.has_approved_revision(provider))
+    }
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -278,6 +297,24 @@ impl Registry for FakeRegistry {
                 .find(|source| source.kind == kind && source.location == location)
                 .cloned())
         })
+    }
+
+    fn provider_imports(&self) -> Result<Versioned<Vec<ProviderImportRecord>>, RegistryError> {
+        self.read(|state| Ok(state.provider_imports.values().cloned().collect()))
+    }
+
+    fn provider_import(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Versioned<Option<ProviderImportRecord>>, RegistryError> {
+        self.read(|state| Ok(state.provider_imports.get(provider).cloned()))
+    }
+
+    fn provider_has_approved_revision(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Versioned<bool>, RegistryError> {
+        self.read(|state| Ok(state.has_approved_revision(provider)))
     }
 
     fn artifact(
@@ -781,6 +818,7 @@ struct State {
     generation: Generation,
     provider_sources: BTreeMap<ProviderSourceId, ProviderSourceRecord>,
     provider_revisions: BTreeMap<ProviderRevisionKey, ProviderRevisionRecord>,
+    provider_imports: BTreeMap<ProviderName, ProviderImportRecord>,
     artifacts: BTreeMap<Sha256Digest, ArtifactRecord>,
     runtimes: BTreeMap<RuntimeId, Runtime>,
     instances: BTreeMap<InstanceId, Instance>,
@@ -815,6 +853,7 @@ impl State {
             generation: Generation::ZERO,
             provider_sources: BTreeMap::new(),
             provider_revisions: BTreeMap::new(),
+            provider_imports: BTreeMap::new(),
             artifacts: BTreeMap::new(),
             runtimes: BTreeMap::new(),
             instances: BTreeMap::new(),
@@ -846,6 +885,14 @@ impl State {
                 .collect(),
             written: HashMap::new(),
         }
+    }
+
+    /// Whether a provider revision of `provider` is `approved`.
+    fn has_approved_revision(&self, provider: &ProviderName) -> bool {
+        self.provider_revisions.values().any(|record| {
+            record.revision.key().provider() == provider
+                && record.approval == Some(TrustDecision::Approved)
+        })
     }
 
     /// Applies one op after its checks, in the order the trait documents:
@@ -995,6 +1042,36 @@ impl State {
             } => self.delete_instance_created_by(id, expected, operation),
             WriteOp::InsertRestartPlan(plan) => self.insert_restart_plan(plan),
             WriteOp::UpdateRestartPlan(plan) => self.update_restart_plan(plan),
+            WriteOp::PutProviderImport { record, expected } => {
+                self.put_provider_import(*record, expected)
+            }
+            WriteOp::DecideProviderImport { provider, decision } => {
+                self.decide_provider_import(&provider, decision)
+            }
+            WriteOp::DeleteProviderImport(provider) => self
+                .provider_imports
+                .remove(&provider)
+                .map(|_| ())
+                .ok_or(RegistryError::NotFound {
+                    resource: ResourceRef::ProviderImport(provider),
+                }),
+            WriteOp::SetProviderRevisionApproval { key, approval, at } => {
+                if let Some(record) = self.provider_revisions.get_mut(&key) {
+                    record.approval = Some(approval);
+                    record.approved_at = Some(at);
+                }
+                Ok(())
+            }
+            WriteOp::RevokeProviderApprovals { provider, at } => {
+                for record in self.provider_revisions.values_mut().filter(|record| {
+                    record.revision.key().provider() == &provider
+                        && record.approval == Some(TrustDecision::Approved)
+                }) {
+                    record.approval = Some(TrustDecision::Revoked);
+                    record.approved_at = Some(at);
+                }
+                Ok(())
+            }
             other => panic!(
                 "FakeRegistry has no case for the op on {}; add one with the spec 0005 change \
                  that added it",
@@ -1022,6 +1099,75 @@ impl State {
         }
         self.stamp(resource, None, now);
         self.provider_revisions.insert(key, record);
+        Ok(())
+    }
+
+    /// `PutProviderImport`: insert, or replace at `expected` keeping the
+    /// stored decision and `created_at`.
+    fn put_provider_import(
+        &mut self,
+        mut record: ProviderImportRecord,
+        expected: Option<ResourceRevision>,
+    ) -> Result<(), RegistryError> {
+        let resource = ResourceRef::ProviderImport(record.provider.clone());
+        if record.decision.is_some() {
+            return Err(RegistryError::Integrity {
+                detail: "an import write never carries a decision".to_owned(),
+            });
+        }
+        let stored = self.provider_imports.get(&record.provider);
+        match (expected, stored) {
+            (None, Some(_)) => return Err(RegistryError::DuplicateResource { resource }),
+            (Some(_), None) => return Err(RegistryError::NotFound { resource }),
+            (Some(expected), Some(stored)) if stored.revision != expected => {
+                return Err(RegistryError::RevisionConflict {
+                    resource,
+                    expected,
+                    actual: stored.revision,
+                });
+            }
+            _ => {}
+        }
+        if !self.provider_sources.contains_key(&record.source_id) {
+            return Err(RegistryError::MissingReference {
+                resource: ResourceRef::ProviderSource(record.source_id),
+            });
+        }
+        if self.provider_imports.values().any(|other| {
+            other.provider != record.provider && other.package_sha256 == record.package_sha256
+        }) {
+            return Err(RegistryError::Integrity {
+                detail: format!(
+                    "another import holds the package digest {}",
+                    record.package_sha256
+                ),
+            });
+        }
+        if let Some(stored) = stored {
+            record.decision = stored.decision.clone();
+            record.created_at = stored.created_at;
+        }
+        self.provider_imports
+            .insert(record.provider.clone(), record);
+        Ok(())
+    }
+
+    /// `DecideProviderImport`: the decision, a raised revision, and
+    /// `updated_at` at the decision time.
+    fn decide_provider_import(
+        &mut self,
+        provider: &ProviderName,
+        decision: ImportDecision,
+    ) -> Result<(), RegistryError> {
+        let record =
+            self.provider_imports
+                .get_mut(provider)
+                .ok_or_else(|| RegistryError::NotFound {
+                    resource: ResourceRef::ProviderImport(provider.clone()),
+                })?;
+        record.revision = record.revision.next();
+        record.updated_at = decision.at;
+        record.decision = Some(decision);
         Ok(())
     }
 

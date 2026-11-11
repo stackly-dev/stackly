@@ -332,6 +332,7 @@ async fn open(
             tile: TileColor::Blue,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     });
     config.catalog = Some(CatalogOverride::Preloaded(Catalog::for_tests(&[entry])));
     let deps = server::DaemonDeps::new(platform.clone(), prepared.clone(), facts, Arc::new(log))

@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000f34",
+  "idempotencyKey": "0192f3a1-0000-7000-8000-00000000ab01",
+  "call": {
+    "type": "provider.approve",
+    "content": {
+      "provider": "acme/demo",
+      "expectedPackageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  }
+}

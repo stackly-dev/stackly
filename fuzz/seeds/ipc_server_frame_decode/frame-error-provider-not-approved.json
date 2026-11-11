@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f76",
+    "error": {
+      "code": "provider.not_approved",
+      "category": "conflict",
+      "message": "acme/demo has no approval to revoke",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "remove the provider instead if you no longer want it",
+      "details": [
+        {
+          "key": "provider",
+          "value": "acme/demo"
+        },
+        {
+          "key": "approval",
+          "value": "pending"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

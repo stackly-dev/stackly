@@ -1,0 +1,32 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f74",
+    "error": {
+      "code": "provider.approval_required",
+      "category": "unauthorized",
+      "message": "acme/demo is not approved",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "review it with stackly provider inspect, then run stackly provider approve",
+      "details": [
+        {
+          "key": "provider",
+          "value": "acme/demo"
+        },
+        {
+          "key": "providerRevision",
+          "value": "1.0.0"
+        },
+        {
+          "key": "packageSha256",
+          "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

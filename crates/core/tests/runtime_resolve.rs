@@ -84,6 +84,7 @@ fn entry(artifacts: &[String]) -> ProviderEntry {
             tile: TileColor::Gray,
         },
         notes: Vec::new(),
+        origin: stackly_core::catalog::EntryOrigin::Catalog,
     }
 }
 

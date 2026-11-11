@@ -1,0 +1,28 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f72",
+    "error": {
+      "code": "provider.import_limit",
+      "category": "conflict",
+      "message": "too many imported providers",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "remove an imported provider first",
+      "details": [
+        {
+          "key": "limit",
+          "value": "count"
+        },
+        {
+          "key": "max",
+          "value": "32"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

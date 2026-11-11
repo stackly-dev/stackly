@@ -17,7 +17,7 @@ use super::index::{
     versions_sha256,
 };
 use super::model::{
-    Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState,
+    Catalog, CatalogEntry, CatalogLocation, CatalogMeta, CatalogOptions, CatalogState, EntryOrigin,
     InvalidEntry, PlannedEntry, PlatformNote, ProviderEntry, TileHint, UnavailableReason,
 };
 use super::rules::{
@@ -195,6 +195,7 @@ fn load_provider(
             category,
             tile: tile.clone(),
             issues,
+            local: None,
         })
     };
     let at = |field: &str| Location::Field(format!("providers[{position}].{field}"));
@@ -302,6 +303,7 @@ fn load_provider(
         package: Arc::new(package),
         tile,
         notes,
+        origin: EntryOrigin::Catalog,
     })
 }
 

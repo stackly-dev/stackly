@@ -70,6 +70,31 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
         ],
     ),
     (
+        "provider_imports",
+        &[
+            ("provider", "TEXT", true, 1),
+            ("source_id", "TEXT", true, 0),
+            ("provider_revision", "TEXT", true, 0),
+            ("software", "TEXT", true, 0),
+            ("manifest_sha256", "TEXT", true, 0),
+            ("versions_sha256", "TEXT", true, 0),
+            ("package_sha256", "TEXT", true, 0),
+            ("package_bytes", "INTEGER", true, 0),
+            ("origin_path", "TEXT", true, 0),
+            ("quarantined", "INTEGER", false, 0),
+            ("quarantine_agent", "TEXT", false, 0),
+            ("imported_at", "TEXT", true, 0),
+            ("decision", "TEXT", false, 0),
+            ("decided_package_sha256", "TEXT", false, 0),
+            ("decided_revision", "TEXT", false, 0),
+            ("decided_permissions", "TEXT", false, 0),
+            ("decided_at", "TEXT", false, 0),
+            ("revision", "INTEGER", true, 0),
+            ("created_at", "TEXT", true, 0),
+            ("updated_at", "TEXT", true, 0),
+        ],
+    ),
+    (
         "artifacts",
         &[
             ("pk", "INTEGER", true, 1),
@@ -615,7 +640,7 @@ fn every_table_and_column_matches_the_data_model() {
         .unwrap();
     let expected: BTreeSet<String> = DATA_MODEL.iter().map(|(t, _)| (*t).to_owned()).collect();
     assert_eq!(tables, expected);
-    assert_eq!(tables.len(), 31);
+    assert_eq!(tables.len(), 32);
     for (table, expected_columns) in DATA_MODEL {
         let actual: Vec<_> = columns(&conn, table)
             .into_iter()

@@ -12,6 +12,7 @@
     "providerRevision": null,
     "publisher": "Stackly",
     "trust": "official",
+    "approval": null,
     "versions": [],
     "versionCount": 0,
     "licenses": [],
@@ -32,5 +33,7 @@
       "message": "manifestSha256 does not match the package files",
       "reason": null
     }
-  ]
+  ],
+  "local": null,
+  "revocation": null
 }

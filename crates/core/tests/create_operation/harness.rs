@@ -105,6 +105,7 @@ impl CreateRig {
                 tile: TileColor::Blue,
             },
             notes: Vec::new(),
+            origin: stackly_core::catalog::EntryOrigin::Catalog,
         };
         let meta = CatalogMeta {
             revision: 1,

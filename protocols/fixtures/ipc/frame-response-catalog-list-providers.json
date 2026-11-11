@@ -17,7 +17,8 @@
             "arch": "aarch64"
           },
           "outdated": false,
-          "invalidCount": 2
+          "invalidCount": 2,
+          "localCount": 0
         },
         "items": [
           {
@@ -37,7 +38,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Na",
-            "tile": "gray"
+            "tile": "gray",
+            "approval": null
           },
           {
             "provider": "official/intelonly",
@@ -56,7 +58,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Na",
-            "tile": "gray"
+            "tile": "gray",
+            "approval": null
           },
           {
             "provider": "official/nats",
@@ -79,7 +82,8 @@
               "Apache-2.0"
             ],
             "mark": "Na",
-            "tile": "green"
+            "tile": "green",
+            "approval": null
           },
           {
             "provider": "official/broken",
@@ -98,7 +102,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Br",
-            "tile": "gray"
+            "tile": "gray",
+            "approval": null
           },
           {
             "provider": "official/zenith",
@@ -117,7 +122,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Ze",
-            "tile": "gray"
+            "tile": "gray",
+            "approval": null
           },
           {
             "provider": "official/mysql",
@@ -136,7 +142,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "My",
-            "tile": "teal"
+            "tile": "teal",
+            "approval": null
           },
           {
             "provider": "official/postgresql",
@@ -155,7 +162,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Pg",
-            "tile": "blue"
+            "tile": "blue",
+            "approval": null
           },
           {
             "provider": "official/clickhouse",
@@ -174,7 +182,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Ch",
-            "tile": "yellow"
+            "tile": "yellow",
+            "approval": null
           },
           {
             "provider": "official/valkey",
@@ -193,7 +202,8 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Vk",
-            "tile": "red"
+            "tile": "red",
+            "approval": null
           },
           {
             "provider": "official/traefik",
@@ -212,9 +222,11 @@
             "versionCount": 0,
             "licenses": [],
             "mark": "Tr",
-            "tile": "cyan"
+            "tile": "cyan",
+            "approval": null
           }
-        ]
+        ],
+        "revocations": []
       }
     }
   }

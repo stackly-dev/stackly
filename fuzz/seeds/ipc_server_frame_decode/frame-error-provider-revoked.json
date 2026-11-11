@@ -1,0 +1,36 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000f75",
+    "error": {
+      "code": "provider.revoked",
+      "category": "unauthorized",
+      "message": "acme/demo 1.0.0 is revoked",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "existing instances still start; approve the provider again to allow new installs",
+      "details": [
+        {
+          "key": "provider",
+          "value": "acme/demo"
+        },
+        {
+          "key": "providerRevision",
+          "value": "1.0.0"
+        },
+        {
+          "key": "by",
+          "value": "user"
+        },
+        {
+          "key": "since",
+          "value": "2026-11-11T09:05:00.000Z"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

@@ -18,7 +18,7 @@ use stackly_domain::{
     ProviderName, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord, RecoveryHint,
     ResourceRevision, RevisionLabel, Runtime, RuntimeId, RuntimeLine, RuntimeState, Sha256Digest,
     SoftwareName, StageName, StartupPolicy, StoredEnvironment, StoredInstance, StoredLease,
-    StoredOperation, StoredRuntime, Target, Transport, UnixEndpoint,
+    StoredOperation, StoredRuntime, Target, Transport, TrustDecision, UnixEndpoint,
 };
 use uuid::Uuid;
 
@@ -43,7 +43,7 @@ fn revision(number: u64) -> ResourceRevision {
 }
 
 /// Returns a digest no other call returns, built from a new UUID.
-fn fresh_digest() -> Sha256Digest {
+pub(crate) fn fresh_digest() -> Sha256Digest {
     let id = *Uuid::now_v7().as_bytes();
     let mut bytes = [0; 32];
     bytes[..16].copy_from_slice(&id);
@@ -72,7 +72,8 @@ pub struct ProviderRevisionBuilder {
     line_compatibility: LineCompatibility,
     schema_version: Option<String>,
     publisher: Option<String>,
-    approval: Option<String>,
+    approval: Option<TrustDecision>,
+    approved_at: Option<Timestamp>,
 }
 
 impl ProviderRevisionBuilder {
@@ -89,6 +90,7 @@ impl ProviderRevisionBuilder {
             schema_version: Some("stackly.dev/v1".to_owned()),
             publisher: None,
             approval: None,
+            approved_at: None,
         }
     }
 
@@ -133,11 +135,18 @@ impl ProviderRevisionBuilder {
         mut self,
         schema_version: Option<&str>,
         publisher: Option<&str>,
-        approval: Option<&str>,
+        approval: Option<TrustDecision>,
     ) -> Self {
         self.schema_version = schema_version.map(str::to_owned);
         self.publisher = publisher.map(str::to_owned);
-        self.approval = approval.map(str::to_owned);
+        self.approval = approval;
+        self
+    }
+
+    /// Sets when the approval was decided.
+    #[must_use]
+    pub const fn approved_at(mut self, at: Timestamp) -> Self {
+        self.approved_at = Some(at);
         self
     }
 
@@ -167,8 +176,13 @@ impl ProviderRevisionBuilder {
     pub fn record(self) -> ProviderRevisionRecord {
         let schema_version = self.schema_version.clone();
         let publisher = self.publisher.clone();
-        let approval = self.approval.clone();
-        ProviderRevisionRecord::new(self.build(), schema_version, publisher, approval)
+        let approval = self.approval;
+        let approved_at = self.approved_at;
+        let record = ProviderRevisionRecord::new(self.build(), schema_version, publisher, approval);
+        match approved_at {
+            Some(at) => record.with_approved_at(at),
+            None => record,
+        }
     }
 }
 

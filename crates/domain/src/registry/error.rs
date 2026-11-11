@@ -16,7 +16,8 @@ use crate::registry::secret::SecretUse;
 use crate::registry::{AuditEventId, ConfigRevisionId};
 use crate::secret::SecretRef;
 use crate::value::{
-    IdempotencyKey, InstanceName, ResourceRevision, SessionId, Sha256Digest, SoftwareName,
+    IdempotencyKey, InstanceName, ProviderName, ResourceRevision, SessionId, Sha256Digest,
+    SoftwareName,
 };
 
 /// One resource the registry holds, as errors and commit results name it.
@@ -63,6 +64,9 @@ pub enum ResourceRef {
     DaemonSettings,
     /// A storage location (spec 0032). It has no resource kind on the wire.
     StorageLocation(StorageLocationId),
+    /// An imported local provider, by its ID (spec 0037). It has no
+    /// resource kind on the wire.
+    ProviderImport(ProviderName),
 }
 
 /// Why a resource cannot be deleted by the op that tried.
@@ -120,6 +124,7 @@ impl fmt::Display for ResourceRef {
             Self::Sessions => f.write_str("the session table"),
             Self::DaemonSettings => f.write_str("the daemon settings"),
             Self::StorageLocation(id) => write!(f, "storage location {id}"),
+            Self::ProviderImport(provider) => write!(f, "provider import {provider}"),
         }
     }
 }

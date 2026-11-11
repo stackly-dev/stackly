@@ -88,7 +88,10 @@ nonisolated public enum OperationTitle {
         case .updateProviderRevision: return "Update provider"
         case .updateManager: return "Update Stackly"
         case .daemonRestart: return "Restart stacklyd"
-        case .unrecognized: return "Operation"
+        // provisional: F37 step 10 (titles of the provider operations)
+        case .importProvider, .approveProvider, .revokeProvider, .removeProviderImport,
+            .unrecognized:
+            return "Operation"
         }
     }
 

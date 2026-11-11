@@ -19,6 +19,7 @@ mod manifest;
 mod names;
 mod open_with;
 mod package;
+pub(crate) mod permission_facts;
 mod plan;
 mod preflight;
 pub mod probe;

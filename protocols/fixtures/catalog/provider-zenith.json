@@ -12,6 +12,7 @@
     "providerRevision": null,
     "publisher": "Stackly",
     "trust": "official",
+    "approval": null,
     "versions": [],
     "versionCount": 0,
     "licenses": [],
@@ -32,5 +33,7 @@
       "message": "the catalog packages are larger than 16 MiB together",
       "reason": "total_bytes"
     }
-  ]
+  ],
+  "local": null,
+  "revocation": null
 }

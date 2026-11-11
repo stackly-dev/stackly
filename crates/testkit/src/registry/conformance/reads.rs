@@ -12,7 +12,7 @@ use stackly_domain::{
     LocationKind, LogicalRoot, Operation, OperationCursor, OperationId, OperationKind,
     OperationQuery, OperationResource, OperationState, Ownership, Port, PortRequest, Progress,
     ReadinessState, ReasonCode, RecoveryHint, RegistryError, ResourceRef, Runtime, RuntimeId,
-    RuntimeState, StartupPolicy, Transport, UnixEndpoint, WriteOp,
+    RuntimeState, StartupPolicy, Transport, TrustDecision, UnixEndpoint, WriteOp,
 };
 use stackly_platform::{DirectoryLayout, RootSet, instance_path_entries};
 
@@ -33,7 +33,12 @@ pub(super) fn round_trip(suite: &Suite<'_>) {
                 .allow(parse("make a line", "16"), parse("make a line", "17"))
                 .allow(parse("make a line", "15"), parse("make a line", "17")),
         )
-        .columns(Some("stackly.dev/v1"), Some("stackly"), Some("approved"));
+        .columns(
+            Some("stackly.dev/v1"),
+            Some("stackly"),
+            Some(TrustDecision::Approved),
+        )
+        .approved_at(parse("make a timestamp", "2026-01-02T03:04:05.123456789Z"));
     let record = provider.clone().record();
     let runtime = RuntimeBuilder::new()
         .state(RuntimeState::Installed)

@@ -17,7 +17,7 @@ use stackly_domain::{
     InstallMode, Instance, InstanceFilter, InstancePathEntry, Lease, LeaseHolder, LeaseState,
     Operation, Ownership, PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord,
     RegistryError, ResourceRef, ResourceRevision, Runtime, RuntimeId, SignatureInfoJson,
-    SoftwareName, StorageLocationId, WriteBatch, WriteOp,
+    SoftwareName, StorageLocationId, TrustDecision, WriteBatch, WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
@@ -130,6 +130,24 @@ impl GuardView for TransactionView<'_> {
         reference: &stackly_domain::SecretRef,
     ) -> Result<Option<stackly_domain::SecretReferenceView>, RegistryError> {
         secret::reference(self.tx, reference)
+    }
+
+    fn provider_imports(&self) -> Result<Vec<stackly_domain::ProviderImportRecord>, RegistryError> {
+        super::import::all(self.tx)
+    }
+
+    fn provider_import(
+        &self,
+        provider: &stackly_domain::ProviderName,
+    ) -> Result<Option<stackly_domain::ProviderImportRecord>, RegistryError> {
+        super::import::one(self.tx, provider)
+    }
+
+    fn provider_has_approved_revision(
+        &self,
+        provider: &stackly_domain::ProviderName,
+    ) -> Result<bool, RegistryError> {
+        super::import::has_approved_revision(self.tx, provider)
     }
 }
 
@@ -322,6 +340,19 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
             supervision::prune_config_revisions(conn, *instance, *keep)
         }
         WriteOp::InsertProviderSource(record) => source::insert(conn, record),
+        WriteOp::PutProviderImport { record, expected } => {
+            super::import::put(conn, record, *expected)
+        }
+        WriteOp::DecideProviderImport { provider, decision } => {
+            super::import::decide(conn, provider, decision)
+        }
+        WriteOp::DeleteProviderImport(provider) => super::import::delete(conn, provider),
+        WriteOp::SetProviderRevisionApproval { key, approval, at } => {
+            super::import::set_revision_approval(conn, key, *approval, *at)
+        }
+        WriteOp::RevokeProviderApprovals { provider, at } => {
+            super::import::revoke_approvals(conn, provider, *at)
+        }
         WriteOp::DeleteInstanceCreatedBy {
             id,
             expected,
@@ -474,8 +505,8 @@ fn insert_provider_revision(
         .collect();
     conn.execute(
         "INSERT INTO provider_revisions (provider, revision, manifest_sha256, software, \
-         schema_version, publisher, capabilities, line_compatibility, approval, source_id, \
-         created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         schema_version, publisher, capabilities, line_compatibility, approval, approved_at, \
+         source_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             key.provider().as_str(),
             key.revision().as_str(),
@@ -485,7 +516,8 @@ fn insert_provider_revision(
             record.publisher,
             json_text(&capabilities)?,
             json_text(&lines)?,
-            record.approval,
+            record.approval.map(TrustDecision::as_code),
+            opt_ts(record.approved_at),
             record.source_id.map(|source| source.to_string()),
             now,
         ],

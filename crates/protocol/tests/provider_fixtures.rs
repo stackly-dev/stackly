@@ -1,14 +1,19 @@
-//! Checks the `provider.validate` fixtures (spec 0036, *Kontrak wire*): the
-//! reply DTOs in `protocols/fixtures/provider/`, which the Swift tests read
-//! too, and the request and response frames in `protocols/fixtures/ipc/`.
+//! Checks the provider fixtures: the `provider.validate` reply DTOs (spec
+//! 0036, *Kontrak wire*) and the import preview and local detail DTOs (spec
+//! 0037) in `protocols/fixtures/provider/`, which the Swift tests read too,
+//! the approval statement, and the request and response frames in
+//! `protocols/fixtures/ipc/`.
 
 use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde_json::Value;
+use stackly_protocol::catalog::{ProviderDetail, SupportReason, TrustLevel};
 use stackly_protocol::json::decode_request;
 use stackly_protocol::provider::{
-    ApiVersionStatus, FindingOrigin, FindingSeverity, ProviderValidation,
+    ApiVersionStatus, ApprovalState, CatalogChangeKind, ExecutableUse, FindingOrigin,
+    FindingSeverity, ImportBlockReason, ImportPreview, PermissionChange, ProviderValidation,
+    RevocationSource,
 };
 use stackly_protocol::{Call, Reply, ServerFrame};
 
@@ -45,14 +50,17 @@ fn every_provider_fixture_decodes_and_the_roundtrip_ones_keep_their_shape() {
     let mut files: Vec<String> = std::fs::read_dir(fixtures_dir().join("provider"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name != "index.json")
+        .filter(|name| name != "index.json" && name.ends_with(".json"))
         .collect();
     files.sort();
     let mut listed: Vec<String> = index.fixtures.iter().map(|e| e.file.clone()).collect();
     listed.sort();
     assert_eq!(files, listed, "every fixture file is listed in index.json");
     for entry in &index.fixtures {
-        assert_eq!(entry.type_name, "ProviderValidation");
+        if entry.type_name != "ProviderValidation" {
+            check_import_fixture(entry);
+            continue;
+        }
         let bytes = read(&format!("provider/{}", entry.file));
         let value: ProviderValidation =
             serde_json::from_slice(&bytes).unwrap_or_else(|err| panic!("{}: {err}", entry.file));
@@ -160,4 +168,137 @@ fn the_ipc_frames_carry_the_method_and_its_reply() {
         *reply,
         validation("validation-unsupported-api-version.json")
     );
+}
+
+/// Decodes an import fixture as its type and, for a roundtrip one, checks
+/// that Rust writes the same shape.
+fn check_import_fixture(entry: &Entry) {
+    let bytes = read(&format!("provider/{}", entry.file));
+    let written = match entry.type_name.as_str() {
+        "ImportPreview" => serde_json::to_value(
+            serde_json::from_slice::<ImportPreview>(&bytes)
+                .unwrap_or_else(|err| panic!("{}: {err}", entry.file)),
+        ),
+        "ProviderDetail" => serde_json::to_value(
+            serde_json::from_slice::<ProviderDetail>(&bytes)
+                .unwrap_or_else(|err| panic!("{}: {err}", entry.file)),
+        ),
+        other => panic!("{}: unknown fixture type {other}", entry.file),
+    }
+    .expect("a decoded fixture encodes");
+    if entry.expect == "roundtrip" {
+        let fixture: Value = serde_json::from_slice(&bytes).expect("the fixture is JSON");
+        assert_eq!(
+            written, fixture,
+            "{}: Rust writes another shape",
+            entry.file
+        );
+    }
+}
+
+fn import_fixture<T: serde::de::DeserializeOwned>(file: &str) -> T {
+    serde_json::from_slice(&read(&format!("provider/{file}")))
+        .unwrap_or_else(|err| panic!("{file}: {err}"))
+}
+
+#[test]
+fn the_approval_statement_is_one_line_without_sandbox_or_safety_claims() {
+    let text = String::from_utf8(read("provider/approval-statement.txt")).unwrap();
+    let line = text
+        .strip_suffix('\n')
+        .expect("the file ends with one newline");
+    assert!(!line.contains('\n'), "one line");
+    assert!(line.starts_with("This provider runs native programs on your Mac"));
+    assert!(line.contains("Stackly does not sandbox them"));
+    let lower = line.to_lowercase();
+    for phrase in [
+        "sandboxed",
+        "safe to run",
+        "verified publisher",
+        "trusted publisher",
+        "malware",
+        "up to date",
+        "latest",
+    ] {
+        assert!(!lower.contains(phrase), "{phrase}");
+    }
+}
+
+#[test]
+fn the_import_previews_carry_their_verdict_existing_import_and_changes() {
+    let pending: ImportPreview = import_fixture("import-preview-pending.json");
+    assert!(pending.verdict.importable && pending.verdict.reason.is_none());
+    assert_eq!(pending.publisher.as_deref(), Some("acme"));
+    assert!(pending.permissions.is_some() && pending.existing.is_none());
+    let invalid: ImportPreview = import_fixture("import-preview-invalid.json");
+    assert_eq!(
+        invalid.verdict.reason,
+        Some(ImportBlockReason::PackageInvalid)
+    );
+    assert_eq!(invalid.import_issues[0].code, "namespace_not_allowed");
+    let replaces: ImportPreview = import_fixture("import-preview-replaces.json");
+    let existing = replaces.existing.expect("it replaces an import");
+    assert_eq!(existing.approval, ApprovalState::Approved);
+    assert!(!existing.same_package);
+    assert_eq!(
+        replaces.changes,
+        [
+            PermissionChange::Revision,
+            PermissionChange::Downloads,
+            PermissionChange::DownloadHosts
+        ]
+    );
+}
+
+#[test]
+fn import_values_this_build_does_not_know_read_unrecognized() {
+    let preview: ImportPreview = import_fixture("import-preview-unknown-values.json");
+    assert_eq!(
+        preview.verdict.reason,
+        Some(ImportBlockReason::Unrecognized)
+    );
+    assert_eq!(preview.changes, [PermissionChange::Unrecognized]);
+    assert_eq!(
+        preview.existing.map(|existing| existing.approval),
+        Some(ApprovalState::Unrecognized)
+    );
+    assert_eq!(
+        preview.revocation.map(|revocation| revocation.by),
+        Some(RevocationSource::Unrecognized)
+    );
+    let permissions = preview.permissions.expect("permissions");
+    assert_eq!(
+        permissions.executables[0].uses,
+        [ExecutableUse::Start, ExecutableUse::Unrecognized]
+    );
+    let change: CatalogChangeKind = serde_json::from_str("\"renamed\"").unwrap();
+    assert_eq!(change, CatalogChangeKind::Unrecognized);
+}
+
+#[test]
+fn a_local_detail_is_local_trust_with_its_approval_and_decision() {
+    let pending: ProviderDetail = import_fixture("detail-local-pending.json");
+    assert_eq!(pending.summary.trust, TrustLevel::Local);
+    assert_eq!(pending.summary.approval, Some(ApprovalState::Pending));
+    assert_eq!(
+        pending.summary.state_reason,
+        Some(SupportReason::ApprovalRequired)
+    );
+    assert!(
+        pending
+            .local
+            .as_ref()
+            .is_some_and(|local| local.decision.is_none())
+    );
+    let revoked: ProviderDetail = import_fixture("detail-local-revoked.json");
+    assert_eq!(
+        revoked.summary.state_reason,
+        Some(SupportReason::TrustRevoked)
+    );
+    assert_eq!(
+        revoked.revocation.map(|revocation| revocation.by),
+        Some(RevocationSource::User)
+    );
+    let approved: ProviderDetail = import_fixture("detail-local-approved.json");
+    assert!(approved.versions[0].install.installable);
 }

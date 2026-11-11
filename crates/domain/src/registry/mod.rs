@@ -11,6 +11,7 @@ mod config;
 mod error;
 mod guard;
 mod health;
+mod import;
 mod install;
 mod path;
 mod query;
@@ -39,7 +40,7 @@ use crate::runtime::{Runtime, RuntimeReferences};
 use crate::secret::SecretRef;
 use crate::session::DaemonSession;
 use crate::text::serde_as_text;
-use crate::value::{IdempotencyKey, InstanceName, Sha256Digest};
+use crate::value::{IdempotencyKey, InstanceName, ProviderName, Sha256Digest};
 
 pub use batch::{Committed, Generation, Versioned, WriteBatch, WriteOp};
 pub use config::{
@@ -51,6 +52,9 @@ pub use guard::{CommitGuard, GuardDecision, GuardView, Guarded};
 pub use health::{
     QUICK_CHECK_MESSAGES_MAX, QuickCheck, UNRECOGNIZED_ROWS_PER_COLUMN, UNRECOGNIZED_VALUE_MAX_LEN,
     UnrecognizedValue,
+};
+pub use import::{
+    ApprovalState, ImportDecision, ProviderImportRecord, TrustDecision, approval_state,
 };
 pub use install::{
     CODES_MAX, CompatibilityRecordRow, CompatibilityResult, CompatibilityScope,
@@ -154,6 +158,34 @@ pub trait Registry: Send + Sync {
         kind: ProviderSourceKind,
         location: &str,
     ) -> Result<Versioned<Option<ProviderSourceRecord>>, RegistryError>;
+
+    /// Returns every imported local provider, ordered by provider ID (spec
+    /// 0037).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_imports(&self) -> Result<Versioned<Vec<ProviderImportRecord>>, RegistryError>;
+
+    /// Returns the import row of one provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_import(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Versioned<Option<ProviderImportRecord>>, RegistryError>;
+
+    /// Returns whether any provider revision of `provider` is `approved`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn provider_has_approved_revision(
+        &self,
+        provider: &ProviderName,
+    ) -> Result<Versioned<bool>, RegistryError>;
 
     /// Returns an artifact by its digest.
     ///

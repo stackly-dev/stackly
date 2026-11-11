@@ -18,6 +18,7 @@ public enum ContractNames {
 		"runtime.state_changed",
 		"daemon.restart_plan",
 		"settings.changed",
+		"catalog.changed",
 	]
 }
 
@@ -87,6 +88,11 @@ extension Call {
 		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
 		case .diagnosticsExportBundle: "diagnostics.export_bundle"
 		case .providerValidate: "provider.validate"
+		case .providerPreviewImport: "provider.preview_import"
+		case .providerImport: "provider.import"
+		case .providerApprove: "provider.approve"
+		case .providerRevoke: "provider.revoke"
+		case .providerRemove: "provider.remove"
 		}
 	}
 }
@@ -157,6 +163,11 @@ extension Reply {
 		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
 		case .diagnosticsExportBundle: "diagnostics.export_bundle"
 		case .providerValidate: "provider.validate"
+		case .providerPreviewImport: "provider.preview_import"
+		case .providerImport: "provider.import"
+		case .providerApprove: "provider.approve"
+		case .providerRevoke: "provider.revoke"
+		case .providerRemove: "provider.remove"
 		}
 	}
 }
@@ -177,6 +188,7 @@ extension EventKind {
 		case .runtimeStateChanged: "runtime.state_changed"
 		case .daemonRestartPlan: "daemon.restart_plan"
 		case .settingsChanged: "settings.changed"
+		case .catalogChanged: "catalog.changed"
 		}
 	}
 }

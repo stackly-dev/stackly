@@ -1,0 +1,105 @@
+{
+  "provider": "acme/demo",
+  "displayName": "Acme Demo",
+  "software": "demo",
+  "category": "database",
+  "description": "Demo server packaged by Acme for import tests.",
+  "providerRevision": "1.1.0",
+  "publisher": "acme",
+  "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "versionsSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "packageSha256": "9999999999999999999999999999999999999999999999999999999999999999",
+  "packageBytes": 4096,
+  "fileCount": 4,
+  "originPath": "~/providers/acme-demo",
+  "quarantined": false,
+  "quarantineAgent": null,
+  "versions": [
+    "1.1.0"
+  ],
+  "versionCount": 1,
+  "permissions": {
+    "capabilities": [
+      "multi_instance",
+      "persistence"
+    ],
+    "managedFilesystem": [
+      "config",
+      "data",
+      "logs",
+      "run",
+      "temp"
+    ],
+    "executables": [
+      {
+        "name": "runtime",
+        "path": "bin/demo-server",
+        "uses": [
+          "start",
+          "version_check"
+        ]
+      },
+      {
+        "name": "demoCli",
+        "path": "bin/demo-cli",
+        "uses": [
+          "probe",
+          "open_with"
+        ]
+      }
+    ],
+    "secrets": [
+      "password"
+    ],
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "purpose": "client",
+        "defaultPort": 7400
+      }
+    ],
+    "downloads": [
+      {
+        "artifact": "demo-1.0.0-macos-aarch64",
+        "version": "1.0.0",
+        "os": "macos",
+        "arch": "aarch64",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1048576,
+        "hosts": [
+          "downloads.example.test",
+          "mirror.example.test"
+        ],
+        "signingPolicy": "keep_or_adhoc"
+      }
+    ],
+    "openWith": [
+      {
+        "name": "shell",
+        "kind": "terminal",
+        "target": "demoCli"
+      }
+    ]
+  },
+  "findings": [],
+  "omittedFindings": 0,
+  "importIssues": [],
+  "verdict": {
+    "importable": true,
+    "reason": null
+  },
+  "existing": {
+    "providerRevision": "1.0.0",
+    "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "approval": "approved",
+    "samePackage": false,
+    "storedCopyValid": true
+  },
+  "changes": [
+    "revision",
+    "downloads",
+    "download_hosts"
+  ],
+  "revocation": null
+}

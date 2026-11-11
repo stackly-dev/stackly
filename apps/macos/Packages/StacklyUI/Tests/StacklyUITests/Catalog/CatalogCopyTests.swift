@@ -86,7 +86,7 @@ struct CatalogCopyTests {
             revision: fixture.revision, publishedAt: fixture.publishedAt,
             loadedAt: fixture.loadedAt, contentSha256: fixture.contentSha256,
             source: .development, trust: .development, host: fixture.host, outdated: false,
-            invalidCount: 0)
+            invalidCount: 0, localCount: 0)
         let utc = try #require(TimeZone(identifier: "UTC"))
         #expect(
             CatalogCopy.subtitle(

@@ -54,6 +54,7 @@ fn migrating_v3_gives_old_rows_no_items_and_no_rule_and_keeps_the_data() {
             && table != "daemon_sessions"
             && table != "daemon_settings"
             && table != "storage_locations"
+            && table != "provider_imports"
     };
     let mut before = row_counts(&harness.connect());
     before.retain(|(table, _)| kept(table));

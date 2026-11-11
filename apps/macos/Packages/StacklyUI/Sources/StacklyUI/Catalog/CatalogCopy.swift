@@ -105,7 +105,8 @@ nonisolated public enum CatalogCopy {
             "Tested with this provider on this Mac."
         case .runtimeTested:
             "The runtime ran on this Mac; the provider is not tested with it yet."
-        case .unrecognized:
+        // provisional: F37 step 10 (the copy of approval_required and trust_revoked)
+        case .approvalRequired, .trustRevoked, .unrecognized:
             "Reason not recognized by this version of Stackly."
         }
     }
@@ -132,7 +133,8 @@ nonisolated public enum CatalogCopy {
         switch trust {
         case .official: "Official, bundled with Stackly"
         case .development: "Development catalog"
-        case .unrecognized: "Unknown trust"
+        // provisional: F37 step 10 (the label of local trust)
+        case .local, .unrecognized: "Unknown trust"
         }
     }
 
@@ -141,7 +143,8 @@ nonisolated public enum CatalogCopy {
         switch trust {
         case .official: "Official"
         case .development: "Development catalog"
-        case .unrecognized: "Unknown trust"
+        // provisional: F37 step 10 (the label of local trust)
+        case .local, .unrecognized: "Unknown trust"
         }
     }
 

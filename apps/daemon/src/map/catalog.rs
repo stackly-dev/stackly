@@ -10,8 +10,9 @@
 use serde::de::DeserializeOwned;
 use stackly_core::catalog::{
     Catalog, CatalogEntry, CatalogLocation, Installability, NotInstallableReason,
-    OFFICIAL_NAMESPACE, ProviderEntry, SUMMARY_VERSIONS_MAX, TargetSupport, UnavailableReason,
-    category_code, entry_status, installability, version_support,
+    OFFICIAL_NAMESPACE, ProviderEntry, SUMMARY_VERSIONS_MAX, TargetSupport, TrustVerdict,
+    UnavailableReason, category_code, entry_status_with_trust, entry_trust,
+    installability_with_trust, version_support,
 };
 use stackly_core::provider::{ArtifactStatus, Issue, VersionArtifact};
 use stackly_domain::{ExactVersion, ProviderName, Target};
@@ -71,6 +72,17 @@ pub fn catalog_info(catalog: &Catalog, host: &HostFacts, outdated: bool) -> dto:
         host: host_target(host.target),
         outdated,
         invalid_count: Count::saturating(catalog.invalid_count() as u64),
+        local_count: Count::saturating(catalog.local_count() as u64),
+    }
+}
+
+/// The trust verdict of an entry for display: [`entry_trust`] for a
+/// provider entry, trusted for planned and invalid entries (which are never
+/// installable anyway).
+fn display_trust(catalog: &Catalog, entry: &CatalogEntry) -> TrustVerdict {
+    match entry {
+        CatalogEntry::Provider(provider) => entry_trust(catalog, provider),
+        CatalogEntry::Planned(_) | CatalogEntry::Invalid(_) => TrustVerdict::Trusted,
     }
 }
 
@@ -89,6 +101,8 @@ pub fn list_providers(
             .iter()
             .map(|entry| provider_summary(catalog, entry, host))
             .collect(),
+        // provisional: F37 step 8 (the catalog `revoked` list)
+        revocations: Vec::new(),
     }
 }
 
@@ -107,8 +121,25 @@ pub fn provider_summary(
     entry: &CatalogEntry,
     host: &HostFacts,
 ) -> dto::ProviderSummary {
-    let status = entry_status(entry, host);
-    let (_, trust) = source_and_trust(&catalog.meta().location);
+    let status = entry_status_with_trust(entry, host, &display_trust(catalog, entry));
+    let (_, catalog_trust) = source_and_trust(&catalog.meta().location);
+    let local_record = match entry {
+        CatalogEntry::Provider(provider) => provider.local().map(|info| &info.record),
+        CatalogEntry::Invalid(invalid) => invalid.local.as_deref(),
+        CatalogEntry::Planned(_) => None,
+    };
+    let (trust, approval, publisher) = match local_record {
+        Some(record) => (
+            dto::TrustLevel::Local,
+            Some(super::trust::approval(record.approval())),
+            Some(entry.id().namespace().to_owned()),
+        ),
+        None => (
+            catalog_trust,
+            None,
+            (entry.id().namespace() == OFFICIAL_NAMESPACE).then(|| OFFICIAL_PUBLISHER.to_owned()),
+        ),
+    };
     let mut versions: Vec<String> = Vec::new();
     let mut licenses: Vec<String> = Vec::new();
     let (software, description, provider_revision) = match entry {
@@ -150,9 +181,9 @@ pub fn provider_summary(
         state_reason: status.reason.map(|reason| wire(reason.as_code())),
         state_note: status.note,
         provider_revision,
-        publisher: (entry.id().namespace() == OFFICIAL_NAMESPACE)
-            .then(|| OFFICIAL_PUBLISHER.to_owned()),
+        publisher,
         trust,
+        approval,
         versions,
         version_count,
         licenses,
@@ -179,6 +210,8 @@ pub fn provider_detail(
         platform_notes: Vec::new(),
         note: None,
         issues: Vec::new(),
+        local: None,
+        revocation: super::trust::verdict_revocation(&display_trust(catalog, entry)),
     };
     match entry {
         CatalogEntry::Provider(provider) => {
@@ -197,8 +230,11 @@ pub fn provider_detail(
             detail.versions = provider
                 .versions()
                 .into_iter()
-                .map(|version| catalog_version(entry, provider, version, host))
+                .map(|version| catalog_version(catalog, entry, provider, version, host))
                 .collect();
+            detail.local = provider
+                .local()
+                .map(|info| super::trust::local_info(&info.record, Some(&info.permissions)));
             detail.platform_notes = provider
                 .notes
                 .iter()
@@ -212,6 +248,10 @@ pub fn provider_detail(
         CatalogEntry::Planned(planned) => detail.note.clone_from(&planned.note),
         CatalogEntry::Invalid(invalid) => {
             detail.issues = invalid.issues.iter().map(catalog_issue).collect();
+            detail.local = invalid
+                .local
+                .as_deref()
+                .map(|record| super::trust::local_info(record, None));
         }
     }
     detail
@@ -220,6 +260,7 @@ pub fn provider_detail(
 /// One version row of a provider: its matrix cells, the gate's verdict for
 /// this Mac, and its artifacts in file order.
 fn catalog_version(
+    catalog: &Catalog,
     entry: &CatalogEntry,
     provider: &ProviderEntry,
     version: &ExactVersion,
@@ -230,21 +271,22 @@ fn catalog_version(
         .iter()
         .filter(|artifact| artifact.version == *version)
         .collect();
-    let install = match installability(entry, version, host) {
-        Ok(Installability::Installable { .. }) => dto::InstallVerdict {
-            installable: true,
-            reason: None,
-        },
-        Ok(Installability::NotInstallable { reason, .. }) => dto::InstallVerdict {
-            installable: false,
-            reason: Some(wire(reason.as_code())),
-        },
-        // Every version of `provider.versions()` has an artifact.
-        Err(_) => dto::InstallVerdict {
-            installable: false,
-            reason: Some(wire(NotInstallableReason::NoBuildForHost.as_code())),
-        },
-    };
+    let install =
+        match installability_with_trust(entry, version, host, &entry_trust(catalog, provider)) {
+            Ok(Installability::Installable { .. }) => dto::InstallVerdict {
+                installable: true,
+                reason: None,
+            },
+            Ok(Installability::NotInstallable { reason, .. }) => dto::InstallVerdict {
+                installable: false,
+                reason: Some(wire(reason.as_code())),
+            },
+            // Every version of `provider.versions()` has an artifact.
+            Err(_) => dto::InstallVerdict {
+                installable: false,
+                reason: Some(wire(NotInstallableReason::NoBuildForHost.as_code())),
+            },
+        };
     dto::CatalogVersion {
         version: version.to_string(),
         line: artifacts
@@ -342,7 +384,7 @@ fn catalog_artifact(artifact: &VersionArtifact) -> dto::CatalogArtifact {
 }
 
 /// One issue of an invalid entry.
-fn catalog_issue(issue: &Issue) -> dto::CatalogIssue {
+pub(crate) fn catalog_issue(issue: &Issue) -> dto::CatalogIssue {
     dto::CatalogIssue {
         file: issue.file.clone(),
         location: issue.location.to_string(),
@@ -524,6 +566,7 @@ mod tests {
             package: Arc::new(package),
             tile: hint,
             notes,
+            origin: stackly_core::catalog::EntryOrigin::Catalog,
         })
     }
 
@@ -571,6 +614,7 @@ mod tests {
                 category,
                 tile: tile(mark, TileColor::Gray),
                 issues: vec![issue],
+                local: None,
             })
         };
         let entries = [

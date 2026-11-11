@@ -71,7 +71,8 @@
                         throw .rejected(ClientErrorCatalog.protocolViolation())
                     }
                     return .catalogListProviders(
-                        ListProvidersReply(catalog: .fixture, items: script.providers))
+                        ListProvidersReply(
+                            catalog: .fixture, items: script.providers, revocations: []))
                 }, now: now, sleep: { _ in })
             operations = OperationCenter(
                 fetchPage: { _ throws(ClientError) in Page(items: script.operations, next: nil) },

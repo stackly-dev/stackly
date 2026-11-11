@@ -203,6 +203,10 @@ pub enum ValueKind {
     ProviderSourceKind,
     /// A [`ProviderSourceStatus`](crate::ProviderSourceStatus).
     ProviderSourceStatus,
+    /// A [`TrustDecision`](crate::TrustDecision).
+    TrustDecision,
+    /// An [`ApprovalState`](crate::ApprovalState).
+    ApprovalState,
     /// An [`OsVersion`](crate::OsVersion).
     OsVersion,
     /// An [`ArtifactFormat`](crate::ArtifactFormat).
@@ -335,6 +339,8 @@ impl ValueKind {
             Self::ConfigRevisionNumber => "config revision number",
             Self::ProviderSourceKind => "provider source kind",
             Self::ProviderSourceStatus => "provider source status",
+            Self::TrustDecision => "trust decision",
+            Self::ApprovalState => "approval state",
             Self::OsVersion => "os version",
             Self::ArtifactFormat => "artifact format",
             Self::SupportStatus => "support status",

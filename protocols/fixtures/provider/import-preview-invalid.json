@@ -1,0 +1,113 @@
+{
+  "provider": "official/demo",
+  "displayName": "Acme Demo",
+  "software": "demo",
+  "category": "database",
+  "description": "Demo server packaged by Acme for import tests.",
+  "providerRevision": "1.0.0",
+  "publisher": "official",
+  "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "versionsSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "packageBytes": 4096,
+  "fileCount": 4,
+  "originPath": "~/providers/acme-demo",
+  "quarantined": null,
+  "quarantineAgent": null,
+  "versions": [
+    "1.0.0"
+  ],
+  "versionCount": 1,
+  "permissions": {
+    "capabilities": [
+      "multi_instance",
+      "persistence"
+    ],
+    "managedFilesystem": [
+      "config",
+      "data",
+      "logs",
+      "run",
+      "temp"
+    ],
+    "executables": [
+      {
+        "name": "runtime",
+        "path": "bin/demo-server",
+        "uses": [
+          "start",
+          "version_check"
+        ]
+      },
+      {
+        "name": "demoCli",
+        "path": "bin/demo-cli",
+        "uses": [
+          "probe",
+          "open_with"
+        ]
+      }
+    ],
+    "secrets": [
+      "password"
+    ],
+    "endpoints": [
+      {
+        "name": "client",
+        "transport": "tcp",
+        "purpose": "client",
+        "defaultPort": 7400
+      }
+    ],
+    "downloads": [
+      {
+        "artifact": "demo-1.0.0-macos-aarch64",
+        "version": "1.0.0",
+        "os": "macos",
+        "arch": "aarch64",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1048576,
+        "hosts": [
+          "downloads.example.test",
+          "mirror.example.test"
+        ],
+        "signingPolicy": "keep_or_adhoc"
+      }
+    ],
+    "openWith": [
+      {
+        "name": "shell",
+        "kind": "terminal",
+        "target": "demoCli"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "severity": "warning",
+      "origin": "package",
+      "file": "provider.yaml",
+      "location": "apiVersion",
+      "code": "unsupported_api_version",
+      "message": "apiVersion \"stackly/v1alpha0\" is deprecated",
+      "reason": null
+    }
+  ],
+  "omittedFindings": 0,
+  "importIssues": [
+    {
+      "file": "provider.yaml",
+      "location": "metadata.id",
+      "code": "namespace_not_allowed",
+      "message": "namespace official can't be imported",
+      "reason": null
+    }
+  ],
+  "verdict": {
+    "importable": false,
+    "reason": "package_invalid"
+  },
+  "existing": null,
+  "changes": [],
+  "revocation": null
+}

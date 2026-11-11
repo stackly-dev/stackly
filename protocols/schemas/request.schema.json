@@ -1098,6 +1098,91 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Reads a local provider package folder and answers what importing it\nwould bring in (spec 0037). Not an operation: it writes nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/PreviewImportParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.preview_import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Imports a local provider package: an `import_provider` operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ImportProviderParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Approves exactly the stored bytes of an imported provider: an\n`approve_provider` operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/DecideProviderParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.approve"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Revokes the approval of an imported provider: a `revoke_provider`\noperation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderTargetParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.revoke"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Removes an imported provider from the catalog: a\n`remove_provider_import` operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderTargetParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.remove"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1335,6 +1420,24 @@
         "provider",
         "runtimeId",
         "settings"
+      ]
+    },
+    "DecideProviderParams": {
+      "description": "Params of `provider.approve`, an `approve_provider` operation.",
+      "type": "object",
+      "properties": {
+        "expectedPackageSha256": {
+          "description": "The `local.packageSha256` of the detail the client showed.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "The imported provider, with its namespace.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "expectedPackageSha256"
       ]
     },
     "DeleteSecretParams": {
@@ -1768,6 +1871,24 @@
         "protocol",
         "client",
         "contractDigest"
+      ]
+    },
+    "ImportProviderParams": {
+      "description": "Params of `provider.import`, an `import_provider` operation; the\nrequest carries the `idempotencyKey`.",
+      "type": "object",
+      "properties": {
+        "expectedPackageSha256": {
+          "description": "The `packageSha256` of the preview the client showed; the import is\nrefused with `provider.import_changed` when the folder now holds\nother bytes.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The absolute path of the package folder, as for\n[`PreviewImportParams`].",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "expectedPackageSha256"
       ]
     },
     "InstallRuntimeParams": {
@@ -2377,6 +2498,19 @@
         "action"
       ]
     },
+    "PreviewImportParams": {
+      "description": "Params of `provider.preview_import`.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The absolute path of the package folder: 1 to [`IMPORT_PATH_MAX`]\nbytes, without a `.` or `..` component.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
     "ProtocolVersion": {
       "description": "Version of the IPC protocol a peer speaks.\n\n`major` changes when the wire breaks, `minor` when it only gains optional\nadditions. Peers with the same major always talk, whatever their minors.",
       "type": "object",
@@ -2418,6 +2552,19 @@
       },
       "required": [
         "name"
+      ]
+    },
+    "ProviderTargetParams": {
+      "description": "Params of `provider.revoke` and `provider.remove`.",
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "The imported provider, with its namespace.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
       ]
     },
     "ProviderValidateParams": {

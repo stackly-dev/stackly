@@ -63,7 +63,7 @@ struct ProviderFactsTests {
             summary: detail.summary, software: detail.software,
             manifestSha256: detail.manifestSha256, capabilities: detail.capabilities,
             versions: [version, second], platformNotes: detail.platformNotes, note: nil,
-            issues: nil)
+            issues: nil, local: nil, revocation: nil)
         let facts = ProviderFacts(detail: two, host: host, locale: english)
         #expect(facts.download == "6.8 MB to 48.1 MB")
         #expect(facts.disk == "120 MB")
@@ -88,7 +88,7 @@ struct ProviderFactsTests {
                 CatalogVersion(
                     version: version.version, line: version.line, support: version.support,
                     install: version.install, artifacts: [plain])
-            ], platformNotes: nil, note: nil, issues: nil)
+            ], platformNotes: nil, note: nil, issues: nil, local: nil, revocation: nil)
         let facts = ProviderFacts(detail: changed, host: host)
         #expect(facts.dependencies == "None")
         #expect(facts.revision == "1.0.1")
@@ -109,7 +109,7 @@ struct ProviderFactsTests {
                 CatalogVersion(
                     version: version.version, line: version.line, support: version.support,
                     install: version.install, artifacts: [local])
-            ], platformNotes: nil, note: nil, issues: nil)
+            ], platformNotes: nil, note: nil, issues: nil, local: nil, revocation: nil)
         #expect(ProviderFacts(detail: changed, host: host).licenseURL == nil)
     }
 

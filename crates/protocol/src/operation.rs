@@ -195,6 +195,18 @@ pub enum OperationKind {
     /// Restart the daemon with a plan (spec 0030); its resource is the
     /// manager.
     DaemonRestart,
+    /// Import a local provider package (spec 0037); its resource is the
+    /// manager.
+    ImportProvider,
+    /// Approve the stored bytes of an imported provider (spec 0037); its
+    /// resource is the manager.
+    ApproveProvider,
+    /// Revoke the approval of an imported provider (spec 0037); its
+    /// resource is the manager.
+    RevokeProvider,
+    /// Remove an imported provider (spec 0037); its resource is the
+    /// manager.
+    RemoveProviderImport,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

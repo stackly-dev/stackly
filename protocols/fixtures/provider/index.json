@@ -19,6 +19,41 @@
       "file": "validation-unknown-values.json",
       "type": "ProviderValidation",
       "expect": "decode"
+    },
+    {
+      "file": "import-preview-pending.json",
+      "type": "ImportPreview",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "import-preview-invalid.json",
+      "type": "ImportPreview",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "import-preview-replaces.json",
+      "type": "ImportPreview",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "import-preview-unknown-values.json",
+      "type": "ImportPreview",
+      "expect": "decode"
+    },
+    {
+      "file": "detail-local-pending.json",
+      "type": "ProviderDetail",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "detail-local-approved.json",
+      "type": "ProviderDetail",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "detail-local-revoked.json",
+      "type": "ProviderDetail",
+      "expect": "roundtrip"
     }
   ]
 }
