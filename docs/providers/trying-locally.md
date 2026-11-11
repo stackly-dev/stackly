@@ -8,7 +8,7 @@ Every command on this page talks to the Stackly daemon, so `stacklyd` must be ru
 
 - Only a package folder: `provider.yaml`, `schemas/settings.schema.json`, `templates/`, and `versions.json`, as in [authoring.md](authoring.md#package-layout).
 - Only a namespace of your own. Import refuses the `official`, `testing`, and `stackly` namespaces.
-- A package that passes `stackly provider validate` with no error. Warnings do not block an import.
+- A package whose package and authoring checks find no error. These are the checks of `stackly provider validate` with two differences: an import does not compare the folder name with the name part of `metadata.id`, and it never reads `tests/`, so `tests/scenarios.yaml` is not checked. Warnings do not block an import.
 - At most 32 imported providers, 16 MiB of package files in all.
 
 A package made with `cargo xtask provider new` is `testing/<name>`, so it cannot be imported as it is: the `testing` namespace exists only for the harness. To try it in the app, copy the folder, set `metadata.id` to your own namespace (for example `acme/mytool`), and rename the folder to the name part of that ID. A package that installs a runtime also needs artifacts with a real `https` URL and the real `sha256` of the download; the fixture artifacts of a `testing` package are refused.
@@ -25,7 +25,7 @@ stackly provider inspect <provider>
 stackly provider approve <provider>
 ```
 
-1. `stackly provider validate <dir>` runs the package checks of the validator and writes nothing. The import runs them again and adds its own rules (namespace, artifacts, limits).
+1. `stackly provider validate <dir>` runs the package checks of the validator, the folder name and `tests/scenarios.yaml` included, and writes nothing. The import runs the same checks again without those two and adds its own rules (namespace, artifacts, limits).
 2. `stackly provider import <dir> --dry-run` previews the package: its ID, revision, publisher, digests, the permissions it asks for, and every finding. Nothing is written.
 3. `stackly provider import <dir>` copies the package into Stackly's own store. The folder you imported from is never changed, and Stackly keeps its own copy, so later edits to your folder change nothing until you import again.
 4. `stackly provider inspect <provider>` shows the entry. `stackly provider list` shows it with `local` in the `TRUST` column and `needs approval` as its state.
@@ -76,9 +76,10 @@ Neither revoke nor remove ever deletes a runtime or data.
 | --- | --- |
 | `provider.approval_required`, `provider.revoked` | 4 |
 | `provider.import_changed`, `provider.import_limit`, `provider.not_approved` | 3 |
-| `manifest.invalid`, `provider.import_unreadable` | 2 |
+| `manifest.invalid`, `provider.import_unreadable`, `cli.provider_invalid`, `cli.confirmation_required` | 2 |
 | `provider.store_failed` | 7 |
-| `provider.import_not_found` | 10 |
+| `cli.confirmation_declined` | 9 |
+| `catalog.provider_not_found`, `provider.import_not_found` | 10 |
 
 ## Pull requests from others
 

@@ -315,6 +315,8 @@ Langkah Commands Milestone 1 sampai 4 sudah dicentang di verify sebelumnya dan t
 3. Dua test `docs::walkthrough` tentang interupsi gagal bila `cargo test` dijalankan dari job latar belakang yang mengabaikan SIGINT (`nohup ... &` dari shell non interaktif): baris `sleep 30` mewarisi SIGINT yang diabaikan, jadi batas 20 detik terlewati. Dari terminal biasa keduanya lulus. Ini sifat lingkungan run, bukan cacat perintah, tetapi layak diketahui siapa pun yang menjalankan suite ini di latar belakang.
 4. `runtime::ports::tests::allocated_ports_differ_and_can_be_bound_again` (spec 0003, bukan fitur 38) gagal sekali lalu lulus saat diulang: port yang baru dilepas sempat diambil test sesi lain yang berjalan bersamaan. Flake lama, di luar lingkup fitur ini.
 
+**Tindak lanjut catatan 1 dan 2 (2026-11-11):** `CONTRIBUTING.md` kini berkata proyek akan memakai Contributor Covenant 2.1 dan filenya ditambahkan begitu kontak pelaporan tersedia, dengan harapan perilaku dan rujukan ke core maintainer di `GOVERNANCE.md#roles`, tanpa link ke `CODE_OF_CONDUCT.md`. `trying-locally.md` menyebut dua beda import dengan `validate` (tanpa cek nama folder, `NameCheck::Skip` di `crates/core/src/catalog/local/load.rs`; tanpa `tests/scenarios.yaml`, `ImportCheck::new` di `rules.rs`), dan tabel exit code memuat `cli.provider_invalid` dan `cli.confirmation_required` (2), `cli.confirmation_declined` (9), serta `catalog.provider_not_found` (10). Tidak ada test yang mengunci kalimat lama.
+
 ### Acceptance-criteria coverage
 
 - AC-1, AC-2, AC-4, AC-6 sampai AC-14 · terpenuhi (tabel di atas)
