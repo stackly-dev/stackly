@@ -13,6 +13,7 @@ struct SettingsAvailabilityTests {
         #expect(Set(rows) == Set(SettingsRow.allCases))
     }
 
+    // covers: AC-16 (spec 0037): community sources stay Deferred (public registry)
     @Test func theRowsOfFeaturesNotBuiltStayOut() {
         #expect(SettingsAvailability.isShown(.cleanUpCache) == false)
         #expect(SettingsAvailability.isShown(.communitySources) == false)
@@ -20,6 +21,7 @@ struct SettingsAvailabilityTests {
         #expect(community?.owner == "Deferred (public registry)")
     }
 
+    // covers: AC-16 (spec 0037): `.importProviders` is built, `.communitySources` stays out
     @Test func theImportedProvidersGroupIsBuiltByFeature37() {
         let entry = SettingsAvailability.entries.first { $0.row == .importProviders }
         #expect(entry?.isBuilt == true)

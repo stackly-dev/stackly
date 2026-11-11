@@ -699,3 +699,59 @@ fn inspect_of_a_local_entry_shows_trust_approval_import_and_permissions() {
     assert!(outputs[4].1.contains("Permissions: not available"));
     ev.pass();
 }
+
+// covers: AC-11, AC-8 (spec 0037, *Copy*): the phrases no copy of this
+// feature may say, over every provider golden the CLI writes
+#[test]
+fn no_provider_golden_claims_a_sandbox_safety_a_verified_publisher_or_a_fresh_revocation_list() {
+    let ev = evidence!(
+        covers = ["AC-061", "BR-020"],
+        kind = Kind::Fixture,
+        expected = "no provider golden of the CLI says sandboxed, safe to run, verified publisher, trusted publisher, malware, up to date, or latest",
+    );
+    const FORBIDDEN: [&str; 7] = [
+        "sandboxed",
+        "safe to run",
+        "verified publisher",
+        "trusted publisher",
+        "malware",
+        "up to date",
+        "latest",
+    ];
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let mut read = 0;
+    for entry in std::fs::read_dir(&dir).expect("the golden folder lists") {
+        let path = entry.expect("an entry reads").path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_owned();
+        if !name.starts_with("provider_") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path)
+            .expect("a golden reads")
+            .to_lowercase();
+        for phrase in FORBIDDEN {
+            assert!(!text.contains(phrase), "{name} says {phrase:?}");
+        }
+        read += 1;
+    }
+    assert!(
+        read >= 18,
+        "the provider goldens of spec 0037 are read: {read}"
+    );
+    // Every local entry is shown as not verified.
+    for name in [
+        "provider_inspect_local_pending.txt",
+        "provider_inspect_local_approved.txt",
+        "provider_inspect_local_revoked.txt",
+        "provider_inspect_local_changed.txt",
+    ] {
+        let text = std::fs::read_to_string(dir.join(name)).expect("a golden reads");
+        assert!(text.contains("(not verified)"), "{name}");
+        assert!(text.contains("local, not verified"), "{name}");
+    }
+    ev.pass();
+}

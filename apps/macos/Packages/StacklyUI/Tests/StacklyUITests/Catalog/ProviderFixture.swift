@@ -42,13 +42,20 @@ enum ProviderFixture {
         }
     }
 
-    /// The approved detail with a revocation by the installed catalog.
+    /// The approved detail with a revocation by the installed catalog. As `stacklyd` answers
+    /// it, the entry is blocked and no version installs: every `versions[].install` is
+    /// `installable: false` with reason `trust_revoked`, as in `detail-local-revoked`.
     static func catalogRevokedDetail() throws -> ProviderDetail {
         try detail("approved") { json in
             var summary = json["summary"] as? [String: Any] ?? [:]
             summary["state"] = "blocked"
             summary["stateReason"] = "trust_revoked"
             json["summary"] = summary
+            json["versions"] = (json["versions"] as? [[String: Any]] ?? []).map { version in
+                var version = version
+                version["install"] = ["installable": false, "reason": "trust_revoked"]
+                return version
+            }
             json["revocation"] = [
                 "by": "catalog", "since": "2026-11-05T00:00:00.000Z",
                 "reason": "Starts with an insecure default; use revision 1.0.1 or later.",

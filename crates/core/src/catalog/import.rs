@@ -513,16 +513,23 @@ async fn run_import(
         .await?;
     let platform = Arc::clone(ctx.platform());
     let layout = Arc::clone(ctx.layout());
-    let stored = blocking(move || {
+    let (absent, stored) = blocking(move || {
         let dirs = layout.layout();
-        write_package(
+        let dir = dirs.provider_import_dir(&digest);
+        // A folder that was not there before this write is this import's
+        // own, also when the write fails after making it (a full disk): the
+        // compensator removes it then. A folder that was there, or one that
+        // cannot be inspected, is never claimed.
+        let absent = matches!(platform.fs().symlink_metadata(&dir), Ok(None));
+        let stored = write_package(
             &platform,
             &layout,
             &dirs.provider_imports_dir(),
-            &dirs.provider_import_dir(&digest),
+            &dir,
             &files,
             StoreMode::Import(&digest),
-        )
+        );
+        (absent, stored)
     })
     .await?;
     match stored {
@@ -539,8 +546,12 @@ async fn run_import(
                 reason = source.reason(),
                 "a provider package could not be stored"
             );
-            ctx.not_created(item, ReasonCode::from_static("store_failed"))
-                .await?;
+            if absent {
+                ctx.confirm_created(item).await?;
+            } else {
+                ctx.not_created(item, ReasonCode::from_static("store_failed"))
+                    .await?;
+            }
             return Err(failed(ProviderOpError::Store {
                 provider: provider.to_string(),
                 source,

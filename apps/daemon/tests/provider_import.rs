@@ -671,3 +671,461 @@ fn a_catalog_with_64_providers_64_planned_and_32_local_entries_lists_in_one_cont
     let len = serde_json::to_vec(&frame).expect("encodes").len();
     assert!(len < CONTROL_FRAME_MAX as usize, "{len} bytes");
 }
+
+/// A copy of `acme-demo` at `<test root>/packages/<name>` whose provider ID
+/// is `acme/<name>`.
+fn renamed(site: &Site, name: &str) -> PathBuf {
+    let dir = package(site, "acme-demo", name);
+    let yaml = dir.join("provider.yaml");
+    let text = std::fs::read_to_string(&yaml).expect("reads");
+    std::fs::write(
+        &yaml,
+        text.replace("id: acme/demo", &format!("id: acme/{name}")),
+    )
+    .expect("writes");
+    dir
+}
+
+/// Eight concurrent imports of the same bytes, as eight clients send them.
+async fn eight_imports(
+    site: &Site,
+    dir: &Path,
+    digest: &str,
+) -> Vec<Result<ProviderDetail, String>> {
+    let mut set = tokio::task::JoinSet::new();
+    for _ in 0..8 {
+        let api = site.api().await;
+        let dir = dir.to_path_buf();
+        let digest = digest.to_owned();
+        set.spawn(async move {
+            import(&api, &dir, &digest, &key())
+                .await
+                .map_err(|error| error.code().to_owned())
+        });
+    }
+    let mut replies = Vec::new();
+    while let Some(reply) = set.join_next().await {
+        replies.push(reply.expect("the import task ends"));
+    }
+    replies
+}
+
+// covers: AC-3 (spec 0037, *API surface*: eight imports at once)
+#[tokio::test(flavor = "multi_thread")]
+async fn eight_imports_of_the_same_bytes_at_once_all_succeed_with_one_row_and_one_copy() {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = package(&site, "acme-demo", "acme-demo");
+    let digest = preview(&api, &dir)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+
+    let replies = eight_imports(&site, &dir, &digest).await;
+
+    for reply in &replies {
+        let detail = reply.as_ref().expect("every import succeeds");
+        assert_eq!(
+            detail
+                .local
+                .as_ref()
+                .map(|local| local.package_sha256.as_str()),
+            Some(digest.as_str())
+        );
+    }
+    let registry = daemon.core().registry().expect("the registry is open");
+    assert_eq!(registry.provider_imports().expect("reads").value.len(), 1);
+    let copies = std::fs::read_dir(site.root.path().join("data/provider-imports"))
+        .expect("the store lists")
+        .count();
+    assert_eq!(copies, 1, "one content addressed copy");
+    assert!(
+        registry
+            .unfinished_operations()
+            .expect("reads")
+            .value
+            .is_empty()
+    );
+    drop(api);
+    stop(daemon).await;
+}
+
+// covers: AC-2 (spec 0037, *Aturan import*: the import limit through the
+// daemon)
+#[tokio::test(flavor = "multi_thread")]
+async fn the_33rd_local_provider_is_refused_by_preview_and_import_and_a_replace_at_the_limit_imports()
+ {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    for n in 0..32 {
+        let dir = renamed(&site, &format!("p{n}"));
+        let digest = preview(&api, &dir)
+            .await
+            .expect("previews")
+            .package_sha256
+            .expect("a digest");
+        import(&api, &dir, &digest, &key())
+            .await
+            .unwrap_or_else(|error| panic!("import {n}: {error:?}"));
+    }
+    let extra = renamed(&site, "p32");
+
+    let shown = preview(&api, &extra).await.expect("previews");
+    assert!(!shown.verdict.importable);
+    assert_eq!(shown.verdict.reason, Some(ImportBlockReason::ImportLimit));
+    let refused = import(
+        &api,
+        &extra,
+        &shown.package_sha256.clone().expect("a digest"),
+        &key(),
+    )
+    .await
+    .expect_err("the 33rd import is refused");
+    assert_eq!(refused.code(), "provider.import_limit");
+    let detail = |key: &str| {
+        refused
+            .details()
+            .iter()
+            .find(|detail| detail.key() == key)
+            .map(|detail| detail.value().to_owned())
+    };
+    assert_eq!(detail("limit").as_deref(), Some("count"));
+    assert_eq!(detail("max").as_deref(), Some("32"));
+    let registry = daemon.core().registry().expect("the registry is open");
+    assert_eq!(registry.provider_imports().expect("reads").value.len(), 32);
+
+    // Replacing an imported provider at the limit is allowed.
+    let replace = renamed(&site, "p0-next");
+    let yaml = replace.join("provider.yaml");
+    let text = std::fs::read_to_string(&yaml).expect("reads");
+    std::fs::write(
+        &yaml,
+        text.replace("id: acme/p0-next", "id: acme/p0")
+            .replace("revision: \"1.0.0\"", "revision: \"1.0.1\""),
+    )
+    .expect("writes");
+    let digest = preview(&api, &replace)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+    import(&api, &replace, &digest, &key())
+        .await
+        .expect("a replace at the limit imports");
+    assert_eq!(registry.provider_imports().expect("reads").value.len(), 32);
+    drop(api);
+    stop(daemon).await;
+}
+
+// covers: AC-14 (spec 0037, *Kode error di wire*: the static hint of
+// provider.import_limit, finding 5 of the milestone 1 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_import_at_the_limit_and_a_remove_of_an_unknown_id_carry_their_static_hint() {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    for n in 0..32 {
+        let dir = renamed(&site, &format!("h{n}"));
+        let digest = preview(&api, &dir)
+            .await
+            .expect("previews")
+            .package_sha256
+            .expect("a digest");
+        import(&api, &dir, &digest, &key()).await.expect("imports");
+    }
+    let extra = renamed(&site, "h32");
+    let digest = preview(&api, &extra)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+
+    let limit = import(&api, &extra, &digest, &key())
+        .await
+        .expect_err("refused");
+    let unknown = remove(&api, "acme/nothing")
+        .await
+        .expect_err("nothing to remove");
+
+    assert_eq!(limit.code(), "provider.import_limit");
+    assert_eq!(limit.hint(), Some("remove an imported provider first"));
+    assert_eq!(unknown.code(), "provider.import_not_found");
+    assert_eq!(
+        unknown.hint(),
+        Some("run stackly provider list to see imported providers")
+    );
+    drop(api);
+    stop(daemon).await;
+}
+
+// covers: AC-10 (spec 0037, *Read model*: recovery mode)
+#[tokio::test(flavor = "multi_thread")]
+async fn in_registry_recovery_the_catalog_health_says_local_providers_are_not_loaded() {
+    use stackly_protocol::daemon::SubsystemStatus;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = package(&site, "acme-demo", "acme-demo");
+    let digest = preview(&api, &dir)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+    import(&api, &dir, &digest, &key()).await.expect("imports");
+    drop(api);
+    stop(daemon).await;
+    let db = site.prepared.layout().registry_db();
+    let mut bytes = std::fs::read(&db).expect("the registry file reads");
+    bytes[60..64].copy_from_slice(&999_u32.to_be_bytes());
+    std::fs::write(&db, &bytes).expect("the registry file is written");
+
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let health = match api
+        .client
+        .call(Call::DaemonGetHealth)
+        .await
+        .expect("health answers in recovery")
+    {
+        Reply::DaemonGetHealth(health) => health,
+        other => panic!("not a health reply: {other:?}"),
+    };
+    let catalog = health
+        .subsystems
+        .iter()
+        .find(|subsystem| subsystem.name == "catalog")
+        .expect("health lists the catalog");
+    assert_eq!(catalog.status, SubsystemStatus::Degraded);
+    assert!(
+        catalog
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("local providers not loaded: registry recovery")),
+        "{catalog:?}"
+    );
+    let reply = list(&api).await;
+    assert!(
+        reply
+            .items
+            .iter()
+            .all(|item| item.trust != TrustLevel::Local),
+        "no local entry in recovery"
+    );
+    assert_eq!(u64::from(reply.catalog.local_count), 0);
+    let refused = preview(&api, &dir)
+        .await
+        .expect_err("a preview is refused in recovery");
+    assert_eq!(refused.code(), "registry.recovery_mode");
+    drop(api);
+    stop(daemon).await;
+    assert_eq!(
+        std::fs::read(&db).expect("the registry reads"),
+        bytes,
+        "recovery writes nothing"
+    );
+}
+
+/// The `catalog.changed` events and the final states of provider
+/// operations, in the order they arrive within a short wait.
+async fn provider_events(events: &mut stackly_ipc::EventStream) -> Vec<String> {
+    use stackly_protocol::operation::{OperationKind as Kind, OperationState};
+    let mut seen = Vec::new();
+    while let Ok(Ok(Some(frame))) =
+        tokio::time::timeout(Duration::from_millis(400), events.next()).await
+    {
+        let DecodedFrame::Event(event) = frame else {
+            continue;
+        };
+        match event.kind {
+            EventKind::CatalogChanged(changed) => {
+                seen.push(format!("catalog.changed {:?}", changed.change));
+            }
+            EventKind::OperationStateChanged(summary)
+                if matches!(
+                    summary.kind,
+                    Kind::ImportProvider
+                        | Kind::ApproveProvider
+                        | Kind::RevokeProvider
+                        | Kind::RemoveProviderImport
+                ) && matches!(
+                    summary.state,
+                    OperationState::Succeeded | OperationState::Failed
+                ) =>
+            {
+                seen.push(format!("{:?} {:?}", summary.kind, summary.state));
+            }
+            _ => {}
+        }
+    }
+    seen
+}
+
+// covers: AC-10 (spec 0037, *Read model*: one catalog.changed per
+// operation, after the commit and before the operation ends)
+#[tokio::test(flavor = "multi_thread")]
+async fn every_provider_operation_sends_catalog_changed_exactly_once_before_it_ends() {
+    use stackly_protocol::provider::DecideProviderParams;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let (_, mut events) = api
+        .client
+        .subscribe(SubscribeParams::default())
+        .await
+        .expect("subscribes");
+    let dir = package(&site, "acme-demo", "acme-demo");
+    let digest = preview(&api, &dir)
+        .await
+        .expect("previews")
+        .package_sha256
+        .expect("a digest");
+    let decide = |call: Call| {
+        api.client
+            .call_detailed(call, CallOptions::default().with_idempotency_key(key()))
+    };
+
+    import(&api, &dir, &digest, &key()).await.expect("imports");
+    assert_eq!(
+        provider_events(&mut events).await,
+        ["catalog.changed Imported", "ImportProvider Succeeded"]
+    );
+    decide(Call::ProviderApprove(DecideProviderParams {
+        provider: "acme/demo".to_owned(),
+        expected_package_sha256: digest.clone(),
+    }))
+    .await
+    .expect("approves");
+    assert_eq!(
+        provider_events(&mut events).await,
+        ["catalog.changed Approved", "ApproveProvider Succeeded"]
+    );
+    decide(Call::ProviderRevoke(ProviderTargetParams {
+        provider: "acme/demo".to_owned(),
+    }))
+    .await
+    .expect("revokes");
+    assert_eq!(
+        provider_events(&mut events).await,
+        ["catalog.changed Revoked", "RevokeProvider Succeeded"]
+    );
+    remove(&api, "acme/demo").await.expect("removes");
+    assert_eq!(
+        provider_events(&mut events).await,
+        ["catalog.changed Removed", "RemoveProviderImport Succeeded"]
+    );
+
+    // A failed import commits nothing and announces nothing.
+    use std::os::unix::fs::PermissionsExt as _;
+    let store = site.root.path().join("data/provider-imports");
+    std::fs::create_dir_all(&store).expect("the store folder exists");
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o500))
+        .expect("the store folder locks");
+    let failed = import(&api, &dir, &digest, &key()).await;
+    std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700))
+        .expect("the store folder unlocks");
+    assert_eq!(
+        failed.expect_err("the store cannot be written").code(),
+        "provider.store_failed"
+    );
+    assert_eq!(
+        provider_events(&mut events).await,
+        ["ImportProvider Failed"]
+    );
+    drop((api, events));
+    stop(daemon).await;
+}
+
+// covers: AC-10 (spec 0037, *Anggaran frame*: 64 revocations as well)
+#[test]
+fn a_full_catalog_with_64_revocations_lists_in_one_control_frame() {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    use stackly_core::catalog::{
+        Catalog, CatalogEntry, EntryOrigin, PlannedEntry, ProviderEntry, Revocation, TileColor,
+        TileHint,
+    };
+    use stackly_core::provider::{Category, NameCheck, PackageFiles, ValidatedPackage};
+    use stackly_protocol::limits::CONTROL_FRAME_MAX;
+
+    let source = fixture("acme-demo");
+    let files: BTreeMap<String, Vec<u8>> = [
+        "provider.yaml",
+        "versions.json",
+        "schemas/settings.schema.json",
+        "templates/demo.conf.tmpl",
+    ]
+    .into_iter()
+    .map(|path| {
+        (
+            path.to_owned(),
+            std::fs::read(source.join(path)).expect("reads"),
+        )
+    })
+    .collect();
+    let package = |id: &str| {
+        let mut files = files.clone();
+        let yaml = String::from_utf8(files["provider.yaml"].clone()).expect("UTF-8");
+        files.insert(
+            "provider.yaml".to_owned(),
+            yaml.replace("id: acme/demo", &format!("id: {id}"))
+                .into_bytes(),
+        );
+        ValidatedPackage::from_files(PackageFiles::new("p", files), NameCheck::Skip)
+            .expect("the package validates")
+    };
+    let tile = || TileHint {
+        mark: "Ac".to_owned(),
+        tile: TileColor::Gray,
+    };
+    let mut entries: Vec<CatalogEntry> = (0..64)
+        .map(|n| {
+            CatalogEntry::Provider(ProviderEntry {
+                package: Arc::new(package(&format!("official/p{n}"))),
+                tile: tile(),
+                notes: Vec::new(),
+                origin: EntryOrigin::Catalog,
+            })
+        })
+        .collect();
+    entries.extend((0..64).map(|n| {
+        CatalogEntry::Planned(PlannedEntry {
+            id: format!("official/q{n}").parse().expect("an id"),
+            display_name: "\u{1F600}".repeat(64),
+            category: Category::Database,
+            description: "\u{1F600}".repeat(512),
+            note: None,
+            tile: tile(),
+        })
+    }));
+    let revocations: Vec<Revocation> = (0..64)
+        .map(|n| {
+            Revocation::new(
+                format!("acme/revoked-{n:02}").parse().expect("an id"),
+                "1.0.0".parse().expect("a label"),
+                Some("ab".repeat(32).parse().expect("a digest")),
+                "x".repeat(256),
+                "2026-09-01".parse().expect("a date"),
+            )
+        })
+        .collect();
+    let catalog = Catalog::for_tests(&entries).with_revocations(revocations);
+    let host = stackly_platform::HostFacts::new(
+        "macos-aarch64".parse().expect("a target"),
+        stackly_domain::OsVersion::major_minor(27, 0),
+        None,
+    );
+
+    let reply = stacklyd::map::catalog::list_providers(&catalog, &host, false);
+
+    assert_eq!(reply.revocations.len(), 64);
+    let frame = stackly_protocol::ServerFrame::Response(stackly_protocol::Response {
+        request_id: "0192f3a1-0000-7000-8000-000000000001".to_owned(),
+        reply: Reply::CatalogListProviders(reply),
+    });
+    let len = serde_json::to_vec(&frame).expect("encodes").len();
+    assert!(len < CONTROL_FRAME_MAX as usize, "{len} bytes");
+}

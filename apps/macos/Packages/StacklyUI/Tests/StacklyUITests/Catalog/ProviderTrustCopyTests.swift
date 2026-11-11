@@ -179,6 +179,18 @@ struct ProviderTrustCopyTests {
         #expect(banner.action == .approveAgain)
     }
 
+    // covers: AC-8, AC-15 (spec 0037): the version matrix of an entry the catalog revokes
+    // offers no Get, the same install gate as `detail-local-revoked`
+    @Test func anEntryTheCatalogRevokesHasNoGetForAnyVersion() throws {
+        let revoked = try #require(ProviderFixture.detail("revoked").versions?.first)
+        let versions = try #require(ProviderFixture.catalogRevokedDetail().versions)
+        #expect(versions.isEmpty == false)
+        for version in versions {
+            #expect(version.install == revoked.install)
+            #expect(RuntimeGetCell.disabledReason(of: version) == "Approval revoked.")
+        }
+    }
+
     @Test func anEntryTheCatalogRevokesSaysTheCatalogRevisionAndDateAndOffersNothing() throws {
         let banner = try #require(
             ProviderTrustCopy.banner(
