@@ -31,7 +31,7 @@ cargo xtask evidence run --kind native -- cargo test -p xtask --test native_runt
 cargo xtask evidence run --kind native -- cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1
 ```
 
-- [ ] The runtime spike passes for every new artifact (the first command), and `cargo xtask codegen` writes its compatibility record into `versions.json`.
+- [ ] The runtime spike passes for every new artifact (the first command). `cargo xtask runtime record <report.json>` then copies its records into `evidence/runtime/<runId>/` (the two commit flow of spec 0003: the inventory change first, then the evidence on that clean tree), and only after that `cargo xtask codegen` writes the compatibility record into `versions.json`.
 - [ ] The native conformance test passes for every runtime line of the package (the second command; one test per line in `apps/daemon/tests/provider_conformance.rs`).
 - [ ] The launchd test passes for every line, only when the provider should survive a planned daemon restart (see [Daemon restart handover](#daemon-restart-handover)).
 
