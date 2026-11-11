@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ca37-41d9-70d7-91fb-eac110b5dd9b",
+  "covers": [
+    "AC-034",
+    "REQ-034"
+  ],
+  "kind": "fixture",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "Spec 0038 test run: provider contributor walkthrough from a clean clone",
+    "file": null,
+    "line": null
+  },
+  "status": "PASS",
+  "expected": "docs walkthrough exits 0 and the harness report exists",
+  "actual": "cargo xtask docs walkthrough exited 0 and printed `ok walkthrough 23300da10883cba882a6cff18f8ccab86534f369 2`: all four lines of the docs-walkthrough block exited 0, the clone held two harness reports (testing/example and the scaffolded testing/mytool, each with scenarios default and slow-ready) with schema stackly.provider-conformance/v1 and verdict pass, git status in the clone listed only new files under providers/mytool/, and the temporary folder was gone afterwards. Wall time 124 s.",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": [
+    "Committed the spec 0038 test suite as 23300da1 (clean tree) in worktree arc-f36-spec-e2dee8 on this Mac (macOS 27.0.1, Apple M1 Max), 45 GiB free on the data volume before the run.",
+    "./target/debug/xtask docs walkthrough with CARGO_PROFILE_DEV_DEBUG=0 and CARGO_INCREMENTAL=0; the task cloned HEAD into $TMPDIR/stackly-walkthrough-*/stackly, made a 0700 STACKLY_ROOT next to it, and ran the four lines of the block in docs/providers/README.md in the clone with its own target folder. Cargo used the crates already in its cache; no runtime was downloaded.",
+    "Read the output (walkthrough.log in this record's folder, build lines left out, the temp path written as $TMPDIR): clone, run and ok per line, the two report paths, ok walkthrough <sha> 2, exit 0.",
+    "Afterwards no $TMPDIR/stackly-walkthrough-* folder was left. The earlier AC-034 record at 2fea6e6b is kept as it is; this run repeats it after the harness and scaffold changes of spec 0036 and 0037 that landed since."
+  ],
+  "reviewer": "Claude Opus 5.5 (session tst-f38-test, for ojiepermana)",
+  "startedAt": "2026-11-11T10:44:06Z",
+  "finishedAt": "2026-11-11T10:46:10Z",
+  "evidencePath": "evidence/manual/files/01a1ca37-41d9-70d7-91fb-eac110b5dd9b/",
+  "context": {
+    "sourceCommit": "23300da10883cba882a6cff18f8ccab86534f369",
+    "sourceDirty": false,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}
