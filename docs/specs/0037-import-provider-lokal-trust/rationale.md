@@ -94,7 +94,7 @@ Kalau ini tidak diputuskan, kontributor tidak punya jalur jujur untuk mencoba pr
 - **Opsi 2: tolak folder ber quarantine.** Kontra: mendorong pengguna menghapus atribut itu sendiri, persis yang dilarang PRD 23.
 - **Opsi 3: hapus atribut saat import.** Ditolak: melanggar spec 0003 AC-8.
 
-### K14 sampai K21: keputusan kecil
+### K14 sampai K26: keputusan kecil
 
 - **K14 Onboarding**: tidak ada baris atau toggle baru di langkah Catalog Trust; hanya subjudul yang diperbaiki supaya tetap benar setelah entri lokal yang belum disetujui bisa tampil. Alternatif: baris "Local providers" di onboarding, ditolak karena saat onboarding pertama daftar itu selalu kosong dan trust per provider punya rumah di Catalog.
 - **K15 Settings Sources**: grup "Imported providers" yang hanya menampilkan dan menavigasi, plus tombol Import Provider…; aksi approve, revoke, dan remove hanya di panel detail Catalog. Alternatif: aksi lengkap di Settings, ditolak karena dua tempat untuk aksi berisiko.
@@ -108,6 +108,7 @@ Kalau ini tidak diputuskan, kontributor tidak punya jalur jujur untuk mencoba pr
 - **K23 Cakupan revoke**: seluruh provider ID (keputusan tersimpan dan setiap revision pinned yang `approved`), dan boleh selama ada approval. Alternatif: hanya kunci yang sedang tersimpan, ditolak karena revision pinned lama tetap bisa dipakai membuat instance sesudah "revoke" (temuan cross check 3).
 - **K24 Resource operasi**: `Manager` dengan `LockKey::Provider`, karena kolom resource operasi dan audit hanya menerima UUID dan provider tidak punya UUID. Alternatif: jenis resource `provider` baru dengan migrasi pembangunan ulang tabel `operations` dan `audit_events`, ditolak karena mahal untuk empat operasi singkat (temuan cross check 1).
 - **K25 Runtime yang dipasang lewat provider lokal**: tetap runtime biasa sesudah revoke atau remove, dan bisa dipakai provider lain ber software sama; dinyatakan sebagai residual. Alternatif: mencatat provider pemasang di baris runtime dan memblokirnya, ditolak untuk baseline karena mengubah model runtime spec 0018 dan PRD meminta revocation tidak menghapus yang sudah ada; dicatat di Follow-up fitur 55.
+- **K26 Jawaban request yang diulang** (keputusan lead atas delegasi user, 2026-11-11, opsi C dari developer). Draf spec ini menulis bahwa request operasi provider yang diulang dengan `idempotencyKey` yang sama "mendapat balasan pertamanya apa adanya". Suite test fitur ini menemukan bahwa yang dibangun menjawab keadaan provider saat ini: `replay_operation` spec 0007 hanya mengembalikan operasi, `input` journal, dan error nya, dan hasilnya memang snapshot. Yang dipilih: teks spec mengikuti kode. Request yang diulang tidak pernah membuat operasi kedua, operasi pertama yang berhasil dijawab dengan `ProviderDetail` saat ini (atau `provider.import_not_found` sesudah remove), dan operasi pertama yang gagal dijawab dengan error nya. Kode tidak berubah, dan perilakunya dikunci test. Alasannya: jaminan yang dibutuhkan client dari kunci idempotensi adalah "tidak ada efek kedua", dan itu utuh; keadaan saat ini lebih berguna bagi client yang menampilkan detail daripada salinan lama yang sudah basi; dan aturan ini sama dengan `Replayed` spec 0007, yang membawa state operasi saat ini, bukan state saat request pertama dijawab. Alternatif yang ditolak: menyimpan balasan pertama di operation engine. Itu berarti mengubah spec 0007, menambah kolom atau tabel di storage dengan satu migrasi, dan menaikkan batas hasil journal, karena `ProviderDetail` melebihi `RESULT_MAX`; mahal untuk empat operasi singkat, dan salinan balasan lama bisa menampilkan `approval` yang sudah dicabut. Alternatif lain: menyimpan hanya ringkasan kecil (`approval` sesudah operasi) di hasil journal, ditolak karena reply nya jadi campuran field lama dan field saat ini.
 
 ## Rationale
 
@@ -136,7 +137,7 @@ Cross check dijalankan model lain (Opus, read only) pada 2026-11-11 atas draf pe
 8. Approval pinned per `manifest_sha256`, dan penulis store tidak sama dengan pin. Perbaikan: dinyatakan terang; `StoreMode`.
 9. `ProviderRevisionRecord` belum punya `approved_at`, `PUBLISHER` hard coded, dan `SourceRecorder` hanya tahu sumber catalog. Perbaikan: field baru, `PinMeta`, `source_id` dari baris import.
 10. Entri `invalid` tidak bisa diperbaiki dengan import ulang. Perbaikan: jalur tanpa operasi hanya saat salinan store termuat; `storedCopyValid`.
-11. Replay dan konkurensi tidak ditetapkan. Perbaikan: balasan pertama apa adanya, `BusyPolicy::Queue`, cek ulang di guard.
+11. Replay dan konkurensi tidak ditetapkan. Perbaikan: balasan pertama apa adanya, `BusyPolicy::Queue`, cek ulang di guard. *Diubah 2026-11-11 (K26):* "balasan pertama apa adanya" diganti dengan semantik snapshot spec 0007; replay tetap tidak membuat operasi kedua.
 12. Urutan sesudah commit, pemanggil refresh, dan event saat start. Perbaikan: urutan ditetapkan, port `CatalogRefresher`, tanpa event saat start, hapus folder di bawah lock dengan cek rujukan.
 13. Entri `invalid` lokal tidak dikenali sebagai lokal. Perbaikan: `InvalidEntry.local`.
 14. `installability` tidak punya catalog untuk `entry_trust`. Perbaikan: parameter `trust` dan daftar tiga pemanggil.
