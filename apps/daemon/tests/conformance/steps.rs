@@ -237,8 +237,22 @@ pub async fn run_scenario(ctx: &Ctx, scenario: &Scenario) -> ScenarioResult {
         if let Some(first) = run.first.clone()
             && !run.steps.iter().any(|step| step.name == "leftovers")
         {
-            run.step("leftovers", Duration::from_secs(15), leftovers(ctx, &first))
-                .await;
+            if interrupted() {
+                // The check never ran; the run's cleanup looks for what is
+                // left instead, so this is no failure of the package.
+                run.steps.push(StepResult {
+                    name: "leftovers",
+                    status: StepStatus::Skipped,
+                    duration_ms: 0,
+                    detail: skipped_because(
+                        "a signal stopped the run; the cleanup checks for leftovers",
+                    ),
+                    failure: None,
+                });
+            } else {
+                run.step("leftovers", Duration::from_secs(15), leftovers(ctx, &first))
+                    .await;
+            }
         }
     }
     ScenarioResult {
