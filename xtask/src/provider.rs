@@ -101,7 +101,8 @@ fn freeze_task(root: &Path, dir: &str) -> Result<ExitCode> {
     use anyhow::Context;
 
     let cwd = std::env::current_dir().context("cannot read the current directory")?;
-    match freeze::freeze(&root.join(freeze::CORPUS_DIR), &cwd.join(dir)) {
+    let catalog = freeze::catalog_providers(root)?;
+    match freeze::freeze(&root.join(freeze::CORPUS_DIR), &catalog, &cwd.join(dir)) {
         Ok(freeze::Frozen::Written(entry)) => {
             println!("frozen {}", entry.display());
             Ok(ExitCode::SUCCESS)
@@ -289,6 +290,7 @@ mod not_frozen_tests {
 
         freeze::freeze(
             &root.path().join(freeze::CORPUS_DIR),
+            &["official/nats".to_owned()],
             &providers.join("nats"),
         )
         .unwrap();

@@ -29,14 +29,18 @@ pub enum Frozen {
     Already(PathBuf),
 }
 
-/// Freezes the package in `dir` into `corpus`.
+/// Freezes the package in `dir` into `corpus`. `catalog` holds the
+/// `[[provider]]` IDs of `providers/catalog.toml` ([`catalog_providers`]):
+/// only a provider in the catalog is pinned in a user's root, so only it
+/// is frozen.
 ///
 /// # Errors
 ///
 /// Fails, writing nothing, for a package that is not publishable, one
-/// outside the `official` namespace, or a revision already frozen with
-/// another digest; and when a file cannot be written.
-pub fn freeze(corpus: &Path, dir: &Path) -> Result<Frozen> {
+/// outside the `official` namespace, one that is not a `[[provider]]` of
+/// the catalog (such as a `[[planned]]` one), or a revision already frozen
+/// with another digest; and when a file cannot be written.
+pub fn freeze(corpus: &Path, catalog: &[String], dir: &Path) -> Result<Frozen> {
     let check = check_package(&MacosFilesystem, dir, NameCheck::FolderName);
     if !check.publishable() {
         let lines: Vec<String> = check
@@ -59,6 +63,15 @@ pub fn freeze(corpus: &Path, dir: &Path) -> Result<Frozen> {
         bail!(
             "{} is {}: only official/ packages are frozen, because only they are pinned in a user's root",
             dir.display(),
+            key.provider()
+        );
+    }
+    if !catalog
+        .iter()
+        .any(|id| id.as_str() == key.provider().as_str())
+    {
+        bail!(
+            "{} is not a [[provider]] of providers/catalog.toml: only a provider in the catalog is pinned in a user's root, so freeze it in the commit that moves it from [[planned]] to [[provider]]",
             key.provider()
         );
     }
@@ -191,7 +204,7 @@ mod tests {
         let nats = root.path().join("providers/nats");
         copy_dir(&repo().join("providers/nats"), &nats);
 
-        let first = freeze(&corpus, &nats).unwrap();
+        let first = freeze(&corpus, &catalog(), &nats).unwrap();
 
         let Frozen::Written(entry) = first else {
             panic!("a new entry is written: {first:?}");
@@ -212,7 +225,7 @@ mod tests {
         assert_eq!(facts.schema, "stackly.provider-frozen/v1");
         assert!(!facts.start_args.is_empty());
         assert_eq!(
-            freeze(&corpus, &nats).unwrap(),
+            freeze(&corpus, &catalog(), &nats).unwrap(),
             Frozen::Already(entry.clone())
         );
 
@@ -224,7 +237,7 @@ mod tests {
         )
         .unwrap();
         let before = fs::read(entry.join(FROZEN_FILE)).unwrap();
-        let err = freeze(&corpus, &nats).unwrap_err().to_string();
+        let err = freeze(&corpus, &catalog(), &nats).unwrap_err().to_string();
         assert!(err.contains("raise metadata.revision"), "{err}");
         assert_eq!(fs::read(entry.join(FROZEN_FILE)).unwrap(), before);
         assert!(fs::read_dir(entry.parent().unwrap()).unwrap().all(|e| {
@@ -240,9 +253,10 @@ mod tests {
         let root = stackly_testkit::TestRoot::new().unwrap();
         let corpus = root.path().join("compat");
 
-        let fake = freeze(&corpus, &repo().join("providers/fake")).unwrap_err();
+        let fake = freeze(&corpus, &catalog(), &repo().join("providers/fake")).unwrap_err();
         let command = freeze(
             &corpus,
+            &catalog(),
             &repo().join("crates/core/tests/fixtures/packages/fake-command"),
         )
         .unwrap_err();
@@ -252,6 +266,39 @@ mod tests {
             "{fake}"
         );
         assert!(command.to_string().contains("not publishable"), "{command}");
+        assert!(!corpus.exists());
+    }
+
+    fn catalog() -> Vec<String> {
+        catalog_providers(&repo()).unwrap()
+    }
+
+    #[test]
+    fn a_package_that_is_not_a_catalog_provider_is_refused_without_a_write() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let corpus = root.path().join("compat");
+        let traefik = root.path().join("providers/traefik");
+        copy_dir(&repo().join("providers/traefik"), &traefik);
+
+        let planned = freeze(&corpus, &catalog(), &traefik)
+            .unwrap_err()
+            .to_string();
+        let listed = freeze(
+            &corpus,
+            &["official/nats".to_owned()],
+            &repo().join("providers/postgresql"),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(
+            planned.contains("official/traefik is not a [[provider]] of providers/catalog.toml"),
+            "{planned}"
+        );
+        assert!(
+            listed.contains("official/postgresql is not a [[provider]]"),
+            "{listed}"
+        );
         assert!(!corpus.exists());
     }
 

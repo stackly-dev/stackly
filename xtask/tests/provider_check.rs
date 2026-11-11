@@ -296,3 +296,19 @@ fn a_copy_of_a_frozen_revision_with_other_bytes_is_refused() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("raise metadata.revision"), "{stderr}");
 }
+
+#[test]
+fn a_planned_provider_is_refused_before_anything_is_written() {
+    let corpus = repo_root().join("crates/core/tests/fixtures/compat/traefik");
+    assert!(!corpus.exists(), "traefik is not frozen before the test");
+
+    let output = provider_freeze(&repo_root().join("providers/traefik"));
+
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("official/traefik is not a [[provider]] of providers/catalog.toml"),
+        "{stderr}"
+    );
+    assert!(!corpus.exists(), "nothing was written");
+}
