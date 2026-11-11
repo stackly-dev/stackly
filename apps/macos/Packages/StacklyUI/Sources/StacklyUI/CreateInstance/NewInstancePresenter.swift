@@ -37,8 +37,11 @@ public final class NewInstancePresenter {
     }
 
     /// Opens the sheet.
-    /// - Parameter software: The software to start on, or `nil` for the first runtime.
-    public func present(software: String? = nil) {
+    /// - Parameters:
+    ///   - software: The software to start on, or `nil` for the first runtime.
+    ///   - provider: The provider whose form to read, as the Catalog detail panel of that
+    ///     entry asks, or `nil` for the one the daemon picks.
+    public func present(software: String? = nil, provider: String? = nil) {
         guard !isPresented else { return }
         switch model.phase {
         case .submitting, .creating:
@@ -48,7 +51,7 @@ public final class NewInstancePresenter {
         default:
             break
         }
-        model.begin(software: software)
+        model.begin(software: software, provider: provider)
         isPresented = true
     }
 

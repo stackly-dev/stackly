@@ -15,6 +15,16 @@ struct ProviderImportModelTests {
         var outcome: MutationOutcome
         var reads: [Call] = []
         var sent: [(Call, String)] = []
+        /// Whether a mutation waits for ``release()`` before it answers.
+        var holdsSends = false
+        private(set) var held: [CheckedContinuation<Void, Never>] = []
+
+        /// Lets every held mutation answer.
+        func release() {
+            let all = held
+            held = []
+            for one in all { one.resume() }
+        }
 
         init(preview: Result<ImportPreview, ClientError>, outcome: MutationOutcome) {
             self.preview = preview
@@ -31,6 +41,7 @@ struct ProviderImportModelTests {
 
         func send(_ call: Call, _ key: String) async -> MutationOutcome {
             sent.append((call, key))
+            if holdsSends { await withCheckedContinuation { held.append($0) } }
             return outcome
         }
     }
@@ -312,5 +323,104 @@ struct ProviderImportModelTests {
             capabilities: [], managedFilesystem: ["data"], executables: [], secrets: [],
             endpoints: [], downloads: [], openWith: [])
         #expect(ProviderPermissionsList.groups(of: empty) == [.writes])
+    }
+
+    // MARK: - Cancel while a request runs (spec 0037 review, AC-15)
+
+    // covers: AC-15 (spec 0037), review Minor (late results after Cancel)
+    @Test func cancelClosesTheImportSheetAtOnceAndItsLateAnswerChangesNothing() async throws {
+        let preview = try ProviderFixture.preview("pending")
+        let detail = try ProviderFixture.detail("pending")
+        let daemon = Daemon(
+            preview: .success(preview), outcome: .completed(.providerImport(detail)))
+        daemon.holdsSends = true
+        var importedDetail: ProviderDetail?
+        let model = model(daemon, imported: { importedDetail = $0 })
+        await model.begin()
+        let running = Task { await model.importPackage() }
+        await settle("the held import") { daemon.held.count == 1 }
+
+        model.cancel()
+        #expect(model.phase == .idle)
+
+        daemon.release()
+        await running.value
+        #expect(model.phase == .idle)
+        #expect(importedDetail == nil)
+        #expect(daemon.sent.count == 1)
+    }
+
+    // covers: AC-15 (spec 0037), review Minor (late results after Cancel)
+    @Test func aLateRefusalNeverReopensTheImportSheetOrTouchesANewPreview() async throws {
+        let preview = try ProviderFixture.preview("pending")
+        let daemon = Daemon(
+            preview: .success(preview),
+            outcome: .rejected(Self.rejection("provider.import_limit")))
+        daemon.holdsSends = true
+        let model = model(daemon)
+        await model.begin()
+        let running = Task { await model.importPackage() }
+        await settle("the held import") { daemon.held.count == 1 }
+
+        model.cancel()
+        await model.begin()
+        #expect(model.phase == .preview(preview, path: "/Users/me/providers/acme-demo"))
+        daemon.release()
+        await running.value
+        #expect(model.phase == .preview(preview, path: "/Users/me/providers/acme-demo"))
+    }
+
+    // covers: AC-15 (spec 0037), review Minor (late results after Cancel)
+    @Test func cancelClosesTheApproveSheetAtOnceAndOnlyTheRefreshFollows() async throws {
+        let detail = try ProviderFixture.detail("pending")
+        let daemon = Daemon(
+            preview: .failure(.notSent(ClientErrorCatalog.notConnected())),
+            outcome: .completed(.providerApprove(try ProviderFixture.detail("approved"))))
+        daemon.holdsSends = true
+        var refreshes = 0
+        let model = decisions(daemon, refreshed: { refreshes += 1 })
+        let feedback = FeedbackCenter()
+        model.beginApprove(detail)
+        let running = Task { await model.confirmApprove(feedback: feedback) }
+        await settle("the held approval") { daemon.held.count == 1 }
+
+        model.cancelApprove()
+        #expect(model.approval == nil)
+
+        daemon.release()
+        await running.value
+        #expect(model.approval == nil)
+        #expect(feedback.current == nil)
+        #expect(refreshes == 1)
+    }
+
+    // covers: AC-15 (spec 0037), review Minor (late results after Cancel)
+    @Test func aLateRefusalNeverWritesToTheSheetOfAnotherProvider() async throws {
+        let detail = try ProviderFixture.detail("pending")
+        let other = try ProviderFixture.detail("revoked")
+        let daemon = Daemon(
+            preview: .failure(.notSent(ClientErrorCatalog.notConnected())),
+            outcome: .rejected(Self.rejection("provider.not_approved")))
+        daemon.holdsSends = true
+        let model = decisions(daemon)
+        model.beginApprove(detail)
+        let running = Task { await model.confirmApprove(feedback: nil) }
+        await settle("the held approval") { daemon.held.count == 1 }
+
+        model.cancelApprove()
+        model.beginApprove(other)
+        daemon.release()
+        await running.value
+        #expect(model.approval == ProviderDecisionModel.Approval(detail: other))
+    }
+
+    // covers: spec 0037 review, Minor (spinner of an unreadable folder)
+    @Test func onlyReadingAFolderShowsTheFooterSpinner() {
+        let path = "/Users/me/providers/acme-demo"
+        #expect(ImportProviderSheet.isReading(.loading(path: path)))
+        #expect(
+            ImportProviderSheet.isReading(
+                .unreadable(Self.rejection("provider.import_unreadable"), path: path)) == false)
+        #expect(ImportProviderSheet.isReading(.idle) == false)
     }
 }

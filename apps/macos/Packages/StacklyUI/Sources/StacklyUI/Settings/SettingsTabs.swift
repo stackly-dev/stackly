@@ -169,8 +169,11 @@ struct SourcesSettingsTab: View {
 
     /// The IDs and revisions of the imported providers, so their details load again when
     /// the list changes.
+    /// The task key of the detail loads: each imported entry, and the detail epoch, since a
+    /// new snapshot drops the cached details and the dates with them.
     private var localKeys: [String] {
         (catalog.localProviders ?? []).map { "\($0.provider)@\($0.revision)" }
+            + ["epoch \(catalog.detail.epoch)"]
     }
 
     /// "{id} · {approval} · imported {date}"; the date shows once the detail loaded.

@@ -9,6 +9,8 @@
     final class FixtureCreateService: CreateInstanceService {
         /// The calls made, in order.
         private(set) var formCalls: [UUID] = []
+        /// The `provider` of each form call, in order.
+        private(set) var formProviders: [String?] = []
         private(set) var duplicateCalls: [UUID] = []
         private(set) var preflightCalls: [PreflightCreateParams] = []
         private(set) var listCalls = 0
@@ -30,6 +32,7 @@
             -> CreateForm
         {
             formCalls.append(runtimeId)
+            formProviders.append(provider)
             return try await onForm(runtimeId)
         }
 

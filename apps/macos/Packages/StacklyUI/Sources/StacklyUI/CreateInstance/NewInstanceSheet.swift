@@ -92,6 +92,9 @@ public struct NewInstanceSheet: View {
                             dismiss()
                             navigator?.show(.diagnostics)
                         })
+                    if !model.providerCandidates.isEmpty {
+                        ProviderCandidatesSection(model: model)
+                    }
                 case .choosingRuntime:
                     Text("No installed runtimes in this category.")
                         .font(.callout)
@@ -238,5 +241,40 @@ public struct NewInstanceSheet: View {
     private func clearDrafts() {
         for key in drafts.keys { drafts[key]?.clear() }
         drafts = [:]
+    }
+}
+
+/// The providers the daemon offers when it can't pick one (spec 0037, *Layar*): one row per
+/// candidate in the daemon's order, with its display name, full ID, and for a local entry its
+/// trust and approval. Choosing one reads its form.
+private struct ProviderCandidatesSection: View {
+    let model: CreateInstanceModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s8) {
+            Text("Choose a provider")
+                .font(.headline)
+            ForEach(model.providerCandidateRows, id: \.id) { candidate in
+                Button {
+                    model.chooseProvider(candidate.id)
+                } label: {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text(candidate.displayName ?? candidate.id)
+                        if candidate.displayName != nil {
+                            Text(candidate.id)
+                                .font(.callout.monospaced())
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
+                        if let trust = candidate.trustLabel {
+                            Text(trust)
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
