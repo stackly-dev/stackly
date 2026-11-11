@@ -56,10 +56,10 @@ Dokumen dan aturan supaya orang lain bisa menyumbang provider: CONTRIBUTING, sch
 **Pointer:** spec [0038](../specs/0038-panduan-kontributor-governance/index.md) · code in `xtask/src/docs/`, `docs/providers/`, `CONTRIBUTING.md`, `SECURITY.md`, `GOVERNANCE.md`, `.github/`
 
 - [x] Design it (spec): `/architect panduan kontributor & governance`
-- [ ] Build it: `/develop panduan kontributor & governance`
+- [x] Build it: `/develop panduan kontributor & governance`
   - [x] License record, `cargo xtask docs check`, and the community files: `repository` and the README license clause, the docs checker with its broken fixture tests, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `GOVERNANCE.md`, the three issue forms with `config.yml`, the PR template, `CONTRIBUTING.md`, `LICENSE-NOTICES.md` for nats, postgresql, and traefik, and the README update (spec 0038 AC-1 to AC-4, AC-6, AC-7, AC-9, AC-13, AC-14; build steps 1 to 7; no prerequisite, can run next to the feature 36 build; AC-3 needs owner input I1 and AC-5 is a manual owner step)
   - [x] Provider guide and schema reference: the three reference pages with the schema coverage check, `docs/providers/README.md` with the walkthrough block, `authoring.md`, `testing.md`, `compatibility.md`, `review.md`, and the CONTRIBUTING provider section (spec 0038 AC-2, AC-10, AC-11; build steps 8 and 9; needs feature 36)
   - [x] `cargo xtask docs walkthrough` from a fresh clone, its tests, one full run, and the manual evidence record for AC-034 (spec 0038 AC-8; build step 10; needs feature 36, after the provider guide)
   - [x] Trying a provider locally: `docs/providers/trying-locally.md` with the approval statement check, trust terms aligned in `GOVERNANCE.md` and `review.md`, and the revocation sentences in `SECURITY.md` and `GOVERNANCE.md` (spec 0038 AC-12, AC-4, AC-6; build step 11; needs feature 37)
-- [ ] Verify it: `/check verify panduan kontributor & governance`
+- [x] Verify it: `/check verify panduan kontributor & governance`
 - [x] Test it: `/test panduan kontributor & governance`
