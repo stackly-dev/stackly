@@ -66,4 +66,35 @@ struct ProviderValidateContractTests {
         #expect(reply.identity == nil)
         #expect(reply.omitted == 2)
     }
+
+    /// A daemon whose table marks a version `deprecated` sends that status
+    /// and a `warning` finding (spec 0036 AC-1, AC-5, *Versi dan status*);
+    /// both decode as named cases, not `.unrecognized`.
+    @Test func aDeprecatedVersionAndItsWarningDecode() throws {
+        var object = try #require(
+            JSONSerialization.jsonObject(
+                with: Fixture.data("provider/validation-publishable.json")) as? [String: Any])
+        object["supportedApiVersions"] = [["name": "stackly/v1alpha1", "status": "deprecated"]]
+        object["findings"] = [
+            [
+                "severity": "warning",
+                "origin": "package",
+                "file": "provider.yaml",
+                "location": "apiVersion",
+                "code": "deprecated_api_version",
+                "message":
+                    "apiVersion \"stackly/v1alpha1\" is deprecated; "
+                    + "new packages use: stackly/v1beta1",
+            ]
+        ]
+        object["findingCount"] = 1
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        let reply = try StacklyJSON.decoder().decode(ProviderValidation.self, from: data)
+
+        #expect(reply.supportedApiVersions.map(\.status) == [.deprecated])
+        #expect(reply.findings.map(\.severity) == [.warning])
+        #expect(reply.findings.map(\.origin) == [.package])
+        #expect(reply.loadable && reply.publishable)
+    }
 }

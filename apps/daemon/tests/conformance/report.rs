@@ -404,6 +404,7 @@ fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
 mod tests {
     use super::*;
 
+    // covers: AC-13 (spec 0036)
     #[test]
     fn the_sanitizer_writes_home_and_the_temporary_directory_by_name() {
         let sanitizer = Sanitizer {

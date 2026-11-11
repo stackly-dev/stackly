@@ -44,6 +44,7 @@ fn validation(file: &str) -> ProviderValidation {
         .unwrap_or_else(|err| panic!("{file}: {err}"))
 }
 
+// covers: AC-5 (spec 0036)
 #[test]
 fn every_provider_fixture_decodes_and_the_roundtrip_ones_keep_their_shape() {
     let index: Index = serde_json::from_slice(&read("provider/index.json")).unwrap();
@@ -82,6 +83,7 @@ fn every_provider_fixture_decodes_and_the_roundtrip_ones_keep_their_shape() {
     }
 }
 
+// covers: AC-5 (spec 0036)
 #[test]
 fn a_publishable_package_has_its_identity_and_no_finding() {
     let reply = validation("validation-publishable.json");
@@ -97,6 +99,7 @@ fn a_publishable_package_has_its_identity_and_no_finding() {
     );
 }
 
+// covers: AC-1, AC-5 (spec 0036)
 #[test]
 fn an_unsupported_api_version_is_one_package_error_and_no_identity() {
     let reply = validation("validation-unsupported-api-version.json");
@@ -116,6 +119,7 @@ fn an_unsupported_api_version_is_one_package_error_and_no_identity() {
     assert!(finding.message.contains("stackly/v1alpha1"));
 }
 
+// covers: AC-2, AC-5 (spec 0036)
 #[test]
 fn an_authoring_finding_keeps_the_package_loadable_but_not_publishable() {
     let reply = validation("validation-authoring.json");
@@ -125,6 +129,7 @@ fn an_authoring_finding_keeps_the_package_loadable_but_not_publishable() {
     assert_eq!(reply.findings[0].code, "token_not_allowed_here");
 }
 
+// covers: AC-5 (spec 0036)
 #[test]
 fn values_a_newer_daemon_sends_read_unrecognized() {
     let reply = validation("validation-unknown-values.json");
@@ -137,6 +142,40 @@ fn values_a_newer_daemon_sends_read_unrecognized() {
     assert_eq!(reply.findings[0].reason, None);
     assert!(reply.identity.is_none());
     assert_eq!(u64::from(reply.omitted), 2);
+}
+
+// covers: AC-1, AC-5 (spec 0036, *Versi dan status*: a deprecated version)
+#[test]
+fn a_deprecated_version_and_its_warning_keep_their_wire_names() {
+    let mut value: Value = serde_json::from_slice(&read("provider/validation-publishable.json"))
+        .expect("the fixture is JSON");
+    value["supportedApiVersions"][0]["status"] = "deprecated".into();
+    value["findings"] = serde_json::json!([{
+        "severity": "warning",
+        "origin": "package",
+        "file": "provider.yaml",
+        "location": "apiVersion",
+        "code": "deprecated_api_version",
+        "message": "apiVersion \"stackly/v1alpha1\" is deprecated; new packages use: stackly/v1beta1",
+        "reason": null,
+    }]);
+    value["findingCount"] = 1.into();
+
+    let reply: ProviderValidation =
+        serde_json::from_value(value.clone()).expect("the deprecated reply decodes");
+
+    assert_eq!(
+        reply.supported_api_versions[0].status,
+        ApiVersionStatus::Deprecated
+    );
+    assert_eq!(reply.findings[0].severity, FindingSeverity::Warning);
+    assert_eq!(reply.findings[0].origin, FindingOrigin::Package);
+    assert!(reply.loadable && reply.publishable);
+    assert_eq!(
+        serde_json::to_value(&reply).expect("the reply encodes"),
+        value,
+        "deprecated and warning go back on the wire as they came"
+    );
 }
 
 #[test]

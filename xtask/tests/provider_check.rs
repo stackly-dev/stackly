@@ -62,6 +62,7 @@ fn broken_copy(root: &TestRoot, package: &str, edit: &dyn Fn(&str) -> String) ->
     copy
 }
 
+// covers: AC-4, AC-7 (spec 0036)
 #[test]
 fn the_repo_packages_pass_with_one_ok_line_each() {
     let output = provider_check(&[]);
@@ -95,6 +96,7 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
     }
 }
 
+// covers: AC-4 (spec 0036)
 #[test]
 fn an_unknown_primitive_in_a_copy_of_each_package_fails_with_one_line() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -127,6 +129,7 @@ fn an_unknown_primitive_in_a_copy_of_each_package_fails_with_one_line() {
     );
 }
 
+// covers: AC-4 (spec 0036)
 #[test]
 fn every_problem_in_a_package_gets_its_own_line_next_to_the_valid_ones() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -152,6 +155,7 @@ fn every_problem_in_a_package_gets_its_own_line_next_to_the_valid_ones() {
     );
 }
 
+// covers: AC-2, AC-4 (spec 0036)
 #[test]
 fn a_nats_copy_that_renders_its_config_at_initialize_prints_the_init_port_issues_and_no_ok_line() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -185,6 +189,7 @@ fn a_nats_copy_that_renders_its_config_at_initialize_prints_the_init_port_issues
     );
 }
 
+// covers: AC-2, AC-4 (spec 0036)
 #[test]
 fn a_traefik_copy_that_renders_its_static_config_at_initialize_is_reported_next_to_the_valid_ones()
 {
@@ -213,6 +218,7 @@ fn a_traefik_copy_that_renders_its_static_config_at_initialize_is_reported_next_
     assert!(oks[0].starts_with("ok official/nats 1.0.1 "), "{}", oks[0]);
 }
 
+// covers: AC-1, AC-4 (spec 0036)
 #[test]
 fn another_api_version_prints_one_line_that_names_the_supported_versions() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -231,6 +237,7 @@ fn another_api_version_prints_one_line_that_names_the_supported_versions() {
     );
 }
 
+// covers: AC-3, AC-4 (spec 0036)
 #[test]
 fn a_broken_scenarios_file_is_an_error_line_and_no_ok_line() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -267,6 +274,7 @@ fn provider_freeze(dir: &Path) -> Output {
         .expect("the xtask binary runs")
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn freezing_a_frozen_revision_again_changes_nothing_and_a_testing_package_is_refused() {
     let nats = provider_freeze(&repo_root().join("providers/nats"));
@@ -283,6 +291,7 @@ fn freezing_a_frozen_revision_again_changes_nothing_and_a_testing_package_is_ref
     );
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn a_copy_of_a_frozen_revision_with_other_bytes_is_refused() {
     let root = TestRoot::new().expect("a test root can be created");
@@ -297,6 +306,7 @@ fn a_copy_of_a_frozen_revision_with_other_bytes_is_refused() {
     assert!(stderr.contains("raise metadata.revision"), "{stderr}");
 }
 
+// covers: AC-6 (spec 0036)
 #[test]
 fn a_planned_provider_is_refused_before_anything_is_written() {
     let corpus = repo_root().join("crates/core/tests/fixtures/compat/traefik");

@@ -376,6 +376,7 @@ mod tests {
         facts
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn postgresql_runs_four_probes_in_a_fixed_order_as_the_package_superuser() {
         let script = Script::answering(&[
@@ -425,6 +426,89 @@ mod tests {
         assert!(zstd.1.contains(&"/spike/run/dump.zst".to_owned()));
     }
 
+    // covers: AC-16 (spec 0036; spec 0003 AC-7, *Spike dari paket provider*)
+    #[test]
+    fn every_postgresql_probe_call_is_the_exact_spec_0003_command_line() {
+        let script = Script::answering(&[
+            (0, "CREATE DATABASE\n", ""),
+            (0, "i\n", ""),
+            (0, "und, collversion 153.120\n", ""),
+            (0, "CREATE EXTENSION\n16\n", ""),
+            (0, "CREATE TABLE\nINSERT 0 1\nlz4\n", ""),
+            (0, "", ""),
+        ]);
+
+        probes("postgresql", &postgres_facts(), &script);
+
+        let connection = [
+            "-h",
+            "/tmp/sk-0011aabb/i/abc",
+            "-p",
+            "40123",
+            "-U",
+            "postgres",
+        ];
+        let psql = |statements: &[&str]| -> Vec<String> {
+            let mut args: Vec<&str> = vec!["-X", "-w", "-v", "ON_ERROR_STOP=1", "-At"];
+            args.extend(connection);
+            args.extend(["-d", "postgres"]);
+            for statement in statements {
+                args.extend(["-c", statement]);
+            }
+            args.into_iter().map(str::to_owned).collect()
+        };
+        let mut pg_dump = vec!["-w"];
+        pg_dump.extend(connection);
+        pg_dump.extend(["--compress=zstd", "-f", "/spike/run/dump.zst", "postgres"]);
+        let expected: Vec<(String, Vec<String>)> = vec![
+            (
+                "psql".to_owned(),
+                psql(&[
+                    "create database stackly_icu_probe template template0 locale_provider icu icu_locale 'und'",
+                ]),
+            ),
+            (
+                "psql".to_owned(),
+                psql(&[
+                    "select datlocprovider from pg_database where datname = 'stackly_icu_probe'",
+                ]),
+            ),
+            (
+                "psql".to_owned(),
+                psql(&[
+                    "select datlocale || ', collversion ' || coalesce(datcollversion, 'none') from pg_database where datname = 'stackly_icu_probe'",
+                ]),
+            ),
+            (
+                "psql".to_owned(),
+                psql(&[
+                    "create extension pgcrypto",
+                    "select length(gen_random_bytes(16))",
+                ]),
+            ),
+            (
+                "psql".to_owned(),
+                psql(&[
+                    "create table stackly_lz4 (value text compression lz4)",
+                    "insert into stackly_lz4 values (repeat('a', 10000))",
+                    "select pg_column_compression(value) from stackly_lz4",
+                ]),
+            ),
+            (
+                "pg_dump".to_owned(),
+                pg_dump.into_iter().map(str::to_owned).collect(),
+            ),
+        ];
+        let calls: Vec<(String, Vec<String>)> = script
+            .calls
+            .borrow()
+            .iter()
+            .map(|(name, args, _)| (name.clone(), args.clone()))
+            .collect();
+        assert_eq!(calls, expected);
+    }
+
+    // covers: AC-16 (spec 0036)
     #[test]
     fn the_icu_probe_sends_its_two_statements_in_two_calls() {
         let script = Script::answering(&[
@@ -453,6 +537,7 @@ mod tests {
         );
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn the_icu_probe_fails_on_another_provider_or_a_refused_create() {
         let builtin = Script::answering(&[(0, "", ""), (0, "b\n", "")]);
@@ -484,6 +569,7 @@ mod tests {
         );
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn an_empty_or_missing_dump_fails_the_zstd_probe() {
         let mut empty = Script::answering(&[]);
@@ -507,6 +593,7 @@ mod tests {
         assert!(missing.unwrap_err().to_string().contains("wrote no"));
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn nats_checks_jetstream_on_the_monitoring_port_and_others_have_no_probes() {
         let mut facts = SpikeFacts::default();

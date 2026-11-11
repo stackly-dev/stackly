@@ -368,6 +368,7 @@ mod tests {
         result.unwrap_err().reason.unwrap()
     }
 
+    // covers: AC-10 (spec 0036)
     #[test]
     fn two_equal_samples_of_a_group_leader_hold_the_contract() {
         let one = sample(41, "t1", 41);
@@ -375,6 +376,7 @@ mod tests {
         assert!(compare(&one, &one.clone(), LOCK, PROGRAM).is_ok());
     }
 
+    // covers: AC-10 (spec 0036)
     #[test]
     fn another_pid_or_start_time_or_a_process_that_leads_no_group_is_not_foreground() {
         let one = sample(41, "t1", 41);
@@ -394,6 +396,7 @@ mod tests {
         );
     }
 
+    // covers: AC-10 (spec 0036)
     #[test]
     fn another_file_at_fd_3_or_another_executable_fails_with_its_reason() {
         let one = sample(41, "t1", 41);
@@ -415,6 +418,7 @@ mod tests {
         assert_eq!(reason(compare(&one, &copied, LOCK, PROGRAM)), "re_exec");
     }
 
+    // covers: AC-10 (spec 0036)
     #[test]
     fn lsof_output_is_read_for_the_named_descriptor_only() {
         let text = "p41\nfcwd\nD0x1000010\ni2\nftxt\nD0x1000010\ni77\nf3\nD0x1000011\ni88\n";

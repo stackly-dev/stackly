@@ -197,6 +197,7 @@ mod tests {
         }
     }
 
+    // covers: AC-6 (spec 0036)
     #[test]
     fn a_new_entry_holds_the_package_bytes_and_its_facts_and_never_changes() {
         let root = stackly_testkit::TestRoot::new().unwrap();
@@ -248,6 +249,7 @@ mod tests {
         }));
     }
 
+    // covers: AC-6 (spec 0036)
     #[test]
     fn testing_and_unpublishable_packages_are_refused_without_a_write() {
         let root = stackly_testkit::TestRoot::new().unwrap();
@@ -273,6 +275,7 @@ mod tests {
         catalog_providers(&repo()).unwrap()
     }
 
+    // covers: AC-6 (spec 0036)
     #[test]
     fn a_package_that_is_not_a_catalog_provider_is_refused_without_a_write() {
         let root = stackly_testkit::TestRoot::new().unwrap();
