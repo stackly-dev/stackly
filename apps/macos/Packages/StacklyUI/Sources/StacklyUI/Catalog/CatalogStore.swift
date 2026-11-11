@@ -19,11 +19,18 @@ public final class CatalogStore {
         var revocations: [CatalogRevocation] = []
     }
 
+    /// The reply of the last `catalog.list_providers`, held until its generation completes,
+    /// so the reply of a generation a newer one replaced changes nothing.
+    final class PendingReply {
+        var reply: ListProvidersReply?
+    }
+
     /// The store the shell keeps in sync.
     public let store: ResourceStore<ProviderSummary>
     /// The detail of the selected provider.
     public let detail: ProviderDetailModel
     @ObservationIgnored private let loaded: Loaded
+    @ObservationIgnored private let refresher: SnapshotCoalescer
     /// Sends one read to the daemon.
     @ObservationIgnored let call: (Call) async throws(ClientError) -> Reply
     /// Sends one mutation with its idempotency key through the mutation path.
@@ -47,20 +54,18 @@ public final class CatalogStore {
         sleep: @escaping (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         let loaded = Loaded()
+        let pending = PendingReply()
         let detail = ProviderDetailModel(call: call, serverInstance: serverInstance)
         let reload = ReloadBox()
         self.loaded = loaded
         self.detail = detail
         self.call = call
         self.send = send
-        store = ResourceStore(
+        let store = ResourceStore<ProviderSummary>(
             kinds: ["catalog."],
             fetchPage: { _ throws(ClientError) in
                 let reply = try await Self.list(call: call)
-                loaded.info = reply.catalog
-                loaded.order = (reply.items ?? []).map(\.provider)
-                loaded.revocations = reply.revocations ?? []
-                detail.invalidate()
+                pending.reply = reply
                 return Page(items: reply.items ?? [], next: nil)
             },
             fetchOne: { id throws(ClientError) in try await Self.provider(id, call: call) },
@@ -73,8 +78,20 @@ public final class CatalogStore {
             },
             now: now,
             sleep: sleep)
-        let store = store
-        reload.run = { Task { _ = await store.resnapshot() } }
+        let refresher = SnapshotCoalescer { [weak store] in _ = await store?.resnapshot() }
+        self.store = store
+        self.refresher = refresher
+        reload.run = { refresher.request() }
+        // Only a snapshot that completed takes its reply and drops the detail cache: the
+        // reply is the last one fetched, since a completed generation is the newest.
+        store.didApply = { change in
+            guard case .reloaded = change, let reply = pending.reply else { return }
+            pending.reply = nil
+            loaded.info = reply.catalog
+            loaded.order = (reply.items ?? []).map(\.provider)
+            loaded.revocations = reply.revocations ?? []
+            detail.invalidate()
+        }
     }
 
     /// The action `catalog.changed` runs, set once the resource store exists.
@@ -94,8 +111,10 @@ public final class CatalogStore {
     }
 
     /// Loads the catalog again after a provider operation, without waiting for its event.
+    /// It shares a snapshot with `catalog.changed`: a request while one runs asks for one more
+    /// after it, so N requests make at most two `catalog.list_providers`.
     func reload() async {
-        _ = await store.resnapshot()
+        await refresher.run()
     }
 
     /// A model of the import flow over this store, for one window.
@@ -180,5 +199,47 @@ public final class CatalogStore {
             throw .rejected(ClientErrorCatalog.protocolViolation())
         }
         return detail.summary
+    }
+}
+
+/// Runs one snapshot at a time for requests that come together, such as `catalog.changed`
+/// and the reload after an operation. A request while a snapshot runs asks for one more after
+/// it, since the running one may have started before the change; N requests while one runs
+/// make one more, not N.
+@MainActor
+final class SnapshotCoalescer {
+    private var running: Task<Void, Never>?
+    private var again = false
+    private let snapshot: @MainActor () async -> Void
+
+    /// Creates a coalescer around one snapshot.
+    /// - Parameter snapshot: Loads one snapshot.
+    init(snapshot: @escaping @MainActor () async -> Void) {
+        self.snapshot = snapshot
+    }
+
+    /// Asks for a snapshot without waiting: starts one, or marks one more after the running
+    /// one. It is synchronous, so a request made while a snapshot completes still joins it.
+    func request() {
+        guard running == nil else {
+            again = true
+            return
+        }
+        running = Task { @MainActor [weak self] in
+            while let self {
+                self.again = false
+                await self.snapshot()
+                guard self.again else {
+                    self.running = nil
+                    return
+                }
+            }
+        }
+    }
+
+    /// Asks for a snapshot and waits until the snapshots that cover the request are done.
+    func run() async {
+        request()
+        await running?.value
     }
 }

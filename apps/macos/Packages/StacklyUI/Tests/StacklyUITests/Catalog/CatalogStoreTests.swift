@@ -195,4 +195,119 @@ struct CatalogStoreTests {
         #expect(store.revocations == [revocation])
         #expect(store.localProviders?.map(\.provider) == ["acme/demo"])
     }
+
+    // MARK: - Snapshots and the detail cache (spec 0037 review, Major 3)
+
+    // covers: spec 0037 review, Major 3
+    @Test func aLoadAfterInvalidateStartsAtOnceAndKeepsItsAnswer() async throws {
+        let nats = try CatalogFixture.detail("nats")
+        let gate = ReplyGate()
+        let model = ProviderDetailModel(call: { _ throws(ClientError) in await gate.wait() })
+        let first = Task { await model.load("official/nats", revision: 1) }
+        await settle("the first call") { gate.waiting.count == 1 }
+
+        model.invalidate()
+        let second = Task { await model.load("official/nats", revision: 1) }
+        await settle("a second call for the new epoch") { gate.waiting.count == 2 }
+
+        gate.answer(0, .catalogGetProvider(nats))
+        await first.value
+        #expect(model.phase(for: "official/nats", revision: 1) == .loading)
+        gate.answer(1, .catalogGetProvider(nats))
+        await second.value
+        #expect(model.phase(for: "official/nats", revision: 1) == .loaded(nats))
+    }
+
+    // covers: spec 0037 review, Major 3
+    @Test func catalogChangedAndAReloadShareSnapshotsAndTheDetailLoadsOnce() async throws {
+        let gate = ReplyGate()
+        let script = script
+        let release = Reply.catalogListProviders(try #require(script.list))
+        let store = CatalogStore(
+            call: { call throws(ClientError) in
+                if case .catalogListProviders = call { _ = await gate.wait() }
+                return try await script.call(call)
+            },
+            now: { Date(timeIntervalSince1970: 100) }, sleep: { _ in })
+        let event = Event(
+            subscriptionId: 1, sequence: 1, at: Date(timeIntervalSince1970: 100),
+            resource: nil, revision: nil,
+            kind: .catalogChanged(CatalogChanged(provider: "acme/demo", change: .approved)))
+
+        store.store.receive(event)
+        await settle("the snapshot of the event") { gate.waiting.count == 1 }
+        let reloads = (0..<3).map { _ in Task { await store.reload() } }
+        store.store.receive(event)
+        for _ in 0..<5 { await Task.yield() }
+        #expect(gate.waiting.count == 1)
+
+        gate.answer(0, release)
+        await settle("one more snapshot for the requests") { gate.waiting.count == 2 }
+        gate.answer(1, release)
+        for _ in 0..<5 { await Task.yield() }
+        #expect(gate.waiting.count == 2)
+        gate.answerAll(release)
+        for reload in reloads { await reload.value }
+        #expect(script.listCalls == 2)
+        #expect(store.providers?.isEmpty == false)
+
+        let epoch = store.detail.epoch
+        await store.detail.load("official/nats", revision: 1)
+        #expect(store.detail.epoch == epoch)
+        #expect(
+            store.detail.phase(for: "official/nats", revision: 1)
+                == .loaded(try CatalogFixture.detail("nats")))
+    }
+
+    // covers: spec 0037 review, Major 3
+    @Test func aSnapshotThatANewerOneReplacedChangesNothing() async throws {
+        let gate = ReplyGate()
+        let script = script
+        let release = Reply.catalogListProviders(try #require(script.list))
+        let store = CatalogStore(
+            call: { call throws(ClientError) in
+                if case .catalogListProviders = call { _ = await gate.wait() }
+                return try await script.call(call)
+            },
+            now: { Date(timeIntervalSince1970: 100) }, sleep: { _ in })
+        let older = Task { await store.store.resnapshot() }
+        await settle("the older snapshot") { gate.waiting.count == 1 }
+        let newer = Task { await store.store.resnapshot() }
+        await settle("the newer snapshot") { gate.waiting.count == 2 }
+        let epoch = store.detail.epoch
+
+        gate.answer(0, release)
+        _ = await older.value
+        #expect(store.info == nil)
+        #expect(store.detail.epoch == epoch)
+
+        gate.answer(1, release)
+        _ = await newer.value
+        #expect(store.info == script.list?.catalog)
+        #expect(store.detail.epoch == epoch + 1)
+    }
+}
+
+/// Holds each call until the test answers it, by index.
+@MainActor
+final class ReplyGate {
+    private(set) var waiting: [CheckedContinuation<Reply, Never>] = []
+    private var answered: Set<Int> = []
+
+    /// Waits for the test to answer this call.
+    func wait() async -> Reply {
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    /// Answers every call not answered yet with `reply`, so a test that expected fewer
+    /// calls fails instead of waiting forever.
+    func answerAll(_ reply: Reply) {
+        for index in waiting.indices { answer(index, reply) }
+    }
+
+    /// Answers call `index` with `reply`.
+    func answer(_ index: Int, _ reply: Reply) {
+        guard answered.insert(index).inserted else { return }
+        waiting[index].resume(returning: reply)
+    }
 }

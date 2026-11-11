@@ -27,12 +27,20 @@ public final class ProviderDetailModel {
         let revision: UInt64
     }
 
+    /// A load on its way: its key and the epoch it started in.
+    private struct InFlight: Hashable {
+        let key: Key
+        let epoch: Int
+    }
+
     @ObservationIgnored private let call: (Call) async throws(ClientError) -> Reply
     @ObservationIgnored private let serverInstance: () -> UUID?
     /// Counts the times the cache was dropped. The page keys its detail task on it, so a
     /// new snapshot (a restarted daemon, say) loads the selected provider again.
     private(set) var epoch = 0
-    @ObservationIgnored private var inFlight: Set<Key> = []
+    /// The loads on their way, each with the epoch it started in: a load of an older epoch
+    /// never blocks one of the current epoch, whose answer is the only one kept.
+    @ObservationIgnored private var inFlight: Set<InFlight> = []
     private var details: [Key: ProviderDetail] = [:]
     private var failures: [Key: FailureContent] = [:]
 
@@ -61,11 +69,12 @@ public final class ProviderDetailModel {
     /// A load that the caller cancels (the selection moved on) leaves no trace.
     public func load(_ provider: String, revision: UInt64) async {
         let key = key(provider, revision)
-        guard details[key] == nil, failures[key] == nil, inFlight.insert(key).inserted else {
+        let started = epoch
+        let load = InFlight(key: key, epoch: started)
+        guard details[key] == nil, failures[key] == nil, inFlight.insert(load).inserted else {
             return
         }
-        let started = epoch
-        defer { inFlight.remove(key) }
+        defer { inFlight.remove(load) }
         do throws(ClientError) {
             let reply = try await call(.catalogGetProvider(GetProviderParams(provider: provider)))
             guard started == epoch, Task.isCancelled == false else { return }
@@ -86,7 +95,9 @@ public final class ProviderDetailModel {
         await load(provider, revision: revision)
     }
 
-    /// Drops every answer and failure: the store loaded a snapshot again.
+    /// Drops every answer and failure: the store loaded a snapshot again. A load still on its
+    /// way keeps running, but its answer is dropped, and a new ``load(_:revision:)`` of the
+    /// same provider starts at once instead of waiting for it.
     func invalidate() {
         epoch += 1
         details.removeAll()
