@@ -128,6 +128,7 @@ pub fn run(repo: &Path, id: &str, result_path: &Path, no_quarantine: bool) -> Re
         local_run: no_quarantine,
         worker_timeout_secs: WORKER_TIMEOUT.as_secs(),
         redactions: redactions.clone(),
+        repo: repo.to_path_buf(),
     };
     write_json_atomic(&layout.plan(), &plan).context("cannot write plan.json")?;
     for dir in [layout.agent_home(), layout.agent_tmp()] {

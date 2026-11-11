@@ -1,0 +1,10 @@
+# Managed by Stackly. Edits to this file are lost on the next start.
+# Only the readiness probe role logs in without a password, and only through
+# the instance's private Unix socket, as the OS user that owns that socket.
+# TYPE  DATABASE  USER               ADDRESS        METHOD
+local   postgres  stackly_readiness                 peer map=stackly
+local   all       stackly_readiness                 reject
+host    all       stackly_readiness  all            reject
+local   all       all                               scram-sha-256
+host    all       all                127.0.0.1/32   scram-sha-256
+host    all       all                ::1/128        scram-sha-256

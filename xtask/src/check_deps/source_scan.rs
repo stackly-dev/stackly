@@ -182,7 +182,7 @@ const CLI_CODES_RULE: &str = "only the cli and the protocol name codes::cli, so 
 /// `stacklyd` `ipc::secret`, `stackly-cli` `secret_input`,
 /// `commands::secret`, and `commands::instance::connection`, which joins the
 /// revealed password into a connection string, spec 0021).
-pub const EXPOSE_ALLOWED: [(&str, &[&str]); 6] = [
+pub const EXPOSE_ALLOWED: [(&str, &[&str]); 7] = [
     (
         "stackly-cli",
         &["commands::secret", "commands::instance::connection"],
@@ -192,6 +192,11 @@ pub const EXPOSE_ALLOWED: [(&str, &[&str]); 6] = [
     ("stackly-protocol", &["secret"]),
     ("stackly-testkit", &["fake_secret"]),
     ("stacklyd", &["ipc::secret"]),
+    // Tooling only (spec 0036 AC-16, rationale decision 15): the spike's
+    // package recipe hands the fixture credentials it made itself (spec
+    // 0002 prefix) to a package's initialize steps on stdin, in env, or in
+    // a 0600 file. It never sees a user's secret.
+    ("xtask", &["runtime::spike::package_recipe"]),
 ];
 /// The `std::env` functions a library never calls.
 const ENV_READS: [&str; 6] = ["var", "var_os", "vars", "vars_os", "home_dir", "temp_dir"];
@@ -1702,6 +1707,7 @@ mod tests {
                 ("stackly-protocol", &["secret"][..]),
                 ("stackly-testkit", &["fake_secret"][..]),
                 ("stacklyd", &["ipc::secret"][..]),
+                ("xtask", &["runtime::spike::package_recipe"][..]),
             ]
         );
     }

@@ -28,6 +28,8 @@ mod remedies;
 pub mod scenarios;
 mod settings;
 mod template;
+#[cfg(feature = "test-support")]
+pub mod testing;
 mod timeouts;
 mod validate;
 mod version_check;

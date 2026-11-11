@@ -430,6 +430,17 @@
       "summary": "the platform roots or the socket path cannot be worked out"
     },
     {
+      "code": "cli.provider_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "errors",
+        "warnings"
+      ],
+      "items": null,
+      "summary": "the provider package is not publishable; the result holds the validation (spec 0036)"
+    },
+    {
       "code": "cli.restart_aborted",
       "category": "failed",
       "retryable": false,
