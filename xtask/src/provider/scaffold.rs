@@ -279,6 +279,7 @@ pub fn run(_root: &Path, _args: &[&str]) -> Result<ExitCode> {
 mod tests {
     use super::*;
 
+    // covers: AC-7 (spec 0036)
     #[test]
     fn a_name_that_breaks_the_name_part_rule_or_is_example_is_refused() {
         for name in [
@@ -301,12 +302,14 @@ mod tests {
         }
     }
 
+    // covers: AC-7 (spec 0036)
     #[test]
     fn the_first_letter_of_the_name_is_capitalized() {
         assert_eq!(capitalized("mytool"), "Mytool");
         assert_eq!(capitalized("my-tool"), "My-tool");
     }
 
+    // covers: AC-7 (spec 0036)
     #[test]
     fn a_line_is_replaced_only_when_it_is_there_exactly_once() {
         assert_eq!(
@@ -322,6 +325,7 @@ mod tests {
         assert!(replace_line("  id: xy\n", "f", "  id: x", "y").is_err());
     }
 
+    // covers: AC-7 (spec 0036)
     #[test]
     fn the_arguments_are_a_name_and_an_optional_out_folder() {
         assert_eq!(parse_args(&["t"]).unwrap(), ("t", None));

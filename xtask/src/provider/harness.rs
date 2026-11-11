@@ -190,6 +190,7 @@ fn ignore_signals_while_the_harness_runs() -> Result<()> {
 mod tests {
     use super::*;
 
+    // covers: AC-12, AC-13 (spec 0036)
     #[test]
     fn the_arguments_are_a_folder_and_the_options_or_cleanup_alone() {
         assert_eq!(parse(&["--cleanup"]).unwrap(), Task::Cleanup);

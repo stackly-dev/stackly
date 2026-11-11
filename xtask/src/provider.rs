@@ -237,6 +237,7 @@ mod macos {
     mod tests {
         use super::*;
 
+        // covers: AC-4 (spec 0036)
         #[test]
         fn a_missing_folder_is_one_problem_named_after_it() {
             let root = stackly_testkit::TestRoot::new().unwrap();
@@ -261,6 +262,7 @@ mod not_frozen_tests {
 
     use super::*;
 
+    // covers: AC-4, AC-6 (spec 0036)
     #[test]
     fn a_catalog_provider_without_a_corpus_entry_is_one_not_frozen_problem() {
         let root = stackly_testkit::TestRoot::new().unwrap();

@@ -668,6 +668,7 @@ mod tests {
         PackageRecipe::load(&dir, provider).unwrap()
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn the_three_packaged_providers_are_found_by_their_software() {
         for provider in ["nats", "postgresql", "traefik"] {
@@ -679,6 +680,7 @@ mod tests {
         }
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn a_package_that_is_not_publishable_or_has_no_version_check_is_refused() {
         let root = stackly_testkit::TestRoot::new().unwrap();
@@ -701,6 +703,7 @@ mod tests {
         assert_eq!(err.to_string(), "package has no versionCheck");
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn nats_starts_from_its_package_with_the_allocated_ports() {
         let root = stackly_testkit::TestRoot::new().unwrap();
@@ -746,6 +749,7 @@ mod tests {
         }
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn postgresql_17_and_18_plan_initdb_with_the_fixture_password_and_a_socket() {
         for (version, line) in [("17.11", "17"), ("18.6", "18")] {
@@ -811,6 +815,7 @@ mod tests {
         }
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn traefik_starts_from_its_package_and_reads_its_version_line() {
         let root = stackly_testkit::TestRoot::new().unwrap();
@@ -843,6 +848,7 @@ mod tests {
         );
     }
 
+    // covers: AC-16 (spec 0036)
     #[test]
     fn the_fake_package_runs_init_start_ready_and_stop_against_the_fake_server() {
         let root = stackly_testkit::TestRoot::new().unwrap();
