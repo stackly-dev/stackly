@@ -32,6 +32,8 @@ This copies [`providers/example/`](../../providers/example/) into `providers/myt
 
 The new package is valid at once: `cargo xtask provider check providers/mytool` and `cargo xtask provider test providers/mytool` both pass before you change anything. It runs `stackly-fake-server`, so you can learn the format without downloading a runtime.
 
+A new folder in `providers/` also needs two repository changes in the same pull request, for a `testing` package too, not only when it moves to the official catalog: add the folder name to `PROVIDER_WORDS` in `xtask/src/check_deps/source_scan.rs` (until you do, `cargo test -p xtask` fails with `<name> is not listed`), and write its create form fixture with `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures`, then list the new `protocols/fixtures/instance/create-form-<name>.json` in `protocols/fixtures/instance/index.json` with the type `CreateForm`.
+
 ## Fill in the package
 
 Work in this order, and run `cargo xtask provider check providers/mytool` after each change.
@@ -71,8 +73,8 @@ A `testing` package never ships. To make it an official provider, the package an
 1. **Pin the runtime.** Add an `[[artifact]]` entry for each runtime version to `runtimes/inventory.toml`, with the real download URL and digest. `cargo xtask runtime pin --url <https>` downloads the file and prints the values to copy. Never write a URL or a digest you have not checked. The spike evidence for each artifact follows the runtime flow (`cargo xtask runtime spike`), and a maintainer runs it.
 2. **Change the identity.** Set `metadata.id` to `official/<name>`, `metadata.software` to the `provider` of the inventory entries, the `category`, and `runtime.executable`. The folder name must equal the name part of the new ID.
 3. **Generate `versions.json`.** Delete the hand written file and run `cargo xtask codegen`, which writes it from the inventory. `cargo xtask codegen --check` must stay clean.
-4. **Add the name to the scan list.** Add the provider name to `PROVIDER_WORDS` in `xtask/src/check_deps/source_scan.rs`. Until you do, the `xtask` test `the_provider_words_cover_every_provider_folder_and_catalog_id` fails.
-5. **Write the create form fixture.** Run `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures`, which writes one form fixture per folder in `providers/`, and commit the new file.
+4. **Check the scan list.** The folder name is already in `PROVIDER_WORDS` in `xtask/src/check_deps/source_scan.rs` ([Start from the example](#start-from-the-example)). Add the name part of the new ID too when it differs. Until every folder and catalog ID is listed, the `xtask` test `the_provider_words_cover_every_provider_folder_and_catalog_id` fails.
+5. **Update the create form fixture.** Run `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures` again, which rewrites the form fixture of every folder in `providers/` for the new identity and runtime, and commit the changed file.
 6. **Add native tests.** Add one native test per runtime line to `apps/daemon/tests/provider_conformance.rs`, like the existing NATS and PostgreSQL tests. A maintainer runs them ([testing.md](testing.md#fixture-evidence-and-native-evidence)).
 7. **List it in the catalog.** Add a `[[provider]]` entry to `providers/catalog.toml` (or move it from `[[planned]]`), and run `cargo xtask catalog check`.
 8. **Freeze the revision.** Run `cargo xtask provider freeze providers/<name>`, which copies this revision into the compatibility corpus, and commit the new entry. Freeze refuses a package that is not a `[[provider]]` of the catalog, so it comes after step 7, and `cargo xtask provider check` without arguments reports `not frozen` for a catalog provider until you run it. See [compatibility.md](compatibility.md).
