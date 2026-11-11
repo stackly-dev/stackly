@@ -308,12 +308,30 @@ pub fn field_errors(issues: &[FieldIssue]) -> Vec<FieldError> {
 #[must_use]
 pub fn create_error(error: &CreateError, issues: &[FieldIssue]) -> ErrorBody {
     let body = crate::ipc::operation::operation_error_body(error);
+    // Spec 0037, *Software yang sama*: candidates come from a pick by
+    // software, where several entries match or the only one is not
+    // approved, so the message of a pinned digest clash would mislead.
+    if let CreateError::ProviderAmbiguous { candidates, .. } = error
+        && !candidates.is_empty()
+    {
+        return body.details().iter().fold(
+            ErrorBody::new(
+                &stackly_protocol::codes::instance::PROVIDER_AMBIGUOUS,
+                AMBIGUOUS_CHOICE,
+            ),
+            |rewritten, detail| rewritten.with_detail(detail.key(), detail.value()),
+        );
+    }
     if error.carries_fields() {
         body.with_fields(field_errors(issues))
     } else {
         body
     }
 }
+
+/// The message of `instance.provider_ambiguous` for a pick by software.
+pub const AMBIGUOUS_CHOICE: &str =
+    "no single approved provider runs this software; choose one of the candidates";
 
 /// `body` with the static hint of its `instance.*`, `provider.*`, or
 /// `catalog.pin_failed` code, unless it carries one.
