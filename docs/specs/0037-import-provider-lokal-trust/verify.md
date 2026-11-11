@@ -549,3 +549,18 @@ Milestone 1 sampai 4 dan Langkah 13 sudah PASS dan tidak diulang satu per satu. 
 - AC-15, AC-16 · bagian otomatis terpenuhi; tinjauan GUI dengan mata `NOT_RUN`, owner user
 - AC-8, AC-13 · terpenuhi; bukti `native` jaringan mati, folder terlindung, dan quarantine unduhan browser `NOT_RUN`, owner user
 - Done when fitur 37 · keenam kalimat terpenuhi
+
+## Fix review
+
+_2026-11-11 (`dev-f37-fix3`): temuan review [2026-11-11-f37-import-provider-lokal-trust.md](../../reviews/2026-11-11-f37-import-provider-lokal-trust.md) di core, daemon, dan CLI; kontrak tidak berubah._
+
+| Temuan | Fix | Test |
+| --- | --- | --- |
+| Major 1, remedy doctor dari paket lokal yang belum disetujui | `dbc20be7`: `catalog_package` memakai entri snapshot hanya bila entri catalog, atau entri lokal yang kuncinya sama persis dengan revision pinned instance dan `entry_trust` `Trusted`; selain itu paket pinned | `cargo test -p stackly-core --test supervisor_start a_local_entry_of_another_revision` (entri pengganti `pending`, `revoked`, dan `approved` di revision lain → remedy dari paket pinned) |
+| Minor, audit operasi gagal tanpa provider | `f7eba2c6`: catatan audit awal dari request (provider, digest yang diharapkan) sebelum langkah pertama, lalu catatan lengkap sesudah paket terbaca; berlaku untuk keempat operasi | `cargo test -p stackly-core --test catalog_local operation::a_full_disk` dan `cargo test -p stacklyd --test provider_gate a_store_that` |
+| Minor, install tanpa cek trust sebelum unduhan | `ff8533ae`: `recheck_local` sebelum langkah `download`, juga saat resume | `cargo test -p stackly-core --test runtime_install an_install_from_a_revoked_local_entry_asks_for_no_byte` (`FakeFetcher` tanpa permintaan) |
+| Minor, revoke di antara pemindahan folder dan batch akhir → `needs_recovery` | `5ba3080e`: batch akhir tidak lagi membaca approval; `recheck_local` tepat sebelum `commit_stage` yang menentukan | `cargo test -p stackly-core --test runtime_install a_revoke_after_the_commit_check` |
+| Minor, import yang sudah commit membalas `provider.import_not_found` saat refresh gagal | `52b64bc9`: `detail_after` membangun detail dari baris registry dan salinan store bila snapshot tidak memuat baris yang sekarang | `cargo test -p stacklyd --test provider_gate an_import_and_an_approval_answer_their_committed_state` |
+| Minor, `import --approve` menyetujui digest balasan; approve gagal membuang hasil import | `ad58b5d5`: digest balasan import dibandingkan dengan digest preview, beda → `provider.import_changed` (exit 3) tanpa `provider.approve`; approve yang ditolak daemon menyimpan entri yang diimpor sebagai hasil `partial` | `cargo test -p stackly-cli --test provider trust::import_approve_` |
+
+**Tafsiran revoke sesudah cek commit install** (temuan `install.rs:2262`): dipilih "batch akhir tetap menulis runtime", bukan kegagalan. Sesudah folder runtime dipindah, kegagalan biasa yang dikompensasi tidak mungkin lagi (langkah `commit` tidak bisa dibalik), jadi pilihan nyatanya `needs_recovery` atau sukses. Binary sudah lolos exec check saat approval masih berlaku, dan *Security model* menyatakan runtime yang sudah masuk tetap terpasang sesudah revoke; revoke yang masuk sebelum `recheck_local` di awal langkah `commit` tetap menggagalkan install (provider.revoked). Teks *Gate trust* "commit `install_runtime` ... operasi gagal" berarti cek di awal langkah commit itu.
