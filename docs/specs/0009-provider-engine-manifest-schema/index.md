@@ -105,9 +105,9 @@ providers/<nama>/                 # nama = bagian nama dari metadata.id
 │   └── settings.schema.json      # wajib, ≤ 128 KiB, satu satunya isi schemas/
 ├── templates/
 │   └── *.tmpl                    # nama ^[a-z0-9][a-z0-9._-]{0,63}\.tmpl$, ≤ 256 KiB, paling banyak 32, tanpa subfolder
-├── tests/                        # tidak dibaca loader (fixture harness fitur 36)
+├── tests/                        # tidak dibaca loader; tests/scenarios.yaml dibaca check_package, harness, dan spike (spec 0036)
 ├── README.md                     # opsional, tidak dibaca
-└── LICENSE-NOTICES.md            # opsional, tidak dibaca
+└── LICENSE-NOTICES.md            # tidak dibaca loader; wajib di luar namespace testing (spec 0038)
 ```
 
 - `read_package(fs, dir) -> Result<PackageFiles, PackageError>`: folder paket sendiri harus folder, bukan symlink. Loader berjalan dengan `read_dir` tanpa mengikuti symlink; symlink di mana pun ditolak (`symlink_not_allowed`), begitu juga FIFO, device, atau socket (`not_a_regular_file`). Entri lain di root, di `schemas/`, atau di `templates/` ditolak (`unexpected_entry`), kecuali `.DS_Store` yang dilewati. File wajib yang tidak ada menghasilkan `missing_file`. Total byte yang dibaca paling banyak 4 MiB. Semua file harus UTF-8 tanpa BOM (`not_utf8`).
@@ -747,6 +747,19 @@ Tidak ada variabel environment baru untuk daemon atau CLI. Kode test membaca `ST
 
 Test yang membuktikan ID PRD (REQ-029, REQ-031, VAL-002, VAL-012, VAL-018, VAL-019, AC-031, AC-058) memasang guard evidence `fixture` spec 0002. AC-029 hanya terbukti sebagian di sini (bagian manifest); install, create, start, health, dan form dibuktikan fitur 14, 20, dan 36.
 
+### Tambahan fitur 36 sampai 38
+
+*Ditambah fitur 36, 37, dan 38 ([spec 0036](../0036-provider-sdk-test-harness/index.md), [spec 0037](../0037-import-provider-lokal-trust/index.md), [spec 0038](../0038-panduan-kontributor-governance/index.md), 2026-11-11).* AC spec ini tidak berubah.
+
+- **Kebijakan kompatibilitas** `stackly/v1alpha1` (additive, pengetatan penulis, merusak, deprecation, migrasi) ditulis di spec 0036 dan dijaga corpus paket beku `crates/core/tests/fixtures/compat/` (`cargo xtask provider freeze`). Setiap perubahan schema tetap lewat update spec ini.
+- **Validator.** `stackly_core::provider::check::check_package` membungkus `read_package`, `from_files`, `authoring_findings()` (hari ini `init_port_issues`), dan `tests/scenarios.yaml`. `Issue.file` boleh bernilai `tests/scenarios.yaml` untuk finding ber origin `scenarios`. `read_package` dan `from_files` sendiri tetap tidak membaca `tests/`, dan digest paket tidak berubah saat file itu berubah.
+- **`unsupported_api_version`.** Pesannya kini `apiVersion "<nilai>" is not supported; this Stackly supports: <daftar>` dari tabel `SUPPORTED_API_VERSIONS`; nilainya di escape dan dipotong di 128 karakter. `validate()` berhenti sesudah issue ini, jadi paket seperti itu melaporkan tepat satu issue.
+- **`IssueCode` baru.** `deprecated_api_version` (fitur 36; hanya dibuat `check_package` sebagai `warning`, tidak pernah oleh `from_files`) dan `import_digest_mismatch` (fitur 37; salinan store paket lokal yang tidak cocok dengan baris import nya). Kode yang dipakai aturan import spec 0037 dan kode skenario spec 0036 tercatat di spec itu.
+- **`Manifest::timings()`** (`crates/core/src/provider/timeouts.rs`): accessor publik yang memberi batas waktu manifest dengan default spec ini sudah terisi; dipakai harness spec 0036.
+- **Kode error `provider.*`** (area milik spec ini) ditambah spec 0037: `provider.import_unreadable`, `provider.import_changed`, `provider.import_limit`, `provider.import_not_found`, `provider.approval_required`, `provider.revoked`, `provider.not_approved`, dan `provider.store_failed`.
+- **Import paket lokal** (spec 0037) memakai `check_package` dengan `NameCheck::Skip` dan menolak finding `error` ber origin `package` atau `authoring`.
+- **`LICENSE-NOTICES.md`** wajib untuk paket di `providers/` selain namespace `testing` (spec 0038, pemeriksaan (f) `cargo xtask docs check`); loader tetap tidak membacanya. Dokumentasi schema `stackly/v1alpha1` untuk penulis paket tinggal di `docs/providers/`.
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey proyek: satu jalur dibuat lengkap lebih dulu, yaitu "paket fake dibaca, divalidasi, lalu menghasilkan plan yang benar, termasuk semua jalur gagalnya", karena itulah yang dibutuhkan fitur 10 dan 14. NATS, Traefik, katalog versi, dan JSON Schema menyusul di atas jalur itu, lalu fuzz dan pengerasan.
@@ -839,10 +852,10 @@ Urutan mengikuti pendekatan Journey proyek: satu jalur dibuat lengkap lebih dulu
 - [x] Spec 0014 (update 2026-10-20, AC-20): AC-18 tidak lagi mengecualikan `fake.json`, dan pindaian sentinel mencakup folder instance di root data. Diterapkan di spec 0014 (2026-10-20); sejak 2026-10-21 AC-18 juga menegaskan folder `secrets/` instance tidak ada setelah stop. Test nya dibangun langkah 21 spec ini.
 - [x] Spec 0010 dan 0011 (update 2026-10-20, AC-20): satu kalimat bahwa config sensitif kini selalu di folder `secrets/`, sehingga `remove_secret_material`, sweep, dan penghapusan `InitPlan.cleanup` oleh executor init yang sudah ada mencakupnya. Diterapkan di kedua spec (2026-10-20), tanpa perubahan keputusan.
 - [ ] Lewat lead (temuan cross check update 2026-10-20): destination tidak sensitif `${instance.run}/secrets/<x>` (`PathBase::Dir(Run)` dengan komponen pertama `secrets`) masih diterima, jadi config biasa bisa menimpa file `MaterializeSecret` atau ikut terhapus `remove_secret_material`. Ini tidak membocorkan secret dan sudah ada sebelum update ini, jadi tidak diubah di sini. Rekomendasi: update spec berikutnya menolak komponen pertama `secrets` di bawah `${instance.run}` dengan `token_not_allowed_here`.
-- [ ] Fitur 36: kebijakan kompatibilitas v1alpha1 mencakup penambahan primitive, jenis probe, probe native, dan format template secara additive, dan harness menggantikan langkah spike per provider. Sejak update 2026-10-22 kebijakan itu juga mencatat bahwa pengetatan untuk penulis paket ditulis sebagai laporan terpisah dari `from_files` (contoh `init_port_issues`), supaya salinan pinned lama tetap termuat.
+- [x] Diputuskan [spec 0036](../0036-provider-sdk-test-harness/index.md) (*Kebijakan kompatibilitas*, *Spike dari paket*) dan dibangun fitur 36 (2026-11-11); diterapkan di sini di *Tambahan fitur 36 sampai 38*. Fitur 36: kebijakan kompatibilitas v1alpha1 mencakup penambahan primitive, jenis probe, probe native, dan format template secara additive, dan harness menggantikan langkah spike per provider. Sejak update 2026-10-22 kebijakan itu juga mencatat bahwa pengetatan untuk penulis paket ditulis sebagai laporan terpisah dari `from_files` (contoh `init_port_issues`), supaya salinan pinned lama tetap termuat.
 - [x] Usulan spec 0023 butir 1 (*Usulan update spec lain (2026-10-22)*): token port endpoint di initialize dilaporkan `token_not_allowed_here`, dan paket Traefik diperbaiki di perubahan yang sama. Diterapkan 2026-10-22 sebagai `init_port_issues` (AC-21, *Pemeriksaan port saat initialize*, langkah 22), bukan aturan `from_files`, dengan perubahan `Resolver::new` untuk field `managed`; alasan nya di rationale *Update 2026-10-22*.
 - [ ] Lewat lead, untuk pemilik spec 0017 (opsional): `cargo xtask catalog check`, yang berjalan di pre commit, ikut memanggil `init_port_issues` untuk setiap entri `[[provider]]`, supaya paket yang lolos tanpa `provider check` tetap tertahan sebelum commit. Tanpa ini, penjaga nya test core di langkah 22 dan dry run spec 0020.
-- [ ] Fitur 37: putuskan apakah import paket menolak paket dengan `init_port_issues` atau hanya memperingatkan.
+- [x] Fitur 37: putuskan apakah import paket menolak paket dengan `init_port_issues` atau hanya memperingatkan. Diputuskan [spec 0037](../0037-import-provider-lokal-trust/index.md) (K11) dan dibangun fitur 37 (2026-11-11): import menolak, karena finding `authoring` ber severity `error` dari `check_package` membuat paket tidak bisa diimpor.
 - [x] Fitur 23: tambah jenis probe `native`, registry `NativeProbeDescriptor`, dan `nats-readiness` (cek JetStream dan identitas `server_name`) sesuai kontrak di *Probe*, lalu ganti probe `http` di `providers/nats`. Kontrak ditulis spec 0023 dan diterapkan di *Probe* spec ini (2026-10-20, fase 02); kode nya dibangun fitur 23 langkah 1 (engine), 2 (paket NATS), 3 (state machine), 4 (fuzz), 5 (driver dan dispatch supervisor), dan 6 (loop readiness).
 - [x] `/sync` setelah build: catat layout paket provider, `cargo xtask provider check`, dan generator `versions.json` di root `AGENTS.md`. Diterapkan di root `AGENTS.md` (2026-10-19): perintah `cargo xtask provider check` dan penulisan ulang golden di *Commands*, serta satu baris *Rules* untuk layout `providers/<nama>/`, `versions.json` hasil generator (kecuali milik `providers/fake`), JSON Schema di `schemas/provider/`, dan fixture `fake-command`.
 

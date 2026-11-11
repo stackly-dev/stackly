@@ -605,6 +605,15 @@ Test yang butuh handler lambat, banyak event, atau drain berjalan di dalam prose
 - Observasi di event: client resep snapshot plus cursor menerapkan event observasi yang revision nya sama dengan snapshot dan waktu observasinya sama atau lebih baru, per jenis (health yang lebih lama tidak tertolak oleh readiness yang lebih baru), dan mengabaikan yang lebih lama. Memverifikasi **AC-9**.
 - Dua akun nyata (manual, native): akun kedua di Mac ini tidak bisa membuka socket akun pertama (izin ditolak di path), dan daemon akun kedua berjalan dengan socket dan root sendiri. Evidence manual `NOT_RUN` sampai dijalankan, `BLOCKED` kalau belum ada akun kedua. Memverifikasi **AC-2** (AC-079).
 
+### Tambahan fitur 36 dan 37
+
+*Ditambah fitur 36 dan 37 ([spec 0036](../0036-provider-sdk-test-harness/index.md), [spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* AC spec ini tidak berubah; bentuk DTO nya ada di spec pemiliknya.
+
+- Protokol `3.6` (fitur 36): method `provider.validate` (`recovery allowed`, baca saja, bukan operasi) dengan `ProviderValidateParams` dan `ProviderValidation`.
+- Protokol `4.0` (fitur 37): lima method `provider.preview_import`, `provider.import`, `provider.approve`, `provider.revoke`, `provider.remove` (semua `recovery refused`), modul DTO `provider`, tambahan DTO catalog (`TrustLevel.local`, `approval`, `local`, `revocation`, `revocations`), kode error `provider.*`, dan event `catalog.changed`. Karena `EventKind` tertutup, event baru itu yang membuat kenaikan ini major.
+- Protokol `4.1` (fitur 37): nilai `local_import` di enum terbuka `CreateProviderSource`, kenaikan minor.
+- `idempotencyKey` method operasi provider berjalan di envelope request seperti method operasi lain, bukan di params.
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey: jalur yang dibangun lengkap adalah "client di Mac ini tersambung dengan aman ke satu satunya daemon milik user lalu melihat statusnya", termasuk semua jalur gagal. Kontrak dan codec dibangun lebih dulu karena setiap bagian lain bicara dengannya; transport, lock dan log, serta fuzzing lalu berjalan berdampingan; daemon server dan CLI menutup jalur itu. Setiap test yang membuktikan ID PRD memakai guard evidence spec 0002 (langkah 1 spec 0002 sudah dibangun).

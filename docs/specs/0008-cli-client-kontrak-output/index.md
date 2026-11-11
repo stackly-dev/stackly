@@ -463,6 +463,10 @@ Test integrasi menjalankan binary `stackly` (lewat `cargo_bin` testkit) dengan `
 
 Test yang membuktikan REQ-028, AC-028 (bagian output dan exit code), dan BR-011 memakai guard evidence spec 0002 dengan label `fixture`. Bukti AC-028 penuh (operasi yang setara dari GUI dan CLI) menunggu create instance di fitur 20.
 
+### Tambahan fitur 36 dan 37
+
+*Ditambah fitur 36 dan 37 ([spec 0036](../0036-provider-sdk-test-harness/index.md), [spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* Grup `stackly provider` mendapat `validate <dir> [--json]` (spec 0036: kode `cli.provider_invalid`, kategori `invalid_input`, exit 2, dengan `result` tetap terisi) dan `import <dir> [--dry-run] [--approve [--yes]]`, `approve`, `revoke`, `remove <provider> [--yes]` (spec 0037 *CLI*). Semuanya memanggil daemon; CLI tidak pernah membaca file paket atau menjalankan binary provider. Konfirmasi, envelope `--json`, dan exit code mengikuti aturan spec ini apa adanya: `provider.approval_required` dan `provider.revoked` keluar 4, `provider.import_changed`, `provider.import_limit`, dan `provider.not_approved` keluar 3, `manifest.invalid` dan `provider.import_unreadable` keluar 2, `provider.store_failed` keluar 7, `provider.import_not_found` keluar 10. `stackly provider test` tidak dibuat (harness hanya `cargo xtask provider test`, spec 0036). AC spec ini tidak berubah.
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey. Jalur yang dibangun lengkap adalah "script atau pengguna menjalankan `stackly` dan selalu mendapat kontrak yang sama", dimulai dari perintah yang sudah punya daemon nyata (`daemon status`) dengan semua state gagal nya, lalu jalur operasi dan `--wait`. Setiap test yang membuktikan ID PRD memakai guard evidence spec 0002.
@@ -532,7 +536,8 @@ Sesi paralel: di Milestone 1, langkah 2 (`check-deps`, hanya `xtask/` dan crate 
 - [ ] Fitur 20: bukti AC-028 penuh (create instance dari GUI dan `--json` CLI dengan validasi dan error yang sama).
 - [ ] Fitur 27: perintah streaming pertama memakai record `type: item`.
 - [ ] Fitur 54: konfirmasi purge yang lebih berat di atas `Confirm`, sesuai scope "purge di mode noninteractive tetap butuh konfirmasi eksplisit".
-- [ ] Fitur 38 atau 66: dokumentasi referensi CLI (envelope, exit code, variabel environment), dan pertimbangkan JSON Schema envelope di `schemas/cli/`.
+- [x] Fitur 38: bagiannya dibangun (2026-11-11, [spec 0038](../0038-panduan-kontributor-governance/index.md)): exit code perintah provider di `docs/providers/testing.md` dan `docs/providers/trying-locally.md`, dan variabel dev root (`STACKLY_ROOT`, `STACKLY_LOG`) di `CONTRIBUTING.md`.
+- [ ] Fitur 66: dokumentasi referensi CLI umum (envelope, tabel exit code, semua variabel environment), dan pertimbangkan JSON Schema envelope di `schemas/cli/` (rekomendasi spec 0038: hanya bila ada konsumen yang memvalidasinya). Dipecah dari baris "Fitur 38 atau 66" pada 2026-11-11.
 - [ ] Fitur 64: ukur waktu start `stackly` dan latensi `daemon status` di mesin baseline.
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` tabel exit code, envelope `--json`, `STACKLY_NO_INPUT`, aturan `check-deps` CLI, dan pola command group; tambah `anstream`, `anstyle`, dan `unicode-width` ke baris `Declined:` untuk Agent Skills (ditolak pengguna 2026-10-18).
 

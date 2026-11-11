@@ -457,7 +457,7 @@ Diterapkan di spec 0013 (2026-10-22, `97e093f9`).
 - [ ] Fitur 44: tambahkan baris "Environments as files" dari mockup ke langkah Welcome.
 - [ ] Fitur 46: tambahkan `stackly env up ~/Code/erp` ke `OnboardingCopy.commandExamples`.
 - [ ] Fitur 32: baris "Show Welcome…" di tab General Settings yang memanggil `OnboardingModel.present()`.
-- [ ] Fitur 37: putuskan apakah langkah Catalog Trust menampilkan sumber lokal atau community dan trust per provider.
+- [x] Fitur 37: putuskan apakah langkah Catalog Trust menampilkan sumber lokal atau community dan trust per provider. Diputuskan [spec 0037](../0037-import-provider-lokal-trust/index.md) (K14, AC-16) dan dibangun fitur 37 (2026-11-11): langkah itu tidak mendapat baris atau toggle baru dan tidak menampilkan trust per provider; hanya subjudul dan satu kalimat catatannya yang berubah (`OnboardingCopy.swift`). Sumber community tetap Deferred.
 - [x] Fitur 67: umpan balik "Setup complete." dan "Copied." lewat komponen umpan balik. Diterapkan (2026-10-21): AC-11, *Tampilan di jendela utama*, dan *Kontrol Command Line* memakai `FeedbackCenter` dan `CopyButton` spec 0067.
 - [ ] Fitur 68: snapshot setiap langkah dan setiap baris tabel state, di light, dark, Increase Contrast, dan Reduce Transparency. Cara dan pemilik suite sudah tercatat di langkah 7 (2026-10-21); tetap terbuka sampai suite itu dibangun.
 - [ ] Fitur 69: daftarkan "Welcome to Stackly" di peta perintah, dan nonaktifkan perintah shell selama onboarding tampil. Diputuskan spec 0069 AC-4 dan AC-13, dan aturan dua jalur di *Tampilan di jendela utama* (2026-10-21); tetap terbuka sampai milestone 2 spec 0069 atau langkah 2 spec ini membangunnya.
