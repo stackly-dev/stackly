@@ -1291,3 +1291,99 @@ async fn the_catalog_revision_of_the_provider_comes_before_the_pinned_package() 
     assert_eq!(remedy.package, *package.key());
     assert_eq!(remedy.remedy.name, "stale_pid");
 }
+
+// covers: AC-10 (spec 0034); AC-4, AC-11 (spec 0037, review Major 1): a
+// local entry that replaced the revision an instance pins never supplies the
+// remedy, whatever its approval, so bytes nobody approved never become
+// advice in Stackly's voice
+#[tokio::test]
+async fn a_local_entry_of_another_revision_never_supplies_the_remedy_of_a_pinned_instance() {
+    use stackly_core::catalog::local::{package_bytes, package_sha256, permissions};
+    use stackly_core::catalog::{
+        Catalog, CatalogEntry, EntryOrigin, LocalInfo, ProviderEntry, TileColor, TileHint,
+    };
+    use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
+    use stackly_domain::{ImportDecision, ProviderImportRecord, TrustDecision};
+
+    let rig = remedy_rig().await;
+    failed_with(&rig, Some("process_exited"), &[PID_LINE]);
+    let mut files = std::collections::BTreeMap::new();
+    for (path, bytes) in rig.package.files().iter() {
+        files.insert(path.to_owned(), bytes.to_vec());
+    }
+    let manifest = files.get_mut("provider.yaml").expect("a manifest");
+    let replaced = String::from_utf8(manifest.clone())
+        .expect("a UTF-8 manifest")
+        .replacen("revision: ", "revision: \"9.9.9\"\n  # was: ", 1)
+        .replace(
+            "title: Fake found an old fake.pid",
+            "title: Run this command nobody approved",
+        );
+    *manifest = replaced.into_bytes();
+    let package = ValidatedPackage::from_files(PackageFiles::new("fake", files), NameCheck::Skip)
+        .expect("the replacing revision is valid");
+    assert_ne!(package.key(), rig.key());
+
+    let decisions = [
+        None,
+        Some(TrustDecision::Revoked),
+        Some(TrustDecision::Approved),
+    ];
+    for decision in decisions {
+        let key = package.key();
+        let mut record = ProviderImportRecord::new(
+            key.provider().clone(),
+            "0199f000-0000-7000-8000-000000000010"
+                .parse()
+                .expect("an id"),
+            key.revision().clone(),
+            package.software().clone(),
+            *key.manifest_sha256(),
+            *key.manifest_sha256(),
+            package_sha256(package.files()),
+            package_bytes(package.files()),
+            "~/acme".to_owned(),
+            jiff::Timestamp::UNIX_EPOCH,
+        );
+        if let Some(decision) = decision {
+            let (digest, revision) = (record.package_sha256, record.provider_revision.clone());
+            record = record.with_decision(ImportDecision::new(
+                decision,
+                digest,
+                revision,
+                "{}".to_owned(),
+                jiff::Timestamp::UNIX_EPOCH,
+            ));
+        }
+        let entry = CatalogEntry::Provider(ProviderEntry {
+            package: Arc::new(package.clone()),
+            tile: TileHint {
+                mark: "Fk".to_owned(),
+                tile: TileColor::Gray,
+            },
+            notes: Vec::new(),
+            origin: EntryOrigin::Local(Box::new(LocalInfo::new(record, permissions(&package)))),
+        });
+        let catalog = Catalog::for_tests(&[]).with_local(vec![entry]);
+
+        let reading = capacity(&rig, TB, TB / 2);
+        let report = Doctor::default()
+            .run(
+                sources(&rig).with_catalog(Some(Arc::new(catalog))),
+                DoctorRequest::default(),
+                async move { reading },
+            )
+            .await
+            .expect("the run starts");
+
+        let remedy = start_failed(&report)
+            .remedy
+            .as_deref()
+            .expect("the pinned package has the remedy");
+        assert_eq!(remedy.package, *rig.key(), "{decision:?}");
+        assert_eq!(
+            remedy.remedy.title, "Fake found an old fake.pid",
+            "{decision:?}"
+        );
+    }
+}

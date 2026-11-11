@@ -138,6 +138,8 @@ pub struct Script {
     pub imported: ProviderDetail,
     /// The error the mutation methods answer instead, if any.
     pub fail: Option<ErrorBody>,
+    /// The error only `provider.approve` answers instead, if any.
+    pub fail_approve: Option<ErrorBody>,
 }
 
 impl Default for Script {
@@ -147,6 +149,7 @@ impl Default for Script {
             detail: local("pending"),
             imported: local("pending"),
             fail: None,
+            fail_approve: None,
         }
     }
 }
@@ -167,6 +170,11 @@ pub fn provider(script: Arc<Mutex<Script>>) -> impl Fn(&Call, Ctx) -> Vec<Step> 
                 | Call::ProviderRemove(_)
         );
         if mutation && let Some(body) = script.fail {
+            return vec![Step::Fail(body)];
+        }
+        if matches!(call, Call::ProviderApprove(_))
+            && let Some(body) = script.fail_approve
+        {
             return vec![Step::Fail(body)];
         }
         match call {

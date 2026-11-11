@@ -102,6 +102,11 @@ pub async fn approve_detail(
             CommandOutput::ok(Outcome::new(format!("Approved {name}."), *detail))
         }
         Ok(_) => CommandOutput::failed(CliFailure::unexpected_reply(None)),
-        Err(failure) => CommandOutput::failed(failure),
+        // An import that came first is committed: a refused approval keeps
+        // it as the result, as a declined confirmation does.
+        Err(failure) => match imported {
+            Some(line) => CommandOutput::partial(Outcome::new(line, detail), failure),
+            None => CommandOutput::failed(failure),
+        },
     }
 }

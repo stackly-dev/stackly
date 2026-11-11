@@ -665,6 +665,9 @@ async fn a_store_that_cannot_be_written_answers_the_fixed_text_without_a_path() 
         .iter()
         .find(|row| row.operation_kind == Some(stackly_domain::OperationKind::ImportProvider))
         .expect("the failed import is audited");
+    // It names the provider and the bytes (AC-17, review of feature 37).
+    assert_eq!(row.safe_details.get("provider"), Some(LOCAL));
+    assert!(row.safe_details.get("packageSha256").is_some());
     for (key, value) in row.safe_details.iter() {
         assert!(!value.contains(&root), "{key}: {value}");
         assert!(!value.contains("/Users/"), "{key}: {value}");
@@ -1599,4 +1602,72 @@ async fn a_repeated_request_whose_first_operation_failed_answers_its_first_error
         .expect("the registry is open");
     assert!(registry.provider_imports().expect("reads").value.is_empty());
     assert_eq!(audited(&daemon, OperationKind::ApproveProvider), approvals);
+}
+
+// covers: AC-3, AC-10 (spec 0037, *Read model*: a refresh that fails after
+// the commit never fails the operation; review of feature 37)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_import_and_an_approval_answer_their_committed_state_while_the_snapshot_is_stale() {
+    use stackly_core::catalog::CatalogState;
+    use stackly_protocol::provider::ApprovalState;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    // A snapshot from a generation no refresh reaches stays in place, as
+    // after a refresh that could not read the registry.
+    let core = daemon.core();
+    let stale = core.catalog().expect("the catalog is loaded");
+    assert!(core.replace_catalog(CatalogState::clone(&stale), u64::MAX - 1));
+
+    let dir = local_fake(site.root.path());
+    let preview = match api
+        .client
+        .call(Call::ProviderPreviewImport(PreviewImportParams {
+            path: dir.display().to_string(),
+        }))
+        .await
+        .expect("the preview answers")
+    {
+        Reply::ProviderPreviewImport(preview) => preview,
+        other => panic!("not a preview reply: {other:?}"),
+    };
+    let digest = preview.package_sha256.clone().expect("a digest");
+    let imported = match call(
+        &api.client,
+        Call::ProviderImport(ImportProviderParams {
+            path: dir.display().to_string(),
+            expected_package_sha256: digest.clone(),
+        }),
+    )
+    .await
+    .expect("a committed import answers its detail, not provider.import_not_found")
+    {
+        Reply::ProviderImport(detail) => detail,
+        other => panic!("not an import reply: {other:?}"),
+    };
+    assert_eq!(imported.summary.provider, LOCAL);
+    assert_eq!(imported.summary.approval, Some(ApprovalState::Pending));
+    assert_eq!(
+        imported
+            .local
+            .as_ref()
+            .map(|local| local.package_sha256.as_str()),
+        Some(digest.as_str())
+    );
+
+    let approved = send(&api, approve_call(&digest), &key())
+        .await
+        .expect("approves");
+    assert_eq!(
+        approval_in(approved),
+        Some(ApprovalState::Approved),
+        "the approval answers the committed decision, not the stale snapshot"
+    );
+    assert!(
+        core.catalog()
+            .is_some_and(|state| std::sync::Arc::ptr_eq(&state, &stale)
+                || matches!(state.as_ref(), CatalogState::Loaded(catalog)
+                    if catalog.entry(&LOCAL.parse().expect("an id")).is_none())),
+        "the snapshot itself is still the stale one"
+    );
 }

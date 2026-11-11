@@ -941,6 +941,22 @@ mod operation {
             folder.display()
         );
         assert!(rig.refreshes().is_empty(), "nothing committed, no refresh");
+        // The audit row of the failed import still names the provider and
+        // the bytes (spec 0037 AC-17, review of feature 37).
+        let rows = rig
+            .registry
+            .audit_events(stackly_domain::AuditQuery::page(50, None))
+            .expect("reads")
+            .value
+            .items;
+        let row = rows
+            .iter()
+            .find(|row| row.operation_kind == Some(OperationKind::ImportProvider))
+            .expect("the failed import is audited");
+        assert_eq!(row.safe_details.get("provider"), Some("acme/demo"));
+        let digest = digest.to_string();
+        assert_eq!(row.safe_details.get("packageSha256"), Some(digest.as_str()));
+        assert!(row.safe_details.get("manifestSha256").is_some());
     }
 
     // covers: AC-3 (spec 0037, *Store salinan*: a failed repair never removes
