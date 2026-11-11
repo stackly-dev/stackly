@@ -33,8 +33,8 @@ extension SnapshotTests {
                         loadedAt: info.loadedAt, contentSha256: info.contentSha256,
                         source: info.source, trust: info.trust, host: info.host,
                         outdated: setup.outdated,
-                        invalidCount: setup.invalidCount ?? info.invalidCount),
-                    items: setup.items ?? list.items)
+                        invalidCount: setup.invalidCount ?? info.invalidCount, localCount: 0),
+                    items: setup.items ?? list.items, revocations: [])
                 script.list = list
             }
             script.failure = setup.failure

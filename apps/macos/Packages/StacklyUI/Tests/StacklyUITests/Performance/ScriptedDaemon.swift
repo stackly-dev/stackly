@@ -119,7 +119,8 @@ nonisolated final class ScriptedDaemon: Sendable {
         case .instanceList: reply = .instanceList(InstancePage(items: instances, next: nil))
         case .operationList: reply = .operationList(OperationPage(items: [], next: nil))
         case .catalogListProviders:
-            reply = .catalogListProviders(ListProvidersReply(catalog: .fixture, items: []))
+            reply = .catalogListProviders(
+                ListProvidersReply(catalog: .fixture, items: [], revocations: []))
         case .runtimeList:
             reply = .runtimeList(RuntimeListPage(items: [], next: nil, installing: []))
         default:

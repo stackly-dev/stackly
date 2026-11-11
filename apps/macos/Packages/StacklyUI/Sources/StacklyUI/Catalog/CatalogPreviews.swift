@@ -39,7 +39,9 @@
                 software: id.split(separator: "/").last.map(String.init), category: category,
                 description: description, state: state, stateReason: reason, stateNote: nil,
                 providerRevision: state == .planned || state == .invalid ? nil : "1.0.0",
-                publisher: "Stackly", trust: .official, versions: versions,
+                publisher: "Stackly", trust: .official,
+                approval: nil,  // provisional: F37 step 10
+                versions: versions,
                 versionCount: UInt64(versions.count), licenses: licenses, mark: mark, tile: tile)
         }
 
@@ -79,11 +81,13 @@
                                 installable: ready, reason: summary.stateReason),
                             artifacts: ready ? [artifact] : [])
                     ],
-                    platformNotes: [], note: nil, issues: [])
+                    platformNotes: [], note: nil, issues: [],
+                    local: nil, revocation: nil)  // provisional: F37 step 10
             case .planned:
                 return ProviderDetail(
                     summary: summary, software: nil, manifestSha256: nil, capabilities: [],
-                    versions: [], platformNotes: [], note: nil, issues: [])
+                    versions: [], platformNotes: [], note: nil, issues: [],
+                    local: nil, revocation: nil)  // provisional: F37 step 10
             case .invalid:
                 return ProviderDetail(
                     summary: summary, software: nil, manifestSha256: nil, capabilities: [],
@@ -93,14 +97,17 @@
                             file: "catalog.json", location: "providers[1].manifestSha256",
                             code: "catalog_digest_mismatch",
                             message: "manifestSha256 does not match the package files", reason: nil)
-                    ])
+                    ],
+                    local: nil, revocation: nil)  // provisional: F37 step 10
             }
         }
 
         /// A catalog store over the sample providers, loaded.
         @MainActor
         static func store(providers: [ProviderSummary] = providers) async -> CatalogStore {
-            let reply = ListProvidersReply(catalog: .fixture, items: providers)
+            let reply = ListProvidersReply(
+                catalog: .fixture, items: providers,
+                revocations: [])  // provisional: F37 step 10
             let store = CatalogStore(
                 call: { call throws(ClientError) in
                     switch call {

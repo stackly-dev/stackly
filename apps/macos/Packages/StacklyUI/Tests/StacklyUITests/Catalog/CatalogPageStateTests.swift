@@ -92,7 +92,7 @@ struct CatalogPageStateTests {
         let one = CatalogInfo(
             revision: info.revision, publishedAt: info.publishedAt, loadedAt: info.loadedAt,
             contentSha256: info.contentSha256, source: info.source, trust: info.trust,
-            host: info.host, outdated: false, invalidCount: 1)
+            host: info.host, outdated: false, invalidCount: 1, localCount: 0)
         guard case .loaded(_, let notes) = state(info: one) else {
             Issue.record("expected loaded")
             return
@@ -104,7 +104,7 @@ struct CatalogPageStateTests {
         let clean = CatalogInfo(
             revision: info.revision, publishedAt: info.publishedAt, loadedAt: info.loadedAt,
             contentSha256: info.contentSha256, source: info.source, trust: info.trust,
-            host: info.host, outdated: false, invalidCount: 0)
+            host: info.host, outdated: false, invalidCount: 0, localCount: 0)
         guard case .loaded(_, let notes) = state(info: clean) else {
             Issue.record("expected loaded")
             return
@@ -116,7 +116,7 @@ struct CatalogPageStateTests {
         let old = CatalogInfo(
             revision: info.revision, publishedAt: info.publishedAt, loadedAt: info.loadedAt,
             contentSha256: info.contentSha256, source: .development, trust: .development,
-            host: info.host, outdated: true, invalidCount: 0)
+            host: info.host, outdated: true, invalidCount: 0, localCount: 0)
         guard case .loaded(_, let notes) = state(info: old) else {
             Issue.record("expected loaded")
             return

@@ -19,7 +19,7 @@ extension SnapshotTests {
             return CatalogInfo(
                 revision: base.revision, publishedAt: base.publishedAt, loadedAt: base.loadedAt,
                 contentSha256: base.contentSha256, source: source, trust: trust, host: base.host,
-                outdated: outdated, invalidCount: base.invalidCount)
+                outdated: outdated, invalidCount: base.invalidCount, localCount: 0)
         }
 
         private static func row(

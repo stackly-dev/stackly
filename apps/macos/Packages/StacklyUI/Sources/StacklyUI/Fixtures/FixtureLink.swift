@@ -156,7 +156,8 @@
                 return .operationGet(OperationDetail(operation: found, steps: nil, created: nil))
             case .catalogListProviders:
                 return .catalogListProviders(
-                    ListProvidersReply(catalog: .fixture, items: scenario.providers))
+                    ListProvidersReply(
+                        catalog: .fixture, items: scenario.providers, revocations: []))
             case .runtimeList:
                 return runtimeList()
             case .runtimeGet(let params):
