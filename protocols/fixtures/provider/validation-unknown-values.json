@@ -1,0 +1,24 @@
+{
+  "folder": "future",
+  "loadable": true,
+  "publishable": true,
+  "apiVersion": "stackly/v1beta1",
+  "supportedApiVersions": [
+    {
+      "name": "stackly/v1alpha1",
+      "status": "retired"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "notice",
+      "origin": "lint",
+      "file": "provider.yaml",
+      "location": "metadata",
+      "code": "some_future_code",
+      "message": "a finding this build does not know"
+    }
+  ],
+  "findingCount": 3,
+  "omitted": 2
+}

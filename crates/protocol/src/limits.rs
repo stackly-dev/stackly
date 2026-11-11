@@ -197,6 +197,7 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
         "operationPageBytesMax",
         crate::operation::OPERATION_PAGE_BYTES_MAX as u64,
     ),
+    ("providerPathMax", crate::provider::PROVIDER_PATH_MAX as u64),
     (
         "providerRevisionMax",
         crate::instance::PROVIDER_REVISION_MAX as u64,
@@ -233,6 +234,10 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     (
         "subscribeKindsMax",
         crate::events::SUBSCRIBE_KINDS_MAX as u64,
+    ),
+    (
+        "validationFindingsMax",
+        crate::provider::VALIDATION_FINDINGS_MAX as u64,
     ),
 ];
 
@@ -307,7 +312,7 @@ mod tests {
 
     /// Every module of the crate whose constants can be contract limits:
     /// all but the fuzz harnesses and the generated digest.
-    const SOURCES: [(&str, &str); 25] = [
+    const SOURCES: [(&str, &str); 26] = [
         ("audit", include_str!("audit.rs")),
         ("catalog", include_str!("catalog.rs")),
         ("codes", include_str!("codes.rs")),
@@ -325,6 +330,7 @@ mod tests {
         ("logs", include_str!("logs.rs")),
         ("message", include_str!("message.rs")),
         ("operation", include_str!("operation.rs")),
+        ("provider", include_str!("provider.rs")),
         ("restart", include_str!("restart.rs")),
         ("runtime", include_str!("runtime.rs")),
         ("secret", include_str!("secret.rs")),

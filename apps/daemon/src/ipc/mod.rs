@@ -8,6 +8,7 @@ pub mod doctor;
 pub mod instance;
 pub mod logs;
 pub mod operation;
+pub mod provider;
 pub mod restart;
 pub mod runtime;
 pub mod secret;

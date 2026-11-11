@@ -1,0 +1,32 @@
+{
+  "folder": "fake-command",
+  "loadable": true,
+  "publishable": false,
+  "apiVersion": "stackly/v1alpha1",
+  "supportedApiVersions": [
+    {
+      "name": "stackly/v1alpha1",
+      "status": "current"
+    }
+  ],
+  "identity": {
+    "provider": "testing/fake-command",
+    "revision": "0.1.0",
+    "manifestSha256": "b5bc7f5c0d6e3a7e210585e026109b240f2968e5578017f4c821b72dd9cf5aab",
+    "software": "fake",
+    "displayName": "Fake Command Provider"
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "origin": "authoring",
+      "file": "templates/peers.yaml.tmpl",
+      "location": "2:7",
+      "code": "token_not_allowed_here",
+      "message": "config file peers is rendered by initialize, but settings.listenPort is managed from an endpoint port, which is chosen when the instance starts; every config file is rendered again before each spawn",
+      "reason": null
+    }
+  ],
+  "findingCount": 1,
+  "omitted": 0
+}

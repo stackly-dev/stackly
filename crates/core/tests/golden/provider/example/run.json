@@ -1,0 +1,129 @@
+{
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/server.json",
+        "content": {
+          "configFile": "serverConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "{\n  \"greeting\": \"hello\",\n  \"instanceName\": \"golden\",\n  \"authToken\": "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:authToken>",
+                "format": "json"
+              }
+            },
+            {
+              "type": "text",
+              "content": "\n}\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/fake/0.1.0/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "stackly-fake-server"
+    },
+    "args": [
+      "serve",
+      "--config=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/server.json",
+      "--data=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--port=14000",
+      "--ready-delay-ms=0"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "PATH",
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      ],
+      [
+        "TMPDIR",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/ready",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "2s",
+    "deadline": "60s"
+  },
+  "recoveryDeadline": "60s",
+  "health": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/health",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "2s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "30s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "http",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ]
+  ]
+}

@@ -1,21 +1,26 @@
-//! `cargo xtask provider check [<dir>...]`: reads and validates provider
-//! packages with the engine of spec 0009, through `MacosFilesystem`, the
-//! way the catalog will read them.
+//! `cargo xtask provider check [<dir>...]`: checks provider packages with
+//! `check_package` (spec 0036, AC-4), the validator the daemon and import
+//! share, through `MacosFilesystem`.
 //!
-//! Every valid package prints `ok <id> <revision> <manifest_sha256>`;
-//! every problem prints one `<folder>: <file> <location>: <code>: <message>`
-//! line, and the task exits 1. A valid package whose initialize uses a
-//! port that is chosen only at start (`init_port_issues`, spec 0009) prints
-//! its issues the same way and no `ok` line.
+//! Every publishable package prints `ok <id> <revision> <manifest_sha256>`;
+//! every error finding (`package`, `authoring`, such as `init_port_issues`,
+//! or `scenarios`) prints one `<folder>: <file> <location>: <code>:
+//! <message>` line and no `ok` line, every warning prints the same line
+//! after `warning: `, and the task exits 1 when a package is not
+//! publishable. Without folders it checks every folder in `providers/`,
+//! where a warning fails the check too.
 
 use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 
+mod scaffold;
+
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     match args {
         ["check", dirs @ ..] => check(root, dirs),
+        ["new", rest @ ..] => scaffold::run(root, rest),
         _ => bail!(
             "unknown provider task `{}`; see `cargo xtask help`",
             args.join(" ")
@@ -33,7 +38,7 @@ fn check(root: &Path, dirs: &[&str]) -> Result<ExitCode> {
         let cwd = std::env::current_dir().context("cannot read the current directory")?;
         dirs.iter().map(|dir| cwd.join(dir)).collect()
     };
-    let report = macos::check_packages(&packages);
+    let report = macos::check_packages(&packages, dirs.is_empty());
     for line in &report.lines {
         println!("{line}");
     }
@@ -80,62 +85,74 @@ fn repo_packages(root: &Path) -> Result<Vec<std::path::PathBuf>> {
 mod macos {
     use std::path::{Path, PathBuf};
 
-    use stackly_core::provider::{NameCheck, PackageError, ValidatedPackage, read_package};
+    use stackly_core::provider::{Finding, NameCheck, Severity, check_package};
     use stackly_platform_macos::MacosFilesystem;
 
     /// What `provider check` prints, and how many problems it found.
     #[derive(Debug, Default)]
     pub struct Report {
-        /// One `ok` line per valid package and one line per problem, in
-        /// package order.
+        /// One `ok` line per publishable package, one line per error, and
+        /// one `warning: ` line per warning, in package order.
         pub lines: Vec<String>,
-        /// Every problem across all packages.
+        /// Every error across all packages, plus every warning when
+        /// warnings fail the check.
         pub problems: usize,
         /// Packages with at least one problem.
         pub failed: usize,
     }
 
-    /// Reads each package folder through `MacosFilesystem` and validates it
-    /// with `NameCheck::FolderName`.
-    pub fn check_packages(packages: &[PathBuf]) -> Report {
+    /// Checks each package folder with `check_package` through
+    /// `MacosFilesystem` and `NameCheck::FolderName` (spec 0036, AC-4).
+    /// With `warnings_fail`, which the check of `providers/` sets, a
+    /// warning is a problem too, so a repo package never ships a
+    /// deprecated item.
+    pub fn check_packages(packages: &[PathBuf], warnings_fail: bool) -> Report {
         let mut report = Report::default();
         for dir in packages {
-            match read_and_validate(dir) {
-                Ok(package) => {
-                    let init_port = package.init_port_issues();
-                    if init_port.is_empty() {
-                        let key = package.key();
-                        report.lines.push(format!(
-                            "ok {} {} {}",
-                            key.provider(),
-                            key.revision(),
-                            key.manifest_sha256()
-                        ));
-                    } else {
-                        report.failed += 1;
-                        report.problems += init_port.len();
-                        let folder = folder_name(dir);
-                        report
-                            .lines
-                            .extend(init_port.iter().map(|issue| format!("{folder}: {issue}")));
+            let check = check_package(&MacosFilesystem, dir, NameCheck::FolderName);
+            let folder = folder_name(dir);
+            let mut problems = 0;
+            let mut warnings = Vec::new();
+            for finding in &check.findings {
+                match finding.severity {
+                    Severity::Error => {
+                        problems += 1;
+                        report.lines.push(line(&folder, finding));
                     }
+                    Severity::Warning => warnings.push(finding),
                 }
-                Err(err) => {
-                    report.failed += 1;
-                    report.problems += err.issues.len();
-                    let folder = folder_name(dir);
-                    report
-                        .lines
-                        .extend(err.issues.iter().map(|issue| format!("{folder}: {issue}")));
+            }
+            if problems == 0
+                && let Some(package) = &check.package
+            {
+                let key = package.key();
+                report.lines.push(format!(
+                    "ok {} {} {}",
+                    key.provider(),
+                    key.revision(),
+                    key.manifest_sha256()
+                ));
+            }
+            for finding in warnings {
+                report
+                    .lines
+                    .push(format!("warning: {}", line(&folder, finding)));
+                if warnings_fail {
+                    problems += 1;
                 }
+            }
+            if problems > 0 {
+                report.failed += 1;
+                report.problems += problems;
             }
         }
         report
     }
 
-    fn read_and_validate(dir: &Path) -> Result<ValidatedPackage, PackageError> {
-        let files = read_package(&MacosFilesystem, dir)?;
-        ValidatedPackage::from_files(files, NameCheck::FolderName)
+    /// `<folder>: <file> <location>: <code>: <message>`, the line format
+    /// of spec 0009 AC-14.
+    fn line(folder: &str, finding: &Finding) -> String {
+        format!("{folder}: {}", finding.issue)
     }
 
     /// The folder name a problem line starts with, or the whole path when
@@ -155,7 +172,7 @@ mod macos {
         fn a_missing_folder_is_one_problem_named_after_it() {
             let root = stackly_testkit::TestRoot::new().unwrap();
 
-            let report = check_packages(&[root.path().join("nowhere")]);
+            let report = check_packages(&[root.path().join("nowhere")], false);
 
             assert_eq!(report.problems, report.lines.len());
             assert!(report.problems >= 1);

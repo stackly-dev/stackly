@@ -4,7 +4,7 @@ _Langkah diturunkan dari acceptance criteria spec 0036. `/check verify` menjalan
 
 ## Milestone 1: Validator dan kebijakan
 
-Bagian ini baru mencakup Build plan langkah 1 (`core::provider::check` dan `core::provider::scenarios`). Langkah 2 sampai 5 milestone ini menambah bagiannya sendiri di bawah.
+Bagian ini mencakup Build plan langkah 1 (`core::provider::check` dan `core::provider::scenarios`), langkah 2 (`cargo xtask provider check` di atas `check_package`), dan langkah 3 (`provider.validate`, protokol 3.6). Langkah 4 dan 5 menambah barisnya sendiri di bawah.
 
 ### UI / manual
 
@@ -18,12 +18,52 @@ Bagian ini baru mencakup Build plan langkah 1 (`core::provider::check` dan `core
 - [ ] `cargo test -p stackly-core --test provider_rules another_api_version_or_kind_stops_before_the_rest_is_read` → lulus tanpa perubahan: satu issue `unsupported_api_version` → AC-1
 - [ ] `cargo test -p stackly-core --test fuzz_regressions` dan `cargo test -p stackly-core --lib provider::fuzzing` → lulus; `provider_scenarios` ada di daftar target dan dua seed nya (`fixture.fake.yaml`, `fixture.invalid.yaml`) melewati harness → AC-3
 - [ ] `cargo xtask fuzz list` → memuat `provider_scenarios`; `cargo xtask fuzz build provider_scenarios` → exit 0 dengan toolchain pin; `cargo xtask fuzz seed` lalu `git status --short fuzz/seeds` → bersih (seed `provider_scenarios` sudah ter-commit; seed dari `providers/example/tests/scenarios.yaml` dan `providers/fake/tests/scenarios.yaml` ikut otomatis begitu file itu ada) → AC-3
-- [ ] `cargo xtask provider check` → empat baris `ok` tidak berubah (format lama tetap sampai langkah 2) → AC-2
+- [ ] `cargo xtask provider check` → empat baris `ok` (`testing/fake`, `official/nats`, `official/postgresql`, `official/traefik`), exit 0 → AC-4
+- [ ] `cargo test -p xtask --test provider_check` → 7 test lulus: format baris lama tetap untuk error `package` dan `authoring` (`init_port_issues`); `apiVersion: stackly/v2` mencetak tepat satu baris `fake: provider.yaml apiVersion: unsupported_api_version: apiVersion "stackly/v2" is not supported; this Stackly supports: stackly/v1alpha1`; `tests/scenarios.yaml` yang rusak mencetak baris `fake: tests/scenarios.yaml scenarios[0].settings.readyDelayMs: settings_value: ...` tanpa baris `ok`; exit 1 → AC-4, AC-1 (bagian xtask). Baris `warning: ` belum bisa dipicu karena belum ada versi atau item `deprecated`; tanpa argumen folder, warning dihitung sebagai masalah (`check_packages(.., warnings_fail = true)`)
+- [ ] `cargo test -p stackly-protocol --lib provider` dan `cargo test -p stackly-protocol --test provider_fixtures` → lulus: path 1 sampai 4096 byte, diawali `/`, tanpa NUL, selain itu `invalid_format` di `path`; ketiga enum terbuka membaca nilai asing sebagai `unrecognized`; setiap file di `protocols/fixtures/provider/` terdaftar di `index.json`, fixture `roundtrip` sama persis dengan bentuk tulisan Rust, `omitted` = `findingCount` dikurangi panjang `findings`; frame request, reject path relatif, dan response di `protocols/fixtures/ipc/` → AC-5
+- [ ] `cargo test -p stackly-protocol` → lulus, termasuk `ipc_fixtures` (setiap varian `Call` dan `Reply` punya fixture roundtrip), `limits` (`providerPathMax`, `validationFindingsMax`), recovery allowed untuk `provider.validate`, dan `ProtocolVersion::CURRENT` 3.6 → AC-5
+- [ ] `cargo xtask codegen --check` → "20 generated files are up to date"; `protocols/contract-versions.json` mencatat 3.6 → AC-5
+- [ ] `cargo test -p stacklyd --test provider_validate` → 6 test lulus: salinan `providers/nats` `publishable` dengan identitas dari `ValidatedPackage::key()`, generation registry dan isi root sama sebelum dan sesudah; `apiVersion: stackly/v2` dan `fake-command` menghasilkan persis fixture `validation-unsupported-api-version.json` dan `validation-authoring.json`; folder yang tidak ada dan folder dengan 150 entri asing tetap balasan sukses (`loadable: false`, 100 finding, `findingCount` 101, `omitted` 1); path relatif, kosong, dan ber-NUL ditolak `request.invalid_params` di `path`; method dijawab dalam recovery mode tanpa menyentuh registry; entri catalog yang `provider.yaml` nya `stackly/v2` berstatus `invalid` dengan tepat satu issue `unsupported_api_version` → AC-5 (bagian daemon), AC-1 (bagian method dan catalog)
+- [ ] `cargo test -p stacklyd --lib ipc::provider` → 150 finding dipotong ke 100 dengan `omitted` 50 → AC-5
+- [ ] `swift test --package-path clients/swift` → lulus, termasuk `ProviderValidateContractTests` (5 test: request, frame balasan, tiga fixture, nilai asing `.unrecognized`), `IpcFixtureTests` (62 method), dan `ContractTests` (protokol 3.6) → AC-5
+- [ ] `cargo xtask fuzz seed` lalu `git status --short fuzz/seeds` → bersih; seed `ipc_request_decode` dan `ipc_server_frame_decode` memuat ketiga frame `provider.validate` → AC-5
 - [ ] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` dan `cargo xtask check-deps` → lulus; `check` dan `scenarios` hanya memakai port `Filesystem` → AC-2
 
 ### Acceptance-criteria coverage
 
-- AC-1 · bagian core: tabel, pesan, satu finding di `check_package` dan `from_files` (jadi juga di muat catalog yang memakai `from_files`); `provider.validate` menunggu langkah 3, `cargo xtask provider check` langkah 2, catalog `invalid` lewat test daemon langkah 3, harness langkah 12
-- AC-2 · lengkap di core; dipakai `cargo xtask provider check` (langkah 2) dan `provider.validate` (langkah 3)
+- AC-1 · bagian core (tabel, pesan, satu finding di `check_package` dan `from_files`), xtask (`cargo xtask provider check`), method (`provider.validate`), dan catalog (entri `invalid` dengan satu issue); bagian harness menunggu langkah 12
+- AC-2 · lengkap
 - AC-3 · lengkap kecuali fuzz 10 menit (langkah manual di atas); seed dari `providers/example` menunggu langkah 6
-- AC-4 sampai AC-16 · belum, milik langkah 2 dan seterusnya
+- AC-4 · tanpa pemeriksaan `not frozen`, yang menunggu langkah 5
+- AC-5 · bagian daemon dan kontrak; `stackly provider validate` dan `cli.provider_invalid` menunggu langkah 4
+- AC-6 sampai AC-16 · belum, milik langkah 5 dan seterusnya
+
+## Milestone 2: Paket contoh, scaffold, dan form
+
+Bagian ini mencakup Build plan langkah 6 (paket `providers/example/`), langkah 7 (`cargo xtask provider new`), dan langkah 8 (fixture form per folder dan test `StacklyUI` generik).
+
+### UI / manual
+
+- Tidak ada langkah manual untuk langkah 6 sampai 8.
+
+### Commands
+
+- [ ] `cargo xtask provider check providers/example` → `ok testing/example 0.1.0 <sha256>` tanpa finding → AC-7 (bagian paket)
+- [ ] `cargo test -p stackly-core --test provider_packages` → lulus, termasuk `the_example_package_reads_without_writes_and_validates` (ID `testing/example`, revision `0.1.0`, software `fake`, capability `reload`, `multiInstance`, `persistence`, field `greeting`, `readyDelayMs`, `authToken` secret), `the_example_package_is_publishable_with_its_two_scenarios` (`check_package` tanpa finding, skenario `default` dengan settings kosong dan `slow-ready` dengan `readyDelayMs: 1500`, keduanya `ready`), `the_example_package_has_the_artifacts_of_the_fake_package` (artefak `versions.json` sama dengan milik `providers/fake`, yang versinya dijaga `provider_no_shell` terhadap crate `stackly-fake-server`), dan `example_plans_match_the_golden_files` (golden `crates/core/tests/golden/provider/example/`: init tanpa render, run me-render `serverConfig` sebelum spawn) → AC-7 (bagian paket)
+- [ ] `cargo xtask fuzz seed` lalu `git status --short fuzz/seeds` → bersih; `fuzz/seeds/provider_scenarios/example.scenarios.yaml` ter-commit → AC-3
+- [ ] `cargo xtask docs check` → `ok docs`; `providers/example/README.md` ikut diperiksa: blok `bash` nya memuat `cargo xtask provider new mytool` dan `cargo xtask provider check providers/mytool` (keduanya ada di `USAGE`), sedangkan `docs/providers/README.md` dan perintah `test` dan `freeze` tetap code span (bukan link atau blok `bash`) sampai halaman dan perintah itu ada → AC-7
+- [ ] `cargo test -p xtask scaffold` → 9 test lulus: nama yang melanggar aturan bagian nama `ProviderName` (kosong, huruf besar, angka di awal, `--`, `-` di akhir, `/`, `_`, 64 karakter) dan `example` ditolak dengan pesan aturannya; huruf pertama dikapitalkan; penggantian hanya untuk baris utuh yang muncul tepat sekali; argumen `<name> [--out <dir>]`; hasil scaffold `mytool` berbeda dari paket contoh hanya pada tiga baris (`# Mytool provider`, `  id: testing/mytool`, `  displayName: Mytool`), file yang sama, folder sementara hilang, dan baris `ok testing/mytool 0.1.0 <sha256>`; folder tujuan yang sudah ada, nama tidak valid, contoh yang drift (`0 times`), dan salinan yang tidak `publishable` tidak meninggalkan file apa pun → AC-7
+- [ ] Jalankan `cargo xtask provider new mytool` → exit 0, baris `ok testing/mytool 0.1.0 <sha256>` lalu `next:` dengan `provider check`, `provider test`, README, dan `STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures`; `cargo xtask provider check providers/mytool` → baris `ok` yang sama; ulangi `provider new mytool` → exit 1 `... already exists; nothing was written`; `cargo xtask provider new My` → exit 1 dengan aturan nama; `cargo xtask provider new other --out <folder sementara>` → exit 0 tanpa baris `create_form_fixtures`. Hapus `providers/mytool` dan folder sementara (`git status` bersih) → AC-7
+- [ ] `cargo test -p xtask` (seluruhnya) → lulus, termasuk `the_provider_words_cover_every_provider_folder_and_catalog_id` (`example` ada di `PROVIDER_WORDS`) dan `the_repo_packages_pass_with_one_ok_line_each` (lima baris `ok`, `testing/example` pertama); `cargo xtask check-deps` → bersih (`instance::create` dan folder Swift `CreateInstance/` tidak memuat kata `example`)
+- [ ] `cargo xtask catalog check` → revision catalog tidak berubah (namespace `testing` tidak masuk catalog); `cargo xtask codegen --check` → up to date
+- [ ] `cargo test -p stacklyd --test create_form_fixtures` → lulus; satu fixture `protocols/fixtures/instance/create-form-<folder>.json` untuk setiap folder `providers/` (`example`, `fake`, `nats`, `postgresql`, `traefik`) dari listing folder; nama tampil dari `metadata.displayName`, versi dan line dari artefak pertama `versions.json` untuk target host → AC-8
+- [ ] Probe drift: ubah `"default": "hello"` di `providers/example/schemas/settings.schema.json`, jalankan test di atas → gagal `example: rerun with STACKLY_UPDATE_GOLDEN=1`; kembalikan. Hapus sementara `create-form-traefik.json` → gagal dengan path file itu; kembalikan (`git status` bersih) → AC-8
+- [ ] `cargo test -p stackly-protocol --test create_fixtures` dan `swift test --package-path clients/swift --filter 'CreateContractTests|CreateClientTests'` → lulus pada fixture yang ditulis ulang → AC-8
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'EveryCreateFormFixtureTests|SchemaFormModelTests|CreateInstanceCopyTests|CreateInstanceModelTests'` → lulus; `EveryCreateFormFixtureTests` membaca setiap `create-form-*.json` (paling sedikit lima), membangun `SchemaFormModel`, dan gagal bila ada field ber kind `.unrecognized` atau baris ber control `.unrecognized` → AC-8
+
+### Acceptance-criteria coverage
+
+- AC-7 · lengkap (langkah 6 dan 7); scaffold yang lulus `provider test` menunggu harness langkah 10 sampai 13
+- AC-8 · lengkap (langkah 8)
+- AC-3 · seed `example.scenarios.yaml` ada; fuzz 10 menit tetap langkah manual Milestone 1
+- AC-9 (paket contoh lulus harness) · menunggu langkah 10

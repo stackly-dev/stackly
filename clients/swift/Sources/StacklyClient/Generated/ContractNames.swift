@@ -86,6 +86,7 @@ extension Call {
 		case .doctorRun: "doctor.run"
 		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
 		case .diagnosticsExportBundle: "diagnostics.export_bundle"
+		case .providerValidate: "provider.validate"
 		}
 	}
 }
@@ -155,6 +156,7 @@ extension Reply {
 		case .doctorRun: "doctor.run"
 		case .diagnosticsPreviewBundle: "diagnostics.preview_bundle"
 		case .diagnosticsExportBundle: "diagnostics.export_bundle"
+		case .providerValidate: "provider.validate"
 		}
 	}
 }

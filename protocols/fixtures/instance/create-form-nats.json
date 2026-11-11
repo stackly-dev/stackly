@@ -33,10 +33,8 @@
       "supported": false
     }
   ],
-  "dataPath": "instances/<new instance id>/data",
-  "startupDefault": "manual",
   "dataLocation": "/Users/dev/Library/Application Support/Stackly",
-  "logsLocation": "/Users/dev/Library/Logs/Stackly",
+  "dataPath": "instances/<new instance id>/data",
   "endpoints": [
     {
       "defaultPort": 4222,
@@ -179,6 +177,7 @@
       "visibility": "advanced"
     }
   ],
+  "logsLocation": "/Users/dev/Library/Logs/Stackly",
   "provider": {
     "category": "messaging",
     "displayName": "NATS Server",
@@ -190,7 +189,7 @@
   "runtime": {
     "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
     "dependentRuntimes": [],
-    "displayName": "NATS",
+    "displayName": "NATS Server",
     "id": "0192f3a6-0000-7000-8000-0000000000a1",
     "installMode": "managed",
     "installedAt": "2026-01-01T00:00:00.000Z",
@@ -208,5 +207,6 @@
     "usedBy": [],
     "version": "2.15.1"
   },
+  "startupDefault": "manual",
   "suggestedName": "nats-2-15"
 }
