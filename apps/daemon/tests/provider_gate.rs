@@ -631,6 +631,10 @@ async fn a_store_that_cannot_be_written_answers_the_fixed_text_without_a_path() 
         "the provider package could not be stored"
     );
     assert!(detail(&refused, "reason").is_some());
+    assert!(
+        refused.hint().is_some(),
+        "an error of the operation keeps its hint"
+    );
     let root = site.root.path().display().to_string();
     let registry = daemon.core().registry().expect("the registry is open");
     let rows = registry

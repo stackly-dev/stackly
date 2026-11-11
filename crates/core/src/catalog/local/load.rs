@@ -12,7 +12,9 @@ use crate::catalog::index::versions_sha256;
 use crate::catalog::model::{
     CatalogEntry, EntryOrigin, InvalidEntry, LocalInfo, ProviderEntry, TileHint,
 };
-use crate::provider::{FindingOrigin, Issue, IssueCode, Location, NameCheck, check_package};
+use crate::provider::{
+    FindingOrigin, Issue, IssueCode, Location, NameCheck, Severity, check_package,
+};
 
 /// Builds the catalog entries of every import row, in provider order, with
 /// the registry generation the rows were read at.
@@ -60,16 +62,16 @@ fn load_one(
             local: Some(Box::new(record)),
         })
     };
-    let Some(package) = check.package.filter(|_| {
-        !check
-            .findings
-            .iter()
-            .any(|finding| finding.origin == FindingOrigin::Package)
-    }) else {
+    // Only an error makes a store copy unloadable; a warning never does
+    // (spec 0036 fix 3).
+    let blocks = |finding: &crate::provider::Finding| {
+        finding.origin == FindingOrigin::Package && finding.severity == Severity::Error
+    };
+    let Some(package) = check.package.filter(|_| !check.findings.iter().any(blocks)) else {
         let issues = check
             .findings
             .into_iter()
-            .filter(|finding| finding.origin == FindingOrigin::Package)
+            .filter(blocks)
             .map(|finding| finding.issue)
             .collect();
         return invalid(record, issues);
