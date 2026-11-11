@@ -9,7 +9,7 @@
 
 use jiff::Timestamp;
 use stackly_domain::{
-    ApprovalState, GuardView, ProviderImportRecord, ProviderName, ProviderRevisionKey,
+    ApprovalState, Generation, GuardView, ProviderImportRecord, ProviderName, ProviderRevisionKey,
     ProviderRevisionRecord, Registry, RegistryError, Sha256Digest, TrustDecision,
 };
 
@@ -84,15 +84,17 @@ impl RevokedInfo {
     }
 }
 
-/// The revocation of the installed catalog that matches `key`.
-///
-/// The installed catalog carries no `revoked` list yet, so none matches.
-// provisional: F37 step 8 (the catalog `revoked` list and `Catalog::revocation`)
-pub(crate) const fn catalog_revocation(
-    _catalog: &Catalog,
-    _key: &ProviderRevisionKey,
-) -> Option<RevokedInfo> {
-    None
+/// The revocation of the installed catalog that matches `key`, as the
+/// verdict carries it: by the catalog, since midnight UTC of its date, with
+/// its reason and the catalog revision.
+#[must_use]
+pub fn catalog_revocation(catalog: &Catalog, key: &ProviderRevisionKey) -> Option<RevokedInfo> {
+    catalog.revocation(key).map(|revocation| RevokedInfo {
+        by: RevokedBy::Catalog,
+        since: revocation.since_instant(),
+        reason: Some(revocation.reason.clone()),
+        catalog_revision: Some(catalog.meta().revision),
+    })
 }
 
 /// The verdict of a local import row: `pending` needs an approval, a
@@ -158,6 +160,27 @@ pub fn require_entry_trust(
     };
     let stored = registry.provider_import(&info.record.provider)?.value;
     Ok(fresh_trust(stored.as_ref(), &info.record.package_sha256))
+}
+
+/// The verdict of a local import read again from the registry for bytes an
+/// operation froze: the row of `provider` must still hold `package_sha256`
+/// and its approval. The `install_runtime` work calls it right before the
+/// first exec of a binary from a local entry.
+///
+/// # Errors
+///
+/// Returns the [`RegistryError`] of a failed read; the caller fails, never
+/// trusts.
+pub fn stored_trust(
+    registry: &dyn Registry,
+    provider: &ProviderName,
+    package_sha256: &Sha256Digest,
+) -> Result<(TrustVerdict, Generation), RegistryError> {
+    let stored = registry.provider_import(provider)?;
+    Ok((
+        fresh_trust(stored.value.as_ref(), package_sha256),
+        stored.generation,
+    ))
 }
 
 /// The verdict of a pinned revision, from its registry record, which the

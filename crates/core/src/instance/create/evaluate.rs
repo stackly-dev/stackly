@@ -302,8 +302,39 @@ impl Judge<'_> {
                             CreateError::ProviderAmbiguous {
                                 provider: draft.provider.name.clone(),
                                 revision: draft.provider.revision.clone(),
+                                candidates: Vec::new(),
                             },
                             "More than one package matches that revision.".to_owned(),
+                        )
+                    }
+                    ProviderProblem::ApprovalRequired {
+                        provider,
+                        provider_revision,
+                        package_sha256,
+                    } => {
+                        self.issue("provider.name", FieldCode::InvalidValue);
+                        (
+                            CreateError::ApprovalRequired {
+                                provider: provider.clone(),
+                                provider_revision: provider_revision.clone(),
+                                package_sha256: package_sha256.clone(),
+                            },
+                            "This provider is not approved yet.".to_owned(),
+                        )
+                    }
+                    ProviderProblem::Revoked {
+                        provider,
+                        provider_revision,
+                        info,
+                    } => {
+                        self.issue("provider.name", FieldCode::InvalidValue);
+                        (
+                            CreateError::Revoked {
+                                provider: provider.clone(),
+                                provider_revision: provider_revision.clone(),
+                                info: info.clone(),
+                            },
+                            "The approval of this provider was revoked.".to_owned(),
                         )
                     }
                     ProviderProblem::Unavailable { state } => {

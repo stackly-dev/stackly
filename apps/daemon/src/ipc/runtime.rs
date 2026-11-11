@@ -13,7 +13,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use stackly_core::catalog::{Catalog, CatalogEntry, NotInstallableReason, ProviderEntry};
+use stackly_core::catalog::{
+    Catalog, CatalogEntry, NotInstallableReason, ProviderEntry, TrustVerdict, entry_trust,
+    require_entry_trust,
+};
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, NoOpReply, OperationError, Origin, Precheck, PrecheckOutcome,
 };
@@ -395,10 +398,9 @@ fn catalog_match<'a>(
     let InstallMode::Managed { artifact_sha256 } = runtime.install() else {
         return None;
     };
-    for entry in catalog.entries() {
-        let CatalogEntry::Provider(provider) = entry else {
-            continue;
-        };
+    // Spec 0037, *Software yang sama*: a catalog entry of the software
+    // decides before a local one.
+    for provider in same_software_order(catalog) {
         if provider.package.software() != runtime.software() {
             continue;
         }
@@ -412,7 +414,7 @@ fn catalog_match<'a>(
         if let Some(artifact) = found {
             let verdict = support_status(
                 artifact,
-                artifact.compatibility(),
+                provider.trusted_compatibility(artifact),
                 Some(provider.package.key()),
                 host,
             );
@@ -420,6 +422,20 @@ fn catalog_match<'a>(
         }
     }
     None
+}
+
+/// The provider entries of `catalog`, catalog entries before local ones,
+/// each group in display order.
+fn same_software_order(catalog: &Catalog) -> impl Iterator<Item = &ProviderEntry> {
+    let providers = || {
+        catalog.entries().iter().filter_map(|entry| match entry {
+            CatalogEntry::Provider(provider) => Some(provider),
+            _ => None,
+        })
+    };
+    providers()
+        .filter(|provider| provider.local().is_none())
+        .chain(providers().filter(|provider| provider.local().is_some()))
 }
 
 fn loaded_catalog(catalog: Option<&stackly_core::catalog::CatalogState>) -> Option<&Catalog> {
@@ -437,12 +453,11 @@ impl DisplayNames {
     fn new(catalog: Option<&stackly_core::catalog::CatalogState>) -> Self {
         let mut names = BTreeMap::new();
         if let Some(catalog) = loaded_catalog(catalog) {
-            for entry in catalog.entries() {
-                if let CatalogEntry::Provider(provider) = entry {
-                    names
-                        .entry(provider.package.software().to_string())
-                        .or_insert_with(|| entry.display_name());
-                }
+            // A local entry never names software a catalog entry runs.
+            for provider in same_software_order(catalog) {
+                names
+                    .entry(provider.package.software().to_string())
+                    .or_insert_with(|| provider.package.manifest().display_name().to_owned());
             }
         }
         Self(names)
@@ -510,7 +525,11 @@ fn select(core: &DaemonCore, params: &InstallRuntimeParams) -> Result<Selection,
             ));
         }
     };
-    let resolution = resolve(provider, &selector, &host)
+    // The trust gate, right after the entry is found and before the
+    // resolve and the precheck, so an artifact already installed through
+    // another entry is refused too (spec 0037, *Gate trust*).
+    let trust = entry_gate(core, &catalog, provider)?;
+    let resolution = resolve(provider, &selector, &host, &trust)
         .map_err(|error| Box::new(map::runtime::resolve_error(&error, asked, &params.selector)))?;
     let artifact: &VersionArtifact = resolution.artifact;
     let stackly_core::provider::ArtifactStatus::Available { sha256, .. } = &artifact.status else {
@@ -528,7 +547,12 @@ fn select(core: &DaemonCore, params: &InstallRuntimeParams) -> Result<Selection,
     }
     let key = provider.package.key();
     let software: &SoftwareName = provider.package.software();
-    let verdict = support_status(artifact, artifact.compatibility(), Some(key), &host);
+    let verdict = support_status(
+        artifact,
+        provider.trusted_compatibility(artifact),
+        Some(key),
+        &host,
+    );
     let resolved = map::runtime::resolved_artifact(
         &entry.id().to_string(),
         software.as_str(),
@@ -553,11 +577,38 @@ fn select(core: &DaemonCore, params: &InstallRuntimeParams) -> Result<Selection,
         tracing::error!(%error, "an artifact cannot be frozen into an install input");
         unexpected("the artifact cannot be frozen into an install input")
     })?;
+    let input = match provider.local() {
+        Some(local) => input.from_local_import(&local.record.package_sha256),
+        None => input,
+    };
     Ok(Selection {
         resolved,
         input,
         sha256: *sha256,
     })
+}
+
+/// The verdict of the gate for `provider`, read again from the registry for
+/// a local entry; a verdict that is not trusted refuses the request with
+/// `provider.approval_required` or `provider.revoked`.
+fn entry_gate(
+    core: &DaemonCore,
+    catalog: &Catalog,
+    provider: &ProviderEntry,
+) -> Result<TrustVerdict, Box<ErrorBody>> {
+    // A catalog entry reads no registry; a local one cannot be checked
+    // without it, so it is refused.
+    let trust = if provider.local().is_some() {
+        let registry = registry_of(core)?;
+        require_entry_trust(catalog, &registry, provider)
+            .map_err(|error| Box::new(map::registry_error(&error)))?
+    } else {
+        entry_trust(catalog, provider)
+    };
+    match map::trust::verdict_refusal(provider, &trust) {
+        Some(body) => Err(Box::new(body)),
+        None => Ok(trust),
+    }
 }
 
 fn refuse(

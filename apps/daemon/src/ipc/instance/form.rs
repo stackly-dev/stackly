@@ -9,8 +9,8 @@
 use stackly_core::catalog::{CatalogEntry, CatalogState};
 use stackly_core::instance::create::{
     CreateDeps, CreateError, CreateFormModel, FormError, ProviderProblem, build_form,
-    build_form_from_package, evaluate, form_locations, gather, names_of, resolve_package,
-    select_provider, suggested_name,
+    build_form_from_package, evaluate, form_locations, form_trust, gather, names_of,
+    resolve_package, select_provider, suggested_name,
 };
 use stackly_domain::{
     Instance, InstanceFilter, ProviderName, Registry, Runtime, RuntimeId, RuntimeState,
@@ -74,6 +74,20 @@ pub fn get_create_form(
                         None,
                     ))
                 })?;
+                // The trust gate, after the pick and before the form
+                // (spec 0037, *Gate trust*).
+                form_trust(&state, &registry, entry)
+                    .map_err(|error| Box::new(map::registry_error(&error)))?
+                    .map_err(|error| {
+                        Box::new(form_error(
+                            error,
+                            &state,
+                            &runtime,
+                            Some(entry.package.key().provider().as_str()),
+                            None,
+                            None,
+                        ))
+                    })?;
                 build_form(entry, &runtime, &names_of(&instances), meta)
             }
             Some(revision) => {
@@ -178,8 +192,28 @@ async fn pinned_form(
                 FormError::CatalogUnavailable { reason }
             }
             ProviderProblem::NotFound => FormError::ProviderNotFound,
-            ProviderProblem::Ambiguous => FormError::ProviderAmbiguous,
+            ProviderProblem::Ambiguous => FormError::ProviderAmbiguous {
+                candidates: Vec::new(),
+            },
             ProviderProblem::Unavailable { state } => FormError::ProviderUnavailable { state },
+            ProviderProblem::ApprovalRequired {
+                provider,
+                provider_revision,
+                package_sha256,
+            } => FormError::ApprovalRequired {
+                provider,
+                provider_revision,
+                package_sha256,
+            },
+            ProviderProblem::Revoked {
+                provider,
+                provider_revision,
+                info,
+            } => FormError::Revoked {
+                provider,
+                provider_revision,
+                info,
+            },
         };
         refuse(error, Some(&name), None)
     })?;
@@ -224,9 +258,28 @@ fn form_error(
             provider: name,
             revision,
         },
-        FormError::ProviderAmbiguous => CreateError::ProviderAmbiguous {
+        FormError::ProviderAmbiguous { candidates } => CreateError::ProviderAmbiguous {
             provider: name,
             revision,
+            candidates,
+        },
+        FormError::ApprovalRequired {
+            provider,
+            provider_revision,
+            package_sha256,
+        } => CreateError::ApprovalRequired {
+            provider,
+            provider_revision,
+            package_sha256,
+        },
+        FormError::Revoked {
+            provider,
+            provider_revision,
+            info,
+        } => CreateError::Revoked {
+            provider,
+            provider_revision,
+            info,
         },
         FormError::ProviderUnavailable { state } => CreateError::ProviderUnavailable {
             provider: name,

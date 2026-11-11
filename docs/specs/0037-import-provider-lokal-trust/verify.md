@@ -51,3 +51,35 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Record evidence `na
 - AC-17 · bagian import dan remove: baris audit di commit yang sama lewat mesin operasi dengan `provider`, `providerRevision`, `packageSha256`, `manifestSha256`; `changes` di audit import dan approve milik milestone 2
 - AC-18 · lengkap: kenaikan major 4.0, method `recovery refused`, DTO, enum terbuka, kode, event, fixture Rust dan Swift, seed fuzz, migrasi 13, `CODED_COLUMNS`, `ProviderSourceKind::Local`
 - AC-4 · bagian core (milestone 2 menyambungkan gate di handler); AC-11 · `trusted_compatibility` di status dan kalimat izin di fixture; AC-5 sampai AC-8, AC-12, AC-14 sampai AC-16, AC-19 · milik milestone 2 sampai 4
+
+## Milestone 2: Approval, revocation, and the gate
+
+_Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langkah 6 di commit sendiri; langkah 7 dan 8 di satu commit karena keduanya mengubah `catalog::trust`, `map::trust`, dan `provider_gate.rs` yang sama. Kontrak naik minor ke 4.1: `CreateProviderSource` mendapat `local_import`. Revision yang sempat dipin lewat celah create milestone 1 (`approval` null, sumber catalog) tetap dianggap dipercaya oleh `pinned_trust`; celah itu tertutup mulai langkah 7, jadi baris seperti itu hanya ada di root dev yang dibuat dari `main` antara langkah 5 dan 7._
+
+### UI / manual
+
+- [ ] Jaringan mati: matikan Wi-Fi dan kabel, lalu preview, import, approve, revoke, list, dan detail entri lokal, serta `runtime.resolve` entri yang dicabut catalog → perilaku sama dengan saat online, tidak ada permintaan jaringan → AC-8
+
+### Commands
+
+- [ ] `cargo test -p stacklyd --test provider_trust` → 4 test lulus: approve dengan digest lain `provider.import_changed` ber hint; approve byte yang ditampilkan membuka gate (`approved`, `available`, versi `installable`), satu event `approved`, satu baris audit `approve_provider`, approve ulang tanpa operasi; revoke menutup gate dan keputusan mengikuti byte nya lintas import; `settings.update` dengan kunci trust `request.invalid_params`; daemon dengan `STACKLY_TRUST=1` dan `STACKLY_APPROVE_ALL=1` tetap mengimpor `pending` → AC-5, AC-6, AC-7, AC-12, AC-17
+- [ ] `cargo test -p stacklyd --test provider_gate` → 4 test lulus: entri `pending` ditolak `provider.approval_required` (detail `provider`, hint) di `runtime.install`, `runtime.resolve`, form tanpa dan dengan revision, dan `instance.create`, tanpa instance atau baris `provider_revisions`, dan form tanpa provider memilih entri catalog; entri `approved` membuat form ber sumber `local_import`, create sukses dan pin menulis `publisher` `acme`, `approval` `approved`, `approved_at` waktu keputusan, dan `source_id` baris import; sesudah revoke kelima titik dan form duplicate menolak `provider.revoked` by `user`, dan instance yang ada tetap bisa start; revision yang dicabut catalog muncul di `ListProvidersReply.revocations` dan `ImportPreview.revocation`, approve nya ditolak `provider.revoked` by `catalog` dengan `catalogRevision` dan `since`, dan semua titik gate menolak; nama tampil runtime terpasang diambil dari entri catalog, bukan entri lokal ber `software` sama → AC-4, AC-7, AC-8, AC-11, AC-19
+- [ ] `cargo test -p stackly-core --test runtime_install local` → 2 test lulus: input dari entri lokal membuang compatibility record dan membawa `localPackageSha256` lewat journal (input lama tanpa field tetap terbaca); install dari entri lokal tanpa approval gagal `provider.approval_required` sebelum exec pertama, tanpa spawn `RuntimeCheck`, runtime, atau folder → AC-4, AC-11
+- [ ] `cargo test -p stackly-core --lib catalog::load` → lulus, termasuk tiga test `revoked`: daftar termuat dan urut, `Catalog::revocation` mencakup semua digest tanpa `manifestSha256` dan hanya digest yang disebut, `catalog_revocation` by `catalog` dengan `since` tengah malam UTC dan revision catalog, snapshot lokal menjaga daftar, index tanpa revocation tidak menulis `revoked` dan digest nya tetap; entri yang cocok dengan provider di catalog yang sama menggagalkan build dan membuat loader `index_invalid`; aturan urut, unik, ID, revision, digest, reason, batas 64, dan `since` di masa depan saat build → AC-8
+- [ ] `cargo test -p xtask catalog::source` → `[[revoked]]` terbaca dengan tanggal, waktu atau field asing ditolak → AC-8
+- [ ] `cargo xtask catalog check` → `ok catalog revision 11 7f4ebd23…` (digest catalog bawaan tidak berubah) → AC-8
+- [ ] `cargo test -p stackly-core --test catalog_trust` dan `--test runtime_resolve` → lulus dengan `installability`, `entry_status`, dan `resolve` yang menerima verdict → AC-4
+- [ ] `cargo test -p stackly-protocol` → lulus, termasuk `a_form_from_a_local_entry_names_the_local_import_source` dan `current_version_is_four_point_one` → AC-19, AC-18
+- [ ] `swift test --package-path clients/swift` → lulus dengan versi 4.1 → AC-18
+- [ ] `cargo xtask codegen --check` → "20 generated files are up to date"; `protocols/contract-versions.json` mencatat 4.1
+- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan cek target Windows → bersih
+
+### Acceptance-criteria coverage
+
+- AC-4 · lengkap di daemon dan core: `select()` runtime, form sesudah `select_provider` (`form_trust`), `resolve_package` (cabang entri dan `find_pinned`), `gather_duplicate`, guard `create_instance` (`recheck_trust`), dan `install_runtime` (baca ulang sebelum `validate_binary`, sebelum `commit`, dan generation import di batch akhir). Test spawn nol dan `FakeFetcher` tanpa permintaan ada di core untuk install; di daemon penolakan dibuktikan tanpa instance dan tanpa pin
+- AC-5, AC-6, AC-12 · lengkap (langkah 6)
+- AC-7 · lengkap untuk gate dan instance yang ada tetap start; perbandingan byte folder data dan pinned sebelum dan sesudah revoke belum ditulis sebagai test
+- AC-8 · lengkap kecuali langkah jaringan mati di atas
+- AC-11 · bagian milestone 2: compatibility record lokal tidak masuk `InstallInput` dan tidak ke matrix, nama tampil dan status runtime mengikuti entri catalog ber `software` sama; copy GUI dan CLI milik milestone 3 dan 4
+- AC-17 · lengkap untuk approve dan revoke (langkah 6)
+- AC-19 · lengkap: `PackageSource::LocalImport`, `PinMeta` lokal, *Software yang sama* di `select_provider`, `catalog_match`, dan `DisplayNames`

@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
-use stackly_core::catalog::{SourceNote, SourcePlanned, SourceProvider, SourceSpec};
+use stackly_core::catalog::{IndexRevoked, SourceNote, SourcePlanned, SourceProvider, SourceSpec};
 
 /// The only `schema` of `catalog.toml`.
 pub const SOURCE_SCHEMA: &str = "stackly.catalog-source/v1";
@@ -19,6 +19,19 @@ struct RawSource {
     provider: Vec<RawProvider>,
     #[serde(default)]
     planned: Vec<RawPlanned>,
+    #[serde(default)]
+    revoked: Vec<RawRevoked>,
+}
+
+/// One `[[revoked]]` (spec 0037, *Revocation di catalog*).
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRevoked {
+    id: String,
+    revision: String,
+    manifest_sha256: Option<String>,
+    reason: String,
+    since: toml::value::Datetime,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,7 +88,36 @@ pub fn parse(text: &str) -> Result<SourceSpec> {
                 raw.published_at
             )
         })?;
+    let revoked = raw
+        .revoked
+        .into_iter()
+        .map(|entry| {
+            let since = match (entry.since.date, entry.since.time, entry.since.offset) {
+                (Some(date), None, None) => jiff::civil::Date::new(
+                    i16::try_from(date.year).unwrap_or(i16::MAX),
+                    i8::try_from(date.month).unwrap_or(i8::MAX),
+                    i8::try_from(date.day).unwrap_or(i8::MAX),
+                )
+                .ok(),
+                _ => None,
+            }
+            .with_context(|| {
+                format!(
+                    "providers/catalog.toml: revoked {} since {} must be a date without a time",
+                    entry.id, entry.since
+                )
+            })?;
+            Ok(IndexRevoked {
+                id: entry.id,
+                revision: entry.revision,
+                manifest_sha256: entry.manifest_sha256,
+                reason: entry.reason,
+                since,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(SourceSpec {
+        revoked,
         revision: raw.revision,
         published_at,
         providers: raw
@@ -146,6 +188,23 @@ description = "Relational server."
         assert_eq!(spec.published_at.to_string(), "2026-10-19T07:05:00Z");
         assert_eq!(spec.providers[0].platform_notes[0].os, "windows");
         assert_eq!(spec.planned[0].mark, None);
+    }
+
+    // covers: AC-8 (spec 0037)
+    #[test]
+    fn a_revoked_entry_parses_with_its_date_and_needs_a_plain_date() {
+        let revoked = format!(
+            "{SOURCE}\n[[revoked]]\nid = \"official/nats\"\nrevision = \"1.0.0\"\nreason = \"Insecure default.\"\nsince = 2026-10-01\n"
+        );
+        let spec = parse(&revoked).unwrap();
+        assert_eq!(spec.revoked[0].since.to_string(), "2026-10-01");
+        assert_eq!(spec.revoked[0].manifest_sha256, None);
+
+        assert!(
+            parse(&revoked.replace("since = 2026-10-01", "since = 2026-10-01T00:00:00Z")).is_err()
+        );
+        assert!(parse(&revoked.replace("reason =", "reasons =")).is_err());
+        assert!(parse(SOURCE).unwrap().revoked.is_empty());
     }
 
     #[test]

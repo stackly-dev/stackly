@@ -127,10 +127,16 @@ pub fn duplicate_error(error: &DuplicateError, source: Uuid) -> ErrorBody {
                 &CreateError::ProviderAmbiguous {
                     provider: provider.to_string(),
                     revision: Some(revision.to_string()),
+                    candidates: Vec::new(),
                 },
                 &[],
             ))
         }
+        DuplicateError::Revoked {
+            provider,
+            revision,
+            info,
+        } => super::trust::revoked(&provider.to_string(), &revision.to_string(), info),
         DuplicateError::CapabilityUnsupported { provider, existing } => create::with_create_hint(
             ErrorBody::new(
                 &instance::CAPABILITY_UNSUPPORTED,

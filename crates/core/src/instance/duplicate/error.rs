@@ -33,6 +33,17 @@ pub enum DuplicateError {
         /// The revision label both packages carry.
         revision: RevisionLabel,
     },
+    /// The provider revision of the instance is revoked, by the user or the
+    /// installed catalog, so no new instance is created from it (spec 0037).
+    #[error("{provider} {revision} is revoked")]
+    Revoked {
+        /// The provider.
+        provider: ProviderName,
+        /// The revoked revision label.
+        revision: RevisionLabel,
+        /// Who revoked it and since when.
+        info: crate::catalog::RevokedInfo,
+    },
     /// The package cannot run a second instance.
     #[error("{provider} runs one instance at a time, and {existing} is it")]
     CapabilityUnsupported {

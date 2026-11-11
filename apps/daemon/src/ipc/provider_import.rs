@@ -249,8 +249,10 @@ fn preview_of(
             stored_copy_valid: stored_copy_valid(catalog, row),
         }),
         changes,
-        // provisional: F37 step 8 (catalog revocations)
-        revocation: None,
+        revocation: package
+            .and_then(|package| stackly_core::catalog::catalog_revocation(catalog, package.key()))
+            .as_ref()
+            .map(map::trust::revocation),
     }
 }
 

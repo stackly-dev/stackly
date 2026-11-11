@@ -19,9 +19,9 @@ use stackly_domain::{
     ArtifactFormat, ArtifactRecord, CompatibilityRecordRow, CompatibilityResult,
     CompatibilityScope, DependencyManifestJson, DetailKey, ErrorCodeName, ExactVersion,
     InstallDetails, InstallMode, JournalPayload, JournalView, NewRuntime, Operation,
-    OperationResource, OsVersion, Progress, ProviderRevisionKey, Registry, ResourceRef, Runtime,
-    RuntimeId, RuntimeLine, Sha256Digest, SignatureInfoJson, SoftwareName, StageName, Target,
-    WriteOp,
+    OperationResource, OsVersion, Progress, ProviderName, ProviderRevisionKey, Registry,
+    ResourceRef, Runtime, RuntimeId, RuntimeLine, Sha256Digest, SignatureInfoJson, SoftwareName,
+    StageName, Target, WriteOp,
 };
 use stackly_platform::{
     EntryPath, FileMode, HostFacts, HttpsUrl, Platform, PlatformError, ReadSeekFile, StopFlag,
@@ -41,6 +41,8 @@ use super::macho;
 use super::validate::{
     Marker, ValidateError, ValidateInput, ValidateReport, VersionCheckSpec, finish_tree, validate,
 };
+use crate::catalog::import::revoked_details;
+use crate::catalog::{RevokedInfo, TrustVerdict, stored_trust};
 use crate::layout::PreparedLayout;
 use crate::operation::{
     BoxFuture, FinalBatch, Finalize, OperationContext, OperationError, OperationOutcome,
@@ -115,6 +117,12 @@ pub struct InstallInput {
     /// The version check of the package, if it declares one.
     #[serde(default)]
     pub version_check: Option<VersionCheckInput>,
+    /// The `packageSha256` of the local import the artifact comes from, for
+    /// a selection from a local entry (spec 0037): the work checks the
+    /// approval of exactly these bytes again before the first exec and at
+    /// commit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_package_sha256: Option<String>,
 }
 
 /// The host an input was resolved for.
@@ -361,7 +369,19 @@ impl InstallInput {
                 pattern: check.pattern().to_owned(),
                 timeout_seconds: check.timeout().as_secs(),
             }),
+            local_package_sha256: None,
         })
+    }
+
+    /// Marks the input as a selection from a local entry whose stored
+    /// package is `package_sha256`. A local package's compatibility records
+    /// are never copied to the registry (spec 0037 AC-11), so they are
+    /// dropped here.
+    #[must_use]
+    pub fn from_local_import(mut self, package_sha256: &Sha256Digest) -> Self {
+        self.compatibility.clear();
+        self.local_package_sha256 = Some(package_sha256.to_string());
+        self
     }
 
     /// Encodes the input as the journal keeps it.
@@ -455,6 +475,20 @@ pub struct Plan {
     pub compatibility: Vec<CompatibilityRecordRow>,
     /// The version check, if the package declares one.
     pub version_check: Option<VersionCheckSpec>,
+    /// The local import the artifact comes from, if any.
+    pub local: Option<LocalSource>,
+}
+
+/// The local import an install comes from, whose approval the work checks
+/// again (spec 0037, *Gate trust*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalSource {
+    /// The provider ID.
+    pub provider: ProviderName,
+    /// The revision label, for the error details.
+    pub provider_revision: String,
+    /// The stored package bytes the selection saw.
+    pub package_sha256: Sha256Digest,
 }
 
 impl Plan {
@@ -543,6 +577,17 @@ impl Plan {
                 .map(compatibility_of)
                 .collect::<Result<Vec<_>, _>>()?,
             version_check,
+            local: input
+                .local_package_sha256
+                .as_ref()
+                .map(|sha256| {
+                    Ok::<_, InputError>(LocalSource {
+                        provider: field(&input.provider, "provider")?,
+                        provider_revision: input.package_revision.revision.clone(),
+                        package_sha256: field(sha256, "localPackageSha256")?,
+                    })
+                })
+                .transpose()?,
         })
     }
 
@@ -695,9 +740,50 @@ pub enum InstallError {
         /// The folder.
         path: String,
     },
+    /// The local entry the artifact comes from lost its approval during
+    /// the install (`provider.approval_required`, spec 0037).
+    #[error("{provider} is not approved")]
+    ApprovalRequired {
+        /// The provider ID.
+        provider: String,
+        /// The revision label.
+        provider_revision: String,
+        /// The stored package bytes.
+        package_sha256: String,
+    },
+    /// The approval was revoked during the install (`provider.revoked`).
+    #[error("{provider} {provider_revision} is revoked")]
+    Revoked {
+        /// The provider ID.
+        provider: String,
+        /// The revision label.
+        provider_revision: String,
+        /// Who revoked it and since when.
+        info: RevokedInfo,
+    },
     /// Something that should not happen.
     #[error("internal error: {0}")]
     Internal(String),
+}
+
+impl InstallError {
+    /// The error for a verdict on `local` that is not trusted.
+    #[must_use]
+    pub fn of_trust(local: &LocalSource, verdict: &TrustVerdict) -> Option<Self> {
+        match verdict {
+            TrustVerdict::Trusted => None,
+            TrustVerdict::Revoked(info) => Some(Self::Revoked {
+                provider: local.provider.to_string(),
+                provider_revision: local.provider_revision.clone(),
+                info: info.clone(),
+            }),
+            _ => Some(Self::ApprovalRequired {
+                provider: local.provider.to_string(),
+                provider_revision: local.provider_revision.clone(),
+                package_sha256: local.package_sha256.to_string(),
+            }),
+        }
+    }
 }
 
 impl InstallError {
@@ -723,10 +809,15 @@ impl InstallError {
             Self::ArchiveRejected { .. } => codes::ARCHIVE_REJECTED,
             Self::Validate(error) => error.code(),
             Self::InstallConflict { .. } => codes::INSTALL_CONFLICT,
+            Self::ApprovalRequired { .. } => APPROVAL_REQUIRED,
+            Self::Revoked { .. } => REVOKED,
             Self::Internal(_) => crate::operation::codes::INTERNAL_UNEXPECTED,
         }
     }
 }
+
+const APPROVAL_REQUIRED: ErrorCodeName = ErrorCodeName::from_static("provider.approval_required");
+const REVOKED: ErrorCodeName = ErrorCodeName::from_static("provider.revoked");
 
 fn key(text: &str) -> DetailKey {
     text.parse()
@@ -817,6 +908,20 @@ impl OperationError for InstallError {
             ],
             Self::Validate(error) => validate_details(error),
             Self::InstallConflict { path } => vec![(key("path"), path.clone())],
+            Self::ApprovalRequired {
+                provider,
+                provider_revision,
+                package_sha256,
+            } => vec![
+                (key("provider"), provider.clone()),
+                (key("providerRevision"), provider_revision.clone()),
+                (key("packageSha256"), package_sha256.clone()),
+            ],
+            Self::Revoked {
+                provider,
+                provider_revision,
+                info,
+            } => revoked_details(provider, provider_revision, info),
             Self::Internal(_) => Vec::new(),
         }
     }
@@ -1658,6 +1763,29 @@ pub fn final_batch(
     facts: &FinalFacts,
     registry: &dyn Registry,
 ) -> Result<FinalBatch, InstallError> {
+    // The approval of a local source is read first, so its generation
+    // guards the batch: a revoke that lands before the commit fails it.
+    let trust_generation = match &plan.local {
+        Some(local) => {
+            let (verdict, generation) = stored_trust(
+                registry,
+                &local.provider,
+                &local.package_sha256,
+            )
+            .map_err(|error| {
+                tracing::warn!(%error, "the registry could not be read for the final batch");
+                InstallError::Io {
+                    op: "read the registry",
+                    root: "data",
+                }
+            })?;
+            if let Some(error) = InstallError::of_trust(local, &verdict) {
+                return Err(error);
+            }
+            Some(generation)
+        }
+        None => None,
+    };
     let read = registry.runtimes().map_err(|error| {
         tracing::warn!(%error, "the registry could not be read for the final batch");
         InstallError::Io {
@@ -1757,7 +1885,7 @@ pub fn final_batch(
         compatibility: plan.compatibility.clone(),
     });
     Ok(FinalBatch {
-        expected_generation: Some(read.generation),
+        expected_generation: Some(trust_generation.unwrap_or(read.generation)),
         ops: vec![
             WriteOp::InsertArtifact(record),
             WriteOp::InsertRuntime(runtime),
@@ -1966,6 +2094,30 @@ async fn existing_runtime(
     }))
 }
 
+/// Reads the import row of a local source again and fails the work when
+/// its approval no longer covers the bytes the selection saw.
+async fn recheck_local(ctx: &OperationContext, plan: &Plan) -> Result<(), WorkError> {
+    let Some(local) = plan.local.clone() else {
+        return Ok(());
+    };
+    let registry = Arc::clone(ctx.registry());
+    let read = local.clone();
+    let (verdict, _) = tokio::task::spawn_blocking(move || {
+        stored_trust(&*registry, &read.provider, &read.package_sha256)
+    })
+    .await
+    .map_err(|_| {
+        WorkError::Engine(crate::operation::EngineError::Internal {
+            reason: "the registry read task stopped",
+        })
+    })?
+    .map_err(|error| WorkError::Engine(crate::operation::EngineError::Registry(error)))?;
+    match InstallError::of_trust(&local, &verdict) {
+        Some(error) => Err(WorkError::Failed(Box::new(error))),
+        None => Ok(()),
+    }
+}
+
 async fn run_install(work: InstallRuntimeWork, mut ctx: OperationContext) -> WorkResult {
     let InstallRuntimeWork {
         env,
@@ -2067,6 +2219,9 @@ async fn run_install(work: InstallRuntimeWork, mut ctx: OperationContext) -> Wor
         })?,
         StepStart::Run { .. } => {
             ctx.set_stage(VALIDATE_BINARY).await?;
+            // A revoke during the download keeps the first exec from
+            // happening (spec 0037, *Gate trust*).
+            recheck_local(&ctx, &plan).await?;
             let stop = StopFlag::new();
             let (sender, mut receiver) = mpsc::unbounded_channel::<(u64, u64)>();
             let progress = move |done: u64, total: u64| {
@@ -2104,6 +2259,7 @@ async fn run_install(work: InstallRuntimeWork, mut ctx: OperationContext) -> Wor
     {
         ctx.set_stage(COMMIT).await?;
         ctx.set_progress(Progress::Indeterminate);
+        recheck_local(&ctx, &plan).await?;
         let (env, plan, paths, id) = (
             env.clone(),
             Arc::clone(&plan),

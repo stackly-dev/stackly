@@ -55,13 +55,23 @@ struct Case {
 // covers: AC-17
 #[test]
 fn every_create_form_fixture_roundtrips_in_the_wire_form() {
-    for name in ["fake", "nats", "postgresql"] {
+    for name in ["fake", "nats", "postgresql", "local"] {
         let file = format!("instance/create-form-{name}.json");
         let value: CreateForm = decode(&file);
         let written = serde_json::to_value(&value).expect("a decoded value always encodes");
         let fixture: serde_json::Value = decode(&file);
         assert_eq!(written, fixture, "{file}: Rust writes another shape");
     }
+}
+
+// covers: AC-19 (spec 0037)
+#[test]
+fn a_form_from_a_local_entry_names_the_local_import_source() {
+    let local = form("local");
+    assert_eq!(local.provider.name, "acme/fake");
+    assert_eq!(local.provider.source, CreateProviderSource::LocalImport);
+    let written = serde_json::to_value(local.provider.source).expect("a source encodes");
+    assert_eq!(written, "local_import");
 }
 
 // covers: AC-1, AC-21

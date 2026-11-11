@@ -541,6 +541,84 @@ async fn a_failed_digest_fails_the_install_and_leaves_no_runtime_artifact_or_fol
     ev.pass();
 }
 
+// covers: AC-4, AC-11 (spec 0037)
+#[test]
+fn a_local_input_drops_its_compatibility_records_and_keeps_its_bytes_through_the_journal() {
+    let archive = archive();
+    let sha256 = Sha256Digest::from_bytes(Sha256::digest(&archive).into());
+    let records: Vec<String> = (18..20).map(|major| record_for("aarch64", major)).collect();
+    let package = package_with_records(&archive, &sha256, VERSION, URL, &records);
+    let root = TestRoot::new().expect("a test root");
+    let platform = FakePlatform::new(&root).platform();
+    let input = InstallInput::new(
+        package.software(),
+        "acme/nats",
+        "stable",
+        &platform.info().host_facts(),
+        &package.versions().artifacts()[0],
+        package.key(),
+        None,
+    )
+    .expect("the input freezes");
+    assert_eq!(input.compatibility.len(), 2);
+    let stored = Sha256Digest::from_bytes([7; 32]);
+
+    let local = input.clone().from_local_import(&stored);
+
+    assert!(
+        local.compatibility.is_empty(),
+        "a local package's records are never copied"
+    );
+    let back = InstallInput::from_payload(&local.to_payload().expect("fits")).expect("decodes");
+    assert_eq!(back.local_package_sha256, Some(stored.to_string()));
+    // An input from before spec 0037 has no field and decodes as a
+    // catalog selection.
+    let old = InstallInput::from_payload(&input.to_payload().expect("fits")).expect("decodes");
+    assert_eq!(old.local_package_sha256, None);
+}
+
+// covers: AC-4 (spec 0037, *Gate trust*)
+#[tokio::test]
+async fn an_install_from_a_local_entry_without_its_approval_fails_before_the_first_exec() {
+    let rig = Harness::new().await;
+    let mut input = rig.input();
+    input.provider = "acme/nats".to_owned();
+    // The registry holds no import row for these bytes: the work reads it
+    // again before validating and refuses.
+    let input = input.from_local_import(&Sha256Digest::from_bytes([7; 32]));
+    let runtime = RuntimeId::generate();
+    let request = BeginRequest {
+        kind: OperationKind::InstallRuntime,
+        resource: OperationResource::Runtime(runtime),
+        creates_resource: true,
+        extra_locks: vec![LockKey::Artifact(rig.sha256)],
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin: Origin::Background,
+        input: input.to_payload().expect("the input fits the journal"),
+        work: install_runtime_work(rig.deps(), &input, runtime).expect("the work builds"),
+        precheck: None,
+    };
+    let op = match rig.engine.begin(request).await {
+        Ok(BeginOutcome::Created(view)) => view.operation.id(),
+        other => panic!("expected a created operation: {other:?}"),
+    };
+
+    let detail = rig.wait(op, OperationState::Failed).await;
+
+    assert_eq!(failure_code(&detail), "provider.approval_required");
+    assert!(
+        rig.fake
+            .processes()
+            .spawns()
+            .iter()
+            .all(|spawn| spawn.role != ChildRole::RuntimeCheck),
+        "no binary of the artifact ran"
+    );
+    assert!(rig.runtimes().is_empty());
+    assert!(!exists(&rig.runtime_dir()));
+}
+
 #[tokio::test]
 async fn no_network_and_no_cache_fails_offline_and_a_cached_entry_installs_without_the_network() {
     let ev = evidence!(

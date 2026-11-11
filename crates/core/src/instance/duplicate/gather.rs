@@ -90,6 +90,22 @@ pub fn gather_duplicate(
             revision: key.revision().clone(),
         });
     }
+    // A revoked revision duplicates into nothing (spec 0037, *Gate trust*).
+    if let Some(record) = registry.provider_revision(key)?.value {
+        let catalog = match deps.catalog {
+            crate::catalog::CatalogState::Loaded(catalog) => Some(catalog.as_ref()),
+            _ => None,
+        };
+        if let crate::catalog::TrustVerdict::Revoked(info) =
+            crate::catalog::pinned_trust(catalog, key, &record)
+        {
+            return Err(DuplicateError::Revoked {
+                provider: key.provider().clone(),
+                revision: key.revision().clone(),
+                info,
+            });
+        }
+    }
     if !package
         .manifest()
         .capabilities()

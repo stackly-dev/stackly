@@ -137,12 +137,16 @@ pub enum CreateError {
         /// The revision asked for.
         revision: Option<String>,
     },
-    /// More than one pinned package matches (`instance.provider_ambiguous`).
+    /// More than one pinned package or entry matches
+    /// (`instance.provider_ambiguous`).
     ProviderAmbiguous {
         /// The provider asked for.
         provider: String,
         /// The revision asked for.
         revision: Option<String>,
+        /// The IDs to choose from, when entries of the same software match
+        /// (spec 0037); empty for an ambiguous pinned digest.
+        candidates: Vec<String>,
     },
     /// The entry is planned or invalid (`instance.provider_unavailable`).
     ProviderUnavailable {
@@ -150,6 +154,25 @@ pub enum CreateError {
         provider: String,
         /// `planned` or `invalid`.
         state: &'static str,
+    },
+    /// A local entry whose stored bytes are not approved
+    /// (`provider.approval_required`, spec 0037).
+    ApprovalRequired {
+        /// The provider.
+        provider: String,
+        /// Its revision label.
+        provider_revision: String,
+        /// The digest of its stored bytes.
+        package_sha256: String,
+    },
+    /// The revision is revoked (`provider.revoked`, spec 0037).
+    Revoked {
+        /// The provider.
+        provider: String,
+        /// The revoked revision label.
+        provider_revision: String,
+        /// Who revoked it and since when.
+        info: crate::catalog::RevokedInfo,
     },
     /// The provider runs one instance at a time (`instance.capability_unsupported`).
     CapabilityUnsupported {
@@ -305,6 +328,8 @@ impl CreateError {
             Self::ProviderNotFound { .. } => "instance.provider_not_found",
             Self::ProviderAmbiguous { .. } => "instance.provider_ambiguous",
             Self::ProviderUnavailable { .. } => "instance.provider_unavailable",
+            Self::ApprovalRequired { .. } => "provider.approval_required",
+            Self::Revoked { .. } => "provider.revoked",
             Self::CapabilityUnsupported { .. } => "instance.capability_unsupported",
             Self::RuntimeNotFound { .. } => "instance.runtime_not_found",
             Self::RuntimeMismatch { .. } => "instance.runtime_mismatch",

@@ -11,7 +11,7 @@ use crate::provider::{ArtifactStatus, VersionArtifact};
 
 use super::model::{CatalogEntry, ProviderEntry};
 use super::status::SupportReason;
-use super::trust::{TrustVerdict, snapshot_trust};
+use super::trust::TrustVerdict;
 
 /// Why the gate refuses a version. The codes are the same as the
 /// matching [`SupportReason`] codes.
@@ -96,26 +96,6 @@ pub enum Installability<'a> {
 #[error("the version is not in the catalog entry")]
 pub struct VersionNotFound;
 
-/// Decides whether `version` of `entry` can be installed on `host`, with
-/// the trust verdict of a provider entry taken from the snapshot.
-///
-/// # Errors
-///
-/// Returns [`VersionNotFound`] when a provider entry has no artifact of
-/// `version`.
-// provisional: F37 step 5 (callers pass the verdict of `catalog::trust`)
-pub fn installability<'a>(
-    entry: &'a CatalogEntry,
-    version: &ExactVersion,
-    host: &HostFacts,
-) -> Result<Installability<'a>, VersionNotFound> {
-    let trust = match entry {
-        CatalogEntry::Provider(provider) => snapshot_trust(provider),
-        CatalogEntry::Planned(_) | CatalogEntry::Invalid(_) => TrustVerdict::Trusted,
-    };
-    installability_with_trust(entry, version, host, &trust)
-}
-
 /// Decides whether `version` of `entry` can be installed on `host`.
 ///
 /// Planned and invalid entries refuse every version. For a provider entry,
@@ -131,7 +111,7 @@ pub fn installability<'a>(
 ///
 /// Returns [`VersionNotFound`] when a provider entry has no artifact of
 /// `version`.
-pub fn installability_with_trust<'a>(
+pub fn installability<'a>(
     entry: &'a CatalogEntry,
     version: &ExactVersion,
     host: &HostFacts,
@@ -144,34 +124,17 @@ pub fn installability_with_trust<'a>(
     match entry {
         CatalogEntry::Planned(_) => Ok(refuse(NotInstallableReason::ProviderPlanned)),
         CatalogEntry::Invalid(_) => Ok(refuse(NotInstallableReason::PackageInvalid)),
-        CatalogEntry::Provider(provider) => {
-            provider_installability_with_trust(provider, version, host, trust)
-        }
+        CatalogEntry::Provider(provider) => provider_installability(provider, version, host, trust),
     }
 }
 
-/// [`installability`] for an entry already known to be a provider, with
-/// the trust verdict of the snapshot.
-///
-/// # Errors
-///
-/// Returns [`VersionNotFound`] when the entry has no artifact of `version`.
-// provisional: F37 step 7 (`runtime::resolve` takes the verdict of `require_entry_trust`)
-pub fn provider_installability<'a>(
-    provider: &'a ProviderEntry,
-    version: &ExactVersion,
-    host: &HostFacts,
-) -> Result<Installability<'a>, VersionNotFound> {
-    provider_installability_with_trust(provider, version, host, &snapshot_trust(provider))
-}
-
-/// [`installability_with_trust`] for an entry already known to be a
+/// [`installability`] for an entry already known to be a
 /// provider.
 ///
 /// # Errors
 ///
 /// Returns [`VersionNotFound`] when the entry has no artifact of `version`.
-pub fn provider_installability_with_trust<'a>(
+pub fn provider_installability<'a>(
     provider: &'a ProviderEntry,
     version: &ExactVersion,
     host: &HostFacts,
@@ -265,7 +228,7 @@ mod tests {
     }
 
     fn refusal(entry: &CatalogEntry) -> (NotInstallableReason, Vec<String>) {
-        match installability(entry, &version(), &host()).unwrap() {
+        match installability(entry, &version(), &host(), &TrustVerdict::Trusted).unwrap() {
             Installability::NotInstallable {
                 reason,
                 available_targets,
@@ -316,14 +279,19 @@ mod tests {
                 .unwrap(),
         );
 
-        match installability(&nats, &version(), &host()).unwrap() {
+        match installability(&nats, &version(), &host(), &TrustVerdict::Trusted).unwrap() {
             Installability::Installable { artifact } => {
                 assert_eq!(artifact.id, "nats-2.15.1-macos-aarch64");
             }
             other => panic!("not installable: {other:?}"),
         }
         assert_eq!(
-            installability(&nats, &"9.9.9".parse().unwrap(), &host()),
+            installability(
+                &nats,
+                &"9.9.9".parse().unwrap(),
+                &host(),
+                &TrustVerdict::Trusted
+            ),
             Err(VersionNotFound)
         );
     }
@@ -343,7 +311,12 @@ mod tests {
         });
 
         assert_eq!(
-            installability(&planned, &"9.9.9".parse().unwrap(), &host()),
+            installability(
+                &planned,
+                &"9.9.9".parse().unwrap(),
+                &host(),
+                &TrustVerdict::Trusted
+            ),
             Ok(Installability::NotInstallable {
                 reason: NotInstallableReason::ProviderPlanned,
                 available_targets: Vec::new()

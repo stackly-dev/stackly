@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use stackly_core::catalog::local::{ImportCheck, load};
 use stackly_core::catalog::{
-    Catalog, CatalogEntry, CatalogOptions, EntryOrigin, EntryState, Installability,
+    Catalog, CatalogEntry, CatalogOptions, EntryOrigin, EntryState, EntryStatus, Installability,
     NotInstallableReason, ProviderEntry, RevokedBy, StoreMode, SupportReason, TileColor, TileHint,
     TrustVerdict, entry_status, entry_trust, guard_pinned_trust, guard_trust, installability,
     pinned_trust, require_entry_trust, version_support, write_package,
@@ -200,8 +200,22 @@ fn provider(catalog: &Catalog, id: &str) -> ProviderEntry {
     }
 }
 
-fn refusal(entry: &CatalogEntry) -> Option<NotInstallableReason> {
-    match installability(entry, &"1.0.0".parse().expect("a version"), &host())
+/// The display verdict of `entry`, the one `catalog::status` and the
+/// daemon's catalog mapping pass.
+fn verdict(catalog: &Catalog, entry: &CatalogEntry) -> TrustVerdict {
+    match entry {
+        CatalogEntry::Provider(provider) => entry_trust(catalog, provider),
+        _ => TrustVerdict::Trusted,
+    }
+}
+
+fn status_of(catalog: &Catalog, entry: &CatalogEntry) -> EntryStatus {
+    entry_status(entry, &host(), &verdict(catalog, entry))
+}
+
+fn refusal(catalog: &Catalog, entry: &CatalogEntry) -> Option<NotInstallableReason> {
+    let trust = verdict(catalog, entry);
+    match installability(entry, &"1.0.0".parse().expect("a version"), &host(), &trust)
         .expect("the version exists")
     {
         Installability::Installable { .. } => None,
@@ -237,12 +251,15 @@ fn an_imported_package_loads_from_its_store_copy_as_a_pending_local_entry() {
         entry_trust(&catalog, &local),
         TrustVerdict::ApprovalRequired
     );
-    let status = entry_status(entry, &host());
+    let status = status_of(&catalog, entry);
     assert_eq!(
         (status.state, status.reason),
         (EntryState::Blocked, Some(SupportReason::ApprovalRequired))
     );
-    assert_eq!(refusal(entry), Some(NotInstallableReason::ApprovalRequired));
+    assert_eq!(
+        refusal(&catalog, entry),
+        Some(NotInstallableReason::ApprovalRequired)
+    );
     assert_eq!(
         NotInstallableReason::ApprovalRequired.as_code(),
         "approval_required"
@@ -264,18 +281,21 @@ fn approving_the_stored_bytes_opens_the_gate_and_revoking_closes_it_as_user() {
         require_entry_trust(&catalog, &site.registry, &local).expect("the registry reads"),
         TrustVerdict::Trusted
     );
-    assert_eq!(entry_status(entry, &host()).state, EntryState::Available);
-    assert_eq!(refusal(entry), None);
+    assert_eq!(status_of(&catalog, entry).state, EntryState::Available);
+    assert_eq!(refusal(&catalog, entry), None);
 
     site.decide(&record, TrustDecision::Revoked);
     let catalog = site.catalog();
     let entry = catalog.entry(&record.provider).expect("listed");
-    let status = entry_status(entry, &host());
+    let status = status_of(&catalog, entry);
     assert_eq!(
         (status.state, status.reason),
         (EntryState::Blocked, Some(SupportReason::TrustRevoked))
     );
-    assert_eq!(refusal(entry), Some(NotInstallableReason::TrustRevoked));
+    assert_eq!(
+        refusal(&catalog, entry),
+        Some(NotInstallableReason::TrustRevoked)
+    );
     match entry_trust(&catalog, &provider(&catalog, "acme/demo")) {
         TrustVerdict::Revoked(info) => {
             assert_eq!(info.by, RevokedBy::User);
@@ -460,7 +480,7 @@ fn a_missing_or_changed_store_copy_is_an_invalid_local_entry_and_others_still_lo
     ));
     assert_eq!(catalog.local_count(), 2);
     assert_eq!(
-        entry_status(catalog.entry(&demo.provider).expect("listed"), &host()).state,
+        status_of(&catalog, catalog.entry(&demo.provider).expect("listed")).state,
         EntryState::Invalid
     );
 

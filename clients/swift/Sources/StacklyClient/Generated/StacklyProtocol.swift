@@ -2548,6 +2548,9 @@ public enum CreateProviderSource: String, Codable, Sendable, Equatable {
 	case developmentCatalog = "development_catalog"
 	/// A package already pinned in the data folder.
 	case pinned
+	/// An imported local provider whose stored bytes are approved (spec
+	/// 0037); create pins it.
+	case localImport = "local_import"
 	/// A source this build does not know. The daemon never sends it.
 	case unrecognized
 }
