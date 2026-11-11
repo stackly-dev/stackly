@@ -108,7 +108,7 @@ fn the_example_package_passes_conformance() {
     let ev = evidence!(
         covers = ["AC-029", "AC-034", "REQ-029"],
         kind = Kind::Fixture,
-        expected = "conformance::run on providers/example runs default and slow-ready through catalog to start_again over the socket with a daemon in process, writes a stackly.provider-conformance/v1 report with verdict pass, and leaves no process and no root",
+        expected = "conformance::run on providers/example runs default and slow-ready through catalog to start_again over the socket with a daemon in process, writes a stackly.provider-conformance/v1 report with verdict pass whose default start and stop steps give the AC-15 line example 1.0.0 ready in <ms> ms, stopped in <ms> ms, and leaves no process and no root",
     );
     let (report, _out) = run_package(&repo().join("providers/example"));
 
@@ -144,8 +144,30 @@ fn the_example_package_passes_conformance() {
         !text.contains("hello"),
         "a settings text value reached the report"
     );
+    let line = actual("example", "1.0.0", &report);
+    assert!(
+        has_native_actual_form(&line),
+        "the native actual has the AC-15 form: {line}"
+    );
     assert_clean(&report);
     ev.pass();
+}
+
+/// Whether `line` is `example 1.0.0 ready in <n> ms, stopped in <n> ms`
+/// with two whole numbers above zero.
+fn has_native_actual_form(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("example 1.0.0 ready in ") else {
+        return false;
+    };
+    let Some((ready, rest)) = rest.split_once(" ms, stopped in ") else {
+        return false;
+    };
+    let Some(stopped) = rest.strip_suffix(" ms") else {
+        return false;
+    };
+    [ready, stopped]
+        .iter()
+        .all(|n| n.parse::<u64>().is_ok_and(|n| n > 0))
 }
 
 // covers: AC-9 (spec 0036)
@@ -654,16 +676,27 @@ fn native(ev: &Evidence, name: &str, line: &str) {
     );
     assert_pass(&report);
     assert_clean(&report);
-    let steps: Vec<String> = report
-        .scenarios
-        .iter()
-        .flat_map(|scenario| {
-            scenario.steps.iter().map(move |step| {
-                format!("{}:{}={}", scenario.name, step.name, step.status.as_str())
-            })
-        })
-        .collect();
-    ev.pass_with(&format!("verdict pass; {}", steps.join(", ")));
+    let version = runtime["version"].as_str().unwrap_or_default();
+    ev.pass_with(&actual(name, version, &report));
+}
+
+/// The `actual` of a native record (AC-15): `<provider> <version> ready in
+/// <ms> ms, stopped in <ms> ms`, from the `start` and `stop` steps of the
+/// `default` scenario, or of the first scenario without one.
+fn actual(provider: &str, version: &str, report: &Report) -> String {
+    let scenario = report
+        .scenario("default")
+        .or_else(|| report.scenarios.first());
+    let duration = |step: &str| {
+        scenario
+            .and_then(|scenario| scenario.steps.iter().find(|s| s.name == step))
+            .map_or(0, |step| step.duration_ms)
+    };
+    format!(
+        "{provider} {version} ready in {} ms, stopped in {} ms",
+        duration("start"),
+        duration("stop")
+    )
 }
 
 // covers: AC-15 (spec 0036)
