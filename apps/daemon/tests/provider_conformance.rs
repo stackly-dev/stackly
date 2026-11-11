@@ -526,6 +526,43 @@ fn an_unsupported_api_version_ends_before_any_lifecycle() {
     ev.pass();
 }
 
+// covers: AC-9 (spec 0036)
+#[test]
+fn step_limits_come_from_the_checked_manifest_in_any_yaml_style() {
+    let ev = evidence!(
+        covers = ["REQ-029"],
+        kind = Kind::Fixture,
+        expected = "the step limits of providers/postgresql, whose timeouts block is one flow-style line, are init 180 s, readiness 120 s, stop 60 s, and reload 30 s as its manifest says, and providers/nats has readiness 30 s with the default init 120 s",
+    );
+    let limits = |name: &str| {
+        let check = stackly_core::provider::check_package(
+            &stackly_platform_macos::MacosFilesystem,
+            &repo().join("providers").join(name),
+            stackly_core::provider::NameCheck::FolderName,
+        );
+        conformance::steps::Limits::of(check.package.as_ref().expect("the package validates"))
+    };
+
+    let postgresql = limits("postgresql");
+    let nats = limits("nats");
+
+    let secs = std::time::Duration::from_secs;
+    assert_eq!(
+        (
+            postgresql.init,
+            postgresql.readiness,
+            postgresql.stop,
+            postgresql.reload
+        ),
+        (secs(180), secs(120), secs(60), secs(30))
+    );
+    assert_eq!(
+        (nats.init, nats.readiness, nats.stop),
+        (secs(120), secs(30), secs(30))
+    );
+    ev.pass();
+}
+
 // covers: AC-12 (spec 0036)
 #[test]
 fn a_root_without_this_runs_marker_is_never_removed() {

@@ -79,6 +79,7 @@ pub use settings::{
     Visibility,
 };
 pub use template::{OUTPUT_MAX_LEN, TemplateFormat};
+pub use timeouts::ManifestTimings;
 pub use validate::ValidatedPackage;
 pub use version_check::{
     VERSION_CHECK_ARGS_MAX, VERSION_CHECK_TIMEOUT_DEFAULT, VERSION_CHECK_TIMEOUT_MAX_SECONDS,
