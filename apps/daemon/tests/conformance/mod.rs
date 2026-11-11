@@ -43,7 +43,7 @@ pub fn interrupted() -> bool {
 }
 
 /// What one run checks and where its report goes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunRequest {
     /// The absolute package folder.
     pub package_dir: PathBuf,
@@ -57,6 +57,9 @@ pub struct RunRequest {
     pub report_path: PathBuf,
     /// Keep the data folder of the root after the run.
     pub keep: bool,
+    /// The run ID, when the caller chose the report folder by it
+    /// (`cargo xtask provider test`); a new UUID v7 otherwise.
+    pub run_id: Option<Uuid>,
 }
 
 impl RunRequest {
@@ -71,6 +74,7 @@ impl RunRequest {
             only: Vec::new(),
             report_path,
             keep: false,
+            run_id: None,
         }
     }
 }
@@ -221,7 +225,7 @@ pub const fn expect_name(expect: Expect) -> &'static str {
 /// ends up in the report.
 #[must_use]
 pub fn run(request: &RunRequest) -> Report {
-    let run_id = Uuid::now_v7();
+    let run_id = request.run_id.unwrap_or_else(Uuid::now_v7);
     let mut report = Report::new(run_id);
     let check = check_package(
         &MacosFilesystem,
@@ -247,6 +251,7 @@ pub fn run(request: &RunRequest) -> Report {
         &mut report,
     ));
     drop(runtime);
+    report.interrupted |= interrupted();
     report.finish_and_write(&request.report_path);
     report
 }

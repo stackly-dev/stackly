@@ -21,6 +21,7 @@ use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 
+mod harness;
 mod scaffold;
 
 pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
@@ -28,6 +29,7 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
         ["check", dirs @ ..] => check(root, dirs),
         ["freeze", dir] => freeze_task(root, dir),
         ["new", rest @ ..] => scaffold::run(root, rest),
+        ["test", rest @ ..] => harness::run(root, rest),
         _ => bail!(
             "unknown provider task `{}`; see `cargo xtask help`",
             args.join(" ")

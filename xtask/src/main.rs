@@ -39,6 +39,11 @@ Tasks:
   provider freeze <dir>
                        Copy an official/ package revision into the compatibility
                        corpus in crates/core/tests/fixtures/compat/ on macOS
+  provider test <dir> [--line <line>] [--scenario <name>]... [--report <file>] [--keep]
+                       Run the conformance harness on a package (macOS); report in
+                       target/provider-test/<runId>/; exit 0 pass, 1 fail, 2 blocked
+  provider test --cleanup
+                       Remove the marked test roots of harness runs that are gone
   provider new <name> [--out <dir>]
                        Copy providers/example into <dir>/<name>/ (default
                        providers/<name>/) as testing/<name> and check it (macOS)

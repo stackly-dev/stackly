@@ -23,12 +23,15 @@ generates it, keeps it in the Keychain, and hands it to `init` on stdin.
 
 ## Commands
 
-Start a new package from this one, then check it:
+Start a new package from this one, then check and test it:
 
 ```bash
 cargo xtask provider new mytool
 cargo xtask provider check providers/mytool
+cargo xtask provider test providers/mytool
 ```
+
+The report of a test run is `target/provider-test/<runId>/report.json`.
 
 | Command | What it does |
 | --- | --- |

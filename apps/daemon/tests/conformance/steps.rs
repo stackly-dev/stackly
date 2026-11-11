@@ -529,9 +529,16 @@ async fn act(ctx: &Ctx, method: &str, content: Value) -> Result<Value, Failure> 
         // Already in that state: no operation ran.
         return Ok(json!({ "operation": { "state": "succeeded" }, "alreadyInState": true }));
     };
-    wait_operation(ctx, operation)
+    let finished = wait_operation(ctx, operation)
         .await
-        .map_err(|error| error_failure(&error))
+        .map_err(|error| error_failure(&error))?;
+    if interrupted() && finished["operation"]["state"] != "succeeded" {
+        return Err(Failure::reason(
+            "interrupted",
+            "a signal stopped the run while the operation ran",
+        ));
+    }
+    Ok(finished)
 }
 
 fn state(summary: &Value, field: &str) -> String {
