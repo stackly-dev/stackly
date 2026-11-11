@@ -6,6 +6,7 @@
 //! writes a file, or resolves a secret; every side effect happens in the
 //! executor of spec 0010, from a validated plan.
 
+pub mod check;
 mod connection;
 mod digest;
 #[doc(hidden)]
@@ -23,6 +24,7 @@ mod preflight;
 pub mod probe;
 mod raw;
 mod remedies;
+pub mod scenarios;
 mod settings;
 mod template;
 mod timeouts;
@@ -30,6 +32,10 @@ mod validate;
 mod version_check;
 mod versions;
 
+pub use check::{
+    ApiVersionStatus, ApiVersionSupport, Finding, FindingOrigin, PackageCheck,
+    SUPPORTED_API_VERSIONS, Severity, check_package,
+};
 pub use connection::{
     CONNECTION_ENTRIES_MAX, CONNECTION_TEMPLATE_MAX, CONNECTION_TITLE_MAX, ConnectionSpec,
 };
@@ -62,6 +68,7 @@ pub use remedies::{
     REMEDY_TITLE_MAX, REMEDY_WHEN_CODES_MAX, REMEDY_WHEN_TEXT_MAX, RemedySpec, RemedySubject,
     RenderedRemedy, RenderedRemedyStep, render_remedy,
 };
+pub use scenarios::{Expect, Scenario, Scenarios, read_scenarios};
 pub use settings::{
     ApplyClass, ArrayRules, BooleanRules, FieldKind, IntegerRules, ItemField, Pattern,
     SETTINGS_DOCUMENT_MAX_LEN, ScalarKind, ScalarValue, SettingClass, SettingField, SettingValue,

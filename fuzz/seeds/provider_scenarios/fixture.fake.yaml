@@ -1,0 +1,11 @@
+# Valid scenarios for providers/fake (spec 0036, *File skenario*); a seed of
+# the provider_scenarios fuzz target and the file provider_check copies in.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+    settings: { greeting: "hello" }
+  - name: slow-ready
+    settings: { readyDelayMs: 1500 }
+  - name: crash-on-start
+    settings: { readyDelayMs: 60000, crashAfterMs: 300 }
+    expect: start_fails

@@ -12,6 +12,7 @@ use stackly_domain::{
 };
 use stackly_platform::{DirectoryLayout, RootSet};
 
+use super::check::{is_supported_api_version, unsupported_api_version_issue};
 use super::connection;
 use super::digest::manifest_sha256;
 use super::interpolate::{
@@ -37,8 +38,8 @@ use super::package::{
 use super::plan::{PlanContext, ResolvedEndpoint, RuntimeContext};
 use super::probe::native::{NativeParamKind, NativeProbeKind};
 use super::raw::{
-    API_VERSION, KIND, RawCommand, RawManifest, RawParam, RawProbe, RawSettingsSchema, RawStdin,
-    RawStep, RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
+    KIND, RawCommand, RawManifest, RawParam, RawProbe, RawSettingsSchema, RawStdin, RawStep,
+    RawVersions, check_yaml_value, decode_json, decode_json_text, decode_yaml, parse_json,
     parse_yaml,
 };
 use super::remedies;
@@ -348,9 +349,15 @@ type Validated = (
 
 fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) -> Option<Validated> {
     let texts = check_files(files, issues);
+    let mut unsupported = false;
     let raw_manifest = texts
         .get(MANIFEST_FILE)
-        .and_then(|text| decode_manifest(text, issues));
+        .and_then(|text| decode_manifest(text, issues, &mut unsupported));
+    if unsupported {
+        // Another apiVersion means another schema: nothing else is decoded,
+        // so the one issue explains it (spec 0036 AC-1).
+        return None;
+    }
     let raw_settings = texts.get(SETTINGS_SCHEMA_FILE).and_then(|text| {
         parse_json(SETTINGS_ISSUE_FILE, text)
             .map_err(|issue| issues.push(issue))
@@ -453,7 +460,10 @@ fn validate(files: &PackageFiles, name_check: NameCheck, issues: &mut Issues) ->
     Some((manifest, settings, templates, versions))
 }
 
-fn decode_manifest(text: &str, issues: &mut Issues) -> Option<RawManifest> {
+/// Decodes `provider.yaml`, checking `apiVersion` against
+/// [`SUPPORTED_API_VERSIONS`](super::check::SUPPORTED_API_VERSIONS) and
+/// `kind` first; `unsupported` is set when `apiVersion` is not supported.
+fn decode_manifest(text: &str, issues: &mut Issues, unsupported: &mut bool) -> Option<RawManifest> {
     let file = MANIFEST_FILE;
     let value = parse_yaml(file, text)
         .map_err(|issue| issues.push(issue))
@@ -471,24 +481,36 @@ fn decode_manifest(text: &str, issues: &mut Issues) -> Option<RawManifest> {
         );
         return None;
     }
-    for (field, expected, code) in [
-        ("apiVersion", API_VERSION, IssueCode::UnsupportedApiVersion),
-        ("kind", KIND, IssueCode::UnknownKind),
-    ] {
-        match value.get(field) {
-            None => {
-                yaml.at(
-                    field,
-                    IssueCode::MissingField,
-                    format!("missing field `{field}`"),
-                );
-                return None;
-            }
-            Some(found) if found.as_str() == Some(expected) => {}
-            Some(_) => {
-                yaml.at(field, code, format!("{field} must be {expected}"));
-                return None;
-            }
+    match value.get("apiVersion") {
+        None => {
+            yaml.at(
+                "apiVersion",
+                IssueCode::MissingField,
+                "missing field `apiVersion`",
+            );
+            return None;
+        }
+        Some(found) if found.as_str().is_some_and(is_supported_api_version) => {}
+        Some(found) => {
+            *unsupported = true;
+            issues.push(unsupported_api_version_issue(found.as_str()));
+            return None;
+        }
+    }
+    let mut yaml = FileIssues::new(file, issues);
+    match value.get("kind") {
+        None => {
+            yaml.at("kind", IssueCode::MissingField, "missing field `kind`");
+            return None;
+        }
+        Some(found) if found.as_str() == Some(KIND) => {}
+        Some(_) => {
+            yaml.at(
+                "kind",
+                IssueCode::UnknownKind,
+                format!("kind must be {KIND}"),
+            );
+            return None;
         }
     }
     decode_yaml(file, value, IssueCode::UnknownField)
