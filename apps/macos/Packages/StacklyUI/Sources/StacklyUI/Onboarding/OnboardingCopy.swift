@@ -81,7 +81,7 @@ nonisolated public enum OnboardingCopy {
     static let catalogTitle = "Catalog sources"
     /// The subtitle of the Catalog Trust step.
     static let catalogSubtitle =
-        "Providers describe how to install and run each server. Only trusted sources appear in the catalog."
+        "Providers describe how to install and run each server. Stackly only installs and runs providers from sources you trust."
     /// The title of the Command Line step.
     static let commandLineTitle = "Command line tool"
     /// The subtitle of the Command Line step.
@@ -288,4 +288,9 @@ nonisolated extension OnboardingCopy {
     /// The note under the row.
     static let catalogNote =
         "Trust tells you where a provider comes from. It isn’t a sandbox: every server runs with your user’s permissions."
+
+    /// The sentence under the trust note: a provider from a folder comes later, in Catalog,
+    /// and stays blocked until approved (spec 0037, *Copy*).
+    static let catalogImportNote =
+        "You can import a provider from a folder later in Catalog. It stays blocked until you approve it."
 }

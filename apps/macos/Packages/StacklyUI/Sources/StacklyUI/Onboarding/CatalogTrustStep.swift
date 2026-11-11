@@ -25,6 +25,11 @@ struct CatalogTrustStep: View {
                 .foregroundStyle(StacklyColor.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+            Text(OnboardingCopy.catalogImportNote)
+                .font(.callout)
+                .foregroundStyle(StacklyColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

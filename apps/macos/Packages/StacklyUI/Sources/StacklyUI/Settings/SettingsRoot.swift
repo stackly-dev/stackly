@@ -10,6 +10,7 @@ public struct SettingsRoot: View {
     private let preferences: AppPreferences
     private let loginItem: LoginItemModel
     private let notifications: NotificationModel
+    private let showInCatalog: (@MainActor (String) -> Void)?
 
     /// Creates the Settings content.
     /// - Parameters:
@@ -17,14 +18,18 @@ public struct SettingsRoot: View {
     ///   - preferences: The choices that belong to this Mac, such as Appearance.
     ///   - loginItem: Open Stackly at login, read from the OS.
     ///   - notifications: The notification model, for the Notifications row.
+    ///   - showInCatalog: Opens the main window on the Catalog with a provider selected
+    ///     (Settings › Sources, spec 0037), or `nil` to leave the button out.
     public init(
         model: DaemonModel, preferences: AppPreferences, loginItem: LoginItemModel,
-        notifications: NotificationModel
+        notifications: NotificationModel,
+        showInCatalog: (@MainActor (String) -> Void)? = nil
     ) {
         self.model = model
         self.preferences = preferences
         self.loginItem = loginItem
         self.notifications = notifications
+        self.showInCatalog = showInCatalog
     }
 
     /// The Settings content.
@@ -43,7 +48,7 @@ public struct SettingsRoot: View {
             }
             Tab(SettingsTab.sources.title, systemImage: SettingsTab.sources.symbol, value: .sources)
             {
-                SourcesSettingsTab(model: model)
+                SourcesSettingsTab(model: model, showInCatalog: showInCatalog)
             }
             Tab(SettingsTab.storage.title, systemImage: SettingsTab.storage.symbol, value: .storage)
             {

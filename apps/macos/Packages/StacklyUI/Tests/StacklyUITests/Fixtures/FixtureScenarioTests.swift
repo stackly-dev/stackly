@@ -19,7 +19,8 @@ struct FixtureScenarioTests {
         // Spec 0032, *Fixture*.
         "menubar-normal", "menubar-failed", "menubar-offline-last-known", "menubar-many",
         "menubar-empty", "menubar-stop-preview", "menubar-stop-partial", "settings-general",
-        "settings-instances-denied", "settings-sources", "settings-storage-custom",
+        "settings-instances-denied", "settings-sources", "settings-sources-imported",
+        "settings-storage-custom",
         "settings-updates", "settings-offline", "settings-conflict",
     ]
 

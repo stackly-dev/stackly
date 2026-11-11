@@ -46,10 +46,23 @@ struct InstancesSettingsTab: View {
     }
 }
 
-/// The Sources tab: where the catalog came from and who publishes each provider (spec 0032,
-/// *Baris Settings*). It only reads; the catalog has no setting yet.
+/// The Sources tab: where the catalog came from, who publishes each provider (spec 0032,
+/// *Baris Settings*), and the imported providers with Import Provider… (spec 0037, AC-16).
+/// Import runs the same ``ProviderImportModel`` as the Catalog page, with its sheet in the
+/// Settings window. While stacklyd is offline the tab shows the last known rows and the
+/// button is off (spec 0032 AC-24).
 struct SourcesSettingsTab: View {
     let model: DaemonModel
+    /// Opens the main window on the Catalog with a provider selected, or `nil` where no
+    /// main window can open (a snapshot): then Show in Catalog does not show.
+    var showInCatalog: (@MainActor (String) -> Void)?
+    /// Asks the person for a folder; the open panel by default.
+    var picker: any FolderPicking = OpenPanelFolderPicker()
+
+    @State private var importModel: ProviderImportModel?
+    @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+    @Environment(\.timeZone) private var timeZone
 
     private var catalog: CatalogStore { model.catalog }
 
@@ -72,6 +85,11 @@ struct SourcesSettingsTab: View {
                         LabeledContent(
                             "Published",
                             value: info.publishedAt.formatted(date: .abbreviated, time: .omitted))
+                        if catalog.revocations.isEmpty == false {
+                            Text(ProviderTrustCopy.revokedRevisions(catalog.revocations.count))
+                                .font(.callout)
+                                .foregroundStyle(StacklyColor.textSecondary)
+                        }
                         if mode == .lastKnown {
                             Text(SettingsCopy.lastKnown)
                                 .font(.callout)
@@ -85,7 +103,8 @@ struct SourcesSettingsTab: View {
             }
             if SettingsAvailability.isShown(.providers), let providers = catalog.providers {
                 Section("Providers") {
-                    ForEach(providers, id: \.provider) { provider in
+                    // Imported providers have their own group below.
+                    ForEach(providers.filter { $0.trust != .local }, id: \.provider) { provider in
                         LabeledContent {
                             Text(provider.publisher ?? "Unknown publisher")
                         } label: {
@@ -99,8 +118,87 @@ struct SourcesSettingsTab: View {
                     }
                 }
             }
+            if SettingsAvailability.isShown(.importProviders) {
+                importedSection
+            }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: importSheetShown) {
+            if let importModel {
+                ImportProviderSheet(model: importModel)
+            }
+        }
+        .task(id: localKeys) {
+            for provider in catalog.localProviders ?? [] {
+                await catalog.detail.load(provider.provider, revision: provider.revision)
+            }
+        }
+    }
+
+    /// The group of imported providers and Import Provider….
+    @ViewBuilder private var importedSection: some View {
+        Section(ProviderTrustCopy.settingsGroup) {
+            let local = catalog.localProviders ?? []
+            if local.isEmpty {
+                Text(ProviderTrustCopy.settingsEmpty)
+                    .foregroundStyle(StacklyColor.textSecondary)
+            }
+            ForEach(local, id: \.provider) { provider in
+                LabeledContent {
+                    if let showInCatalog {
+                        Button(ProviderTrustCopy.showInCatalog) {
+                            showInCatalog(provider.provider)
+                        }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Text(provider.displayName)
+                        Text(line(of: provider))
+                            .font(.callout)
+                            .foregroundStyle(StacklyColor.textSecondary)
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button(ProviderTrustCopy.importButton) { beginImport() }
+                    .disabled(reason: mode == .live ? nil : ProviderTrustCopy.offlineHelp)
+            }
+        }
+    }
+
+    /// The IDs and revisions of the imported providers, so their details load again when
+    /// the list changes.
+    private var localKeys: [String] {
+        (catalog.localProviders ?? []).map { "\($0.provider)@\($0.revision)" }
+    }
+
+    /// "{id} · {approval} · imported {date}"; the date shows once the detail loaded.
+    private func line(of provider: ProviderSummary) -> String {
+        var importedAt: Date?
+        if case .loaded(let detail) = catalog.detail.phase(
+            for: provider.provider, revision: provider.revision)
+        {
+            importedAt = detail.local?.importedAt
+        }
+        return ProviderTrustCopy.settingsLine(
+            provider: provider.provider, approval: provider.approval, importedAt: importedAt,
+            style: LocalProviderSection.dateStyle(
+                locale: locale, calendar: calendar, timeZone: timeZone))
+    }
+
+    private func beginImport() {
+        let model = importModel ?? catalog.makeImportModel(picker: picker, imported: { _ in })
+        importModel = model
+        Task { await model.begin() }
+    }
+
+    private var importSheetShown: Binding<Bool> {
+        Binding(
+            get: { importModel?.isPresented ?? false },
+            set: { shown in
+                if shown == false { importModel?.cancel() }
+            })
     }
 }
 
