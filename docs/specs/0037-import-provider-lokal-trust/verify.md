@@ -146,3 +146,52 @@ Tidak ada langkah yang butuh izin user di milestone ini. Pembacaan ulang copy CL
 - AC-11 · bagian CLI: kalimat izin persis dari fixture (test membaca file yang sama), publisher "(not verified)", trust "local, not verified", pindaian frasa terlarang atas copy CLI. Copy GUI milik milestone 4
 - AC-8 · bagian tampilan CLI: `list` dan `inspect` menyebut revision dan tanggal catalog terpasang, tanpa klaim kesegaran; isi revocation milik langkah 8
 - AC-1 sampai AC-7, AC-9, AC-10, AC-12, AC-13, AC-15 sampai AC-19 · milik milestone 1, 2, dan 4
+
+## Milestone 4: Import and approval in the app
+
+_Status 2026-11-11: langkah Build plan 10 sampai 12 dibangun (`dev-f37-m4`), dari fixture `protocols/fixtures/provider/`. `provider.approve` dan `provider.revoke` di daemon masih menjawab `request.unknown_method` sampai milestone 2 masuk `main`, jadi approve dan revoke GUI baru diuji terhadap fixture; test integrasi Swift terhadap daemon nyata untuk keduanya menyusul. Langkah 13 (evidence `native` `NOT_RUN` dan langkah manual) menunggu milestone 2 dan 3._
+
+Tafsiran yang diambil (teks AC tidak berubah):
+
+- Label folder "Writes to": `config` Configuration, `data` Data, `logs` Logs, `run` Runtime state, `temp` Temporary files (spec hanya menyebut "label folder").
+- Umpan balik sesudah approve, revoke, dan remove: "Approved {name}.", "Revoked the approval of {name}.", "Removed {name} from the catalog." (spec hanya menetapkan teks import).
+- Import yang ditolak daemon membiarkan sheet dengan preview dan alasan daemon, dengan tombol utama "Preview Again" yang membaca folder lagi.
+- Kartu dengan label badge lebih dari 12 karakter ("Needs Approval", "Unrecognized State") menaruh badge di bawah nama, supaya nama tidak terpotong per huruf di kolom sempit.
+- Settings › Sources: entri lokal hanya tampil di grup "Imported providers", tidak diulang di grup "Providers". Tanggal impor di baris itu datang dari `catalog.get_provider` (`local.importedAt`), karena `ProviderSummary` tidak membawanya.
+- Sheet approve memakai `StacklySheet(cancelIsDefault: true)`: Cancel digambar sebagai tombol default dan Approve sebagai tombol biasa. Tidak ada shortcut keyboard (Interaction policy 2026-10-24).
+
+### UI / manual
+
+Langkah ini butuh izin user dan tidak dijalankan sesi build.
+
+- [ ] Alur GUI lengkap (milestone 2 harus sudah di `main`): jalankan app Debug dengan daemon nyata, Catalog › toolbar "Import Provider…" → panel folder dengan tombol "Choose" → pilih salinan `crates/core/tests/fixtures/packages/acme-demo` → sheet "Import Provider" dengan Publisher "acme (not verified)", Package 12 hex, Folder `~/...`, Permissions, dan catatan kaki "Importing doesn’t run anything…" → Import → sheet tertutup, kartu "Acme Demo" terpilih dengan badge "Needs Approval" dan meta "Database · Local", kartu umpan balik "Imported Acme Demo. Approve it before you install anything." → AC-15
+- [ ] Banner "Not approved yet" → Approve… → sheet `Approve “Acme Demo”?` dengan kalimat izin persis seperti `protocols/fixtures/provider/approval-statement.txt`, Cancel digambar sebagai tombol default → Approve → badge kembali ke state biasa, banner hilang, Get di matrix tidak lagi diblok `approval_required` → AC-15, AC-11, AC-5
+- [ ] Revoke Approval… → dialog native `Revoke approval for “Acme Demo”?` dengan Cancel default dan tombol merah "Revoke Approval" → banner "Approval revoked" dengan "Approve Again…"; instance yang sudah ada tetap bisa Start → AC-15, AC-7
+- [ ] Remove… → dialog `Remove “Acme Demo” from the catalog?` → kartu hilang; folder asal tidak berubah (`ls -la` sebelum dan sesudah sama) → AC-15, AC-9
+- [ ] Ubah satu template di folder asal lalu import lagi → sheet menulis "Replaces imported revision …" dan "Differs from the version you decided on: configuration content."; detail menampilkan banner "Changed since your approval" → AC-15, AC-6
+- [ ] Settings › Sources: grup "Imported providers" dengan baris "{id} · {approval} · imported {tanggal}" dan "Show in Catalog" yang membuka jendela utama di Catalog dengan entri itu terpilih; "No imported providers." saat kosong; tombol "Import Provider…" membuka sheet di jendela Settings; matikan daemon → tombol nonaktif dengan alasan "Not available while stacklyd is offline." → AC-16
+- [ ] Onboarding (reset dengan `defaults delete com.ojiepermana.stackly` pada akun uji, bukan akun utama): langkah Catalog Trust tanpa baris atau toggle baru, subjudul "Providers describe how to install and run each server. Stackly only installs and runs providers from sources you trust." dan kalimat "You can import a provider from a folder later in Catalog. It stays blocked until you approve it." → AC-16
+- [ ] `/check verify` membaca ulang semua copy `ProviderTrustCopy.swift` terhadap PRD AC-061 dan mencatat hasilnya → AC-11
+
+### Commands
+
+- [ ] `xcrun swift-format lint --strict` atas semua file Swift yang diubah milestone ini → bersih
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderTrustCopyTests` → lulus: kalimat izin sama persis dengan `approval-statement.txt`; pindaian frasa terlarang ("sandboxed", "safe to run", "verified publisher", "trusted publisher", "malware", "up to date", "latest") atas semua copy fitur ini, label CatalogCopy lokal, banner setiap state, dan copy onboarding baru; tabel label `uses` dan `changes`; banner pending tanpa keputusan, berubah sejak keputusan, revoked user, dan revoked catalog dengan revision dan tanggal terbit; approved `neutral`, bukan `positive` → AC-11, AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderImportModelTests` → lulus: Cancel di panel folder tanpa sheet dan tanpa request; preview tanpa mutasi; folder tak terbaca; Import mengirim `expectedPackageSha256` yang ditampilkan; penolakan menyimpan preview dan alasan; paket tidak valid dan paket yang sama tidak mengirim apa pun, salinan rusak boleh "Import Again"; catatan pengganti, perubahan, dan quarantine; masalah dipotong di 20 dengan "and N more"; Approve mengirim digest detail yang ditampilkan; `provider.import_changed` menutup sheet dan memuat ulang; penolakan lain tetap di sheet; Revoke dan Remove bertanya dulu dengan copy destruktif; urutan grup izin → AC-15
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogStoreTests` → lulus, termasuk `catalog.changed` memuat snapshot lagi dan `revocations` serta entri lokal tersimpan → AC-15, AC-8
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "SettingsAvailabilityTests|OnboardingCopyTests|CatalogTrustContentTests|FixtureScenarioTests"` → lulus: `.importProviders` `isBuilt: true` milik feature 37, `.communitySources` tetap tidak dibangun dengan pemilik "Deferred (public registry)", copy onboarding baru, scenario `settings-sources-imported` → AC-16
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogLocalSnapshotTests|SettingsSnapshotTests|OnboardingSnapshotTests"` → lulus terhadap referensi: `catalog-import-preview`, `catalog-import-invalid`, `catalog-import-replaces`, `catalog-local-pending`, `catalog-local-changed`, `catalog-local-approved`, `catalog-local-revoked`, `catalog-local-catalog-revoked`, `catalog-approve-sheet` (light, dark, narrow), `settings-sources-imported` (light, dark), dan `onboarding-catalog-trust` yang direkam ulang → AC-15, AC-16
+- [ ] `cargo xtask snapshot review` → `target/snapshot-review/index.html` menampilkan PNG baru dan `onboarding-catalog-trust` lama dan baru untuk ditinjau
+- [ ] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI` → semua lulus (flaky beban yang dikenal diulang sendirian)
+- [ ] `swift test --package-path clients/swift` → lulus
+- [ ] `cargo xtask build-app` → BUILD SUCCEEDED
+- [ ] `grep -rn "provisional: F37" apps/macos clients/swift` → tidak ada hasil
+
+### Acceptance-criteria coverage
+
+- AC-11 · bagian GUI lengkap: trust "Local, not verified", publisher "(not verified)", kalimat izin persis dari fixture di sheet approve, pindaian frasa terlarang; bagian CLI milik milestone 3
+- AC-15 · lengkap dari fixture: tombol toolbar (nonaktif dengan alasan saat offline, hilang saat `unsupported`), panel folder, sheet Import Provider dengan setiap state (loading, gagal baca, tidak valid, sama, pengganti, gagal import), banner approval per state, baris Publisher, Trust, Source, Package, seksi Permissions, Approve…, Revoke Approval…, Remove…, sheet approve dengan Cancel default, dialog native, kartu umpan balik, snapshot; alur terhadap daemon nyata untuk approve dan revoke menunggu milestone 2
+- AC-16 · lengkap: grup "Imported providers", "Show in Catalog", "Import Provider…" di Settings, hitungan revocation, `SettingsAvailability`, copy onboarding
+- AC-8 · bagian tampilan: banner "Revoked by the catalog" dengan revision dan tanggal terbit catalog terpasang, hitungan revocation di Settings, tanpa klaim kesegaran; isi revocation dari daemon milik milestone 2
+- AC-13 · bagian tampilan: catatan quarantine di sheet import
+- AC-1 sampai AC-7, AC-9, AC-10, AC-12, AC-14, AC-17 sampai AC-19 · milik milestone 1 sampai 3

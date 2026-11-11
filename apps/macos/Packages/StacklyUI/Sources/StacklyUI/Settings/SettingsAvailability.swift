@@ -89,8 +89,10 @@ enum SettingsAvailability {
         Entry(row: .updateChannel, tab: .updates, owner: "feature 32", isBuilt: true),
         Entry(row: .telemetry, tab: .updates, owner: "feature 32", isBuilt: true),
         Entry(row: .cleanUpCache, tab: .storage, owner: "feature 55", isBuilt: false),
-        Entry(row: .communitySources, tab: .sources, owner: "feature 37", isBuilt: false),
-        Entry(row: .importProviders, tab: .sources, owner: "feature 37", isBuilt: false),
+        Entry(
+            row: .communitySources, tab: .sources, owner: "Deferred (public registry)",
+            isBuilt: false),
+        Entry(row: .importProviders, tab: .sources, owner: "feature 37", isBuilt: true),
     ]
 
     /// Whether `row` shows in the window.

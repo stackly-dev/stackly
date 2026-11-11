@@ -188,8 +188,15 @@ public final class DaemonModel {
             now: now)
         sync.register(instances.store)
         let serverInstance = serverInstance
+        let mutations = MutationPathBox()
         catalog = CatalogStore(
             call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            send: { call, key in
+                guard let path = mutations.path else {
+                    return .notSent(ClientErrorCatalog.notConnected())
+                }
+                return await path.perform(call, idempotencyKey: key)
+            },
             serverInstance: { serverInstance.id },
             now: now)
         sync.register(catalog.store)
@@ -199,7 +206,6 @@ public final class DaemonModel {
         doctor = DoctorModel(
             read: { call throws(ClientError) in try await link.call(call, nil, .standard) },
             capacity: capacity, now: now)
-        let mutations = MutationPathBox()
         instanceActions = InstanceActionModel(
             send: { call, key in
                 guard let path = mutations.path else {

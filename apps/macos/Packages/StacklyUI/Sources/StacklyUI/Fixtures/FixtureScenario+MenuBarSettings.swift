@@ -228,6 +228,38 @@
                 return connectedWith(
                     normalServices, providers: providerCases,
                     replies: settingsReplies(settingsView()))
+            case .settingsSourcesImported:
+                let local: [ProviderSummary] = [
+                    .fixtureLocal(),
+                    .fixtureLocal(
+                        provider: "acme/cache", displayName: "Acme Cache", approval: .approved),
+                ]
+                let info = CatalogInfo.fixture
+                let list = ListProvidersReply(
+                    catalog: CatalogInfo(
+                        revision: info.revision, publishedAt: info.publishedAt,
+                        loadedAt: info.loadedAt, contentSha256: info.contentSha256,
+                        source: info.source, trust: info.trust, host: info.host,
+                        outdated: info.outdated, invalidCount: info.invalidCount,
+                        localCount: UInt64(local.count)),
+                    items: [providerCases[0]] + local,
+                    revocations: [
+                        CatalogRevocation(
+                            provider: "official/nats", providerRevision: "1.0.0",
+                            manifestSha256: nil,
+                            reason: "Starts with an insecure default; use revision 1.0.1 or later.",
+                            since: "2026-10-20"),
+                        CatalogRevocation(
+                            provider: "official/valkey", providerRevision: "1.0.0",
+                            manifestSha256: nil, reason: "Superseded by revision 1.0.1.",
+                            since: "2026-10-21"),
+                    ])
+                var replies = settingsReplies(settingsView())
+                replies["catalog.list_providers"] = .reply(.catalogListProviders(list))
+                replies["catalog.get_provider"] = .reply(
+                    .catalogGetProvider(.fixtureLocal(local[0])))
+                return connectedWith(
+                    normalServices, providers: [providerCases[0]] + local, replies: replies)
             case .settingsStorageCustom:
                 let storage = customStorage
                 return connectedWith(

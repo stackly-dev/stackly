@@ -2,7 +2,9 @@ import Foundation
 import StacklyClient
 
 /// The key value rows of the detail panel (spec 0017, *Layar Catalog (GUI)*): License,
-/// Source, Download, Disk, Requires, Dependencies, Publisher, Revision, and Trust.
+/// Source, Download, Disk, Requires, Dependencies, Publisher, Revision, and Trust. An
+/// imported provider (spec 0037) writes its publisher as not verified, its Source as where
+/// and when it was imported, and adds the Package row.
 /// License, Source, Download, Disk, Requires, and Dependencies read only the artifacts for
 /// this Mac, the ones whose OS and architecture equal the catalog's host. That filters
 /// what is shown; it never changes a status, which the daemon computes.
@@ -31,13 +33,19 @@ nonisolated struct ProviderFacts: Equatable {
     let revision: String
     /// The trust row.
     let trust: String
+    /// The first 12 characters of the package digest of an imported provider, or `nil`.
+    let package: String?
 
     /// Reads the rows from a provider detail.
     /// - Parameters:
     ///   - detail: The detail the daemon sent.
     ///   - host: This Mac, from the catalog info.
     ///   - locale: The locale of the sizes.
-    init(detail: ProviderDetail, host: HostTarget, locale: Locale = .current) {
+    ///   - dateStyle: How the import date of a local provider is written.
+    init(
+        detail: ProviderDetail, host: HostTarget, locale: Locale = .current,
+        dateStyle: Date.FormatStyle = Date.FormatStyle(date: .abbreviated, time: .omitted)
+    ) {
         let artifacts = (detail.versions ?? [])
             .flatMap { $0.artifacts ?? [] }
             .filter { $0.os == host.os && $0.arch == host.arch }
@@ -45,12 +53,24 @@ nonisolated struct ProviderFacts: Equatable {
         let urls = Self.unique(artifacts.compactMap(\.licenseUrl))
         licenseURL =
             licenses.count == 1 && urls.count == 1 ? Self.webURL(urls[0]) : nil
-        sources = Self.unique(artifacts.compactMap(\.source))
+        if let local = detail.local {
+            sources = [
+                ProviderTrustCopy.source(
+                    importedAt: local.importedAt, originPath: local.originPath, style: dateStyle)
+            ]
+            package = ProviderTrustCopy.shortDigest(local.packageSha256)
+        } else {
+            sources = Self.unique(artifacts.compactMap(\.source))
+            package = nil
+        }
         download = Self.range(of: artifacts.compactMap(\.downloadSize), locale: locale)
         disk = Self.range(of: artifacts.compactMap(\.installedSize), locale: locale)
         requires = Self.requires(artifacts.compactMap(\.minOs), host: host)
         dependencies = Self.dependencies(artifacts)
-        publisher = detail.summary.publisher ?? Self.notListed
+        publisher =
+            detail.summary.trust == .local
+            ? ProviderTrustCopy.publisher(provider: detail.summary.provider)
+            : detail.summary.publisher ?? Self.notListed
         revision = Self.revision(
             detail.summary.providerRevision, manifestSha256: detail.manifestSha256)
         trust = CatalogCopy.trustText(detail.summary.trust)

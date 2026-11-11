@@ -253,9 +253,11 @@ nonisolated public enum ActivityCopy {
         case .updateManager: "Update Stackly"
         case .migrateData: "Migrate data"
         case .daemonRestart: "Restart stacklyd"
-        // provisional: F37 step 10 (titles of the provider operations)
-        case .importProvider, .approveProvider, .revokeProvider, .removeProviderImport,
-            .unrecognized:
+        case .importProvider: "Import provider"
+        case .approveProvider: "Approve provider"
+        case .revokeProvider: "Revoke provider approval"
+        case .removeProviderImport: "Remove imported provider"
+        case .unrecognized:
             "Operation"
         }
     }

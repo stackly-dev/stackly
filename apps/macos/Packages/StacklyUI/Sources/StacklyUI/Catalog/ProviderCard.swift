@@ -16,12 +16,13 @@ struct ProviderCard: View {
     }
 
     /// The status of the card: "{n} installed" once a runtime of the provider's software is
-    /// installed (spec 0018), else the state of the entry.
+    /// installed (spec 0018), else the approval of a local entry that waits for it or lost
+    /// it (spec 0037), else the state of the entry.
     static func status(of provider: ProviderSummary, installedCount: Int) -> StatusAppearance {
         if installedCount > 0, provider.state == .available {
             return RuntimeAppearance.installedCount(installedCount)
         }
-        return CatalogAppearance.appearance(of: provider.state)
+        return CatalogAppearance.badge(of: provider)
     }
 
     var body: some View {
@@ -67,13 +68,28 @@ struct ProviderCard: View {
 
     }
 
-    /// The name, which wraps, and the badge on its right.
-    private var titleRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.s8) {
-            name
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            ToneBadge(status)
+    /// The longest badge label that still sits on the right of the name. A longer one,
+    /// such as "Needs Approval" (spec 0037), goes under the name, so the name keeps the
+    /// width of the card in the narrowest column.
+    static let sideBadgeLimit = 12
+
+    /// The name, which wraps, and the badge on its right, or under it when its label is
+    /// long.
+    @ViewBuilder private var titleRow: some View {
+        if status.label.count > Self.sideBadgeLimit {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                name
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ToneBadge(status)
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s8) {
+                name
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ToneBadge(status)
+            }
         }
     }
 

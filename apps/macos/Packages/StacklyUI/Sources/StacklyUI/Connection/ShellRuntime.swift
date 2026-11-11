@@ -115,6 +115,15 @@ public final class ShellRuntime {
             })
     }
 
+    /// Opens the main window on the Catalog with `provider` selected: Show in Catalog in
+    /// Settings › Sources (spec 0037). The window takes the destination when it shows, also
+    /// when it opens because of this request.
+    public func showInCatalog(_ provider: String) {
+        destinations.request(.provider(provider))
+        activation.prepareToShowWindow()
+        windowOpener.openMain()
+    }
+
     /// The app became active: retry now when not connected, and read the background
     /// agent's status again (spec 0015). Neither changes the registration. The login item and
     /// the notification permission are read again too, since the person may have changed them

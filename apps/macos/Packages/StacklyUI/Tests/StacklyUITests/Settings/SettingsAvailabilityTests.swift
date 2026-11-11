@@ -16,14 +16,25 @@ struct SettingsAvailabilityTests {
     @Test func theRowsOfFeaturesNotBuiltStayOut() {
         #expect(SettingsAvailability.isShown(.cleanUpCache) == false)
         #expect(SettingsAvailability.isShown(.communitySources) == false)
-        #expect(SettingsAvailability.isShown(.importProviders) == false)
+        let community = SettingsAvailability.entries.first { $0.row == .communitySources }
+        #expect(community?.owner == "Deferred (public registry)")
+    }
+
+    @Test func theImportedProvidersGroupIsBuiltByFeature37() {
+        let entry = SettingsAvailability.entries.first { $0.row == .importProviders }
+        #expect(entry?.isBuilt == true)
+        #expect(entry?.owner == "feature 37")
+        #expect(entry?.tab == .sources)
     }
 
     @Test func theRowsOfThisMilestoneShow() {
         #expect(SettingsAvailability.rows(in: .updates) == [.updateChannel, .telemetry])
         #expect(
             SettingsAvailability.rows(in: .instances) == [.autostartNewInstances, .notifications])
-        #expect(SettingsAvailability.rows(in: .sources) == [.catalogSource, .providers])
+        #expect(
+            SettingsAvailability.rows(in: .sources) == [
+                .catalogSource, .providers, .importProviders,
+            ])
         #expect(
             SettingsAvailability.rows(in: .storage)
                 == [.dataLocation, .logsLocation, .cacheLocation, .logRetention, .auditRetention])
