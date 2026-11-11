@@ -131,7 +131,7 @@
 
 ## Riwayat wave
 
-- belum ada
+- Wave 1, `2026-11-11`: fitur 36, 37, 38 dari `Design it` sampai kotak terakhir; 27 dari 27 kotak tercentang; protokol 3.5 → 4.1, migrasi `0013`; lima sesi dipakai ulang lintas item (empat worktree awal ditambah `chk-f37-rev` untuk review segar). Gerbang akhir di `main` (`c1fa63de`): fmt, clippy workspace, `stacklyd` 719 (pada `81a311d7`, sesudahnya hanya dokumen), core 1590, CLI 620, xtask 610, storage, domain, dan protokol 904, `clients/swift` 281, StacklyUI 2124, `build-app`, `check-deps`, `evidence check` 70 record, `codegen --check`, `provider check`, `catalog check` revision 11, `docs check` 26, cek target Windows. Graph dokumen (`/graphify . --update`) tidak dijalankan.
 
 ## Penutupan
 
