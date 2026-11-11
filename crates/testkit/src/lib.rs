@@ -149,3 +149,5 @@ pub use spawned_daemon::{
 };
 pub use stackly_evidence as evidence;
 pub use test_root::TestRoot;
+#[cfg(unix)]
+pub use test_root::{CleanupRefused, MARKER_FILE, MARKER_SCHEMA, sweep_marked};
