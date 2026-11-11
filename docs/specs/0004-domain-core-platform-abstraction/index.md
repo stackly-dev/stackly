@@ -323,7 +323,7 @@ Nilai `effective` dihitung saat dibaca dan tidak disimpan. Signature-nya `effect
 | BR-017 | F4 | domain: `ProviderRevision` immutable; revision instance hanya berubah lewat `apply_provider_revision(AcceptedRevisionChange)`, yang menolak perubahan bukan dari revision saat ini atau ke provider lain | `provider_revision_changes_only_with_an_accepted_diff` | fitur 59 |
 | BR-018 | Dipetakan | domain tidak menyimpan nilai secret, dan manifest instance tidak punya field secret (Key invariants); domain hanya memegang `SecretRef` *(ditambah fitur 11, spec 0011)* | tidak ada test di fitur ini | fitur 11, spec 0011 (AC-1, AC-12, AC-17); registry tanpa kolom nilai secret di spec 0005 (AC-12) |
 | BR-019 | F4 | domain: `plan_runtime_removal` untuk runtime external hanya menghasilkan `UnregisterOnly`, tidak pernah menghapus file | `external_runtime_removal_never_deletes_files` | fitur 55, 56 |
-| BR-020 | Dipetakan | kebijakan, ditulis di Security model | tidak ada | fitur 37, 66 |
+| BR-020 | Dipetakan | kebijakan, ditulis di Security model | tidak ada | fitur 37 (dibangun: kalimat izin approval provider lokal, spec 0037 AC-11), 66 |
 | BR-021 | Dipetakan | `Target` dan `native_support` dipakai untuk cek kompatibilitas restore | tidak ada | fitur 51 |
 | BR-022 | Dipetakan | tidak ada tipe di fitur ini | tidak ada | fitur 49, 51 |
 | BR-023 | F4 (sebagian) | core: `create_instance_layout` tidak pernah menghapus; error parsial membawa daftar persis path yang dibuat; manifest mencatat `createdByOperation` | `failed_create_reports_only_its_own_paths_and_deletes_nothing` | fitur 7, spec 0007 (AC-8: kompensasi hanya untuk yang dimiliki operasi, lihat *Port platform*) |
@@ -720,6 +720,10 @@ Selain tabel BR:
 - macOS nyata: integration test `crates/platform-macos/tests/layout.rs` membuat `MacosPlatform::with_roots(test_root.roots())`, menjalankan `fs_conformance`, prepare, create, dan inventaris, dan memastikan root default tidak disentuh (`symlink_metadata` root default sebelum dan sesudah sama). Memverifikasi **AC-6**, **AC-12**, **AC-15**.
 - Penjaga path hardcode: crate fixture di test `check-deps` yang memanggil `std::env::var` atau memuat `"/opt/homebrew"` membuat `check-deps` gagal dengan pesan file dan baris. Memverifikasi **AC-6**.
 - Portabilitas: `cargo check --target aarch64-pc-windows-msvc` untuk domain, platform, protocol, dan core dijalankan manual di Mac ini seperti sekarang. Memverifikasi **AC-1**.
+
+### Tambahan fitur 37
+
+*Ditambah fitur 37 ([spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* `DirectoryLayout` mendapat `provider_imports_dir()` = `<data>/provider-imports/` dan `provider_import_dir(&Sha256Digest)` = `<data>/provider-imports/<package_sha256>/`: salinan paket provider lokal yang dialamati digest seluruh byte paketnya (*Store salinan* spec 0037), folder 0700 dan file 0600 seperti folder pinned. BR-020 untuk provider lokal dipenuhi kalimat izin approval spec 0037 (AC-11); bagian dokumentasi pengguna tetap fitur 66. AC spec ini tidak berubah.
 
 ## Build plan
 

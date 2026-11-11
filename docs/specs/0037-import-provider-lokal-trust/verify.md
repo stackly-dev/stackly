@@ -133,6 +133,10 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Record evidence `na
 
 _Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langkah 6 di commit sendiri; langkah 7 dan 8 di satu commit karena keduanya mengubah `catalog::trust`, `map::trust`, dan `provider_gate.rs` yang sama. Kontrak naik minor ke 4.1: `CreateProviderSource` mendapat `local_import`. Temuan 1 verify milestone 1 (paket `pending` bisa create dan start) ditutup gate langkah 7; revision yang sempat dipin lewat celah itu (`approval` null, sumber catalog, namespace selain `official`/`testing`) kini `ApprovalRequired` di `pinned_trust`, jadi create dari pin itu dan duplicate instance nya ditolak `provider.approval_required`._
 
+_Fix sesudah verify milestone 2 (`dev-f37-fix`, keputusan lead): (1) baris audit `import_provider` kini memuat `changes` terhadap keputusan terakhir atas byte lain, dihitung sama dengan approve (`decision_changes` di `crates/core/src/catalog/import.rs`), dan kosong pada import pertama; (2) `instance.provider_ambiguous` dari pemilihan menurut `software` (`details.candidates` tidak kosong) kini berpesan `no single approved provider runs this software; choose one of the candidates`, kodenya tetap; (3) baris `WARN` log daemon saat store gagal hanya memuat `provider` dan `reason`, tanpa path. Langkah cek nya:_
+
+- [x] `cargo test -p stacklyd --test provider_gate -- the_audit_row a_pick` → 2 test lulus: import pertama tanpa `changes`, import revision `0.4.1` dengan host unduhan lain sesudah approve memuat `changes` dengan `revision` dan `download_hosts`; form tanpa `provider` dengan satu entri lokal `pending` memberi pesan di atas dengan `candidates` `acme/fake` → AC-17, AC-19
+
 ### UI / manual
 
 - [ ] Jaringan mati: matikan Wi-Fi dan kabel, lalu preview, import, approve, revoke, list, dan detail entri lokal, serta `runtime.resolve` entri yang dicabut catalog → perilaku sama dengan saat online, tidak ada permintaan jaringan → AC-8
@@ -155,7 +159,7 @@ _Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langk
 - [x] `swift test --package-path clients/swift` → lulus dengan versi 4.1 → AC-18
 - [x] `cargo xtask codegen --check` → "20 generated files are up to date"; `protocols/contract-versions.json` mencatat 4.1
 - [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo xtask evidence check`, dan cek target Windows → bersih
-- [ ] `cargo test -p stacklyd --test provider_gate a_snapshot` → `replace_catalog` menolak snapshot dari generation lebih tua, menjaga yang lebih baru, dan menerima generation sama → AC-10 (ditambahkan sesudah verify, commit `690889d2`; gerbang lead 9 test lulus)
+- [x] `cargo test -p stacklyd --test provider_gate a_snapshot` → `replace_catalog` menolak snapshot dari generation lebih tua, menjaga yang lebih baru, dan menerima generation sama → AC-10 (ditambahkan sesudah verify, commit `690889d2`; gerbang lead 9 test lulus)
 
 ### Hasil `/check verify` 2026-11-11 (Milestone 2, commit `7a62eb10`)
 
@@ -204,6 +208,21 @@ _Status 2026-11-11: langkah Build plan 6 sampai 8 dibangun (`dev-f37-m2`). Langk
 3. Rendah. Residual K25 (runtime yang dipasang lewat provider lokal tetap terpasang sesudah revoke) tidak bisa diprobe dengan fixture, karena tidak ada artefak nyata untuk provider lokal; yang terbukti: baris `runtimes` dan folder runtime tidak berubah oleh revoke dan remove.
 
 **Langkah manual (tidak dijalankan, `NOT_RUN`, owner user):** jaringan mati (AC-8); folder terlindung dan quarantine nyata (Milestone 1); alur GUI (Milestone 4).
+
+### Cek ulang fix AC-17 2026-11-11 (commit `dffd465f`, fix `1cd34477`)
+
+**Verdict: temuan 1 tertutup, AC-17 terpenuhi untuk import, approve, revoke, dan remove.** Dua butir rendah yang ikut diperbaiki juga tertutup. Dua kotak di atas (`the_audit_row a_pick` dan `a_snapshot`) dicentang.
+
+- `cargo test -p stacklyd --test provider_gate` → 11 lulus, 0 gagal, termasuk `the_audit_row...`, `a_pick...`, dan `a_snapshot...`.
+- **Probe `stacklyd` sungguhan** (root sementara, catalog development, paket `acme/fakeish`; daemon dihentikan dan root dihapus sesudahnya). Baris audit dibaca dari registry test root (`sqlite3 -readonly`) dan dari `stackly audit list --json`:
+  - Import pertama → baris `import_provider` dengan `provider`, `providerRevision` `0.1.0`, `packageSha256`, `manifestSha256`, tanpa `changes`.
+  - Sesudah approve, satu byte template diubah lalu diimpor → preview `changes: [content]`, baris audit `changes: content`.
+  - Revision `0.2.0` dengan host unduhan dan port lain diimpor → preview `changes: [revision, download_hosts, endpoints]`, baris audit `changes: revision,download_hosts,endpoints`, `providerRevision` `0.2.0`. Isi `changes` di audit sama dengan yang ditampilkan preview.
+  - Tidak ada baris audit yang memuat path home.
+- **Pesan `instance.provider_ambiguous`:** `stackly instance create probe --runtime fake@0.1.0` tanpa `--provider`, dengan satu entri lokal `pending` ber `software` sama → pesan `no single approved provider runs this software; choose one of the candidates`, `details.candidates` `acme/fakeish`, kode tetap, tidak ada instance dibuat.
+- **Baris `WARN` store:** dibaca di diff (`tracing::warn!` kini hanya membawa `provider` dan `reason`); tidak diprobe ulang dengan store yang gagal. Test `a_store` tetap lulus, dan log daemon probe ini tidak memuat path home.
+
+Catatan: `changes` dihitung terhadap keputusan terakhir atas byte lain (sama dengan approve). Import di atas entri yang belum pernah diputuskan tidak membawa `changes`; ini sesuai teks fix dan diterima.
 
 ### Acceptance-criteria coverage
 
@@ -308,22 +327,66 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build.
 - [ ] Ubah satu template di folder asal lalu import lagi → sheet menulis "Replaces imported revision …" dan "Differs from the version you decided on: configuration content."; detail menampilkan banner "Changed since your approval" → AC-15, AC-6
 - [ ] Settings › Sources: grup "Imported providers" dengan baris "{id} · {approval} · imported {tanggal}" dan "Show in Catalog" yang membuka jendela utama di Catalog dengan entri itu terpilih; "No imported providers." saat kosong; tombol "Import Provider…" membuka sheet di jendela Settings; matikan daemon → tombol nonaktif dengan alasan "Not available while stacklyd is offline." → AC-16
 - [ ] Onboarding (reset dengan `defaults delete com.ojiepermana.stackly` pada akun uji, bukan akun utama): langkah Catalog Trust tanpa baris atau toggle baru, subjudul "Providers describe how to install and run each server. Stackly only installs and runs providers from sources you trust." dan kalimat "You can import a provider from a folder later in Catalog. It stays blocked until you approve it." → AC-16
-- [ ] `/check verify` membaca ulang semua copy `ProviderTrustCopy.swift` terhadap PRD AC-061 dan mencatat hasilnya → AC-11
+- [x] `/check verify` membaca ulang semua copy `ProviderTrustCopy.swift` terhadap PRD AC-061 dan mencatat hasilnya → AC-11
 
 ### Commands
 
-- [ ] `xcrun swift-format lint --strict` atas semua file Swift yang diubah milestone ini → bersih
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderTrustCopyTests` → lulus: kalimat izin sama persis dengan `approval-statement.txt`; pindaian frasa terlarang ("sandboxed", "safe to run", "verified publisher", "trusted publisher", "malware", "up to date", "latest") atas semua copy fitur ini, label CatalogCopy lokal, banner setiap state, dan copy onboarding baru; tabel label `uses` dan `changes`; banner pending tanpa keputusan, berubah sejak keputusan, revoked user, dan revoked catalog dengan revision dan tanggal terbit; approved `neutral`, bukan `positive` → AC-11, AC-15
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderImportModelTests` → lulus: Cancel di panel folder tanpa sheet dan tanpa request; preview tanpa mutasi; folder tak terbaca; Import mengirim `expectedPackageSha256` yang ditampilkan; penolakan menyimpan preview dan alasan; paket tidak valid dan paket yang sama tidak mengirim apa pun, salinan rusak boleh "Import Again"; catatan pengganti, perubahan, dan quarantine; masalah dipotong di 20 dengan "and N more"; Approve mengirim digest detail yang ditampilkan; `provider.import_changed` menutup sheet dan memuat ulang; penolakan lain tetap di sheet; Revoke dan Remove bertanya dulu dengan copy destruktif; urutan grup izin → AC-15
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogStoreTests` → lulus, termasuk `catalog.changed` memuat snapshot lagi dan `revocations` serta entri lokal tersimpan → AC-15, AC-8
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "SettingsAvailabilityTests|OnboardingCopyTests|CatalogTrustContentTests|FixtureScenarioTests"` → lulus: `.importProviders` `isBuilt: true` milik feature 37, `.communitySources` tetap tidak dibangun dengan pemilik "Deferred (public registry)", copy onboarding baru, scenario `settings-sources-imported` → AC-16
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogLocalSnapshotTests|SettingsSnapshotTests|OnboardingSnapshotTests"` → lulus terhadap referensi: `catalog-import-preview`, `catalog-import-invalid`, `catalog-import-replaces`, `catalog-local-pending`, `catalog-local-changed`, `catalog-local-approved`, `catalog-local-revoked`, `catalog-local-catalog-revoked`, `catalog-approve-sheet` (light, dark, narrow), `settings-sources-imported` (light, dark), dan `onboarding-catalog-trust` yang direkam ulang → AC-15, AC-16
-- [ ] `cargo xtask snapshot review` → `target/snapshot-review/index.html` menampilkan PNG baru dan `onboarding-catalog-trust` lama dan baru untuk ditinjau
-- [ ] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI` → semua lulus (flaky beban yang dikenal diulang sendirian)
-- [ ] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --filter LocalProviderEndToEndTests` → lulus: terhadap `stacklyd` nyata (root `skeleton_seed`, catalog kosong `stackly-testkit` sebagai `STACKLY_CATALOG_DIR`) model GUI mengimpor salinan `providers/fake` sebagai `acme/fake` dengan `pending` dan badge "Needs Approval"; form dan create ditolak `provider.approval_required`; digest basi menutup sheet approve dengan umpan balik `provider.import_changed`; approve membuka gate (form ber `source` `local_import`, create berhasil); revoke dari panel membuat create baru ditolak `provider.revoked` `by` `user` dengan hint "existing instances still start" dan banner "Approval revoked" ber "Approve Again…", sedangkan instance lama tetap start dan stop; approve dari koneksi lain sampai ke `CatalogStore` lewat `catalog.changed` saja; remove menghilangkan entri → AC-4, AC-5, AC-7, AC-9, AC-15
-- [ ] `swift test --package-path clients/swift` → lulus
-- [ ] `cargo xtask build-app` → BUILD SUCCEEDED
-- [ ] `grep -rn "provisional: F37" apps/macos clients/swift` → tidak ada hasil
+- [x] `xcrun swift-format lint --strict` atas semua file Swift yang diubah milestone ini → bersih
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderTrustCopyTests` → lulus: kalimat izin sama persis dengan `approval-statement.txt`; pindaian frasa terlarang ("sandboxed", "safe to run", "verified publisher", "trusted publisher", "malware", "up to date", "latest") atas semua copy fitur ini, label CatalogCopy lokal, banner setiap state, dan copy onboarding baru; tabel label `uses` dan `changes`; banner pending tanpa keputusan, berubah sejak keputusan, revoked user, dan revoked catalog dengan revision dan tanggal terbit; approved `neutral`, bukan `positive` → AC-11, AC-15
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter ProviderImportModelTests` → lulus: Cancel di panel folder tanpa sheet dan tanpa request; preview tanpa mutasi; folder tak terbaca; Import mengirim `expectedPackageSha256` yang ditampilkan; penolakan menyimpan preview dan alasan; paket tidak valid dan paket yang sama tidak mengirim apa pun, salinan rusak boleh "Import Again"; catatan pengganti, perubahan, dan quarantine; masalah dipotong di 20 dengan "and N more"; Approve mengirim digest detail yang ditampilkan; `provider.import_changed` menutup sheet dan memuat ulang; penolakan lain tetap di sheet; Revoke dan Remove bertanya dulu dengan copy destruktif; urutan grup izin → AC-15
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter CatalogStoreTests` → lulus, termasuk `catalog.changed` memuat snapshot lagi dan `revocations` serta entri lokal tersimpan → AC-15, AC-8
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "SettingsAvailabilityTests|OnboardingCopyTests|CatalogTrustContentTests|FixtureScenarioTests"` → lulus: `.importProviders` `isBuilt: true` milik feature 37, `.communitySources` tetap tidak dibangun dengan pemilik "Deferred (public registry)", copy onboarding baru, scenario `settings-sources-imported` → AC-16
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "CatalogLocalSnapshotTests|SettingsSnapshotTests|OnboardingSnapshotTests"` → lulus terhadap referensi: `catalog-import-preview`, `catalog-import-invalid`, `catalog-import-replaces`, `catalog-local-pending`, `catalog-local-changed`, `catalog-local-approved`, `catalog-local-revoked`, `catalog-local-catalog-revoked`, `catalog-approve-sheet` (light, dark, narrow), `settings-sources-imported` (light, dark), dan `onboarding-catalog-trust` yang direkam ulang → AC-15, AC-16
+- [x] `cargo xtask snapshot review` → `target/snapshot-review/index.html` menampilkan PNG baru dan `onboarding-catalog-trust` lama dan baru untuk ditinjau
+- [x] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI` → semua lulus (flaky beban yang dikenal diulang sendirian)
+- [x] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && swift test --package-path apps/macos/Packages/StacklyUI --filter LocalProviderEndToEndTests` → lulus: terhadap `stacklyd` nyata (root `skeleton_seed`, catalog kosong `stackly-testkit` sebagai `STACKLY_CATALOG_DIR`) model GUI mengimpor salinan `providers/fake` sebagai `acme/fake` dengan `pending` dan badge "Needs Approval"; form dan create ditolak `provider.approval_required`; digest basi menutup sheet approve dengan umpan balik `provider.import_changed`; approve membuka gate (form ber `source` `local_import`, create berhasil); revoke dari panel membuat create baru ditolak `provider.revoked` `by` `user` dengan hint "existing instances still start" dan banner "Approval revoked" ber "Approve Again…", sedangkan instance lama tetap start dan stop; approve dari koneksi lain sampai ke `CatalogStore` lewat `catalog.changed` saja; remove menghilangkan entri → AC-4, AC-5, AC-7, AC-9, AC-15
+- [x] `swift test --package-path clients/swift` → lulus
+- [x] `cargo xtask build-app` → BUILD SUCCEEDED
+- [x] `grep -rn "provisional: F37" apps/macos clients/swift` → tidak ada hasil
+
+### Hasil `/check verify` 2026-11-11 (Milestone 4, commit `78c8ccef`)
+
+**Verdict: PASS untuk bagian otomatis.** AC-11 (bagian GUI), AC-15, AC-16, dan bagian tampilan AC-8 dan AC-13 terpenuhi dari fixture, snapshot, dan test terhadap `stacklyd` nyata; tidak ada temuan yang menggagalkan AC. Tujuh langkah GUI manual tidak dijalankan (`NOT_RUN`, owner user). Ke 12 langkah Commands dijalankan dengan `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0` dan lulus.
+
+| Perintah | Hasil |
+| --- | --- |
+| `xcrun swift-format lint --strict` atas 60 file Swift yang berubah sejak `e5506e2c` | bersih |
+| `swift test --package-path apps/macos/Packages/StacklyUI` (seluruhnya, sesudah build `stacklyd`, fake server, dan `skeleton_seed`) | 2109 test di 208 suite lulus dalam 325 detik; 6 "known issue" semuanya dari self test `SnapshotHelperTests` |
+| suite `ProviderTrustCopyTests`, `ProviderImportModelTests`, `CatalogStoreTests`, `SettingsAvailabilityTests`, `OnboardingCopyTests`, `CatalogTrustContentTests`, `CatalogLocalSnapshotTests`, `SettingsSnapshotTests`, `OnboardingSnapshotTests`, `LocalProviderEndToEndTests` | semuanya berjalan dan lulus di run penuh itu (`LocalProviderEndToEndTests` 38 detik terhadap daemon nyata, tidak `BLOCKED`) |
+| `swift test --package-path clients/swift` | 281 test lulus |
+| `cargo xtask build-app` | `built .../target/app/Debug/Stackly.app` |
+| `cargo xtask snapshot review --base e5506e2c` | `target/snapshot-review/index.html` dibuat |
+| `grep -rn "provisional: F37" apps/macos clients/swift` | kosong |
+
+**Kode yang dibaca:**
+
+- Sheet approve: `Text(ProviderTrustCopy.approvalStatement)`, dan `ProviderTrustCopyTests` membandingkannya dengan `approval-statement.txt`; `StacklySheet(cancelIsDefault: true)`; `provider.approve` dikirim dengan digest detail yang ditampilkan.
+- Revoke dan Remove: `confirmationDialog` dengan role `.destructive`.
+- Aksi mutasi memakai `StacklyAction(mutates: true)`, jadi `ActionHost` mematikannya saat daemon offline dengan alasan; tombol toolbar memakai "Not available while stacklyd is offline.".
+- File baru tidak menawarkan cancel, resume, atau abandon operasi; "Cancel" di kedua sheet hanya menutup sheet.
+- `CatalogStore` berlangganan kind `catalog.` dan memuat snapshot lagi (`CatalogStoreTests`; di test end to end approve dari koneksi lain sampai lewat `catalog.changed` saja).
+- `SettingsAvailability`: `.importProviders` `isBuilt: true` milik "feature 37"; `.communitySources` tetap tidak dibangun, pemilik "Deferred (public registry)".
+
+**Pembacaan copy terhadap PRD AC-061:** `ProviderTrustCopy.swift` dan `CatalogCopy.swift` dibaca ulang. Kalimat izin sama persis dengan fixture. Sembilan teks yang juga ada di CLI (`copy.rs`) sama kata demi kata (catatan kaki approve dan import, catatan quarantine, paket sama, salinan rusak, revocation catalog, batas import, pesan revoke, pesan remove). Judul dan pesan banner sama dengan tabel *Banner approval*. Trust "Local, not verified", publisher "(not verified)". Tidak ada frasa "sandboxed", "safe to run", "verified publisher", "trusted publisher", "malware", "up to date", atau "latest" di teks tampil (satu kemunculan "verified publisher" ada di komentar dokumentasi yang menjelaskan larangannya).
+
+**Tinjauan PNG referensi** (dibuka satu per satu):
+
+- `catalog-import-preview`: header, baris Publisher "acme (not verified)", Category, Software, Versions, Package 12 hex, Folder `~/...`, catatan quarantine, grup Permissions dalam urutan spec, Cancel dan Import. Sesuai.
+- `catalog-import-invalid`: banner kritis "This package can't be imported" dengan `provider.yaml metadata.id · Namespace official can't be imported.`, Import nonaktif dengan alasan. Sesuai.
+- `catalog-import-replaces`: "Replaces imported revision 1.0.0..." dan "Differs from the version you decided on: revision, files it downloads, download hosts.". Sesuai.
+- `catalog-approve-sheet`: judul `Approve "Acme Demo"?`, baris identitas, kalimat izin utuh tanpa terpotong, "Approve only if you trust where this provider came from.", Permissions, perubahan, catatan kaki. Sesuai. Tombol default tidak terlihat bedanya di PNG (render di luar layar); itu bagian langkah GUI manual.
+- `catalog-local-pending`, `-changed`, `-revoked` (narrow): kartu dengan badge "Needs Approval" di bawah nama atau "Revoked", meta "Database · Local", banner dengan judul, pesan, dan aksi menurut tabel, "Needs your approval." atau "Approval revoked.", sel macOS "Unverified", Get nonaktif. Sesuai; tidak ada teks terpotong.
+- `catalog-local-catalog-revoked`: banner "Revoked by the catalog" dengan revision, tanggal terbit, `since`, dan reason. Lihat temuan 1.
+- `settings-sources-imported`: "2 revoked revisions in this catalog", grup "Imported providers" dengan "acme/demo · Needs Approval · imported Oct 17, 2026" dan "Show in Catalog"; entri lokal tidak diulang di "Providers". Sesuai.
+- `onboarding-catalog-trust`: subjudul dan kalimat tambahan baru, tanpa baris atau toggle baru. Sesuai.
+
+**Tafsiran developer yang dinilai** (semua diterima): label "Writes to"; teks umpan balik approve, revoke, remove; "Preview Again"; badge panjang di bawah nama (terlihat benar di kolom sempit); entri lokal hanya di "Imported providers"; `ShellDestination.provider` dengan `CatalogRequest` sekali pakai (pola yang sama dengan `instance(UUID)`); `StacklySheet(cancelIsDefault:)`; umpan balik gagal yang persisten; helper test yang memuat ulang lewat epoch.
+
+**Temuan rendah** (tidak menggagalkan AC):
+
+1. PNG `catalog-local-catalog-revoked` (tiga varian) menampilkan tombol "Get" aktif. Penyebabnya fixture test: `ProviderFixture.catalogRevokedDetail()` dibuat dari `detail-local-approved` dan hanya mengubah `summary` serta menambah `revocation`, jadi `versions[].install.installable` tetap true. Daemon nyata memberi `installable: false` reason `trust_revoked` (probe CLI Milestone 2 dan 3: `no (trust_revoked)`). Saran: perbaiki fixture dan rekam ulang tiga PNG itu.
+2. Snapshot panel detail terpotong di batas layar: baris Publisher, Trust, Source, Package, seksi Permissions, dan tombol "Revoke Approval…" serta "Remove…" tidak terlihat di PNG mana pun. Teks nya dijaga test model, tetapi tidak punya referensi visual.
+3. Di `catalog-import-preview` catatan kaki "Importing doesn't run anything..." ada di bawah batas gulir, dan di `settings-sources-imported` tombol "Import Provider…" tidak ikut tertangkap.
 
 ### Acceptance-criteria coverage
 
@@ -349,8 +412,18 @@ Langkah ini butuh izin user dan tidak dijalankan sesi build. Pakai root sementar
 
 ### Commands
 
-- [ ] `cargo test -p stacklyd --test provider_import --test provider_trust --test provider_gate` → lulus dengan guard evidence `fixture` di sepuluh test (lihat status di atas) → AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12
-- [ ] `cargo xtask evidence check` → lulus, termasuk empat record `NOT_RUN` baru di `evidence/manual/`
+- [x] `cargo test -p stacklyd --test provider_import --test provider_trust --test provider_gate` → lulus dengan guard evidence `fixture` di sepuluh test (lihat status di atas) → AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12
+- [x] `cargo xtask evidence check` → lulus, termasuk empat record `NOT_RUN` baru di `evidence/manual/`
+
+### Hasil `/check verify` 2026-11-11 (Langkah 13, commit `78c8ccef`)
+
+**Verdict: PASS untuk bagian otomatis; empat bukti `native` `NOT_RUN`, owner user.**
+
+- `cargo test -p stacklyd --test provider_import --test provider_trust --test provider_gate` → 7, 4, dan 9 lulus; sepuluh guard `evidence!` ada di ketiga file itu, dengan `covers` AC-033, REQ-033, REQ-032, AC-032, AC-072, dan VAL-018.
+- `cargo xtask evidence check` → `68 manual record(s), baseline valid`.
+- Empat record `evidence/manual/2026-11-11-spec-0037-*.json`: `kind` `native`, `method` `manual`, `status` `NOT_RUN`, `covers` sesuai langkahnya (REQ-033 dan AC-033 untuk folder terlindung dan quarantine; REQ-032, REQ-033, AC-033, AC-061, AC-072 untuk alur GUI; REQ-032 dan AC-072 untuk jaringan mati), `expected` menyebut hasil yang harus diamati. Field `owner` nya null: spec 0002 hanya mewajibkan `owner` untuk `BLOCKED`, dan 15 dari 16 record `NOT_RUN` lain di repo juga begitu. Pemiliknya (user) tertulis di bagian ini.
+- ID Trace: PAGE-08 dan OQ-009 memang bukan ID evidence. PAGE-08 dibuktikan snapshot, test model, dan record alur GUI (yang membawa AC-033 dan AC-061); itu memadai sampai langkah GUI manual dijalankan. OQ-009 sengaja tetap terbuka (*Security model*).
+- Guard Swift membawa REQ-032, REQ-033, AC-033, AC-032, AC-061, AC-072, BR-020; guard CLI REQ-028.
 
 ### Acceptance-criteria coverage
 

@@ -769,6 +769,85 @@ async fn a_snapshot_built_from_an_older_generation_never_replaces_a_newer_one() 
     assert_eq!(revision(), 903);
 }
 
+/// The `changes` of the audit rows of the import operations, oldest first.
+fn import_changes(daemon: &stacklyd::server::DaemonHandle) -> Vec<Option<String>> {
+    let registry = daemon.core().registry().expect("the registry is open");
+    let mut rows: Vec<_> = registry
+        .audit_events(stackly_domain::AuditQuery::page(500, None))
+        .expect("reads")
+        .value
+        .items
+        .into_iter()
+        .filter(|row| row.operation_kind == Some(stackly_domain::OperationKind::ImportProvider))
+        .collect();
+    rows.sort_by_key(|row| row.occurred_at);
+    rows.iter()
+        .map(|row| row.safe_details.get("changes").map(str::to_owned))
+        .collect()
+}
+
+// covers: AC-17 (spec 0037; finding 1 of the milestone 2 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn the_audit_row_of_an_import_carries_the_changes_since_the_last_decision() {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    approve(&api.client, &digest).await;
+
+    // A new revision that downloads from another host.
+    let manifest = dir.join("provider.yaml");
+    let text = std::fs::read_to_string(&manifest).expect("the manifest reads");
+    std::fs::write(
+        &manifest,
+        text.replace("revision: \"0.4.0\"", "revision: \"0.4.1\""),
+    )
+    .expect("the manifest writes");
+    let versions = dir.join("versions.json");
+    let text = std::fs::read_to_string(&versions).expect("the versions read");
+    std::fs::write(
+        &versions,
+        text.replace("downloads.example.test", "mirror.example.test"),
+    )
+    .expect("the versions write");
+    let _next = import(&api.client, &dir).await;
+
+    let changes = import_changes(&daemon);
+    assert_eq!(changes.len(), 2, "{changes:?}");
+    assert_eq!(
+        changes[0], None,
+        "a first import has no decision to compare"
+    );
+    let second = changes[1]
+        .clone()
+        .expect("the changed import names its changes");
+    let codes: Vec<&str> = second.split(',').collect();
+    assert!(codes.contains(&"revision"), "{second}");
+    assert!(codes.contains(&"download_hosts"), "{second}");
+}
+
+// covers: AC-19 (spec 0037; a low item of the milestone 2 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pick_by_software_names_its_candidates_without_a_digest_message() {
+    let site = Site::new();
+    let _daemon = site.start_with(without_catalog_entry()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let _digest = import(&api.client, &dir).await;
+
+    let picked = api
+        .form(api.runtime_id, None)
+        .await
+        .expect_err("a pending entry is never picked for the runtime");
+    assert_eq!(picked.code(), "instance.provider_ambiguous");
+    assert_eq!(
+        picked.message(),
+        "no single approved provider runs this software; choose one of the candidates"
+    );
+    assert_eq!(detail(&picked, "candidates"), Some(LOCAL));
+}
+
 /// Every file under `dir` with the SHA-256 of its bytes, and every folder,
 /// sorted; an absent folder is empty.
 fn content(dir: &Path) -> Vec<(String, String)> {

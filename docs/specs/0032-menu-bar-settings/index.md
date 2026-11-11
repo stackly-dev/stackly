@@ -416,7 +416,7 @@ Tidak ada variabel environment atau credential baru. `STACKLY_ROOT` tetap mengge
 ### Selisih mockup yang disengaja
 
 - Appearance punya System (default), Light, dan Dark, bukan hanya Light dan Dark.
-- Tidak ada Restart Daemon, toggle community, atau Clean Up… sampai fitur 30, 37, dan 55.
+- Tidak ada Restart Daemon, toggle community, atau Clean Up… sampai fitur 30, 37, dan 55. *Ditambah fitur 37 ([spec 0037](../0037-import-provider-lokal-trust/index.md) AC-16, 2026-11-11):* tab Sources mendapat grup "Imported providers" dan tombol "Import Provider…", dan entri `.importProviders` di `SettingsAvailability` kini `isBuilt: true`. Toggle community tetap tidak ada: `.communitySources` berpemilik Deferred (public registry), bukan fitur 37.
 - Baris lokasi bisa diubah (Change…, Use Default, Reveal in Finder), bukan teks saja.
 - Retention log tampil read only dari spec 0027, bukan pilihan 7, 14, atau 30 hari.
 - Telemetry dan channel memakai catatan jujur AC-23.

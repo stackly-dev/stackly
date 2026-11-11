@@ -132,11 +132,11 @@ Unik `(kind, location)`.
 | `manifest_sha256`* | `sha256` | |
 | `software`* | `name` | |
 | `schema_version` | `TEXT` | apiVersion manifest, diisi fitur 9 |
-| `publisher` | `TEXT` | fitur 37 |
+| `publisher` | `TEXT` | fitur 37 (dibangun): `Stackly` untuk pin dari catalog, namespace paket untuk pin entri lokal |
 | `capabilities`* | `json` array | kode `Capability` |
 | `line_compatibility`* | `json` object | `{ "<data line>": ["<runtime line>", ...] }` |
 | `source_id` | `uuid` | FK `provider_sources(id)` restrict |
-| `approval` | `code` | set terbuka, fitur 37 |
+| `approval` | `code` | set terbuka, fitur 37 (dibangun): `TrustDecision` `approved` atau `revoked`, null untuk pin catalog; terdaftar di `CODED_COLUMNS` |
 | `approved_at` | `ts` | |
 | `created_at`* | `ts` | |
 
@@ -774,6 +774,16 @@ Test yang menulis evidence (semuanya `fixture`, spec 0002):
 | `registry_never_holds_secret_values` | `BR-018` |
 | `provider_revision_manifest_fields_are_immutable` | `BR-017` |
 | `prune_keeps_unfinished_operations_and_bounds_history` | `NFR-011` |
+
+### Tambahan fitur 37
+
+*Ditambah fitur 37 ([spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* Skema lengkapnya ada di *Model data* spec itu; di sini hanya daftar yang berubah, dan AC spec ini tidak berubah.
+
+- Migrasi `0013_provider_imports.sql` membuat tabel `provider_imports`: satu baris per provider ID yang diimpor, dengan `source_id`, revision, tiga digest (`manifest_sha256`, `versions_sha256`, `package_sha256` yang unik), ukuran, `origin_path`, fakta quarantine, dan keputusan terakhir (`decision`, waktunya, byte dan izin yang diputuskan). Kolom `provider_imports.decision` dan `provider_revisions.approval` masuk `CODED_COLUMNS`.
+- `ProviderSourceKind` mendapat `Local` (satu baris `provider_sources` ber `location` `imports`).
+- `ProviderRevisionRecord.approval` bertipe `Option<TrustDecision>` dan record itu mendapat `approved_at`.
+- Port `Registry` mendapat baca `provider_imports()`, `provider_import(id)`, dan `provider_has_approved_revision(id)`, serta `WriteOp` `PutProviderImport`, `DecideProviderImport`, `DeleteProviderImport`, `SetProviderRevisionApproval`, dan `RevokeProviderApprovals`; `GuardView` membaca baris import dan revision di dalam `commit_guarded`. `FakeRegistry`, `registry_conformance`, dan `SqliteRegistry` mengikuti.
+- `LockKey::Provider` dan empat `OperationKind` (`import_provider`, `approve_provider`, `revoke_provider`, `remove_provider_import`) dicatat di spec 0007.
 
 ## Build plan
 

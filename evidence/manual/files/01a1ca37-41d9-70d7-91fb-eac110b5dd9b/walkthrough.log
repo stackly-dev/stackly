@@ -1,0 +1,27 @@
+clone 23300da10883cba882a6cff18f8ccab86534f369
+run cargo xtask provider check providers/example
+ok testing/example 0.1.0 287cdc78dc31d36561602cf20324efd082d10f464c420a910951f7c229a0c303
+ok
+run cargo xtask provider test providers/example
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+default: pass
+slow-ready: pass
+verdict: pass
+provider test report: $TMPDIR/stackly-walkthrough-4hNRmT/stackly/target/provider-test/01a1ca35-9669-761d-ad11-d837cc01b7b6/report.json
+ok
+run cargo xtask provider new mytool
+ok testing/mytool 0.1.0 3823b7c68dde5c4bcadeb258704af788690d9ffc76669d2f0805332dc1a98d59
+next:
+  cargo xtask provider check providers/mytool
+  cargo xtask provider test providers/mytool
+  read providers/mytool/README.md
+  STACKLY_UPDATE_GOLDEN=1 cargo test -p stacklyd --test create_form_fixtures
+ok
+run cargo xtask provider test providers/mytool
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+default: pass
+slow-ready: pass
+verdict: pass
+provider test report: $TMPDIR/stackly-walkthrough-4hNRmT/stackly/target/provider-test/01a1ca36-79de-735c-ac75-d9d575cf0bd0/report.json
+ok
+ok walkthrough 23300da10883cba882a6cff18f8ccab86534f369 2

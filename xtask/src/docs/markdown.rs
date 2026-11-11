@@ -281,6 +281,7 @@ fn mask(raw: &str, in_comment: &mut bool) -> String {
 mod tests {
     use super::*;
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_fence_hides_its_body_from_the_prose_and_keeps_its_language() {
         let doc = Markdown::parse("a\n```bash\ncargo xtask nope\n```\nb\n");
@@ -291,6 +292,7 @@ mod tests {
         assert_eq!(prose, vec![(1, "a"), (5, "b")]);
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn an_indented_fence_inside_a_list_is_still_a_fence() {
         let doc = Markdown::parse("- item\n\n  ```text\n  TODO\n  ```\n");
@@ -298,6 +300,7 @@ mod tests {
         assert_eq!(doc.fences[0].line, 3);
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn code_spans_autolinks_and_comments_are_blanked_in_the_prose() {
         let mut open = false;
@@ -310,6 +313,7 @@ mod tests {
         assert_eq!(masked.len(), line.len());
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn a_comment_over_two_lines_is_blanked_on_both() {
         let doc = Markdown::parse("<!-- start\nTODO -->\nafter\n");
@@ -320,6 +324,7 @@ mod tests {
         assert_eq!(prose, vec!["", "", "after"]);
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn slugs_follow_the_github_rules_and_number_duplicates() {
         let doc = Markdown::parse("# Hello, World!\n## `cargo xtask docs`\n## Hello, World!\n");
@@ -329,6 +334,7 @@ mod tests {
         );
     }
 
+    // covers: AC-9 (spec 0038)
     #[test]
     fn code_spans_are_read_with_double_backticks() {
         assert_eq!(code_spans("a `x` and `` y` `` b"), vec!["x", "y`"]);

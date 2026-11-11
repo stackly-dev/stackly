@@ -1218,6 +1218,15 @@ Untuk dicatat lead di `ui-macos.md`:
 - Baris preflight `provider` dan `settings` muncul saat gagal; baris secret per secret field dengan judul field; listener wildcard dan `::1` tampil sebagai peringatan, bukan error.
 - Tombol Copy menyalin perintah lengkap termasuk `--port` dan `--secret`, bukan versi pendek mockup.
 
+### Tambahan fitur 37
+
+*Ditambah fitur 37 ([spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* AC spec ini tidak berubah.
+
+- `PackageSource` mendapat `LocalImport { source_id, approved_at }` untuk entri lokal; di wire nilainya `local_import` pada `CreateProviderSource` (protokol 4.1). Pin dari entri lokal lewat `pin_revision_with` dan `PinMeta::local`: `publisher` namespace paket, `approval` `approved`, `approved_at` waktu keputusan, dan `source_id` baris import.
+- `ProviderProblem`, `FormError`, dan `CreateError` mendapat `ApprovalRequired` dan `Revoked` (kode `provider.approval_required` dan `provider.revoked`); `DuplicateError` mendapat keduanya juga.
+- Gate trust: `resolve_package` (cabang entri dan `find_pinned`, yang kini mewajibkan baris `provider_revisions`), handler form sesudah `select_provider` (`form_trust`), `gather_duplicate`, dan guard commit `create_instance` (`recheck_trust` di tahap `register`).
+- `select_provider` mengikuti *Software yang sama* spec 0037: entri catalog dulu, lalu satu satunya entri lokal yang dipercaya, selain itu `instance.provider_ambiguous` dengan `details.candidates` dan pesan `no single approved provider runs this software; choose one of the candidates`. Benturan digest pinned tanpa kandidat tetap berpesan `more than one package digest matches the provider and revision`.
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap adalah "pengguna membuat instance dengan preflight lalu instance itu bisa di start", lebih dulu di core di atas fake dengan semua jalur gagalnya, lalu lewat daemon dan CLI, lalu di GUI, lalu dibuktikan dengan PostgreSQL nyata di Mac ini.

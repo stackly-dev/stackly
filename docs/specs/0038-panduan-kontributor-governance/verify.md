@@ -208,18 +208,116 @@ Tafsiran: (1) perintah, flag, exit code, dan kalimat di halaman itu dibaca dari 
 
 ### UI / manual
 
-- [ ] Baca `docs/providers/trying-locally.md` terhadap perilaku `stackly provider import`, `approve`, `revoke`, `remove`, `list`, dan `inspect` di `main` (test `apps/cli/tests/provider/trust_stacklyd.rs` membuktikan exit code dan state nya terhadap `stacklyd` nyata) → AC-12
-- [ ] Baca `GOVERNANCE.md`, `SECURITY.md`, dan `docs/providers/review.md`: istilah trust `official`, `development`, `local` ("Local, not verified"), approval `pending`, `approved`, `revoked`; tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", "safe to run", dan tidak ada klaim revocation terkini → AC-4, AC-6
+- [x] Baca `docs/providers/trying-locally.md` terhadap perilaku `stackly provider import`, `approve`, `revoke`, `remove`, `list`, dan `inspect` di `main` (test `apps/cli/tests/provider/trust_stacklyd.rs` membuktikan exit code dan state nya terhadap `stacklyd` nyata) → AC-12
+- [x] Baca `GOVERNANCE.md`, `SECURITY.md`, dan `docs/providers/review.md`: istilah trust `official`, `development`, `local` ("Local, not verified"), approval `pending`, `approved`, `revoked`; tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", "safe to run", dan tidak ada klaim revocation terkini → AC-4, AC-6
 
 ### Commands
 
-- [ ] `cargo xtask docs check` → `ok docs 26` (pemeriksaan (h) berjalan atas halaman baru) → AC-9, AC-12
-- [ ] `cargo test -p xtask --test docs_check` → 4 test lulus, termasuk `the_trying_locally_page_quotes_the_approval_statement_of_the_fixture` (kalimat izin fixture utuh di halaman, kalimat paket scaffold tidak bisa diimpor, dan larangan mengimpor paket PR sebelum review) → AC-12
-- [ ] `cargo test -p xtask --bin xtask docs::text` → lulus, termasuk `the_approval_statement_must_be_quoted_word_for_word` (kalimat yang beda satu kata menjadi satu masalah) → AC-12
-- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo fmt --all --check` → lulus
+- [x] `cargo xtask docs check` → `ok docs 26` (pemeriksaan (h) berjalan atas halaman baru) → AC-9, AC-12
+- [x] `cargo test -p xtask --test docs_check` → 4 test lulus, termasuk `the_trying_locally_page_quotes_the_approval_statement_of_the_fixture` (kalimat izin fixture utuh di halaman, kalimat paket scaffold tidak bisa diimpor, dan larangan mengimpor paket PR sebelum review) → AC-12
+- [x] `cargo test -p xtask --bin xtask docs::text` → lulus, termasuk `the_approval_statement_must_be_quoted_word_for_word` (kalimat yang beda satu kata menjadi satu masalah) → AC-12
+- [x] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo fmt --all --check` → lulus
+
+### Hasil `/check verify` 2026-11-11 (Milestone 4, commit `83b6c22c`)
+
+**Verdict: PASS.** AC-12 terpenuhi, dan bagian langkah 11 dari AC-4 dan AC-6 terpenuhi. Tidak ada kalimat di `docs/providers/trying-locally.md` yang bertentangan dengan perilaku nyata. Ada dua catatan rendah di bawah, keduanya soal kelengkapan, bukan kesalahan.
+
+Halaman itu dinilai terhadap CLI dan `stacklyd` nyata yang sama yang diverifikasi di spec 0037 Milestone 1 sampai 4 (probe di root sementara dengan catalog development, lihat `verify.md` spec 0037), bukan hanya terhadap test.
+
+- **Perintah dan flag:** `provider validate`, `import <dir>`, `import --dry-run`, `import --approve`, `inspect`, `list`, `approve`, `revoke`, `remove`, `runtime install`, dan `instance create` semuanya ada dengan nama itu. Tanpa terminal atau dengan `--json`, `approve`, `revoke`, `remove`, dan `import --approve` menolak tanpa `--yes` dan tidak mengubah apa pun (terlihat di probe pty dan non TTY Milestone 3 spec 0037). `import <dir> --yes` tanpa `--approve` memang ditolak sebagai salah pakai, dan halaman tidak menyarankannya.
+- **Yang bisa diimpor:** namespace `official`, `testing`, dan `stackly` ditolak; batas 32 provider dan 16 MiB; warning tidak menghalangi; paket scaffold `testing/<name>` dan artefak fixture ditolak; folder sumber tidak diubah dan salinan store milik Stackly sendiri. Semua cocok dengan probe Milestone 1 dan 2 spec 0037.
+- **Approval:** terikat ke `packageSha256` (semua file, `versions.json` termasuk); paket yang berubah menjadi `pending` dan preview menyebut bedanya; mengimpor byte yang sama mengembalikan keputusan lama; label `local`, publisher "<namespace> (not verified)", tidak pernah Tested; quarantine hanya dibaca. Cocok.
+- **Tabel state:** `pending` menolak install dan instance baru dengan `provider.approval_required`, `revoked` dengan `provider.revoked`, dan instance yang sudah ada tetap bisa start, stop, dan diubah. Cocok dengan gate yang dicek ulang di Milestone 1 dan 2 spec 0037.
+- **Revoke dan remove:** runtime, instance, dan data tidak disentuh; revisi di daftar `revoked` catalog ditolak, termasuk approval nya; daftar itu milik catalog versi Stackly yang berjalan dan tidak pernah diambil online. Cocok dengan probe catalog revisi 12 ber `[[revoked]]`.
+- **Exit code:** 4 untuk `provider.approval_required` dan `provider.revoked`; 3 untuk `provider.import_changed`, `provider.import_limit`, `provider.not_approved`; 2 untuk `manifest.invalid` dan `provider.import_unreadable`; 7 untuk `provider.store_failed`; 10 untuk `provider.import_not_found`. Sama dengan yang terlihat di probe CLI Milestone 3 spec 0037.
+- **Padanan GUI:** **Import Provider…**, **Approve…**, **Revoke Approval…**, dan **Remove…** sama dengan teks tombol di `ProviderTrustCopy.swift` dan snapshot Milestone 4 spec 0037. Sesi GUI nyata tidak dijalankan (`NOT_RUN`, owner user, tercatat di spec 0037).
+- **Istilah trust dan revocation:** `GOVERNANCE.md` (*Official and reviewed*, *Provider owners*), `SECURITY.md` (*Our process* langkah 4), dan `docs/providers/review.md` memakai `official`, `development`, `local` ("Local, not verified"), `pending`, `approved`, `revoked`, dan kata kerja import, approve, revoke, remove. Tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", atau "safe to run". Daftar `revoked` selalu disebut sampai ke user lewat rilis baru dan tidak pernah diambil online; "latest release" di `SECURITY.md` hanya soal versi yang didukung. `docs/providers/README.md` dan `CONTRIBUTING.md` punya link ke halaman baru. `review.md` melarang mengimpor paket PR sebelum review selesai.
+- **Perintah:** `cargo xtask docs check` → `ok docs 26`; `cargo test -p xtask --test docs_check` → 4 lulus; `cargo test -p xtask --bin xtask docs::text` → 7 lulus; clippy xtask bersih; `cargo test -p xtask` → 566 lulus, 0 gagal; `check-deps` 13 crate; `evidence check` 68 record manual, baseline valid; `cargo fmt --all --check` bersih.
+- **Probe pemeriksaan (h):** satu kata di kalimat izin halaman diganti ("show" menjadi "prove") → `cargo xtask docs check` gagal dengan exit 1 dan pesan `the approval statement of protocols/fixtures/provider/approval-statement.txt is not quoted word for word`. File dipulihkan dengan `git checkout`, lalu `ok docs 26` lagi.
+
+**Tafsiran developer yang dinilai** (ketiganya diterima): isi halaman diambil dari kode di `main` dan spec 0037 AC-14; paket `official` dicoba lewat catalog development; tidak ada klaim revocation terkini.
+
+**Catatan rendah** (tidak menggagalkan, untuk developer bila mau dirapikan):
+
+1. Baris 11, "A package that passes `stackly provider validate` with no error": syarat ini cukup, tetapi tidak persis sama dengan aturan import. `validate` juga memeriksa nama folder dan `tests/scenarios.yaml`, sedangkan import melewati cek nama folder dan tidak membaca skenario. Jadi paket yang gagal `validate` hanya karena dua hal itu tetap bisa diimpor. Kalimat langkah 1 ("The import runs them again and adds its own rules") juga sedikit terlalu kuat karena alasan yang sama.
+2. Tabel exit code tidak memuat exit 9 (`cli.confirmation_declined`, saat kamu menjawab tidak), exit 2 untuk `cli.confirmation_required` (lupa `--yes`) dan `cli.provider_invalid`, serta exit 10 untuk `catalog.provider_not_found`. Kalimat tentang `--yes` sudah menjelaskan perilakunya; hanya angkanya yang tidak tertulis.
 
 ### Acceptance-criteria coverage
 
 - AC-12 · lengkap: alur import, preview, approve, `--approve --yes`, revoke, remove, list, inspect dengan nama perintah spec 0037; padanan GUI; batas import (namespace, 32 provider, 16 MiB, validator tanpa error, artefak `https` dan `sha256` asli); paket scaffold `testing/<name>` tidak bisa diimpor; approval mengikat `packageSha256`; tabel state approval; quarantine hanya dibaca; exit code; kalimat izin kata demi kata (pemeriksaan (h)); larangan mengimpor paket PR sebelum review
 - AC-4 · bagian langkah 11: langkah 4 *Our process* menyebut daftar `revoked` catalog
 - AC-6 · bagian langkah 11: istilah trust di *Official and reviewed* dan alur revocation di *Provider owners*
+
+## Verify penuh fitur 38
+
+### Hasil `/check verify` 2026-11-11 (seluruh spec, commit `b340e3a6`)
+
+**Verdict: PASS untuk semua yang bisa dibangun dan dijalankan sesi; dua AC `BLOCKED` dengan owner user.** Dua belas dari empat belas AC terpenuhi. AC-3 dan AC-5 tidak dinilai gagal: keduanya menunggu pemilik repo. Tidak ada `specced but missing` selain `CODE_OF_CONDUCT.md` (AC-3). Kalimat ketiga **Done when** baru terpenuhi separuh, lihat di bawah.
+
+Langkah Commands Milestone 1 sampai 4 sudah dicentang di verify sebelumnya dan tidak diulang satu per satu. Yang dijalankan ulang pada `main` sesudah merge terakhir (test `xtask/tests/public_docs.rs`, record walkthrough kedua, perbaikan kalimat panduan, langkah 11, penyelarasan spec):
+
+| Perintah | Hasil |
+| --- | --- |
+| `cargo xtask docs check` | `ok docs 26` |
+| `cargo test -p xtask --no-fail-fast` | 610 lulus, 0 gagal, 8 diabaikan (`native_runtime`): unit 550, `docs_check` 8, `evidence_run` 8, `provider_check` 10, `provider_test` 7, `public_docs` 27 |
+| `cargo xtask evidence check` | 69 record manual, baseline valid |
+| `cargo deny check licenses` | `licenses ok` (peringatan `unmatched license allowance` untuk `NCSA`, sama seperti sebelumnya) |
+| `cargo metadata --no-deps` | 13 anggota workspace, satu pasangan `('MIT OR Apache-2.0', 'https://github.com/stackly-dev/stackly')` |
+| `cargo xtask provider check`, `cargo xtask catalog check` | lima baris `ok` dengan digest yang sama (`8e30…`, `389b…`, `cbb4…` untuk tiga paket resmi); `ok catalog revision 11 7f4ebd23…` |
+| `cargo xtask codegen --check`, `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo xtask check-deps`, `cargo fmt --all --check` | bersih |
+| `cargo xtask provider test providers/example` (baris kedua blok walkthrough, di `HEAD`) | `default: pass`, `slow-ready: pass`, `verdict: pass`, exit 0, report `stackly.provider-conformance/v1`; tidak ada root harness atau proses yang tersisa |
+| `gh api repos/stackly-dev/stackly/private-vulnerability-reporting` (baca saja) | `{"enabled":false}` |
+| `gh label list --repo stackly-dev/stackly` (baca saja) | lima label triage belum ada |
+
+**Verdict per AC:**
+
+| AC | Verdict | Bukti atau alasan |
+| --- | --- | --- |
+| AC-1 | terpenuhi | `LICENSE-MIT` dan `LICENSE-APACHE` tidak berubah sejak scaffold; `license` dan `repository` diwarisi 13 crate; klausa kontribusi kata demi kata di `README.md` (*License*) dan `CONTRIBUTING.md` (*Licensing*); kalimat binary pihak ketiga di keduanya; `cargo deny check licenses` lulus |
+| AC-2 | terpenuhi | sembilan bagian `CONTRIBUTING.md` berurutan, bahasa Inggris; pemeriksaan (c) bersih |
+| AC-3 | `BLOCKED` | `reason`: `CODE_OF_CONDUCT.md` belum ada; butuh alamat kontak I1 dan teks resmi Contributor Covenant 2.1, yang tidak boleh ditulis dari ingatan. `owner`: user |
+| AC-4 | terpenuhi | enam bagian `SECURITY.md`, tujuh langkah proses dengan kalimat `revoked` di langkah 4; `config.yml` dengan `blank_issues_enabled: false` dan link advisory |
+| AC-5 | `BLOCKED` | `reason`: private vulnerability reporting masih mati (`{"enabled":false}`). `owner`: user |
+| AC-6 | terpenuhi | delapan bagian `GOVERNANCE.md`, lima peran, tabel triage, istilah trust spec 0037; pemegang peran memakai default I2 `@ojiepermana`, menunggu konfirmasi user |
+| AC-7 | terpenuhi untuk file | tiga form, `config.yml`, template PR dengan lima bagian; label form hanya dari tabel triage. Lima label di GitHub belum dibuat (langkah manual, owner user); form tetap berfungsi tanpa label |
+| AC-8 | terpenuhi | dua record manual `PASS` (`sourceCommit` `2fea6e6b` dan `23300da1`); run penuh checker di Milestone 3; harness contoh lulus lagi di `HEAD` |
+| AC-9 | terpenuhi | `ok docs 26`; test fixture rusak per pemeriksaan (a) sampai (h); `docs_check` 8 test, termasuk exit 2 untuk tabel `stackly` yang tidak terbaca dan bukti bahwa `docs check` tidak menulis apa pun di repo |
+| AC-10 | terpenuhi | tiga halaman rujukan; pemeriksaan (d) wajib dan bersih |
+| AC-11 | terpenuhi | lima halaman panduan; kalimat yang dulu tidak cocok (Milestone 2, butir 1 sampai 6) sudah diperbaiki, termasuk `loadable` dan `--scenario` yang tidak dikenal |
+| AC-12 | terpenuhi | Milestone 4; dua catatan rendah di sana belum dikerjakan dan tetap terbuka |
+| AC-13 | terpenuhi | tiga `LICENSE-NOTICES.md`; digest paket dan ledger revision tidak berubah |
+| AC-14 | terpenuhi | semua dokumen publik bahasa Inggris (`public_docs` juga memeriksa kata Indonesia yang umum); `README.md` tanpa "early scaffold", dengan `Contributing`, `Security`, `License` |
+
+**Done when, kalimat demi kalimat:**
+
+1. *Kontributor yang mengikuti panduan dari repository bersih bisa menjalankan validator dan harness pada contoh provider.* **Terpenuhi.** `cargo xtask docs walkthrough` menjalankan empat baris blok quick start di clone baru dan lulus tiga kali (dua record, satu run checker). Record terbaru ada di `23300da1`. Sesudah commit itu, di luar `docs/specs/` dan `docs/scope/`, hanya fix AC-17 fitur 37 (`crates/core/src/catalog/import.rs`, `apps/daemon/src/map/create.rs`, satu file test) dan file record itu sendiri yang berubah; jalur walkthrough (scaffold, validator, harness, paket contoh) tidak tersentuh. Jadi record itu cukup dekat dengan `main`, dan run penuh tidak diulang.
+2. *Lisensi core sudah diputuskan dan tercatat.* **Terpenuhi.** `MIT OR Apache-2.0` tercatat di empat tempat AC-1. Keputusan OQ-013 diambil lead atas delegasi user (log koordinasi scope 06, 2026-11-11) dan dilaporkan ke user; Follow-up OQ-013 di spec 0001 sudah ditandai selesai. Karena lewat delegasi, user masih bisa membatalkannya.
+3. *Kanal security disclosure privat dan proses advisory tersedia.* **Separuh terpenuhi.** Proses advisory tertulis lengkap di `SECURITY.md` (terpenuhi). Kanal privatnya belum tersedia: private vulnerability reporting di repo masih mati, jadi tombol dan URL `security/advisories/new` yang disebut `SECURITY.md` belum bisa dipakai orang luar. Spec sendiri berkata kanal belum boleh disebut tersedia selama AC-5 belum aktif. Ini bukan kegagalan build; ini satu langkah pemilik repo. `SECURITY.md` belum ada di `origin/main` (`main` lokal 223 commit di depan), jadi belum ada klaim publik yang salah. Saran: aktifkan fitur itu sebelum atau bersamaan dengan push pertama yang membawa `SECURITY.md`.
+
+**Trace:** REQ-034 → AC-2, AC-7, AC-8, AC-10, AC-11. AC-034 → AC-8 dan dua record manual ber `covers` `AC-034`, `REQ-034`. OQ-013 → AC-1, K1. JOURNEY-07 → AC-8, AC-12. PRD bagian 39 → AC-3 sampai AC-6, AC-11, AC-13. Setiap AC selain AC-3 dan AC-5 punya test bertanda `covers` di `xtask/tests/public_docs.rs`, `xtask/tests/docs_check.rs`, atau test unit `xtask/src/docs/`.
+
+**Follow-up spec lain yang dijawab spec 0038** (dicek di `main`): spec 0001 (OQ-013 dan file governance, ditandai selesai), spec 0008 (bagian fitur 38 ditandai selesai, rujukan CLI umum tetap milik fitur 66), spec 0009 (`LICENSE-NOTICES.md` wajib di luar namespace `testing`). Yang masih terbuka dan bukan milik build ini: fitur 66, fitur 60, peninjauan hukum distribusi binary, `/sync` (`AGENTS.md` belum memuat `cargo xtask docs check` dan `docs walkthrough` di Commands), dan `CODEOWNERS` saat ada maintainer kedua.
+
+**`BLOCKED`, owner user** (tidak dijalankan sesi mana pun; empat kotak di Milestone 1 tetap terbuka):
+
+| Langkah | `reason` | `owner` |
+| --- | --- | --- |
+| AC-3, `CODE_OF_CONDUCT.md` | butuh I1 dan teks resmi Contributor Covenant 2.1 dengan URL sumber dan SHA-256 nya | user |
+| AC-5, private vulnerability reporting | pengaturan repo GitHub; balasan `gh api` masih `{"enabled":false}` | user |
+| Lima label triage | `gh label create` mengubah repo GitHub | user |
+| Community Standards | hanya bisa dicek sesudah push, dan push adalah keputusan pemilik repo | user |
+| Konfirmasi I2 | handle `@ojiepermana` di `GOVERNANCE.md` adalah default | user |
+
+**Catatan rendah** (tidak menggagalkan AC):
+
+1. Dua catatan Milestone 4 atas `docs/providers/trying-locally.md` masih berlaku: syarat "passes `stackly provider validate`" cukup tetapi tidak persis sama dengan aturan import, dan tabel exit code tidak memuat exit 9, exit 2 untuk `--yes` yang terlupa, dan exit 10 untuk `catalog.provider_not_found`.
+2. `CONTRIBUTING.md` baris 15 berkata proyek sudah mengadopsi Contributor Covenant 2.1, sementara `CODE_OF_CONDUCT.md` belum ada. Kalimat itu benar begitu AC-3 selesai; sampai saat itu pembaca tidak punya file untuk dibuka.
+3. Dua test `docs::walkthrough` tentang interupsi gagal bila `cargo test` dijalankan dari job latar belakang yang mengabaikan SIGINT (`nohup ... &` dari shell non interaktif): baris `sleep 30` mewarisi SIGINT yang diabaikan, jadi batas 20 detik terlewati. Dari terminal biasa keduanya lulus. Ini sifat lingkungan run, bukan cacat perintah, tetapi layak diketahui siapa pun yang menjalankan suite ini di latar belakang.
+4. `runtime::ports::tests::allocated_ports_differ_and_can_be_bound_again` (spec 0003, bukan fitur 38) gagal sekali lalu lulus saat diulang: port yang baru dilepas sempat diambil test sesi lain yang berjalan bersamaan. Flake lama, di luar lingkup fitur ini.
+
+**Tindak lanjut catatan 1 dan 2 (2026-11-11):** `CONTRIBUTING.md` kini berkata proyek akan memakai Contributor Covenant 2.1 dan filenya ditambahkan begitu kontak pelaporan tersedia, dengan harapan perilaku dan rujukan ke core maintainer di `GOVERNANCE.md#roles`, tanpa link ke `CODE_OF_CONDUCT.md`. `trying-locally.md` menyebut dua beda import dengan `validate` (tanpa cek nama folder, `NameCheck::Skip` di `crates/core/src/catalog/local/load.rs`; tanpa `tests/scenarios.yaml`, `ImportCheck::new` di `rules.rs`), dan tabel exit code memuat `cli.provider_invalid` dan `cli.confirmation_required` (2), `cli.confirmation_declined` (9), serta `catalog.provider_not_found` (10). Tidak ada test yang mengunci kalimat lama.
+
+### Acceptance-criteria coverage
+
+- AC-1, AC-2, AC-4, AC-6 sampai AC-14 · terpenuhi (tabel di atas)
+- AC-3, AC-5 · `BLOCKED`, owner user
