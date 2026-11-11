@@ -647,3 +647,69 @@ async fn a_store_that_cannot_be_written_answers_the_fixed_text_without_a_path() 
         assert!(!value.contains("/Users/"), "{key}: {value}");
     }
 }
+
+// covers: AC-3, AC-10 (spec 0037; finding 3 of the milestone 1 verify)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_import_of_the_same_bytes_repairs_a_changed_store_copy_and_keeps_the_decision() {
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = import(&api.client, &dir).await;
+    approve(&api.client, &digest).await;
+    let copy = site
+        .prepared
+        .layout()
+        .provider_import_dir(&digest.parse().expect("a digest"))
+        .join("versions.json");
+    let bytes = std::fs::read(&copy).expect("the copy reads");
+    std::fs::write(&copy, b"{}").expect("the copy can be changed");
+
+    // A restart loads the changed copy as an invalid local entry.
+    drop(api);
+    daemon
+        .shutdown(
+            stackly_protocol::events::ShutdownReason::Requested,
+            std::future::pending(),
+        )
+        .await;
+    let _daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let summary = |reply: Reply| match reply {
+        Reply::CatalogListProviders(list) => list
+            .items
+            .into_iter()
+            .find(|item| item.provider == LOCAL)
+            .expect("the local entry is listed"),
+        other => panic!("not a list reply: {other:?}"),
+    };
+    let broken = summary(
+        api.client
+            .call(Call::CatalogListProviders)
+            .await
+            .expect("lists"),
+    );
+    assert_eq!(
+        broken.state,
+        stackly_protocol::catalog::CatalogEntryState::Invalid
+    );
+
+    let digest_again = import(&api.client, &dir).await;
+    assert_eq!(digest_again, digest);
+    assert_eq!(std::fs::read(&copy).expect("the copy reads"), bytes);
+    let repaired = summary(
+        api.client
+            .call(Call::CatalogListProviders)
+            .await
+            .expect("lists"),
+    );
+    assert_eq!(
+        repaired.approval,
+        Some(stackly_protocol::provider::ApprovalState::Approved),
+        "the decision on these bytes stays"
+    );
+    assert_ne!(
+        repaired.state,
+        stackly_protocol::catalog::CatalogEntryState::Invalid
+    );
+}
