@@ -1,0 +1,12 @@
+# Every scenario rule broken once against providers/fake (spec 0036, AC-3),
+# for provider_check and as a fuzz seed.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+  - name: default
+  - name: Upper
+  - name: secret
+    settings: { authToken: "local:instance/0192f000-0000-7000-8000-000000000001/x" }
+  - name: out-of-range
+    settings: { readyDelayMs: -1, nope: 1 }
+    expect: create_fails

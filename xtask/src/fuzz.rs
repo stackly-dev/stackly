@@ -62,6 +62,15 @@ const PROVIDER_PACKAGES: [(&str, &str); 4] = [
 const PROVIDER_FILE_MAX_LEN: usize = 262_144;
 /// The longest settings schema input: the 128 KiB file limit.
 const SETTINGS_SCHEMA_MAX_LEN: usize = 131_072;
+/// The longest `tests/scenarios.yaml` input: the 64 KiB file limit (spec
+/// 0036).
+const SCENARIOS_MAX_LEN: usize = 65_536;
+/// The packages whose `tests/scenarios.yaml` seeds `provider_scenarios`
+/// when they have one (spec 0036, AC-3).
+const SCENARIO_PACKAGES: [(&str, &str); 2] =
+    [("example", "providers/example"), ("fake", "providers/fake")];
+/// The core fixtures that seed `provider_scenarios` besides the packages.
+const SCENARIO_FIXTURES: &str = "crates/core/tests/fixtures/scenarios";
 /// The longest manifest field the interpolation target tries.
 const INTERPOLATION_MAX_LEN: usize = 4096;
 /// The `nats-readiness` transcripts and their index, the seed source of
@@ -143,6 +152,12 @@ const TARGETS: &[Target] = &[
         crate_dir: "crates/core",
         max_len: SETTINGS_SCHEMA_MAX_LEN,
         seeds: provider_settings_schema_seeds,
+    },
+    Target {
+        name: "provider_scenarios",
+        crate_dir: "crates/core",
+        max_len: SCENARIOS_MAX_LEN,
+        seeds: provider_scenarios_seeds,
     },
     Target {
         name: "nats_readiness_protocol",
@@ -667,6 +682,35 @@ fn provider_settings_schema_seeds(root: &Path) -> Result<Vec<Seed>> {
             })
         })
         .collect()
+}
+
+/// `provider_scenarios`: the `tests/scenarios.yaml` of the example and
+/// fake packages, where they have one, then every `.yaml` file of the core
+/// scenario fixtures in name order.
+fn provider_scenarios_seeds(root: &Path) -> Result<Vec<Seed>> {
+    let mut seeds = Vec::new();
+    for (name, dir) in SCENARIO_PACKAGES {
+        let path = format!("{dir}/tests/scenarios.yaml");
+        if root.join(&path).is_file() {
+            seeds.push(Seed {
+                name: format!("{name}.scenarios.yaml"),
+                bytes: read(root, &path)?,
+            });
+        }
+    }
+    let mut files: Vec<String> = fs::read_dir(root.join(SCENARIO_FIXTURES))
+        .with_context(|| format!("cannot read {SCENARIO_FIXTURES}"))?
+        .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
+        .collect::<Result<_>>()?;
+    files.retain(|file| file.ends_with(".yaml"));
+    files.sort();
+    for file in files {
+        seeds.push(Seed {
+            name: format!("fixture.{file}"),
+            bytes: read(root, &format!("{SCENARIO_FIXTURES}/{file}"))?,
+        });
+    }
+    Ok(seeds)
 }
 
 /// Reads a repository file.

@@ -20,11 +20,12 @@ use stackly_core::runtime::fuzzing as runtime_fuzzing;
 type Harness = fn(&[u8]);
 
 /// Every fuzz target of this crate and its harness.
-const TARGETS: [(&str, Harness); 7] = [
+const TARGETS: [(&str, Harness); 8] = [
     ("provider_manifest", fuzzing::manifest),
     ("provider_template", fuzzing::template),
     ("provider_interpolation", fuzzing::interpolation),
     ("provider_settings_schema", fuzzing::settings_schema),
+    ("provider_scenarios", fuzzing::scenarios),
     ("nats_readiness_protocol", fuzzing::nats_readiness_protocol),
     ("runtime_archive", runtime_fuzzing::archive),
     ("runtime_macho", runtime_fuzzing::macho),

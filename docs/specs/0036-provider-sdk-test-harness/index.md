@@ -1,7 +1,7 @@
 # 0036. Provider SDK dan test harness
 
 **Date**: 2026-11-11
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
