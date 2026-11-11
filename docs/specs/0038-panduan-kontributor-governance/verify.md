@@ -79,20 +79,20 @@ Tafsiran: Build plan langkah 8 berkata pemeriksaan (d) "menjadi wajib", sedangka
 
 ### UI / manual
 
-- [ ] Buka `docs/providers/manifest-reference.md` → bahasa Inggris; bagian per blok manifest (`metadata`, `compatibility`, `runtime`, `capabilities`, `resources`, `configFiles`, `lifecycle` dengan command, langkah initialize, `stop`, `reload`, `readiness` dan `health` dengan empat jenis probe, `timeouts`, `logs`, `backup`, `permissions`, `connection`, `openWith`, `remedies`) dan tabel token; setiap field dengan arti, wajib atau tidak, dan batasnya sesuai spec 0009, spec 0034 (`remedies`), dan spec 0070 (`openWith`); `apiVersion` menyebut `SUPPORTED_API_VERSIONS` dan `unsupported_api_version`; link ke `schemas/provider/provider.v1alpha1.schema.json` → AC-10, AC-14
-- [ ] Buka `docs/providers/settings-reference.md` → root, field, item array, `x-stackly` (`apply`, `visibility`, `secret`, `printableOnly`, `managed`, `key`), dan cara daemon memeriksa nilai, sesuai spec 0009 *Settings schema*; link ke `schemas/provider/settings.v1alpha1.schema.json` → AC-10, AC-14
-- [ ] Buka `docs/providers/versions-reference.md` → root, artefak dengan tiga status (`available`, `blocked`, `fixture`) dan field yang wajib serta terlarang per status, `dependencies`, dan record `compatibility`, sesuai spec 0009 *`versions.json`* dan `crates/core/src/provider/versions.rs`; kalimat bahwa paket official tidak menulis file ini dengan tangan (`cargo xtask codegen`); link ke `schemas/provider/versions.v1.schema.json` → AC-10, AC-14
-- [ ] Setiap blok contoh di ketiga halaman menyebut file sumbernya dan cocok (atau berupa potongan yang disingkat) dengan file itu di `providers/` (`postgresql`, `nats`, `traefik`, `example`); tidak ada manifest karangan, dan tidak ada perintah yang belum ada (`cargo xtask provider test`, alur import fitur 37) → AC-10
+- [x] Buka `docs/providers/manifest-reference.md` → bahasa Inggris; bagian per blok manifest (`metadata`, `compatibility`, `runtime`, `capabilities`, `resources`, `configFiles`, `lifecycle` dengan command, langkah initialize, `stop`, `reload`, `readiness` dan `health` dengan empat jenis probe, `timeouts`, `logs`, `backup`, `permissions`, `connection`, `openWith`, `remedies`) dan tabel token; setiap field dengan arti, wajib atau tidak, dan batasnya sesuai spec 0009, spec 0034 (`remedies`), dan spec 0070 (`openWith`); `apiVersion` menyebut `SUPPORTED_API_VERSIONS` dan `unsupported_api_version`; link ke `schemas/provider/provider.v1alpha1.schema.json` → AC-10, AC-14
+- [x] Buka `docs/providers/settings-reference.md` → root, field, item array, `x-stackly` (`apply`, `visibility`, `secret`, `printableOnly`, `managed`, `key`), dan cara daemon memeriksa nilai, sesuai spec 0009 *Settings schema*; link ke `schemas/provider/settings.v1alpha1.schema.json` → AC-10, AC-14
+- [x] Buka `docs/providers/versions-reference.md` → root, artefak dengan tiga status (`available`, `blocked`, `fixture`) dan field yang wajib serta terlarang per status, `dependencies`, dan record `compatibility`, sesuai spec 0009 *`versions.json`* dan `crates/core/src/provider/versions.rs`; kalimat bahwa paket official tidak menulis file ini dengan tangan (`cargo xtask codegen`); link ke `schemas/provider/versions.v1.schema.json` → AC-10, AC-14
+- [x] Setiap blok contoh di ketiga halaman menyebut file sumbernya dan cocok (atau berupa potongan yang disingkat) dengan file itu di `providers/` (`postgresql`, `nats`, `traefik`, `example`); tidak ada manifest karangan, dan tidak ada perintah yang belum ada (`cargo xtask provider test`, alur import fitur 37) → AC-10
 
 ### Commands
 
-- [ ] `cargo xtask docs check` → `ok docs 20`, exit 0 (17 file Milestone 1 ditambah tiga halaman rujukan) → AC-9, AC-10, AC-14
-- [ ] `cargo test -p xtask --bin xtask docs::schema` → test lulus: fixture bersih tanpa masalah, halaman yang hilang adalah satu masalah walau `docs/providers/README.md` belum ada, property yang tidak disebut dan nilai enum yang tidak disebut masing masing satu baris dengan namanya, dan penelusuran hanya posisi schema → AC-9, AC-10
-- [ ] `cargo test -p xtask --test docs_check` → 2 test lulus; repo nyata bersih dengan (d) wajib → AC-9, AC-10
-- [ ] Tambah sementara property `ticket` dengan `enum: ["open", "wontfix"]` ke `$defs.Blocked` di `schemas/provider/versions.v1.schema.json`, jalankan `cargo xtask docs check` → tiga baris `docs/providers/versions-reference.md:1: ...` untuk `open`, `wontfix`, dan `ticket`, exit 1; kembalikan dengan `git checkout -- schemas/provider/versions.v1.schema.json` → AC-10
-- [ ] Pindahkan sementara `docs/providers/settings-reference.md` ke luar repo → `docs/providers/settings-reference.md:1: reference page is missing; it must cover `schemas/provider/settings.v1alpha1.schema.json`` ditambah dua baris link dari dua halaman lain, exit 1; kembalikan → AC-10
-- [ ] `cargo xtask codegen --check` → bersih, jadi nama yang diperiksa adalah schema hasil codegen saat ini → AC-10
-- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
+- [x] `cargo xtask docs check` → `ok docs 20`, exit 0 (17 file Milestone 1 ditambah tiga halaman rujukan) → AC-9, AC-10, AC-14
+- [x] `cargo test -p xtask --bin xtask docs::schema` → test lulus: fixture bersih tanpa masalah, halaman yang hilang adalah satu masalah walau `docs/providers/README.md` belum ada, property yang tidak disebut dan nilai enum yang tidak disebut masing masing satu baris dengan namanya, dan penelusuran hanya posisi schema → AC-9, AC-10
+- [x] `cargo test -p xtask --test docs_check` → 2 test lulus; repo nyata bersih dengan (d) wajib → AC-9, AC-10
+- [x] Tambah sementara property `ticket` dengan `enum: ["open", "wontfix"]` ke `$defs.Blocked` di `schemas/provider/versions.v1.schema.json`, jalankan `cargo xtask docs check` → tiga baris `docs/providers/versions-reference.md:1: ...` untuk `open`, `wontfix`, dan `ticket`, exit 1; kembalikan dengan `git checkout -- schemas/provider/versions.v1.schema.json` → AC-10
+- [x] Pindahkan sementara `docs/providers/settings-reference.md` ke luar repo → `docs/providers/settings-reference.md:1: reference page is missing; it must cover `schemas/provider/settings.v1alpha1.schema.json`` ditambah dua baris link dari dua halaman lain, exit 1; kembalikan → AC-10
+- [x] `cargo xtask codegen --check` → bersih, jadi nama yang diperiksa adalah schema hasil codegen saat ini → AC-10
+- [x] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
 
 ### Acceptance-criteria coverage
 
@@ -108,20 +108,56 @@ Ditambahkan sesudah `cargo xtask provider test` masuk `main` (`0cc879af`, spec 0
 
 #### UI / manual
 
-- [ ] Buka `docs/providers/README.md` → untuk siapa; prasyarat (Mac Apple Silicon macOS 27, rustup dengan toolchain `rust-toolchain.toml`, Xcode Command Line Tools, tanpa unduhan runtime); komentar `<!-- docs-walkthrough -->` tepat di atas satu blok `bash` berisi persis empat perintah `cargo xtask provider check providers/example`, `cargo xtask provider test providers/example`, `cargo xtask provider new mytool`, `cargo xtask provider test providers/mytool`; satu kalimat letak report (`target/provider-test/<runId>/report.json`, baris terakhir stderr); tabel halaman lain; alur tujuh langkah PRD 39 → AC-8, AC-11
-- [ ] Buka `docs/providers/authoring.md` → layout paket spec 0009; `cargo xtask provider new <name>` menyalin `providers/example/` menjadi `testing/<name>` yang langsung valid; urutan mengisi `provider.yaml`, settings schema, template, `tests/scenarios.yaml` (satu satunya file `tests/` yang dibaca; tanpa file itu satu skenario `default`); bagian **Moving to the official catalog** dengan entri inventaris (`cargo xtask runtime pin`), ganti `metadata.id` dan `software`, `cargo xtask codegen`, `PROVIDER_WORDS`, fixture form `create_form_fixtures`, test native per line, `[[provider]]` di `providers/catalog.toml`, `cargo xtask provider freeze` (sesudah `[[provider]]`, karena freeze menolak paket di luar catalog), `LICENSE-NOTICES.md`, dan kenaikan `metadata.revision` → AC-11
-- [ ] Buka `docs/providers/testing.md` → `cargo xtask provider check` tanpa daemon dan `stackly provider validate <dir>` lewat daemon (exit 0 atau 2 `cli.provider_invalid`, hasil sama); `error` dan `warning`; origin `package`, `authoring`, `scenarios`; `loadable` dan `publishable`; `cargo xtask provider test` dengan `--line`, `--scenario`, `--report`, `--keep`; namespace `official` dan `testing` saja; setting fake server (`readyDelayMs`, `crashAfterMs`, `logLinesPerSecond`, …); report `stackly.provider-conformance/v1`; exit 0, 1, 2; `--cleanup`; root sementara dan daemon sendiri; bukti fixture dan native → AC-11
-- [ ] Buka `docs/providers/compatibility.md` → `current` dan `deprecated` (`deprecated_api_version`), `unsupported_api_version` ditolak tanpa lifecycle, tiga kelas perubahan, corpus beku, deprecation, migrasi `apiVersion` baru, sesuai spec 0036 *Kebijakan kompatibilitas* → AC-11
-- [ ] Buka `docs/providers/review.md` → peringatan membaca diff sebelum menjalankan apa pun; validator; report harness; bukti native dengan tiga perintah (`native_runtime`, `provider_conformance`, `native_launchd` hanya untuk handover); corpus `cargo xtask provider freeze`; sumber dan lisensi; keamanan (executable dari runtime, tanpa secret di argv, loopback, tanpa skrip); revision tidak berubah sesudah merge; `HANDOVER_PROVEN` hanya lewat test native launchd → AC-11
-- [ ] `CONTRIBUTING.md` bagian 4 punya blok `cargo xtask provider test providers/<name>`, dan bagian 6 berisi lima langkah ringkas dengan link ke `docs/providers/README.md`, `authoring.md`, `testing.md`, `review.md` → AC-2
-- [ ] `README.md` bagian `Contributing` menautkan `docs/providers/README.md`, dan baris Layout `docs/` menyebut `docs/providers/`; `GOVERNANCE.md` bagian 3 menautkan `review.md` dan bagian 6 menautkan `compatibility.md`; `providers/example/README.md` menautkan `docs/providers/README.md`; template PR punya kotak `cargo xtask provider test` di `Checks I ran locally` → AC-2, AC-6, AC-7, AC-14
-- [ ] Tidak ada halaman yang menyebut alur import fitur 37 atau `stackly provider test` → AC-11
+- [x] Buka `docs/providers/README.md` → untuk siapa; prasyarat (Mac Apple Silicon macOS 27, rustup dengan toolchain `rust-toolchain.toml`, Xcode Command Line Tools, tanpa unduhan runtime); komentar `<!-- docs-walkthrough -->` tepat di atas satu blok `bash` berisi persis empat perintah `cargo xtask provider check providers/example`, `cargo xtask provider test providers/example`, `cargo xtask provider new mytool`, `cargo xtask provider test providers/mytool`; satu kalimat letak report (`target/provider-test/<runId>/report.json`, baris terakhir stderr); tabel halaman lain; alur tujuh langkah PRD 39 → AC-8, AC-11
+- [x] Buka `docs/providers/authoring.md` → layout paket spec 0009; `cargo xtask provider new <name>` menyalin `providers/example/` menjadi `testing/<name>` yang langsung valid; urutan mengisi `provider.yaml`, settings schema, template, `tests/scenarios.yaml` (satu satunya file `tests/` yang dibaca; tanpa file itu satu skenario `default`); bagian **Moving to the official catalog** dengan entri inventaris (`cargo xtask runtime pin`), ganti `metadata.id` dan `software`, `cargo xtask codegen`, `PROVIDER_WORDS`, fixture form `create_form_fixtures`, test native per line, `[[provider]]` di `providers/catalog.toml`, `cargo xtask provider freeze` (sesudah `[[provider]]`, karena freeze menolak paket di luar catalog), `LICENSE-NOTICES.md`, dan kenaikan `metadata.revision` → AC-11
+- [x] Buka `docs/providers/testing.md` → `cargo xtask provider check` tanpa daemon dan `stackly provider validate <dir>` lewat daemon (exit 0 atau 2 `cli.provider_invalid`, hasil sama); `error` dan `warning`; origin `package`, `authoring`, `scenarios`; `loadable` dan `publishable`; `cargo xtask provider test` dengan `--line`, `--scenario`, `--report`, `--keep`; namespace `official` dan `testing` saja; setting fake server (`readyDelayMs`, `crashAfterMs`, `logLinesPerSecond`, …); report `stackly.provider-conformance/v1`; exit 0, 1, 2; `--cleanup`; root sementara dan daemon sendiri; bukti fixture dan native → AC-11
+- [x] Buka `docs/providers/compatibility.md` → `current` dan `deprecated` (`deprecated_api_version`), `unsupported_api_version` ditolak tanpa lifecycle, tiga kelas perubahan, corpus beku, deprecation, migrasi `apiVersion` baru, sesuai spec 0036 *Kebijakan kompatibilitas* → AC-11
+- [x] Buka `docs/providers/review.md` → peringatan membaca diff sebelum menjalankan apa pun; validator; report harness; bukti native dengan tiga perintah (`native_runtime`, `provider_conformance`, `native_launchd` hanya untuk handover); corpus `cargo xtask provider freeze`; sumber dan lisensi; keamanan (executable dari runtime, tanpa secret di argv, loopback, tanpa skrip); revision tidak berubah sesudah merge; `HANDOVER_PROVEN` hanya lewat test native launchd → AC-11
+- [x] `CONTRIBUTING.md` bagian 4 punya blok `cargo xtask provider test providers/<name>`, dan bagian 6 berisi lima langkah ringkas dengan link ke `docs/providers/README.md`, `authoring.md`, `testing.md`, `review.md` → AC-2
+- [x] `README.md` bagian `Contributing` menautkan `docs/providers/README.md`, dan baris Layout `docs/` menyebut `docs/providers/`; `GOVERNANCE.md` bagian 3 menautkan `review.md` dan bagian 6 menautkan `compatibility.md`; `providers/example/README.md` menautkan `docs/providers/README.md`; template PR punya kotak `cargo xtask provider test` di `Checks I ran locally` → AC-2, AC-6, AC-7, AC-14
+- [x] Tidak ada halaman yang menyebut alur import fitur 37 atau `stackly provider test` → AC-11
 
 #### Commands
 
-- [ ] `cargo xtask docs check` → `ok docs 25`, exit 0 (20 file sebelumnya ditambah lima halaman baru) → AC-2, AC-9, AC-11
-- [ ] `cargo xtask provider check` → lima baris `ok` dengan digest yang sama seperti di `main` (README paket contoh tidak masuk digest) → AC-11
-- [ ] `cargo test -p xtask` → lulus, termasuk test scaffold yang menyalin `providers/example/README.md` → AC-11
+- [x] `cargo xtask docs check` → `ok docs 25`, exit 0 (20 file sebelumnya ditambah lima halaman baru) → AC-2, AC-9, AC-11
+- [x] `cargo xtask provider check` → lima baris `ok` dengan digest yang sama seperti di `main` (README paket contoh tidak masuk digest) → AC-11
+- [x] `cargo test -p xtask` → lulus, termasuk test scaffold yang menyalin `providers/example/README.md` → AC-11
+
+### Hasil `/check verify` 2026-11-11 (Milestone 2, commit `9a9e97fe`)
+
+**Verdict: PASS.** Semua langkah UI / manual dan Commands di bagian ini dan di *Langkah 9* dikerjakan dan lulus, dengan `CARGO_PROFILE_DEV_DEBUG=0 CARGO_INCREMENTAL=0`. Tidak ada temuan FAIL. Catatan: `9a9e97fe` adalah `main` saat verify; kode fitur 37 di dalamnya tidak dibaca.
+
+| AC | Verdict | Bukti |
+| --- | --- | --- |
+| AC-2 | terpenuhi | `CONTRIBUTING.md` bagian *Build and check locally* memuat blok `cargo xtask provider test providers/<name>`; bagian *Contributing a provider* berisi lima langkah dengan link ke `README.md`, `authoring.md`, `testing.md`, `review.md` |
+| AC-9 (d) | terpenuhi | `cargo xtask docs check` → `ok docs 25`; `docs::schema` 5 test; `docs_check` 3 test; dua probe di bawah |
+| AC-10 | terpenuhi | ketiga halaman rujukan ada; probe schema di bawah gagal dengan nama yang hilang |
+| AC-11 | terpenuhi | lima halaman panduan ada dengan isi *Dokumen provider*; isinya dicocokkan dengan perilaku fitur 36 (di bawah) |
+| AC-14 | terpenuhi | delapan halaman berbahasa Inggris, masing masing satu H1, tanpa HTML inline; `docs check` (g) bersih |
+
+Perintah lain: `cargo xtask codegen --check` (20 file), `cargo xtask provider check` (lima baris `ok`, digest sama dengan sebelumnya), `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask` (535 unit test plus integrasi), `cargo xtask check-deps`, `cargo fmt --all --check`: semua bersih.
+
+**Probe schema:** property `ticket` dengan `enum: ["open", "wontfix"]` ditambahkan ke `$defs.Blocked` → tiga baris `docs/providers/versions-reference.md:1: ...` untuk `open`, `wontfix`, dan `ticket`, exit 1; dikembalikan. `settings-reference.md` dipindah → baris `reference page is missing; it must cover ...` ditambah lima baris link rusak (bukan dua seperti di teks langkah, karena sekarang lima tempat menautkannya), exit 1; dikembalikan, `ok docs 25` lagi.
+
+**Uji petik nilai di halaman rujukan terhadap `crates/core/src/provider/`** (semua cocok): batas `timeouts` dan default nya (`timeouts.rs`: init 120 dan 1 sampai 1800, readiness 60 dan 1 sampai 600, stop 30 dan 1 sampai 600, reload 30 dan 1 sampai 300), `health` dan `readiness` (interval, attempt timeout, `failureThreshold`), `successExitCodes` (paling banyak 8, default `[0]`), enam nilai `category`, 256 KiB manifest, 1 MiB `versions.json`, 32 template, 16 endpoint dan 16 config file, 64 karakter `displayName`, `versionCheck.timeoutSeconds` 1 sampai 60 default 15, batas `connection` (8, 64, 512), `openWith` (8, 48, 512, 4, 32, 16, 1024), `remedies` (8, 80, 6, 300, 500, 200), nama probe native `nats-readiness` dan `traefik-routes`, tiga status artefak, nilai `apply` dan `visibility`. Setiap blok contoh di ketiga halaman menyebut file sumbernya; isinya potongan yang dipadatkan dari file itu.
+
+**Isi panduan terhadap perilaku fitur 36 yang sudah diverifikasi:** cocok untuk `cargo xtask provider new`, `check`, `test`, `freeze`, `stackly provider validate` (exit 0 dan 2), `--line`, `--scenario`, `--report`, `--keep`, `--cleanup`, path dan field report, exit 0, 1, 2, namespace `official` dan `testing`, aturan `tests/scenarios.yaml`, corpus beku, `not frozen`, `PROVIDER_WORDS`, fixture form, dan syarat `HANDOVER_PROVEN`. Tidak ada halaman yang menyebut alur import atau `stackly provider test`.
+
+**Tafsiran developer yang dinilai** (semua diterima):
+
+- Pemeriksaan (d) selalu jalan: diterima; probe halaman hilang membuktikannya.
+- `authoring.md` menaruh `provider freeze` sesudah `[[provider]]`: diterima, karena `freeze` memang menolak paket di luar catalog (probe `providers/traefik` di verify spec 0036). Urutan di spec 0038 perlu dibalik.
+- Kotak `cargo xtask provider test` di template PR: diterima.
+
+**Kalimat yang tidak cocok dengan perilaku nyata** (rendah, tidak menggagalkan AC):
+
+1. `testing.md`, bagian *The conformance harness*: "Per scenario it validates the package, finds it in the catalog, installs the runtime". Validasi dan pemasangan runtime terjadi sekali per run, saat root disiapkan; per skenario harness hanya memeriksa runtime itu terpasang.
+2. `testing.md`, tabel *Exit codes*: tidak menyebut exit 130. Ctrl+C pertama menghentikan run secara tertib, menulis report `interrupted: true`, membersihkan root, dan keluar 130.
+3. `testing.md`, *Findings*: "loadable: no finding has origin `package`". Kalimat ini cocok dengan kode hari ini, tetapi keputusan lead untuk `dev-f36-fix` (`loadable()` dan `publishable()` hanya menghitung `error`) akan membuatnya salah. Perlu diubah bersama fix itu. Hal yang sama untuk `--scenario` dengan nama yang tidak dikenal.
+4. `testing.md`, `--keep` dan `--cleanup`: tidak menyebut bahwa `--cleanup` juga menghapus folder yang disimpan `--keep` (run nya sudah mati), dan bahwa baris `kept` mencetak path dengan `$TMPDIR`.
+5. `authoring.md`: kewajiban `PROVIDER_WORDS` dan fixture form hanya ditulis di *Moving to the official catalog*. Keduanya sudah berlaku begitu ada folder baru di `providers/`, juga untuk paket `testing`. Probe: `cargo xtask provider new probetool` lalu `cargo test -p xtask` gagal dengan `probetool is not listed`. Saran: satu kalimat di *Start from the example*.
+6. `review.md`, *Native evidence*: butir pertama berkata `cargo xtask codegen` menulis record kompatibilitas sesudah spike lulus, tanpa menyebut `cargo xtask runtime record` (alur dua commit spec 0003) yang menyalin record itu ke `evidence/runtime/` lebih dulu.
+7. Teks dua langkah di atas tertinggal: `ok docs 20` kini `ok docs 25`, dan `docs_check` kini 3 test.
 
 ## Milestone 3: `cargo xtask docs walkthrough` from a fresh clone
 
@@ -131,18 +167,30 @@ Tafsiran: (1) nama field verdict report harness dibaca dari spec 0036 *Report*: 
 
 ### UI / manual
 
-- [ ] Dari root repo dengan tree bersih dan paling sedikit 8 GiB bebas di `$TMPDIR`: `cargo xtask docs walkthrough` → baris `clone <sha>`, lalu untuk keempat perintah blok walkthrough satu baris `run <perintah>` dan `ok`, lalu `ok walkthrough <sha> 2`, exit 0; folder `$TMPDIR/stackly-walkthrough-*` hilang sesudahnya. Butuh beberapa menit karena clone membangun xtask, `stackly-fake-server`, dan example `provider_harness` dari awal → AC-8
-- [ ] Jalankan lagi dan tekan Ctrl+C saat baris `cargo xtask provider test` berjalan → baris `fail interrupted` atau `fail <code>`, saran `cargo xtask provider test --cleanup` di stderr, exit 1, dan folder temp terhapus; `pgrep -f stackly-walkthrough` kosong → AC-8
-- [ ] Record `evidence/manual/2026-11-11-provider-contributor-walkthrough-from-a-clean-cl.json` berisi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt` dari run pada `sourceCommit` nya, dan `cargo xtask evidence check` menerimanya → AC-8
+- [x] Dari root repo dengan tree bersih dan paling sedikit 8 GiB bebas di `$TMPDIR`: `cargo xtask docs walkthrough` → baris `clone <sha>`, lalu untuk keempat perintah blok walkthrough satu baris `run <perintah>` dan `ok`, lalu `ok walkthrough <sha> 2`, exit 0; folder `$TMPDIR/stackly-walkthrough-*` hilang sesudahnya. Butuh beberapa menit karena clone membangun xtask, `stackly-fake-server`, dan example `provider_harness` dari awal → AC-8
+- [x] Jalankan lagi dan tekan Ctrl+C saat baris `cargo xtask provider test` berjalan → baris `fail interrupted` atau `fail <code>`, saran `cargo xtask provider test --cleanup` di stderr, exit 1, dan folder temp terhapus; `pgrep -f stackly-walkthrough` kosong → AC-8
+- [x] Record `evidence/manual/2026-11-11-provider-contributor-walkthrough-from-a-clean-cl.json` berisi `steps`, `actual`, `status`, `reviewer`, dan `finishedAt` dari run pada `sourceCommit` nya, dan `cargo xtask evidence check` menerimanya → AC-8
 
 ### Commands
 
-- [ ] `cargo test -p xtask --bin xtask docs::walkthrough` → test lulus: blok adalah blok `bash` pertama sesudah penanda tanpa komentar; panduan tanpa penanda atau blok ditolak; status git hanya `??` di bawah paket hasil scaffold (`Cargo.lock` yang berubah atau file lain gagal); report harus satu per baris `provider test`, `stackly.provider-conformance/v1`, verdict `pass`; parse `df`; repo git fixture dengan baris yang lulus (exit 0, folder temp terhapus), baris `false` (berhenti di baris itu, exit 1, folder temp terhapus), file liar (exit 1), ruang bebas kurang (exit 2 tanpa clone), root 0700 dan `PATH` diawali `target/debug` clone dengan `--keep` (folder tetap ada), dan interupsi saat `sleep 30` (berhenti cepat, exit 1, folder terhapus) → AC-8
-- [ ] `cargo test -p xtask --test docs_check` → 3 test lulus, termasuk `docs walkthrough --nope` ditolak sebelum clone → AC-8
-- [ ] `cargo xtask help` → baris `docs walkthrough [--keep]` ada → AC-8
-- [ ] `cargo xtask docs check` → `ok docs 25` → AC-9
-- [ ] `cargo xtask evidence check` → menerima record AC-034 → AC-8
-- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
+- [x] `cargo test -p xtask --bin xtask docs::walkthrough` → test lulus: blok adalah blok `bash` pertama sesudah penanda tanpa komentar; panduan tanpa penanda atau blok ditolak; status git hanya `??` di bawah paket hasil scaffold (`Cargo.lock` yang berubah atau file lain gagal); report harus satu per baris `provider test`, `stackly.provider-conformance/v1`, verdict `pass`; parse `df`; repo git fixture dengan baris yang lulus (exit 0, folder temp terhapus), baris `false` (berhenti di baris itu, exit 1, folder temp terhapus), file liar (exit 1), ruang bebas kurang (exit 2 tanpa clone), root 0700 dan `PATH` diawali `target/debug` clone dengan `--keep` (folder tetap ada), dan interupsi saat `sleep 30` (berhenti cepat, exit 1, folder terhapus) → AC-8
+- [x] `cargo test -p xtask --test docs_check` → 3 test lulus, termasuk `docs walkthrough --nope` ditolak sebelum clone → AC-8
+- [x] `cargo xtask help` → baris `docs walkthrough [--keep]` ada → AC-8
+- [x] `cargo xtask docs check` → `ok docs 25` → AC-9
+- [x] `cargo xtask evidence check` → menerima record AC-034 → AC-8
+- [x] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo fmt --all --check` → lulus
+
+### Hasil `/check verify` 2026-11-11 (Milestone 3, commit `9a9e97fe`)
+
+**Verdict: PASS.** AC-8 terpenuhi. Semua langkah di bagian ini dikerjakan dan lulus; langkah Ctrl+C dikerjakan dengan `kill -INT` ke proses `xtask docs walkthrough` (bukan tombol di terminal).
+
+- **Run penuh oleh checker:** dari tree bersih dengan 26 GiB bebas, `cargo xtask docs walkthrough` → `clone 9a9e97fe…`, lalu `run` dan `ok` untuk keempat baris blok, `ok walkthrough 9a9e97fe71be9d5aba9343d38eee247da17d1b60 2`, exit 0, 134 detik. Dua report harness `verdict: pass` (paket contoh dan `testing/mytool`). Sesudahnya tidak ada `$TMPDIR/stackly-walkthrough-*`, `git status` repo bersih.
+- **Interupsi, dua kali:** (1) `kill -INT` saat baris `cargo xtask provider test providers/example` masih membangun → `fail interrupted`, exit 1 dalam satu detik. (2) `kill -INT` tujuh detik sesudah proses `provider_harness` di clone muncul (instance sedang berjalan, root berpenanda ada) → harness mencetak `stopping after the current step`, menulis report `interrupted`, lalu `fail interrupted`, exit 1 dalam dua detik. Di kedua run: saran `cargo xtask provider test --cleanup` di stderr, folder temp terhapus, `pgrep -f stackly-walkthrough` kosong, tidak ada root harness berpenanda dan tidak ada `stackly-fake-server` dari run itu yang tersisa.
+- **Kegagalan lain:** dibuktikan test unit yang ada (`docs::walkthrough` 11 test): baris `false` berhenti di baris itu dengan exit 1 dan folder terhapus, file liar exit 1, ruang bebas kurang exit 2 tanpa clone, report bukan `pass` atau jumlah report salah ditolak. `docs walkthrough --nope` ditolak sebelum clone (`docs_check` 3 test).
+- **Record manual AC-034:** `evidence/manual/2026-11-11-provider-contributor-walkthrough-from-a-clean-cl.json` berisi `steps`, `actual`, `status` `PASS`, `reviewer`, `finishedAt`, dan `sourceCommit` `2fea6e6b` (commit yang menambah perintah itu); file bukti `walkthrough.log` ada; `cargo xtask evidence check` menerimanya (64 record manual). Record diisi sesi developer sebagai reviewer. Spec 0002 hanya meminta nama atau handle, dan record manual lain di repo ini diisi dengan cara yang sama, jadi diterima. Run ulang checker di atas memberi hasil yang sama pada commit yang lebih baru; record baru tidak dibuat, karena spec 0002 tidak memintanya.
+- Perintah lain: `cargo xtask help` memuat `docs walkthrough [--keep]`; `cargo xtask docs check` → `ok docs 25`; clippy, `cargo test -p xtask`, `check-deps`, dan `fmt --check` bersih.
+
+**Tafsiran developer yang dinilai** (semua diterima): field `verdict` bernilai `pass` cocok dengan report nyata; `git status --porcelain --untracked-files=all`; saran `--cleanup` dicetak di setiap run yang gagal atau terputus (terlihat di kedua probe); ruang bebas dari `df -Pk`.
 
 ### Acceptance-criteria coverage
 
