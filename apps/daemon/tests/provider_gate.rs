@@ -717,3 +717,35 @@ async fn an_import_of_the_same_bytes_repairs_a_changed_store_copy_and_keeps_the_
         stackly_protocol::catalog::CatalogEntryState::Invalid
     );
 }
+
+// covers: AC-10 (spec 0037, *Read model*: an older snapshot never wins)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_snapshot_built_from_an_older_generation_never_replaces_a_newer_one() {
+    use stackly_core::catalog::{Catalog, CatalogState};
+    use std::sync::Arc;
+    let site = Site::new();
+    let daemon = site.start_with(fast_with_catalog()).await;
+    let core = daemon.core();
+    let marked = |revision: u64| {
+        let mut meta = support::fake_catalog().meta().clone();
+        meta.revision = revision;
+        CatalogState::Loaded(Arc::new(Catalog::for_tests_with_meta(meta, &[])))
+    };
+    let revision = || match core.catalog().as_deref() {
+        Some(CatalogState::Loaded(catalog)) => catalog.meta().revision,
+        other => panic!("not loaded: {other:?}"),
+    };
+
+    assert!(core.replace_catalog(marked(901), u64::MAX - 1));
+    assert_eq!(revision(), 901);
+    assert!(
+        !core.replace_catalog(marked(902), 5),
+        "an older generation is refused"
+    );
+    assert_eq!(revision(), 901, "the newer snapshot stays");
+    assert!(
+        core.replace_catalog(marked(903), u64::MAX - 1),
+        "the same generation replaces"
+    );
+    assert_eq!(revision(), 903);
+}
