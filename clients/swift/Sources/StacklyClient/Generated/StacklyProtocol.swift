@@ -7219,6 +7219,28 @@ public struct OperationStats: Codable, Sendable, Equatable {
 	}
 }
 
+/// Who a validated package is.
+public struct PackageIdentity: Codable, Sendable, Equatable {
+	/// `metadata.id`, such as `official/nats`.
+	public let provider: String
+	/// `metadata.revision`.
+	public let revision: String
+	/// The digest of the package files, lowercase hex.
+	public let manifestSha256: String
+	/// The software it provides.
+	public let software: String
+	/// `metadata.displayName`.
+	public let displayName: String
+
+	public init(provider: String, revision: String, manifestSha256: String, software: String, displayName: String) {
+		self.provider = provider
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+		self.software = software
+		self.displayName = displayName
+	}
+}
+
 /// What the catalog says about one OS a provider has no artifact for.
 public struct PlatformNoteDto: Codable, Sendable, Equatable {
 	/// `linux` or `windows`.
@@ -7291,6 +7313,127 @@ public struct ProviderDetail: Codable, Sendable, Equatable {
 		self.platformNotes = platformNotes
 		self.note = note
 		self.issues = issues
+	}
+}
+
+/// Params of `provider.validate`.
+public struct ProviderValidateParams: Codable, Sendable, Equatable {
+	/// The absolute path of the package folder: 1 to
+	/// [`PROVIDER_PATH_MAX`] bytes, starting with `/`, without NUL.
+	public let path: String
+
+	public init(path: String) {
+		self.path = path
+	}
+}
+
+/// The status of a supported `apiVersion`.
+public enum ApiVersionStatus: String, Codable, Sendable, Equatable {
+	/// The version for new packages.
+	case current
+	/// Still loads and runs, with one warning.
+	case deprecated
+	/// A status this build does not know.
+	case unrecognized
+}
+
+/// One `apiVersion` the daemon loads.
+public struct SupportedApiVersion: Codable, Sendable, Equatable {
+	/// The value, such as `stackly/v1alpha1`.
+	public let name: String
+	/// Whether new packages should use it.
+	public let status: ApiVersionStatus
+
+	public init(name: String, status: ApiVersionStatus) {
+		self.name = name
+		self.status = status
+	}
+}
+
+/// How serious a [`ValidationFinding`] is.
+public enum FindingSeverity: String, Codable, Sendable, Equatable {
+	/// The package is not publishable.
+	case error
+	/// The package is publishable, but something should change.
+	case warning
+	/// A severity this build does not know.
+	case unrecognized
+}
+
+/// Which rule set a [`ValidationFinding`] comes from.
+public enum FindingOrigin: String, Codable, Sendable, Equatable {
+	/// The package cannot load anywhere.
+	case package
+	/// A tightening for package authors; the package still loads.
+	case authoring
+	/// `tests/scenarios.yaml`.
+	case scenarios
+	/// An origin this build does not know.
+	case unrecognized
+}
+
+/// One problem the validator found.
+public struct ValidationFinding: Codable, Sendable, Equatable {
+	/// How serious it is.
+	public let severity: FindingSeverity
+	/// Which rule set found it.
+	public let origin: FindingOrigin
+	/// The package file, such as `provider.yaml` or
+	/// `tests/scenarios.yaml`, or empty for the package as a whole.
+	public let file: String
+	/// Where in the file: a field path, `line:column`, or `.`.
+	public let location: String
+	/// The stable snake_case issue code of spec 0009.
+	public let code: String
+	/// What is wrong, in English; never a secret or a settings value.
+	public let message: String
+	/// A stable snake_case reason, for the codes that declare one.
+	public let reason: String?
+
+	public init(severity: FindingSeverity, origin: FindingOrigin, file: String, location: String, code: String, message: String, reason: String?) {
+		self.severity = severity
+		self.origin = origin
+		self.file = file
+		self.location = location
+		self.code = code
+		self.message = message
+		self.reason = reason
+	}
+}
+
+/// Reply of `provider.validate`.
+public struct ProviderValidation: Codable, Sendable, Equatable {
+	/// The last component of the path.
+	public let folder: String
+	/// Whether the package loads: no finding has origin `package`.
+	public let loadable: Bool
+	/// Whether the package may be published: no finding is an error.
+	public let publishable: Bool
+	/// The raw `apiVersion` string of `provider.yaml`, when the package
+	/// could be read and the field is a string.
+	public let apiVersion: String?
+	/// Every `apiVersion` this daemon loads.
+	public let supportedApiVersions: [SupportedApiVersion]
+	/// Who the package is, when it validated.
+	public let identity: PackageIdentity?
+	/// The first [`VALIDATION_FINDINGS_MAX`] findings: `package`, then
+	/// `authoring`, then `scenarios`.
+	public let findings: [ValidationFinding]
+	/// Every finding, those left out included.
+	public let findingCount: UInt64
+	/// `findingCount` minus the length of `findings`.
+	public let omitted: UInt64
+
+	public init(folder: String, loadable: Bool, publishable: Bool, apiVersion: String?, supportedApiVersions: [SupportedApiVersion], identity: PackageIdentity?, findings: [ValidationFinding], findingCount: UInt64, omitted: UInt64) {
+		self.folder = folder
+		self.loadable = loadable
+		self.publishable = publishable
+		self.apiVersion = apiVersion
+		self.supportedApiVersions = supportedApiVersions
+		self.identity = identity
+		self.findings = findings
+		self.findingCount = findingCount
+		self.omitted = omitted
 	}
 }
 
@@ -7463,6 +7606,9 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Copies the zip of a preview exactly to a path the client chose
 	/// (spec 0034). Not an operation.
 	case diagnosticsExportBundle(ExportBundleParams)
+	/// Checks a provider package folder with the shared validator (spec
+	/// 0036). Not an operation: it reads the folder and writes nothing.
+	case providerValidate(ProviderValidateParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -7525,7 +7671,8 @@ public enum Call: Codable, Sendable, Equatable {
 			instancePrepareTerminal = "instance.prepare_terminal",
 			doctorRun = "doctor.run",
 			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
-			diagnosticsExportBundle = "diagnostics.export_bundle"
+			diagnosticsExportBundle = "diagnostics.export_bundle",
+			providerValidate = "provider.validate"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -7819,6 +7966,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .diagnosticsExportBundle(content)
 					return
 				}
+			case .providerValidate:
+				if let content = try? container.decode(ProviderValidateParams.self, forKey: .content) {
+					self = .providerValidate(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -7999,6 +8151,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .diagnosticsExportBundle(let content):
 			try container.encode(CodingKeys.diagnosticsExportBundle, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .providerValidate(let content):
+			try container.encode(CodingKeys.providerValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -8149,6 +8304,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case diagnosticsPreviewBundle(BundlePreview)
 	/// The file the bundle was copied to.
 	case diagnosticsExportBundle(ExportedBundle)
+	/// What the validator found, even for a package that does not load.
+	case providerValidate(ProviderValidation)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -8211,7 +8368,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			instancePrepareTerminal = "instance.prepare_terminal",
 			doctorRun = "doctor.run",
 			diagnosticsPreviewBundle = "diagnostics.preview_bundle",
-			diagnosticsExportBundle = "diagnostics.export_bundle"
+			diagnosticsExportBundle = "diagnostics.export_bundle",
+			providerValidate = "provider.validate"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -8523,6 +8681,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .diagnosticsExportBundle(content)
 					return
 				}
+			case .providerValidate:
+				if let content = try? container.decode(ProviderValidation.self, forKey: .content) {
+					self = .providerValidate(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -8711,6 +8874,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .diagnosticsExportBundle(let content):
 			try container.encode(CodingKeys.diagnosticsExportBundle, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .providerValidate(let content):
+			try container.encode(CodingKeys.providerValidate, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

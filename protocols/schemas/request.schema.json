@@ -1081,6 +1081,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Checks a provider package folder with the shared validator (spec\n0036). Not an operation: it reads the folder and writes nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ProviderValidateParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "provider.validate"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -2401,6 +2418,19 @@
       },
       "required": [
         "name"
+      ]
+    },
+    "ProviderValidateParams": {
+      "description": "Params of `provider.validate`.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The absolute path of the package folder: 1 to\n[`PROVIDER_PATH_MAX`] bytes, starting with `/`, without NUL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
       ]
     },
     "ReloadInstanceParams": {

@@ -211,3 +211,47 @@ fn a_traefik_copy_that_renders_its_static_config_at_initialize_is_reported_next_
     assert_eq!(oks.len(), 1, "{lines:#?}");
     assert!(oks[0].starts_with("ok official/nats 1.0.1 "), "{}", oks[0]);
 }
+
+#[test]
+fn another_api_version_prints_one_line_that_names_the_supported_versions() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = broken_copy(&root, "fake", &|text| {
+        text.replace("apiVersion: stackly/v1alpha1", "apiVersion: stackly/v2")
+    });
+
+    let output = provider_check(&[copy]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        stdout_lines(&output),
+        [
+            "fake: provider.yaml apiVersion: unsupported_api_version: apiVersion \"stackly/v2\" is not supported; this Stackly supports: stackly/v1alpha1"
+        ]
+    );
+}
+
+#[test]
+fn a_broken_scenarios_file_is_an_error_line_and_no_ok_line() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = root.path().join("providers/fake");
+    copy_dir(&repo_root().join("providers/fake"), &copy);
+    fs::create_dir_all(copy.join("tests")).expect("the tests folder can be created");
+    fs::write(
+        copy.join("tests/scenarios.yaml"),
+        "schema: stackly.provider-scenarios/v1\nscenarios:\n  - name: default\n    settings: { readyDelayMs: -1 }\n",
+    )
+    .expect("the scenarios file can be written");
+
+    let output = provider_check(&[copy]);
+
+    assert_eq!(output.status.code(), Some(1));
+    let lines = stdout_lines(&output);
+    assert_eq!(lines.len(), 1, "{lines:#?}");
+    assert!(
+        lines[0].starts_with(
+            "fake: tests/scenarios.yaml scenarios[0].settings.readyDelayMs: settings_value: "
+        ),
+        "{}",
+        lines[0]
+    );
+}

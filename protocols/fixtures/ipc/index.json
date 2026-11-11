@@ -2125,6 +2125,25 @@
       "file": "frame-error-diagnostics-bundle-failed.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-provider-validate.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-provider-validate-relative-path.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-provider-validate.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

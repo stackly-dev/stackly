@@ -49,6 +49,7 @@ use crate::operation::{
     ListOperationsParams, OperationDetail, OperationPage, OperationStats, OperationSummary,
     ResumeOperationParams,
 };
+use crate::provider::{ProviderValidateParams, ProviderValidation};
 use crate::restart::RestartPreview;
 use crate::runtime::{
     GetRuntimeParams, InstallRuntimeParams, InstallRuntimeReply, ListRuntimesParams,
@@ -283,6 +284,10 @@ pub enum Call {
     /// (spec 0034). Not an operation.
     #[serde(rename = "diagnostics.export_bundle")]
     DiagnosticsExportBundle(ExportBundleParams),
+    /// Checks a provider package folder with the shared validator (spec
+    /// 0036). Not an operation: it reads the folder and writes nothing.
+    #[serde(rename = "provider.validate")]
+    ProviderValidate(ProviderValidateParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -476,6 +481,9 @@ pub enum Reply {
     /// The file the bundle was copied to.
     #[serde(rename = "diagnostics.export_bundle")]
     DiagnosticsExportBundle(ExportedBundle),
+    /// What the validator found, even for a package that does not load.
+    #[serde(rename = "provider.validate")]
+    ProviderValidate(Box<ProviderValidation>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -607,6 +615,7 @@ methods! {
     "doctor.run" => DoctorRun(DoctorParams), recovery allowed;
     "diagnostics.preview_bundle" => DiagnosticsPreviewBundle, recovery allowed;
     "diagnostics.export_bundle" => DiagnosticsExportBundle(ExportBundleParams), recovery allowed;
+    "provider.validate" => ProviderValidate(ProviderValidateParams), recovery allowed;
 }
 
 impl Reply {
@@ -738,6 +747,9 @@ mod tests {
                 preview_id: uuid::Uuid::nil(),
                 destination: "/a.zip".to_owned(),
                 replace: false,
+            }),
+            Call::ProviderValidate(ProviderValidateParams {
+                path: "/a/mytool".to_owned(),
             }),
             Call::RuntimeResolve(InstallRuntimeParams {
                 provider: "official/nats".to_owned(),

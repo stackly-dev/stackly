@@ -1268,6 +1268,14 @@ async fn dispatch(
             .map(Reply::DiagnosticsExportBundle),
             None,
         ),
+        Call::ProviderValidate(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.validate_provider(c, x, p)
+            })
+            .await
+            .map(|validation| Reply::ProviderValidate(Box::new(validation))),
+            None,
+        ),
         Call::InstanceGetDataUsage(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.get_data_usage(c, x, p)
