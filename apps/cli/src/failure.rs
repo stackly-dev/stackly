@@ -586,6 +586,23 @@ impl CliFailure {
         )
     }
 
+    /// `cli.provider_invalid` (spec 0036): the package has `errors`
+    /// error findings and `warnings` warning findings, so it is not
+    /// publishable. Exits 2; `stackly provider validate` keeps the
+    /// validation in `result`.
+    #[must_use]
+    pub fn provider_invalid(errors: u64, warnings: u64) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::PROVIDER_INVALID,
+                "the provider package is not publishable",
+            )
+            .with_detail("errors", errors.to_string())
+            .with_detail("warnings", warnings.to_string())
+            .with_hint("Fix each finding above, then validate again."),
+        )
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
     /// restart is sent or while it is sent, or `agent_call` after a macOS call that
@@ -714,6 +731,7 @@ mod tests {
             CliFailure::restart_restore_failed(OPERATION),
             CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
             CliFailure::doctor_found_errors(2, 1),
+            CliFailure::provider_invalid(1, 0),
         ]
     }
 
