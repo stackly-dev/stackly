@@ -905,6 +905,71 @@ mod operation {
         );
     }
 
+    // covers: AC-3, AC-10 (spec 0037, *Store salinan*: the compensation of
+    // the store folder)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_full_disk_fails_the_import_with_no_space_and_leaves_no_row_folder_or_refresh() {
+        let rig = Rig::new().await;
+        let dir = rig.site.copy(&fixture("acme-demo"), "acme-demo");
+        rig.site
+            .fake
+            .fs()
+            .fail_next(FsOp::WriteFileAtomic, Fault::NoSpace);
+
+        let (detail, digest) = rig.import(&dir).await;
+
+        assert_ne!(detail.view.operation.state(), OperationState::Succeeded);
+        let (code, details) = failure(&detail);
+        assert_eq!(code, "provider.store_failed");
+        assert!(
+            details
+                .iter()
+                .any(|(key, value)| key == "reason" && value == "no_space"),
+            "{details:?}"
+        );
+        assert!(
+            rig.registry
+                .provider_imports()
+                .expect("reads")
+                .value
+                .is_empty()
+        );
+        let folder = rig.site.prepared.layout().provider_import_dir(&digest);
+        assert!(
+            fs::symlink_metadata(&folder).is_err(),
+            "the store folder the failed import made is gone: {}",
+            folder.display()
+        );
+        assert!(rig.refreshes().is_empty(), "nothing committed, no refresh");
+    }
+
+    // covers: AC-3 (spec 0037, *Store salinan*: a failed repair never removes
+    // a folder that was there before it)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_full_disk_during_a_repair_keeps_the_store_folder_that_was_there() {
+        let rig = Rig::new().await;
+        let dir = rig.site.copy(&fixture("acme-demo"), "acme-demo");
+        let (first, digest) = rig.import(&dir).await;
+        assert_eq!(first.view.operation.state(), OperationState::Succeeded);
+        let folder = rig.site.prepared.layout().provider_import_dir(&digest);
+        fs::write(folder.join("versions.json"), b"{}").expect("the copy can be changed");
+        rig.site
+            .fake
+            .fs()
+            .fail_next(FsOp::WriteFileAtomic, Fault::NoSpace);
+
+        let (repair, _) = rig.import(&dir).await;
+
+        assert_eq!(failure(&repair).0, "provider.store_failed");
+        assert!(folder.is_dir(), "the folder of the earlier import stays");
+        assert!(folder.join("provider.yaml").is_file());
+        assert_eq!(
+            rig.registry.provider_imports().expect("reads").value.len(),
+            1,
+            "the row of the earlier import stays"
+        );
+    }
+
     // covers: AC-2, AC-3 (spec 0037, *Store salinan*: a guard refusal after
     // the store is compensated)
     #[tokio::test(flavor = "multi_thread")]
