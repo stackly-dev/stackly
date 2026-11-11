@@ -1,0 +1,183 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "nats",
+  "artifacts": [
+    {
+      "id": "nats-2.15.1-macos-aarch64",
+      "line": "2.15",
+      "version": "2.15.1",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "13.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://github.com/nats-io/nats-server/releases/download/v2.15.1/nats-server-v2.15.1-darwin-arm64.tar.gz"
+      ],
+      "sha256": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "size": 6785953,
+      "archiveRoot": "nats-server-v2.15.1-darwin-arm64",
+      "signingPolicy": "keep_or_adhoc",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://github.com/nats-io/nats-server/blob/v2.15.1/LICENSE",
+      "executables": [
+        "nats-server"
+      ],
+      "stable": true,
+      "unpackedSize": 17674495,
+      "entryCount": 3,
+      "dependencies": [
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        },
+        {
+          "name": "libresolv.9.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libresolv.9.dylib"
+        },
+        {
+          "name": "CoreFoundation",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+        },
+        {
+          "name": "Security",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+        }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "jetstream",
+            "launch_agent",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "nats 2.15.1 ready in 322 ms, stopped in 183 ms",
+          "testedAt": "2026-10-18T11:20:01.288Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f4807c4123"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/nats",
+            "revision": "1.0.1",
+            "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "honest_readiness",
+            "identity_check",
+            "init",
+            "jetstream_mode",
+            "readiness",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "client_auth_not_configured",
+            "jetstream_persistence_not_covered",
+            "multi_instance_not_covered"
+          ],
+          "summary": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, and stopped with no process left",
+          "testedAt": "2026-11-02T04:12:46.641Z",
+          "evidence": "compatibility/01a19a74-dab1-715d-9449-2d0b0e289fac/01a19a75-0add-732f-b747-d1369bcb8f23"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/nats",
+            "revision": "1.0.1",
+            "manifestSha256": "fe57c6f49a92c7aed14ff76cc961e0934c623a0284d6e7f89f2a573b12145cbd"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "honest_readiness",
+            "identity_check",
+            "init",
+            "jetstream_mode",
+            "readiness",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "client_auth_not_configured",
+            "jetstream_persistence_not_covered",
+            "multi_instance_not_covered"
+          ],
+          "summary": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, and stopped with no process left",
+          "testedAt": "2026-10-22T06:34:07.189Z",
+          "evidence": "compatibility/01a16250-1438-776c-9d1a-91bc752be6a9/01a16250-7f5a-73be-b6a4-04e0706ae0c6"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/nats",
+            "revision": "1.0.0",
+            "manifestSha256": "91d3c6da2a0c43639d45a354e5f0dc9ddc492398b09b9350b99a25b1689e9235"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "honest_readiness",
+            "identity_check",
+            "init",
+            "jetstream_mode",
+            "readiness",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "client_auth_not_configured",
+            "jetstream_persistence_not_covered",
+            "multi_instance_not_covered"
+          ],
+          "summary": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, and stopped with no process left",
+          "testedAt": "2026-10-22T02:48:46.057Z",
+          "evidence": "compatibility/01a16181-5b99-7703-9d30-90b6b9a3d09d/01a16182-2a3d-760a-947e-13c4cc91b238"
+        }
+      ]
+    }
+  ]
+}
