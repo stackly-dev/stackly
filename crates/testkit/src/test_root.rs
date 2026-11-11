@@ -3,6 +3,11 @@ use std::path::{Path, PathBuf};
 
 use stackly_platform::{FixedRoots, RootSet};
 
+#[cfg(unix)]
+mod marked;
+#[cfg(unix)]
+pub use marked::{CleanupRefused, MARKER_FILE, MARKER_SCHEMA, sweep_marked};
+
 /// Prefix of every test root directory, so a leftover one is easy to spot.
 const PREFIX: &str = "stackly-test-";
 /// Prefix of every short run folder. Not `sk-`, because the spec 0003 spike
@@ -36,6 +41,8 @@ const RUN_PREFIX: &str = "skt-";
 pub struct TestRoot {
     dir: tempfile::TempDir,
     run: tempfile::TempDir,
+    /// The run ID of a marked root ([`TestRoot::new_marked`]), else none.
+    run_id: Option<String>,
 }
 
 impl TestRoot {
@@ -52,7 +59,11 @@ impl TestRoot {
         let run = private_dir_builder()
             .prefix(RUN_PREFIX)
             .tempdir_in(run_base()?)?;
-        Ok(Self { dir, run })
+        Ok(Self {
+            dir,
+            run,
+            run_id: None,
+        })
     }
 
     /// Returns the canonical path of this test root.

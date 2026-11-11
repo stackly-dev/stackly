@@ -15,6 +15,7 @@ use signal_hook::iterator::Signals;
 
 use crate::args::Flags;
 use crate::http::{self, IO_TIMEOUT, RequestError};
+use crate::rogue;
 use crate::{Failure, write_argv};
 
 /// The argv record `serve` writes in the data folder.
@@ -66,10 +67,19 @@ pub(crate) fn run(argv: &[String], args: &[String]) -> Result<(), Failure> {
             "log-line-bytes",
             "ignore-term",
             "leak-token",
+            "close-lock-fd",
+            "re-exec",
+            "background",
+            "lock-fd-closed",
+            "re-executed",
+            "backgrounded",
         ],
         &[],
     )?;
     let options = Options::from_flags(&flags)?;
+    if rogue::act(&flags, &options.data, args)? == rogue::Acted::Exit {
+        return Ok(());
+    }
 
     // Install the handlers before anything else, so a signal that arrives
     // during startup is handled instead of killing the process.
