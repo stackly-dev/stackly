@@ -39,7 +39,9 @@ use stackly_storage::SqliteRegistry;
 
 use crate::dispatch::{HandlerFuture, RequestContext};
 use crate::ipc::operation::dto::failure_body;
-use crate::ipc::operation::{StartOutcome, StartRequest as OperationStart, start_operation};
+use crate::ipc::operation::{
+    StartOutcome, StartRequest as OperationStart, replay_operation, start_operation,
+};
 use crate::map;
 use crate::state::DaemonCore;
 
@@ -324,6 +326,38 @@ async fn wait_final(core: &DaemonCore, operation: uuid::Uuid) -> Result<(), Box<
     }
 }
 
+/// The reply to a request that came again with its `idempotencyKey`: the
+/// detail of the provider its first request named, once that operation is
+/// final, or the error it stored. It runs before anything else of the
+/// handler, so a folder that moved or an entry that changed since does not
+/// change the answer's kind (spec 0037, *API surface*).
+async fn replayed(
+    core: &DaemonCore,
+    context: &RequestContext,
+    method: &'static str,
+    fingerprint: [u8; 32],
+) -> Result<Option<Box<ProviderDetail>>, Box<ErrorBody>> {
+    let start = OperationStart::new(method, context.idempotency_key.as_deref(), fingerprint);
+    let Some(replay) = replay_operation(core, context, start).await? else {
+        return Ok(None);
+    };
+    if let Some(failure) = replay.failure {
+        return Err(Box::new(failure));
+    }
+    wait_final(core, replay.accepted.operation.id).await?;
+    let provider = serde_json::from_str::<serde_json::Value>(replay.input.as_str())
+        .ok()
+        .and_then(|input| {
+            input
+                .get("provider")?
+                .as_str()?
+                .parse::<ProviderName>()
+                .ok()
+        })
+        .ok_or_else(|| unexpected("the journal of the operation names no provider"))?;
+    detail_of(core, &provider).map(Some)
+}
+
 fn input_of(value: &serde_json::Value) -> JournalPayload {
     JournalPayload::new(value.to_string(), OperationJournal::INPUT_MAX)
         .unwrap_or_else(|_| JournalPayload::empty())
@@ -356,6 +390,9 @@ fn import_inner<'a>(
             .catalog_refresher()
             .ok_or_else(|| unexpected("the catalog refresher is not set"))?;
         let fingerprint = request_fingerprint(&Call::ProviderImport(params.clone()));
+        if let Some(reply) = replayed(core, &context, "provider.import", fingerprint).await? {
+            return Ok(reply);
+        }
         let path = PathBuf::from(&params.path);
         let read = read_folder(core, &catalog, &path).await?;
         let check = &read.check;
@@ -552,6 +589,9 @@ pub fn approve<'a>(
                 .catalog_refresher()
                 .ok_or_else(|| unexpected("the catalog refresher is not set"))?;
             let fingerprint = request_fingerprint(&Call::ProviderApprove(params.clone()));
+            if let Some(reply) = replayed(core, &context, "provider.approve", fingerprint).await? {
+                return Ok(reply);
+            }
             let provider = provider_param(&params.provider)?;
             let expected: stackly_domain::Sha256Digest =
                 params.expected_package_sha256.parse().map_err(|_| {
@@ -631,6 +671,9 @@ pub fn revoke<'a>(
                 .catalog_refresher()
                 .ok_or_else(|| unexpected("the catalog refresher is not set"))?;
             let fingerprint = request_fingerprint(&Call::ProviderRevoke(params.clone()));
+            if let Some(reply) = replayed(core, &context, "provider.revoke", fingerprint).await? {
+                return Ok(reply);
+            }
             let provider = provider_param(&params.provider)?;
             let row = import_row(&registry, &provider).await?;
             local_entry(&catalog, &provider, row.is_some())?;

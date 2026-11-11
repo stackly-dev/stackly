@@ -7,7 +7,8 @@
 //! `provider.revoked`; an approved entry creates with the `local_import`
 //! source and pins a revision record that names its namespace as publisher,
 //! the approval, and the local source; a revision the installed catalog
-//! revokes is listed, shown in the preview, and refused by the catalog.
+//! revokes is listed, shown in the preview, and refused by the catalog; a
+//! repeated import, approve, or revoke answers from its first operation.
 #![cfg(target_os = "macos")]
 
 mod common;
@@ -333,6 +334,54 @@ async fn an_approved_local_entry_pins_as_local_and_a_revoke_closes_create_and_du
     let started = api.start_ready(created).await;
     assert_eq!(started.id, created);
     api.stop_when_free(created).await;
+}
+
+// covers: AC-2, AC-18 (spec 0037, *API surface*: a replay answers first)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_import_repeated_with_its_key_answers_after_the_folder_moved() {
+    let site = Site::new();
+    let _daemon = site.start_with(fast_with_catalog()).await;
+    let api = site.api().await;
+    let dir = local_fake(site.root.path());
+    let digest = match api
+        .client
+        .call(Call::ProviderPreviewImport(PreviewImportParams {
+            path: dir.display().to_string(),
+        }))
+        .await
+        .expect("the preview answers")
+    {
+        Reply::ProviderPreviewImport(preview) => {
+            preview.package_sha256.expect("the package has a digest")
+        }
+        other => panic!("not a preview reply: {other:?}"),
+    };
+    let params = ImportProviderParams {
+        path: dir.display().to_string(),
+        expected_package_sha256: digest,
+    };
+    let request_key = key();
+    let send = || {
+        api.client.call_detailed(
+            Call::ProviderImport(params.clone()),
+            CallOptions::default().with_idempotency_key(request_key.clone()),
+        )
+    };
+    let first = match send().await.expect("it imports") {
+        Reply::ProviderImport(detail) => detail,
+        other => panic!("not an import reply: {other:?}"),
+    };
+    std::fs::rename(&dir, dir.with_file_name("moved")).expect("the folder moves");
+
+    let again = match send()
+        .await
+        .expect("the replay answers, not import_unreadable")
+    {
+        Reply::ProviderImport(detail) => detail,
+        other => panic!("not an import reply: {other:?}"),
+    };
+    assert_eq!(again.summary.provider, first.summary.provider);
+    assert_eq!(again.summary.provider, LOCAL);
 }
 
 /// The fake catalog with a `revoked` entry for every digest of the local
