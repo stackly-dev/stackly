@@ -208,15 +208,39 @@ Tafsiran: (1) perintah, flag, exit code, dan kalimat di halaman itu dibaca dari 
 
 ### UI / manual
 
-- [ ] Baca `docs/providers/trying-locally.md` terhadap perilaku `stackly provider import`, `approve`, `revoke`, `remove`, `list`, dan `inspect` di `main` (test `apps/cli/tests/provider/trust_stacklyd.rs` membuktikan exit code dan state nya terhadap `stacklyd` nyata) → AC-12
-- [ ] Baca `GOVERNANCE.md`, `SECURITY.md`, dan `docs/providers/review.md`: istilah trust `official`, `development`, `local` ("Local, not verified"), approval `pending`, `approved`, `revoked`; tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", "safe to run", dan tidak ada klaim revocation terkini → AC-4, AC-6
+- [x] Baca `docs/providers/trying-locally.md` terhadap perilaku `stackly provider import`, `approve`, `revoke`, `remove`, `list`, dan `inspect` di `main` (test `apps/cli/tests/provider/trust_stacklyd.rs` membuktikan exit code dan state nya terhadap `stacklyd` nyata) → AC-12
+- [x] Baca `GOVERNANCE.md`, `SECURITY.md`, dan `docs/providers/review.md`: istilah trust `official`, `development`, `local` ("Local, not verified"), approval `pending`, `approved`, `revoked`; tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", "safe to run", dan tidak ada klaim revocation terkini → AC-4, AC-6
 
 ### Commands
 
-- [ ] `cargo xtask docs check` → `ok docs 26` (pemeriksaan (h) berjalan atas halaman baru) → AC-9, AC-12
-- [ ] `cargo test -p xtask --test docs_check` → 4 test lulus, termasuk `the_trying_locally_page_quotes_the_approval_statement_of_the_fixture` (kalimat izin fixture utuh di halaman, kalimat paket scaffold tidak bisa diimpor, dan larangan mengimpor paket PR sebelum review) → AC-12
-- [ ] `cargo test -p xtask --bin xtask docs::text` → lulus, termasuk `the_approval_statement_must_be_quoted_word_for_word` (kalimat yang beda satu kata menjadi satu masalah) → AC-12
-- [ ] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo fmt --all --check` → lulus
+- [x] `cargo xtask docs check` → `ok docs 26` (pemeriksaan (h) berjalan atas halaman baru) → AC-9, AC-12
+- [x] `cargo test -p xtask --test docs_check` → 4 test lulus, termasuk `the_trying_locally_page_quotes_the_approval_statement_of_the_fixture` (kalimat izin fixture utuh di halaman, kalimat paket scaffold tidak bisa diimpor, dan larangan mengimpor paket PR sebelum review) → AC-12
+- [x] `cargo test -p xtask --bin xtask docs::text` → lulus, termasuk `the_approval_statement_must_be_quoted_word_for_word` (kalimat yang beda satu kata menjadi satu masalah) → AC-12
+- [x] `cargo clippy -p xtask --all-targets --locked -- -D warnings`, `cargo test -p xtask`, `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo fmt --all --check` → lulus
+
+### Hasil `/check verify` 2026-11-11 (Milestone 4, commit `83b6c22c`)
+
+**Verdict: PASS.** AC-12 terpenuhi, dan bagian langkah 11 dari AC-4 dan AC-6 terpenuhi. Tidak ada kalimat di `docs/providers/trying-locally.md` yang bertentangan dengan perilaku nyata. Ada dua catatan rendah di bawah, keduanya soal kelengkapan, bukan kesalahan.
+
+Halaman itu dinilai terhadap CLI dan `stacklyd` nyata yang sama yang diverifikasi di spec 0037 Milestone 1 sampai 4 (probe di root sementara dengan catalog development, lihat `verify.md` spec 0037), bukan hanya terhadap test.
+
+- **Perintah dan flag:** `provider validate`, `import <dir>`, `import --dry-run`, `import --approve`, `inspect`, `list`, `approve`, `revoke`, `remove`, `runtime install`, dan `instance create` semuanya ada dengan nama itu. Tanpa terminal atau dengan `--json`, `approve`, `revoke`, `remove`, dan `import --approve` menolak tanpa `--yes` dan tidak mengubah apa pun (terlihat di probe pty dan non TTY Milestone 3 spec 0037). `import <dir> --yes` tanpa `--approve` memang ditolak sebagai salah pakai, dan halaman tidak menyarankannya.
+- **Yang bisa diimpor:** namespace `official`, `testing`, dan `stackly` ditolak; batas 32 provider dan 16 MiB; warning tidak menghalangi; paket scaffold `testing/<name>` dan artefak fixture ditolak; folder sumber tidak diubah dan salinan store milik Stackly sendiri. Semua cocok dengan probe Milestone 1 dan 2 spec 0037.
+- **Approval:** terikat ke `packageSha256` (semua file, `versions.json` termasuk); paket yang berubah menjadi `pending` dan preview menyebut bedanya; mengimpor byte yang sama mengembalikan keputusan lama; label `local`, publisher "<namespace> (not verified)", tidak pernah Tested; quarantine hanya dibaca. Cocok.
+- **Tabel state:** `pending` menolak install dan instance baru dengan `provider.approval_required`, `revoked` dengan `provider.revoked`, dan instance yang sudah ada tetap bisa start, stop, dan diubah. Cocok dengan gate yang dicek ulang di Milestone 1 dan 2 spec 0037.
+- **Revoke dan remove:** runtime, instance, dan data tidak disentuh; revisi di daftar `revoked` catalog ditolak, termasuk approval nya; daftar itu milik catalog versi Stackly yang berjalan dan tidak pernah diambil online. Cocok dengan probe catalog revisi 12 ber `[[revoked]]`.
+- **Exit code:** 4 untuk `provider.approval_required` dan `provider.revoked`; 3 untuk `provider.import_changed`, `provider.import_limit`, `provider.not_approved`; 2 untuk `manifest.invalid` dan `provider.import_unreadable`; 7 untuk `provider.store_failed`; 10 untuk `provider.import_not_found`. Sama dengan yang terlihat di probe CLI Milestone 3 spec 0037.
+- **Padanan GUI:** **Import Provider…**, **Approve…**, **Revoke Approval…**, dan **Remove…** sama dengan teks tombol di `ProviderTrustCopy.swift` dan snapshot Milestone 4 spec 0037. Sesi GUI nyata tidak dijalankan (`NOT_RUN`, owner user, tercatat di spec 0037).
+- **Istilah trust dan revocation:** `GOVERNANCE.md` (*Official and reviewed*, *Provider owners*), `SECURITY.md` (*Our process* langkah 4), dan `docs/providers/review.md` memakai `official`, `development`, `local` ("Local, not verified"), `pending`, `approved`, `revoked`, dan kata kerja import, approve, revoke, remove. Tidak ada "untrusted", "trusted publisher", "verified publisher", "sandboxed", atau "safe to run". Daftar `revoked` selalu disebut sampai ke user lewat rilis baru dan tidak pernah diambil online; "latest release" di `SECURITY.md` hanya soal versi yang didukung. `docs/providers/README.md` dan `CONTRIBUTING.md` punya link ke halaman baru. `review.md` melarang mengimpor paket PR sebelum review selesai.
+- **Perintah:** `cargo xtask docs check` → `ok docs 26`; `cargo test -p xtask --test docs_check` → 4 lulus; `cargo test -p xtask --bin xtask docs::text` → 7 lulus; clippy xtask bersih; `cargo test -p xtask` → 566 lulus, 0 gagal; `check-deps` 13 crate; `evidence check` 68 record manual, baseline valid; `cargo fmt --all --check` bersih.
+- **Probe pemeriksaan (h):** satu kata di kalimat izin halaman diganti ("show" menjadi "prove") → `cargo xtask docs check` gagal dengan exit 1 dan pesan `the approval statement of protocols/fixtures/provider/approval-statement.txt is not quoted word for word`. File dipulihkan dengan `git checkout`, lalu `ok docs 26` lagi.
+
+**Tafsiran developer yang dinilai** (ketiganya diterima): isi halaman diambil dari kode di `main` dan spec 0037 AC-14; paket `official` dicoba lewat catalog development; tidak ada klaim revocation terkini.
+
+**Catatan rendah** (tidak menggagalkan, untuk developer bila mau dirapikan):
+
+1. Baris 11, "A package that passes `stackly provider validate` with no error": syarat ini cukup, tetapi tidak persis sama dengan aturan import. `validate` juga memeriksa nama folder dan `tests/scenarios.yaml`, sedangkan import melewati cek nama folder dan tidak membaca skenario. Jadi paket yang gagal `validate` hanya karena dua hal itu tetap bisa diimpor. Kalimat langkah 1 ("The import runs them again and adds its own rules") juga sedikit terlalu kuat karena alasan yang sama.
+2. Tabel exit code tidak memuat exit 9 (`cli.confirmation_declined`, saat kamu menjawab tidak), exit 2 untuk `cli.confirmation_required` (lupa `--yes`) dan `cli.provider_invalid`, serta exit 10 untuk `catalog.provider_not_found`. Kalimat tentang `--yes` sudah menjelaskan perilakunya; hanya angkanya yang tidak tertulis.
 
 ### Acceptance-criteria coverage
 
