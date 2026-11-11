@@ -33,10 +33,8 @@
       "supported": false
     }
   ],
-  "dataPath": "instances/<new instance id>/data",
-  "startupDefault": "manual",
   "dataLocation": "/Users/dev/Library/Application Support/Stackly",
-  "logsLocation": "/Users/dev/Library/Logs/Stackly",
+  "dataPath": "instances/<new instance id>/data",
   "endpoints": [
     {
       "defaultPort": 18080,
@@ -346,6 +344,7 @@
       "visibility": "basic"
     }
   ],
+  "logsLocation": "/Users/dev/Library/Logs/Stackly",
   "provider": {
     "category": "testing",
     "displayName": "Fake Provider",
@@ -357,12 +356,12 @@
   "runtime": {
     "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
     "dependentRuntimes": [],
-    "displayName": "Fake",
+    "displayName": "Fake Provider",
     "id": "0192f3a6-0000-7000-8000-0000000000a1",
     "installMode": "managed",
     "installedAt": "2026-01-01T00:00:00.000Z",
     "lastVerifiedAt": null,
-    "line": "1",
+    "line": "0.1",
     "revision": 1,
     "software": "fake",
     "state": "installed",
@@ -373,7 +372,8 @@
       "os": "macos"
     },
     "usedBy": [],
-    "version": "1.0.0"
+    "version": "0.1.0"
   },
-  "suggestedName": "fake-1"
+  "startupDefault": "manual",
+  "suggestedName": "fake-0-1"
 }
