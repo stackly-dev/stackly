@@ -30,15 +30,15 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
 
 **Trace:** REQ-038, AC-038, AC-077 (sebagian), PRD bagian 22.4
 
-**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md) · code in `providers/valkey/`, `apps/daemon/tests/valkey/`, `crates/core/src/provider/template.rs`, `crates/core/src/provider/plan.rs`
+**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md) · code in `providers/valkey/`, `apps/daemon/tests/valkey/`, `crates/core/src/provider/template.rs`, `crates/core/src/provider/plan.rs`, `apps/daemon/tests/native_launchd.rs`
 
 - [x] Design it (spec): `/architect provider Valkey`
-- [ ] Build it: `/develop provider Valkey`
+- [x] Build it: `/develop provider Valkey`
   - [x] Perubahan core dan paket, dibuktikan di fixture: format `valkeyConf`, filter template `sha256Hex` (dibangun fitur 40, dipakai fitur 43), paket `providers/valkey` dengan golden, fixture form, dan seed fuzz, lalu spike dari paket (hapus recipe `Valkey` dan `// provisional: F40`) (spec 0040 AC-1, AC-2 tanpa round trip, AC-3, AC-7 bagian teks, AC-12 bagian plan, AC-16 bagian spike, AC-18 bagian loader; build step 1 sampai 4; needs fase 06, sudah done; step 1 dan 2 menyentuh `template.rs` dan `plan.rs` bersama fitur 42 dan 43, satu sesi pada satu waktu; fitur 43 needs step 2)
   - [x] Valkey 9.1.2 asli lewat daemon: harness dan test native auth, readiness jujur (`LOADING`), parameter milik Stackly, stop, tool dari runtime, lifecycle dan adopsi, durability tiga mode (stop normal dan crash), mode yang tidak bisa diganti, test install dari cache, remedy, connection, dan Open In (spec 0040 AC-2 round trip, AC-4 sampai AC-13, AC-16 bagian version check, AC-18; build step 5 sampai 7; after milestone 1; needs artefak `valkey-9.1.2-r2-macos-aarch64` di cache xtask, selain itu `BLOCKED`; step 7 menyentuh `native_runtime_install.rs` bersama fitur 42 dan 43)
-  - [ ] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
-  - [ ] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
-- [ ] Verify it: `/check verify provider Valkey`
+  - [x] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
+  - [x] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
+- [x] Verify it: `/check verify provider Valkey`
 - [ ] Test it: `/test provider Valkey`
 
 ### 41. Provider Traefik & routing lokal · in-progress
