@@ -78,7 +78,7 @@ Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readi
   - [x] MySQL 9.7, isolasi, penolakan line, konformitas, evidence, dan catalog: suite untuk 9.7, sentinel dua instance per lini, penolakan data lini lain dua arah, data yang sudah ada ditolak, dua test konformitas native, MySQL ke `[[provider]]` di catalog dengan `provider freeze`, lalu `compatibility.json` per artefak (spec 0042 AC-9, AC-10, AC-11, AC-14 konformitas, AC-1 bagian catalog, AC-16, AC-3 sampai AC-13 untuk 9.7; build step 9 sampai 12; after milestone 2; needs artefak `mysql-9.7.2-macos-aarch64` di cache xtask; step 10 dan 11 menyentuh file bersama dan berurutan antar fitur 39 sampai 43; step 12 after step 11)
   - [x] Handover: dua test native launchd MySQL dan, hanya bersama record `PASS` nya, entri `official/mysql` di `HANDOVER_PROVEN` (spec 0042 AC-17; build step 13; after milestone 2 step 5; needs sesi GUI, `BLOCKED` tanpa itu; file bersama dengan fitur 39 sampai 43)
 - [x] Verify it: `/check verify provider MySQL`
-- [ ] Test it: `/test provider MySQL`
+- [x] Test it: `/test provider MySQL`
 
 ### 43. Provider ClickHouse · in-progress
 
