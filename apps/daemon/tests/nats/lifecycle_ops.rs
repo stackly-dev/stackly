@@ -9,7 +9,7 @@ use stackly_protocol::operation::{ListOperationsParams, OperationState};
 use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Kind, evidence};
 
-use crate::harness::{Serve, Site, alive, create_instance, stop_instance};
+use crate::harness::{Serve, Site, alive, create_instance, port_of, stop_instance, varz};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
@@ -26,6 +26,8 @@ async fn nats_refuses_reload_without_an_operation_and_restarts_with_a_new_proces
     let api = site.api().await;
     let id = create_instance(&site, &api, "lifecycle-ops", json!({})).await;
     let running = api.start_ready(id).await;
+    let report = varz(port_of(&running, "monitoring"));
+    site.subject(&ev, report["version"].as_str().unwrap_or("unknown"));
     assert!(!running.capabilities.reload);
     let first = running.process.as_ref().expect("a process").pid;
     let count = async || match api
