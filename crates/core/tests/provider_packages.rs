@@ -922,10 +922,33 @@ fn reload_of_nats_is_unsupported() {
 }
 
 #[test]
-fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
+fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     let package = validated(&nats_dir());
     let context = context_under(
-        Path::new("/Users/o\"q/Library/Application Support/Stackly"),
+        Path::new("/Users/o\"q\\r$s/Library/Application Support/Stackly"),
+        &package,
+        serde_json::json!({}),
+    );
+
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds with a quote in the data folder");
+
+    let (_, text) = rendered(&package, &run.render)
+        .into_iter()
+        .next()
+        .expect("nats renders nats.conf");
+    assert!(
+        text.contains("store_dir: \"/Users/o\\\"q\\\\r$s/Library/Application Support/Stackly/"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value() {
+    let package = validated(&nats_dir());
+    let context = context_under(
+        Path::new("/Users/o\u{1}q/Library/Application Support/Stackly"),
         &package,
         serde_json::json!({}),
     );
@@ -936,7 +959,7 @@ fn a_quote_in_the_data_folder_fails_the_nats_plan_without_the_value() {
         panic!("expected UnrepresentableValue, got {err:?}");
     };
     assert!(field.contains("instance.data"), "{field}");
-    assert!(!err.to_string().contains("o\"q"), "{err}");
+    assert!(!err.to_string().contains("o\u{1}q"), "{err}");
 }
 
 /// `context` with every TCP and UDP endpoint stripped of its port, the state

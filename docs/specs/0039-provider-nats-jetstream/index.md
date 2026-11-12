@@ -1,7 +1,7 @@
 # 0039. Provider NATS dan JetStream
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

@@ -53,8 +53,9 @@ pub enum TemplateFormat {
     Yaml,
     /// JSON; text becomes a JSON string.
     Json,
-    /// The NATS server config; text becomes a double quoted string, and
-    /// text holding `"`, `\`, `$`, or a control character is rejected.
+    /// The NATS server config; text becomes a double quoted string with `"`
+    /// and `\` escaped and `$` kept as is, and text holding a control
+    /// character is rejected.
     NatsConf,
     /// The PostgreSQL server config (spec 0019): text becomes a single
     /// quoted value with `'` doubled and `\` doubled, text holding a
@@ -118,15 +119,25 @@ impl TemplateFormat {
                     .replace('{', "\\u007B")
                     .replace('}', "\\u007D"),
             ),
+            // `\"` and `\\` are the escapes of a double quoted NATS string,
+            // and `$` inside quotes is literal (spec 0039, fact 4); a control
+            // character has no escape the server reads back, so it is
+            // rejected.
             Self::NatsConf => {
-                if text
-                    .chars()
-                    .any(|c| matches!(c, '"' | '\\' | '$') || c.is_control())
-                {
-                    None
-                } else {
-                    Some(format!("\"{text}\""))
+                if text.chars().any(char::is_control) {
+                    return None;
                 }
+                let mut out = String::with_capacity(text.len() + 2);
+                out.push('"');
+                for c in text.chars() {
+                    match c {
+                        '"' => out.push_str("\\\""),
+                        '\\' => out.push_str("\\\\"),
+                        c => out.push(c),
+                    }
+                }
+                out.push('"');
+                Some(out)
             }
             Self::PostgresqlConf => {
                 if text.chars().any(char::is_control) {
@@ -1188,14 +1199,65 @@ mod tests {
     }
 
     #[test]
-    fn nats_conf_rejects_quotes_backslashes_dollars_and_control_characters() {
+    fn nats_conf_escapes_a_double_quote_as_backslash_quote() {
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("a\"b").unwrap(),
+            "\"a\\\"b\""
+        );
+    }
+
+    #[test]
+    fn nats_conf_escapes_a_backslash_as_two_backslashes() {
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("a\\b").unwrap(),
+            "\"a\\\\b\""
+        );
+    }
+
+    #[test]
+    fn nats_conf_writes_a_dollar_sign_as_is() {
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("$HOME").unwrap(),
+            "\"$HOME\""
+        );
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("a$b$").unwrap(),
+            "\"a$b$\""
+        );
+    }
+
+    #[test]
+    fn nats_conf_escapes_quote_backslash_and_dollar_together() {
+        assert_eq!(
+            TemplateFormat::NatsConf
+                .escape_text("p\"q\\r$s-fixture")
+                .unwrap(),
+            "\"p\\\"q\\\\r$s-fixture\""
+        );
+    }
+
+    #[test]
+    fn nats_conf_rejects_every_control_character() {
+        for bad in [
+            "a\nb", "a\tb", "a\rb", "a\u{0}", "a\u{1f}", "a\u{7f}", "a\u{85}", "a\u{9f}",
+        ] {
+            assert_eq!(TemplateFormat::NatsConf.escape_text(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn nats_conf_keeps_other_printable_characters_as_is() {
         assert_eq!(
             TemplateFormat::NatsConf.escape_text("orders db").unwrap(),
             "\"orders db\""
         );
-        for bad in ["a\"b", "a\\b", "$HOME", "a\nb", "a\u{0}"] {
-            assert_eq!(TemplateFormat::NatsConf.escape_text(bad), None, "{bad:?}");
-        }
+        assert_eq!(
+            TemplateFormat::NatsConf
+                .escape_text("a #b {c} 'd' ü 空 \u{a0}")
+                .unwrap(),
+            "\"a #b {c} 'd' ü 空 \u{a0}\""
+        );
+        assert_eq!(TemplateFormat::NatsConf.escape_text("").unwrap(), "\"\"");
     }
 
     #[test]
