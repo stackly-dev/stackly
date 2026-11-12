@@ -27,8 +27,11 @@ account that has no password.
 `slow_query_log_file`, and `mysqlx` are set on the `mysqld` command line.
 `mysqld` starts with `--persisted-globals-load=OFF`, so variables saved with
 `SET PERSIST` last only until the next restart; change lasting settings in
-Stackly. `my.cnf` in the instance config folder is written again before every
-start; hand edits there are lost.
+Stackly. `my.cnf` in the instance config folder is managed by Stackly: change
+its values on the instance's Configuration page. Stackly does not overwrite a
+hand edit there: the next start fails with `config.drift_detected` (`config
+files changed outside stackly: my.cnf`), the edit stays in the file, and the
+instance does not start until you resolve the drift.
 
 The binary log is off by default. Turn on the `Binary log` setting (and
 restart) when a change data capture tool needs it.

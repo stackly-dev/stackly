@@ -15,7 +15,7 @@
           "segments": [
             {
               "type": "text",
-              "content": "# Managed by Stackly. Edits to this file are lost on the next start.\n# Port, bind address, socket, data folder, temp folder, and log files are set\n# on the mysqld command line by Stackly and cannot be changed here.\n# Variables saved with SET PERSIST are not loaded when the instance starts.\n[mysqld]\nmax_connections = 151\ninnodb_buffer_pool_size = 128M\ndefault_time_zone = \"+00:00\"\ndisable_log_bin\n"
+              "content": "# Managed by Stackly. Change these values on the instance's Configuration page.\n# Stackly does not overwrite an edit made here: it reports the file as changed\n# and the instance does not start until you resolve it.\n# Port, bind address, socket, data folder, temp folder, and log files are set\n# on the mysqld command line by Stackly and cannot be changed here.\n# Variables saved with SET PERSIST are not loaded when the instance starts.\n[mysqld]\nmax_connections = 151\ninnodb_buffer_pool_size = 128M\ndefault_time_zone = \"+00:00\"\ndisable_log_bin\n"
             }
           ]
         },
