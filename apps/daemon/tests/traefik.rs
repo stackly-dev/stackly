@@ -9,6 +9,8 @@
 
 #[path = "common/mod.rs"]
 mod common;
+#[path = "traefik/compatibility.rs"]
+mod compatibility;
 #[path = "traefik/config.rs"]
 mod config;
 #[path = "supervisor/config_calls.rs"]
