@@ -7,8 +7,8 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 12
-published_at = 2026-11-12T01:36:07Z
+revision = 13
+published_at = 2026-11-12T03:41:45Z
 
 [[provider]]
 id = "official/postgresql"
@@ -19,6 +19,21 @@ tile = "blue"
 id = "official/nats"
 mark = "Na"
 tile = "green"
+
+[[provider.platform_note]]
+os = "linux"
+status = "planned"
+note = "Linux releases exist upstream; Stackly supports macOS first."
+
+[[provider.platform_note]]
+os = "windows"
+status = "planned"
+note = "Windows releases exist upstream; per version verification is pending."
+
+[[provider]]
+id = "official/traefik"
+mark = "Tr"
+tile = "cyan"
 
 [[provider.platform_note]]
 os = "linux"
@@ -53,11 +68,3 @@ category = "cache"
 description = "In-memory key-value store. Standalone, with RDB or AOF persistence per instance."
 mark = "Vk"
 tile = "red"
-
-[[planned]]
-id = "official/traefik"
-display_name = "Traefik"
-category = "proxy"
-description = "Reverse proxy with file-based routes. Entrypoints bind to loopback by default."
-mark = "Tr"
-tile = "cyan"
