@@ -105,40 +105,47 @@ _Build 2026-11-12 (dev-f41-m2b): langkah 7a, commit `d898f493`, dan langkah 7b. 
 
 ## Milestone 3: Evidence, catalog, dan handover
 
-_Build sebagian 2026-11-12 (dev-f41-m2b): hanya kode langkah 8, commit `ff337dea`. Run native di Mac ini dengan artefak dari cache: record `PASS`, `compatibility.json` dengan sepuluh check dan dua `knownLimitations`. Belum dijalankan, menunggu giliran catalog lead: `cargo xtask runtime compat-record`, `cargo xtask codegen` untuk `providers/traefik/versions.json`, langkah 9 (catalog, `catalog-revisions.json`, freeze, `xtask/tests/provider_check.rs`), dan langkah 10 (launchd dan `HANDOVER_PROVEN`)._
+_Build 2026-11-12: kode langkah 8 commit `ff337dea` (dev-f41-m2b); commit evidence langkah 8 dan 9 `6647adb7` dan langkah 10 `7499915f` (dev-f41-m3). Run native `01a1cdd2-3059-7223-b72d-b828f79622d2` dari `HEAD` bersih `67b8a452`: 12 record native `PASS`, 0 problem. Catalog revision 13. Test launchd langkah 10 sudah ditulis tetapi tidak dijalankan (butuh sesi GUI kamu), jadi baris `HandoverProof` Traefik di `crates/core/src/supervisor/handover.rs` dan baris `("official/traefik", "1.0.0", false)` di modul test nya belum diubah. Keduanya menyusul bersama record `PASS` sesudah kamu menjalankan langkah manual 7 di bagian Milestone 4. AC-12 tetap terbuka sampai itu._
 
 ### UI / manual
 
-- [ ] Tidak ada langkah GUI di bagian ini. Test launchd AC-12 (langkah 10) ada di *Langkah manual* 7 di bagian Milestone 4.
+- [ ] Tidak ada langkah GUI di bagian ini. Test launchd AC-12 (langkah 10) ada di langkah manual 7 di bagian Milestone 4.
 
 ### Commands
 
 - [x] `cargo test -p stacklyd --test traefik -- --ignored traefik_compatibility` dengan `STACKLY_EVIDENCE_DIR=<dir> STACKLY_EVIDENCE_KIND=native` → lulus; record `PASS` dengan `covers` `BR-025`, `REQ-039`, `AC-039` dan subject `traefik 3.7.15` dari `GET /api/version`; `<dir>/artifacts/<id>/compatibility.json` memuat `providerRevision` `official/traefik` `1.0.0` `c57b6a82…`, `checks` `health`, `http`, `init`, `invalid_config`, `readiness`, `rollback`, `routing_update`, `second_instance`, `start`, `stop`, dan `knownLimitations` `dashboard_not_offered`, `https_not_offered`; byte `/etc/hosts` sama sebelum dan sesudah → AC-11, AC-7
-- [ ] Dari `HEAD` yang bersih: `cargo test -p stacklyd --test traefik -- --ignored`, `cargo xtask runtime compat-record <report.json>`, lalu `cargo xtask codegen` → `providers/traefik/versions.json` mendapat record scope `provider` → AC-11 (menunggu giliran catalog)
-- [ ] `cargo xtask catalog check` lalu `cargo xtask provider freeze providers/traefik` sesudah entri `[[provider]]` → AC-10 (menunggu giliran catalog)
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test traefik --locked -- --ignored --test-threads=1` dari `HEAD` bersih → 12 record native `PASS`, 0 problem, `sourceDirty` `false`; run `01a1cdd2-3059-7223-b72d-b828f79622d2` → AC-11
+- [x] `cargo xtask runtime compat-record target/evidence/01a1cdd2-3059-7223-b72d-b828f79622d2/report.json` → `evidence/compatibility/01a1cdd2-3059-7223-b72d-b828f79622d2/`; lalu `cargo xtask codegen` → `providers/traefik/versions.json` mendapat satu record scope `provider` `pass` dengan sepuluh check, dua `knownLimitations`, dan `manifestSha256` `c57b6a82…` → AC-11
+- [x] `providers/catalog.toml`: `[[planned]]` `official/traefik` hilang, `[[provider]]` `official/traefik` (`Tr`, `cyan`, dua `platform_note`) ada, `revision = 13`; `cargo xtask catalog check --update` → `ok catalog revision 13 39c35a35…` → AC-10
+- [x] `cargo xtask provider freeze providers/traefik` → `crates/core/tests/fixtures/compat/traefik/1.0.0/` dengan `frozen.json` `c57b6a82…`; `diff -r crates/core/tests/fixtures/compat/traefik/1.0.0/package providers/traefik` hanya menyebut `README.md` dan `LICENSE-NOTICES.md` → AC-10
+- [x] `cargo test -p xtask --test provider_check` → lulus; `a_package_that_never_enters_the_catalog_is_refused_before_anything_is_written` memakai `providers/example` → AC-10
+- [x] `cargo clippy -p stacklyd --all-targets --locked -- -D warnings` → test launchd Traefik ter-compile tanpa baris `HandoverProof` → AC-12 (kode)
+- [ ] Langkah manual 7 di bagian Milestone 4 → AC-12 (menunggu sesi GUI kamu)
 
 ### Acceptance-criteria coverage
 
-- AC-11: kode `traefik_compatibility` dan run native nya di sini; record evidence di `evidence/compatibility/`, `versions.json`, dan catalog menunggu commit evidence langkah 8 dan 9.
+- AC-10: catalog revision 13, ledger, dan freeze di sini.
+- AC-11: record evidence, `versions.json`, dan konformitas di sini dan di Milestone 2b.
 - AC-7: byte `/etc/hosts` di `traefik_compatibility`.
-- AC-10, AC-12, AC-14: menunggu langkah 9 dan 10.
+- AC-12: kode test di sini; run dan baris `HANDOVER_PROVEN` menunggu langkah manual 7.
+- AC-14: diff akhir di bagian Milestone 4.
 
 ## Milestone 4: Journey dari CLI dan GUI
 
-_Build 2026-11-12 (dev-f41-m2b): langkah 11, commit `dec8f746`, dan langkah 12 (bagian ini). Run native langkah 11 di Mac ini: record `PASS`. Langkah manual di bawah dijalankan kamu, bukan sesi build; langkah 1 butuh unduhan dan langkah 7 butuh sesi GUI yang login. Pemeriksaan AC-14 atas diff akhir menunggu milestone 3._
+_Build 2026-11-12 (dev-f41-m2b): langkah 11, commit `dec8f746`, dan langkah 12 (bagian ini). Run native langkah 11 di Mac ini: record `PASS`. Langkah manual di bawah dijalankan kamu, bukan sesi build; langkah 1 butuh unduhan dan langkah 7 butuh sesi GUI yang login. Pemeriksaan AC-14 atas diff sesudah milestone 3 dicatat di bawah (dev-f41-m3)._
 
 ### UI / manual
 
 GUI mengikuti Interaction policy di `AGENTS.md`: hanya kontrol pointer dan teks biasa, tanpa shortcut, VoiceOver, atau identifier test.
 
-- [ ] 1. Di app: buka Catalog, pilih Traefik (sekarang tersedia), pasang runtime 3.7.15 (unduhan, hanya kamu yang menjalankan), buat instance `edge-a` dan `edge-b`, lalu Start keduanya → AC-9 (menunggu milestone 3: Traefik masuk catalog di langkah 9)
+- [ ] 1. Di app: buka Catalog, pilih Traefik (sekarang tersedia), pasang runtime 3.7.15 (unduhan, hanya kamu yang menjalankan), buat instance `edge-a` dan `edge-b`, lalu Start keduanya → AC-9 (Traefik ada di catalog sejak revision 13)
 - [ ] 2. Di `edge-a`, tab Configuration: tambah satu route di daftar Routes (Name `api`, Rule ``Host(`app.localhost`)``, Backend URL ke server lokal kamu). Coba dulu Backend URL dengan path, misalnya `http://127.0.0.1:3000/api`: periksa error di field itu dan bahwa tidak ada revision baru, lalu hapus path nya. Periksa tag "Applies on reload" dan tombol Apply and Reload, lalu Apply. Jalankan `curl -H 'Host: app.localhost' http://127.0.0.1:<port web edge-a>/` dan periksa jawabannya; ulangi ke port `edge-b` dan periksa 404 → AC-9, AC-15, AC-2
 - [ ] 3. Ubah Log level: periksa tag "Requires restart" dan tombol Apply and Restart → AC-9
 - [ ] 4. Ganti Rule menjadi `Host(` lalu Apply: periksa kartu gagal, status not ready, dan banner "Revision N hasn’t reached ready". Klik Roll Back to Revision M dan periksa route menjawab lagi → AC-4
 - [ ] 5. Menu Open In: Routes File membuka Finder di `routes.yaml`; Loaded Routers membuka JSON router di browser → AC-1
 - [ ] 6. Doctor saat langkah 4 sebelum roll back: periksa remedy "Traefik hasn’t loaded the routes Stackly wrote" → AC-13
-- [ ] 7. Test launchd AC-12 butuh sesi GUI yang login: `cargo test -p stacklyd --test native_launchd -- --ignored traefik_survives`. Sesi build menjalankannya hanya dengan izin lead; tanpa itu `BLOCKED` dengan `owner` user → AC-12 (menunggu milestone 3: test dan `HANDOVER_PROVEN` di langkah 10)
-- [ ] `git diff --stat main...HEAD` sesudah milestone 3 → di `crates/` hanya test, golden, fixture compat, dan satu baris `HandoverProof` di `crates/core/src/supervisor/handover.rs` (beserta modul test nya); tidak ada file di `crates/protocol/`, `apps/macos/`, atau modul format config, probe, dan hash `crates/core` → AC-14 (menunggu milestone 3)
+- [ ] 7. Test launchd AC-12, di sesi GUI kamu yang login. Test ini menuntut rencana restart memutuskan `keep` dengan alasan `handover_proven`, jadi baris proof dipasang dulu secara lokal: di `crates/core/src/supervisor/handover.rs` tambah `HandoverProof::new("official/traefik", "1", "spec-0041-ac-12"),` di `HANDOVER_PROVEN`, dan di modul test nya ubah `("official/traefik", "1.0.0", false)` menjadi `true`. Lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 traefik_survives`. Yang diharapkan: `traefik_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` lulus, PID dan waktu mulai yang sama sesudah planned restart dan SIGKILL daemon, route menjawab `alpha` sesudah setiap akhir daemon, dan proses baru sesudah `kickstart -k` dan `bootout`. Record `PASS`: commit kedua perubahan `handover.rs` bersama ID record evidence nya. `FAIL` atau `BLOCKED`: buang kedua perubahan itu, dan AC-12 tetap terbuka. Tanpa sesi GUI test berakhir `BLOCKED`, `reason` sesi login GUI, `owner` `@ojiepermana` → AC-12, AC-14
+- [x] `git diff --stat main...HEAD` sesudah milestone 3 (dev-f41-m3) → di `crates/` hanya test, golden, dan fixture compat (`crates/core/tests/`); tidak ada file di `crates/core/src/`, `crates/protocol/`, `apps/macos/`, atau modul format config, probe, dan hash `crates/core`. Baris `HandoverProof` yang AC-14 izinkan belum ada, karena menunggu langkah manual 7 → AC-14
 
 ### Commands
 
@@ -150,5 +157,5 @@ GUI mengikuti Interaction policy di `AGENTS.md`: hanya kontrol pointer dan teks 
 - AC-9: bagian CLI di `cli::cli_applies_routes_with_a_reload_and_the_log_level_with_a_restart`; bagian GUI di langkah manual 1 sampai 3.
 - AC-13: `stackly doctor --instance` di test yang sama; GUI di langkah manual 6.
 - AC-15: bagian GUI di langkah manual 2.
-- AC-12: langkah manual 7, menunggu langkah 10.
-- AC-14: menunggu milestone 3 (pemeriksaan diff akhir).
+- AC-12: kode test di Milestone 3; run dan baris `HANDOVER_PROVEN` di langkah manual 7.
+- AC-14: pemeriksaan diff sesudah milestone 3 di atas; satu baris `HandoverProof` menyusul langkah manual 7.
