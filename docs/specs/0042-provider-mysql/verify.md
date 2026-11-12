@@ -76,7 +76,7 @@ Semua test di bawah native (`#[ignore = "native: ..."]`), satu instance per test
 
 ## Milestone 3: MySQL 9.7, isolasi, penolakan line, konformitas, evidence, dan catalog
 
-_Bagian ini baru memuat langkah 9 dan 10. Langkah 11 (catalog dan `provider freeze`) dan 12 (evidence `compatibility.json`) menunggu giliran catalog._
+_Langkah 9 dan 10, lalu langkah 11 (catalog dan `provider freeze`) dan 12 (evidence `compatibility.json`) di giliran catalog sesudah perbaikan lifecycle `de5d0e14` di `main`: run evidence `01a1cecf-e78a-7057-bb99-9a34b837ae88` dari `HEAD` bersih `de5d0e14`, 37 record native `PASS`._
 
 ### UI / manual
 
@@ -86,7 +86,7 @@ _Bagian ini baru memuat langkah 9 dan 10. Langkah 11 (catalog dan `provider free
 
 Semua test native, satu per satu (`--test-threads 1`), dari `mysql-8.4.11-macos-aarch64` dan `mysql-9.7.2-macos-aarch64` di cache runtime; tanpa artefak test berakhir `BLOCKED`.
 
-- [ ] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 mysql_9_7 --skip sentinel --skip mismatch` → 13 test lulus: suite Milestone 2 (init, auth, endpoints, paths, readiness, stop, tools, lifecycle, binary log, adoption) untuk runtime 9.7.2, dengan hasil yang sama seperti 8.4 → AC-3 sampai AC-8, AC-12, AC-13 untuk 9.7
+- [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 mysql_9_7 --skip sentinel --skip mismatch` → 13 test lulus (di run evidence `01a1cecf…` sesudah perbaikan lifecycle): suite Milestone 2 (init, auth, endpoints, paths, readiness, stop, tools, lifecycle, binary log, adoption) untuk runtime 9.7.2, dengan hasil yang sama seperti 8.4 → AC-3 sampai AC-8, AC-12, AC-13 untuk 9.7
 - [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 sentinel::` → 3 test lulus: dua instance 8.4, dua instance 9.7, dan satu 8.4 di samping satu 9.7, masing masing dengan satu baris di `stackly_sentinel.marker`; sesudah semuanya stop lalu start, query lewat TCP dan socket setiap instance hanya mengembalikan barisnya sendiri → AC-9
 - [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 mismatch::` → 2 test lulus: data 8.4 yang diikat ke runtime 9.7 (dan 9.7 ke 8.4) gagal start dengan `supervisor.data_incompatible` (`outcome` `incompatible`, `data` dan `runtime` sesuai) sebelum spawn, tanpa `mysqld`, byte `mysql_upgrade_history` dan `mysql.ibd` tidak berubah, dan `rebind::check` memberi outcome yang sama; di runtime sendiri penanda yang dihapus memberi `supervisor.data_unavailable` (`reason` `the data marker is missing`), versi `8.0.40` memberi `marker_mismatch`, dan sesudah penanda kembali instance ready → AC-10
 - [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 existing_data::` → salinan folder data MySQL 8.4 yang sah, disisipkan kait `after_layout`, membuat create gagal `instance.data_not_empty` tanpa langkah `init`, tanpa `mysqld`, dan setiap file salinan sama byte demi byte → AC-11
@@ -100,20 +100,20 @@ Semua test native, satu per satu (`--test-threads 1`), dari `mysql-8.4.11-macos-
 - AC-10 · `mismatch::` kedua arah, termasuk `rebind::check`
 - AC-11 · `existing_data::` dengan data 8.4
 - AC-14 · konformitas native kedua lini; `scenarios.yaml` tidak berubah
-- AC-1 (catalog) · langkah 11 di giliran catalog; AC-16 · `compat::` lulus, record evidence di giliran catalog (lihat di bawah)
+- AC-1 (catalog) · `[[provider]]` di catalog revision 16, ledger, dan `provider freeze`; AC-16 · `compat::` lulus dan record `compatibility` per artefak di `providers/mysql/versions.json` (lihat di bawah)
 - AC-17 · Milestone 4
 
 ### Commands (langkah 11 dan 12)
 
 - [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 compat::` → `mysql_8_4_runs_the_package_and_records_what_it_proved` dan `mysql_9_7_runs_the_package_and_records_what_it_proved` lulus dari cache: lewat binary `stacklyd`, `SELECT VERSION()` 8.4.11 dan 9.7.2 sebagai subject, dua instance satu lini dengan baris `stackly_compat.marker` sendiri, restart dengan `mysqld` baru di data yang sama, adopsi PID dan `startedAt` keduanya sesudah `SIGKILL` daemon, stop tanpa proses, lalu data diikat ke runtime lini lain ditolak `supervisor.data_incompatible` tanpa spawn; `compatibility.json` per artefak memuat `adoption`, `init`, `isolation`, `line_mismatch_refusal`, `readiness`, `restart`, `start`, `stop` → AC-16
-- [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test mysql --locked -- --ignored --test-threads 1`, `cargo xtask runtime compat-record`, `cargo xtask codegen` (record `compatibility` per artefak di `providers/mysql/versions.json`) → AC-16
-- [ ] Giliran catalog: entri MySQL ke `[[provider]]` dengan catalog revision 16 (urutan lead: sesudah perbaikan lifecycle di `main`), `cargo xtask catalog check --update`, `cargo xtask provider freeze providers/mysql` → AC-1
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test mysql --locked -- --ignored --test-threads 1` dari `HEAD` bersih `de5d0e14` → 37 record native `PASS`, 0 problem, `sourceDirty` `false`; run `01a1cecf-e78a-7057-bb99-9a34b837ae88`; lalu `cargo xtask runtime compat-record target/evidence/01a1cecf-e78a-7057-bb99-9a34b837ae88/report.json` → `evidence/compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/`, dan `cargo xtask codegen` → `providers/mysql/versions.json` mendapat satu record scope `provider` `pass` per artefak (8.4.11 dan 9.7.2) dengan delapan check, tanpa `knownLimitations`, `manifestSha256` `e6478e38…` → AC-16
+- [x] Entri MySQL pindah ke `[[provider]]` (mark `My`, tile `teal`, tanpa catatan platform karena spec tidak menyebutnya) dengan catalog revision 16; `cargo xtask catalog check --update` → `ok catalog revision 16 fc9d3da1…`; `cargo xtask provider freeze providers/mysql` menulis `crates/core/tests/fixtures/compat/mysql/1.0.0/`; `cargo test -p xtask`, `cargo test -p stackly-core`, `cargo test -p stackly-cli`, dan `cargo test -p stacklyd` lulus tanpa perubahan fixture → AC-1
 
 ## Milestone 4: Handover
 
 ### UI / manual
 
-- [ ] `NOT_RUN` · `BLOCKED` di sesi build (`reason` test launchd butuh sesi login GUI user, `owner` `@ojiepermana`) · AC-17, di sesi GUI yang login. Kedua test gagal di assert `Keep/HandoverProven` sampai baris handover ada, jadi pasang dulu secara lokal: di `crates/core/src/supervisor/handover.rs` tambah `HandoverProof::new("official/mysql", "1", "spec-0042-ac-17"),` ke `HANDOVER_PROVEN`, dan di tabel test modul itu yang memuat `("official/clickhouse", "1.0.0", false)` tambah `("official/mysql", "1.0.0", true)`. Lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 mysql_`. Harapan: `mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` dan `mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` lulus (PID dan `startedAt` sama sesudah planned restart dan `SIGKILL` daemon, proses baru sesudah `kickstart -k` dan `bootout`). PASS keduanya: commit kedua perubahan `handover.rs` bersama ID record nya. Salah satu FAIL atau BLOCKED: buang keduanya; AC-17 bagian entri tetap terbuka.
+- [ ] `NOT_RUN` · `BLOCKED` di sesi build (`reason` test launchd butuh sesi login GUI user, `owner` `@ojiepermana`) · AC-17, di sesi GUI yang login. Kedua test gagal di assert `Keep/HandoverProven` sampai baris handover ada, dan `cargo xtask evidence run` hanya memberi record yang sah dari `HEAD` bersih, jadi commit dulu dua baris di `crates/core/src/supervisor/handover.rs`: `HandoverProof::new("official/mysql", "1", "spec-0042-ac-17"),` di `HANDOVER_PROVEN`, dan `("official/mysql", "1.0.0", true)` di tabel test modul itu yang memuat `("official/clickhouse", "1.0.0", false)`; `git commit -m "feat(core): spec 0042 step 13, official/mysql in HANDOVER_PROVEN"`. Lalu dari `HEAD` itu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 mysql_`. Harapan: `mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` dan `mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` lulus (PID dan `startedAt` sama sesudah planned restart dan `SIGKILL` daemon, proses baru sesudah `kickstart -k` dan `bootout`). PASS keduanya: commit `handover.rs` tetap, dan ID run evidence dicatat di sini. Salah satu FAIL atau BLOCKED: `git revert` commit `handover.rs`; AC-17 bagian entri tetap terbuka.
 
 ### Commands
 

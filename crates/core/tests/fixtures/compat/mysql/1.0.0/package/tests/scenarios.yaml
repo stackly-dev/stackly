@@ -1,0 +1,8 @@
+# The scenarios cargo xtask provider test runs for this package (spec 0042,
+# *Skenario konformitas*). Settings never hold a secret: the daemon generates
+# rootPassword.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+  - name: binlog
+    settings: { binaryLog: true }

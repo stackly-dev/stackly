@@ -180,6 +180,33 @@
           "summary": "mysql 8.4.11 ready in 712 ms, stopped in 1152 ms",
           "testedAt": "2026-10-18T11:20:55.912Z",
           "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f5507749f7"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/mysql",
+            "revision": "1.0.0",
+            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "isolation",
+            "line_mismatch_refusal",
+            "readiness",
+            "restart",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "MySQL 8.4.11 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+          "testedAt": "2026-11-12T08:16:24.932Z",
+          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced3-7409-7707-9432-5103c55a1513"
         }
       ]
     },
@@ -375,6 +402,33 @@
           "summary": "mysql 9.7.2 ready in 664 ms, stopped in 1118 ms",
           "testedAt": "2026-10-18T11:19:44.251Z",
           "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f0ff829a0b"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/mysql",
+            "revision": "1.0.0",
+            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "isolation",
+            "line_mismatch_refusal",
+            "readiness",
+            "restart",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "MySQL 9.7.2 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+          "testedAt": "2026-11-12T08:17:30.693Z",
+          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced4-576d-72ce-8887-4321a9c158bd"
         }
       ]
     }

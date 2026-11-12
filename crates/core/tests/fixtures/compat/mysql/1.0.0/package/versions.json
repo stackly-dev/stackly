@@ -1,0 +1,436 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "mysql",
+  "artifacts": [
+    {
+      "id": "mysql-8.4.11-macos-aarch64",
+      "line": "8.4",
+      "version": "8.4.11",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "14.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.11-macos15-arm64.tar.gz"
+      ],
+      "sha256": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+      "size": 167977240,
+      "archiveRoot": "mysql-8.4.11-macos15-arm64",
+      "signingPolicy": "keep_or_adhoc",
+      "license": "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
+      "licenseUrl": "https://github.com/mysql/mysql-server/blob/mysql-8.4.11/LICENSE",
+      "executables": [
+        "bin/mysqld",
+        "bin/mysql",
+        "bin/mysqladmin"
+      ],
+      "unpackedSize": 669647849,
+      "entryCount": 363,
+      "dependencies": [
+        {
+          "name": "libssl.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libssl.3.dylib",
+          "version": "3.5.7",
+          "license": "Apache-2.0",
+          "sourceUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+        },
+        {
+          "name": "libcrypto.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libcrypto.3.dylib",
+          "version": "3.5.7",
+          "license": "Apache-2.0",
+          "sourceUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+        },
+        {
+          "name": "libprotobuf-lite.24.4.0.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libprotobuf-lite.24.4.0.dylib",
+          "version": "24.4",
+          "license": "BSD-3-Clause",
+          "sourceUrl": "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+        },
+        {
+          "name": "libfido2.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libfido2.1.dylib",
+          "version": "1.15.0",
+          "license": "BSD-2-Clause",
+          "sourceUrl": "https://developers.yubico.com/libfido2/Releases/libfido2-1.15.0.tar.gz"
+        },
+        {
+          "name": "libgssapi_krb5.2.2.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libgssapi_krb5.2.2.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libkrb5.3.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libkrb5.3.3.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libk5crypto.3.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libk5crypto.3.1.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libkrb5support.1.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libkrb5support.1.1.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libcom_err.3.0.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libcom_err.3.0.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        },
+        {
+          "name": "libc++.1.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libc++.1.dylib"
+        },
+        {
+          "name": "libresolv.9.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libresolv.9.dylib"
+        },
+        {
+          "name": "libsasl2.2.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libsasl2.2.dylib"
+        },
+        {
+          "name": "libncurses.5.4.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libncurses.5.4.dylib"
+        },
+        {
+          "name": "CoreFoundation",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+        },
+        {
+          "name": "CoreServices",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+        },
+        {
+          "name": "IOKit",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
+        },
+        {
+          "name": "Kerberos",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos"
+        }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "launch_agent",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "mysql 8.4.11 ready in 712 ms, stopped in 1152 ms",
+          "testedAt": "2026-10-18T11:20:55.912Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f5507749f7"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/mysql",
+            "revision": "1.0.0",
+            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "isolation",
+            "line_mismatch_refusal",
+            "readiness",
+            "restart",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "MySQL 8.4.11 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+          "testedAt": "2026-11-12T08:16:24.932Z",
+          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced3-7409-7707-9432-5103c55a1513"
+        }
+      ]
+    },
+    {
+      "id": "mysql-9.7.2-macos-aarch64",
+      "line": "9.7",
+      "version": "9.7.2",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "14.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://cdn.mysql.com/Downloads/MySQL-9.7/mysql-9.7.2-macos15-arm64.tar.gz"
+      ],
+      "sha256": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "size": 177169946,
+      "archiveRoot": "mysql-9.7.2-macos15-arm64",
+      "signingPolicy": "keep_or_adhoc",
+      "license": "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
+      "licenseUrl": "https://github.com/mysql/mysql-server/blob/mysql-9.7.2/LICENSE",
+      "executables": [
+        "bin/mysqld",
+        "bin/mysql",
+        "bin/mysqladmin"
+      ],
+      "stable": true,
+      "unpackedSize": 713257358,
+      "entryCount": 376,
+      "dependencies": [
+        {
+          "name": "libssl.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libssl.3.dylib",
+          "version": "3.5.7",
+          "license": "Apache-2.0",
+          "sourceUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+        },
+        {
+          "name": "libcrypto.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libcrypto.3.dylib",
+          "version": "3.5.7",
+          "license": "Apache-2.0",
+          "sourceUrl": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz"
+        },
+        {
+          "name": "libprotobuf-lite.24.4.0.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libprotobuf-lite.24.4.0.dylib",
+          "version": "24.4",
+          "license": "BSD-3-Clause",
+          "sourceUrl": "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+        },
+        {
+          "name": "libprotobuf.24.4.0.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libprotobuf.24.4.0.dylib",
+          "version": "24.4",
+          "license": "BSD-3-Clause",
+          "sourceUrl": "https://github.com/protocolbuffers/protobuf/releases/download/v24.4/protobuf-24.4.tar.gz"
+        },
+        {
+          "name": "libfido2.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libfido2.1.dylib",
+          "version": "1.15.0",
+          "license": "BSD-2-Clause",
+          "sourceUrl": "https://developers.yubico.com/libfido2/Releases/libfido2-1.15.0.tar.gz"
+        },
+        {
+          "name": "libgssapi_krb5.2.2.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libgssapi_krb5.2.2.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libkrb5.3.3.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libkrb5.3.3.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libk5crypto.3.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libk5crypto.3.1.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libkrb5support.1.1.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libkrb5support.1.1.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libcom_err.3.0.dylib",
+          "kind": "bundled",
+          "installName": "@loader_path/libcom_err.3.0.dylib",
+          "version": "1.22",
+          "license": "MIT",
+          "sourceUrl": "https://kerberos.org/dist/krb5/1.22/krb5-1.22.tar.gz"
+        },
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        },
+        {
+          "name": "libc++.1.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libc++.1.dylib"
+        },
+        {
+          "name": "libresolv.9.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libresolv.9.dylib"
+        },
+        {
+          "name": "libsasl2.2.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libsasl2.2.dylib"
+        },
+        {
+          "name": "libncurses.5.4.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libncurses.5.4.dylib"
+        },
+        {
+          "name": "libcurl.4.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libcurl.4.dylib"
+        },
+        {
+          "name": "CoreFoundation",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+        },
+        {
+          "name": "CoreServices",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices"
+        },
+        {
+          "name": "IOKit",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit"
+        },
+        {
+          "name": "Kerberos",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos"
+        }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "launch_agent",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "mysql 9.7.2 ready in 664 ms, stopped in 1118 ms",
+          "testedAt": "2026-10-18T11:19:44.251Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f0ff829a0b"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/mysql",
+            "revision": "1.0.0",
+            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "init",
+            "isolation",
+            "line_mismatch_refusal",
+            "readiness",
+            "restart",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "MySQL 9.7.2 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+          "testedAt": "2026-11-12T08:17:30.693Z",
+          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced4-576d-72ce-8887-4321a9c158bd"
+        }
+      ]
+    }
+  ]
+}
