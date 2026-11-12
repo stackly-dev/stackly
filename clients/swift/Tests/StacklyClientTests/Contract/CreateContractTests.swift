@@ -32,13 +32,18 @@ struct CreateContractTests {
         #expect(
             nats.fields.map(\.key)
                 == [
-                    "serverName", "jetstream", "jetstreamMaxMemoryBytes",
-                    "jetstreamMaxFileBytes", "maxPayloadBytes",
+                    "serverName", "jetstream", "clientPassword", "jetstreamMaxMemoryMiB",
+                    "jetstreamMaxFileMiB", "maxPayloadKiB",
                 ])
         #expect(nats.fields[0].managed)
         #expect(nats.fields[1].kind == .boolean)
         #expect(nats.fields[1].default == .boolean(true))
-        for field in nats.fields.dropFirst(2) {
+        let password = nats.fields[2]
+        #expect(password.secret && password.required && password.printableOnly)
+        #expect(password.visibility == .basic)
+        #expect(password.minLength == 8 && password.maxLength == 128)
+        #expect(password.default == nil)
+        for field in nats.fields.dropFirst(3) {
             #expect(field.kind == .integer)
             #expect(field.visibility == .advanced)
             #expect(field.minimum != nil && field.maximum != nil)
