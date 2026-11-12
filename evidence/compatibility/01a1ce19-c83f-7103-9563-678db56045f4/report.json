@@ -1,0 +1,143 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "532c21b9e87fcc49f958e582af5938252488350e",
+    "sourceDirty": false,
+    "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "traefik",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads=1"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T04:52:38.591537Z",
+  "finishedAt": "2026-11-12T04:57:47.037418Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce1a-f3d6-7017-b562-316f587f9e7c",
+      "covers": [
+        "BR-025",
+        "REQ-039",
+        "AC-039"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "traefik",
+        "name": "compatibility::traefik_compatibility",
+        "file": "apps/daemon/tests/traefik/compatibility.rs",
+        "line": 114
+      },
+      "status": "PASS",
+      "expected": "behind the stacklyd binary a Traefik 3.7.15 instance is created, started, and ready only after its router loaded, healthy with /ping 200, and serves its route; a second instance with the same route name and rule is ready from its own backend; a routing update on the first answers within reloadSeconds with the same pid while the second is untouched; schema refusals write nothing, a rule Traefik rejects fails the apply and keeps the last known good, an explicit roll back makes the route answer again; both stop with a normal stop and leave no process or listener; /etc/hosts keeps its bytes",
+      "actual": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.292714375s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/hosts unchanged",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T04:53:55.286628Z",
+      "finishedAt": "2026-11-12T04:54:51.929158Z",
+      "evidencePath": "artifacts/01a1ce1a-f3d6-7017-b562-316f587f9e7c/",
+      "context": {
+        "sourceCommit": "532c21b9e87fcc49f958e582af5938252488350e",
+        "sourceDirty": false,
+        "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "traefik",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
