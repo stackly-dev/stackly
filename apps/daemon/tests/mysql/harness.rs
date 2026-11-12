@@ -1231,3 +1231,202 @@ pub fn runtime_pair(installed: &Installed, my: My) -> (RuntimeId, RuntimeLine) {
         my.line.parse().expect("a runtime line"),
     )
 }
+
+/// Copies the folder `from` into `to`, the way a test makes a changed copy
+/// of the package.
+pub fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("a folder can be made");
+    for entry in std::fs::read_dir(from)
+        .expect("a folder can be read")
+        .flatten()
+    {
+        let target = to.join(entry.file_name());
+        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), &target).expect("a file can be copied");
+        }
+    }
+}
+
+/// A copy of the package in `root` whose `provider.yaml` has `from` replaced
+/// by `to`.
+#[must_use]
+pub fn package_copy_with(root: &TestRoot, from: &str, to: &str) -> PathBuf {
+    let dir = root.path().join("mysql");
+    copy_tree(&package_dir(), &dir);
+    let manifest = dir.join("provider.yaml");
+    let text = std::fs::read_to_string(&manifest).expect("the manifest can be read");
+    let changed = text.replace(from, to);
+    assert_ne!(text, changed, "the manifest holds {from}");
+    std::fs::write(&manifest, changed).expect("the manifest can be written");
+    dir
+}
+
+/// Creates an instance that is expected to fail and waits for the failed
+/// operation: returns the instance it named and the operation.
+pub async fn failed_create(
+    site: &Site,
+    api: &Api,
+    name: &str,
+    password: &str,
+) -> (Uuid, stackly_protocol::operation::OperationDetail) {
+    let accepted = api
+        .create(create_params(
+            site,
+            name,
+            PortRequest::Auto,
+            password,
+            json!({}),
+        ))
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id: Uuid = accepted
+        .operation
+        .resource
+        .as_ref()
+        .expect("the operation names the instance")
+        .id
+        .parse()
+        .expect("an instance id");
+    let detail = api
+        .wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Failed,
+        )
+        .await;
+    (id, detail)
+}
+
+/// The PIDs of the `mysqld` processes whose argv names `data` as their data
+/// folder.
+#[must_use]
+pub fn mysqld_serving(data: &Path) -> Vec<u32> {
+    let needle = format!("--datadir={}", data.display());
+    output_of("/bin/ps", &["-axww", "-o", "pid=,command="])
+        .lines()
+        .filter(|line| line.contains("bin/mysqld") && line.contains(&needle))
+        .filter_map(|line| line.split_whitespace().next()?.parse().ok())
+        .collect()
+}
+
+/// The `(LISTEN)` lines and the Unix socket paths `lsof` shows for `pid`.
+#[must_use]
+pub fn listeners(pid: u32) -> (Vec<String>, Vec<String>) {
+    let pid = pid.to_string();
+    // `-i` and `-U` are ANDed by `-a`, so each kind is listed on its own.
+    let tcp = output_of("/usr/sbin/lsof", &["-a", "-p", &pid, "-i", "-n", "-P"]);
+    let unix = output_of("/usr/sbin/lsof", &["-a", "-p", &pid, "-U", "-n", "-P"]);
+    let listening = tcp
+        .lines()
+        .filter(|line| line.contains("(LISTEN)"))
+        .map(str::to_owned)
+        .collect();
+    let sockets = unix
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+        .filter(|name| name.starts_with('/'))
+        .map(str::to_owned)
+        .collect();
+    (listening, sockets)
+}
+
+/// The value of the variable `name` as `root` reads it.
+#[must_use]
+pub fn variable(mysql: &Mysql, password: &str, name: &str) -> String {
+    mysql.scalar(password, &format!("SELECT @@{name}"))
+}
+
+/// The text of every line of the durable log of `id` (spec 0027), oldest
+/// first, read through `instance.logs_read`.
+pub async fn log_lines(api: &Api, id: Uuid) -> Vec<String> {
+    use stackly_protocol::logs::{LogAnchor, LogEntryKind, LogPosition, LogsReadParams};
+    use stackly_protocol::{Call, Reply};
+
+    let mut params = LogsReadParams {
+        instance: id,
+        streams: Vec::new(),
+        contains: None,
+        position: None,
+        limit: Some(1000),
+    };
+    let mut lines = Vec::new();
+    loop {
+        let reply = api
+            .client
+            .call(Call::InstanceLogsRead(params.clone()))
+            .await
+            .expect("the log reads");
+        let Reply::InstanceLogsRead(page) = reply else {
+            panic!("not a logs_read reply: {reply:?}");
+        };
+        let mut texts: Vec<String> = page
+            .entries
+            .iter()
+            .filter_map(|entry| match &entry.kind {
+                LogEntryKind::Line(line) => Some(line.text.clone()),
+                _ => None,
+            })
+            .collect();
+        texts.append(&mut lines);
+        lines = texts;
+        match page.earlier {
+            Some(cursor) => params.position = Some(LogPosition::Before(LogAnchor { cursor })),
+            None => return lines,
+        }
+    }
+}
+
+/// Creates an instance whose root password the daemon generates, and
+/// returns it with the generated value, read from the fake secret store.
+pub async fn create_generated(site: &Site, api: &Api, name: &str) -> Made {
+    let port = free_port();
+    let mut params = create_params(site, name, PortRequest::Fixed(port), "unused", json!({}));
+    params.secrets = vec![SecretFieldInput {
+        field: PASSWORD_FIELD.to_owned(),
+        input: SecretInput::Generate,
+    }];
+    let accepted = api
+        .create(params)
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    let done = api
+        .wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Succeeded,
+        )
+        .await;
+    assert_eq!(
+        done.operation.state,
+        stackly_protocol::operation::OperationState::Succeeded,
+        "{done:?}"
+    );
+    let reference: stackly_domain::SecretRef =
+        format!("local:instance/{}/root-password", instance_id(id))
+            .parse()
+            .expect("a secret reference");
+    let password = site
+        .secrets
+        .stored_value(&reference)
+        .expect("the generated password is in the secret store");
+    Made { id, port, password }
+}
+
+/// Whether `data` holds a `binlog.*` file.
+pub fn binlog_files(data: &std::path::Path) -> bool {
+    std::fs::read_dir(data).is_ok_and(|entries| {
+        entries
+            .flatten()
+            .any(|entry| entry.file_name().to_string_lossy().starts_with("binlog."))
+    })
+}

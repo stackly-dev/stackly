@@ -7,11 +7,23 @@
 //! download.
 #![cfg(target_os = "macos")]
 
+#[path = "mysql/auth.rs"]
+mod auth;
 #[path = "mysql/blocked.rs"]
 mod blocked;
 #[path = "common/mod.rs"]
 mod common;
+#[path = "supervisor/config_calls.rs"]
+mod config_calls;
+#[path = "mysql/endpoints.rs"]
+mod endpoints;
+#[path = "mysql/format.rs"]
+mod format;
 #[path = "mysql/harness.rs"]
 mod harness;
+#[path = "mysql/init.rs"]
+mod init;
+#[path = "mysql/paths.rs"]
+mod paths;
 #[path = "supervisor/support.rs"]
 mod support;
