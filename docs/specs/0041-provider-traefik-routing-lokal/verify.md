@@ -102,3 +102,53 @@ _Build 2026-11-12 (dev-f41-m2b): langkah 7a, commit `d898f493`, dan langkah 7b. 
 - AC-7: aturan TLS pada file yang sudah diparse di test fixture core dan di `surface.rs`; byte `/etc/hosts` di `traefik_compatibility` (kode langkah 8, run native milestone 3).
 - AC-11: versi subject dari `GET /api/version` di setiap test native Traefik; konformitas lulus di atas paket baru. Record evidence kompatibilitas, `versions.json`, dan catalog menunggu milestone 3.
 - AC-15: bagian schema di test fixture core, bagian validasi dan Traefik asli di dua test `routing.rs`.
+
+## Milestone 3: Evidence, catalog, dan handover
+
+_Build sebagian 2026-11-12 (dev-f41-m2b): hanya kode langkah 8, commit `ff337dea`. Run native di Mac ini dengan artefak dari cache: record `PASS`, `compatibility.json` dengan sepuluh check dan dua `knownLimitations`. Belum dijalankan, menunggu giliran catalog lead: `cargo xtask runtime compat-record`, `cargo xtask codegen` untuk `providers/traefik/versions.json`, langkah 9 (catalog, `catalog-revisions.json`, freeze, `xtask/tests/provider_check.rs`), dan langkah 10 (launchd dan `HANDOVER_PROVEN`)._
+
+### UI / manual
+
+- [ ] Tidak ada langkah GUI di bagian ini. Test launchd AC-12 (langkah 10) ada di *Langkah manual* 7 di bagian Milestone 4.
+
+### Commands
+
+- [x] `cargo test -p stacklyd --test traefik -- --ignored traefik_compatibility` dengan `STACKLY_EVIDENCE_DIR=<dir> STACKLY_EVIDENCE_KIND=native` → lulus; record `PASS` dengan `covers` `BR-025`, `REQ-039`, `AC-039` dan subject `traefik 3.7.15` dari `GET /api/version`; `<dir>/artifacts/<id>/compatibility.json` memuat `providerRevision` `official/traefik` `1.0.0` `c57b6a82…`, `checks` `health`, `http`, `init`, `invalid_config`, `readiness`, `rollback`, `routing_update`, `second_instance`, `start`, `stop`, dan `knownLimitations` `dashboard_not_offered`, `https_not_offered`; byte `/etc/hosts` sama sebelum dan sesudah → AC-11, AC-7
+- [ ] Dari `HEAD` yang bersih: `cargo test -p stacklyd --test traefik -- --ignored`, `cargo xtask runtime compat-record <report.json>`, lalu `cargo xtask codegen` → `providers/traefik/versions.json` mendapat record scope `provider` → AC-11 (menunggu giliran catalog)
+- [ ] `cargo xtask catalog check` lalu `cargo xtask provider freeze providers/traefik` sesudah entri `[[provider]]` → AC-10 (menunggu giliran catalog)
+
+### Acceptance-criteria coverage
+
+- AC-11: kode `traefik_compatibility` dan run native nya di sini; record evidence di `evidence/compatibility/`, `versions.json`, dan catalog menunggu commit evidence langkah 8 dan 9.
+- AC-7: byte `/etc/hosts` di `traefik_compatibility`.
+- AC-10, AC-12, AC-14: menunggu langkah 9 dan 10.
+
+## Milestone 4: Journey dari CLI dan GUI
+
+_Build 2026-11-12 (dev-f41-m2b): langkah 11, commit `dec8f746`, dan langkah 12 (bagian ini). Run native langkah 11 di Mac ini: record `PASS`. Langkah manual di bawah dijalankan kamu, bukan sesi build; langkah 1 butuh unduhan dan langkah 7 butuh sesi GUI yang login. Pemeriksaan AC-14 atas diff akhir menunggu milestone 3._
+
+### UI / manual
+
+GUI mengikuti Interaction policy di `AGENTS.md`: hanya kontrol pointer dan teks biasa, tanpa shortcut, VoiceOver, atau identifier test.
+
+- [ ] 1. Di app: buka Catalog, pilih Traefik (sekarang tersedia), pasang runtime 3.7.15 (unduhan, hanya kamu yang menjalankan), buat instance `edge-a` dan `edge-b`, lalu Start keduanya → AC-9 (menunggu milestone 3: Traefik masuk catalog di langkah 9)
+- [ ] 2. Di `edge-a`, tab Configuration: tambah satu route di daftar Routes (Name `api`, Rule ``Host(`app.localhost`)``, Backend URL ke server lokal kamu). Coba dulu Backend URL dengan path, misalnya `http://127.0.0.1:3000/api`: periksa error di field itu dan bahwa tidak ada revision baru, lalu hapus path nya. Periksa tag "Applies on reload" dan tombol Apply and Reload, lalu Apply. Jalankan `curl -H 'Host: app.localhost' http://127.0.0.1:<port web edge-a>/` dan periksa jawabannya; ulangi ke port `edge-b` dan periksa 404 → AC-9, AC-15, AC-2
+- [ ] 3. Ubah Log level: periksa tag "Requires restart" dan tombol Apply and Restart → AC-9
+- [ ] 4. Ganti Rule menjadi `Host(` lalu Apply: periksa kartu gagal, status not ready, dan banner "Revision N hasn’t reached ready". Klik Roll Back to Revision M dan periksa route menjawab lagi → AC-4
+- [ ] 5. Menu Open In: Routes File membuka Finder di `routes.yaml`; Loaded Routers membuka JSON router di browser → AC-1
+- [ ] 6. Doctor saat langkah 4 sebelum roll back: periksa remedy "Traefik hasn’t loaded the routes Stackly wrote" → AC-13
+- [ ] 7. Test launchd AC-12 butuh sesi GUI yang login: `cargo test -p stacklyd --test native_launchd -- --ignored traefik_survives`. Sesi build menjalankannya hanya dengan izin lead; tanpa itu `BLOCKED` dengan `owner` user → AC-12 (menunggu milestone 3: test dan `HANDOVER_PROVEN` di langkah 10)
+- [ ] `git diff --stat main...HEAD` sesudah milestone 3 → di `crates/` hanya test, golden, fixture compat, dan satu baris `HandoverProof` di `crates/core/src/supervisor/handover.rs` (beserta modul test nya); tidak ada file di `crates/protocol/`, `apps/macos/`, atau modul format config, probe, dan hash `crates/core` → AC-14 (menunggu milestone 3)
+
+### Commands
+
+- [x] `cargo test -p stacklyd --test traefik -- --ignored cli_applies_routes_with_a_reload_and_the_log_level_with_a_restart` dengan `STACKLY_EVIDENCE_DIR=<dir> STACKLY_EVIDENCE_KIND=native` → lulus, record `PASS`: `instance config apply edge-cli --set-json routes=<json> --dry-run` menilai `reload`, apply dengan `--wait` `succeeded`, route menjawab backend baru dengan PID sama; `--set logLevel=DEBUG` menilai `restart`, PID baru, route tetap menjawab; `instance connection edge-cli --all` menunjukkan `web` `http://127.0.0.1:<web>` dan `ping` `http://127.0.0.1:<ping>/ping`, keduanya `available`; apply dengan rule `Host(` keluar bukan 0 dengan `supervisor.reload_failed`, lalu `doctor --instance edge-cli` membawa remedy `routes_not_loaded` dari `official/traefik` dengan tiga langkah, langkah ketiga path folder `dynamic` instance itu → AC-9, AC-13
+- [x] Test itu memakai binary `stackly` lewat `stackly_testkit::cargo_bin`, yang membangun ke `<repo>/target/testkit-bin` → catatan run, bukan AC
+
+### Acceptance-criteria coverage
+
+- AC-9: bagian CLI di `cli::cli_applies_routes_with_a_reload_and_the_log_level_with_a_restart`; bagian GUI di langkah manual 1 sampai 3.
+- AC-13: `stackly doctor --instance` di test yang sama; GUI di langkah manual 6.
+- AC-15: bagian GUI di langkah manual 2.
+- AC-12: langkah manual 7, menunggu langkah 10.
+- AC-14: menunggu milestone 3 (pemeriksaan diff akhir).
