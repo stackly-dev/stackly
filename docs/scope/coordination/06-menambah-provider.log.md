@@ -135,4 +135,12 @@
 
 ## Penutupan
 
-- belum
+- **Semua branch hijau di-merge:** `2026-11-11`; `git branch --no-merged main` kosong
+- **Merge:** `claude/arc-f36-spec-e2dee8`, `claude/arc-f37-spec-659212`, `claude/arc-f38-spec-f3bc3f`, `claude/chk-f37-review-7c8fc0`, `claude/chk-f37-rev-c9d1b3` (lima branch dipakai ulang lintas item; hash merge per item ada di tabel sub sesi dan di "Dicentang pada wave ini"). Tidak ada branch `tidak di-merge`.
+- **Document:** `CHANGELOG.md`, entri fitur 37 di `[Unreleased]` (`6c649fcd`)
+- **/sync:** `2026-11-11`, rentang `e5506e2c..c1fa63de`; `AGENTS.md` (sembilan baris perintah, lima aturan: folder provider baru, trust provider lokal, replay dan guard import, sumber remedy doctor, `catalog.changed`); tidak ada centang yang ditolak
+- **Commit penutup:** commit ini, `docs(scope): close 06-menambah-provider coordination`
+- **Push:** `origin/main` = `eae918d8` · `2026-11-12` atas jawaban user "Push dan bersihkan", lalu commit penutup ini
+- **Dibersihkan:** `claude/arc-f36-spec-e2dee8`, `claude/arc-f38-spec-f3bc3f`, `claude/chk-f37-review-7c8fc0`, `claude/chk-f37-rev-c9d1b3` · keempat sesi diarsipkan (aplikasi ikut menghapus worktree-nya) · branch dihapus dengan `git branch -d` (semuanya lulus `merge-base --is-ancestor <branch> main` dan worktree bersih)
+- **Disimpan:** sesi `arc-f37-spec` (`local_4d9ccf53-81b5-4bb6-8fdd-46ddc3994c50`), worktree `~/worktrees/Stackly/arc-f37-spec-659212`, dan branch `claude/arc-f37-spec-659212` (`5da6834e`, sudah di-merge, worktree bersih): aplikasi menolak mengarsipkan sesi itu dua kali karena masih ada kerja hidup (kemungkinan klien Remote Control). User mengarsipkannya dari sidebar, lalu `git worktree remove` dan `git branch -d`.
+- **Blocker tersisa:** lihat "Blocker terbuka"
