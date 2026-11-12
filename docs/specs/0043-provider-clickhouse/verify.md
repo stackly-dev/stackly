@@ -83,13 +83,25 @@ Semua test native: `cargo test -p stacklyd --test clickhouse -- --ignored --test
 ### UI / manual
 
 - Tidak ada langkah manual untuk langkah 10 selain run spike native di Milestone 2.
+- [ ] `NOT_RUN` · owner `@ojiepermana` · Sesudah catalog revision 16: di app, buka Catalog → ClickHouse tampil sebagai provider (bukan planned), dengan catatan platform `windows` `unsupported` yang menyebut WSL, lalu buat instance dari Catalog dan start → AC-13, AC-16
+- RISK-07: ClickHouse tidak masuk `HANDOVER_PROVEN` dan tidak mendapat test launchd (keputusan spec), jadi restart daemon terencana memakai `stop_restore` dengan `handover_unproven` untuk instance ClickHouse; tidak ada langkah manual handover.
 
 ### Commands
 
 - [ ] `grep -n "ClickHouse\|F43" xtask/src/runtime/spike/providers.rs` → tidak ada hasil: struct recipe `ClickHouse`, fungsi `xml`, cabang `"clickhouse"`, dan penanda `// provisional: F43` hilang → AC-15
 - [ ] `cargo test -p xtask --bin xtask spike` → `the_packaged_providers_are_found_by_their_software` menemukan `providers/clickhouse`, dan `clickhouse_starts_from_its_package_with_the_users_file_and_reads_its_version_line` memulai ClickHouse dari paket: dua port di `config.xml`, `users.xml` di `secrets/` dengan hash dan tanpa password fixture, `CLICKHOUSE_WATCHDOG_ENABLE=0`, `version_args` `server --version`, dan versi dari baris `ClickHouse server version 26.8.30.8 (official build).` → AC-15
 
+- [x] `cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads=1 clickhouse_26_8_passes_conformance` (langkah 9, ditunda dari Milestone 2) → lulus: report native ber verdict pass untuk skenario `default`, tanpa proses dan root tersisa → AC-14
+- [x] `cargo test -p stacklyd --test provider_conformance every_official_package_has_the_step_and_health_limits_its_manifest_gives` → baris `("clickhouse", (120, 120, 60, 30, 43_000))` → AC-14
+- [x] `cargo test -p stacklyd --test clickhouse -- --ignored --test-threads=1 clickhouse_compatibility` → lulus dari cache tanpa unduhan: `SELECT version()` 26.8.30.8 sebagai subject, probe readiness menolak server asing dengan ID lain, dua listener registry tanpa UDP, password salah dan kosong ditolak di native dan HTTP, instance kedua dengan `default.events` sendiri, reload `logLevel` dengan PID sama, baris bertahan lewat stop dan start, stop tanpa proses; `compatibility.json` memuat `auth`, `isolation`, `lifecycle`, `listeners`, `persistence`, `readiness_identity`, `reload`, `stop` tanpa `knownLimitations` → AC-16 (BR-025)
+- [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test clickhouse --locked -- --ignored --test-threads=1`, `cargo xtask runtime compat-record`, `cargo xtask codegen`, entri `official/clickhouse` ke `[[provider]]` dengan catatan platform `windows` `unsupported` yang menyebut WSL, catalog revision 16, `cargo xtask catalog check --update` → AC-16, AC-13
+- [ ] Giliran catalog: `cargo xtask provider freeze providers/clickhouse` menulis `crates/core/tests/fixtures/compat/clickhouse/`, lalu `cargo test -p stackly-core --test provider_packages` → AC-16
+- [x] RISK-07, `git show --numstat` per commit fitur 43 (dan langkah 2 spec 0040, filter bersama) pada `crates/` dan `apps/` tanpa `tests/`, `fixtures/`, dan `golden/`: hanya `5a417824` (format `xml`: `crates/core/src/provider/template.rs` +83 −1 termasuk unit test escaper, `fuzzing.rs` +7 −6, `validate.rs` +1 −1, `secret/delivery/mod.rs` +8 unit test) dan `0d111375` (filter `sha256Hex`, dihitung sekali untuk fitur 40 dan 43: `template.rs` +146 −28, `plan.rs` +18 −2, `secret/delivery/mod.rs` +16, `instance/config/preview.rs` +1 −1); commit langkah 3 sampai 11 tidak mengubah satu pun file non test di `crates/` atau `apps/`. Tidak ada jenis probe, probe native, primitive, token, DTO, method, event, migrasi, atau kode Swift baru → AC-17
+
 ### Acceptance-criteria coverage
 
+- AC-14 · konformitas native dan tabel batas langkah (langkah 9)
 - AC-15 · langkah 10; bentuk hasil spike tidak berubah, run native nya di langkah manual Milestone 2
-- AC-16 (catalog, corpus, BR-025), AC-13 (catatan platform), AC-17 · langkah 11 sampai 13, belum
+- AC-16 · `clickhouse_compatibility` lulus; record evidence, catalog revision 16, dan freeze di giliran catalog
+- AC-13 · catatan platform di giliran catalog; test platform di Milestone 1
+- AC-17 · ukuran RISK-07 di atas
