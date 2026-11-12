@@ -2284,6 +2284,7 @@ fn plain_templates_keep_text_and_comments_and_reject_output_and_block_tags() {
     );
 }
 
+// covers: AC-2 (spec 0039)
 #[test]
 fn nats_conf_escapes_quotes_and_backslashes_and_fails_control_characters_without_their_value() {
     let package = Edit::fake()

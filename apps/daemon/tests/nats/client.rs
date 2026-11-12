@@ -222,6 +222,24 @@ impl Nats {
             .map(|()| sid)
     }
 
+    /// Every message the server delivered to the subscription `sid` up to
+    /// a `PING` round trip now, taken out of the pending list.
+    pub async fn deliveries(&mut self, sid: u64) -> Vec<Message> {
+        self.checked(b"")
+            .await
+            .expect("a PING round trip needs no permission");
+        let mut out = Vec::new();
+        self.pending.retain(|(got, message)| {
+            if *got == sid {
+                out.push(message.clone());
+                false
+            } else {
+                true
+            }
+        });
+        out
+    }
+
     /// Publishes `payload` to `subject` with a fresh `_INBOX.test.<hex>`
     /// reply subject, outside the inbox space of the readiness probe, and
     /// returns the first reply, or the `-ERR` line of a refusal.

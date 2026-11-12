@@ -1452,6 +1452,81 @@ mod tests {
         assert_eq!(TemplateFormat::NatsConf.escape_text("").unwrap(), "\"\"");
     }
 
+    // covers: AC-2 (spec 0039)
+    #[test]
+    fn nats_conf_never_lets_a_trailing_backslash_escape_the_closing_quote() {
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("a\\").unwrap(),
+            "\"a\\\\\""
+        );
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("\\").unwrap(),
+            "\"\\\\\""
+        );
+    }
+
+    // covers: AC-2 (spec 0039)
+    #[test]
+    fn nats_conf_escapes_an_escaped_quote_in_the_value_as_two_separate_escapes() {
+        // The value `\"` is a backslash then a quote: each gets its own
+        // escape, so the server reads the same two characters back.
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("\\\"").unwrap(),
+            "\"\\\\\\\"\""
+        );
+        assert_eq!(
+            TemplateFormat::NatsConf.escape_text("\"\"\\\\").unwrap(),
+            "\"\\\"\\\"\\\\\\\\\""
+        );
+    }
+
+    // covers: AC-2 (spec 0039)
+    #[test]
+    fn nats_conf_keeps_every_dollar_form_literal_inside_the_quotes() {
+        for text in ["$", "$$", "${VAR}", "$(id)", "$2a$10$abc", "x$"] {
+            assert_eq!(
+                TemplateFormat::NatsConf.escape_text(text).unwrap(),
+                format!("\"{text}\""),
+                "{text:?}"
+            );
+        }
+    }
+
+    // covers: AC-2 (spec 0039)
+    #[test]
+    fn nats_conf_rejects_each_c0_del_and_c1_character_wherever_it_stands() {
+        let controls = (0u32..=0x1f).chain(0x7f..=0x9f);
+        for code in controls {
+            let c = char::from_u32(code).expect("a control code point is a char");
+            for text in [
+                format!("{c}"),
+                format!("a{c}"),
+                format!("{c}a"),
+                format!("\"{c}\\"),
+            ] {
+                assert_eq!(
+                    TemplateFormat::NatsConf.escape_text(&text),
+                    None,
+                    "U+{code:04X} in {text:?}"
+                );
+            }
+        }
+    }
+
+    // covers: AC-2 (spec 0039)
+    #[test]
+    fn nats_conf_keeps_characters_next_to_the_control_ranges_and_outside_the_bmp() {
+        for text in [
+            "\u{20}", "\u{7e}", "\u{a0}", "\u{2028}", "\u{feff}", "🔑", "a\u{301}",
+        ] {
+            assert_eq!(
+                TemplateFormat::NatsConf.escape_text(text).unwrap(),
+                format!("\"{text}\""),
+                "{text:?}"
+            );
+        }
+    }
+
     #[test]
     fn postgresql_conf_single_quotes_text_and_doubles_quotes_and_backslashes() {
         let format = TemplateFormat::PostgresqlConf;
