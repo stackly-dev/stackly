@@ -25,14 +25,14 @@ use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Evidence, Kind, Source, evidence};
 
 use crate::harness::{
-    Line, NATS, OWNER, POSTGRESQL_17, POSTGRESQL_18, Site, TRAEFIK, artifact_facts, cached,
-    install, install_params, wait_end,
+    Line, MYSQL_8_4, MYSQL_9_7, NATS, OWNER, POSTGRESQL_17, POSTGRESQL_18, Site, TRAEFIK,
+    artifact_facts, cached, install, install_params, wait_end,
 };
 use crate::recorders::Asked;
 use stackly_platform::ChildRole;
 use stackly_protocol::operation::OperationState;
 
-/// The reason MySQL, ClickHouse, and Valkey wait for their providers.
+/// The reason ClickHouse and Valkey wait for their providers.
 const NO_PACKAGE: &str = "no provider package (features 40 to 43)";
 /// The variable that says the network run was approved.
 const NETWORK_APPROVED: &str = "STACKLY_NATIVE_NETWORK";
@@ -236,6 +236,16 @@ cache_line_test!(
     POSTGRESQL_18,
     "the daemon installs PostgreSQL 18.6 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
 );
+cache_line_test!(
+    mysql_8_4_installs_from_the_cache,
+    MYSQL_8_4,
+    "the daemon installs MySQL 8.4.11 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
+);
+cache_line_test!(
+    mysql_9_7_installs_from_the_cache,
+    MYSQL_9_7,
+    "the daemon installs MySQL 9.7.2 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
+);
 
 macro_rules! blocked_line_test {
     ($name:ident, $what:literal) => {
@@ -256,8 +266,6 @@ macro_rules! blocked_line_test {
     };
 }
 
-blocked_line_test!(mysql_8_4_installs_from_the_cache, "MySQL 8.4.11");
-blocked_line_test!(mysql_9_7_installs_from_the_cache, "MySQL 9.7.2");
 blocked_line_test!(clickhouse_installs_from_the_cache, "ClickHouse 26.8.30.8");
 blocked_line_test!(valkey_9_1_installs_from_the_cache, "Valkey 9.1.2");
 

@@ -670,12 +670,12 @@ mod tests {
 
     // covers: AC-16 (spec 0036)
     #[test]
-    fn the_three_packaged_providers_are_found_by_their_software() {
-        for provider in ["nats", "postgresql", "traefik"] {
+    fn the_packaged_providers_are_found_by_their_software() {
+        for provider in ["nats", "postgresql", "mysql", "traefik"] {
             let dir = find_package(&repo(), provider).unwrap().unwrap();
             assert_eq!(dir.file_name().unwrap().to_string_lossy(), provider);
         }
-        for provider in ["mysql", "clickhouse", "valkey", "redis"] {
+        for provider in ["clickhouse", "valkey", "redis"] {
             assert_eq!(find_package(&repo(), provider).unwrap(), None, "{provider}");
         }
     }

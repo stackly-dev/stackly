@@ -20,8 +20,6 @@ use crate::runtime::ports;
 pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long one HTTP probe may take.
 pub const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
-/// How long a data folder initialization may take.
-const INIT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// What a recipe works with.
 #[derive(Debug, Clone)]
@@ -71,17 +69,8 @@ impl Ctx {
             .context("this recipe has no socket folder")
     }
 
-    /// Runs a one shot command and keeps the tail of its output.
-    pub fn run_logged(
-        &mut self,
-        name: &str,
-        command: Command,
-        timeout: Duration,
-    ) -> Result<Finished> {
-        self.run_logged_input(name, command, None, timeout)
-    }
-
-    /// [`Ctx::run_logged`] with `input` on stdin.
+    /// Runs a one shot command with `input` on stdin and keeps the tail of
+    /// its output.
     pub fn run_logged_input(
         &mut self,
         name: &str,
@@ -166,7 +155,6 @@ pub fn recipe(repo: &Path, provider: &str) -> Result<Box<dyn Recipe>> {
     let _ = repo;
     match provider {
         "clickhouse" => Ok(Box::new(ClickHouse)),
-        "mysql" => Ok(Box::new(MySql)),
         "valkey" => Ok(Box::new(Valkey)),
         _ => bail!("the spike has no steps for provider {provider}"),
     }
@@ -372,119 +360,6 @@ impl Recipe for ClickHouse {
     }
 }
 
-/// MySQL: `--initialize-insecure`, then a server with no networking at
-/// all, reachable only through a socket in a private folder.
-// provisional: F42 (the MySQL package replaces this recipe)
-struct MySql;
-
-impl MySql {
-    fn socket(ctx: &Ctx) -> Result<String> {
-        Ok(path_text(&ctx.socket_dir()?.join("m.sock")))
-    }
-
-    fn client(ctx: &Ctx, name: &str) -> Result<Command> {
-        let mut command = ctx.command(name)?;
-        command
-            .arg("--no-defaults")
-            .arg("-u")
-            .arg("root")
-            .arg(format!("--socket={}", Self::socket(ctx)?));
-        Ok(command)
-    }
-}
-
-impl Recipe for MySql {
-    fn uses_socket_dir(&self) -> bool {
-        true
-    }
-
-    fn init(&self, ctx: &mut Ctx) -> Result<()> {
-        let mut command = ctx.command("mysqld")?;
-        command
-            .arg("--no-defaults")
-            .arg("--initialize-insecure")
-            .arg(format!("--basedir={}", path_text(&ctx.artifact_root)))
-            .arg(format!("--datadir={}", path_text(&ctx.data_dir)))
-            .arg(format!(
-                "--log-error={}",
-                path_text(&ctx.run_dir.join("init.err"))
-            ));
-        let finished = ctx.run_logged("init", command, INIT_TIMEOUT)?;
-        match finished.status {
-            Some(status) if status.success() => Ok(()),
-            Some(status) => bail!(
-                "mysqld --initialize-insecure failed with {}",
-                process::describe(status)
-            ),
-            None => bail!(
-                "mysqld --initialize-insecure did not finish within {} s",
-                INIT_TIMEOUT.as_secs()
-            ),
-        }
-    }
-
-    fn start(&self, ctx: &mut Ctx) -> Result<Command> {
-        let mut command = ctx.command("mysqld")?;
-        command
-            .arg("--no-defaults")
-            .arg(format!("--basedir={}", path_text(&ctx.artifact_root)))
-            .arg(format!("--datadir={}", path_text(&ctx.data_dir)))
-            .arg(format!("--socket={}", Self::socket(ctx)?))
-            .arg("--skip-networking")
-            .arg("--mysqlx=OFF")
-            .arg(format!(
-                "--pid-file={}",
-                path_text(&ctx.run_dir.join("mysqld.pid"))
-            ))
-            .arg(format!(
-                "--log-error={}",
-                path_text(&ctx.run_dir.join("mysqld.err"))
-            ));
-        Ok(command)
-    }
-
-    fn ready(&self, ctx: &Ctx) -> Result<bool> {
-        let mut command = Self::client(ctx, "mysqladmin")?;
-        command.arg("ping");
-        Ok(process::run(command, CLIENT_TIMEOUT)?.success())
-    }
-
-    fn version(&self, ctx: &Ctx) -> Result<String> {
-        let mut command = Self::client(ctx, "mysql")?;
-        command.args(["-N", "-B", "-e", "select version()"]);
-        Ok(
-            output_of(&process::run(command, CLIENT_TIMEOUT)?, "select version()")?
-                .trim()
-                .to_owned(),
-        )
-    }
-
-    fn normalize(&self, raw: &str) -> Option<String> {
-        version_after(raw, "").and_then(|version| first_parts(&version, 3))
-    }
-
-    fn stop(&self, ctx: &Ctx, _server: &Server) -> Result<()> {
-        let mut command = Self::client(ctx, "mysqladmin")?;
-        command.arg("shutdown");
-        output_of(
-            &process::run(command, CLIENT_TIMEOUT)?,
-            "mysqladmin shutdown",
-        )
-        .map(drop)
-    }
-
-    fn version_args(&self) -> Vec<String> {
-        vec!["--version".to_owned()]
-    }
-
-    fn log_files(&self, ctx: &Ctx) -> Vec<(String, PathBuf)> {
-        vec![
-            ("init.err".to_owned(), ctx.run_dir.join("init.err")),
-            ("mysqld.err".to_owned(), ctx.run_dir.join("mysqld.err")),
-        ]
-    }
-}
-
 /// Valkey: one loopback port, data in the run folder, no persistence, and
 /// no daemonizing.
 // provisional: F40 (the Valkey package replaces this recipe)
@@ -574,12 +449,6 @@ mod tests {
             Some("26.8.29.10")
         );
         assert_eq!(clickhouse.normalize("26.8"), None);
-        let mysql = hand_written("mysql");
-        assert_eq!(mysql.normalize("8.4.11\n").as_deref(), Some("8.4.11"));
-        assert_eq!(
-            mysql.normalize("9.7.2-commercial").as_deref(),
-            Some("9.7.2")
-        );
         assert!(
             recipe(&repo(), "redis")
                 .err()
@@ -589,9 +458,6 @@ mod tests {
 
     #[test]
     fn the_hand_written_recipes_keep_their_shape() {
-        let mysql = hand_written("mysql");
-        assert!(mysql.uses_socket_dir());
-        assert_eq!(mysql.version_args(), ["--version"]);
         let clickhouse = hand_written("clickhouse");
         assert!(!clickhouse.uses_socket_dir());
         assert_eq!(clickhouse.version_args(), ["--version"]);
