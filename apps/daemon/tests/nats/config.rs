@@ -14,14 +14,14 @@ use stackly_testkit::evidence::{Kind, evidence};
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{Serve, Site, alive, create_instance, port_of, stop_instance, varz};
 
-// covers: AC-5, AC-7, AC-16
+// covers: AC-5, AC-7, AC-16 (spec 0029), AC-9 (spec 0039)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
 async fn nats_applies_a_setting_with_a_restart_and_the_new_revision_becomes_the_last_known_good() {
     let ev = evidence!(
-        covers = ["REQ-015", "AC-015"],
+        covers = ["REQ-015", "AC-015", "REQ-036"],
         kind = Kind::Native,
-        expected = "a NATS 2.15.1 instance does not support reload, changing maxPayloadBytes is a restart impact that ends with a new nats-server pid whose /varz reports the new max_payload while the old process is gone, and revision 2 becomes the last known good after the instance was ready on it",
+        expected = "a NATS 2.15.1 instance does not support reload, changing maxPayloadKiB is a restart impact that ends with a new nats-server pid whose /varz reports the new max_payload while the old process is gone, and revision 2 becomes the last known good after the instance was ready on it",
     );
     let Some(site) = Site::open(&ev, Serve::InProcess) else {
         return;
@@ -52,7 +52,7 @@ async fn nats_applies_a_setting_with_a_restart_and_the_new_revision_becomes_the_
     assert!(!refused.code().is_empty(), "{refused:?}");
     assert_eq!(pid_of(&api.get(id).await.expect("instance")), first);
 
-    let change = settings_with(&view, json!({ "maxPayloadBytes": 2_097_152 }));
+    let change = settings_with(&view, json!({ "maxPayloadKiB": 2_048 }));
     assert_eq!(
         cfg.impact(id, 1, change.clone()).await,
         ConfigImpact::Restart
@@ -83,7 +83,7 @@ async fn nats_applies_a_setting_with_a_restart_and_the_new_revision_becomes_the_
 
     // Putting the old value back is a new revision, not an edit of revision 1.
     let second = pid_of(&summary);
-    let back = settings_with(&view, json!({ "maxPayloadBytes": 1_048_576 }));
+    let back = settings_with(&view, json!({ "maxPayloadKiB": 1_024 }));
     cfg.apply_done(id, 2, back).await;
     let summary = api
         .wait_instance(id, "a third nats-server", |summary| {

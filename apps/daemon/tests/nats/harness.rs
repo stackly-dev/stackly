@@ -29,9 +29,10 @@ use stackly_protocol::Timestamp;
 use stackly_protocol::events::EventKind;
 use stackly_protocol::instance::{
     CreateInstanceParams, EndpointRequest, InstanceReadinessState, InstanceSummary, PortRequest,
-    ProviderSelector, SettingsDocument,
+    ProviderSelector, SecretFieldInput, SettingsDocument,
 };
 use stackly_protocol::json::DecodedFrame;
+use stackly_protocol::secret::{SecretInput, SecretText};
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Evidence, Source};
 use stackly_testkit::{
@@ -53,6 +54,17 @@ pub const ARTIFACT: &str = "nats-2.15.1-macos-aarch64";
 /// The name of the data root: a space and Unicode, so `store_dir` in
 /// `nats.conf` has to quote them.
 pub const ROOT_NAME: &str = "Test Root Ünï cödé";
+/// The secret field of the package that holds the client password.
+pub const PASSWORD_FIELD: &str = "clientPassword";
+/// The client user every instance of revision `1.1.0` signs in with.
+pub const USER: &str = "stackly";
+/// The fixture password of an instance a test creates without naming one.
+pub const PASSWORD_A: &str = "stackly-test-nats-a";
+/// The fixture password of a second instance (spec 0039 AC-6).
+pub const PASSWORD_B: &str = "stackly-test-nats-b";
+/// A fixture password with a double quote, a backslash, and a dollar sign
+/// (spec 0039 AC-3), which the `natsConf` escaper has to carry.
+pub const PASSWORD_ESCAPED: &str = "p\"q\\r$s-fixture";
 
 /// Where the daemon of a test runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +238,17 @@ impl Site {
         bin
     }
 
+    /// Where the daemon writes `nats.conf` of the instance `id` before each
+    /// spawn: the runtime `secrets/` folder, since the file holds the client
+    /// password (spec 0039, *Paket NATS 1.1.0*).
+    #[must_use]
+    pub fn nats_conf(&self, id: Uuid) -> PathBuf {
+        self.instance_paths(id)
+            .run
+            .join("secrets")
+            .join("nats.conf")
+    }
+
     /// The paths of the instance `id`.
     #[must_use]
     pub fn instance_paths(&self, id: Uuid) -> stackly_platform::InstancePaths {
@@ -378,9 +401,22 @@ impl InProcess {
     }
 }
 
-/// The params of a create of the NATS package, both endpoints `Auto`.
+/// The params of a create of the NATS package, both endpoints `Auto`, with
+/// the fixture password [`PASSWORD_A`].
 #[must_use]
 pub fn create_params(site: &Site, name: &str, settings: Value) -> CreateInstanceParams {
+    create_params_with_password(site, name, settings, PASSWORD_A)
+}
+
+/// The params of a create of the NATS package, both endpoints `Auto`, with
+/// `password` sent as the value of the client password.
+#[must_use]
+pub fn create_params_with_password(
+    site: &Site,
+    name: &str,
+    settings: Value,
+    password: &str,
+) -> CreateInstanceParams {
     let map = match settings {
         Value::Object(map) => map,
         Value::Null => serde_json::Map::new(),
@@ -402,17 +438,32 @@ pub fn create_params(site: &Site, name: &str, settings: Value) -> CreateInstance
             })
             .collect(),
         settings: SettingsDocument::new(map),
-        secrets: Vec::new(),
+        secrets: vec![SecretFieldInput {
+            field: PASSWORD_FIELD.to_owned(),
+            input: SecretInput::Value(SecretText::new(password.to_owned())),
+        }],
         startup: None,
         duplicate_of: None,
     }
 }
 
-/// Creates an instance and waits until the create (the init) succeeded.
-/// Returns the instance ID.
+/// Creates an instance with the fixture password [`PASSWORD_A`] and waits
+/// until the create (the init) succeeded. Returns the instance ID.
 pub async fn create_instance(site: &Site, api: &Api, name: &str, settings: Value) -> Uuid {
+    create_instance_with_password(site, api, name, settings, PASSWORD_A).await
+}
+
+/// Creates an instance with `password` as its client password and waits
+/// until the create (the init) succeeded. Returns the instance ID.
+pub async fn create_instance_with_password(
+    site: &Site,
+    api: &Api,
+    name: &str,
+    settings: Value,
+    password: &str,
+) -> Uuid {
     let accepted = api
-        .create(create_params(site, name, settings))
+        .create(create_params_with_password(site, name, settings, password))
         .await
         .expect("the create is accepted")
         .accepted
@@ -465,6 +516,14 @@ pub fn port_of(summary: &InstanceSummary, name: &str) -> u16 {
 /// `GET /varz` on a monitoring port, over plain HTTP from the test.
 #[must_use]
 pub fn varz(port: u16) -> Value {
+    let body = monitor_get(port, "/varz");
+    serde_json::from_str(&body).unwrap_or_else(|error| panic!("/varz is not JSON: {error}"))
+}
+
+/// `GET <path>` on a monitoring port over plain HTTP, and the body of the
+/// `200` reply.
+#[must_use]
+pub fn monitor_get(port: u16, path: &str) -> String {
     let mut stream = TcpStream::connect_timeout(
         &SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
         Duration::from_secs(5),
@@ -475,7 +534,7 @@ pub fn varz(port: u16) -> Value {
         .expect("a read timeout can be set");
     // HTTP/1.0 keeps the reply free of chunked framing.
     stream
-        .write_all(b"GET /varz HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        .write_all(format!("GET {path} HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n").as_bytes())
         .expect("the request is written");
     let mut reply = Vec::new();
     stream
@@ -487,9 +546,9 @@ pub fn varz(port: u16) -> Value {
         .unwrap_or_else(|| panic!("no HTTP head in {text}"));
     assert!(
         head.starts_with("HTTP/1.0 200") || head.starts_with("HTTP/1.1 200"),
-        "{head}"
+        "{path}: {head}"
     );
-    serde_json::from_str(body).unwrap_or_else(|error| panic!("/varz is not JSON: {error}"))
+    body.to_owned()
 }
 
 /// Whether `kill(pid, 0)` succeeds, that is, the process exists.
@@ -634,11 +693,7 @@ impl Checks {
                 "manifestSha256": site.manifest_sha256,
             },
             "checks": checks,
-            "knownLimitations": [
-                "client_auth_not_configured",
-                "jetstream_persistence_not_covered",
-                "multi_instance_not_covered",
-            ],
+            "knownLimitations": ["power_loss_not_covered"],
         });
         let path = evidence.artifact_dir().join("compatibility.json");
         std::fs::write(
