@@ -11,12 +11,18 @@
 
 #[path = "common/mod.rs"]
 mod common;
+#[path = "supervisor/config_calls.rs"]
+mod config_calls;
+#[path = "clickhouse/failure.rs"]
+mod failure;
 #[path = "clickhouse/harness.rs"]
 mod harness;
 #[path = "clickhouse/isolation.rs"]
 mod isolation;
 #[path = "clickhouse/lifecycle.rs"]
 mod lifecycle;
+#[path = "clickhouse/reload.rs"]
+mod reload;
 #[path = "clickhouse/security.rs"]
 mod security;
 #[path = "supervisor/support.rs"]
