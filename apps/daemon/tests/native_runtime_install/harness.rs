@@ -91,6 +91,14 @@ pub const CLICKHOUSE: Line = Line {
     version: "26.8.30.8",
 };
 
+/// Valkey 9.1.
+pub const VALKEY: Line = Line {
+    software: "valkey",
+    artifact: "valkey-9.1.2-r2-macos-aarch64",
+    selector: "9.1",
+    version: "9.1.2",
+};
+
 /// The folder of the package of `software`.
 #[must_use]
 pub fn package_dir(software: &str) -> PathBuf {

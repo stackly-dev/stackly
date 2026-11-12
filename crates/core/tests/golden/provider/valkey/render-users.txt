@@ -1,0 +1,3 @@
+# Managed by Stackly. Written again before every start, removed after a clean stop.
+user default on #3164790a81b02910612d66745485dfe767d5ba78c63c69def4f6dfcf184700bc ~* &* +@all
+user stackly-readiness on nopass -@all +ping

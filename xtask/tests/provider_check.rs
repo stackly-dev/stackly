@@ -85,7 +85,8 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
             "testing/fake",
             "official/nats",
             "official/postgresql",
-            "official/traefik"
+            "official/traefik",
+            "official/valkey"
         ]
     );
     for line in &lines {

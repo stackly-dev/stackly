@@ -1,0 +1,41 @@
+[
+  {
+    "name": "readiness_user",
+    "pidFile": null,
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Stackly checks that this instance is ready by sending PING as the user stackly-readiness, which may run PING and nothing else. That sign in fails now."
+      },
+      {
+        "command": null,
+        "path": null,
+        "text": "Restart the instance. Stackly writes this user again before every start."
+      }
+    ],
+    "title": "The readiness user stackly-readiness is missing or changed"
+  },
+  {
+    "name": "aof_damaged",
+    "pidFile": null,
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Valkey stops when the append only file in this instance’s data folder is damaged. Stackly never repairs or deletes data on its own."
+      },
+      {
+        "command": null,
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "text": "Copy the data folder somewhere safe first."
+      },
+      {
+        "command": null,
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/appendonlydir/appendonly.aof.manifest",
+        "text": "Valkey’s own repair tool is valkey-check-aof, next to valkey-server in the runtime’s bin folder. Run it with --fix on this manifest file, then start the instance again. The repair drops every write after the damaged part."
+      }
+    ],
+    "title": "Valkey found a damaged append only file"
+  }
+]

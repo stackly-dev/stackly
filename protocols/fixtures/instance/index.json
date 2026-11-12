@@ -41,6 +41,10 @@
       "type": "CreateForm"
     },
     {
+      "file": "create-form-valkey.json",
+      "type": "CreateForm"
+    },
+    {
       "file": "duplicate-form-fake.json",
       "type": "DuplicateForm"
     },
