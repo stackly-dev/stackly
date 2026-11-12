@@ -1,0 +1,29 @@
+<!-- Managed by Stackly. Edits to this file are lost on the next start. -->
+<clickhouse>
+    <logger>
+        <level>{{ settings.logLevel }}</level>
+        <console>1</console>
+    </logger>
+    <macros>
+        <stackly_instance_id>{{ instance.id }}</stackly_instance_id>
+    </macros>
+    <disable_internal_dns_cache>1</disable_internal_dns_cache>
+    <listen_host>{{ endpoint.http.host }}</listen_host>
+    <http_port>{{ endpoint.http.port }}</http_port>
+    <tcp_port>{{ endpoint.native.port }}</tcp_port>
+    <path>{{ instance.data }}/</path>
+    <tmp_path>{{ instance.temp }}/clickhouse/</tmp_path>
+    <user_files_path>{{ instance.data }}/user_files/</user_files_path>
+    <format_schema_path>{{ instance.data }}/format_schemas/</format_schema_path>
+    <user_scripts_path>{{ instance.data }}/user_scripts/</user_scripts_path>
+    <user_defined_path>{{ instance.data }}/user_defined/</user_defined_path>
+    <dictionaries_lib_path>{{ instance.data }}/dictionaries_lib/</dictionaries_lib_path>
+    <top_level_domains_path>{{ instance.data }}/top_level_domains/</top_level_domains_path>
+    <google_protos_path>{{ instance.data }}/google_protos/</google_protos_path>
+    <dynamic_user_defined_executable_functions_path>{{ instance.data }}/dynamic_user_defined_executable_functions/</dynamic_user_defined_executable_functions_path>
+    <user_directories>
+        <local_directory>
+            <path>{{ instance.data }}/access/</path>
+        </local_directory>
+    </user_directories>
+</clickhouse>

@@ -11,6 +11,8 @@
 
 #[path = "common/mod.rs"]
 mod common;
+#[path = "clickhouse/compatibility.rs"]
+mod compatibility;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
 #[path = "clickhouse/failure.rs"]

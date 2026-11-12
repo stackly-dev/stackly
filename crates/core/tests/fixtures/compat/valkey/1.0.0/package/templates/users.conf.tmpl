@@ -1,0 +1,4 @@
+{{! Rendered before every start. Holds a hash of the password, never the password. }}
+# Managed by Stackly. Written again before every start, removed after a clean stop.
+user default on #{{ secret.password | sha256Hex }} ~* &* +@all
+user stackly-readiness on nopass -@all +ping

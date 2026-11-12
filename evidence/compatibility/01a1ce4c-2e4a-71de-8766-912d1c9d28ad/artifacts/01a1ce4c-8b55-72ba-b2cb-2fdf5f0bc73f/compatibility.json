@@ -1,0 +1,22 @@
+{
+  "checks": [
+    "adoption",
+    "crash_recovery",
+    "init",
+    "persistence_aof",
+    "persistence_rdb",
+    "readiness",
+    "start",
+    "stop",
+    "volatile"
+  ],
+  "knownLimitations": [
+    "power_loss_not_simulated"
+  ],
+  "providerRevision": {
+    "id": "official/valkey",
+    "manifestSha256": "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6",
+    "revision": "1.0.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}
