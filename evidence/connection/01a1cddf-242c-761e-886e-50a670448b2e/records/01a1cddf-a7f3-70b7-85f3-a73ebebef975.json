@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cddf-a7f3-70b7-85f3-a73ebebef975",
+  "covers": [
+    "REQ-036"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "nats",
+    "name": "auth::a_connection_without_credentials_never_reads_or_changes_the_app_account",
+    "file": "apps/daemon/tests/nats/auth.rs",
+    "line": 284
+  },
+  "status": "PASS",
+  "expected": "on a ready NATS 2.15.1 instance of revision 1.1.0 with JetStream, a connection without credentials that aims $JS.API.INFO replies at orders.evil and at the stream create, purge, delete, and message delete APIs leaves ORDERS with its one message and the stackly user with the one stream ORDERS; it is refused with Permissions Violation for every application, JetStream stream, system, and wide inbox subject; its _INBOX.stackly.> subscription never receives what the stackly user publishes there; and an empty password, a password for stackly-readiness, and an unknown user are refused with Authorization Violation",
+  "actual": "NATS 2.15.1: 5 injected replies left ORDERS at 1 message, 5 subscribes and 8 publishes refused, no delivery across accounts, 3 foreign credentials refused",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T03:49:09.235898Z",
+  "finishedAt": "2026-11-12T03:49:12.454869Z",
+  "evidencePath": "output.log"
+}

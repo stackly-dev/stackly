@@ -1,0 +1,43 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cddf-b48d-737d-8882-7b8b0c3a0053",
+  "covers": [
+    "BR-025",
+    "REQ-029",
+    "REQ-036",
+    "AC-029",
+    "REQ-012",
+    "REQ-013",
+    "AC-036",
+    "AC-077",
+    "AC-010"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "nats",
+    "name": "compatibility::nats_compatibility",
+    "file": "apps/daemon/tests/nats/compatibility.rs",
+    "line": 426
+  },
+  "status": "PASS",
+  "expected": "behind the stacklyd binary with the default probe interval, a NATS 2.15.1 instance is created and ready through nats-readiness, a SIGSTOP turns readiness to not_ready with reason timeout while the port still accepts and the process stays running, SIGCONT makes it ready again, foreign servers give identity_mismatch, jetstream_disabled, jetstream_unexpected, and auth_required while matching ones succeed, an instance with JetStream off is ready without a jetstream folder, a SIGKILL of the daemon leaves the server running and the next daemon adopts the same process holding instance.lock, the stackly user signs in with its password while a wrong password and a connection without credentials are refused, two instances with a file stream ORDERS each keep only their own 3 and 5 messages, server name, store, password, and two loopback listeners across a restart, a file stream keeps its 10 messages across a restart while a memory stream is gone and the file stream is still there after SIGKILL, a held fixed monitoring port fails the start at endpoints with supervisor.endpoint_in_use and a suggestedPort while the instance stays stopped and the outside listener keeps working, the instance is ready on the suggested port, and a stop leaves no process",
+  "actual": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, client password enforced, two instances isolated across a restart, file stream kept and memory stream gone after a restart, file stream F held 10 of 10 messages after SIGKILL of nats-server, monitoring port conflict refused at endpoints and ready on the suggested port, and stopped with no process left",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T03:49:12.461539Z",
+  "finishedAt": "2026-11-12T03:50:08.9369Z",
+  "evidencePath": "artifacts/01a1cddf-b48d-737d-8882-7b8b0c3a0053/"
+}
