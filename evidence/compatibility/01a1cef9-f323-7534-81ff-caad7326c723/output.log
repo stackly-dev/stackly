@@ -1,73 +1,11 @@
-   Compiling serde_core v1.0.229
-   Compiling serde_json v1.0.154
-   Compiling errno v0.3.14
-   Compiling tracing-core v0.1.36
    Compiling ring v0.17.14
-   Compiling log v0.4.34
-   Compiling vcpkg v0.2.15
-   Compiling pkg-config v0.3.34
-   Compiling regex-automata v0.4.18
-   Compiling nix v0.31.3
-   Compiling signal-hook-registry v1.4.8
-   Compiling utf8parse v0.2.2
-   Compiling anstyle-parse v1.0.0
-   Compiling tracing v0.1.44
-   Compiling smallvec v1.16.3
-   Compiling colorchoice v1.0.5
-   Compiling anstyle v1.0.14
-   Compiling is_terminal_polyfill v1.70.2
-   Compiling anstyle-query v1.1.5
-   Compiling libsqlite3-sys v0.38.2
-   Compiling ureq-proto v0.6.5
-   Compiling tokio v1.53.3
-   Compiling fallible-iterator v0.3.0
-   Compiling anstream v1.0.0
-   Compiling strsim v0.11.1
-   Compiling lazy_static v1.5.1
-   Compiling fallible-streaming-iterator v0.1.9
-   Compiling heck v0.5.0
-   Compiling clap_lex v1.1.1
-   Compiling sharded-slab v0.1.7
-   Compiling clap_derive v4.6.7
-   Compiling clap_builder v4.6.7
-   Compiling zip v9.0.5
-   Compiling rustix v1.1.5
-   Compiling tracing-log v0.2.0
-   Compiling thread_local v1.1.10
-   Compiling nu-ansi-term v0.50.3
-   Compiling matchers v0.2.0
-   Compiling regex v1.13.1
-   Compiling serde v1.0.229
-   Compiling jiff v0.2.38
-   Compiling uuid v1.28.0
-   Compiling serde_path_to_error v0.1.20
-   Compiling zeroize v1.9.1
    Compiling rustls v0.23.46
-   Compiling tracing-serde v0.2.0
-   Compiling rustls-pki-types v1.15.1
-   Compiling serde_yaml_ng v0.10.0
-   Compiling clap v4.6.7
-   Compiling webpki-roots v1.0.10
-   Compiling typeshare v1.0.5
-   Compiling tracing-subscriber v0.3.23
-   Compiling tempfile v3.27.0
-   Compiling signal-hook v0.4.5
    Compiling rustls-webpki v0.103.16
-   Compiling rusqlite v0.40.2
-   Compiling stackly-domain v0.1.0 ($REPO/crates/domain)
-   Compiling schemars v1.2.3
-   Compiling stackly-protocol v0.1.0 ($REPO/crates/protocol)
-   Compiling stackly-evidence v0.1.0 ($REPO/crates/evidence)
-   Compiling stackly-platform v0.1.0 ($REPO/crates/platform)
    Compiling rustls-platform-verifier v0.7.1
    Compiling ureq v3.4.2
-   Compiling stackly-storage v0.1.0 ($REPO/crates/storage)
-   Compiling stackly-core v0.1.0 ($REPO/crates/core)
-   Compiling stackly-testkit v0.1.0 ($REPO/crates/testkit)
    Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
-   Compiling stackly-ipc v0.1.0 ($REPO/crates/ipc)
    Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
-    Finished `test` profile [unoptimized] target(s) in 25.97s
+    Finished `test` profile [unoptimized] target(s) in 12.31s
      Running tests/mysql.rs (target/debug/deps/mysql-cf6a56d559f755f4)
 
 running 37 tests
@@ -77,13 +15,13 @@ test auth::mysql_8_4_has_three_root_accounts_and_a_readiness_account_that_only_r
 test auth::mysql_8_4_takes_a_password_with_quotes_backslashes_spaces_and_unicode ... ok
 test auth::mysql_9_7_has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket ... ok
 test auth::mysql_9_7_takes_a_password_with_quotes_backslashes_spaces_and_unicode ... ok
-test compat::mysql_8_4_runs_the_package_and_records_what_it_proved ... kill: 27513: No such process
-kill: 27644: No such process
-kill: 27633: No such process
+test compat::mysql_8_4_runs_the_package_and_records_what_it_proved ... kill: 68392: No such process
+kill: 68426: No such process
+kill: 68416: No such process
 ok
-test compat::mysql_9_7_runs_the_package_and_records_what_it_proved ... kill: 28881: No such process
-kill: 28954: No such process
-kill: 28942: No such process
+test compat::mysql_9_7_runs_the_package_and_records_what_it_proved ... kill: 68919: No such process
+kill: 68953: No such process
+kill: 68944: No such process
 ok
 test doctor::mysql_8_4_with_a_dropped_readiness_account_gets_the_readiness_account_remedy ... ok
 test endpoints::mysql_8_4_listens_only_on_its_endpoint_and_ignores_persisted_variables ... ok
@@ -115,5 +53,5 @@ test stop::mysql_9_7_stops_fast_with_a_sleeping_session_and_starts_again_without
 test tools::mysql_8_4_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home ... ok
 test tools::mysql_9_7_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home ... ok
 
-test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1164.04s
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 937.27s
 

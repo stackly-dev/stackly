@@ -2,7 +2,7 @@
   "schema": "stackly.provider-frozen/v1",
   "provider": "official/mysql",
   "revision": "1.0.0",
-  "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204",
+  "manifestSha256": "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c",
   "startArgs": [
     "--defaults-file=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/my.cnf",
     "--persisted-globals-load=OFF",
@@ -25,6 +25,6 @@
     "TMPDIR"
   ],
   "rendered": {
-    "myCnf": "db7c9318aad9eef05aebf8b67754fd8c42875c1f0e62d6803c8ffe12b31848ee"
+    "myCnf": "515ac9352c922d10f5c4fe183194b7a2e32d78a0e2f0eca6033b3d25411fc0c6"
   }
 }

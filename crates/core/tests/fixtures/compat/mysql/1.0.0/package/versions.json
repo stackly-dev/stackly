@@ -187,7 +187,7 @@
           "providerRevision": {
             "id": "official/mysql",
             "revision": "1.0.0",
-            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+            "manifestSha256": "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c"
           },
           "os": "macos",
           "osVersion": "27.0.1",
@@ -205,8 +205,8 @@
           ],
           "knownLimitations": [],
           "summary": "MySQL 8.4.11 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
-          "testedAt": "2026-11-12T08:16:24.932Z",
-          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced3-7409-7707-9432-5103c55a1513"
+          "testedAt": "2026-11-12T09:01:27.378Z",
+          "evidence": "compatibility/01a1cef9-f323-7534-81ff-caad7326c723/01a1cefc-cc4e-7669-bc62-0910ae9431d8"
         }
       ]
     },
@@ -409,7 +409,7 @@
           "providerRevision": {
             "id": "official/mysql",
             "revision": "1.0.0",
-            "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204"
+            "manifestSha256": "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c"
           },
           "os": "macos",
           "osVersion": "27.0.1",
@@ -427,8 +427,8 @@
           ],
           "knownLimitations": [],
           "summary": "MySQL 9.7.2 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
-          "testedAt": "2026-11-12T08:17:30.693Z",
-          "evidence": "compatibility/01a1cecf-e78a-7057-bb99-9a34b837ae88/01a1ced4-576d-72ce-8887-4321a9c158bd"
+          "testedAt": "2026-11-12T09:02:18.118Z",
+          "evidence": "compatibility/01a1cef9-f323-7534-81ff-caad7326c723/01a1cefd-93e3-7210-9095-a890726dd3cf"
         }
       ]
     }
