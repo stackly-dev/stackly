@@ -3,23 +3,34 @@
     {
       "type": "ensureDirectories",
       "content": [
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config"
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets"
       ]
     },
     {
       "type": "writeFile",
       "content": {
-        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/nats.conf",
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/nats.conf",
         "content": {
           "configFile": "natsConf",
           "segments": [
             {
               "type": "text",
-              "content": "# Written by Stackly from the official/nats provider; edits are replaced.\nserver_name: \"golden\"\nlisten: \"127.0.0.1:14000\"\nhttp: \"127.0.0.1:14001\"\nmax_payload: 1048576\njetstream {\n  store_dir: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data\"\n  max_memory_store: 1073741824\n  max_file_store: 10737418240\n}\n"
+              "content": "# Written by Stackly from the official/nats provider; edits are replaced.\nserver_name: \"golden\"\nlisten: \"127.0.0.1:14000\"\nhttp: \"127.0.0.1:14001\"\nmax_payload: 1024KiB\njetstream {\n  store_dir: \"/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data\"\n  max_memory_store: 1024MiB\n  max_file_store: 10240MiB\n}\naccounts {\n  APP: {\n    jetstream: enabled\n    users: [ { user: \"stackly\", password: "
+            },
+            {
+              "type": "secret",
+              "content": {
+                "secret": "<secret:clientPassword>",
+                "format": "natsConf"
+              }
+            },
+            {
+              "type": "text",
+              "content": " } ]\n  }\n  STACKLY_READINESS: {\n    jetstream: enabled\n    users: [ { user: \"stackly-readiness\", permissions: { publish: { allow: [\"$JS.API.INFO\"] }, subscribe: { allow: [\"_INBOX.stackly.>\"] } } } ]\n  }\n}\nno_auth_user: \"stackly-readiness\"\n"
             }
           ]
         },
-        "sensitive": false
+        "sensitive": true
       }
     }
   ],
@@ -30,7 +41,7 @@
     },
     "args": [
       "--config",
-      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/nats.conf"
+      "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/nats.conf"
     ],
     "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
     "env": [

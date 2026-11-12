@@ -1,0 +1,7 @@
+# The scenarios cargo xtask provider test runs for this package (spec 0036,
+# *File skenario*). Settings never hold a secret: the daemon generates it.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+  - name: no-jetstream
+    settings: { jetstream: false }

@@ -4,7 +4,7 @@ metadata:
   id: official/nats
   software: nats
   displayName: NATS Server
-  revision: "1.0.1"
+  revision: "1.1.0"
   category: messaging
   description: NATS messaging server with JetStream, one server per instance.
 compatibility:
@@ -30,13 +30,14 @@ configFiles:
   natsConf:
     template: templates/nats.conf.tmpl
     format: natsConf
-    destination: "${instance.config}/nats.conf"
+    sensitive: true
+    destination: "${instance.secrets}/nats.conf"
 lifecycle:
   initialize:
     - { primitive: createManagedDirectories }
   start:
     executable: "${runtime.executable}"
-    args: ["--config", "${instance.config}/nats.conf"]
+    args: ["--config", "${instance.secrets}/nats.conf"]
     cwd: "${instance.data}"
   stop: { strategy: gracefulProcess, signal: term }
 readiness:
@@ -51,12 +52,12 @@ timeouts: { readinessSeconds: 30, stopSeconds: 30 }
 backup:
   cold: { paths: [data] }
 permissions:
-  managedFilesystem: [data, config, logs, temp]
+  managedFilesystem: [data, config, logs, temp, run]
   executeRuntimeBinary: true
 connection:
   - name: uri
     title: Client URL
-    template: "nats://${endpoint.client.address}"
+    template: "nats://stackly:${secret.clientPassword}@${endpoint.client.address}"
   - name: monitoring
     title: Monitoring URL
     template: "http://${endpoint.monitoring.address}"

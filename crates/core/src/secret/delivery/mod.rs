@@ -98,8 +98,8 @@ pub fn env_pair<'a>(name: &'a str, value: &'a SecretValue) -> (&'a OsStr, &'a Os
 /// Returns the text a secret segment of a config template becomes: the
 /// value escaped for `format`, as the renderer escapes any other text
 /// (mechanism 5, and every `sensitive` template of spec 0009). Returns
-/// `None` when the format cannot hold the value, for example a NATS config
-/// and a value with `"` or `$`.
+/// `None` when the format cannot hold the value, for example a value with a
+/// control character.
 #[must_use]
 pub fn render_secret_placeholder(value: &SecretValue, format: TemplateFormat) -> Option<String> {
     format.escape_text(value.expose())
@@ -164,7 +164,16 @@ mod tests {
             Some("\"a\\\"b\"")
         );
         assert_eq!(
-            render_secret_placeholder(&secret, TemplateFormat::NatsConf),
+            render_secret_placeholder(&secret, TemplateFormat::NatsConf).as_deref(),
+            Some("\"a\\\"b\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("p\"q\\r$s-fixture"), TemplateFormat::NatsConf)
+                .as_deref(),
+            Some("\"p\\\"q\\\\r$s-fixture\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\nb"), TemplateFormat::NatsConf),
             None
         );
         assert_eq!(

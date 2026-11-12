@@ -2,11 +2,28 @@
 server_name: {{ settings.serverName }}
 listen: {{ endpoint.client.address }}
 http: {{ endpoint.monitoring.address }}
-max_payload: {{ settings.maxPayloadBytes }}
+max_payload: {{ settings.maxPayloadKiB }}KiB
 {{#if settings.jetstream}}
 jetstream {
   store_dir: {{ instance.data }}
-  max_memory_store: {{ settings.jetstreamMaxMemoryBytes }}
-  max_file_store: {{ settings.jetstreamMaxFileBytes }}
+  max_memory_store: {{ settings.jetstreamMaxMemoryMiB }}MiB
+  max_file_store: {{ settings.jetstreamMaxFileMiB }}MiB
 }
 {{/if}}
+accounts {
+  APP: {
+{{#if settings.jetstream}}
+    jetstream: enabled
+{{/if}}
+    users: [ { user: "stackly", password: {{ secret.clientPassword }} } ]
+  }
+  STACKLY_READINESS: {
+{{#if settings.jetstream}}
+    jetstream: enabled
+    users: [ { user: "stackly-readiness", permissions: { publish: { allow: ["$JS.API.INFO"] }, subscribe: { allow: ["_INBOX.stackly.>"] } } } ]
+{{else}}
+    users: [ { user: "stackly-readiness", permissions: { publish: { deny: ">" }, subscribe: { deny: ">" } } } ]
+{{/if}}
+  }
+}
+no_auth_user: "stackly-readiness"

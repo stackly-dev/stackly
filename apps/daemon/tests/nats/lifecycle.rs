@@ -1,6 +1,7 @@
 //! The happy path of a NATS instance through the daemon in process (spec
 //! 0023 AC-8).
 
+use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +27,7 @@ async fn nats_lifecycle_in_process() {
     let ev = evidence!(
         covers = ["REQ-029", "REQ-036", "AC-029"],
         kind = Kind::Native,
-        expected = "a NATS 2.15.1 instance with both endpoints on Auto in a data root with a space and Unicode in its name is created with default settings, starts, shows not_ready before ready through nats-readiness, shows lifecycle, desired, readiness, health, and process apart, listens only on its client and monitoring endpoints on loopback, reports its name, store folder, and limits on /varz, sends its log lines to the sink without one line per probe attempt, stops with no process left, and is ready again after the next start",
+        expected = "a NATS 2.15.1 instance with both endpoints on Auto in a data root with a space and Unicode in its name is created with default settings, starts, shows not_ready before ready through nats-readiness, shows lifecycle, desired, readiness, health, and process apart, listens only on its client and monitoring endpoints on loopback, reports its name, store folder, and limits on /varz, sends its log lines to the sink without one line per probe attempt, renders nats.conf with the client password only into the 0700 secrets folder as a 0600 file that a clean stop removes, stops with no process left, and is ready again after the next start",
     );
     let Some(site) = Site::open(&ev, Serve::InProcess) else {
         return;
@@ -53,8 +54,9 @@ async fn nats_lifecycle_in_process() {
     assert_eq!(created.initialized, Some(true));
     let paths = site.instance_paths(id);
     assert!(paths.config.is_dir(), "the init creates the config folder");
+    let conf_path = site.nats_conf(id);
     assert!(
-        !paths.config.join("nats.conf").exists(),
+        !conf_path.exists() && !paths.config.join("nats.conf").exists(),
         "nats.conf is written by the first start, not by the init (spec 0023 AC-15)"
     );
 
@@ -91,8 +93,29 @@ async fn nats_lifecycle_in_process() {
     assert_eq!(listening, expected, "only the two endpoints listen");
     assert_eq!(udp, 0, "no UDP socket");
 
-    let conf = std::fs::read_to_string(paths.config.join("nats.conf"))
-        .expect("nats.conf is rendered before the first spawn");
+    assert!(
+        !paths.config.join("nats.conf").exists(),
+        "nats.conf of revision 1.1.0 is never in the config folder (spec 0039 AC-4)"
+    );
+    let mode = |path: &std::path::Path| {
+        std::fs::metadata(path)
+            .expect("the path exists")
+            .permissions()
+            .mode()
+            & 0o777
+    };
+    assert_eq!(mode(&conf_path), 0o600, "nats.conf is private");
+    assert_eq!(
+        mode(conf_path.parent().expect("nats.conf has a folder")),
+        0o700,
+        "the secrets folder is private"
+    );
+    let conf = std::fs::read_to_string(&conf_path)
+        .expect("nats.conf is rendered into the secrets folder before the first spawn");
+    assert!(
+        conf.contains(&format!("password: \"{}\"", crate::harness::PASSWORD_A)),
+        "the stackly user signs in with the instance password"
+    );
     assert!(
         conf.contains(&format!("listen: \"127.0.0.1:{client}\"\n")),
         "listen names the effective client port {client}: {conf}"
@@ -157,6 +180,10 @@ async fn nats_lifecycle_in_process() {
     assert!(stopped.process.is_none());
     assert!(stopped.last_failure.is_none(), "{stopped:#?}");
     assert!(stopped.leftover_processes.is_empty(), "{stopped:#?}");
+    assert!(
+        !conf_path.exists(),
+        "a clean stop removes nats.conf from the secrets folder (spec 0039 AC-4)"
+    );
 
     let again = api.start_ready(id).await;
     assert_eq!(again.readiness.state, InstanceReadinessState::Ready);

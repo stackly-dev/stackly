@@ -168,11 +168,15 @@ fn every_secret_field_is_generate_and_names_the_reference_the_source_uses() {
     );
     assert_eq!(model.secret_sources[0].1, None);
 
-    // A package without a secret field has none.
+    // The NATS client password is offered as generate too.
     let (site, source) = site_for("nats", "queue-a");
     let model = duplicate(&site, &source);
-    assert!(model.draft.secrets.is_empty());
-    assert!(model.secret_sources.is_empty());
+    assert_eq!(
+        model.draft.secrets,
+        [("clientPassword".to_owned(), SecretSourceKind::Generate)]
+    );
+    assert_eq!(model.secret_sources.len(), 1);
+    assert_eq!(model.secret_sources[0].0.as_str(), "clientPassword");
     ev.pass();
 }
 

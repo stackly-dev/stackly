@@ -203,9 +203,10 @@
         private static var nats: InstanceConfigView {
             let values = JSONObject([
                 "serverName": .string("events"), "jetstream": .bool(true),
-                "jetstreamMaxMemoryBytes": .number(1_073_741_824),
-                "jetstreamMaxFileBytes": .number(10_737_418_240),
-                "maxPayloadBytes": .number(1_048_576),
+                "clientPassword": .string("secret:events/clientPassword"),
+                "jetstreamMaxMemoryMiB": .number(1_024),
+                "jetstreamMaxFileMiB": .number(10_240),
+                "maxPayloadKiB": .number(1_024),
             ])
             let current = revision(
                 1, origin: .created, minutesAgo: 30, ready: true, active: true, good: true,
@@ -333,17 +334,20 @@
                     "serverName", "Server name", .text, apply: nil, managed: true),
                 field("jetstream", "JetStream", .boolean, apply: .restart, default: .boolean(true)),
                 field(
-                    "jetstreamMaxMemoryBytes", "JetStream memory limit (bytes)", .integer,
-                    apply: .restart, visibility: .advanced, default: .integer(1_073_741_824),
-                    minimum: 1_048_576, maximum: 1_099_511_627_776),
+                    "clientPassword", "Client password", .text, apply: .restart, secret: true,
+                    description: "The password of the stackly user that clients sign in with."),
                 field(
-                    "jetstreamMaxFileBytes", "JetStream file limit (bytes)", .integer,
-                    apply: .restart, visibility: .advanced, default: .integer(10_737_418_240),
-                    minimum: 1_048_576, maximum: 1_099_511_627_776),
+                    "jetstreamMaxMemoryMiB", "JetStream memory limit (MiB)", .integer,
+                    apply: .restart, visibility: .advanced, default: .integer(1_024),
+                    minimum: 1, maximum: 1_048_576),
                 field(
-                    "maxPayloadBytes", "Max payload (bytes)", .integer, apply: .restart,
-                    visibility: .advanced, default: .integer(1_048_576), minimum: 1_024,
-                    maximum: 67_108_864),
+                    "jetstreamMaxFileMiB", "JetStream file limit (MiB)", .integer,
+                    apply: .restart, visibility: .advanced, default: .integer(10_240),
+                    minimum: 1, maximum: 1_048_576),
+                field(
+                    "maxPayloadKiB", "Largest message (KiB)", .integer, apply: .restart,
+                    visibility: .advanced, default: .integer(1_024), minimum: 1,
+                    maximum: 65_536),
             ].map(locked)
         }
 
@@ -402,7 +406,7 @@
             case .nats:
                 return [
                     "server_name: events",
-                    "max_payload: \(text(values.members["maxPayloadBytes"]))",
+                    "max_payload: \(text(values.members["maxPayloadKiB"]))KiB",
                     "jetstream: \(text(values.members["jetstream"]))",
                 ]
             case .postgresql, .drift, .rollBack:

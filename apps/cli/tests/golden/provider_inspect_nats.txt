@@ -5,8 +5,8 @@ Description        NATS messaging server with JetStream, one server per instance
 State              available
 Publisher          Stackly
 Trust              official
-Provider revision  1.0.1
-Manifest           sha256:8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe
+Provider revision  1.1.0
+Manifest           sha256:1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621
 Baseline           lifecycle, readiness probe, logs
 
 CAPABILITY              SUPPORT
