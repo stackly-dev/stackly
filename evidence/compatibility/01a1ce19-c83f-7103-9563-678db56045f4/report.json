@@ -1,12 +1,12 @@
 {
   "schema": "stackly.evidence-report/v1",
-  "runId": "01a1ce11-22d5-7705-81b8-542c716175e2",
+  "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
   "kind": "native",
   "wrapperVersion": "0.1.0",
   "context": {
-    "sourceCommit": "9985bbf83f9c12f7e0345490e27b173af3fa627e",
+    "sourceCommit": "532c21b9e87fcc49f958e582af5938252488350e",
     "sourceDirty": false,
-    "runId": "01a1ce11-22d5-7705-81b8-542c716175e2",
+    "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
     "runKind": "native",
     "command": [
       "cargo",
@@ -42,8 +42,8 @@
       "swift": "6.4"
     }
   },
-  "startedAt": "2026-11-12T04:43:11.957366Z",
-  "finishedAt": "2026-11-12T04:48:11.656674Z",
+  "startedAt": "2026-11-12T04:52:38.591537Z",
+  "finishedAt": "2026-11-12T04:57:47.037418Z",
   "commandExitCode": 0,
   "commandSignal": null,
   "interrupted": false,
@@ -65,7 +65,7 @@
   "records": [
     {
       "schema": "stackly.evidence/v1",
-      "id": "01a1ce12-3419-7468-9c13-85059c1b945a",
+      "id": "01a1ce1a-f3d6-7017-b562-316f587f9e7c",
       "covers": [
         "BR-025",
         "REQ-039",
@@ -83,7 +83,7 @@
       },
       "status": "PASS",
       "expected": "behind the stacklyd binary a Traefik 3.7.15 instance is created, started, and ready only after its router loaded, healthy with /ping 200, and serves its route; a second instance with the same route name and rule is ready from its own backend; a routing update on the first answers within reloadSeconds with the same pid while the second is untouched; schema refusals write nothing, a rule Traefik rejects fails the apply and keeps the last known good, an explicit roll back makes the route answer again; both stop with a normal stop and leave no process or listener; /etc/hosts keeps its bytes",
-      "actual": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.190924833s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/hosts unchanged",
+      "actual": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.292714375s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/hosts unchanged",
       "reason": null,
       "owner": null,
       "subjects": [
@@ -96,13 +96,13 @@
       ],
       "steps": null,
       "reviewer": null,
-      "startedAt": "2026-11-12T04:44:21.913581Z",
-      "finishedAt": "2026-11-12T04:45:17.85847Z",
-      "evidencePath": "artifacts/01a1ce12-3419-7468-9c13-85059c1b945a/",
+      "startedAt": "2026-11-12T04:53:55.286628Z",
+      "finishedAt": "2026-11-12T04:54:51.929158Z",
+      "evidencePath": "artifacts/01a1ce1a-f3d6-7017-b562-316f587f9e7c/",
       "context": {
-        "sourceCommit": "9985bbf83f9c12f7e0345490e27b173af3fa627e",
+        "sourceCommit": "532c21b9e87fcc49f958e582af5938252488350e",
         "sourceDirty": false,
-        "runId": "01a1ce11-22d5-7705-81b8-542c716175e2",
+        "runId": "01a1ce19-c83f-7103-9563-678db56045f4",
         "runKind": "native",
         "command": [
           "cargo",

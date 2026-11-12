@@ -110,9 +110,9 @@
             "dashboard_not_offered",
             "https_not_offered"
           ],
-          "summary": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.190924833s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/",
-          "testedAt": "2026-11-12T04:45:17.858Z",
-          "evidence": "compatibility/01a1ce11-22d5-7705-81b8-542c716175e2/01a1ce12-3419-7468-9c13-85059c1b945a"
+          "summary": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.292714375s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/",
+          "testedAt": "2026-11-12T04:54:51.929Z",
+          "evidence": "compatibility/01a1ce19-c83f-7103-9563-678db56045f4/01a1ce1a-f3d6-7017-b562-316f587f9e7c"
         }
       ]
     }
