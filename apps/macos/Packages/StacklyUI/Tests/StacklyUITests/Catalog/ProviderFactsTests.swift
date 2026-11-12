@@ -23,7 +23,7 @@ struct ProviderFactsTests {
         #expect(facts.requires == "macOS 13.0 or later on Apple Silicon")
         #expect(facts.dependencies == "None declared")
         #expect(facts.publisher == "Stackly")
-        #expect(facts.revision == "1.0.1 · 8e3060924c35")
+        #expect(facts.revision == "1.1.0 · 1a9b16f60a26")
         #expect(facts.trust == "Official, bundled with Stackly")
     }
 
@@ -91,7 +91,7 @@ struct ProviderFactsTests {
             ], platformNotes: nil, note: nil, issues: nil, local: nil, revocation: nil)
         let facts = ProviderFacts(detail: changed, host: host)
         #expect(facts.dependencies == "None")
-        #expect(facts.revision == "1.0.1")
+        #expect(facts.revision == "1.1.0")
     }
 
     @Test func aLicenseLinkMustBeAWebAddress() throws {

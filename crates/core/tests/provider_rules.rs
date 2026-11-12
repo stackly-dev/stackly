@@ -2285,7 +2285,7 @@ fn plain_templates_keep_text_and_comments_and_reject_output_and_block_tags() {
 }
 
 #[test]
-fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
+fn nats_conf_escapes_quotes_and_backslashes_and_fails_control_characters_without_their_value() {
     let package = Edit::fake()
         .replace("provider.yaml", "format: json", "format: natsConf")
         .set(
@@ -2295,9 +2295,13 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
         .validate()
         .unwrap_or_else(|err| panic!("{:#?}", err.issues));
     let settings = serde_json::json!({ "authToken": SECRET_REF });
-    let quoted = context_for(&package, settings.clone(), "/Volumes/a\"b");
+    let quoted = context_for(&package, settings.clone(), "/Volumes/a\"b\\c$d");
+    package
+        .init_plan(&quoted)
+        .expect("a quote, a backslash, and a dollar sign in a path render escaped");
+    let control = context_for(&package, settings.clone(), "/Volumes/a\u{7f}b");
 
-    let err = package.init_plan(&quoted).unwrap_err();
+    let err = package.init_plan(&control).unwrap_err();
 
     assert_eq!(
         err,
@@ -2305,7 +2309,7 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
             field: "instance.data".into()
         }
     );
-    assert!(!err.to_string().contains("a\"b"), "{err}");
+    assert!(!err.to_string().contains("a\u{7f}b"), "{err}");
 
     let init = package
         .init_plan(&context_for(&package, settings, "/Volumes/T"))
@@ -2324,14 +2328,21 @@ fn nats_conf_values_the_format_cannot_hold_fail_without_their_value() {
             SecretValue::new(text.to_owned()).expect("a valid secret value"),
         )])
     };
-    let err = write.content.materialize(&token("a$b")).unwrap_err();
+    assert_eq!(
+        write
+            .content
+            .materialize(&token("p\"q\\r$s-fixture"))
+            .expect("a quote, a backslash, and a dollar sign in a secret materialize"),
+        b"data: \"/Volumes/T/data/instances/0192f000-0000-7000-8000-00000000000b/data\"\ntoken: \"p\\\"q\\\\r$s-fixture\"\n"
+    );
+    let err = write.content.materialize(&token("a\tb")).unwrap_err();
     assert_eq!(
         err,
         PlanError::UnrepresentableValue {
             field: "secret.authToken".into()
         }
     );
-    assert!(!err.to_string().contains("a$b"));
+    assert!(!err.to_string().contains("a\tb"));
     assert_eq!(
         write.content.materialize(&token("ok")).expect("plain secrets materialize"),
         b"data: \"/Volumes/T/data/instances/0192f000-0000-7000-8000-00000000000b/data\"\ntoken: \"ok\"\n"

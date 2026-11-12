@@ -89,6 +89,39 @@
           "result": "pass",
           "providerRevision": {
             "id": "official/nats",
+            "revision": "1.1.0",
+            "manifestSha256": "1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "client_auth",
+            "honest_readiness",
+            "identity_check",
+            "init",
+            "isolation",
+            "jetstream_mode",
+            "monitoring_conflict",
+            "persistence",
+            "readiness",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "power_loss_not_covered"
+          ],
+          "summary": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, client password enforced, two instances isolated across a restart, file stream kept and me",
+          "testedAt": "2026-11-12T02:31:35.158Z",
+          "evidence": "compatibility/01a1cd97-b592-729a-83ed-1ab017f2ddb7/01a1cd97-ea52-7721-8b06-7d7ad8760438"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/nats",
             "revision": "1.0.1",
             "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe"
           },

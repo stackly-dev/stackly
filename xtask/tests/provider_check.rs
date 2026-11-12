@@ -215,7 +215,7 @@ fn a_traefik_copy_that_renders_its_static_config_at_initialize_is_reported_next_
             .all(|line| line.contains("traefik.yaml.tmpl"))
     );
     assert_eq!(oks.len(), 1, "{lines:#?}");
-    assert!(oks[0].starts_with("ok official/nats 1.0.1 "), "{}", oks[0]);
+    assert!(oks[0].starts_with("ok official/nats 1.1.0 "), "{}", oks[0]);
 }
 
 // covers: AC-1, AC-4 (spec 0036)
@@ -283,7 +283,7 @@ fn freezing_a_frozen_revision_again_changes_nothing_and_a_testing_package_is_ref
     assert_eq!(nats.status.code(), Some(0), "{nats:?}");
     let stdout = String::from_utf8_lossy(&nats.stdout);
     assert!(stdout.starts_with("already frozen "), "{stdout}");
-    assert!(stdout.trim_end().ends_with("compat/nats/1.0.1"), "{stdout}");
+    assert!(stdout.trim_end().ends_with("compat/nats/1.1.0"), "{stdout}");
     assert_eq!(fake.status.code(), Some(1), "{fake:?}");
     assert!(
         String::from_utf8_lossy(&fake.stderr).contains("only official/ packages are frozen"),
