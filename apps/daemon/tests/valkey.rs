@@ -20,6 +20,8 @@ mod harness;
 mod lifecycle;
 #[path = "valkey/owned.rs"]
 mod owned;
+#[path = "valkey/persistence.rs"]
+mod persistence;
 #[path = "valkey/readiness.rs"]
 mod readiness;
 #[path = "valkey/stop.rs"]
