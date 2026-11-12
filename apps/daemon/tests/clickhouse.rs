@@ -13,7 +13,11 @@
 mod common;
 #[path = "clickhouse/harness.rs"]
 mod harness;
+#[path = "clickhouse/isolation.rs"]
+mod isolation;
 #[path = "clickhouse/lifecycle.rs"]
 mod lifecycle;
+#[path = "clickhouse/security.rs"]
+mod security;
 #[path = "supervisor/support.rs"]
 mod support;
