@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf5a-d930-7576-bae0-6b88fde52169",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "status_window::mysql_9_7_never_reads_running_without_a_process_around_start_restart_and_respawn",
+    "file": "apps/daemon/tests/mysql/status_window.rs",
+    "line": 158
+  },
+  "status": "PASS",
+  "expected": "a second client polling instance.get as fast as it answers, while a MySQL 9.7 instance is started, restarted, and respawned after its mysqld is killed, never reads lifecycle running without a process or with readiness unknown",
+  "actual": "8606 instance.get answers, 6320 of them running, none without a process or unknown, across 3 mysqld processes",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:43:19.984088Z",
+  "finishedAt": "2026-11-12T10:43:43.968727Z",
+  "evidencePath": "output.log"
+}

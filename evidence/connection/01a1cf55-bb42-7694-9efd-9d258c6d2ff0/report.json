@@ -1,0 +1,1257 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+    "sourceDirty": false,
+    "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "mysql",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads=1",
+      "drift::",
+      "format::mysql_8_4_reads_back_every",
+      "format::mysql_9_7",
+      "handover::",
+      "persist::",
+      "status_window::",
+      "existing_data::",
+      "mismatch::",
+      "open_with::mysql_9_7",
+      "doctor::mysql_9_7"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T10:37:44.642389Z",
+  "finishedAt": "2026-11-12T10:43:43.984005Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 14,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 14,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 14
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf55-f2a4-7334-b58c-935d45610acf",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "doctor::mysql_9_7_with_a_dropped_readiness_account_gets_the_readiness_account_remedy",
+        "file": "apps/daemon/tests/mysql/doctor.rs",
+        "line": 125
+      },
+      "status": "PASS",
+      "expected": "after DROP USER stackly_readiness the MySQL 9.7 instance is not_ready, doctor.run reports not_ready with the readiness_account remedy of official/mysql whose command is rendered with the runtime mysql and the instance socket and holds no password, and the account is still missing afterwards",
+      "actual": "not_ready, doctor.run showed readiness_account with the rendered mysql command, and ran nothing",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:37:58.821138Z",
+      "finishedAt": "2026-11-12T10:38:20.636421Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf56-47e1-7785-9066-97cbe566baf6",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "drift::mysql_8_4_refuses_to_start_on_a_hand_edited_my_cnf_and_keeps_the_edit",
+        "file": "apps/daemon/tests/mysql/drift.rs",
+        "line": 122
+      },
+      "status": "PASS",
+      "expected": "the rendered my.cnf holds the three comment lines that call a hand edit drift and not the words lost on the next start; after a hand edit two starts are refused with config.drift_detected, no mysqld runs, the edit stays byte for byte, and keep revision writes the rendered file back so the next start is ready with max_connections 151",
+      "actual": "my.cnf names drift in three comment lines, a hand edit refused two starts with config.drift_detected and stayed byte for byte, keep revision restored the rendered file",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:38:20.641809Z",
+      "finishedAt": "2026-11-12T10:38:42.036194Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf56-9b82-7585-a4c0-fd8593878a22",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "existing_data::mysql_8_4_refuses_a_create_on_a_copy_of_valid_data",
+        "file": "apps/daemon/tests/mysql/existing_data.rs",
+        "line": 78
+      },
+      "status": "PASS",
+      "expected": "a copy of a valid MySQL 8.4 data folder planted in the new data folder after the layout fails the create with instance.data_not_empty before init, no mysqld is spawned, and every file of the copy keeps its bytes",
+      "actual": "a copy of 169 valid data files failed the create with instance.data_not_empty before init, nothing spawned, every file unchanged",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:38:42.05096Z",
+      "finishedAt": "2026-11-12T10:39:03.32515Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf56-eeae-723c-a038-a5011b9b6a17",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "format::mysql_8_4_reads_back_every_edge_text_and_both_booleans",
+        "file": "apps/daemon/tests/mysql/format.rs",
+        "line": 255
+      },
+      "status": "PASS",
+      "expected": "texts with a trailing backslash, escaped quotes, #, ;, outer spaces, single quotes, backslash letters, and Unicode rendered by mysqlCnf come back from my_print_defaults of the MySQL 8.4 runtime byte for byte, and the booleans render as ON and OFF and read back as @@local_infile 1 and @@performance_schema 0",
+      "actual": "my_print_defaults read 16 edge texts back byte for byte, and mysqld read ON as local_infile 1 and OFF as performance_schema 0",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:39:03.342505Z",
+      "finishedAt": "2026-11-12T10:39:23.309149Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf57-3cbf-75d8-90d9-d03eb15ba0b9",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "format::mysql_9_7_reads_back_every_edge_text_and_both_booleans",
+        "file": "apps/daemon/tests/mysql/format.rs",
+        "line": 267
+      },
+      "status": "PASS",
+      "expected": "texts with a trailing backslash, escaped quotes, #, ;, outer spaces, single quotes, backslash letters, and Unicode rendered by mysqlCnf come back from my_print_defaults of the MySQL 9.7 runtime byte for byte, and the booleans render as ON and OFF and read back as @@local_infile 1 and @@performance_schema 0",
+      "actual": "my_print_defaults read 16 edge texts back byte for byte, and mysqld read ON as local_infile 1 and OFF as performance_schema 0",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:39:23.327493Z",
+      "finishedAt": "2026-11-12T10:39:43.590892Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf57-8beb-752f-a302-cdcc068f56b0",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "handover::mysql_8_4_restart_preview_stops_and_restores_while_the_handover_is_unproven",
+        "file": "apps/daemon/tests/mysql/handover.rs",
+        "line": 56
+      },
+      "status": "PASS",
+      "expected": "daemon.restart_preview of a manual stacklyd lists a running MySQL 8.4 instance as stop_restore with handover_unproven",
+      "actual": "MySQL 8.4.11 is stop_restore with handover_unproven in the restart preview",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:39:43.595214Z",
+      "finishedAt": "2026-11-12T10:40:04.527362Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf57-ddbf-77a7-87f5-4e0f0ef4e380",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "handover::mysql_9_7_restart_preview_stops_and_restores_while_the_handover_is_unproven",
+        "file": "apps/daemon/tests/mysql/handover.rs",
+        "line": 68
+      },
+      "status": "PASS",
+      "expected": "daemon.restart_preview of a manual stacklyd lists a running MySQL 9.7 instance as stop_restore with handover_unproven",
+      "actual": "MySQL 9.7.2 is stop_restore with handover_unproven in the restart preview",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:40:04.543557Z",
+      "finishedAt": "2026-11-12T10:40:24.966932Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf58-2d8b-71ab-972a-2a57b7b1c843",
+      "covers": [
+        "REQ-055",
+        "BR-009",
+        "AC-081"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "mismatch::mysql_8_4_data_is_refused_by_a_runtime_9_7_and_a_missing_or_changed_marker_is_refused",
+        "file": "apps/daemon/tests/mysql/mismatch.rs",
+        "line": 163
+      },
+      "status": "PASS",
+      "expected": "data initialized by MySQL 8.4 is refused by a runtime 9.7 with supervisor.data_incompatible (incompatible, data 8.4, runtime 9.7) before any mysqld is spawned, every data file keeps its bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, neither refusal changes a data file, and the instance starts once the marker is back",
+      "actual": "data 8.4 refused on runtime 9.7 by the start and rebind::check, a missing marker as data_unavailable, 8.0.40 as marker_mismatch, every data file byte for byte unchanged after each refusal, and a start once the marker was back",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:40:24.971975Z",
+      "finishedAt": "2026-11-12T10:41:09.865093Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf58-dcf7-77a0-96fe-a22f7dbe9f26",
+      "covers": [
+        "REQ-055",
+        "BR-009",
+        "AC-081"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "mismatch::mysql_9_7_data_is_refused_by_a_runtime_8_4_and_a_missing_or_changed_marker_is_refused",
+        "file": "apps/daemon/tests/mysql/mismatch.rs",
+        "line": 175
+      },
+      "status": "PASS",
+      "expected": "data initialized by MySQL 9.7 is refused by a runtime 8.4 with supervisor.data_incompatible (incompatible, data 9.7, runtime 8.4) before any mysqld is spawned, every data file keeps its bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, neither refusal changes a data file, and the instance starts once the marker is back",
+      "actual": "data 9.7 refused on runtime 8.4 by the start and rebind::check, a missing marker as data_unavailable, 8.0.40 as marker_mismatch, every data file byte for byte unchanged after each refusal, and a start once the marker was back",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:41:09.879866Z",
+      "finishedAt": "2026-11-12T10:41:54.456132Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf59-8b26-7736-9c69-9fda8c0fbe73",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "open_with::mysql_9_7_shows_three_open_actions_with_no_secret_and_the_runtime_mysql",
+        "file": "apps/daemon/tests/mysql/open_with.rs",
+        "line": 103
+      },
+      "status": "PASS",
+      "expected": "instance.get_detail of a ready MySQL 9.7 instance lists the open actions tableplus, sequel_ace, and mysql in that order, each copying rootPassword by reference and none holding its value, and the mysql action runs bin/mysql of the instance runtime over the instance socket",
+      "actual": "tableplus, sequel_ace, and mysql, no secret value, mysql from the runtime",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:41:54.470333Z",
+      "finishedAt": "2026-11-12T10:42:14.828498Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf59-dab5-72a4-9062-e7febfa2ce18",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "persist::mysql_8_4_ignores_persisted_variables_across_an_instance_restart",
+        "file": "apps/daemon/tests/mysql/persist.rs",
+        "line": 123
+      },
+      "status": "PASS",
+      "expected": "SET PERSIST max_connections and SET PERSIST_ONLY of skip_name_resolve, bind_address, port, and admin_address, then instance.restart, give a new mysqld with max_connections from settings, skip_name_resolve 1, the endpoint bind and port, no admin address, one TCP listener, mysqlx off, and stackly_readiness with only USAGE, refused over TCP",
+      "actual": "after instance.restart none of [\"SET PERSIST max_connections = 77\", \"SET PERSIST_ONLY skip_name_resolve = OFF\"] was loaded: max_connections 151, skip_name_resolve 1, bind 127.0.0.1, the endpoint port, no admin address, one listener, mysqlx off, stackly_readiness USAGE only and refused over TCP",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:42:14.837104Z",
+      "finishedAt": "2026-11-12T10:42:35.85442Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf5a-2cde-765e-9be1-1c2215307c01",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "persist::mysql_9_7_ignores_persisted_variables_across_an_instance_restart",
+        "file": "apps/daemon/tests/mysql/persist.rs",
+        "line": 135
+      },
+      "status": "PASS",
+      "expected": "SET PERSIST max_connections and SET PERSIST_ONLY of skip_name_resolve, bind_address, port, and admin_address, then instance.restart, give a new mysqld with max_connections from settings, skip_name_resolve 1, the endpoint bind and port, no admin address, one TCP listener, mysqlx off, and stackly_readiness with only USAGE, refused over TCP",
+      "actual": "after instance.restart none of [\"SET PERSIST max_connections = 77\", \"SET PERSIST_ONLY skip_name_resolve = OFF\"] was loaded: max_connections 151, skip_name_resolve 1, bind 127.0.0.1, the endpoint port, no admin address, one listener, mysqlx off, stackly_readiness USAGE only and refused over TCP",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:42:35.870164Z",
+      "finishedAt": "2026-11-12T10:42:58.263905Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf5a-845d-71f2-9e1a-e66524e33ec2",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "status_window::mysql_8_4_never_reads_running_without_a_process_around_start_restart_and_respawn",
+        "file": "apps/daemon/tests/mysql/status_window.rs",
+        "line": 146
+      },
+      "status": "PASS",
+      "expected": "a second client polling instance.get as fast as it answers, while a MySQL 8.4 instance is started, restarted, and respawned after its mysqld is killed, never reads lifecycle running without a process or with readiness unknown",
+      "actual": "9352 instance.get answers, 7239 of them running, none without a process or unknown, across 3 mysqld processes",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:42:58.269165Z",
+      "finishedAt": "2026-11-12T10:43:19.966826Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cf5a-d930-7576-bae0-6b88fde52169",
+      "covers": [
+        "REQ-055"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "status_window::mysql_9_7_never_reads_running_without_a_process_around_start_restart_and_respawn",
+        "file": "apps/daemon/tests/mysql/status_window.rs",
+        "line": 158
+      },
+      "status": "PASS",
+      "expected": "a second client polling instance.get as fast as it answers, while a MySQL 9.7 instance is started, restarted, and respawned after its mysqld is killed, never reads lifecycle running without a process or with readiness unknown",
+      "actual": "8606 instance.get answers, 6320 of them running, none without a process or unknown, across 3 mysqld processes",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T10:43:19.984088Z",
+      "finishedAt": "2026-11-12T10:43:43.968727Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "acbd83e3cab91b8c4369f4d9975e80190a21dd85",
+        "sourceDirty": false,
+        "runId": "01a1cf55-bb42-7694-9efd-9d258c6d2ff0",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "drift::",
+          "format::mysql_8_4_reads_back_every",
+          "format::mysql_9_7",
+          "handover::",
+          "persist::",
+          "status_window::",
+          "existing_data::",
+          "mismatch::",
+          "open_with::mysql_9_7",
+          "doctor::mysql_9_7"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

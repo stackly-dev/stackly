@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf56-eeae-723c-a038-a5011b9b6a17",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "format::mysql_8_4_reads_back_every_edge_text_and_both_booleans",
+    "file": "apps/daemon/tests/mysql/format.rs",
+    "line": 255
+  },
+  "status": "PASS",
+  "expected": "texts with a trailing backslash, escaped quotes, #, ;, outer spaces, single quotes, backslash letters, and Unicode rendered by mysqlCnf come back from my_print_defaults of the MySQL 8.4 runtime byte for byte, and the booleans render as ON and OFF and read back as @@local_infile 1 and @@performance_schema 0",
+  "actual": "my_print_defaults read 16 edge texts back byte for byte, and mysqld read ON as local_infile 1 and OFF as performance_schema 0",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "8.4.11",
+      "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:39:03.342505Z",
+  "finishedAt": "2026-11-12T10:39:23.309149Z",
+  "evidencePath": "output.log"
+}

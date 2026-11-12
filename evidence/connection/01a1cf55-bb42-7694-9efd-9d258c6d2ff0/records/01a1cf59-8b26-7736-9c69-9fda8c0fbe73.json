@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf59-8b26-7736-9c69-9fda8c0fbe73",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "open_with::mysql_9_7_shows_three_open_actions_with_no_secret_and_the_runtime_mysql",
+    "file": "apps/daemon/tests/mysql/open_with.rs",
+    "line": 103
+  },
+  "status": "PASS",
+  "expected": "instance.get_detail of a ready MySQL 9.7 instance lists the open actions tableplus, sequel_ace, and mysql in that order, each copying rootPassword by reference and none holding its value, and the mysql action runs bin/mysql of the instance runtime over the instance socket",
+  "actual": "tableplus, sequel_ace, and mysql, no secret value, mysql from the runtime",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:41:54.470333Z",
+  "finishedAt": "2026-11-12T10:42:14.828498Z",
+  "evidencePath": "output.log"
+}

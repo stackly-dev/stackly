@@ -1,0 +1,28 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 12.53s
+     Running tests/mysql.rs (target/debug/deps/mysql-cf6a56d559f755f4)
+
+running 14 tests
+test doctor::mysql_9_7_with_a_dropped_readiness_account_gets_the_readiness_account_remedy ... ok
+test drift::mysql_8_4_refuses_to_start_on_a_hand_edited_my_cnf_and_keeps_the_edit ... ok
+test existing_data::mysql_8_4_refuses_a_create_on_a_copy_of_valid_data ... ok
+test format::mysql_8_4_reads_back_every_edge_text_and_both_booleans ... ok
+test format::mysql_9_7_reads_back_every_edge_text_and_both_booleans ... ok
+test handover::mysql_8_4_restart_preview_stops_and_restores_while_the_handover_is_unproven ... ok
+test handover::mysql_9_7_restart_preview_stops_and_restores_while_the_handover_is_unproven ... ok
+test mismatch::mysql_8_4_data_is_refused_by_a_runtime_9_7_and_a_missing_or_changed_marker_is_refused ... ok
+test mismatch::mysql_9_7_data_is_refused_by_a_runtime_8_4_and_a_missing_or_changed_marker_is_refused ... ok
+test open_with::mysql_9_7_shows_three_open_actions_with_no_secret_and_the_runtime_mysql ... ok
+test persist::mysql_8_4_ignores_persisted_variables_across_an_instance_restart ... ok
+test persist::mysql_9_7_ignores_persisted_variables_across_an_instance_restart ... ok
+test status_window::mysql_8_4_never_reads_running_without_a_process_around_start_restart_and_respawn ... ok
+test status_window::mysql_9_7_never_reads_running_without_a_process_around_start_restart_and_respawn ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 36 filtered out; finished in 345.16s
+
