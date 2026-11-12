@@ -7,6 +7,8 @@
 //! not in the cache ends a test as `BLOCKED`, never as a download.
 #![cfg(target_os = "macos")]
 
+#[path = "nats/auth.rs"]
+mod auth;
 #[path = "nats/client.rs"]
 mod client;
 #[path = "common/mod.rs"]
