@@ -14,6 +14,7 @@
 | `arc-f41-spec` | architect | F41 Provider Traefik & routing lokal · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0041-provider-traefik-routing-lokal/` | `claude/arc-f41-spec-ec76d9` | `fable-5-2 · high` | merged |
 | `arc-f42-spec` | architect | F42 Provider MySQL · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0042-provider-mysql/` | `claude/arc-f42-spec-*` | `fable-5-2 · high` | aktif |
 | `arc-f43-spec` | architect | F43 Provider ClickHouse · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0043-provider-clickhouse/` | `claude/arc-f43-spec-*` | `fable-5-2 · high` | aktif |
+| `dev-f41-m1` | developer | F41 milestone 1 dan 2 (Build plan langkah 1 sampai 7) | `07-stack-enam-service.md` | `providers/traefik/`, golden dan fixture Traefik, empat file test core bersama, `apps/daemon/tests/traefik*` | `claude/arc-f41-spec-ec76d9` | `opus-5-5 · medium` | dipakai ulang, aktif |
 
 ## Keputusan
 
