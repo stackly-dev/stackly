@@ -232,6 +232,21 @@ Temuan verify penuh MySQL (milestone 3 sisa dan 4) belum tiba saat update kedua 
 
 Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
 
+## Update 2026-11-12 (ketiga): temuan verify penuh
+
+Verify penuh (`chk-f42-full`, merge `7cf2916a`) lulus: AC-1 sampai AC-16 dan AC-18 terpenuhi, AC-17 `BLOCKED` (butuh sesi login GUI), dan dua langkah GUI `NOT_RUN`. Update ini memasukkan empat temuannya ke teks spec. Tidak ada perilaku, paket, kode, ID AC, atau keputusan yang berubah.
+
+| No | Temuan | Yang diubah di spec | Alasan |
+| --- | --- | --- | --- |
+| 1 | Sesudah perbaikan balapan start (`0de32eda`, masuk `main` lewat `de5d0e14`), client bisa melihat proses dan readiness `not_ready` (`awaiting_probe`) selama `starting`, sebelum `running`. Tidak pernah `running` tanpa proses: 1230 sampel polling di sekitar enam start, 0 pelanggaran; `lifecycle::` 8 run berturut turut lulus. | Satu kalimat batas di AC-13, lanjutan paragraf *Perubahan core*, dan lanjutan butir Neutral. | AC-13 menulis "lifecycle `running` dengan readiness `not_ready` lalu `ready`", yang tetap benar, tetapi tidak menyebut bahwa `not_ready` sudah terlihat lebih awal. Tanpa kalimat itu, pembaca bisa mengira proses yang terlihat saat `starting` adalah cacat. Angka pengukuran ditulis sebagai hasil verify, bukan sebagai kriteria baru. |
+| 2 | `official/mysql` masuk `[[provider]]` tanpa catatan platform, jadi sel Linux dan Windows tampil `unsupported` (`no_build`), bukan `planned`. | Satu butir Neutral di Consequences. | Spec ini hanya menetapkan mark dan tile untuk catalog (*Value sourcing*), jadi yang dibangun sesuai spec. `unsupported` dengan `no_build` adalah nilai bawaan `crates/core/src/catalog/status.rs` untuk platform tanpa build dan tanpa catatan. Apakah MySQL ingin `planned` adalah keputusan produk, bukan temuan cacat, jadi tidak dijadikan Follow-up berpemilik. |
+| 3 | Tiga temuan di luar fitur 42 tentang drift: mengembalikan file byte demi byte belum membuka start sampai `stackly instance config get` dijalankan; pesan CLI drift tanpa hint; `lastFailure.excerpt` pada `config_drift` berisi baris log run sebelumnya. | Satu Follow-up untuk pemilik spec 0029 dan 0033. | Spec ini tidak mengubah spec lain. Ketiganya ditemukan pada instance MySQL, tetapi berasal dari alur drift dan alur gagal start yang umum. |
+| 4 | Langkah manual AC-17 yang ditulis `verify.md`: commit baris `HANDOVER_PROVEN` dulu (subject `feat(core): spec 0042 step 13, official/mysql in HANDOVER_PROVEN`), filter `mysql_`, `git revert` kalau bukan `PASS`. | AC-17 mendapat kalimat urutan; langkah 13, tabel *API surface*, dan butir *Langkah manual* disamakan. | Kalimat lama AC-17 ("entri masuk hanya di commit yang membawa record `PASS`") tidak bisa dijalankan seperti tertulis: kedua test menuntut `keep` dengan `handover_proven` dari binary yang diuji, jadi baris itu harus ada sebelum run. Ini urutan yang sama dengan spec 0040 AC-19 dan spec 0041 langkah manual 7. Aturan intinya tidak berubah: entri hanya sampai `main` bersama record `PASS`. |
+
+Temuan verify penuh untuk pemilik `verify.md`, tanpa perubahan spec: angka `13 test` di `verify.md` kini 14.
+
+Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
+
 ## Cross check
 
 Dijalankan 2026-11-12 oleh model lain (Opus), hanya membaca. Ia memeriksa manifest terhadap validator dan spec 0009, 0010, 0011, 0034, 0036, dan 0070. Yang ia nyatakan benar: posisi setiap token, aturan `stdin.text`, argumen `/dev/stdin`, `init_port_issues` kosong, pattern `dataMarker` dan `versionCheck`, batas timeout, tidak adanya reload, blok `connection`, `openWith`, `remedies`, dan skenario.
