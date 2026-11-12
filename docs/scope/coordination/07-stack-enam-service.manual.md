@@ -17,7 +17,7 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 ## Fitur 39 · Provider NATS & JetStream (spec 0039)
 
 1. AC-13, run launchd NATS pada paket `1.1.0`, di sesi login GUI, setelah langkah 8 Build plan: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 nats_survives`. Harapan: `nats_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` PASS; catat ID record evidence di `verify.md`. Kalau gagal, kembali ke `/architect`.
-2. AC-11, pemeriksaan GUI: sheet New Instance, pilih NATS, biarkan password Generate, Create lalu Start. Harapan: Summary menampilkan readiness ready dan Client URL ter-mask (`nats://stackly:****@127.0.0.1:<port>`) dengan tombol salin; tab Configuration menampilkan form dengan batas MiB dan KiB dan tanpa Effective File.
+2. AC-11, pemeriksaan GUI: sheet New Instance, pilih NATS, biarkan password Generate, Create lalu Start. Harapan: Summary menampilkan readiness ready dan Client URL ter-mask (`nats://stackly:****@127.0.0.1:<port>`) dengan tombol salin, dan hasil salin memuat password yang dibangkitkan; tab Configuration menampilkan form dengan batas MiB dan KiB dan tanpa Effective File.
 3. AC-2, fuzz (bila toolchain nightly terpasang): `cargo xtask fuzz run provider_template --time 600`. Harapan: tanpa crash; tanpa toolchain `BLOCKED`, owner user.
 
 ## Fitur 43 · Provider ClickHouse (spec 0043)
