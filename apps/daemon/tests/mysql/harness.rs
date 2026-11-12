@@ -1430,3 +1430,39 @@ pub fn binlog_files(data: &std::path::Path) -> bool {
             .any(|entry| entry.file_name().to_string_lossy().starts_with("binlog."))
     })
 }
+
+/// Starts `id`, waits for the operation to fail, and returns its error.
+pub async fn refused_start(api: &Api, id: Uuid) -> stackly_protocol::ErrorBody {
+    let accepted = api
+        .start(id)
+        .await
+        .expect("the start is accepted")
+        .accepted
+        .expect("a start from stopped begins an operation");
+    let failed = api.wait_final(accepted.operation.id).await;
+    assert_eq!(
+        failed.operation.state,
+        stackly_protocol::operation::OperationState::Failed,
+        "{failed:?}"
+    );
+    failed
+        .operation
+        .failure
+        .expect("the failed operation carries its error")
+        .error
+}
+
+/// The folder of the runtime `runtime_id`, from `runtime.get`.
+pub async fn runtime_dir_of(api: &Api, runtime_id: Uuid) -> PathBuf {
+    use stackly_protocol::runtime::GetRuntimeParams;
+    use stackly_protocol::{Call, Reply};
+
+    let Ok(Reply::RuntimeGet(detail)) = api
+        .client
+        .call(Call::RuntimeGet(GetRuntimeParams { runtime_id }))
+        .await
+    else {
+        panic!("the runtime can be read");
+    };
+    PathBuf::from(&detail.path)
+}

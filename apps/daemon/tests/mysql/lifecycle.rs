@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
-    MY84, My, Site, Via, binlog_files, create_generated, create_with, stop_and_shutdown,
+    MY84, MY97, My, Site, Via, binlog_files, create_generated, create_with, stop_and_shutdown,
 };
 use crate::support::Api;
 
@@ -195,6 +195,21 @@ async fn mysql_8_4_is_created_started_served_restarted_and_stopped_through_the_d
     is_created_started_served_restarted_and_stopped_through_the_daemon(my, ev).await;
 }
 
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_is_created_started_served_restarted_and_stopped_through_the_daemon() {
+    let my = MY97;
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = &format!(
+            "a MySQL {} instance is created with a generated rootPassword, initialized with data.initializedLine {}, starts running not_ready then ready, shows one available uri connection whose masked value is an absolute URI, keeps a row over a stop and a start, gets a new pid on restart, takes maxConnections 77 through the config edit and a restart, and stops",
+            my.line, my.line
+        ),
+    );
+    is_created_started_served_restarted_and_stopped_through_the_daemon(my, ev).await;
+}
+
 async fn writes_a_binary_log_only_when_the_setting_is_on(my: My, ev: Evidence) {
     let Some(site) = Site::open(&ev, my) else {
         return;
@@ -234,4 +249,15 @@ async fn mysql_8_4_writes_a_binary_log_only_when_the_setting_is_on() {
         expected = "with binaryLog true the data folder holds no binlog file after init, and the running server has @@log_bin 1 and writes binlog.NNNNNN",
     );
     writes_a_binary_log_only_when_the_setting_is_on(MY84, ev).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_writes_a_binary_log_only_when_the_setting_is_on() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "with binaryLog true the data folder holds no binlog file after init, and the running server has @@log_bin 1 and writes binlog.NNNNNN",
+    );
+    writes_a_binary_log_only_when_the_setting_is_on(MY97, ev).await;
 }

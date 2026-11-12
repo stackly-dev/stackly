@@ -8,8 +8,8 @@ use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::config_calls::pid_of;
 use crate::harness::{
-    MY84, My, READINESS, Site, Via, create_auto, create_instance, listeners, stop_and_shutdown,
-    variable,
+    MY84, MY97, My, READINESS, Site, Via, create_auto, create_instance, listeners,
+    stop_and_shutdown, variable,
 };
 use crate::support::Api;
 
@@ -111,4 +111,16 @@ async fn mysql_8_4_listens_only_on_its_endpoint_and_ignores_persisted_variables(
         expected = "mysqld listens only on 127.0.0.1 at the client port and on <run>/mysql.sock with mysqlx and the admin interface off; after SET PERSIST max_connections = 77 and SET PERSIST_ONLY skip_name_resolve = OFF and a stop and start, max_connections is the settings value 151, skip_name_resolve is 1, readiness passes, and stackly_readiness is still refused over TCP; an Auto client port is bound after the start and equals @@port",
     );
     listens_only_on_its_endpoint_and_ignores_persisted_variables(MY84, ev).await;
+}
+
+// covers: AC-5 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_listens_only_on_its_endpoint_and_ignores_persisted_variables() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "mysqld listens only on 127.0.0.1 at the client port and on <run>/mysql.sock with mysqlx and the admin interface off; after SET PERSIST max_connections = 77 and SET PERSIST_ONLY skip_name_resolve = OFF and a stop and start, max_connections is the settings value 151, skip_name_resolve is 1, readiness passes, and stackly_readiness is still refused over TCP; an Auto client port is bound after the start and equals @@port",
+    );
+    listens_only_on_its_endpoint_and_ignores_persisted_variables(MY97, ev).await;
 }

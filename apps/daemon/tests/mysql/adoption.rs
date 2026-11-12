@@ -3,7 +3,7 @@
 use stackly_protocol::instance::{InstanceLifecycle, InstanceReadinessState};
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, Site, create_instance, output_of};
+use crate::harness::{MY84, MY97, My, Site, create_instance, output_of};
 
 async fn keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(
     my: My,
@@ -74,4 +74,16 @@ async fn mysql_8_4_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon
         expected = "mysqld holds instance.lock at fd 3, keeps running after stacklyd is killed with SIGKILL, and the next stacklyd adopts the same pid and start time and shows it ready",
     );
     keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(MY84, ev).await;
+}
+
+// covers: AC-13 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "mysqld holds instance.lock at fd 3, keeps running after stacklyd is killed with SIGKILL, and the next stacklyd adopts the same pid and start time and shows it ready",
+    );
+    keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it(MY97, ev).await;
 }

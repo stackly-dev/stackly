@@ -8,7 +8,7 @@ use std::time::Duration;
 use stackly_protocol::instance::InstanceReadinessState;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, Site, create_instance, stop_and_shutdown};
+use crate::harness::{MY84, MY97, My, Site, create_instance, stop_and_shutdown};
 
 async fn is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked(
     my: My,
@@ -76,4 +76,16 @@ async fn mysql_8_4_is_not_ready_while_its_port_accepts_but_the_readiness_account
         expected = "after ALTER USER stackly_readiness ACCOUNT LOCK the instance becomes not_ready with a detail that holds Access denied for user 'stackly_readiness'@'localhost' while its TCP port still accepts connections, and after ACCOUNT UNLOCK it is ready again",
     );
     is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked(MY84, ev).await;
+}
+
+// covers: AC-7 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "after ALTER USER stackly_readiness ACCOUNT LOCK the instance becomes not_ready with a detail that holds Access denied for user 'stackly_readiness'@'localhost' while its TCP port still accepts connections, and after ACCOUNT UNLOCK it is ready again",
+    );
+    is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked(MY97, ev).await;
 }

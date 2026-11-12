@@ -8,7 +8,7 @@ use stackly_protocol::instance::InstanceLifecycle;
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, ROOT, Site, create_instance, stop_and_shutdown};
+use crate::harness::{MY84, MY97, My, ROOT, Site, create_instance, stop_and_shutdown};
 use crate::support::LogRecorder;
 
 async fn stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery(
@@ -112,4 +112,16 @@ async fn mysql_8_4_stops_fast_with_a_sleeping_session_and_starts_again_without_c
         expected = "with one session in SELECT SLEEP(600), the SIGTERM stop ends stopped within 30 s, the pid file, socket, and socket lock file are gone, the log says Shutdown complete, and the next start does not log Database was not shutdown normally",
     );
     stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery(MY84, ev).await;
+}
+
+// covers: AC-8 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "with one session in SELECT SLEEP(600), the SIGTERM stop ends stopped within 30 s, the pid file, socket, and socket lock file are gone, the log says Shutdown complete, and the next start does not log Database was not shutdown normally",
+    );
+    stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery(MY97, ev).await;
 }

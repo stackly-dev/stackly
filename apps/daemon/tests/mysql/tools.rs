@@ -7,7 +7,7 @@ use std::time::Duration;
 use stackly_protocol::operation::OperationState;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, Site, create_instance};
+use crate::harness::{MY84, MY97, My, Site, create_instance};
 
 async fn never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home(my: My, ev: Evidence) {
     let Some(site) = Site::open(&ev, my) else {
@@ -72,4 +72,16 @@ async fn mysql_8_4_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home() 
         expected = "with decoy mysql, mysqld, and mysqladmin first on the daemon's PATH and a .my.cnf with an unknown option in the instance temp folder that is HOME of the children, create, start, readiness, and stop work and no decoy ever runs",
     );
     never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home(MY84, ev).await;
+}
+
+// covers: AC-12 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "with decoy mysql, mysqld, and mysqladmin first on the daemon's PATH and a .my.cnf with an unknown option in the instance temp folder that is HOME of the children, create, start, readiness, and stop work and no decoy ever runs",
+    );
+    never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home(MY97, ev).await;
 }

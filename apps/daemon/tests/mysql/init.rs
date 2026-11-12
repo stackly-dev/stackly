@@ -13,7 +13,7 @@ use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{Evidence, Kind, Source, evidence};
 
 use crate::harness::{
-    MY84, My, Site, binlog_files, create_generated, failed_create, listeners, mysqld_serving,
+    MY84, MY97, My, Site, binlog_files, create_generated, failed_create, listeners, mysqld_serving,
     new_password, output_of, package_copy_with,
 };
 use crate::support::LogRecorder;
@@ -113,6 +113,18 @@ async fn mysql_8_4_initializes_in_one_process_that_opens_nothing_and_leaves_noth
     initializes_in_one_process_that_opens_nothing_and_leaves_nothing(MY84, ev).await;
 }
 
+// covers: AC-3 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_initializes_in_one_process_that_opens_nothing_and_leaves_nothing() {
+    let ev = evidence!(
+        covers = ["REQ-055", "BR-008"],
+        kind = Kind::Native,
+        expected = "the init runs exactly one mysqld --initialize-insecure, which listens on no TCP port and opens no Unix socket, and afterwards no root-password file, no mysqld process, and no binlog.* file is left while mysql_upgrade_history is written",
+    );
+    initializes_in_one_process_that_opens_nothing_and_leaves_nothing(MY97, ev).await;
+}
+
 /// The error of a failed operation, with the reason, step, and exit code it
 /// names.
 fn init_failure(
@@ -207,6 +219,18 @@ async fn mysql_8_4_fails_closed_on_a_bad_account_statement_and_never_starts() {
     fails_closed_on_a_bad_account_statement_and_never_starts(MY84, ev).await;
 }
 
+// covers: AC-3 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_fails_closed_on_a_bad_account_statement_and_never_starts() {
+    let ev = evidence!(
+        covers = ["REQ-055", "BR-008"],
+        kind = Kind::Native,
+        expected = "a copy of the package whose account SQL creates root@localhost again makes mysqld --initialize-insecure exit 1, the init fails init_step_failed at the initialize step with the MySQL error in the log sinks, no password file or mysqld is left, and the create is compensated",
+    );
+    fails_closed_on_a_bad_account_statement_and_never_starts(MY97, ev).await;
+}
+
 /// The bytes and modification time of `path`.
 fn state_of(path: &Path) -> (Vec<u8>, SystemTime) {
     (
@@ -294,4 +318,16 @@ async fn mysql_8_4_refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_a
         expected = "a file put in the data folder after the create checked it empty makes mysqld --initialize-insecure exit 1, the init fails init_step_failed at the initialize step, and the file keeps its bytes and modification time",
     );
     refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_alone(MY84, ev).await;
+}
+
+// covers: AC-3 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_alone() {
+    let ev = evidence!(
+        covers = ["REQ-055", "BR-008"],
+        kind = Kind::Native,
+        expected = "a file put in the data folder after the create checked it empty makes mysqld --initialize-insecure exit 1, the init fails init_step_failed at the initialize step, and the file keeps its bytes and modification time",
+    );
+    refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_alone(MY97, ev).await;
 }

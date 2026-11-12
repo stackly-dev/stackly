@@ -8,8 +8,8 @@ use serde_json::json;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::harness::{
-    MY84, My, Mysql, READINESS, ROOT, Site, Via, create_generated, create_with, files_holding,
-    new_password, output_of, stop_and_shutdown,
+    MY84, MY97, My, Mysql, READINESS, ROOT, Site, Via, create_generated, create_with,
+    files_holding, new_password, output_of, stop_and_shutdown,
 };
 use crate::support::LogRecorder;
 
@@ -154,6 +154,18 @@ async fn mysql_8_4_has_three_root_accounts_and_a_readiness_account_that_only_rea
     has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket(MY84, ev).await;
 }
 
+// covers: AC-4 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket() {
+    let ev = evidence!(
+        covers = ["REQ-055", "VAL-018"],
+        kind = Kind::Native,
+        expected = "after init the unlocked accounts are root@localhost, root@127.0.0.1, root@::1, and stackly_readiness@localhost; the IP roots have the grants of root@localhost but AUDIT_ABORT_EXEMPT and FIREWALL_EXEMPT; root is refused without its password and accepted with it over the socket and TCP; stackly_readiness is refused over TCP, has only USAGE, cannot CREATE DATABASE, and has MAX_USER_CONNECTIONS 3; the password is in no argv, file, or log line",
+    );
+    has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket(MY97, ev).await;
+}
+
 async fn takes_a_password_with_quotes_backslashes_spaces_and_unicode(my: My, ev: Evidence) {
     let Some(site) = Site::open(&ev, my) else {
         return;
@@ -198,4 +210,16 @@ async fn mysql_8_4_takes_a_password_with_quotes_backslashes_spaces_and_unicode()
         expected = "a root password with a single quote, a double quote, a backslash, spaces, and Unicode letters signs in over the socket and TCP, and it is in no argv and no file under the test root, the daemon log included",
     );
     takes_a_password_with_quotes_backslashes_spaces_and_unicode(MY84, ev).await;
+}
+
+// covers: AC-4 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_takes_a_password_with_quotes_backslashes_spaces_and_unicode() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "a root password with a single quote, a double quote, a backslash, spaces, and Unicode letters signs in over the socket and TCP, and it is in no argv and no file under the test root, the daemon log included",
+    );
+    takes_a_password_with_quotes_backslashes_spaces_and_unicode(MY97, ev).await;
 }

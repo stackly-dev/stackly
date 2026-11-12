@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
 use crate::config_calls::pid_of;
-use crate::harness::{MY84, My, Site, create_instance, output_of, stop_and_shutdown, variable};
+use crate::harness::{
+    MY84, MY97, My, Site, create_instance, output_of, stop_and_shutdown, variable,
+};
 
 /// The regular files `pid` has open for writing: the `n` field of each
 /// numbered fd whose access mode is `w` or `u` and whose type is `REG`.
@@ -121,4 +123,16 @@ async fn mysql_8_4_keeps_every_path_in_its_instance() {
         expected = "@@datadir is in the data folder, @@tmpdir is the temp folder, the general and slow log files are in the logs folder, the pid file and socket are in the run folder, secure_file_priv is NULL and log_error is stderr, every regular file mysqld has open for writing is in one of those folders, and the error log lines with their UTC stamp come back from instance.logs_read",
     );
     keeps_every_path_in_its_instance(MY84, ev).await;
+}
+
+// covers: AC-6 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_keeps_every_path_in_its_instance() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "@@datadir is in the data folder, @@tmpdir is the temp folder, the general and slow log files are in the logs folder, the pid file and socket are in the run folder, secure_file_priv is NULL and log_error is stderr, every regular file mysqld has open for writing is in one of those folders, and the error log lines with their UTC stamp come back from instance.logs_read",
+    );
+    keeps_every_path_in_its_instance(MY97, ev).await;
 }
