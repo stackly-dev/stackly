@@ -100,5 +100,25 @@ Semua test native, satu per satu (`--test-threads 1`), dari `mysql-8.4.11-macos-
 - AC-10 · `mismatch::` kedua arah, termasuk `rebind::check`
 - AC-11 · `existing_data::` dengan data 8.4
 - AC-14 · konformitas native kedua lini; `scenarios.yaml` tidak berubah
-- AC-1 (catalog), AC-16 (evidence BR-025 dan `compatibility.json`) · menunggu langkah 11 dan 12
+- AC-1 (catalog) · langkah 11 di giliran catalog; AC-16 · `compat::` lulus, record evidence di giliran catalog (lihat di bawah)
 - AC-17 · Milestone 4
+
+### Commands (langkah 11 dan 12)
+
+- [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 compat::` → `mysql_8_4_runs_the_package_and_records_what_it_proved` dan `mysql_9_7_runs_the_package_and_records_what_it_proved` lulus dari cache: lewat binary `stacklyd`, `SELECT VERSION()` 8.4.11 dan 9.7.2 sebagai subject, dua instance satu lini dengan baris `stackly_compat.marker` sendiri, restart dengan `mysqld` baru di data yang sama, adopsi PID dan `startedAt` keduanya sesudah `SIGKILL` daemon, stop tanpa proses, lalu data diikat ke runtime lini lain ditolak `supervisor.data_incompatible` tanpa spawn; `compatibility.json` per artefak memuat `adoption`, `init`, `isolation`, `line_mismatch_refusal`, `readiness`, `restart`, `start`, `stop` → AC-16
+- [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test mysql --locked -- --ignored --test-threads 1`, `cargo xtask runtime compat-record`, `cargo xtask codegen` (record `compatibility` per artefak di `providers/mysql/versions.json`) → AC-16
+- [ ] Giliran catalog: entri MySQL ke `[[provider]]` dengan catalog revision 16 (urutan lead: sesudah perbaikan lifecycle di `main`), `cargo xtask catalog check --update`, `cargo xtask provider freeze providers/mysql` → AC-1
+
+## Milestone 4: Handover
+
+### UI / manual
+
+- [ ] `NOT_RUN` · `BLOCKED` di sesi build (`reason` test launchd butuh sesi login GUI user, `owner` `@ojiepermana`) · AC-17, di sesi GUI yang login. Kedua test gagal di assert `Keep/HandoverProven` sampai baris handover ada, jadi pasang dulu secara lokal: di `crates/core/src/supervisor/handover.rs` tambah `HandoverProof::new("official/mysql", "1", "spec-0042-ac-17"),` ke `HANDOVER_PROVEN`, dan di tabel test modul itu yang memuat `("official/clickhouse", "1.0.0", false)` tambah `("official/mysql", "1.0.0", true)`. Lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 mysql_`. Harapan: `mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` dan `mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` lulus (PID dan `startedAt` sama sesudah planned restart dan `SIGKILL` daemon, proses baru sesudah `kickstart -k` dan `bootout`). PASS keduanya: commit kedua perubahan `handover.rs` bersama ID record nya. Salah satu FAIL atau BLOCKED: buang keduanya; AC-17 bagian entri tetap terbuka.
+
+### Commands
+
+- [ ] Kedua test launchd MySQL di `apps/daemon/tests/native_launchd.rs` → ditulis, tidak dijalankan sesi build (lihat UI / manual); tanpa entri `HANDOVER_PROVEN` restart daemon terencana memakai `stop_restore` dengan `handover_unproven` dan harness konformitas melaporkan `handover: unproven` → AC-17
+
+### Acceptance-criteria coverage
+
+- AC-17 · bagian test ditulis; entri `HANDOVER_PROVEN` hanya bersama record `PASS` kedua test dari langkah manual

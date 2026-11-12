@@ -2,7 +2,8 @@
 //! and the read only API only on the loopback monitoring port, the
 //! dashboard nowhere, only your routes on `web`, two loopback listeners at
 //! the registry ports and no other, and no TLS configuration in a rendered
-//! file (the AC-7 rule, read on the parsed key paths). The
+//! file (the AC-7 rule, read on the parsed key paths), also with a route
+//! named `tls`. The
 //! test is native, `#[ignore = "native: ..."]`, and ends as `BLOCKED` when
 //! the artifact is not in the runtime cache.
 
@@ -15,8 +16,8 @@ use uuid::Uuid;
 
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
-    Serve, Site, alive, apply_until_end, backend, create_instance, get_path, port_of, route,
-    server_version, status_code, stop_instance,
+    Serve, Site, alive, api_json, apply_until_end, backend, create_instance, eventually, get_path,
+    port_of, route, server_version, status_code, stop_instance,
 };
 
 /// The status code of `GET <path>` on `port` with `host`.
@@ -215,4 +216,80 @@ async fn ping_and_the_api_answer_only_on_the_monitoring_port_and_the_dashboard_i
     ev.pass_with(&format!(
         "ping {ping} served /ping and the API, web {web} served only the route; listeners {listening:?}"
     ));
+}
+
+// covers: AC-7 (spec 0041)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Traefik 3.7.15 artifact in the runtime cache"]
+async fn a_route_named_tls_loads_enabled_and_the_rendered_files_hold_no_tls_configuration() {
+    let ev = evidence!(
+        covers = ["REQ-039", "AC-039"],
+        kind = Kind::Native,
+        expected = "a route named tls passes validate and apply, Traefik 3.7.15 loads the router and service tls@file enabled and answers from its backend on web, and the rendered files on disk hold a router and a service named tls but no TLS configuration",
+    );
+    let Some(site) = Site::open(&ev, Serve::InProcess) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let cfg = Cfg { api: &api };
+    let alpha = backend("alpha");
+
+    let id = create_instance(&site, &api, "edge-tls-name").await;
+    let running = api.start_ready(id).await;
+    let (web, ping) = (port_of(&running, "web"), port_of(&running, "ping"));
+    site.subject(&ev, &server_version(ping));
+    let pid = pid_of(&running);
+
+    let view = cfg.view(id).await;
+    let change = settings_with(
+        &view,
+        json!({ "routes": [route("tls", "Host(`tls.localhost`)", alpha)] }),
+    );
+    let verdict = cfg
+        .validate(id, view.revision.number.get(), change.clone())
+        .await;
+    assert!(verdict.valid, "{verdict:#?}");
+    let applied = apply_until_end(&api, id, view.revision.number.get(), change).await;
+    assert_eq!(
+        applied.operation.state,
+        OperationState::Succeeded,
+        "{applied:?}"
+    );
+    let loaded = |path: &str| {
+        api_json(ping, path)
+            .as_array()
+            .expect("the API answers a list")
+            .iter()
+            .find(|entry| entry["name"] == "tls@file")
+            .map(|entry| entry["status"].clone())
+    };
+    eventually(
+        "tls@file is loaded",
+        std::time::Duration::from_secs(30),
+        || loaded("/api/http/routers").is_some(),
+    )
+    .await;
+    assert_eq!(loaded("/api/http/routers"), Some(json!("enabled")));
+    assert_eq!(loaded("/api/http/services"), Some(json!("enabled")));
+    assert_eq!(get_path(web, "tls.localhost", "/").1, "alpha");
+    let routes =
+        std::fs::read_to_string(site.instance_paths(id).config.join("dynamic/routes.yaml"))
+            .expect("routes.yaml reads");
+    let paths = key_paths(&routes);
+    for section in ["routers", "services"] {
+        assert!(
+            paths
+                .iter()
+                .any(|path| path.as_slice() == ["http", section, "tls"]),
+            "{routes}"
+        );
+    }
+    rendered_files_hold_no_tls(&site, id);
+    assert_eq!(pid_of(&api.get(id).await.expect("the instance")), pid);
+
+    stop_instance(&api, id).await;
+    assert!(!alive(pid));
+    daemon.shutdown().await;
+    ev.pass_with("tls@file loaded enabled and answered alpha; the rendered files hold the name tls and no TLS configuration");
 }

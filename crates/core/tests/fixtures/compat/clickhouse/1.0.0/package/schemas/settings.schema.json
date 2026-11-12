@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClickHouse settings",
+  "description": "Password of the default user and the log level of a ClickHouse instance.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaultPassword": {
+      "type": "string",
+      "title": "Default user password",
+      "description": "Password of the default user. ClickHouse only ever stores its SHA-256 hash.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "reload", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "logLevel": {
+      "type": "string",
+      "title": "Log level",
+      "description": "How much the server writes to the instance log.",
+      "enum": ["error", "warning", "information", "debug", "trace"],
+      "default": "information",
+      "x-stackly": { "apply": "reload", "visibility": "basic" }
+    }
+  },
+  "required": ["defaultPassword"]
+}

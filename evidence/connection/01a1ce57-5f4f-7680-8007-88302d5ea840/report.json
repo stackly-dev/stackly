@@ -1,0 +1,378 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "da039844dd72de660229e5e93580bc0f5b8a7146",
+    "sourceDirty": false,
+    "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "traefik",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads=1",
+      "history::",
+      "a_route_named_tls"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T05:59:54.95914Z",
+  "finishedAt": "2026-11-12T06:01:55.916139Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 4,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 4,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 4
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce57-97d1-7409-a525-3684280638b5",
+      "covers": [
+        "REQ-039",
+        "AC-039",
+        "AC-015"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "traefik",
+        "name": "history::a_backend_only_apply_never_makes_a_disabled_route_last_known_good_and_roll_back_keeps_a_target",
+        "file": "apps/daemon/tests/traefik/history.rs",
+        "line": 81
+      },
+      "status": "PASS",
+      "expected": "a backend only apply to 127.0.0.1, localhost, and [::1] with a trailing slash succeeds and becomes the last known good only with every router and service enabled; a later rule Traefik rejects keeps that revision as the last known good, and the roll back writes a new revision from it, ready with the same pid, answering from the moved backend",
+      "actual": "revision 2 moved the three backends and became the last known good with every route enabled; the roll back from failed revision 3 made revision 4 ready with traefik 78965 unchanged",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T06:00:09.425222Z",
+      "finishedAt": "2026-11-12T06:00:51.022812Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "da039844dd72de660229e5e93580bc0f5b8a7146",
+        "sourceDirty": false,
+        "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "traefik",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "history::",
+          "a_route_named_tls"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce58-3a5c-7173-a8b7-c59394f776a2",
+      "covers": [
+        "REQ-039",
+        "AC-039"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "traefik",
+        "name": "history::an_apply_on_an_instance_already_not_ready_keeps_the_last_known_good_and_gets_no_ready_at",
+        "file": "apps/daemon/tests/traefik/history.rs",
+        "line": 218
+      },
+      "status": "PASS",
+      "expected": "on an instance not_ready after a rule Traefik rejected, a further apply that keeps the rejected rule ends succeeded (spec 0026 AC-10), its revision gets no ready_at, the last known good stays revision 1, readiness stays routes_mismatch, and the roll back still writes a ready revision from revision 1",
+      "actual": "the apply on the not_ready instance ended succeeded; revision 3 got no ready_at, the last known good stayed 1, and the roll back made revision 4 ready",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T06:00:51.036188Z",
+      "finishedAt": "2026-11-12T06:01:36.338164Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "da039844dd72de660229e5e93580bc0f5b8a7146",
+        "sourceDirty": false,
+        "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "traefik",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "history::",
+          "a_route_named_tls"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce58-eb5a-7067-b571-b9fa26f7bebf",
+      "covers": [
+        "REQ-039",
+        "AC-039"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "traefik",
+        "name": "history::two_instances_with_the_same_route_stay_apart_after_each_one_restarts",
+        "file": "apps/daemon/tests/traefik/history.rs",
+        "line": 335
+      },
+      "status": "PASS",
+      "expected": "two ready Traefik 3.7.15 instances route api with Host(`app.localhost`) to their own backend; a restart of A gives A a new pid answering from its own backend with the same revision and routes.yaml while B keeps its pid, revision, routes.yaml bytes, and answer, the same for a restart of B, and a reload of A afterwards still leaves B alone",
+      "actual": "A restarted as 79788 and B as 79791; each kept its own backend and the other's pid, revision, routes.yaml, and answer",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T06:01:36.346293Z",
+      "finishedAt": "2026-11-12T06:01:48.093397Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "da039844dd72de660229e5e93580bc0f5b8a7146",
+        "sourceDirty": false,
+        "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "traefik",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "history::",
+          "a_route_named_tls"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce59-1947-76b6-9f00-8adc4326a8ca",
+      "covers": [
+        "REQ-039",
+        "AC-039"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "traefik",
+        "name": "surface::a_route_named_tls_loads_enabled_and_the_rendered_files_hold_no_tls_configuration",
+        "file": "apps/daemon/tests/traefik/surface.rs",
+        "line": 225
+      },
+      "status": "PASS",
+      "expected": "a route named tls passes validate and apply, Traefik 3.7.15 loads the router and service tls@file enabled and answers from its backend on web, and the rendered files on disk hold a router and a service named tls but no TLS configuration",
+      "actual": "tls@file loaded enabled and answered alpha; the rendered files hold the name tls and no TLS configuration",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T06:01:48.103254Z",
+      "finishedAt": "2026-11-12T06:01:55.90142Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "da039844dd72de660229e5e93580bc0f5b8a7146",
+        "sourceDirty": false,
+        "runId": "01a1ce57-5f4f-7680-8007-88302d5ea840",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "traefik",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "history::",
+          "a_route_named_tls"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

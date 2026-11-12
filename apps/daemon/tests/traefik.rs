@@ -19,6 +19,8 @@ mod config;
 mod config_calls;
 #[path = "traefik/harness.rs"]
 mod harness;
+#[path = "traefik/history.rs"]
+mod history;
 #[path = "traefik/readiness.rs"]
 mod readiness;
 #[path = "traefik/routing.rs"]

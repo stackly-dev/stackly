@@ -30,15 +30,15 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
 
 **Trace:** REQ-038, AC-038, AC-077 (sebagian), PRD bagian 22.4
 
-**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md) · code in `providers/valkey/`, `apps/daemon/tests/valkey/`, `crates/core/src/provider/template.rs`, `crates/core/src/provider/plan.rs`
+**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md) · code in `providers/valkey/`, `apps/daemon/tests/valkey/`, `crates/core/src/provider/template.rs`, `crates/core/src/provider/plan.rs`, `apps/daemon/tests/native_launchd.rs`
 
 - [x] Design it (spec): `/architect provider Valkey`
-- [ ] Build it: `/develop provider Valkey`
+- [x] Build it: `/develop provider Valkey`
   - [x] Perubahan core dan paket, dibuktikan di fixture: format `valkeyConf`, filter template `sha256Hex` (dibangun fitur 40, dipakai fitur 43), paket `providers/valkey` dengan golden, fixture form, dan seed fuzz, lalu spike dari paket (hapus recipe `Valkey` dan `// provisional: F40`) (spec 0040 AC-1, AC-2 tanpa round trip, AC-3, AC-7 bagian teks, AC-12 bagian plan, AC-16 bagian spike, AC-18 bagian loader; build step 1 sampai 4; needs fase 06, sudah done; step 1 dan 2 menyentuh `template.rs` dan `plan.rs` bersama fitur 42 dan 43, satu sesi pada satu waktu; fitur 43 needs step 2)
   - [x] Valkey 9.1.2 asli lewat daemon: harness dan test native auth, readiness jujur (`LOADING`), parameter milik Stackly, stop, tool dari runtime, lifecycle dan adopsi, durability tiga mode (stop normal dan crash), mode yang tidak bisa diganti, test install dari cache, remedy, connection, dan Open In (spec 0040 AC-2 round trip, AC-4 sampai AC-13, AC-16 bagian version check, AC-18; build step 5 sampai 7; after milestone 1; needs artefak `valkey-9.1.2-r2-macos-aarch64` di cache xtask, selain itu `BLOCKED`; step 7 menyentuh `native_runtime_install.rs` bersama fitur 42 dan 43)
-  - [ ] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
-  - [ ] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
-- [ ] Verify it: `/check verify provider Valkey`
+  - [x] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
+  - [x] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
+- [x] Verify it: `/check verify provider Valkey`
 - [ ] Test it: `/test provider Valkey`
 
 ### 41. Provider Traefik & routing lokal · in-progress
@@ -59,7 +59,7 @@ Entrypoint loopback, routing lewat file provider dengan namespace per instance, 
   - [x] Evidence, catalog, dan handover: `traefik_compatibility` dengan `compat-record` dan `codegen`, `official/traefik` ke `[[provider]]` dengan `catalog check --update` dan `provider freeze`, test launchd Traefik lalu baris `HANDOVER_PROVEN`; run launchd setelah persetujuan kamu, selain itu `BLOCKED` (spec 0041 AC-10, AC-11, AC-12, AC-14, AC-7; build step 8 sampai 10; after milestone 2b; needs fitur 17, 18, 30, sudah done; file bersama satu sesi pada satu waktu, nomor revision catalog dari lead)
   - [x] Journey dari CLI dan GUI: `apps/daemon/tests/traefik/cli.rs` dan langkah manual di `verify.md` (spec 0041 AC-9, AC-13, AC-14; build step 11 dan 12; after milestone 3; langkah GUI manual)
 - [x] Verify it: `/check verify provider Traefik & routing lokal`
-- [ ] Test it: `/test provider Traefik & routing lokal`
+- [x] Test it: `/test provider Traefik & routing lokal`
 
 ### 42. Provider MySQL · in-progress
 
@@ -91,9 +91,9 @@ Binary native yang dipilih, path storage, temp, log, user files, dan config per 
 **Pointer:** spec [0043](../specs/0043-provider-clickhouse/index.md) · code in `providers/clickhouse/`, `apps/daemon/tests/clickhouse/`, `crates/core/src/provider/template.rs`
 
 - [x] Design it (spec): `/architect provider ClickHouse`
-- [ ] Build it: `/develop provider ClickHouse`
+- [x] Build it: `/develop provider ClickHouse`
   - [x] Core dan paket tanpa binary: format config `xml`, filter template `sha256Hex` (dilewati kalau fitur 40 sudah memasukkannya), paket `providers/clickhouse` dengan `versions.json` dari codegen, golden plan, render, connection, dan open action, test key yang dilarang dan test platform AC-074, lalu fixture form dan entri `index.json` (spec 0043 AC-1 sampai AC-3, AC-4 bagian template, AC-6 bagian render, AC-11 bagian render, AC-13, AC-16 bagian fixture; build step 1 sampai 5; needs update spec 0009 *Perluasan additive* untuk `xml` dan `sha256Hex`; needs fitur 36, sudah done; step 2 after filter fitur 40 kalau fitur 40 lebih dulu)
   - [x] ClickHouse 26.8.30.8 asli lewat daemon: harness `apps/daemon/tests/clickhouse.rs`, lifecycle dan kontrak proses, isolasi dua instance dengan tabel sama nama, audit listener, auth dan dua user terkelola, reload lewat `SYSTEM RELOAD CONFIG` dengan rotasi password, kegagalan port dan folder data, lalu konformitas dan install dari cache (spec 0043 AC-4 sampai AC-12, AC-14; build step 6 sampai 9; after milestone 1; needs artefak ClickHouse di cache xtask, tanpa itu `BLOCKED`; step 6 sampai 8 bisa dibagi sesudah harness step 6 masuk)
-  - [ ] Catalog, corpus, spike, dan ukuran RISK-07: hapus recipe spike dan penanda `F43`, record BR-025 lewat `clickhouse_compatibility` dan `compat-record`, `official/clickhouse` pindah ke `[[provider]]` dengan catatan platform dan revision catalog baru, `cargo xtask provider freeze`, dan catatan ukuran RISK-07 serta tiga langkah manual di `verify.md` (spec 0043 AC-13 bagian catalog, AC-15 sampai AC-17; build step 10 sampai 13; step 11 dan 12 after milestone 2 lulus; step 10 bisa paralel dengan milestone 2; run spike native, fuzz 10 menit, dan sesi GUI adalah langkah manual)
-- [ ] Verify it: `/check verify provider ClickHouse`
+  - [x] Catalog, corpus, spike, dan ukuran RISK-07: hapus recipe spike dan penanda `F43`, record BR-025 lewat `clickhouse_compatibility` dan `compat-record`, `official/clickhouse` pindah ke `[[provider]]` dengan catatan platform dan revision catalog baru, `cargo xtask provider freeze`, dan catatan ukuran RISK-07 serta tiga langkah manual di `verify.md` (spec 0043 AC-13 bagian catalog, AC-15 sampai AC-17; build step 10 sampai 13; step 11 dan 12 after milestone 2 lulus; step 10 bisa paralel dengan milestone 2; run spike native, fuzz 10 menit, dan sesi GUI adalah langkah manual)
+- [x] Verify it: `/check verify provider ClickHouse`
 - [ ] Test it: `/test provider ClickHouse`

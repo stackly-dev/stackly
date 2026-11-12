@@ -1,0 +1,3 @@
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default

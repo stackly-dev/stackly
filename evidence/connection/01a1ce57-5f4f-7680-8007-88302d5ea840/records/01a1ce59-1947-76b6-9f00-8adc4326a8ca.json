@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce59-1947-76b6-9f00-8adc4326a8ca",
+  "covers": [
+    "REQ-039",
+    "AC-039"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "traefik",
+    "name": "surface::a_route_named_tls_loads_enabled_and_the_rendered_files_hold_no_tls_configuration",
+    "file": "apps/daemon/tests/traefik/surface.rs",
+    "line": 225
+  },
+  "status": "PASS",
+  "expected": "a route named tls passes validate and apply, Traefik 3.7.15 loads the router and service tls@file enabled and answers from its backend on web, and the rendered files on disk hold a router and a service named tls but no TLS configuration",
+  "actual": "tls@file loaded enabled and answered alpha; the rendered files hold the name tls and no TLS configuration",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "traefik",
+      "version": "3.7.15",
+      "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T06:01:48.103254Z",
+  "finishedAt": "2026-11-12T06:01:55.90142Z",
+  "evidencePath": "output.log"
+}

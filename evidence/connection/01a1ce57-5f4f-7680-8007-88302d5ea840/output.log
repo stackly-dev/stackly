@@ -1,0 +1,18 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 12.81s
+     Running tests/traefik.rs (target/debug/deps/traefik-c2d793a0c935fade)
+
+running 4 tests
+test history::a_backend_only_apply_never_makes_a_disabled_route_last_known_good_and_roll_back_keeps_a_target ... ok
+test history::an_apply_on_an_instance_already_not_ready_keeps_the_last_known_good_and_gets_no_ready_at ... ok
+test history::two_instances_with_the_same_route_stay_apart_after_each_one_restarts ... ok
+test surface::a_route_named_tls_loads_enabled_and_the_rendered_files_hold_no_tls_configuration ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 106.48s
+
