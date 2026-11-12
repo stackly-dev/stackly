@@ -1,0 +1,34 @@
+[
+  {
+    "copySecret": null,
+    "kind": "browser",
+    "name": "play",
+    "title": "Play UI",
+    "value": {
+      "url": "http://127.0.0.1:14000/play"
+    }
+  },
+  {
+    "copySecret": {
+      "field": "defaultPassword",
+      "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/default-password"
+    },
+    "kind": "terminal",
+    "name": "client",
+    "title": "clickhouse client",
+    "value": {
+      "args": [
+        "client",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "14001",
+        "--user",
+        "default",
+        "--ask-password"
+      ],
+      "env": [],
+      "executable": "/private/tmp/skt-golden/runtime/clickhouse"
+    }
+  }
+]

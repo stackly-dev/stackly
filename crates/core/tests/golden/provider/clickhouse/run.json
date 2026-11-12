@@ -1,0 +1,221 @@
+{
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/client.xml",
+        "content": {
+          "configFile": "clientConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "<config>\n</config>\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/config.xml",
+        "content": {
+          "configFile": "serverConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "<!-- Managed by Stackly. Edits to this file are lost on the next start. -->\n<clickhouse>\n    <logger>\n        <level>information</level>\n        <console>1</console>\n    </logger>\n    <macros>\n        <stackly_instance_id>0192f000-0000-7000-8000-00000000000a</stackly_instance_id>\n    </macros>\n    <disable_internal_dns_cache>1</disable_internal_dns_cache>\n    <listen_host>127.0.0.1</listen_host>\n    <http_port>14000</http_port>\n    <tcp_port>14001</tcp_port>\n    <path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/</path>\n    <tmp_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp/clickhouse/</tmp_path>\n    <user_files_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_files/</user_files_path>\n    <format_schema_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/format_schemas/</format_schema_path>\n    <user_scripts_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_scripts/</user_scripts_path>\n    <user_defined_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_defined/</user_defined_path>\n    <dictionaries_lib_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/dictionaries_lib/</dictionaries_lib_path>\n    <top_level_domains_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/top_level_domains/</top_level_domains_path>\n    <google_protos_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/google_protos/</google_protos_path>\n    <dynamic_user_defined_executable_functions_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/dynamic_user_defined_executable_functions/</dynamic_user_defined_executable_functions_path>\n    <user_directories>\n        <local_directory>\n            <path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/access/</path>\n        </local_directory>\n    </user_directories>\n</clickhouse>\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/users.xml",
+        "content": {
+          "configFile": "usersConfig",
+          "segments": [
+            {
+              "type": "text",
+              "content": "<!-- Managed by Stackly. Rendered again from the Keychain on every start and reload. -->\n<clickhouse>\n    <profiles>\n        <default/>\n        <stackly_readiness>\n            <readonly>1</readonly>\n            <max_execution_time>2</max_execution_time>\n            <max_memory_usage>16777216</max_memory_usage>\n            <max_threads>1</max_threads>\n        </stackly_readiness>\n        <stackly_reload>\n            <max_execution_time>10</max_execution_time>\n            <max_memory_usage>16777216</max_memory_usage>\n            <max_threads>1</max_threads>\n        </stackly_reload>\n    </profiles>\n    <quotas>\n        <default/>\n    </quotas>\n    <users>\n        <default>\n            <password_sha256_hex>"
+            },
+            {
+              "type": "secretHash",
+              "content": {
+                "secret": "<secret:defaultPassword>",
+                "algo": "sha256_hex"
+              }
+            },
+            {
+              "type": "text",
+              "content": "</password_sha256_hex>\n            <networks>\n                <ip>127.0.0.1</ip>\n                <ip>::1</ip>\n            </networks>\n            <profile>default</profile>\n            <quota>default</quota>\n            <access_management>1</access_management>\n            <named_collection_control>1</named_collection_control>\n            <show_named_collections>1</show_named_collections>\n            <show_named_collections_secrets>1</show_named_collections_secrets>\n        </default>\n        <stackly_readiness>\n            <password></password>\n            <networks>\n                <ip>127.0.0.1</ip>\n                <ip>::1</ip>\n            </networks>\n            <profile>stackly_readiness</profile>\n            <quota>default</quota>\n            <grants>\n                <query>GRANT SELECT ON system.one</query>\n            </grants>\n        </stackly_readiness>\n        <stackly_reload>\n            <password></password>\n            <networks>\n                <ip>127.0.0.1</ip>\n                <ip>::1</ip>\n            </networks>\n            <profile>stackly_reload</profile>\n            <quota>default</quota>\n            <grants>\n                <query>GRANT SYSTEM RELOAD CONFIG ON *.*</query>\n                <query>GRANT SYSTEM RELOAD USERS ON *.*</query>\n            </grants>\n        </stackly_reload>\n    </users>\n</clickhouse>\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    }
+  ],
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/clickhouse/26.8.30.8/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "clickhouse"
+    },
+    "args": [
+      "server",
+      "--config-file=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/config.xml",
+      "--",
+      "--user_directories.users_xml.path=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/users.xml"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "CLICKHOUSE_WATCHDOG_ENABLE",
+        {
+          "type": "text",
+          "content": "0"
+        }
+      ],
+      [
+        "HOME",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "PATH",
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      ],
+      [
+        "TMPDIR",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/clickhouse/26.8.30.8/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "clickhouse"
+          },
+          "args": [
+            "client",
+            "--config-file",
+            "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/client.xml",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "14001",
+            "--user",
+            "stackly_readiness",
+            "--query",
+            "SELECT throwIf(getMacro('stackly_instance_id') != '0192f000-0000-7000-8000-00000000000a')"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "5s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "5s",
+    "deadline": "120s"
+  },
+  "recoveryDeadline": "120s",
+  "health": {
+    "probe": {
+      "type": "http",
+      "content": {
+        "host": "127.0.0.1",
+        "port": 14000,
+        "path": "/ping",
+        "expectStatus": {
+          "start": 200,
+          "end": 299
+        }
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "3s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "60s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "http",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ],
+    [
+      "native",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14001
+        }
+      }
+    ]
+  ]
+}

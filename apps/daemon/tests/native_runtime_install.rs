@@ -25,15 +25,15 @@ use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Evidence, Kind, Source, evidence};
 
 use crate::harness::{
-    Line, NATS, OWNER, POSTGRESQL_17, POSTGRESQL_18, Site, TRAEFIK, VALKEY, artifact_facts, cached,
-    install, install_params, wait_end,
+    CLICKHOUSE, Line, NATS, OWNER, POSTGRESQL_17, POSTGRESQL_18, Site, TRAEFIK, VALKEY,
+    artifact_facts, cached, install, install_params, wait_end,
 };
 use crate::recorders::Asked;
 use stackly_platform::ChildRole;
 use stackly_protocol::operation::OperationState;
 
-/// The reason MySQL and ClickHouse wait for their providers.
-const NO_PACKAGE: &str = "no provider package (features 42 and 43)";
+/// The reason MySQL waits for its provider.
+const NO_PACKAGE: &str = "no provider package (feature 42)";
 /// The variable that says the network run was approved.
 const NETWORK_APPROVED: &str = "STACKLY_NATIVE_NETWORK";
 
@@ -237,6 +237,11 @@ cache_line_test!(
     "the daemon installs PostgreSQL 18.6 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
 );
 cache_line_test!(
+    clickhouse_installs_from_the_cache,
+    CLICKHOUSE,
+    "the daemon installs ClickHouse 26.8.30.8 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
+);
+cache_line_test!(
     valkey_9_1_installs_from_the_cache,
     VALKEY,
     "the daemon installs Valkey 9.1.2 from the runtime cache with no network to an installed runtime whose exec check printed the artifact version, with no com.apple.quarantine on any file and only codesign and the artifact executable run"
@@ -245,7 +250,7 @@ cache_line_test!(
 macro_rules! blocked_line_test {
     ($name:ident, $what:literal) => {
         #[test]
-        #[ignore = "native: waits for the provider package of features 42 and 43"]
+        #[ignore = "native: waits for the provider package of feature 42"]
         fn $name() {
             let ev = evidence!(
                 covers = ["REQ-004", "REQ-005", "AC-049"],
@@ -263,7 +268,6 @@ macro_rules! blocked_line_test {
 
 blocked_line_test!(mysql_8_4_installs_from_the_cache, "MySQL 8.4.11");
 blocked_line_test!(mysql_9_7_installs_from_the_cache, "MySQL 9.7.2");
-blocked_line_test!(clickhouse_installs_from_the_cache, "ClickHouse 26.8.30.8");
 
 #[tokio::test]
 #[ignore = "native: downloads NATS 2.15.1 (6.8 MB) from GitHub Releases; needs STACKLY_NATIVE_NETWORK=1"]
