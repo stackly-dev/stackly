@@ -1,0 +1,5 @@
+# Managed by Stackly. Persistence mode: volatile (memory only).
+# Used only when the instance's Persistence setting is volatile.
+# Nothing is written to disk. Every stop, restart, or crash loses all data.
+save ""
+appendonly no

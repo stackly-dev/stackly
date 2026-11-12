@@ -1,0 +1,7 @@
+# Managed by Stackly. Persistence mode: rdb (snapshots).
+# Used only when the instance's Persistence setting is rdb.
+# Valkey writes dump.rdb in the data folder after 3600 s with 1 change, after
+# 300 s with 100 changes, after 60 s with 10000 changes, and on a normal stop.
+# A crash or a power loss loses every write since the last snapshot.
+save 3600 1 300 100 60 10000
+appendonly no

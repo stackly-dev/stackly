@@ -1,0 +1,322 @@
+{
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/persistence-aof.conf",
+        "content": {
+          "configFile": "persistenceAof",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Persistence mode: aof (append only file).\n# Used only when the instance's Persistence setting is aof.\n# Valkey logs every write in appendonlydir/ in the data folder and syncs the\n# log to disk about once a second. A power loss can lose about the last second.\nsave \"\"\nappendonly yes\nappendfsync everysec\naof-use-rdb-preamble yes\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/persistence-rdb.conf",
+        "content": {
+          "configFile": "persistenceRdb",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Persistence mode: rdb (snapshots).\n# Used only when the instance's Persistence setting is rdb.\n# Valkey writes dump.rdb in the data folder after 3600 s with 1 change, after\n# 300 s with 100 changes, after 60 s with 10000 changes, and on a normal stop.\n# A crash or a power loss loses every write since the last snapshot.\nsave 3600 1 300 100 60 10000\nappendonly no\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/persistence-volatile.conf",
+        "content": {
+          "configFile": "persistenceVolatile",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Persistence mode: volatile (memory only).\n# Used only when the instance's Persistence setting is volatile.\n# Nothing is written to disk. Every stop, restart, or crash loses all data.\nsave \"\"\nappendonly no\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/users.conf",
+        "content": {
+          "configFile": "users",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Written again before every start, removed after a clean stop.\nuser default on #"
+            },
+            {
+              "type": "secretHash",
+              "content": {
+                "secret": "<secret:password>",
+                "algo": "sha256_hex"
+              }
+            },
+            {
+              "type": "text",
+              "content": " ~* &* +@all\nuser stackly-readiness on nopass -@all +ping\n"
+            }
+          ]
+        },
+        "sensitive": true
+      }
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/valkey.conf",
+        "content": {
+          "configFile": "valkeyConf",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Change these values on the instance's Configuration\n# page, not here. The port, the bind address, the data folder, and the\n# persistence mode are set on the valkey-server command line by Stackly.\nmaxmemory 0mb\nmaxmemory-policy \"noeviction\"\nloglevel \"notice\"\nnotify-keyspace-events \"\"\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    }
+  ],
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/valkey/9.1.2/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "bin/valkey-server"
+    },
+    "args": [
+      "--include",
+      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/valkey.conf",
+      "--include",
+      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/persistence-aof.conf",
+      "--include",
+      "/private/tmp/skt-golden/stackly-0000000a/i/0000000a/secrets/users.conf",
+      "--bind",
+      "127.0.0.1",
+      "--port",
+      "14000",
+      "--dir",
+      "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--daemonize",
+      "no",
+      "--protected-mode",
+      "yes",
+      "--set-proc-title",
+      "no",
+      "--always-show-logo",
+      "no",
+      "--tcp-backlog",
+      "128",
+      "--enable-protected-configs",
+      "no",
+      "--enable-debug-command",
+      "no",
+      "--enable-module-command",
+      "no"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "PATH",
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      ],
+      [
+        "TMPDIR",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "TZ",
+        {
+          "type": "text",
+          "content": "UTC"
+        }
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/valkey/9.1.2/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/valkey-cli"
+          },
+          "args": [
+            "-e",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "14000",
+            "--user",
+            "stackly-readiness",
+            "-t",
+            "2",
+            "PING"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "VALKEYCLI_AUTH",
+              {
+                "type": "text",
+                "content": "nopass"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "3s",
+    "deadline": "120s"
+  },
+  "recoveryDeadline": "300s",
+  "health": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/valkey/9.1.2/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/valkey-cli"
+          },
+          "args": [
+            "-e",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "14000",
+            "--user",
+            "stackly-readiness",
+            "-t",
+            "2",
+            "PING"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "VALKEYCLI_AUTH",
+              {
+                "type": "text",
+                "content": "nopass"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "3s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "60s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "client",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ]
+  ]
+}
