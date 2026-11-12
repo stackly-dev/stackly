@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce58-eb5a-7067-b571-b9fa26f7bebf",
+  "covers": [
+    "REQ-039",
+    "AC-039"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "traefik",
+    "name": "history::two_instances_with_the_same_route_stay_apart_after_each_one_restarts",
+    "file": "apps/daemon/tests/traefik/history.rs",
+    "line": 335
+  },
+  "status": "PASS",
+  "expected": "two ready Traefik 3.7.15 instances route api with Host(`app.localhost`) to their own backend; a restart of A gives A a new pid answering from its own backend with the same revision and routes.yaml while B keeps its pid, revision, routes.yaml bytes, and answer, the same for a restart of B, and a reload of A afterwards still leaves B alone",
+  "actual": "A restarted as 79788 and B as 79791; each kept its own backend and the other's pid, revision, routes.yaml, and answer",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "traefik",
+      "version": "3.7.15",
+      "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T06:01:36.346293Z",
+  "finishedAt": "2026-11-12T06:01:48.093397Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce57-97d1-7409-a525-3684280638b5",
+  "covers": [
+    "REQ-039",
+    "AC-039",
+    "AC-015"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "traefik",
+    "name": "history::a_backend_only_apply_never_makes_a_disabled_route_last_known_good_and_roll_back_keeps_a_target",
+    "file": "apps/daemon/tests/traefik/history.rs",
+    "line": 81
+  },
+  "status": "PASS",
+  "expected": "a backend only apply to 127.0.0.1, localhost, and [::1] with a trailing slash succeeds and becomes the last known good only with every router and service enabled; a later rule Traefik rejects keeps that revision as the last known good, and the roll back writes a new revision from it, ready with the same pid, answering from the moved backend",
+  "actual": "revision 2 moved the three backends and became the last known good with every route enabled; the roll back from failed revision 3 made revision 4 ready with traefik 78965 unchanged",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "traefik",
+      "version": "3.7.15",
+      "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T06:00:09.425222Z",
+  "finishedAt": "2026-11-12T06:00:51.022812Z",
+  "evidencePath": "output.log"
+}
