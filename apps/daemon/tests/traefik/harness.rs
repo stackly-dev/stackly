@@ -458,6 +458,13 @@ pub fn port_of(summary: &InstanceSummary, name: &str) -> u16 {
 /// plain HTTP from the test. Returns the status line and the body.
 #[must_use]
 pub fn get(port: u16, host: &str) -> (String, String) {
+    get_path(port, host, "/")
+}
+
+/// `GET <path>` on `port` of the loopback with `host` as the Host header,
+/// over plain HTTP from the test. Returns the status line and the body.
+#[must_use]
+pub fn get_path(port: u16, host: &str, path: &str) -> (String, String) {
     let mut stream = TcpStream::connect_timeout(
         &SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port),
         Duration::from_secs(5),
@@ -467,7 +474,7 @@ pub fn get(port: u16, host: &str) -> (String, String) {
         .set_read_timeout(Some(Duration::from_secs(5)))
         .expect("a read timeout can be set");
     stream
-        .write_all(format!("GET / HTTP/1.0\r\nHost: {host}\r\n\r\n").as_bytes())
+        .write_all(format!("GET {path} HTTP/1.0\r\nHost: {host}\r\n\r\n").as_bytes())
         .expect("the request is written");
     let mut reply = Vec::new();
     let _ = stream.read_to_end(&mut reply);
@@ -477,6 +484,102 @@ pub fn get(port: u16, host: &str) -> (String, String) {
         head.lines().next().unwrap_or_default().to_owned(),
         body.to_owned(),
     )
+}
+
+/// The status code of a status line such as `HTTP/1.1 200 OK`, or 0.
+#[must_use]
+pub fn status_code(status_line: &str) -> u16 {
+    status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .unwrap_or(0)
+}
+
+/// One item of the `routes` setting, to a loopback backend on `port`.
+#[must_use]
+pub fn route(name: &str, rule: &str, port: u16) -> Value {
+    serde_json::json!({
+        "name": name,
+        "rule": rule,
+        "backendUrl": format!("http://127.0.0.1:{port}"),
+    })
+}
+
+/// Longer than `timeouts.reloadSeconds` of the package (30 s), so an apply
+/// whose verify runs out its deadline still ends inside the wait.
+pub const RELOAD_PATIENCE: Duration = Duration::from_secs(90);
+
+/// Applies `change` on `base` and waits until the operation ended, whatever
+/// its state.
+pub async fn apply_until_end(
+    api: &Api,
+    id: Uuid,
+    base: u64,
+    change: stackly_protocol::instance::config::ConfigChangeRequest,
+) -> stackly_protocol::operation::OperationDetail {
+    use stackly_protocol::operation::OperationState;
+
+    let accepted = crate::config_calls::Cfg { api }
+        .apply(id, base, change)
+        .await
+        .expect("the apply is accepted")
+        .accepted
+        .expect("a change begins an operation");
+    let deadline = tokio::time::Instant::now() + RELOAD_PATIENCE;
+    loop {
+        let detail = api.operation(accepted.operation.id).await;
+        if matches!(
+            detail.operation.state,
+            OperationState::Succeeded
+                | OperationState::Failed
+                | OperationState::Cancelled
+                | OperationState::NeedsRecovery
+        ) {
+            return detail;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the apply did not end: {detail:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// Creates an instance with `settings`, waits until the create succeeded,
+/// and returns the instance ID.
+pub async fn create_with(site: &Site, api: &Api, name: &str, settings: Value) -> Uuid {
+    let mut params = create_params(site, name);
+    params.settings = SettingsDocument::new(
+        settings
+            .as_object()
+            .expect("the settings are an object")
+            .clone(),
+    );
+    let accepted = api
+        .create(params)
+        .await
+        .expect("the create is accepted")
+        .accepted
+        .expect("a create starts an operation");
+    let id = accepted
+        .operation
+        .resource
+        .as_ref()
+        .map(|resource| resource.id.parse::<Uuid>().expect("an instance id"))
+        .expect("the operation names the instance");
+    let detail = api
+        .wait_state(
+            accepted.operation.id,
+            stackly_protocol::operation::OperationState::Succeeded,
+        )
+        .await;
+    assert_eq!(
+        detail.operation.state,
+        stackly_protocol::operation::OperationState::Succeeded,
+        "{detail:?}"
+    );
+    id
 }
 
 /// A backend that answers every request with `body`, on a free loopback

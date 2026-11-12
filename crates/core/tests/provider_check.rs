@@ -112,13 +112,13 @@ fn findings(check: &PackageCheck) -> Vec<(FindingOrigin, String, String, IssueCo
         .collect()
 }
 
-// covers: AC-2, AC-3 (spec 0036)
+// covers: AC-2, AC-3 (spec 0036), AC-1 (spec 0041)
 #[test]
 fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
     let ev = evidence!(
         covers = ["REQ-030"],
         kind = Kind::Fixture,
-        expected = "check_package finds nothing in providers/fake, nats, postgresql, and traefik, reads apiVersion, gives fake, postgresql, and traefik the implied default scenario, and reads the default and no-jetstream scenarios of nats",
+        expected = "check_package finds nothing in providers/fake, nats, postgresql, and traefik, reads apiVersion, gives fake and postgresql the implied default scenario, and reads the two scenarios of nats and of traefik",
     );
     for name in ["fake", "nats", "postgresql", "traefik"] {
         let copy = Copy::of(&repo_root().join("providers").join(name));
@@ -145,6 +145,22 @@ fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
                 check.scenarios[1].settings,
                 serde_json::json!({ "jetstream": false })
             );
+            continue;
+        }
+        if name == "traefik" {
+            // spec 0041 AC-1: the package names its own two scenarios.
+            let names: Vec<&str> = check.scenarios.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(names, ["default", "one-route"]);
+            assert_eq!(check.scenarios[0].settings, serde_json::json!({}));
+            assert_eq!(
+                check.scenarios[1].settings,
+                serde_json::json!({ "routes": [{
+                    "name": "app",
+                    "rule": "Host(`app.localhost`)",
+                    "backendUrl": "http://127.0.0.1:9",
+                }] })
+            );
+            assert!(check.scenarios.iter().all(|s| s.expect == Expect::Ready));
             continue;
         }
         assert_eq!(check.scenarios.len(), 1, "{name}");

@@ -1,1 +1,1 @@
-${instance.secrets}/conf/server.json
+http://${endpoint.ping.address}/api/http/routers

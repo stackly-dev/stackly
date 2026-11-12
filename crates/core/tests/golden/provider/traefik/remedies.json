@@ -1,0 +1,24 @@
+[
+  {
+    "name": "routes_not_loaded",
+    "pidFile": null,
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Open the Logs tab. Traefik logs the router it rejected and why, usually a rule it can’t parse."
+      },
+      {
+        "command": null,
+        "path": null,
+        "text": "Fix the rule in Configuration and apply again, or roll back to the last revision that was ready."
+      },
+      {
+        "command": null,
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/dynamic",
+        "text": "A file you added to this folder also causes this, when it holds a router or Traefik can’t read it. Move that file out of the folder."
+      }
+    ],
+    "title": "Traefik hasn’t loaded the routes Stackly wrote"
+  }
+]
