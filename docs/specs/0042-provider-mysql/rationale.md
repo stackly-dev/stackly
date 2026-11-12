@@ -218,6 +218,20 @@ Temuan verify untuk tester dan pemilik `verify.md`, tanpa perubahan spec: `exist
 
 Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
 
+## Update 2026-11-12 (kedua): komentar template dibetulkan sebelum terbit
+
+Lead mengambil keputusan nomor 2 di tabel update pertama: komentar `my.cnf.tmpl` dibetulkan sekarang, di revision `1.0.0`, karena paket belum dibekukan saat temuan itu dilaporkan. Perbaikannya commit `a046da9f`, dan paket final masuk `main` lewat `b1a7b704` bersama evidence kompatibilitas `01a1cef9-f323-7534-81ff-caad7326c723` dan catalog revision 16. Baris 1 dan 2 tabel update pertama menggambarkan keadaan sebelum keputusan ini dan dibiarkan sebagai catatan. Update ini hanya teks spec.
+
+| No | Temuan | Yang diubah di spec | Alasan |
+| --- | --- | --- | --- |
+| 1 | Paket final memuat komentar baru dalam tiga baris `#`, dan README memakai penjelasan drift. | Listing *Template config* disalin dari paket apa adanya; butir "Koreksi" menjadi catatan "sudah dibetulkan sebelum terbit"; uraian README dan satu butir Neutral disamakan; dua Follow-up (template, README) dicentang. | Listing di spec adalah salinan isi paket (AC-1, "paket berisi persis…"), jadi sesudah paket berubah listing harus ikut. Catatan sejarahnya dipertahankan satu butir, supaya pembaca golden lama atau commit `972f5ec0` tahu kenapa komentarnya berbeda. Runner up: menghapus catatan itu sama sekali, yang membuat alasan commit `a046da9f` hanya ada di log. |
+| 2 | Digest paket. | Catatan *Template config* dan Follow-up yang dicentang menyebut `manifest_sha256` `77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c`. | Spec ini tidak pernah mengutip digest lama (contoh *API surface* memakai `<hex>`), jadi tidak ada yang perlu dibetulkan. Digest final dicatat sekali, dicocokkan dengan `crates/core/tests/fixtures/compat/mysql/1.0.0/frozen.json`, supaya jelas bahwa yang terbit adalah paket yang sudah dibetulkan. |
+| 3 | Kalimat salah yang sama masih ada di paket lain: tiga template PostgreSQL (`pg_hba.conf.tmpl`, `pg_ident.conf.tmpl`, `postgresql.conf.tmpl`, revision `1.0.2`) dan `config.xml.tmpl` ClickHouse (revision `1.0.0`). | Satu Follow-up di spec ini untuk kedua paket; untuk ClickHouse juga satu Follow-up di spec 0043. | Kedua paket itu sudah terbit, jadi tidak ada jalan "masuk revision yang sama" seperti MySQL: template ikut `manifest_sha256`, dan perbaikannya milik revision berikutnya masing masing. Spec ini tidak mengubah spec 0019 (PostgreSQL); Follow-up ditaruh di sini karena spec ini yang menemukan kalimat itu. Tambahan dari pemeriksaan saya: `providers/postgresql/README.md` memuat "hand edits there are lost", yang boleh dibetulkan tanpa revision. |
+
+Temuan verify penuh MySQL (milestone 3 sisa dan 4) belum tiba saat update kedua ini ditulis.
+
+Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
+
 ## Cross check
 
 Dijalankan 2026-11-12 oleh model lain (Opus), hanya membaca. Ia memeriksa manifest terhadap validator dan spec 0009, 0010, 0011, 0034, 0036, dan 0070. Yang ia nyatakan benar: posisi setiap token, aturan `stdin.text`, argumen `/dev/stdin`, `init_port_issues` kosong, pattern `dataMarker` dan `versionCheck`, batas timeout, tidak adanya reload, blok `connection`, `openWith`, `remedies`, dan skenario.
