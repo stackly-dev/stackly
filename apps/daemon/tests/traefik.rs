@@ -23,3 +23,5 @@ mod routing;
 mod support;
 #[path = "traefik/surface.rs"]
 mod surface;
+#[path = "traefik/watch.rs"]
+mod watch;
