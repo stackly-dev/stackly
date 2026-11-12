@@ -130,6 +130,81 @@ Untuk rule yang ditolak, keputusan spec 0029 sudah mengikat: roll back adalah ak
 
 Satu fakta tentang Traefik belum dibuktikan test yang ada dan dikunci AC-4: saat satu rule ditolak, router lain dari file yang sama tetap dimuat. Test `readiness.rs` hanya membuktikan bahwa router yang ditolak membuat probe gagal.
 
+## Update 2026-11-12: temuan verify milestone 1 dan 2
+
+### Yang ditemukan
+
+Verify milestone 1 dan 2 (`chk-f41-m1`, `main` `0b87ca82`) lulus, dengan empat temuan yang harus dijawab spec:
+
+1. **High.** Pada instance `ready` dengan route `api`, apply yang hanya mengganti `backendUrl` ke `http://127.0.0.1:9/%zz` berakhir `succeeded`. Revision baru mendapat `ready_at` 0,15 s sesudah apply dan menjadi last known good. Sesudah itu Traefik memuat file, menandai `api@file` `disabled` (`invalid URL escape "%zz"`), route menjawab 404, readiness menjadi `not_ready` `routes_mismatch` 19 s kemudian, dan `stackly instance config rollback` menjawab `config.no_last_known_good`. Sebabnya: verify sesudah reload (`crates/core/src/supervisor/reload.rs`) lulus pada keadaan Traefik yang lama, karena `compare` di `crates/core/src/provider/probe/traefik.rs` hanya membandingkan nama, rule, dan status router, dan pola `backendUrl` lama (`(/[^\s]*)?`) menerima path yang ditolak parser URL Go.
+2. **Low.** Untuk apply yang hanya mengganti backend, operasi `succeeded` di +0,29 s sedangkan jawaban backend baru datang di +2,3 s.
+3. **Low.** Route bernama `tls` lolos schema dan menulis key `http.routers.tls` dan `http.services.tls`, jadi kalimat AC-7 "tidak pernah memuat key `tls`" tidak benar secara harfiah.
+4. **Low.** Subject evidence test native memakai literal `"3.7.15"`, dua komentar `harness.rs` masih menyebut NATS, dan kalimat *Test native* menulis owner `runtime maintainer` sedangkan kode dan spec 0003 memakai `@ojiepermana`.
+
+Lead memutuskan arah temuan 1 (delegasi user): tutup di pola schema, tanpa perubahan core, dan catat sisa jendela verify sebagai residual dan Follow-up.
+
+### Probe pada Traefik 3.7.15
+
+Dijalankan langsung pada binary dari cache runtime xtask (sha256 `402f59ce…`, Go 1.26.9), di folder sementara, dengan file dynamic tulisan tangan yang memakai escape yang sama dengan escaper `yaml` Stackly (`{` dan `}` ditulis sebagai escape, karena file provider Traefik menjalankan file itu lewat template Go lebih dulu). Tidak ada kode repo yang diubah.
+
+| Nilai URL server | Router | Catatan |
+| --- | --- | --- |
+| `http://127.0.0.1:9` | `enabled` | dasar |
+| `http://127.0.0.1:9/%zz`, `/%`, `/%4`, `/a%zzb` | `disabled` | `invalid URL escape` |
+| `http://127.0.0.1:9/a#%zz`, `/a#%`, `/a?b#c%2` | `disabled` | escape salah di fragment |
+| `http://127.0.0.1:9/a?q=%zz`, `/a?%` | `enabled` | parser Go tidak memeriksa query |
+| `http://127.0.0.1:9/%41`, `/%00`, `/%2F%25`, `/a#%41` | `enabled` | escape benar |
+| `http://127.0.0.1:99999`, `:65536`, `:0`, `:00009` | `enabled` | request menjawab 502 |
+| `http://[::1]:9`, `http://localhost:9` | `enabled` | |
+| path dengan `é`, emoji, U+200B, `"`, `\`, `<`, `>`, `^`, backtick, `{`, `}`, pipa, `:`, `@`, `//` | `enabled` | |
+| 605 nilai acak yang cocok dengan pola `%XX` saja | semua `enabled` | tiga host, port 1 sampai 5 digit, path ASCII dan Unicode tanpa whitespace |
+
+Tiga fakta lain dari probe yang sama:
+
+- Backend di `http://127.0.0.1:<port>/prefix` dan di `http://127.0.0.1:<port>/prefix?k=v#frag` menerima request `/some/path?x=1` apa adanya. Traefik tidak memakai path, query, atau fragment URL server.
+- Dengan `broken.yaml` yang tidak bisa diparse di folder `dynamic`, mengganti backend di `routes.yaml` tidak dimuat: backend lama tetap menjawab 200 dan router tetap `enabled`. Sesudah `broken.yaml` dihapus, backend baru dimuat.
+- Pada Traefik yang sedang tenang, backend baru terlihat 0,06 s sesudah file diganti. Jeda sampai 2 s muncul saat muatan sebelumnya baru saja terjadi (throttle provider).
+
+Karakter kontrol tidak diuji lewat Traefik: dialek settings sudah menolaknya di setiap teks (`crates/core/src/provider/settings.rs`, `ControlCharacters`), jadi tidak pernah sampai ke file render.
+
+### Opsi untuk temuan 1
+
+**Opsi P2: `backendUrl` hanya scheme, host loopback, dan port (dipilih).** Pola `http://(127\.0\.0\.1|\[::1\]|localhost):[0-9]{1,5}/?`.
+
+- Pro: menutup kelas temuan secara struktural, karena tidak ada lagi teks bebas yang sampai ke parser URL Traefik; tidak bergantung pada daftar aturan parser Go yang bisa berubah di line berikutnya. Jujur terhadap fakta probe: path tidak pernah berpengaruh, jadi menerimanya adalah jebakan diam diam. Melonggarkan nanti (misalnya bersama `preservePath`) adalah perubahan additive, sedangkan memberi arti pada path yang sudah tersimpan akan mengubah perilaku nilai lama. Nol perubahan core.
+- Kontra: nilai dengan path yang dulu diterima sekarang ditolak (paket belum pernah terbit, jadi tidak ada instance resmi yang terkena); satu input test dan satu golden berubah; pesan error field tetap umum ("does not match the required pattern").
+
+**Opsi P1: tetap menerima path, `%` hanya sah sebagai `%XX`.** Pola `http://(127\.0\.0\.1|\[::1\]|localhost):[0-9]{1,5}(/([^\s%]|%[0-9A-Fa-f]{2})*)?`. Ini bentuk paling sempit dari keputusan lead.
+
+- Pro: perubahan himpunan nilai paling kecil; input test dan golden tidak berubah; terbukti aman pada 3.7.15 (605 nilai acak dimuat `enabled`).
+- Kontra: tetap menerima path yang diabaikan Traefik; keamanannya bertumpu pada daftar aturan parser Go untuk path dan fragment yang kita uji hari ini, bukan pada struktur; pola lebih sulit dibaca di schema dan di editor JSON Schema.
+
+**Opsi 2 checker: probe juga membandingkan service.** `compare` membaca `GET /api/http/services` dan mencocokkan URL backend dengan file.
+
+- Pro: menutup seluruh jendela verify basi, termasuk dua residual yang tersisa.
+- Kontra: mengubah dua modul probe di core dan spec 0009 AC-22, melanggar AC-14 fitur ini (ukuran RISK-07), dan menyentuh file bersama saat lima provider dibangun paralel.
+
+**Opsi 3: batasi juga port ke 1 sampai 65535.**
+
+- Pro: nilai yang tidak mungkin jalan ditolak lebih awal.
+- Kontra: bukan penolakan Traefik (router tetap `enabled`, request 502 seperti backend mati), jadi tidak menyentuh last known good; menambah alternasi enam cabang ke pola untuk kelas yang tidak berbahaya.
+
+### Alasan
+
+Keputusan lead adalah menutup temuan 1 di pola, dan probe menunjukkan pola memang cukup: satu satunya kelas yang lolos pola lama lalu ditolak Traefik adalah `%` yang salah di path atau fragment. P1 dan P2 sama sama menutupnya. P2 dipilih karena probe yang sama menunjukkan fakta yang belum diketahui saat keputusan itu dibuat: path URL server tidak dipakai Traefik sama sekali. Mempertahankan path berarti mempertahankan teks bebas yang tidak berguna tepat di tempat bug ini lahir, dan mewariskan nilai tersimpan yang artinya akan berubah kalau path suatu hari didukung. P2 juga membuat invariant mudah dijelaskan: tidak ada yang bisa ditolak parser, karena tidak ada yang tersisa untuk diparse selain host dan port yang sudah ditentukan pola. Keputusan ini bertanda `berat` (mengubah teks AC-1 pada spec yang sedang dibangun dan mempersempit nilai lebih jauh dari kata kata keputusan lead); kalau lead memilih P1, yang berubah hanya baris pola, tabel contoh di *Perubahan paket* butir 7, nilai contoh AC-15 dan test nya, dan langkah 7a tidak lagi menyentuh `traefik_settings` dan golden `render-routes.txt`.
+
+Opsi 2 checker tidak diambil karena lead sudah memutuskannya, dan probe tidak menemukan kelas yang hanya bisa ditutup olehnya di area yang didukung. Dua residual yang ia tutup (operasi mendahului muatan Traefik, dan backend yang ditahan karena file pengguna yang rusak) dinyatakan di *Yang tidak dilihat verify*, *Edge cases*, dan README, dan menjadi Follow-up ke spec 0009.
+
+### Keputusan kecil update ini
+
+- **Temuan 2 dinyatakan, tidak diperbaiki**: AC-2 mengikat jawaban, bukan akhir operasi. Runner up: menunggu tetap 2 s sesudah setiap reload Traefik, yang memperlambat setiap apply dan tetap tidak membuktikan muatan.
+- **Temuan 3, kalimat AC-7 dipertajam, nama `tls` tidak dilarang**: yang dijanjikan adalah tidak ada konfigurasi TLS, bukan tidak ada kata `tls`. Melarang nama butuh pola `name` yang menyangkal satu kata, dan mesin regex settings tidak punya lookaround, jadi larangan itu harus ditulis sebagai alternasi panjang untuk satu kasus yang tidak berbahaya (route bernama `tls` dimuat `enabled` pada 3.7.15). Runner up: melarang nama `tls`.
+- **Temuan 4, versi subject dari proses yang berjalan**: sama dengan test NATS (`/varz`), dan tetap benar saat `versions.json` mendapat versi kedua. Runner up: field `version` artefak di `versions.json`, yang tersedia sebelum start tetapi hanya mengulang apa yang dipasang, bukan apa yang berjalan.
+- **`description` field tidak diubah**: teksnya masih benar ("such as http://127.0.0.1:3000"), dan mengubahnya akan menyeret `FixtureConfiguration.swift` di `apps/macos/`, yang dilarang AC-14. Penjelasan "tanpa path" masuk README.
+- **Satu `/` penutup tetap diterima**: URL yang ditempel dari browser sering berakhiran `/`, dan Traefik memuatnya.
+- **Nomor langkah 7a dan 7b, milestone 2b**: nomor langkah lama dipakai `verify.md` dan subject commit, jadi tidak digeser.
+- **Update ini tanpa cross check**: jawaban tetap panel dari lead untuk update kecil. Faktanya diuji langsung pada binary Traefik, bukan dinilai dari bacaan.
+
 ## Cross check
 
 Cross check read only dengan model lain (Opus) pada 2026-11-12, terhadap kode di `main`. Yang diubah karenanya:
@@ -145,4 +220,4 @@ Cross check read only dengan model lain (Opus) pada 2026-11-12, terhadap kode di
 - Opsi HTTPS dengan `sniStrict` dicatat dan ditolak untuk revision ini.
 - Dua kegagalan file pengguna di `dynamic/` (YAML rusak, nama router sama) masuk *Edge cases*, dan teks remedy langkah 3 diperluas.
 
-Yang dikonfirmasi benar: token `${endpoint.ping.address}` diikuti path sah di `connection` dan URL browser; remedy dengan `readinessReasons` dimuat dan dipasang doctor pada instance `running` yang `not_ready`; pattern settings mencocokkan seluruh nilai; teks detail probe sama dengan AC-4 dan AC-8; `freeze` menolak provider planned. Perilaku Traefik (router dengan rule yang ditolak menjadi `disabled` sementara router lain dimuat, dan 404 untuk `/dashboard/`) dinilai masuk akal tetapi belum dibuktikan pada 3.7.15; AC-4 dan AC-6 yang menguncinya.
+Yang dikonfirmasi benar: token `${endpoint.ping.address}` diikuti path sah di `connection` dan URL browser; remedy dengan `readinessReasons` dimuat dan dipasang doctor pada instance `running` yang `not_ready`; pattern settings mencocokkan seluruh nilai; teks detail probe sama dengan AC-4 dan AC-8; `freeze` menolak provider planned. Perilaku Traefik (router dengan rule yang ditolak menjadi `disabled` sementara router lain dimuat, dan 404 untuk `/dashboard/`) dinilai masuk akal tetapi belum dibuktikan pada 3.7.15; AC-4 dan AC-6 yang menguncinya. *Update 2026-11-12*: keduanya terbukti pada 3.7.15 di run native milestone 2. Yang luput dari cross check ini adalah jendela verify untuk apply yang hanya mengganti backend; lihat *Update 2026-11-12* di atas.

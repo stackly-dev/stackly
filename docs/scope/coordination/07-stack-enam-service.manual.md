@@ -7,7 +7,7 @@ Langkah yang tidak dijalankan sesi (GUI, unduhan runtime, sesi login launchd). O
 Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app dibangun dengan `cargo xtask build-app`, satu server HTTP lokal sebagai backend. Nilai dari user: URL backend lokal, port web kedua instance.
 
 1. Di app: Catalog, pilih Traefik, pasang runtime 3.7.15 (unduhan), buat instance `edge-a` dan `edge-b`, Start keduanya. Harapan: keduanya ready. Bukti AC-10, AC-2.
-2. `edge-a`, tab Configuration: tambah route Name `api`, Rule ``Host(`app.localhost`)``, Backend URL server lokal. Harapan: tag "Applies on reload", tombol Apply and Reload. Apply, lalu `curl -H 'Host: app.localhost' http://127.0.0.1:<port web edge-a>/` menjawab backend; perintah yang sama ke port web `edge-b` menjawab 404. Bukti AC-9, AC-2.
+2. `edge-a`, tab Configuration: tambah route Name `api`, Rule ``Host(`app.localhost`)``, Backend URL server lokal. Harapan: tag "Applies on reload", tombol Apply and Reload. Apply, lalu `curl -H 'Host: app.localhost' http://127.0.0.1:<port web edge-a>/` menjawab backend; perintah yang sama ke port web `edge-b` menjawab 404. Bukti AC-9, AC-2. Sebelum itu, isi Backend URL dengan path, misalnya `http://127.0.0.1:3000/api`, lalu Apply. Harapan: error di field Backend URL, tidak ada revision baru; hapus path nya lalu lanjutkan. Bukti AC-15.
 3. Ubah Log level. Harapan: tag "Requires restart", tombol Apply and Restart. Bukti AC-9.
 4. Ganti Rule menjadi `Host(` lalu Apply. Harapan: kartu gagal, status not ready, banner "Revision N hasn't reached ready"; klik Roll Back to Revision M, route menjawab lagi. Bukti AC-4.
 5. Menu Open In: Routes File membuka Finder di `routes.yaml`; Loaded Routers membuka JSON router di browser. Bukti AC-1.
