@@ -15,6 +15,8 @@
 mod common;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
+#[path = "mysql/harness.rs"]
+mod mysql;
 #[path = "nats/harness.rs"]
 mod nats;
 #[path = "postgresql/harness.rs"]
@@ -23,6 +25,8 @@ mod pg;
 mod support;
 #[path = "traefik/harness.rs"]
 mod traefik;
+#[path = "valkey/harness.rs"]
+mod valkey;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1077,6 +1081,137 @@ fn traefik_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_
     ev.pass_with(&format!(
         "traefik pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon with its route answering; kickstart -k and bootout ended the session and the instance ran again as pid {} and answered",
         seen.pid, seen.started_at, last.pid
+    ));
+}
+
+/// The MySQL sequence for `line`, recorded under `ev` of the test that
+/// calls it (spec 0042 AC-17).
+fn mysql_survives(ev: &Evidence, line: mysql::My) {
+    if !gui_session(ev) {
+        return;
+    }
+    let Some(site) = mysql::Site::open(ev, line) else {
+        return;
+    };
+    let manual = site.binary(&[]);
+    let (id, seen) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let made = mysql::create_instance(&site, &api, "survivor").await;
+        let seen = started(&api, made.id).await;
+        (made.id, seen)
+    });
+    manual.stop();
+    let mut rig = Rig::at(site.root.path(), site.root.path(), None);
+    let last = survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &last);
+    ev.pass_with(&format!(
+        "mysqld {} pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon; kickstart -k and bootout ended the session and the instance ran again as pid {}",
+        line.version, seen.pid, seen.started_at, last.pid
+    ));
+}
+
+/// Spec 0042 AC-17 and spec 0030 AC-8, MySQL 8.4.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running MySQL 8.4 instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
+    );
+    mysql_survives(&ev, mysql::MY84);
+}
+
+/// Spec 0042 AC-17 and spec 0030 AC-8, MySQL 9.7.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running MySQL 9.7 instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
+    );
+    mysql_survives(&ev, mysql::MY97);
+}
+
+/// Spec 0040 AC-19 and spec 0030 AC-8, Valkey 9.1.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn valkey_9_1_survives_planned_restart_and_sigkill() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running Valkey 9.1.2 instance keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, and every next daemon adopts it as ready with a verified identity; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let Some(site) = valkey::Site::open(&ev) else {
+        return;
+    };
+    let manual = site.binary(&[]);
+    let (id, seen) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let made = valkey::create_instance(&site, &api, "survivor", serde_json::json!({})).await;
+        let seen = started(&api, made.id).await;
+        (made.id, seen)
+    });
+    manual.stop();
+    let mut rig = Rig::at(site.root.path(), site.root.path(), None);
+    let last = survives_every_end(&mut rig, site.runtime_id, id, &seen);
+    stop_and_check(&rig, site.runtime_id, id, &last);
+    ev.pass_with(&format!(
+        "valkey-server pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon; kickstart -k and bootout ended the session and the instance ran again as pid {}",
+        seen.pid, seen.started_at, last.pid
+    ));
+}
+
+/// Spec 0040 AC-19: until `official/valkey` line `1` is in
+/// `HANDOVER_PROVEN`, a planned restart stops a running Valkey instance and
+/// starts it again. Needs no launchd job, only the cached artifact.
+#[test]
+#[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
+fn a_restart_preview_stops_and_restores_a_valkey_instance_while_its_handover_is_unproven() {
+    let ev = evidence!(
+        covers = ["AC-067"],
+        kind = Kind::Native,
+        expected = "daemon.restart_preview of a manual stacklyd lists a running Valkey 9.1.2 instance as stop_restore with handover_unproven",
+    );
+    let Some(site) = valkey::Site::open(&ev) else {
+        return;
+    };
+    let manual = site.binary(&[]);
+    let (decision, reason, version) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let made = valkey::create_instance(&site, &api, "unproven", serde_json::json!({})).await;
+        let running = api.start_ready(made.id).await;
+        let version = valkey::Valkey::signed_in(valkey::port_of(&running), &made.password)
+            .info_server("valkey_version");
+        let preview = match api.client.call(Call::DaemonRestartPreview).await {
+            Ok(Reply::DaemonRestartPreview(preview)) => preview,
+            other => panic!("expected a preview, got {other:?}"),
+        };
+        let entry = preview
+            .instances
+            .iter()
+            .find(|entry| entry.instance_id == made.id)
+            .cloned()
+            .expect("the running instance is in the plan");
+        assert_eq!(entry.provider, "valkey", "{entry:#?}");
+        valkey::stop_instance(&api, made.id).await;
+        (entry.decision, entry.reason, version)
+    });
+    manual.stop();
+    site.subject(&ev, &version);
+    assert_eq!(
+        (decision, reason),
+        (
+            stackly_protocol::restart::PlanDecision::StopRestore,
+            stackly_protocol::restart::PlanReason::HandoverUnproven
+        )
+    );
+    ev.pass_with(&format!(
+        "Valkey {version} is stop_restore with handover_unproven in the restart preview"
     ));
 }
 

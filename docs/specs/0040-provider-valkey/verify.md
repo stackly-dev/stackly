@@ -82,3 +82,43 @@ _Semua test native: butuh artefak `valkey-9.1.2-r2-macos-aarch64` di cache runti
 - AC-16 · version check lewat `native_runtime_install`; run spike native `valkey_9_1_runs_from_managed_artifact` menunggu Milestone 3
 - AC-18 · `doctor::` (+ loader di Milestone 1); Open In di GUI manual
 - AC-14, AC-15, AC-17 · Milestone 3; AC-19 · Milestone 4
+
+## Milestone 3: Konformitas, evidence, dan catalog
+
+_Bagian ini memuat langkah 8 dan 9 (kode test dan run native nya). Langkah 9 bagian evidence (`cargo xtask evidence run`, `compat-record`, `codegen`) dan langkah 10 (catalog revision 14 dan `provider freeze`) masuk di giliran catalog, sesudah catalog revision 13 Traefik di `main`. Semua run native dari `valkey-9.1.2-r2-macos-aarch64` di cache runtime xtask, tanpa unduhan; tanpa artefak setiap test berakhir `BLOCKED` dengan `artifact valkey-9.1.2-r2-macos-aarch64 is not in the runtime cache`, owner `@ojiepermana`._
+
+### UI / manual
+
+- Tidak ada untuk langkah 8 dan 9.
+
+### Commands
+
+- [x] `cargo test -p stacklyd --test provider_conformance -- --ignored valkey_9_1_passes_conformance` → lulus: report native ber verdict pass untuk `default`, `aof`, dan `volatile`, tanpa proses dan root tersisa → AC-14
+- [x] `cargo test -p stacklyd --test provider_conformance every_official_package_has_the_step_and_health_limits_its_manifest_gives` → batas `valkey` init 120, readiness 120, stop 60, reload 30 detik, health 43000 ms → AC-14
+- [x] `cargo xtask provider test providers/valkey` → `default: pass`, `aof: pass`, `volatile: pass`, `verdict: pass`, exit 0; di report langkah `reload` `skipped` dan `handover` dengan detail `unproven` (`handover_unproven`) di setiap skenario → AC-14
+- [x] `cargo test -p stacklyd --test valkey -- --ignored valkey_compatibility` → lulus: tiga instance (`rdb`, `aof`, `volatile`) lewat binary `stacklyd`, `INFO server` `valkey_version` 9.1.2 sebagai subject, adopsi PID dan `startedAt` sama sesudah `SIGKILL` daemon, kunci bertahan lewat stop di `rdb` dan lewat crash `valkey-server` di `aof`, hilang di `volatile`, respawn sesudah crash, stop tanpa proses tersisa; `compatibility.json` memuat sembilan check `adoption`, `crash_recovery`, `init`, `persistence_aof`, `persistence_rdb`, `readiness`, `start`, `stop`, `volatile` dan `knownLimitations` `power_loss_not_simulated` → AC-15
+- [x] `cargo test -p xtask --test native_runtime -- --ignored valkey_9_1_runs_from_managed_artifact` → `PASS, version 9.1.2` dari paket lewat worker spike di `gui/502` → AC-16 (run native)
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test valkey --locked -- --ignored --test-threads=1` dari `HEAD` bersih `efb186c6` → 17 record native `PASS`, 0 problem, `sourceDirty` `false`; run `01a1ce4c-2e4a-71de-8766-912d1c9d28ad`; lalu `cargo xtask runtime compat-record target/evidence/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/report.json` → `evidence/compatibility/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/`, dan `cargo xtask codegen` → `providers/valkey/versions.json` mendapat satu record scope `provider` `pass` dengan sembilan check, `power_loss_not_simulated`, dan `manifestSha256` `1f5abf17…` → AC-15
+- [x] Entri Valkey pindah ke `[[provider]]` (mark `Vk`, tile `red`, tanpa catatan platform karena spec tidak menyebutnya) dengan catalog revision 14; `cargo xtask catalog check --update` → `ok catalog revision 14 ba9d0c7b…`; `cargo xtask provider freeze providers/valkey` menulis `crates/core/tests/fixtures/compat/valkey/1.0.0/`; `cargo test -p xtask`, `cargo test -p stackly-core`, `cargo test -p stackly-cli`, dan test catalog `stacklyd` lulus tanpa perubahan fixture → AC-17
+
+### Acceptance-criteria coverage
+
+- AC-14 · konformitas native, tabel batas langkah, dan `provider test` tiga skenario
+- AC-15 · `valkey_compatibility` dan record evidence run `01a1ce4c`
+- AC-16 · run spike native dari paket; version check di Milestone 2
+- AC-17 · catalog revision 14 dan corpus `valkey/1.0.0`
+
+## Milestone 4: Handover
+
+### UI / manual
+
+- [ ] `NOT_RUN` · `BLOCKED` di sesi build (`reason` test launchd butuh sesi login GUI user, `owner` `@ojiepermana`) · AC-19, di sesi GUI yang login. Test ini gagal di assert `Keep/HandoverProven` sampai baris handover ada, jadi pasang dulu secara lokal: di `crates/core/src/supervisor/handover.rs` tambah `HandoverProof::new("official/valkey", "1", "spec-0040-ac-19"),` ke `HANDOVER_PROVEN`, dan di tabel test modul itu yang memuat `("official/clickhouse", "1.0.0", false)` tambah `("official/valkey", "1.0.0", true)`. Lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 valkey_9_1_survives`. Harapan: `valkey_9_1_survives_planned_restart_and_sigkill` lulus (PID dan `startedAt` sama sesudah planned restart dan `SIGKILL` daemon, proses baru sesudah `kickstart -k` dan `bootout`). PASS: commit kedua perubahan `handover.rs` bersama ID record nya. FAIL atau BLOCKED: buang keduanya; AC-19 bagian entri tetap terbuka.
+
+### Commands
+
+- [x] `cargo test -p stacklyd --test native_launchd -- --ignored a_restart_preview_stops_and_restores_a_valkey_instance_while_its_handover_is_unproven` → lulus: `daemon.restart_preview` dari `stacklyd` manual memuat instance Valkey 9.1.2 yang berjalan sebagai `stop_restore` dengan `handover_unproven` → AC-19
+- [ ] `valkey_9_1_survives_planned_restart_and_sigkill` di `apps/daemon/tests/native_launchd.rs` → tidak dijalankan sesi build (lihat UI / manual) → AC-19
+
+### Acceptance-criteria coverage
+
+- AC-19 · test launchd ditulis (bagian test) dan preview `handover_unproven` lulus; entri `HANDOVER_PROVEN` hanya bersama record `PASS` dari langkah manual

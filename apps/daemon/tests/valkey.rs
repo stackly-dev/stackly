@@ -10,6 +10,8 @@
 mod auth;
 #[path = "common/mod.rs"]
 mod common;
+#[path = "valkey/compat.rs"]
+mod compat;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
 #[path = "valkey/doctor.rs"]

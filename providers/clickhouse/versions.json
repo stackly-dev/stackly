@@ -96,6 +96,33 @@
           "summary": "clickhouse 26.8.30.8 ready in 9397 ms, stopped in 525 ms",
           "testedAt": "2026-10-18T11:20:19.103Z",
           "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93ef26ef3aca"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/clickhouse",
+            "revision": "1.0.0",
+            "manifestSha256": "cce548ff278eb07133243345b0cae701b717db6f30f00f0be59a9c9231e0dc9f"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "auth",
+            "isolation",
+            "lifecycle",
+            "listeners",
+            "persistence",
+            "readiness_identity",
+            "reload",
+            "stop"
+          ],
+          "knownLimitations": [],
+          "summary": "ClickHouse 26.8.30.8 passed lifecycle, readiness_identity, listeners, auth, isolation, reload, persistence, stop",
+          "testedAt": "2026-11-12T06:02:39.389Z",
+          "evidence": "compatibility/01a1ce59-3b54-7635-9345-bd11545e2e7e/01a1ce59-72e1-7679-af98-85e3a77884d2"
         }
       ]
     }

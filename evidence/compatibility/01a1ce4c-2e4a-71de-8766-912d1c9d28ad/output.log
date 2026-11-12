@@ -1,0 +1,32 @@
+   Compiling ring v0.17.14
+   Compiling stackly-core v0.1.0 ($REPO/crates/core)
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 18.28s
+     Running tests/valkey.rs (target/debug/deps/valkey-32b562955c4129ec)
+
+running 17 tests
+test auth::valkey_9_1_listens_on_loopback_only_and_signs_in_only_with_its_password ... ok
+test compat::valkey_compatibility ... ok
+test doctor::valkey_9_1_shows_its_connections_and_open_in_actions_without_the_password ... ok
+test doctor::valkey_9_1_with_a_damaged_append_only_file_gets_the_aof_damaged_remedy ... ok
+test format::valkey_9_1_reads_back_the_text_the_valkey_conf_escaper_wrote ... ok
+test format::valkey_9_1_takes_keyspace_flags_with_a_dollar_sign ... ok
+test lifecycle::valkey_9_1_is_adopted_by_a_daemon_that_comes_back_after_sigkill ... ok
+test lifecycle::valkey_9_1_runs_its_lifecycle_through_the_daemon ... ok
+test lifecycle::valkey_9_1_takes_a_new_password_from_secret_set_at_the_next_start ... ok
+test owned::valkey_9_1_refuses_to_move_what_stackly_owns_and_forgets_config_set_at_restart ... ok
+test persistence::valkey_9_1_aof_keeps_data_over_a_stop_and_over_a_crash ... ok
+test persistence::valkey_9_1_rdb_keeps_data_over_a_stop_and_loses_writes_since_the_snapshot_on_a_crash ... ok
+test persistence::valkey_9_1_volatile_writes_nothing_and_loses_everything_on_a_stop_or_crash ... ok
+test readiness::valkey_9_1_is_not_ready_with_loading_while_its_snapshot_loads ... ok
+test readiness::valkey_9_1_is_not_ready_with_wrongpass_while_the_readiness_user_is_gone ... ok
+test stop::valkey_9_1_stops_on_sigterm_with_a_blocked_client_and_saves_its_snapshot ... ok
+test tools::valkey_9_1_never_runs_a_decoy_valkey_or_redis_from_the_daemon_path ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 71.26s
+

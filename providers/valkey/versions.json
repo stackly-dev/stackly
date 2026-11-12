@@ -70,6 +70,36 @@
           "summary": "valkey 9.1.2 ready in 826 ms, stopped in 139 ms",
           "testedAt": "2026-10-18T11:20:40.850Z",
           "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f1c16a56ff"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/valkey",
+            "revision": "1.0.0",
+            "manifestSha256": "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "crash_recovery",
+            "init",
+            "persistence_aof",
+            "persistence_rdb",
+            "readiness",
+            "start",
+            "stop",
+            "volatile"
+          ],
+          "knownLimitations": [
+            "power_loss_not_simulated"
+          ],
+          "summary": "Valkey 9.1.2 passed init, start, readiness, adoption, persistence_rdb, crash_recovery, persistence_aof, volatile, stop",
+          "testedAt": "2026-11-12T05:48:26.658Z",
+          "evidence": "compatibility/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/01a1ce4c-8b55-72ba-b2cb-2fdf5f0bc73f"
         }
       ]
     }
