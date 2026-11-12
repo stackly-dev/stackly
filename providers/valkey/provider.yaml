@@ -1,0 +1,158 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/valkey
+  software: valkey
+  displayName: Valkey
+  revision: "1.0.0"
+  category: cache
+  description: Valkey in-memory key-value store. Each instance is one standalone server with a password, a loopback port, and its own persistence mode.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+runtime:
+  executable: bin/valkey-server
+  executionMode: foreground
+  versionCheck:
+    args: ["--version"]
+    pattern: '^Valkey server v=([0-9]+\.[0-9]+\.[0-9]+) '
+    timeoutSeconds: 10
+capabilities:
+  multiInstance: true
+  persistence: true
+  backup: [cold]
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 6379 }
+configFiles:
+  valkeyConf:
+    template: templates/valkey.conf.tmpl
+    format: valkeyConf
+    destination: "${instance.config}/valkey.conf"
+  persistenceRdb:
+    template: templates/persistence-rdb.conf.tmpl
+    format: plain
+    destination: "${instance.config}/persistence-rdb.conf"
+  persistenceAof:
+    template: templates/persistence-aof.conf.tmpl
+    format: plain
+    destination: "${instance.config}/persistence-aof.conf"
+  persistenceVolatile:
+    template: templates/persistence-volatile.conf.tmpl
+    format: plain
+    destination: "${instance.config}/persistence-volatile.conf"
+  users:
+    template: templates/users.conf.tmpl
+    format: valkeyConf
+    destination: "${instance.secrets}/users.conf"
+    sensitive: true
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - "--include"
+      - "${instance.config}/valkey.conf"
+      - "--include"
+      - "${instance.config}/persistence-${settings.persistence}.conf"
+      - "--include"
+      - "${instance.secrets}/users.conf"
+      - "--bind"
+      - "${endpoint.client.host}"
+      - "--port"
+      - "${endpoint.client.port}"
+      - "--dir"
+      - "${instance.data}"
+      - "--daemonize"
+      - "no"
+      - "--protected-mode"
+      - "yes"
+      - "--set-proc-title"
+      - "no"
+      - "--always-show-logo"
+      - "no"
+      - "--tcp-backlog"
+      - "128"
+      - "--enable-protected-configs"
+      - "no"
+      - "--enable-debug-command"
+      - "no"
+      - "--enable-module-command"
+      - "no"
+    cwd: "${instance.data}"
+    env: { TZ: UTC }
+  stop: { strategy: gracefulProcess, signal: term }
+readiness:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executables.cli}"
+      args:
+        - "-e"
+        - "-h"
+        - "${endpoint.client.host}"
+        - "-p"
+        - "${endpoint.client.port}"
+        - "--user"
+        - "stackly-readiness"
+        - "-t"
+        - "2"
+        - "PING"
+      cwd: "${instance.temp}"
+      env: { VALKEYCLI_AUTH: nopass }
+    successExitCodes: [0]
+  intervalMilliseconds: 500
+  attemptTimeoutMilliseconds: 3000
+health:
+  intervalSeconds: 10
+  attemptTimeoutMilliseconds: 3000
+  failureThreshold: 3
+timeouts: { readinessSeconds: 120, recoverySeconds: 300, stopSeconds: 60 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, temp, run]
+  executeRuntimeBinary: true
+  additionalExecutables: { cli: bin/valkey-cli }
+connection:
+  - name: uri
+    title: Connection URL
+    template: "redis://default:${secret.password}@${endpoint.client.address}/0"
+  - name: valkey
+    title: Valkey URL
+    template: "valkey://default:${secret.password}@${endpoint.client.address}/0"
+openWith:
+  - name: tableplus
+    title: TablePlus
+    kind: app
+    app:
+      bundleIds: ["com.tinyapp.TablePlus"]
+      url: "redis://default@${endpoint.client.address}/0"
+    copySecret: password
+  - name: cli
+    title: valkey-cli
+    kind: terminal
+    terminal:
+      executable: "${runtime.executables.cli}"
+      args: ["-u", "valkey://default@${endpoint.client.address}/0", "--askpass", "--no-auth-warning"]
+    copySecret: password
+remedies:
+  - name: readiness_user
+    when:
+      readinessDetailContains: "WRONGPASS"
+    title: "The readiness user stackly-readiness is missing or changed"
+    steps:
+      - text: "Stackly checks that this instance is ready by sending PING as the user stackly-readiness, which may run PING and nothing else. That sign in fails now."
+      - text: "Restart the instance. Stackly writes this user again before every start."
+  - name: aof_damaged
+    when:
+      failureCodes: [crash_loop, process_exited]
+      excerptContains: "Bad file format reading the append only file"
+    title: "Valkey found a damaged append only file"
+    steps:
+      - text: "Valkey stops when the append only file in this instance’s data folder is damaged. Stackly never repairs or deletes data on its own."
+      - text: "Copy the data folder somewhere safe first."
+        path: "${instance.data}"
+      - text: "Valkey’s own repair tool is valkey-check-aof, next to valkey-server in the runtime’s bin folder. Run it with --fix on this manifest file, then start the instance again. The repair drops every write after the damaged part."
+        path: "${instance.data}/appendonlydir/appendonly.aof.manifest"

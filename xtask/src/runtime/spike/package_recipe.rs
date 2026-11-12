@@ -670,12 +670,12 @@ mod tests {
 
     // covers: AC-16 (spec 0036)
     #[test]
-    fn the_three_packaged_providers_are_found_by_their_software() {
-        for provider in ["nats", "postgresql", "traefik"] {
+    fn the_packaged_providers_are_found_by_their_software() {
+        for provider in ["nats", "postgresql", "traefik", "valkey"] {
             let dir = find_package(&repo(), provider).unwrap().unwrap();
             assert_eq!(dir.file_name().unwrap().to_string_lossy(), provider);
         }
-        for provider in ["mysql", "clickhouse", "valkey", "redis"] {
+        for provider in ["mysql", "clickhouse", "redis"] {
             assert_eq!(find_package(&repo(), provider).unwrap(), None, "{provider}");
         }
     }
@@ -846,6 +846,55 @@ mod tests {
                 .as_deref(),
             Some("3.7.15")
         );
+    }
+
+    // covers: AC-16 (spec 0040)
+    #[test]
+    fn valkey_starts_from_its_package_with_the_users_file_and_reads_its_version_line() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let recipe = load("valkey");
+        let socket = SocketDir::new();
+        let mut ctx = ctx(
+            root.path(),
+            &root.path().join("art"),
+            "9.1.2",
+            "9.1",
+            &socket,
+        );
+        ctx.ports = ports::allocate(recipe.ip_endpoints()).unwrap();
+
+        let command = recipe.start(&mut ctx).unwrap();
+
+        assert_eq!(recipe.ip_endpoints(), 1);
+        assert!(
+            command
+                .get_program()
+                .to_string_lossy()
+                .ends_with("bin/valkey-server")
+        );
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let port = args.iter().position(|arg| arg == "--port").unwrap();
+        assert_eq!(args[port + 1], ctx.ports[0].to_string());
+        let users = args
+            .iter()
+            .find(|arg| arg.ends_with("/secrets/users.conf"))
+            .unwrap();
+        let text = fs::read_to_string(users).unwrap();
+        let password = &recipe.secrets["password"];
+        assert!(password.starts_with(FIXTURE_CREDENTIAL_PREFIX));
+        assert!(!text.contains(password.as_str()), "{text}");
+        assert!(text.contains("user stackly-readiness on nopass -@all +ping"));
+        assert_eq!(recipe.version_args(), ["--version"]);
+        assert_eq!(
+            recipe
+                .normalize("Valkey server v=9.1.2 sha=00000000:1 malloc=libc bits=64 build=991715b0e5b85611\n")
+                .as_deref(),
+            Some("9.1.2")
+        );
+        assert_eq!(recipe.normalize("valkey-cli 9.1.2\n"), None);
     }
 
     // covers: AC-16 (spec 0036)
