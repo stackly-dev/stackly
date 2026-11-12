@@ -2,6 +2,8 @@
 
 - **Scope:** `docs/scope/<file>.md`
 - **Hash awal:** `<git rev-parse main saat koordinasi mulai>` · **Hash awal wave aktif:** `<hash>`
+- **Mode keputusan:** `auto` | `tanya berat` | `tanya` · **Ketentuan tambahan:** `<teks argumen apa adanya, atau "tidak ada">`
+- **Aturan umum brief:** `<nama-SCOPE>.brief-umum.md` · **Langkah manual:** `<nama-SCOPE>.manual.md`
 - **Wave aktif:** `<n>`, mulai `<YYYY-MM-DD>`
 - **Diperbarui:** `<YYYY-MM-DD HH:MM>`
 
@@ -9,7 +11,7 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `<nama>` | `<peran>` | `<fitur, milestone, dan langkah Build plan bila pecahan>` | `<file scope>` | `<path>` | `claude/<name>-<hash>` | `<model · effort, mis. sonnet-5-5 · high>` | `aktif` / `peer` / `done` / `blocked` / `failed` / `merged` / `dipakai ulang` / `diarsipkan` / `tidak di-merge` |
+| `<nama>` | `<peran>` | `<fitur, milestone, dan langkah Build plan bila pecahan>` | `<file scope>` | `<path>` | `claude/<name>-<hash>` | `<model · effort, mis. opus-5-5 · medium>` | `standby` / `aktif` / `peer` / `done` / `blocked` / `failed` / `merged` / `dipakai ulang` / `diarsipkan` / `tidak di-merge` |
 
 ## Keputusan
 
@@ -17,13 +19,21 @@
 | --- | --- | --- |
 | `<YYYY-MM-DD>` | `<apa yang diputuskan dan alasannya>` | `user` / `lead` |
 
+## Keputusan delegasi
+
+Keputusan spec yang diambil dari opsi rekomendasi atas nama user (SKILL.md bagian "Mode keputusan"). Baris `berat` di atas.
+
+| Tanggal | Spec · AC | Pertanyaan | Diambil | Runner-up | Berat | Cara membatalkan | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `<YYYY-MM-DD>` | `<NNNN>` · `<AC-n>` | `<pertanyaan>` | `<opsi dan alasan satu kalimat>` | `<opsi>` | `berat` / `-` | `architect (update)` spec `<NNNN>`; langkah Build plan `<n>` dibangun ulang | `berlaku` / `dibatalkan user <tanggal>` |
+
 ## Blocker terbuka
 
 - `<item>`: `<penyebab>`, `<siapa atau apa yang membukanya>`
 
 ## Dicentang pada wave ini
 
-- `<fitur>` · `<teks kotak>` · `<laporan yang jadi dasar>` · `<branch yang di-merge>` → `<hash merge>` · `<pemeriksaan di main yang lead jalankan>` · `<commit docs(scope) yang mencatatnya>`
+- `<fitur>` · `<teks kotak>` · `<laporan yang jadi dasar>` · `<branch yang di-merge>` → `<hash merge>` · `<pemeriksaan di main yang lead jalankan>` · `<commit docs(scope) yang mencatatnya>` · `(manual NOT_RUN: <ID langkah di file manual>, owner user)` bila ada
 
 ## Riwayat wave
 

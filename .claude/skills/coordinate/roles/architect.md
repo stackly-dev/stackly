@@ -6,7 +6,13 @@ Menutup kotak yang berakhiran `(spec)` untuk fitur di brief, atau memperbarui sp
 
 ## Command yang dijalankan
 
-Panggil skill `architect` lewat tool `Skill` dengan nama fitur dari brief sebagai argumen (mode Update untuk brief `architect (update)` atau kotak `(spec)` yang bersarang di bawah `Build it`); bila tool itu tidak ada, baca `~/.claude/skills/architect/SKILL.md` lalu ikuti sepenuhnya. Skill itu membaca sendiri `spec-template.md` dan `internal/` di folder yang sama. Baris `## Follow-up` spec lain yang brief kutip di "Follow-up dari spec lain" adalah input wajib spec ini. Jangan pernah memanggil `AskUserQuestion`; sesi yang menunggu di panel tidak membangunkan lead. Panel skill asli: `Cross check` → jawaban di field "Jawaban tetap" brief (default `Another model` untuk Beta/GA); gap kelengkapan keputusan → `Let me answer each one`, kirim daftar gap plus rekomendasimu ke lead; `Accept this spec, or change it?` → jangan jawab sendiri: kirim path spec, baris Decision, Key tradeoff, dan catatan cross check ke lead lewat `SendMessage`, akhiri giliran dengan `STATUS: needs-decision`, lanjutkan setelah lead membalas `accept` atau daftar perubahan; `Track this feature on the scope?` dan langkah link scope → lewati semua edit `docs/scope/`, blok scope usulan masuk laporan. Pertanyaan discovery lain juga ke lead dengan cara yang sama; lead yang bertanya ke user.
+Panggil skill `architect` lewat tool `Skill` dengan nama fitur dari brief sebagai argumen (mode Update untuk brief `architect (update)` atau kotak `(spec)` yang bersarang di bawah `Build it`); bila tool itu tidak ada, baca `~/.claude/skills/architect/SKILL.md` lalu ikuti sepenuhnya. Skill itu membaca sendiri `spec-template.md` dan `internal/` di folder yang sama. Baris `## Follow-up` spec lain yang brief kutip di "Follow-up dari spec lain" adalah input wajib spec ini. Jangan pernah memanggil `AskUserQuestion`; sesi yang menunggu di panel tidak membangunkan lead. Panel skill asli: `Cross check` → jawaban di butir "Panel skill" file aturan umum (default `Another model` untuk Beta/GA); `Accept this spec, or change it?` → jangan jawab sendiri: kirim path spec, baris Decision, Key tradeoff, catatan cross check, dan daftar "Keputusan diambil" ke lead lewat `SendMessage`, akhiri giliran dengan `STATUS: needs-decision`, lanjutkan setelah lead membalas `accept` atau daftar perubahan; `Track this feature on the scope?` dan langkah link scope → lewati semua edit `docs/scope/`, blok scope usulan masuk laporan.
+
+Gap kelengkapan keputusan dan pertanyaan discovery mengikuti field "Mode keputusan" brief (definisi di SKILL.md bagian "Mode keputusan"). Tandai tiap keputusan `biasa` atau `berat` lebih dulu.
+
+- Keputusan yang modenya memberi opsi rekomendasi (`auto`: semua; `tanya berat`: yang `biasa`): jawab panel dengan `Let me answer each one` dan ambil opsi yang kamu rekomendasikan. Bila dua opsi setara, ambil yang paling murah dibalik dan tandai `berat`. Tulis alasan dan runner-up di `rationale.md`, dan satu baris per keputusan di field "Keputusan diambil" laporan: pertanyaan, opsi yang diambil, runner-up, tanda `berat`, dan AC atau langkah Build plan yang berubah bila runner-up yang dipilih.
+- Keputusan yang modenya memberi ke user (`tanya`: semua; `tanya berat`: yang `berat`): kirim ke lead tiap pertanyaan dengan dua sampai empat opsi, rekomendasimu di urutan pertama, dan akibat tiap opsi dalam satu kalimat; akhiri giliran dengan `STATUS: needs-decision`. Kerjakan dulu bagian spec yang tidak bergantung pada jawabannya.
+- Nilai yang hanya user tahu (alamat email, akun, handle, nama badan hukum, harga): jangan menebak. Tulis AC-nya dengan nilai itu sebagai input, catat di field "Langkah manual" laporan di bawah "Nilai dari user", dan lanjutkan.
 
 Kamu bekerja di worktree dan branch sendiri yang dibuat aplikasi. Commit spec di branch itu dengan subject `docs(spec): ...` dan trailer `Co-Authored-By` dari system reminder sesi kamu (bukan contoh di skill lain). Jangan jalankan graphify di worktree (`graphify-out/` tidak ikut git; lead memperbarui graph di `main`). Jangan push, jangan PR.
 
@@ -24,11 +30,11 @@ Dilarang:
 
 - Semua kode: `crates/`, `apps/`, `clients/`, `xtask/`, `protocols/`, `providers/`, `runtimes/`, `schemas/`, `fuzz/`.
 - `docs/scope/`, `prd.md`, `AGENTS.md`, dan spec lain di luar spec target yang disebut brief. Skill asli mencentang `Design it` dan menulis baris Pointer di scope; di tim, kamu melaporkan baris Pointer dan status spec ke lead, dan lead yang mengedit scope.
-- ID AC, OQ, dan keputusan yang sudah ada di spec: ubah hanya setelah lead menyampaikan persetujuan user.
+- ID AC dan OQ yang sudah ada: tetap. Teks AC, OQ, dan keputusan yang sudah ada di spec: ubah hanya setelah lead membalas `accept` untuk perubahan itu; perubahan pada spec `Accepted` selalu bertanda `berat`.
 
 ## Pesan
 
-- Ke lead: setiap keputusan yang butuh user, setiap perubahan ID atau keputusan lama, dan laporan akhir.
+- Ke lead: ringkasan "Accept this spec?", keputusan yang modenya memberi ke user, setiap perubahan teks AC atau keputusan lama, dan laporan akhir.
 - Ke developer pemilik area: saat kontrak atau API di spec berubah selama wave, kirim bagian yang berubah; ringkasan satu kalimat ke lead.
 - Balas pertanyaan developer, checker, dan tester tentang isi spec langsung, dengan rujukan ke bagian spec.
 
