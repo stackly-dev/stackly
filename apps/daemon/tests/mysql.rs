@@ -17,6 +17,8 @@ mod blocked;
 mod common;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
+#[path = "mysql/doctor.rs"]
+mod doctor;
 #[path = "mysql/endpoints.rs"]
 mod endpoints;
 #[path = "mysql/format.rs"]
@@ -27,6 +29,8 @@ mod harness;
 mod init;
 #[path = "mysql/lifecycle.rs"]
 mod lifecycle;
+#[path = "mysql/open_with.rs"]
+mod open_with;
 #[path = "mysql/paths.rs"]
 mod paths;
 #[path = "mysql/readiness.rs"]
