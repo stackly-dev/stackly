@@ -7,6 +7,8 @@
 //! download.
 #![cfg(target_os = "macos")]
 
+#[path = "mysql/adoption.rs"]
+mod adoption;
 #[path = "mysql/auth.rs"]
 mod auth;
 #[path = "mysql/blocked.rs"]
@@ -23,7 +25,15 @@ mod format;
 mod harness;
 #[path = "mysql/init.rs"]
 mod init;
+#[path = "mysql/lifecycle.rs"]
+mod lifecycle;
 #[path = "mysql/paths.rs"]
 mod paths;
+#[path = "mysql/readiness.rs"]
+mod readiness;
+#[path = "mysql/stop.rs"]
+mod stop;
 #[path = "supervisor/support.rs"]
 mod support;
+#[path = "mysql/tools.rs"]
+mod tools;
