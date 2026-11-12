@@ -1,0 +1,247 @@
+{
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": false
+    },
+    {
+      "capability": "metrics",
+      "supported": false
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "dataLocation": "/Users/dev/Library/Application Support/Stackly",
+  "dataPath": "instances/<new instance id>/data",
+  "endpoints": [
+    {
+      "defaultPort": 6379,
+      "host": "127.0.0.1",
+      "name": "client",
+      "purpose": "client",
+      "socketName": null,
+      "transport": "tcp"
+    }
+  ],
+  "fields": [
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": null,
+      "description": "Password of the default user. Every client needs it. A new value takes effect at the next start.",
+      "itemKey": null,
+      "items": [],
+      "key": "password",
+      "kind": "text",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": 128,
+      "maximum": null,
+      "minItems": null,
+      "minLength": 8,
+      "minimum": null,
+      "printableOnly": true,
+      "required": true,
+      "secret": true,
+      "title": "Password",
+      "visibility": "basic"
+    },
+    {
+      "apply": "immutable_after_init",
+      "choices": [
+        "rdb",
+        "aof",
+        "volatile"
+      ],
+      "default": {
+        "content": "rdb",
+        "type": "text"
+      },
+      "description": "What survives a stop. rdb: snapshots on disk now and then and on a normal stop; a crash loses the writes since the last snapshot. aof: every write is logged and synced about once a second. volatile: memory only; every stop, restart, or crash loses all data, and there is nothing to back up or restore. Set once when the instance is created.",
+      "itemKey": null,
+      "items": [],
+      "key": "persistence",
+      "kind": "choice",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Persistence",
+      "visibility": "basic"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": 0,
+        "type": "integer"
+      },
+      "description": "Most memory Valkey uses for data. 0 means no limit.",
+      "itemKey": null,
+      "items": [],
+      "key": "maxMemoryMb",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 1048576,
+      "minItems": null,
+      "minLength": null,
+      "minimum": 0,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Max memory (MB)",
+      "visibility": "basic"
+    },
+    {
+      "apply": "restart",
+      "choices": [
+        "noeviction",
+        "allkeys-lru",
+        "allkeys-lfu",
+        "allkeys-random",
+        "volatile-lru",
+        "volatile-lfu",
+        "volatile-random",
+        "volatile-ttl"
+      ],
+      "default": {
+        "content": "noeviction",
+        "type": "text"
+      },
+      "description": "What Valkey does when the memory limit is reached. noeviction refuses new writes; the others remove keys.",
+      "itemKey": null,
+      "items": [],
+      "key": "maxMemoryPolicy",
+      "kind": "choice",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Eviction policy",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "restart",
+      "choices": [
+        "debug",
+        "verbose",
+        "notice",
+        "warning"
+      ],
+      "default": {
+        "content": "notice",
+        "type": "text"
+      },
+      "description": "How much Valkey writes to the instance log.",
+      "itemKey": null,
+      "items": [],
+      "key": "logLevel",
+      "kind": "choice",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Log level",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": "",
+        "type": "text"
+      },
+      "description": "Which key events Valkey publishes, as Valkey flag letters, for example Ex for expired keys. Empty turns them off.",
+      "itemKey": null,
+      "items": [],
+      "key": "notifyKeyspaceEvents",
+      "kind": "text",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": 16,
+      "maximum": null,
+      "minItems": null,
+      "minLength": 0,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Keyspace notifications",
+      "visibility": "advanced"
+    }
+  ],
+  "logsLocation": "/Users/dev/Library/Logs/Stackly",
+  "provider": {
+    "category": "cache",
+    "displayName": "Valkey",
+    "manifestSha256": "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6",
+    "name": "official/valkey",
+    "revision": "1.0.0",
+    "source": "bundled_catalog"
+  },
+  "runtime": {
+    "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "dependentRuntimes": [],
+    "displayName": "Valkey",
+    "id": "0192f3a6-0000-7000-8000-0000000000a1",
+    "installMode": "managed",
+    "installedAt": "2026-01-01T00:00:00.000Z",
+    "lastVerifiedAt": null,
+    "line": "9.1",
+    "revision": 1,
+    "software": "valkey",
+    "state": "installed",
+    "support": "unverified",
+    "supportReason": "untested",
+    "target": {
+      "arch": "aarch64",
+      "os": "macos"
+    },
+    "usedBy": [],
+    "version": "9.1.2"
+  },
+  "startupDefault": "manual",
+  "suggestedName": "valkey-9-1"
+}

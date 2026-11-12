@@ -34,8 +34,6 @@ pub struct Ctx {
     pub executables: Vec<String>,
     /// The run folder: working folder, configuration, and logs.
     pub run_dir: PathBuf,
-    /// The data folder, created by the recipe when it needs one.
-    pub data_dir: PathBuf,
     /// The environment of every provider process.
     pub env: CleanEnv,
     /// `/tmp/sk-<8 hex>`, when the recipe uses a socket.
@@ -155,7 +153,6 @@ pub fn recipe(repo: &Path, provider: &str) -> Result<Box<dyn Recipe>> {
     let _ = repo;
     match provider {
         "clickhouse" => Ok(Box::new(ClickHouse)),
-        "valkey" => Ok(Box::new(Valkey)),
         _ => bail!("the spike has no steps for provider {provider}"),
     }
 }
@@ -219,22 +216,6 @@ fn write(path: &Path, text: &str) -> Result<()> {
 
 fn path_text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
-}
-
-/// The text a short command printed, or an error naming its failure.
-fn output_of(finished: &Finished, what: &str) -> Result<String> {
-    match finished.status {
-        None => bail!(
-            "{what} did not finish within {} s",
-            CLIENT_TIMEOUT.as_secs()
-        ),
-        Some(status) if status.success() => Ok(finished.stdout.clone()),
-        Some(status) => bail!(
-            "{what} failed with {}: {}",
-            process::describe(status),
-            finished.complaint()
-        ),
-    }
 }
 
 /// ClickHouse: a minimal config with only TCP and HTTP on loopback, data
@@ -360,75 +341,6 @@ impl Recipe for ClickHouse {
     }
 }
 
-/// Valkey: one loopback port, data in the run folder, no persistence, and
-/// no daemonizing.
-// provisional: F40 (the Valkey package replaces this recipe)
-struct Valkey;
-
-impl Valkey {
-    fn cli(ctx: &Ctx, args: &[&str]) -> Result<Command> {
-        let mut command = ctx.command("valkey-cli")?;
-        command
-            .args(["-h", "127.0.0.1", "-p"])
-            .arg(ctx.port(0)?.to_string())
-            .args(args);
-        Ok(command)
-    }
-}
-
-impl Recipe for Valkey {
-    fn init(&self, ctx: &mut Ctx) -> Result<()> {
-        process::create_dir(&ctx.data_dir)
-    }
-
-    fn start(&self, ctx: &mut Ctx) -> Result<Command> {
-        ctx.ports = ports::allocate(1)?;
-        let mut command = ctx.command("valkey-server")?;
-        command
-            .args(["--bind", "127.0.0.1", "--port"])
-            .arg(ctx.port(0)?.to_string())
-            .arg("--dir")
-            .arg(&ctx.data_dir)
-            .args(["--save", "", "--appendonly", "no", "--daemonize", "no"]);
-        Ok(command)
-    }
-
-    fn ready(&self, ctx: &Ctx) -> Result<bool> {
-        let finished = process::run(Self::cli(ctx, &["PING"])?, CLIENT_TIMEOUT)?;
-        Ok(finished.success() && finished.stdout.trim() == "PONG")
-    }
-
-    /// The `valkey_version` line of `INFO server`; Valkey also reports a
-    /// `redis_version` for compatibility, which is not its own version.
-    fn version(&self, ctx: &Ctx) -> Result<String> {
-        let text = output_of(
-            &process::run(Self::cli(ctx, &["INFO", "server"])?, CLIENT_TIMEOUT)?,
-            "INFO server",
-        )?;
-        text.lines()
-            .map(str::trim)
-            .find(|line| line.starts_with("valkey_version:"))
-            .map(str::to_owned)
-            .with_context(|| format!("INFO server printed no valkey_version: {}", text.trim()))
-    }
-
-    fn normalize(&self, raw: &str) -> Option<String> {
-        version_after(raw, "valkey_version:").and_then(|version| first_parts(&version, 3))
-    }
-
-    fn stop(&self, ctx: &Ctx, _server: &Server) -> Result<()> {
-        output_of(
-            &process::run(Self::cli(ctx, &["shutdown", "nosave"])?, CLIENT_TIMEOUT)?,
-            "valkey-cli shutdown nosave",
-        )
-        .map(drop)
-    }
-
-    fn version_args(&self) -> Vec<String> {
-        vec!["--version".to_owned()]
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,21 +373,6 @@ mod tests {
         let clickhouse = hand_written("clickhouse");
         assert!(!clickhouse.uses_socket_dir());
         assert_eq!(clickhouse.version_args(), ["--version"]);
-        let valkey = hand_written("valkey");
-        assert!(!valkey.uses_socket_dir());
-        assert_eq!(valkey.version_args(), ["--version"]);
-    }
-
-    #[test]
-    fn a_valkey_version_comes_from_the_valkey_version_line_of_info_server() {
-        let valkey = hand_written("valkey");
-        let info = "# Server\r\nredis_version:7.2.4\r\nserver_name:valkey\r\nvalkey_version:9.1.2\r\nvalkey_release_stage:ga\r\nredis_git_sha1:00000000\r\n";
-        assert_eq!(valkey.normalize(info).as_deref(), Some("9.1.2"));
-        assert_eq!(
-            valkey.normalize("valkey_version:9.1.2").as_deref(),
-            Some("9.1.2")
-        );
-        assert_eq!(valkey.normalize("redis_version:7.2.4\r\n"), None);
     }
 
     #[test]

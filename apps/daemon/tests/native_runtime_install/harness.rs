@@ -99,6 +99,14 @@ pub const MYSQL_9_7: Line = Line {
     version: "9.7.2",
 };
 
+/// Valkey 9.1.
+pub const VALKEY: Line = Line {
+    software: "valkey",
+    artifact: "valkey-9.1.2-r2-macos-aarch64",
+    selector: "9.1",
+    version: "9.1.2",
+};
+
 /// The folder of the package of `software`.
 #[must_use]
 pub fn package_dir(software: &str) -> PathBuf {
