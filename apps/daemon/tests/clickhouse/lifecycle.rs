@@ -22,6 +22,7 @@ use crate::harness::{
     port_of, stop_instance, wait_log,
 };
 
+// covers: AC-7, AC-9, AC-11 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_lifecycle_in_process() {
@@ -185,6 +186,7 @@ async fn clickhouse_lifecycle_in_process() {
     ));
 }
 
+// covers: AC-5 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_runs_as_one_foreground_process() {

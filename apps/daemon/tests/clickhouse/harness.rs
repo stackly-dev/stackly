@@ -40,12 +40,14 @@ use stackly_protocol::secret::{SecretInput, SecretText};
 use stackly_protocol::{Call, Reply};
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Evidence, Source};
-use stackly_testkit::{FakeSecretStore, ReapGuard, RuntimeCache, TestRoot, allocate_port};
+use stackly_testkit::{
+    FakeSecretStore, ReapGuard, RuntimeCache, SpawnCatalog, SpawnedDaemon, TestRoot, allocate_port,
+};
 use stacklyd::lock::{DaemonLock, LockOwner};
 use stacklyd::server::{self, DaemonConfig, DaemonHandle};
 use uuid::Uuid;
 
-use crate::common;
+use crate::common::{self, STACKLYD};
 use crate::support::{Api, fast};
 
 /// The owner who can fill the runtime cache (spec 0002).
@@ -71,6 +73,19 @@ pub const READINESS_USER: &str = "stackly_readiness";
 pub const RELOAD_USER: &str = "stackly_reload";
 /// The macro that names the instance in `config.xml`.
 pub const ID_MACRO: &str = "stackly_instance_id";
+/// How long a binary daemon may stay in `daemon.starting`.
+const PATIENCE: Duration = Duration::from_secs(60);
+
+/// Where the daemon of a test runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Serve {
+    /// In this process, through `stacklyd::server::start`, with a
+    /// `FakeSecretStore`.
+    InProcess,
+    /// As the `stacklyd` binary with `STACKLY_ROOT` on the data root, so
+    /// secrets live in the file keychain under that data root.
+    Binary,
+}
 
 /// The folder of the package under test.
 #[must_use]
@@ -156,17 +171,26 @@ impl Site {
     /// the package. Notes `evidence` as `BLOCKED` and returns `None` when
     /// the cache does not hold the artifact, so the test ends there.
     pub fn open(evidence: &Evidence) -> Option<Self> {
+        Self::open_with(evidence, ROOT_NAME, Serve::InProcess)
+    }
+
+    /// [`Site::open`] with a data root named `root_name` and a daemon that
+    /// runs as `serve` says.
+    pub fn open_with(evidence: &Evidence, root_name: &str, serve: Serve) -> Option<Self> {
         let root = TestRoot::new().expect("a test root can be created");
-        let data_root = root.path().join(ROOT_NAME);
+        let data_root = root.path().join(root_name);
         // A root override must exist; the daemon creates everything below it.
         std::fs::create_dir(&data_root).expect("the data root can be created");
         std::fs::set_permissions(&data_root, std::fs::Permissions::from_mode(0o700))
             .expect("the data root can be made private");
         let secrets = Arc::new(FakeSecretStore::new());
-        let platform = MacosPlatform::with_roots(
-            RootSet::under_override(&data_root, root.run_dir())
-                .expect("a test root is a valid root override"),
-        )
+        let platform = match serve {
+            Serve::InProcess => MacosPlatform::with_roots(
+                RootSet::under_override(&data_root, root.run_dir())
+                    .expect("a test root is a valid root override"),
+            ),
+            Serve::Binary => MacosPlatform::new(Some(data_root.clone().into())),
+        }
         .expect("a test root is a valid root override")
         .with_secrets(Arc::clone(&secrets) as Arc<dyn stackly_platform::SecretStore>);
         let package = package(&platform);
@@ -322,6 +346,60 @@ impl Site {
         .await
         .expect("the client connects");
         Api::new(client, self.runtime_id)
+    }
+
+    /// Starts the `stacklyd` binary on the data root, which keeps secrets
+    /// in a file keychain under it, and waits until it answers a
+    /// handshake. Only for a site opened with [`Serve::Binary`].
+    pub fn spawn(&self) -> SpawnedDaemon {
+        let socket = self.prepared.layout().daemon_socket();
+        let runtime_root = self
+            .platform
+            .directories()
+            .roots()
+            .expect("the macOS platform resolved its roots")
+            .runtime()
+            .to_path_buf();
+        SpawnedDaemon::start_with_catalog(
+            Path::new(STACKLYD),
+            &self.data_root,
+            &socket,
+            &runtime_root,
+            SpawnCatalog::Unset,
+            |daemon| {
+                let stderr = daemon.stderr();
+                common::logged(&stderr, "registry_state") && common::handshakes(daemon.socket())
+            },
+        )
+        .expect("stacklyd starts")
+    }
+
+    /// A typed client of the binary daemon, once its start slot ended.
+    pub async fn binary_api(&self, daemon: &SpawnedDaemon) -> Api {
+        let (client, _) = common::client(daemon.socket()).await;
+        let api = Api::new(client, self.runtime_id);
+        // The socket answers a handshake while the supervisor still
+        // reconciles, and the instance methods say `daemon.starting` until
+        // it is done.
+        let deadline = tokio::time::Instant::now() + PATIENCE;
+        loop {
+            match api
+                .client
+                .call(Call::InstanceList(Default::default()))
+                .await
+            {
+                Ok(_) => break,
+                Err(error) if error.code() == "daemon.starting" => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "the daemon stayed in starting"
+                    );
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                Err(error) => panic!("instance.list: {error:?}"),
+            }
+        }
+        api
     }
 
     /// Runs `query` through the runtime's own `clickhouse client` on the

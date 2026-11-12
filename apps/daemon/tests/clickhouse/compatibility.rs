@@ -165,6 +165,7 @@ async fn start_healthy(api: &Api, id: Uuid) -> InstanceSummary {
     .await
 }
 
+// covers: AC-16 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_compatibility() {

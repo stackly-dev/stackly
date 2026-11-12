@@ -30,7 +30,7 @@ const KEEPER_PATHS: [&str; 4] = [
 ];
 
 /// The SHA-256 of `text` as 64 lowercase hex characters.
-fn sha256_hex(text: &str) -> String {
+pub fn sha256_hex(text: &str) -> String {
     Sha256::digest(text.as_bytes())
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -38,7 +38,7 @@ fn sha256_hex(text: &str) -> String {
 }
 
 /// Every file under `folder` whose bytes hold `needle`.
-fn files_holding(folder: &Path, needle: &[u8]) -> Vec<PathBuf> {
+pub fn files_holding(folder: &Path, needle: &[u8]) -> Vec<PathBuf> {
     entries_under(folder)
         .into_iter()
         .map(|relative| folder.join(relative))
@@ -50,6 +50,7 @@ fn files_holding(folder: &Path, needle: &[u8]) -> Vec<PathBuf> {
         .collect()
 }
 
+// covers: AC-4 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_only_listens_on_its_two_registry_ports() {
@@ -165,6 +166,7 @@ async fn clickhouse_only_listens_on_its_two_registry_ports() {
     ));
 }
 
+// covers: AC-6 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_default_user_needs_the_keychain_password() {
@@ -242,6 +244,7 @@ async fn clickhouse_default_user_needs_the_keychain_password() {
     );
 }
 
+// covers: AC-6 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_managed_users_can_do_nothing_else() {
@@ -317,4 +320,142 @@ async fn clickhouse_managed_users_can_do_nothing_else() {
 
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with("both managed users were refused everything but their one job");
+}
+
+/// The four `SYSTEM STOP` commands that ClickHouse runs for any user when
+/// no table is named: with no table the user may touch, they stop nothing.
+const STOP_COMMANDS: [&str; 4] = [
+    "SYSTEM STOP MERGES",
+    "SYSTEM STOP MOVES",
+    "SYSTEM STOP TTL MERGES",
+    "SYSTEM STOP FETCHES",
+];
+
+/// The active parts of `default.parts`, as the `default` user sees them.
+fn active_parts(site: &Site, native: u16, password: &str) -> String {
+    site.sql_ok(
+        native,
+        "default",
+        Some(password),
+        "SELECT count() FROM system.parts WHERE database = 'default' AND table = 'parts' AND active",
+    )
+}
+
+/// Inserts one part per row into `default.parts`, then merges with
+/// `OPTIMIZE TABLE ... FINAL` as `default`, and returns the active parts.
+fn insert_and_optimize(site: &Site, native: u16, password: &str, rows: &[u64]) -> String {
+    for row in rows {
+        site.exec(
+            native,
+            "default",
+            Some(password),
+            &format!("INSERT INTO default.parts VALUES ({row})"),
+        );
+    }
+    site.exec(
+        native,
+        "default",
+        Some(password),
+        "OPTIMIZE TABLE default.parts FINAL",
+    );
+    active_parts(site, native, password)
+}
+
+// covers: AC-6 (spec 0043)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
+async fn the_managed_users_stop_commands_without_a_table_leave_merges_running() {
+    let ev = evidence!(
+        covers = ["REQ-037"],
+        kind = Kind::Native,
+        expected = "SYSTEM STOP MERGES, STOP MOVES, STOP TTL MERGES, and STOP FETCHES with no table name exit 0 for stackly_readiness and stackly_reload but stop nothing: OPTIMIZE TABLE default.parts FINAL as default still merges the parts to one, while the same commands naming default.parts are refused for both users, and the default user's own SYSTEM STOP MERGES default.parts does keep the parts apart",
+    );
+    let Some(site) = Site::open(&ev) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let made = create_instance(&site, &api, "merges", json!({})).await;
+    let running = api.start_ready(made.id).await;
+    let http = port_of(&running, "http");
+    let native = port_of(&running, "native");
+    let password = made.password.as_str();
+    site.subject(&ev, &site.version(http, password));
+    site.exec(
+        native,
+        "default",
+        Some(password),
+        "CREATE TABLE default.parts (id UInt64) ENGINE = MergeTree ORDER BY id",
+    );
+
+    // The control: a stop that does apply keeps the parts apart, so the
+    // part count below would see a stop that took effect.
+    site.exec(
+        native,
+        "default",
+        Some(password),
+        "SYSTEM STOP MERGES default.parts",
+    );
+    for row in [1, 2, 3] {
+        site.exec(
+            native,
+            "default",
+            Some(password),
+            &format!("INSERT INTO default.parts VALUES ({row})"),
+        );
+    }
+    // With merges stopped, OPTIMIZE may end with ABORTED; only the parts
+    // count matters here.
+    let _ = site.sql(
+        native,
+        "default",
+        Some(password),
+        "OPTIMIZE TABLE default.parts FINAL",
+    );
+    assert_eq!(
+        active_parts(&site, native, password),
+        "3",
+        "merges stay stopped for default.parts"
+    );
+    site.exec(
+        native,
+        "default",
+        Some(password),
+        "SYSTEM START MERGES default.parts",
+    );
+    assert_eq!(insert_and_optimize(&site, native, password, &[]), "1");
+
+    let mut refusals = Vec::new();
+    for user in [READINESS_USER, RELOAD_USER] {
+        for command in STOP_COMMANDS {
+            let done = site.sql(native, user, None, command);
+            assert!(
+                done.ok(),
+                "`{command}` with no table as {user} exits 0: {done:?}"
+            );
+            let named = format!("{command} default.parts");
+            let refused = site.sql(native, user, None, &named);
+            assert!(!refused.ok(), "{user} ran `{named}`: {refused:?}");
+            refusals.push(refused.code);
+        }
+        let merged = insert_and_optimize(&site, native, password, &[10, 11, 12]);
+        assert_eq!(
+            merged, "1",
+            "the stop commands of {user} with no table stopped nothing"
+        );
+    }
+    assert_eq!(
+        site.sql_ok(
+            native,
+            "default",
+            Some(password),
+            "SELECT count() FROM default.parts"
+        ),
+        "9"
+    );
+
+    stop_and_shutdown(&api, daemon, made.id).await;
+    ev.pass_with(&format!(
+        "the four SYSTEM STOP commands without a table exited 0 for both managed users and OPTIMIZE FINAL still merged to one part; the named forms exited {refusals:?}"
+    ));
 }
