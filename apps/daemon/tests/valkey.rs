@@ -12,6 +12,8 @@ mod auth;
 mod common;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
+#[path = "valkey/doctor.rs"]
+mod doctor;
 #[path = "valkey/format.rs"]
 mod format;
 #[path = "valkey/harness.rs"]
