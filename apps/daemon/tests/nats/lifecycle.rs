@@ -21,6 +21,7 @@ use crate::support::LogRecorder;
 /// How long the test watches the spool after the instance is ready.
 const QUIET: Duration = Duration::from_secs(60);
 
+// covers: AC-4, AC-5, AC-9 (spec 0039)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
 async fn nats_lifecycle_in_process() {

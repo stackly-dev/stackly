@@ -249,3 +249,144 @@ async fn nats_auth_in_process() {
         after - before
     ));
 }
+
+/// The JetStream API subjects a connection without credentials aims a reply
+/// at, so the server would write its answer there if both users shared an
+/// account (spec 0039, fact 12): a subject an application stream captures,
+/// and the APIs that create, purge, or delete a stream or a message.
+const INJECTED_REPLIES: [&str; 5] = [
+    "orders.evil",
+    "$JS.API.STREAM.CREATE.EVIL",
+    "$JS.API.STREAM.PURGE.ORDERS",
+    "$JS.API.STREAM.DELETE.ORDERS",
+    "$JS.API.STREAM.MSG.DELETE.ORDERS",
+];
+
+/// What a connection without credentials may not subscribe to.
+const REFUSED_SUBSCRIPTIONS: [&str; 5] = ["orders.>", "$JS.API.>", "_INBOX.>", "$SYS.>", ">"];
+
+/// What a connection without credentials may not publish to.
+const REFUSED_PUBLISHES: [&str; 8] = [
+    "orders.two",
+    "$JS.API.STREAM.INFO.ORDERS",
+    "$JS.API.STREAM.MSG.GET.ORDERS",
+    "$JS.API.STREAM.NAMES",
+    "$JS.API.STREAM.PURGE.ORDERS",
+    "$JS.API.STREAM.DELETE.ORDERS",
+    "$SYS.REQ.SERVER.PING",
+    "_INBOX.stackly.x",
+];
+
+// covers: AC-3, AC-4 (spec 0039)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
+async fn a_connection_without_credentials_never_reads_or_changes_the_app_account() {
+    let ev = evidence!(
+        covers = ["REQ-036"],
+        kind = Kind::Native,
+        expected = "on a ready NATS 2.15.1 instance of revision 1.1.0 with JetStream, a connection without credentials that aims $JS.API.INFO replies at orders.evil and at the stream create, purge, delete, and message delete APIs leaves ORDERS with its one message and the stackly user with the one stream ORDERS; it is refused with Permissions Violation for every application, JetStream stream, system, and wide inbox subject; its _INBOX.stackly.> subscription never receives what the stackly user publishes there; and an empty password, a password for stackly-readiness, and an unknown user are refused with Authorization Violation",
+    );
+    let Some(site) = Site::open(&ev, Serve::InProcess) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let id = create_instance(&site, &api, "inject", json!({})).await;
+    let running = api.start_ready(id).await;
+    let client = loopback(port_of(&running, "client"));
+    let version = varz(port_of(&running, "monitoring"))["version"]
+        .as_str()
+        .expect("/varz reports the version")
+        .to_owned();
+    site.subject(&ev, &version);
+    let mut app = Nats::signed_in(client, Some((USER, PASSWORD_A))).await;
+    app.stream_create("ORDERS", "orders.>", "file")
+        .await
+        .expect("the stackly user creates a stream");
+    app.publish("orders.one", b"first")
+        .await
+        .expect("the stackly user publishes");
+    let mut anonymous = Nats::signed_in(client, None).await;
+
+    // replies aimed at the application account
+    for reply in INJECTED_REPLIES {
+        anonymous
+            .publish_with_reply("$JS.API.INFO", Some(reply), b"")
+            .await
+            .unwrap_or_else(|error| panic!("$JS.API.INFO with reply {reply}: {error}"));
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        app.stream_messages("ORDERS").await,
+        1,
+        "ORDERS kept its one message"
+    );
+    assert_eq!(app.stream_get("ORDERS", 1).await, b"first");
+    let names = app
+        .api("$JS.API.STREAM.NAMES", &json!({}))
+        .await
+        .expect("the stackly user lists its streams");
+    assert_eq!(names["streams"], json!(["ORDERS"]), "{names}");
+
+    // subjects out of reach
+    for subject in REFUSED_SUBSCRIPTIONS {
+        assert_permission_violation(
+            anonymous.subscribe(subject).await.map(|_| ()),
+            &format!("a subscribe to {subject}"),
+        );
+    }
+    for subject in REFUSED_PUBLISHES {
+        assert_permission_violation(
+            anonymous
+                .publish_with_reply(subject, Some("_INBOX.stackly.r"), b"")
+                .await,
+            &format!("a publish to {subject}"),
+        );
+    }
+
+    // the inbox space of the readiness user is its own
+    let inbox = anonymous
+        .subscribe("_INBOX.stackly.>")
+        .await
+        .expect("the readiness user subscribes to its inbox space");
+    app.publish_with_reply("_INBOX.stackly.leak", None, b"app-only")
+        .await
+        .expect("the stackly user publishes to any subject");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    // The daemon's probe also asks `$JS.API.INFO` from `_INBOX.stackly.*` of
+    // the readiness account, so its replies may arrive here (a residual the
+    // spec states); nothing the stackly user sent may.
+    let leaked: Vec<_> = anonymous
+        .deliveries(inbox)
+        .await
+        .into_iter()
+        .filter(|message| {
+            message.subject == "_INBOX.stackly.leak" || message.payload == b"app-only"
+        })
+        .collect();
+    assert!(leaked.is_empty(), "the readiness user received {leaked:?}");
+
+    // credentials that are not the instance password
+    for (user, password) in [
+        (USER, ""),
+        ("stackly-readiness", "any-password"),
+        ("root", PASSWORD_A),
+    ] {
+        let (_, refused) = Nats::connect(client, Some((user, password))).await;
+        assert!(
+            refused.starts_with("-ERR 'Authorization Violation'"),
+            "{user} with {} characters: {refused}",
+            password.len()
+        );
+    }
+
+    drop((app, anonymous));
+    stop_instance(&api, id).await;
+    daemon.shutdown().await;
+    ev.pass_with(&format!(
+        "NATS {version}: {} injected replies left ORDERS at 1 message, {} subscribes and {} publishes refused, no delivery across accounts, 3 foreign credentials refused",
+        INJECTED_REPLIES.len(),
+        REFUSED_SUBSCRIPTIONS.len(),
+        REFUSED_PUBLISHES.len()
+    ));
+}

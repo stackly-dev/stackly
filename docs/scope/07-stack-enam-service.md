@@ -12,15 +12,15 @@ Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring d
 
 **Trace:** REQ-036, AC-010, AC-036, AC-077 (sebagian), PRD bagian 22.2
 
-**Pointer:** spec [0039](../specs/0039-provider-nats-jetstream/index.md)
+**Pointer:** spec [0039](../specs/0039-provider-nats-jetstream/index.md) · code in `providers/nats/`, `apps/daemon/tests/nats/`, `crates/core/src/provider/template.rs`
 
 - [x] Design it (spec): `/architect provider NATS & JetStream`
-- [ ] Build it: `/develop provider NATS & JetStream`
-  - [ ] Paket `1.1.0` dan escaper, di fixture: escaper `natsConf` (`"` dan `\` di escape, `$` literal) di `crates/core/src/provider/template.rs`, lalu paket `providers/nats` revision `1.1.0` (password client lewat secret `clientPassword`, akun `APP` dan `STACKLY_READINESS` dengan `no_auth_user`, `nats.conf` sensitif di `secrets/`, batas MiB dan KiB, `tests/scenarios.yaml`, README), golden, fixture form dan catalog, revision catalog, entri corpus `compat/nats/1.1.0/`, dan test Swift yang mengikuti fixture (spec 0039 AC-1, AC-2 bagian fixture, AC-9 schema, AC-10 file skenario, AC-11 fixture dan Swift, AC-12 catalog dan corpus; build step 1 sampai 3; step 1 boleh masuk `main` sendiri; step 3 after step 2, boleh sesi Swift terpisah; `crates/core/tests/provider_packages.rs` dipakai bersama fitur 41 milestone 1)
-  - [ ] NATS 2.15.1 asli lewat daemon: harness dan client uji NATS di `apps/daemon/tests/nats/`, `nats_auth_in_process` (auth, batas izin tanpa credential, percobaan suntik balasan, kebocoran password, readiness tanpa bacaan secret), check baru `client_auth`, `isolation`, `persistence`, dan `monitoring_conflict` di `nats_compatibility`, konformitas dua skenario, dan `nats_journey` CLI (spec 0039 AC-2 bagian native, AC-3 sampai AC-11; build step 4 sampai 7; after milestone 1; needs artefak `nats-2.15.1-macos-aarch64` di cache xtask, selain itu `BLOCKED`)
-  - [ ] Evidence, catalog, dan ukuran RISK-07: run native dari `HEAD` bersih, `cargo xtask runtime compat-record`, satu commit evidence dengan `versions.json`, ledger catalog, dan golden status dukungan, lalu catatan RISK-07 dan langkah manual di `verify.md` (spec 0039 AC-12, AC-13, AC-14, AC-11 bagian GUI; build step 8 dan 9; after milestone 2; step 2 sampai 8 masuk `main` bersama dalam satu giliran catalog, karena paket `1.1.0` tanpa evidence menurunkan status NATS ke `experimental`; run launchd AC-13 dan pemeriksaan GUI AC-11 adalah langkah manual)
-- [ ] Verify it: `/check verify provider NATS & JetStream`
-- [ ] Test it: `/test provider NATS & JetStream`
+- [x] Build it: `/develop provider NATS & JetStream`
+  - [x] Paket `1.1.0` dan escaper, di fixture: escaper `natsConf` (`"` dan `\` di escape, `$` literal) di `crates/core/src/provider/template.rs`, lalu paket `providers/nats` revision `1.1.0` (password client lewat secret `clientPassword`, akun `APP` dan `STACKLY_READINESS` dengan `no_auth_user`, `nats.conf` sensitif di `secrets/`, batas MiB dan KiB, `tests/scenarios.yaml`, README), golden, fixture form dan catalog, revision catalog, entri corpus `compat/nats/1.1.0/`, dan test Swift yang mengikuti fixture (spec 0039 AC-1, AC-2 bagian fixture, AC-9 schema, AC-10 file skenario, AC-11 fixture dan Swift, AC-12 catalog dan corpus; build step 1 sampai 3; step 1 boleh masuk `main` sendiri; step 3 after step 2, boleh sesi Swift terpisah; `crates/core/tests/provider_packages.rs` dipakai bersama fitur 41 milestone 1)
+  - [x] NATS 2.15.1 asli lewat daemon: harness dan client uji NATS di `apps/daemon/tests/nats/`, `nats_auth_in_process` (auth, batas izin tanpa credential, percobaan suntik balasan, kebocoran password, readiness tanpa bacaan secret), check baru `client_auth`, `isolation`, `persistence`, dan `monitoring_conflict` di `nats_compatibility`, konformitas dua skenario, dan `nats_journey` CLI (spec 0039 AC-2 bagian native, AC-3 sampai AC-11; build step 4 sampai 7; after milestone 1; needs artefak `nats-2.15.1-macos-aarch64` di cache xtask, selain itu `BLOCKED`)
+  - [x] Evidence, catalog, dan ukuran RISK-07: run native dari `HEAD` bersih, `cargo xtask runtime compat-record`, satu commit evidence dengan `versions.json`, ledger catalog, dan golden status dukungan, lalu catatan RISK-07 dan langkah manual di `verify.md` (spec 0039 AC-12, AC-13, AC-14, AC-11 bagian GUI; build step 8 dan 9; after milestone 2; step 2 sampai 8 masuk `main` bersama dalam satu giliran catalog, karena paket `1.1.0` tanpa evidence menurunkan status NATS ke `experimental`; run launchd AC-13 dan pemeriksaan GUI AC-11 adalah langkah manual)
+- [x] Verify it: `/check verify provider NATS & JetStream`
+- [x] Test it: `/test provider NATS & JetStream`
 
 ### 40. Provider Valkey · in-progress
 
@@ -30,12 +30,12 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
 
 **Trace:** REQ-038, AC-038, AC-077 (sebagian), PRD bagian 22.4
 
-**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md)
+**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md) · code in `providers/valkey/`, `apps/daemon/tests/valkey/`, `crates/core/src/provider/template.rs`, `crates/core/src/provider/plan.rs`
 
 - [x] Design it (spec): `/architect provider Valkey`
 - [ ] Build it: `/develop provider Valkey`
-  - [ ] Perubahan core dan paket, dibuktikan di fixture: format `valkeyConf`, filter template `sha256Hex` (dibangun fitur 40, dipakai fitur 43), paket `providers/valkey` dengan golden, fixture form, dan seed fuzz, lalu spike dari paket (hapus recipe `Valkey` dan `// provisional: F40`) (spec 0040 AC-1, AC-2 tanpa round trip, AC-3, AC-7 bagian teks, AC-12 bagian plan, AC-16 bagian spike, AC-18 bagian loader; build step 1 sampai 4; needs fase 06, sudah done; step 1 dan 2 menyentuh `template.rs` dan `plan.rs` bersama fitur 42 dan 43, satu sesi pada satu waktu; fitur 43 needs step 2)
-  - [ ] Valkey 9.1.2 asli lewat daemon: harness dan test native auth, readiness jujur (`LOADING`), parameter milik Stackly, stop, tool dari runtime, lifecycle dan adopsi, durability tiga mode (stop normal dan crash), mode yang tidak bisa diganti, test install dari cache, remedy, connection, dan Open In (spec 0040 AC-2 round trip, AC-4 sampai AC-13, AC-16 bagian version check, AC-18; build step 5 sampai 7; after milestone 1; needs artefak `valkey-9.1.2-r2-macos-aarch64` di cache xtask, selain itu `BLOCKED`; step 7 menyentuh `native_runtime_install.rs` bersama fitur 42 dan 43)
+  - [x] Perubahan core dan paket, dibuktikan di fixture: format `valkeyConf`, filter template `sha256Hex` (dibangun fitur 40, dipakai fitur 43), paket `providers/valkey` dengan golden, fixture form, dan seed fuzz, lalu spike dari paket (hapus recipe `Valkey` dan `// provisional: F40`) (spec 0040 AC-1, AC-2 tanpa round trip, AC-3, AC-7 bagian teks, AC-12 bagian plan, AC-16 bagian spike, AC-18 bagian loader; build step 1 sampai 4; needs fase 06, sudah done; step 1 dan 2 menyentuh `template.rs` dan `plan.rs` bersama fitur 42 dan 43, satu sesi pada satu waktu; fitur 43 needs step 2)
+  - [x] Valkey 9.1.2 asli lewat daemon: harness dan test native auth, readiness jujur (`LOADING`), parameter milik Stackly, stop, tool dari runtime, lifecycle dan adopsi, durability tiga mode (stop normal dan crash), mode yang tidak bisa diganti, test install dari cache, remedy, connection, dan Open In (spec 0040 AC-2 round trip, AC-4 sampai AC-13, AC-16 bagian version check, AC-18; build step 5 sampai 7; after milestone 1; needs artefak `valkey-9.1.2-r2-macos-aarch64` di cache xtask, selain itu `BLOCKED`; step 7 menyentuh `native_runtime_install.rs` bersama fitur 42 dan 43)
   - [ ] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
   - [ ] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
 - [ ] Verify it: `/check verify provider Valkey`
@@ -88,7 +88,7 @@ Binary native yang dipilih, path storage, temp, log, user files, dan config per 
 
 **Trace:** REQ-037, AC-037, AC-074, PRD bagian 22.3
 
-**Pointer:** spec [0043](../specs/0043-provider-clickhouse/index.md)
+**Pointer:** spec [0043](../specs/0043-provider-clickhouse/index.md) · code in `providers/clickhouse/`, `apps/daemon/tests/clickhouse/`, `crates/core/src/provider/template.rs`
 
 - [x] Design it (spec): `/architect provider ClickHouse`
 - [ ] Build it: `/develop provider ClickHouse`

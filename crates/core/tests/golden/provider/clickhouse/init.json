@@ -1,0 +1,15 @@
+{
+  "steps": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a"
+      ]
+    }
+  ],
+  "deadline": "120s",
+  "cleanup": []
+}

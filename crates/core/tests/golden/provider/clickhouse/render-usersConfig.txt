@@ -1,0 +1,60 @@
+<!-- Managed by Stackly. Rendered again from the Keychain on every start and reload. -->
+<clickhouse>
+    <profiles>
+        <default/>
+        <stackly_readiness>
+            <readonly>1</readonly>
+            <max_execution_time>2</max_execution_time>
+            <max_memory_usage>16777216</max_memory_usage>
+            <max_threads>1</max_threads>
+        </stackly_readiness>
+        <stackly_reload>
+            <max_execution_time>10</max_execution_time>
+            <max_memory_usage>16777216</max_memory_usage>
+            <max_threads>1</max_threads>
+        </stackly_reload>
+    </profiles>
+    <quotas>
+        <default/>
+    </quotas>
+    <users>
+        <default>
+            <password_sha256_hex>3630dab2a0be428af1f29c46d13965e18b1f140f1151c83bd67eec4a2fcf6274</password_sha256_hex>
+            <networks>
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+            <show_named_collections>1</show_named_collections>
+            <show_named_collections_secrets>1</show_named_collections_secrets>
+        </default>
+        <stackly_readiness>
+            <password></password>
+            <networks>
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+            <profile>stackly_readiness</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SELECT ON system.one</query>
+            </grants>
+        </stackly_readiness>
+        <stackly_reload>
+            <password></password>
+            <networks>
+                <ip>127.0.0.1</ip>
+                <ip>::1</ip>
+            </networks>
+            <profile>stackly_reload</profile>
+            <quota>default</quota>
+            <grants>
+                <query>GRANT SYSTEM RELOAD CONFIG ON *.*</query>
+                <query>GRANT SYSTEM RELOAD USERS ON *.*</query>
+            </grants>
+        </stackly_reload>
+    </users>
+</clickhouse>

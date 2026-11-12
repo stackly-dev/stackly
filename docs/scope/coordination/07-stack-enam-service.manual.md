@@ -38,4 +38,4 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 2. Form dan Configuration (AC-7). Form create Valkey: teks `Persistence` tampil di bawah kontrolnya. Buat instance `volatile`: halaman Configuration menampilkan field itu terkunci dengan nilai `volatile` dan file `persistence-volatile.conf`.
 3. TablePlus (AC-18). Prasyarat: TablePlus terpasang, instance Valkey `ready`. `Open in TablePlus`: koneksi Redis terbuka ke port instance, password dari clipboard diterima. Kalau TablePlus menolak URL tanpa password, entri `tableplus` dihapus lewat revision paket baru.
 4. Terminal (AC-18). `Open valkey-cli in Terminal`, tempel password: prompt `valkey-cli` terbuka.
-5. Fuzz (AC-2, AC-3). `cargo xtask fuzz run provider_template --time 600` sesudah langkah 1 dan 2: tanpa crash.
+5. Fuzz (AC-2, AC-3): sudah dijalankan checker `chk-f40-m1` pada 2026-11-12 (`Done 90583 runs in 601 second(s)`, tanpa crash); tidak perlu diulang.

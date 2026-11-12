@@ -99,6 +99,14 @@ pub const MYSQL_9_7: Line = Line {
     version: "9.7.2",
 };
 
+/// ClickHouse 26.8.
+pub const CLICKHOUSE: Line = Line {
+    software: "clickhouse",
+    artifact: "clickhouse-26.8.30.8-macos-aarch64",
+    selector: "26.8",
+    version: "26.8.30.8",
+};
+
 /// Valkey 9.1.
 pub const VALKEY: Line = Line {
     software: "valkey",

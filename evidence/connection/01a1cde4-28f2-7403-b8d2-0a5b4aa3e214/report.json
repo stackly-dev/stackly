@@ -1,0 +1,232 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
+    "sourceDirty": false,
+    "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "nats",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads",
+      "1",
+      "a_connection_without_credentials",
+      "compatibility::nats_compatibility"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T03:54:04.402816Z",
+  "finishedAt": "2026-11-12T03:55:25.948372Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 2,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 2,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 2
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cde4-9a1c-76a5-a084-edecad612862",
+      "covers": [
+        "REQ-036"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "nats",
+        "name": "auth::a_connection_without_credentials_never_reads_or_changes_the_app_account",
+        "file": "apps/daemon/tests/nats/auth.rs",
+        "line": 284
+      },
+      "status": "PASS",
+      "expected": "on a ready NATS 2.15.1 instance of revision 1.1.0 with JetStream, a connection without credentials that aims $JS.API.INFO replies at orders.evil and at the stream create, purge, delete, and message delete APIs leaves ORDERS with its one message and the stackly user with the one stream ORDERS; it is refused with Permissions Violation for every application, JetStream stream, system, and wide inbox subject; its _INBOX.stackly.> subscription never receives what the stackly user publishes there; and an empty password, a password for stackly-readiness, and an unknown user are refused with Authorization Violation",
+      "actual": "NATS 2.15.1: 5 injected replies left ORDERS at 1 message, 5 subscribes and 8 publishes refused, no delivery across accounts, 3 foreign credentials refused",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T03:54:33.372754Z",
+      "finishedAt": "2026-11-12T03:54:36.581576Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
+        "sourceDirty": false,
+        "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "nats",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1",
+          "a_connection_without_credentials",
+          "compatibility::nats_compatibility"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cde4-a6b5-775e-bafa-7eb478eee1f3",
+      "covers": [
+        "BR-025",
+        "REQ-029",
+        "REQ-036",
+        "AC-029",
+        "REQ-012",
+        "REQ-013",
+        "AC-036",
+        "AC-077",
+        "AC-010"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "nats",
+        "name": "compatibility::nats_compatibility",
+        "file": "apps/daemon/tests/nats/compatibility.rs",
+        "line": 426
+      },
+      "status": "PASS",
+      "expected": "behind the stacklyd binary with the default probe interval, a NATS 2.15.1 instance is created and ready through nats-readiness, a SIGSTOP turns readiness to not_ready with reason timeout while the port still accepts and the process stays running, SIGCONT makes it ready again, foreign servers give identity_mismatch, jetstream_disabled, jetstream_unexpected, and auth_required while matching ones succeed, an instance with JetStream off is ready without a jetstream folder, a SIGKILL of the daemon leaves the server running and the next daemon adopts the same process holding instance.lock, the stackly user signs in with its password while a wrong password and a connection without credentials are refused, two instances with a file stream ORDERS each keep only their own 3 and 5 messages, server name, store, password, and two loopback listeners across a restart, a file stream keeps its 10 messages across a restart while a memory stream is gone and the file stream is still there after SIGKILL, a held fixed monitoring port fails the start at endpoints with supervisor.endpoint_in_use and a suggestedPort while the instance stays stopped and the outside listener keeps working, the instance is ready on the suggested port, and a stop leaves no process",
+      "actual": "NATS 2.15.1: ready through nats-readiness, not_ready with reason timeout under SIGSTOP and ready again after SIGCONT, foreign servers refused, adopted after SIGKILL, client password enforced, two instances isolated across a restart, file stream kept and memory stream gone after a restart, file stream F held 10 of 10 messages after SIGKILL of nats-server, monitoring port conflict refused at endpoints and ready on the suggested port, and stopped with no process left",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T03:54:36.597478Z",
+      "finishedAt": "2026-11-12T03:55:25.934414Z",
+      "evidencePath": "artifacts/01a1cde4-a6b5-775e-bafa-7eb478eee1f3/",
+      "context": {
+        "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
+        "sourceDirty": false,
+        "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "nats",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1",
+          "a_connection_without_credentials",
+          "compatibility::nats_compatibility"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

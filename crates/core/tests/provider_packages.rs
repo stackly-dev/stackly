@@ -1,7 +1,7 @@
 //! The provider engine on real packages: `providers/fake`,
 //! `providers/example`, `providers/nats`, `providers/traefik`,
-//! `providers/postgresql`, `providers/mysql`, `providers/valkey`, and the
-//! `fake-command` fixture are
+//! `providers/postgresql`, `providers/mysql`, `providers/valkey`,
+//! `providers/clickhouse`, and the `fake-command` fixture are
 //! copied into a `TestRoot`, read through the `Filesystem` port of
 //! `FakePlatform`, validated, and planned against the fixed golden context
 //! of spec 0009 ("Context golden").
@@ -16,10 +16,11 @@ use std::path::{Path, PathBuf};
 use stackly_core::provider::{
     ApplyClass, Command, EnvValue, InitStep, MarkerRead, NameCheck, OpenWithKind, PackageFiles,
     PlanContext, PlanError, PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject,
-    ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage,
-    check_package, read_package, render_remedy, scenarios::Expect,
+    ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext, Scenarios, Segment, SettingsIssueKind,
+    Stdin, ValidatedPackage, check_package, read_package, render_remedy, scenarios::Expect,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
+use stackly_core::supervisor::{HANDOVER_PROVEN, is_handover_proven};
 use stackly_domain::{
     Capability, ExactVersion, FailureCode, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
@@ -62,6 +63,10 @@ fn mysql_dir() -> PathBuf {
 
 fn valkey_dir() -> PathBuf {
     repo_root().join("providers/valkey")
+}
+
+fn clickhouse_dir() -> PathBuf {
+    repo_root().join("providers/clickhouse")
 }
 
 fn traefik_dir() -> PathBuf {
@@ -828,7 +833,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the postgresql, mysql, nats, fake, traefik, and valkey packages validate with their connection block (sentinel render included)",
+        expected = "the postgresql, mysql, nats, fake, traefik, valkey, and clickhouse packages validate with their connection block (sentinel render included)",
     );
     let entries = |dir: &Path| -> Vec<(String, String)> {
         validated(dir)
@@ -865,9 +870,14 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
         entries(&valkey_dir()),
         [pair("uri", "Connection URL"), pair("valkey", "Valkey URL")]
     );
+    assert_eq!(
+        entries(&clickhouse_dir()),
+        [pair("http", "HTTP URL"), pair("native", "Native TCP")]
+    );
     ev.pass();
 }
 
+// covers: AC-1 (spec 0039)
 #[test]
 fn the_nats_package_reads_without_writes_and_validates() {
     let ev = evidence!(
@@ -901,6 +911,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
     ev.pass();
 }
 
+// covers: AC-1, AC-4, AC-9 (spec 0039)
 #[test]
 fn nats_plans_match_the_golden_files() {
     let package = validated(&nats_dir());
@@ -922,6 +933,7 @@ fn nats_plans_match_the_golden_files() {
     }
 }
 
+// covers: AC-1, AC-3 (spec 0039)
 #[test]
 fn nats_without_jetstream_renders_no_jetstream_block_and_denies_the_readiness_user() {
     let package = validated(&nats_dir());
@@ -952,6 +964,7 @@ fn nats_without_jetstream_renders_no_jetstream_block_and_denies_the_readiness_us
     assert_golden("nats", &format!("render-{config}-no-jetstream.txt"), &text);
 }
 
+// covers: AC-1, AC-4 (spec 0039)
 #[test]
 fn the_nats_run_plan_writes_nats_conf_to_the_secrets_folder_and_holds_no_secret_value() {
     let package = validated(&nats_dir());
@@ -991,6 +1004,7 @@ fn reload_of_nats_is_unsupported() {
     );
 }
 
+// covers: AC-2 (spec 0039)
 #[test]
 fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     let package = validated(&nats_dir());
@@ -1014,6 +1028,7 @@ fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     );
 }
 
+// covers: AC-2 (spec 0039)
 #[test]
 fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value() {
     let package = validated(&nats_dir());
@@ -1032,6 +1047,288 @@ fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value(
     assert!(!err.to_string().contains("o\u{1}q"), "{err}");
 }
 
+/// The settings issues of `document` against the NATS schema, as field path
+/// and kind.
+fn nats_settings_issues(
+    package: &ValidatedPackage,
+    document: serde_json::Value,
+) -> Vec<(String, Option<SettingsIssueKind>)> {
+    match package.settings_schema().validate(&document) {
+        Ok(_) => Vec::new(),
+        Err(err) => err
+            .issues
+            .iter()
+            .map(|issue| (issue.location.to_string(), issue.settings_kind))
+            .collect(),
+    }
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn the_nats_limits_accept_their_bounds_and_refuse_one_past_each_bound() {
+    let package = validated(&nats_dir());
+    let limits = [
+        ("jetstreamMaxMemoryMiB", 1, 1_048_576),
+        ("jetstreamMaxFileMiB", 1, 1_048_576),
+        ("maxPayloadKiB", 1, 65_536),
+    ];
+
+    for (field, minimum, maximum) in limits {
+        for good in [minimum, maximum] {
+            let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, field: good });
+            assert_eq!(
+                nats_settings_issues(&package, document),
+                Vec::new(),
+                "{field} = {good} is in range"
+            );
+        }
+        for bad in [minimum - 1, maximum + 1] {
+            let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, field: bad });
+            let issues = nats_settings_issues(&package, document);
+            assert_eq!(issues.len(), 1, "{field} = {bad}: {issues:?}");
+            assert!(issues[0].0.contains(field), "{field} = {bad}: {issues:?}");
+            assert_eq!(
+                issues[0].1,
+                Some(SettingsIssueKind::OutOfRange),
+                "{field} = {bad}"
+            );
+        }
+    }
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn the_nats_byte_limits_of_revision_1_0_1_are_unknown_settings() {
+    let package = validated(&nats_dir());
+
+    for old in [
+        "jetstreamMaxMemoryBytes",
+        "jetstreamMaxFileBytes",
+        "maxPayloadBytes",
+    ] {
+        let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, old: 1_048_576 });
+        let issues = nats_settings_issues(&package, document);
+        assert_eq!(
+            issues,
+            vec![(old.to_owned(), Some(SettingsIssueKind::Unknown))],
+            "{old}"
+        );
+    }
+}
+
+// covers: AC-3, AC-4 (spec 0039)
+#[test]
+fn the_nats_schema_requires_a_printable_client_password_of_8_to_128_characters() {
+    let package = validated(&nats_dir());
+
+    let missing = nats_settings_issues(&package, serde_json::json!({}));
+    assert!(
+        missing
+            .iter()
+            .any(|(path, _)| path.contains("clientPassword")),
+        "an instance of 1.1.0 always has a password: {missing:?}"
+    );
+    let field = package
+        .settings_schema()
+        .field("clientPassword")
+        .expect("the schema declares clientPassword");
+    assert!(field.is_secret());
+    let rule = SecretFieldRule::from_setting(field).expect("a secret text field has a rule");
+    assert!(rule.printable_only);
+    assert_eq!(rule.min_length, 8);
+    assert_eq!(rule.max_length, Some(128));
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn nats_renders_custom_limits_with_binary_suffixes_glued_to_the_number() {
+    let package = validated(&nats_dir());
+    let context = golden_context(
+        &package,
+        serde_json::json!({
+            "clientPassword": GOLDEN_SECRET_REF,
+            "jetstreamMaxMemoryMiB": 1,
+            "jetstreamMaxFileMiB": 1_048_576,
+            "maxPayloadKiB": 65_536,
+        }),
+    );
+
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds with custom limits");
+
+    let (_, text) = rendered(&package, &run.render)
+        .into_iter()
+        .next()
+        .expect("nats renders nats.conf");
+    for line in [
+        "max_payload: 65536KiB\n",
+        "  max_memory_store: 1MiB\n",
+        "  max_file_store: 1048576MiB\n",
+    ] {
+        assert!(text.contains(line), "{line:?} in {text}");
+    }
+}
+
+// covers: AC-7 (spec 0039)
+#[test]
+fn the_nats_package_says_file_streams_survive_a_restart_and_memory_streams_do_not() {
+    let package = validated(&nats_dir());
+    let schema: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("schemas/settings.schema.json")
+            .expect("the package has a settings schema"),
+    )
+    .expect("the schema is JSON");
+    let readme = fs::read_to_string(nats_dir().join("README.md")).expect("the NATS README reads");
+
+    let description = schema["properties"]["jetstream"]["description"]
+        .as_str()
+        .expect("jetstream has a description");
+    assert!(
+        description.contains("File streams survive a restart, memory streams do not."),
+        "{description}"
+    );
+    assert!(
+        readme.contains(
+            "File streams survive a normal restart of the instance. Memory streams do\nnot"
+        ),
+        "the README states the restart rule"
+    );
+    assert!(
+        readme.contains("power loss"),
+        "the README says the last writes can be lost on a power loss"
+    );
+}
+
+// covers: AC-10 (spec 0039)
+#[test]
+fn the_nats_scenarios_are_default_and_no_jetstream_and_pass_the_schema_without_a_secret() {
+    let package = validated(&nats_dir());
+    let text = fs::read_to_string(nats_dir().join("tests/scenarios.yaml"))
+        .expect("the NATS scenarios file reads");
+
+    let scenarios = Scenarios::parse(&text).unwrap_or_else(|issues| panic!("{issues:#?}"));
+
+    let names: Vec<(&str, &serde_json::Value, Expect)> = scenarios
+        .iter()
+        .map(|scenario| (scenario.name.as_str(), &scenario.settings, scenario.expect))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("default", &serde_json::json!({}), Expect::Ready),
+            (
+                "no-jetstream",
+                &serde_json::json!({ "jetstream": false }),
+                Expect::Ready
+            ),
+        ]
+    );
+    Scenarios::validate(&scenarios, package.settings_schema())
+        .unwrap_or_else(|issues| panic!("{issues:#?}"));
+}
+
+// covers: AC-12 (spec 0039)
+#[test]
+fn the_nats_versions_hold_a_passing_native_record_for_revision_1_1_0_with_its_evidence() {
+    let package = validated(&nats_dir());
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let sha = package.key().manifest_sha256().to_string();
+
+    let records: Vec<&serde_json::Value> = versions["artifacts"]
+        .as_array()
+        .expect("versions.json lists artifacts")
+        .iter()
+        .flat_map(|artifact| artifact["compatibility"].as_array().into_iter().flatten())
+        .filter(|record| {
+            record["scope"] == "provider"
+                && record["providerRevision"]["revision"] == "1.1.0"
+                && record["providerRevision"]["manifestSha256"] == sha.as_str()
+        })
+        .collect();
+
+    assert!(!records.is_empty(), "a provider record of 1.1.0 for {sha}");
+    for record in records {
+        assert_eq!(record["result"], "pass", "{record}");
+        assert_eq!(
+            record["checks"],
+            serde_json::json!([
+                "adoption",
+                "client_auth",
+                "honest_readiness",
+                "identity_check",
+                "init",
+                "isolation",
+                "jetstream_mode",
+                "monitoring_conflict",
+                "persistence",
+                "readiness",
+                "start",
+                "stop"
+            ]),
+            "{record}"
+        );
+        assert_eq!(
+            record["knownLimitations"],
+            serde_json::json!(["power_loss_not_covered"]),
+            "{record}"
+        );
+        let evidence = record["evidence"]
+            .as_str()
+            .expect("the record names its evidence");
+        let mut parts = evidence.split('/');
+        let (Some("compatibility"), Some(run), Some(id), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            panic!("evidence is compatibility/<run>/<record>: {evidence}");
+        };
+        let report_path = repo_root()
+            .join("evidence/compatibility")
+            .join(run)
+            .join("report.json");
+        let report: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&report_path)
+                .unwrap_or_else(|err| panic!("{}: {err}", report_path.display())),
+        )
+        .expect("report.json is JSON");
+        assert_eq!(report["kind"], "native", "{evidence}");
+        let source = report["records"]
+            .as_array()
+            .expect("the report lists records")
+            .iter()
+            .find(|entry| entry["id"] == id)
+            .unwrap_or_else(|| panic!("{evidence}: the report holds the record"));
+        assert_eq!(source["status"], "PASS", "{evidence}");
+        let covers = source["covers"].as_array().expect("the record covers IDs");
+        for id in ["REQ-036", "AC-036", "AC-077", "AC-010"] {
+            assert!(
+                covers.iter().any(|cover| cover == id),
+                "{evidence} covers {id}"
+            );
+        }
+    }
+}
+
+// covers: AC-13 (spec 0039)
+#[test]
+fn the_handover_proof_of_the_nats_line_covers_revision_1_1_0() {
+    let package = validated(&nats_dir());
+
+    assert!(
+        is_handover_proven(HANDOVER_PROVEN, package.key()),
+        "{} keeps its process through a planned daemon restart",
+        package.key()
+    );
+}
+
 /// `context` with every TCP and UDP endpoint stripped of its port, the state
 /// of an `Auto` endpoint at initialize.
 fn without_ports(mut context: PlanContext) -> PlanContext {
@@ -1043,6 +1340,7 @@ fn without_ports(mut context: PlanContext) -> PlanContext {
     context
 }
 
+// covers: AC-1 (spec 0039)
 #[test]
 fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
     let package = validated(&nats_dir());
@@ -1081,6 +1379,7 @@ fn every_package_initializes_with_endpoints_that_have_no_port() {
         ("mysql", mysql_dir(), mysql_settings()),
         ("traefik", traefik_dir(), traefik_settings(1)),
         ("valkey", valkey_dir(), valkey_settings()),
+        ("clickhouse", clickhouse_dir(), clickhouse_settings()),
     ];
     for (name, dir, settings) in packages {
         let package = validated(&dir);
@@ -2373,6 +2672,491 @@ fn valkey_offers_tableplus_and_valkey_cli_in_terminal() {
             ("cli", "valkey-cli", OpenWithKind::Terminal)
         ]
     );
+}
+
+/// ClickHouse settings with only the default user password, as a secret
+/// reference (spec 0043).
+fn clickhouse_settings() -> serde_json::Value {
+    serde_json::json!({ "defaultPassword": GOLDEN_SECRET_REF })
+}
+
+/// The keys `config.xml` never holds (spec 0043, *Key yang dilarang*),
+/// without the second `listen_host`, which is counted on its own.
+const CLICKHOUSE_FORBIDDEN_KEYS: [&str; 15] = [
+    "mysql_port",
+    "postgresql_port",
+    "grpc_port",
+    "interserver_http_port",
+    "interserver_https_port",
+    "https_port",
+    "tcp_port_secure",
+    "tcp_with_proxy_port",
+    "prometheus",
+    "keeper_server",
+    "zookeeper",
+    "remote_servers",
+    "distributed_ddl",
+    "listen_try",
+    "include_from",
+];
+
+/// The rendered text of one config file of the ClickHouse run plan.
+fn clickhouse_render(package: &ValidatedPackage, context: &PlanContext, config: &str) -> String {
+    let run = package
+        .run_plan(context)
+        .expect("the clickhouse run plan builds");
+    rendered(package, &run.render)
+        .into_iter()
+        .find_map(|(name, text)| (name == config).then_some(text))
+        .unwrap_or_else(|| panic!("the run plan renders {config}"))
+}
+
+// covers: AC-3 (spec 0043)
+#[test]
+fn the_clickhouse_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-037"],
+        kind = Kind::Fixture,
+        expected = "providers/clickhouse copied into a test root reads through the Filesystem port without a write and validates as official/clickhouse 1.0.0 with no data marker",
+    );
+    let package = validated(&clickhouse_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/clickhouse");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "clickhouse");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::Reload,
+            Capability::ColdBackup,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    assert_eq!(
+        package.data_marker_path(&golden_context(&package, clickhouse_settings()).paths),
+        None
+    );
+    assert!(package.init_port_issues().is_empty());
+    ev.pass();
+}
+
+// covers: AC-3 (spec 0043)
+#[test]
+fn clickhouse_plans_match_the_golden_files() {
+    let package = validated(&clickhouse_dir());
+    let context = golden_context(&package, clickhouse_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the clickhouse init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the clickhouse run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the clickhouse reload plan builds");
+
+    assert_golden("clickhouse", "init.json", &pretty(&init));
+    assert_golden("clickhouse", "run.json", &pretty(&run));
+    assert_golden("clickhouse", "reload.json", &pretty(&reload));
+    let renders = rendered(&package, &run.render);
+    let names: Vec<&str> = renders.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, ["clientConfig", "serverConfig", "usersConfig"]);
+    for (config, text) in renders {
+        assert_golden("clickhouse", &format!("render-{config}.txt"), &text);
+    }
+}
+
+// covers: AC-3 (spec 0043)
+#[test]
+fn clickhouse_initializes_without_ports_and_renders_its_configs_only_for_the_run() {
+    let package = validated(&clickhouse_dir());
+    let context = golden_context(&package, clickhouse_settings());
+    let portless = without_ports(context.clone());
+
+    let init = package
+        .init_plan(&portless)
+        .expect("the clickhouse init plan builds while the endpoints have no port");
+
+    assert!(
+        matches!(init.steps.as_slice(), [InitStep::EnsureDirectories(_)]),
+        "initialize only creates the folders: {:?}",
+        init.steps
+    );
+    let run = package
+        .run_plan(&context)
+        .expect("the clickhouse run plan builds with ports");
+    let destinations: Vec<PathBuf> = run
+        .render
+        .iter()
+        .filter_map(|step| match step {
+            InitStep::WriteFile(write) => Some(write.path.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        destinations,
+        [
+            context.paths.config.join("client.xml"),
+            context.paths.config.join("config.xml"),
+            context.paths.run.join("secrets/users.xml"),
+        ]
+    );
+    assert!(matches!(
+        package.run_plan(&portless).unwrap_err(),
+        PlanError::EndpointUnresolved { .. }
+    ));
+}
+
+// covers: AC-4 (spec 0043, template part)
+#[test]
+fn clickhouse_config_holds_no_forbidden_key_and_one_listen_host() {
+    let ev = evidence!(
+        covers = ["REQ-037", "AC-037"],
+        kind = Kind::Fixture,
+        expected = "templates/config.xml.tmpl and its golden render hold none of the forbidden listener, cluster, or Keeper keys, one listen_host on 127.0.0.1, the two registry ports, and every path inside the instance",
+    );
+    let package = validated(&clickhouse_dir());
+    let context = golden_context(&package, clickhouse_settings());
+    let template = fs::read_to_string(clickhouse_dir().join("templates/config.xml.tmpl"))
+        .expect("the config template reads");
+    let render = clickhouse_render(&package, &context, "serverConfig");
+
+    for (name, text) in [("template", &template), ("render", &render)] {
+        for key in CLICKHOUSE_FORBIDDEN_KEYS {
+            assert!(!text.contains(&format!("<{key}")), "{name} holds {key}");
+        }
+        assert_eq!(text.matches("<listen_host>").count(), 1, "{name}");
+    }
+    assert!(
+        render.contains("<listen_host>127.0.0.1</listen_host>"),
+        "{render}"
+    );
+    assert!(render.contains("<http_port>14000</http_port>"), "{render}");
+    assert!(render.contains("<tcp_port>14001</tcp_port>"), "{render}");
+    assert!(
+        render.contains(&format!(
+            "<stackly_instance_id>{}</stackly_instance_id>",
+            context.instance_id
+        )),
+        "{render}"
+    );
+    let data = context.paths.data.display().to_string();
+    let temp = context.paths.temp.display().to_string();
+    for line in render.lines() {
+        let Some(start) = line.find(">/") else {
+            continue;
+        };
+        let value = &line[start + 1..];
+        assert!(
+            value.starts_with(&data) || value.starts_with(&temp),
+            "a path outside the instance: {line}"
+        );
+    }
+    ev.pass();
+}
+
+// covers: AC-1 (spec 0043, package part)
+#[test]
+fn an_ampersand_in_the_data_folder_renders_as_an_entity_in_config_xml() {
+    let package = validated(&clickhouse_dir());
+    let context = context_under(
+        Path::new("/Users/o&q<r>\"s'/Library/Application Support/Stackly"),
+        &package,
+        clickhouse_settings(),
+    );
+
+    let render = clickhouse_render(&package, &context, "serverConfig");
+
+    assert!(
+        render.contains(
+            "<path>/Users/o&amp;q&lt;r&gt;&quot;s&apos;/Library/Application Support/Stackly/"
+        ),
+        "{render}"
+    );
+}
+
+// covers: AC-1 (spec 0043, package part)
+#[test]
+fn a_control_character_in_the_data_folder_fails_the_clickhouse_plan_without_the_value() {
+    let package = validated(&clickhouse_dir());
+    let context = context_under(
+        Path::new("/Users/o\u{1b}q/Library/Application Support/Stackly"),
+        &package,
+        clickhouse_settings(),
+    );
+
+    let err = package.run_plan(&context).unwrap_err();
+
+    let PlanError::UnrepresentableValue { field } = &err else {
+        panic!("expected UnrepresentableValue, got {err:?}");
+    };
+    assert!(field.contains("instance."), "{field}");
+    assert!(!err.to_string().contains("o\u{1b}q"), "{err}");
+}
+
+// covers: AC-6 (spec 0043, render part), AC-2 (spec 0043, package part)
+#[test]
+fn clickhouse_users_xml_holds_only_the_hash_of_the_password_in_the_secrets_folder() {
+    use sha2::{Digest, Sha256};
+
+    let ev = evidence!(
+        covers = ["REQ-037"],
+        kind = Kind::Fixture,
+        expected = "users.xml goes to the secrets folder and holds the SHA-256 hex of the default password, never the password, three users on 127.0.0.1 and ::1 only, and the two managed users with their grants and no password",
+    );
+    let package = validated(&clickhouse_dir());
+    let context = golden_context(&package, clickhouse_settings());
+    let run = package
+        .run_plan(&context)
+        .expect("the clickhouse run plan builds");
+    let users = run
+        .render
+        .iter()
+        .find_map(|step| match step {
+            InitStep::WriteFile(write) if write.content.config_file == "usersConfig" => Some(write),
+            _ => None,
+        })
+        .expect("the run plan renders users.xml");
+    assert_eq!(users.path, context.paths.run.join("secrets/users.xml"));
+    let password = "p w\"x&y<z>'";
+    let secrets = ResolvedSecrets::for_tests([(
+        "defaultPassword".parse().expect("valid field name"),
+        SecretValue::new(password.to_owned()).expect("a valid secret value"),
+    )]);
+
+    let text = String::from_utf8(
+        users
+            .content
+            .materialize(&secrets)
+            .expect("users.xml materializes"),
+    )
+    .expect("users.xml is UTF-8");
+
+    let hash: String = Sha256::digest(password.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert!(
+        text.contains(&format!(
+            "<password_sha256_hex>{hash}</password_sha256_hex>"
+        )),
+        "{text}"
+    );
+    assert!(
+        !text.contains(password),
+        "the password itself is never written"
+    );
+    assert!(!text.contains("p w"), "no part of the password is written");
+    assert_eq!(text.matches("<password></password>").count(), 2, "{text}");
+    assert_eq!(
+        text.matches("<networks>\n                <ip>127.0.0.1</ip>\n                <ip>::1</ip>\n            </networks>")
+            .count(),
+        3,
+        "every user is limited to loopback: {text}"
+    );
+    assert!(text.contains("<query>GRANT SELECT ON system.one</query>"));
+    assert!(text.contains("<query>GRANT SYSTEM RELOAD CONFIG ON *.*</query>"));
+    assert!(text.contains("<query>GRANT SYSTEM RELOAD USERS ON *.*</query>"));
+    assert_eq!(text.matches("<query>").count(), 3, "{text}");
+    let debug = format!("{users:?}{}", pretty(&run));
+    assert!(!debug.contains(&hash), "the plan never shows the hash");
+    ev.pass();
+}
+
+// covers: AC-5, AC-7, AC-10 (spec 0043, plan part)
+#[test]
+fn clickhouse_runs_the_server_without_watchdog_and_probes_and_reloads_through_its_client() {
+    let package = validated(&clickhouse_dir());
+    let context = golden_context(&package, clickhouse_settings());
+    let run = package
+        .run_plan(&context)
+        .expect("the clickhouse run plan builds");
+    let reload = package
+        .reload_plan(&context)
+        .expect("the clickhouse reload plan builds");
+
+    assert_eq!(
+        run.spawn.program.relative.to_str().expect("UTF-8 path"),
+        "clickhouse"
+    );
+    assert_eq!(run.spawn.program.runtime_root, context.runtime.root);
+    let users = context.paths.run.join("secrets/users.xml");
+    assert_eq!(
+        run.spawn.args,
+        [
+            "server".to_owned(),
+            format!(
+                "--config-file={}",
+                context.paths.config.join("config.xml").display()
+            ),
+            "--".to_owned(),
+            format!("--user_directories.users_xml.path={}", users.display()),
+        ]
+    );
+    assert_eq!(run.spawn.cwd, context.paths.data);
+    let watchdog = run
+        .spawn
+        .env
+        .iter()
+        .find(|(key, _)| key == "CLICKHOUSE_WATCHDOG_ENABLE")
+        .map(|(_, value)| value);
+    assert_eq!(watchdog, Some(&EnvValue::Text("0".to_owned())));
+
+    let client = |user: &str, query: &str| -> Vec<String> {
+        [
+            "client",
+            "--config-file",
+            &context
+                .paths
+                .config
+                .join("client.xml")
+                .display()
+                .to_string(),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "14001",
+            "--user",
+            user,
+            "--query",
+            query,
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    };
+    let ProbeSpec::Exec(probe) = &run.readiness.probe else {
+        panic!("readiness is an exec probe: {:?}", run.readiness.probe);
+    };
+    assert_eq!(
+        probe.command.args,
+        client(
+            "stackly_readiness",
+            &format!(
+                "SELECT throwIf(getMacro('stackly_instance_id') != '{}')",
+                context.instance_id
+            )
+        )
+    );
+    assert_eq!(probe.command.cwd, context.paths.temp);
+    assert!(matches!(run.health.probe, ProbeSpec::Http { .. }));
+
+    let ReloadAction::Run(command) = &reload.action else {
+        panic!("reload runs a command: {:?}", reload.action);
+    };
+    assert_eq!(
+        command.command.args,
+        client("stackly_reload", "SYSTEM RELOAD CONFIG")
+    );
+    assert_eq!(command.success_exit_codes, [0]);
+    assert!(reload.verify.is_some(), "reload verifies readiness");
+    let rewritten: Vec<&str> = reload
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            InitStep::WriteFile(write) => Some(write.content.config_file.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(rewritten, ["serverConfig", "usersConfig"]);
+}
+
+// covers: AC-13 (spec 0043)
+#[test]
+fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
+    use std::sync::Arc;
+
+    use stackly_core::catalog::{
+        EntryOrigin, Installability, NotInstallableReason, ProviderEntry, TileColor, TileHint,
+        TrustVerdict, provider_installability,
+    };
+    use stackly_domain::{OsVersion, native_support};
+    use stackly_platform::HostFacts;
+
+    let ev = evidence!(
+        covers = ["AC-074"],
+        kind = Kind::Fixture,
+        expected = "the clickhouse manifest and versions.json name only macos-aarch64, and a Windows host with a test catalog holding macos and linux artifacts gets no_build_for_host and no native support",
+    );
+    let repo = validated(&clickhouse_dir());
+    let platforms =
+        fs::read_to_string(clickhouse_dir().join("provider.yaml")).expect("provider.yaml reads");
+    assert!(platforms.contains("  platforms:\n    - { os: macos, arch: aarch64 }\nruntime:"));
+    let versions: serde_json::Value =
+        serde_json::from_slice(repo.files().get("versions.json").expect("versions.json"))
+            .expect("versions.json is JSON");
+    for artifact in versions["artifacts"].as_array().expect("artifacts") {
+        assert_eq!(artifact["os"], "macos");
+    }
+
+    let mut files: BTreeMap<String, Vec<u8>> = repo
+        .files()
+        .iter()
+        .map(|(path, bytes)| (path.to_owned(), bytes.to_vec()))
+        .collect();
+    let manifest = String::from_utf8(files["provider.yaml"].clone()).expect("utf-8");
+    let manifest = manifest.replace(
+        "    - { os: macos, arch: aarch64 }\n",
+        "    - { os: macos, arch: aarch64 }\n    - { os: linux, arch: aarch64 }\n",
+    );
+    files.insert("provider.yaml".to_owned(), manifest.into_bytes());
+    let mut versions = versions;
+    let mut linux = versions["artifacts"][0].clone();
+    linux["id"] = "clickhouse-26.8.30.8-linux-aarch64".into();
+    linux["os"] = "linux".into();
+    versions["artifacts"]
+        .as_array_mut()
+        .expect("artifacts")
+        .push(linux);
+    files.insert(
+        "versions.json".to_owned(),
+        serde_json::to_vec(&versions).expect("versions serialize"),
+    );
+    let files = PackageFiles::new("clickhouse", files);
+    let package = ValidatedPackage::from_files(files, NameCheck::FolderName)
+        .unwrap_or_else(|err| panic!("the test package validates: {:#?}", err.issues));
+    let entry = ProviderEntry {
+        package: Arc::new(package),
+        tile: TileHint {
+            mark: "Ch".into(),
+            tile: TileColor::Yellow,
+        },
+        notes: Vec::new(),
+        origin: EntryOrigin::Catalog,
+    };
+    let windows = HostFacts::new(
+        "windows-aarch64".parse().expect("a target"),
+        OsVersion::major_minor(11, 0),
+        None,
+    );
+
+    let decision = provider_installability(
+        &entry,
+        &"26.8.30.8".parse().expect("a version"),
+        &windows,
+        &TrustVerdict::Trusted,
+    )
+    .expect("the version is in the entry");
+
+    let Installability::NotInstallable {
+        reason,
+        available_targets,
+    } = decision
+    else {
+        panic!("a Windows host never installs clickhouse: {decision:?}");
+    };
+    assert_eq!(reason, NotInstallableReason::NoBuildForHost);
+    assert!(
+        !native_support(&available_targets, windows.target),
+        "{available_targets:?}"
+    );
+    ev.pass();
 }
 
 fn mysql_settings() -> serde_json::Value {
