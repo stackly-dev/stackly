@@ -73,3 +73,32 @@ Semua test di bawah native (`#[ignore = "native: ..."]`), satu instance per test
 - AC-9, AC-10 (daemon), AC-11 · Milestone 3 langkah 9
 - AC-1 (catalog), AC-14 (konformitas) · Milestone 3 langkah 10 dan 11
 - AC-17 · Milestone 4
+
+## Milestone 3: MySQL 9.7, isolasi, penolakan line, konformitas, evidence, dan catalog
+
+_Bagian ini baru memuat langkah 9 dan 10. Langkah 11 (catalog dan `provider freeze`) dan 12 (evidence `compatibility.json`) menunggu giliran catalog._
+
+### UI / manual
+
+- Tidak ada untuk langkah 9 dan 10.
+
+### Commands
+
+Semua test native, satu per satu (`--test-threads 1`), dari `mysql-8.4.11-macos-aarch64` dan `mysql-9.7.2-macos-aarch64` di cache runtime; tanpa artefak test berakhir `BLOCKED`.
+
+- [ ] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 mysql_9_7 --skip sentinel --skip mismatch` → 13 test lulus: suite Milestone 2 (init, auth, endpoints, paths, readiness, stop, tools, lifecycle, binary log, adoption) untuk runtime 9.7.2, dengan hasil yang sama seperti 8.4 → AC-3 sampai AC-8, AC-12, AC-13 untuk 9.7
+- [ ] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 sentinel::` → 3 test lulus: dua instance 8.4, dua instance 9.7, dan satu 8.4 di samping satu 9.7, masing masing dengan satu baris di `stackly_sentinel.marker`; sesudah semuanya stop lalu start, query lewat TCP dan socket setiap instance hanya mengembalikan barisnya sendiri → AC-9
+- [ ] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 mismatch::` → 2 test lulus: data 8.4 yang diikat ke runtime 9.7 (dan 9.7 ke 8.4) gagal start dengan `supervisor.data_incompatible` (`outcome` `incompatible`, `data` dan `runtime` sesuai) sebelum spawn, tanpa `mysqld`, byte `mysql_upgrade_history` dan `mysql.ibd` tidak berubah, dan `rebind::check` memberi outcome yang sama; di runtime sendiri penanda yang dihapus memberi `supervisor.data_unavailable` (`reason` `the data marker is missing`), versi `8.0.40` memberi `marker_mismatch`, dan sesudah penanda kembali instance ready → AC-10
+- [ ] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 existing_data::` → salinan folder data MySQL 8.4 yang sah, disisipkan kait `after_layout`, membuat create gagal `instance.data_not_empty` tanpa langkah `init`, tanpa `mysqld`, dan setiap file salinan sama byte demi byte → AC-11
+- [ ] `cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads 1 mysql` → `mysql_8_4_passes_conformance` dan `mysql_9_7_passes_conformance` lulus untuk skenario `default` dan `binlog`, report native ber verdict pass, tanpa proses dan root tersisa → AC-14
+- [ ] `cargo test -p stacklyd --test provider_conformance every_official_package_has_the_step_and_health_limits_its_manifest_gives` → batas `mysql` init 180, readiness 120, stop 120, reload 30 (bawaan, tanpa capability reload), health 43000 ms → AC-14
+
+### Acceptance-criteria coverage
+
+- AC-3 sampai AC-8, AC-12, AC-13 · 9.7 lewat fungsi test yang sama dengan 8.4 (`mysql_9_7_*`); AC-2 round trip tetap hanya 8.4.11 sesuai teks AC, dan AC-18 (`open_with::`, `doctor::`) hanya 8.4
+- AC-9 · `sentinel::`
+- AC-10 · `mismatch::` kedua arah, termasuk `rebind::check`
+- AC-11 · `existing_data::` dengan data 8.4
+- AC-14 · konformitas native kedua lini; `scenarios.yaml` tidak berubah
+- AC-1 (catalog), AC-16 (evidence BR-025 dan `compatibility.json`) · menunggu langkah 11 dan 12
+- AC-17 · Milestone 4
