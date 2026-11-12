@@ -1,0 +1,57 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 12.31s
+     Running tests/mysql.rs (target/debug/deps/mysql-cf6a56d559f755f4)
+
+running 37 tests
+test adoption::mysql_8_4_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it ... ok
+test adoption::mysql_9_7_keeps_running_after_sigkill_of_the_daemon_and_the_next_daemon_adopts_it ... ok
+test auth::mysql_8_4_has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket ... ok
+test auth::mysql_8_4_takes_a_password_with_quotes_backslashes_spaces_and_unicode ... ok
+test auth::mysql_9_7_has_three_root_accounts_and_a_readiness_account_that_only_reaches_the_socket ... ok
+test auth::mysql_9_7_takes_a_password_with_quotes_backslashes_spaces_and_unicode ... ok
+test compat::mysql_8_4_runs_the_package_and_records_what_it_proved ... kill: 68392: No such process
+kill: 68426: No such process
+kill: 68416: No such process
+ok
+test compat::mysql_9_7_runs_the_package_and_records_what_it_proved ... kill: 68919: No such process
+kill: 68953: No such process
+kill: 68944: No such process
+ok
+test doctor::mysql_8_4_with_a_dropped_readiness_account_gets_the_readiness_account_remedy ... ok
+test endpoints::mysql_8_4_listens_only_on_its_endpoint_and_ignores_persisted_variables ... ok
+test endpoints::mysql_9_7_listens_only_on_its_endpoint_and_ignores_persisted_variables ... ok
+test existing_data::mysql_8_4_refuses_a_create_on_a_copy_of_valid_data ... ok
+test format::mysql_8_4_reads_back_a_text_value_exactly_as_it_was_set ... ok
+test init::mysql_8_4_fails_closed_on_a_bad_account_statement_and_never_starts ... ok
+test init::mysql_8_4_initializes_in_one_process_that_opens_nothing_and_leaves_nothing ... ok
+test init::mysql_8_4_refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_alone ... ok
+test init::mysql_9_7_fails_closed_on_a_bad_account_statement_and_never_starts ... ok
+test init::mysql_9_7_initializes_in_one_process_that_opens_nothing_and_leaves_nothing ... ok
+test init::mysql_9_7_refuses_a_data_folder_that_holds_a_file_and_leaves_the_file_alone ... ok
+test lifecycle::mysql_8_4_is_created_started_served_restarted_and_stopped_through_the_daemon ... ok
+test lifecycle::mysql_8_4_writes_a_binary_log_only_when_the_setting_is_on ... ok
+test lifecycle::mysql_9_7_is_created_started_served_restarted_and_stopped_through_the_daemon ... ok
+test lifecycle::mysql_9_7_writes_a_binary_log_only_when_the_setting_is_on ... ok
+test mismatch::mysql_8_4_data_is_refused_by_a_runtime_9_7_and_a_missing_or_changed_marker_is_refused ... ok
+test mismatch::mysql_9_7_data_is_refused_by_a_runtime_8_4_and_a_missing_or_changed_marker_is_refused ... ok
+test open_with::mysql_8_4_shows_three_open_actions_with_no_secret_and_the_runtime_mysql ... ok
+test paths::mysql_8_4_keeps_every_path_in_its_instance ... ok
+test paths::mysql_9_7_keeps_every_path_in_its_instance ... ok
+test readiness::mysql_8_4_is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked ... ok
+test readiness::mysql_9_7_is_not_ready_while_its_port_accepts_but_the_readiness_account_is_locked ... ok
+test sentinel::mysql_8_4_and_9_7_side_by_side_read_only_their_own_sentinel ... ok
+test sentinel::mysql_8_4_two_instances_read_only_their_own_sentinel ... ok
+test sentinel::mysql_9_7_two_instances_read_only_their_own_sentinel ... ok
+test stop::mysql_8_4_stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery ... ok
+test stop::mysql_9_7_stops_fast_with_a_sleeping_session_and_starts_again_without_crash_recovery ... ok
+test tools::mysql_8_4_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home ... ok
+test tools::mysql_9_7_never_runs_a_decoy_and_ignores_a_broken_my_cnf_in_its_home ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 937.27s
+

@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.provider-frozen/v1",
+  "provider": "official/mysql",
+  "revision": "1.0.0",
+  "manifestSha256": "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c",
+  "startArgs": [
+    "--defaults-file=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/my.cnf",
+    "--persisted-globals-load=OFF",
+    "--basedir=/frozen/runtime",
+    "--datadir=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/data",
+    "--tmpdir=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/temp",
+    "--bind-address=127.0.0.1",
+    "--port=3306",
+    "--socket=/frozen/run/i/000000f0/mysql.sock",
+    "--pid-file=/frozen/run/i/000000f0/mysqld.pid",
+    "--mysqlx=OFF",
+    "--skip-name-resolve=ON",
+    "--secure-file-priv=NULL",
+    "--general-log-file=/frozen/logs/instances/0192f3a6-0000-7000-8000-0000000000f0/general.log",
+    "--slow-query-log-file=/frozen/logs/instances/0192f3a6-0000-7000-8000-0000000000f0/slow.log"
+  ],
+  "startEnvKeys": [
+    "HOME",
+    "PATH",
+    "TMPDIR"
+  ],
+  "rendered": {
+    "myCnf": "515ac9352c922d10f5c4fe183194b7a2e32d78a0e2f0eca6033b3d25411fc0c6"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "checks": [
+    "adoption",
+    "init",
+    "isolation",
+    "line_mismatch_refusal",
+    "readiness",
+    "restart",
+    "start",
+    "stop"
+  ],
+  "knownLimitations": [],
+  "providerRevision": {
+    "id": "official/mysql",
+    "manifestSha256": "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c",
+    "revision": "1.0.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}

@@ -1,0 +1,224 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1cef9-f323-7534-81ff-caad7326c723",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "a046da9fc358a678be545b70034c8d3bd69ec6cb",
+    "sourceDirty": false,
+    "runId": "01a1cef9-f323-7534-81ff-caad7326c723",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "mysql",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads",
+      "1"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T08:57:29.634935Z",
+  "finishedAt": "2026-11-12T09:13:21.506881Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 2,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 2,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 2
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cefc-cc4e-7669-bc62-0910ae9431d8",
+      "covers": [
+        "REQ-055",
+        "AC-081",
+        "BR-009",
+        "BR-025"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "compat::mysql_8_4_runs_the_package_and_records_what_it_proved",
+        "file": "apps/daemon/tests/mysql/compat.rs",
+        "line": 257
+      },
+      "status": "PASS",
+      "expected": "a MySQL 8.4 instance of the final package is created and initialized, started, ready and healthy, isolated from a second instance of its line, restarted with a new mysqld on the same data, adopted with a second one after a SIGKILL of stacklyd, stopped, and its data is refused by the runtime of 9.7, and compatibility.json lists those eight checks",
+      "actual": "MySQL 8.4.11 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "8.4.11",
+          "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T09:00:36.302592Z",
+      "finishedAt": "2026-11-12T09:01:27.378228Z",
+      "evidencePath": "artifacts/01a1cefc-cc4e-7669-bc62-0910ae9431d8/",
+      "context": {
+        "sourceCommit": "a046da9fc358a678be545b70034c8d3bd69ec6cb",
+        "sourceDirty": false,
+        "runId": "01a1cef9-f323-7534-81ff-caad7326c723",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1cefd-93e3-7210-9095-a890726dd3cf",
+      "covers": [
+        "REQ-055",
+        "AC-081",
+        "BR-009",
+        "BR-025"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "mysql",
+        "name": "compat::mysql_9_7_runs_the_package_and_records_what_it_proved",
+        "file": "apps/daemon/tests/mysql/compat.rs",
+        "line": 269
+      },
+      "status": "PASS",
+      "expected": "a MySQL 9.7 instance of the final package is created and initialized, started, ready and healthy, isolated from a second instance of its line, restarted with a new mysqld on the same data, adopted with a second one after a SIGKILL of stacklyd, stopped, and its data is refused by the runtime of 8.4, and compatibility.json lists those eight checks",
+      "actual": "MySQL 9.7.2 passed init, start, readiness, isolation, restart, adoption, stop, line_mismatch_refusal",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T09:01:27.395693Z",
+      "finishedAt": "2026-11-12T09:02:18.118936Z",
+      "evidencePath": "artifacts/01a1cefd-93e3-7210-9095-a890726dd3cf/",
+      "context": {
+        "sourceCommit": "a046da9fc358a678be545b70034c8d3bd69ec6cb",
+        "sourceDirty": false,
+        "runId": "01a1cef9-f323-7534-81ff-caad7326c723",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "mysql",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads",
+          "1"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

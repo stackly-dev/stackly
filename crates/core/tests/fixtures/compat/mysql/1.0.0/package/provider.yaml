@@ -1,0 +1,152 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/mysql
+  software: mysql
+  displayName: MySQL
+  revision: "1.0.0"
+  category: database
+  description: MySQL relational database. Each instance has its own data folder, a password protected root account, a loopback port, and a private Unix socket.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+  dataMarker:
+    file: mysql_upgrade_history
+    pattern: '.*"version":"([0-9]+\.[0-9]+)\.[0-9]+[^"]*"[^\]]*\]\}'
+runtime:
+  executable: bin/mysqld
+  executionMode: foreground
+  versionCheck:
+    args: ["--no-defaults", "--version"]
+    pattern: 'Ver ([0-9]+\.[0-9]+\.[0-9]+) for '
+    timeoutSeconds: 10
+capabilities:
+  multiInstance: true
+  persistence: true
+  backup: [cold]
+resources:
+  endpoints:
+    client: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 3306 }
+    socket: { transport: unix, purpose: client, socketName: "mysql.sock" }
+configFiles:
+  myCnf:
+    template: templates/my.cnf.tmpl
+    format: mysqlCnf
+    destination: "${instance.config}/my.cnf"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+    - { primitive: materializeSecret, secret: rootPassword, destination: root-password }
+    - primitive: runExecutable
+      executable: "${runtime.executable}"
+      args:
+        - "--no-defaults"
+        - "--initialize-insecure"
+        - "--disable-log-bin"
+        - "--basedir=${runtime.root}"
+        - "--datadir=${instance.data}"
+        - "--tmpdir=${instance.temp}"
+        - "--replica-load-tmpdir=${instance.secrets}"
+        - "--init-file=/dev/stdin"
+      cwd: "${instance.temp}"
+      timeoutSeconds: 120
+      stdin:
+        text: |
+          SET @pw = CONVERT(LOAD_FILE(CONCAT(@@replica_load_tmpdir, '/root-password')) USING utf8mb4);
+          SET @sql = IF(@pw IS NULL OR CHAR_LENGTH(@pw) < 8, 'SELECT stackly_root_password_is_missing()', CONCAT('ALTER USER ''root''@''localhost'' IDENTIFIED BY ', QUOTE(@pw)));
+          PREPARE stmt FROM @sql;
+          EXECUTE stmt;
+          SET @sql = CONCAT('CREATE USER ''root''@''127.0.0.1'' IDENTIFIED BY ', QUOTE(@pw));
+          PREPARE stmt FROM @sql;
+          EXECUTE stmt;
+          SET @sql = CONCAT('CREATE USER ''root''@''::1'' IDENTIFIED BY ', QUOTE(@pw));
+          PREPARE stmt FROM @sql;
+          EXECUTE stmt;
+          DEALLOCATE PREPARE stmt;
+          GRANT ALL PRIVILEGES ON *.* TO 'root'@'127.0.0.1', 'root'@'::1' WITH GRANT OPTION;
+          GRANT PROXY ON ''@'' TO 'root'@'127.0.0.1', 'root'@'::1' WITH GRANT OPTION;
+          CREATE USER 'stackly_readiness'@'localhost' IDENTIFIED BY '' WITH MAX_USER_CONNECTIONS 3 COMMENT 'Stackly readiness probe. Dropping or locking this account stops the instance from becoming ready.';
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - "--defaults-file=${instance.config}/my.cnf"
+      - "--persisted-globals-load=OFF"
+      - "--basedir=${runtime.root}"
+      - "--datadir=${instance.data}"
+      - "--tmpdir=${instance.temp}"
+      - "--bind-address=${endpoint.client.host}"
+      - "--port=${endpoint.client.port}"
+      - "--socket=${endpoint.socket.socket}"
+      - "--pid-file=${instance.run}/mysqld.pid"
+      - "--mysqlx=OFF"
+      - "--skip-name-resolve=ON"
+      - "--secure-file-priv=NULL"
+      - "--general-log-file=${instance.logs}/general.log"
+      - "--slow-query-log-file=${instance.logs}/slow.log"
+    cwd: "${instance.data}"
+  stop: { strategy: gracefulProcess, signal: term }
+readiness:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executables.mysql}"
+      args:
+        - "--no-defaults"
+        - "--protocol=socket"
+        - "--socket=${endpoint.socket.socket}"
+        - "--user=stackly_readiness"
+        - "--connect-timeout=2"
+        - "--batch"
+        - "--skip-column-names"
+        - "--execute=SELECT 1"
+      cwd: "${instance.temp}"
+    successExitCodes: [0]
+  intervalMilliseconds: 500
+  attemptTimeoutMilliseconds: 3000
+health:
+  intervalSeconds: 10
+  attemptTimeoutMilliseconds: 3000
+  failureThreshold: 3
+timeouts: { initSeconds: 180, readinessSeconds: 120, recoverySeconds: 600, stopSeconds: 120 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, logs, temp, run]
+  executeRuntimeBinary: true
+  additionalExecutables: { mysql: bin/mysql }
+connection:
+  - name: uri
+    title: Connection string
+    template: "mysql://root:${secret.rootPassword}@${endpoint.client.address}/"
+openWith:
+  - name: tableplus
+    title: TablePlus
+    kind: app
+    app:
+      bundleIds: ["com.tinyapp.TablePlus"]
+      url: "mysql://root@${endpoint.client.address}/"
+    copySecret: rootPassword
+  - name: sequel_ace
+    title: Sequel Ace
+    kind: app
+    app:
+      bundleIds: ["com.sequel-ace.sequel-ace"]
+      url: "mysql://root@${endpoint.client.address}/"
+    copySecret: rootPassword
+  - name: mysql
+    title: mysql
+    kind: terminal
+    terminal:
+      executable: "${runtime.executables.mysql}"
+      args: ["--no-defaults", "--protocol=socket", "--socket=${endpoint.socket.socket}", "--user=root", "--password"]
+    copySecret: rootPassword
+remedies:
+  - name: readiness_account
+    when:
+      readinessDetailContains: "'stackly_readiness'@'localhost'"
+    title: "The readiness account stackly_readiness is missing or changed"
+    steps:
+      - text: "Stackly checks that this instance is ready by signing in as the account stackly_readiness, which the instance’s init created. That sign in fails now."
+      - text: "Run this in Terminal to create the account again and unlock it. mysql asks for the root password, and Stackly never puts it in the command."
+        command: '${runtime.executables.mysql} --no-defaults --protocol=socket --socket=${endpoint.socket.socketDir}/mysql.sock --user=root --password --execute="CREATE USER IF NOT EXISTS ''stackly_readiness''@''localhost'' IDENTIFIED BY '''' WITH MAX_USER_CONNECTIONS 3; ALTER USER ''stackly_readiness''@''localhost'' IDENTIFIED BY '''' ACCOUNT UNLOCK"'
+      - text: "The instance becomes ready again on its next readiness check."
