@@ -805,7 +805,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the postgresql, nats, and fake packages validate with their connection block (sentinel render included) and traefik declares none",
+        expected = "the postgresql, nats, fake, and traefik packages validate with their connection block (sentinel render included)",
     );
     let entries = |dir: &Path| -> Vec<(String, String)> {
         validated(dir)
@@ -833,7 +833,10 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     );
     assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
     assert_eq!(entries(&example_dir()), [pair("config", "Config endpoint")]);
-    assert!(entries(&traefik_dir()).is_empty());
+    assert_eq!(
+        entries(&traefik_dir()),
+        [pair("web", "Web URL"), pair("ping", "Health URL")]
+    );
     ev.pass();
 }
 
@@ -1152,6 +1155,82 @@ fn a_traefik_reload_rewrites_only_routes_and_verifies_readiness() {
         ),
         "the reload plan creates config/dynamic before writing routes"
     );
+}
+
+// covers: AC-13 (spec 0041)
+#[test]
+fn traefik_remedy_matches_routes_mismatch_only_and_renders_like_the_golden_file() {
+    let ev = evidence!(
+        covers = ["REQ-039"],
+        kind = Kind::Fixture,
+        expected = "the routes_not_loaded remedy of providers/traefik matches readiness routes_mismatch and no other reason or failure, and renders three steps with the dynamic folder as the path of the third",
+    );
+    let package = validated(&traefik_dir());
+    let manifest = package.manifest();
+    let context = golden_context(&package, traefik_settings(1));
+    let names: Vec<_> = manifest.remedies().iter().map(RemedySpec::name).collect();
+    assert_eq!(names, ["routes_not_loaded"]);
+    let first_match = |subject: &RemedySubject<'_>| {
+        manifest
+            .remedies()
+            .iter()
+            .find(|remedy| remedy.matches(subject))
+            .map(RemedySpec::name)
+    };
+
+    assert_eq!(
+        first_match(&RemedySubject::Readiness {
+            reason: "routes_mismatch",
+            detail: Some("router api@file is not loaded"),
+        }),
+        Some("routes_not_loaded")
+    );
+    for reason in ["probe_failed", "timeout", "not_ready"] {
+        assert_eq!(
+            first_match(&RemedySubject::Readiness {
+                reason,
+                detail: Some("routes_mismatch"),
+            }),
+            None,
+            "{reason}"
+        );
+    }
+    for code in [FailureCode::PROCESS_EXITED, FailureCode::ENDPOINT_IN_USE] {
+        assert_eq!(
+            first_match(&RemedySubject::Failure {
+                code: Some(&code),
+                excerpt: &[],
+            }),
+            None
+        );
+    }
+
+    let remedy = render_remedy(manifest, &manifest.remedies()[0], &context)
+        .expect("routes_not_loaded renders");
+    assert_eq!(remedy.steps.len(), 3);
+    assert_eq!(
+        remedy.steps[2].path.as_deref(),
+        Some(
+            context
+                .paths
+                .config
+                .join("dynamic")
+                .to_str()
+                .expect("UTF-8 path")
+        )
+    );
+    let rendered = serde_json::json!([{
+        "name": remedy.name,
+        "title": remedy.title,
+        "steps": remedy.steps.iter().map(|step| serde_json::json!({
+            "text": step.text,
+            "command": step.command,
+            "path": step.path,
+        })).collect::<Vec<_>>(),
+        "pidFile": remedy.pid_file,
+    }]);
+    assert_golden("traefik", "remedies.json", &pretty(&rendered));
+    ev.pass();
 }
 
 fn postgresql_settings() -> serde_json::Value {

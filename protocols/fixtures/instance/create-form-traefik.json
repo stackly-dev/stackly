@@ -179,7 +179,7 @@
   "provider": {
     "category": "proxy",
     "displayName": "Traefik Proxy",
-    "manifestSha256": "cbb495fd7cf399562b31e81f190e948700503589391267514a4604a8587c619e",
+    "manifestSha256": "c568f2e2f2be270032d32c8355399fc10101650dce0ef46781ed234057847c82",
     "name": "official/traefik",
     "revision": "1.0.0",
     "source": "bundled_catalog"

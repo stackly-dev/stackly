@@ -648,4 +648,5 @@ fn the_repo_packages_render_their_connections_as_the_golden_files() {
     );
     assert_golden("nats", &golden_entries("nats", &[]));
     assert_golden("fake", &golden_entries("fake", &["authToken"]));
+    assert_golden("traefik", &golden_entries("traefik", &[]));
 }
