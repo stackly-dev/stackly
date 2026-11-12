@@ -30,6 +30,15 @@ A value the schema refuses (a repeated name, an empty rule, a backend that is
 not `http://` on the loopback, more than 64 routes) is refused before anything
 is written.
 
+A backend URL is a scheme, a loopback host, and a port, such as
+`http://127.0.0.1:3000`. Stackly refuses a path, a query, or a fragment there:
+Traefik ignores the path of a server URL, and a path it can’t read would
+switch the route off after the apply.
+
+An apply that only changes a backend can finish up to about two seconds before
+Traefik serves the new backend, because Traefik waits that long between two
+reloads of its files.
+
 ## When the instance says `routes_mismatch`
 
 The instance is ready only when the `@file` routers Traefik loaded match
@@ -45,6 +54,10 @@ tab shows the router Traefik rejected and why.
 also loads any other file you put there, and a file that holds a router makes
 the instance `routes_mismatch` until you move it out. Stackly never reads,
 moves, or deletes such a file.
+
+Stackly compares the routers Traefik loaded, not their backends. If a file you
+added stops Traefik from reading this folder, a backend change can report
+success while Traefik still serves the old backend.
 
 ## Limits of this revision
 

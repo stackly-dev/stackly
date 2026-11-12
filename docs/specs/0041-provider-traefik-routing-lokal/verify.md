@@ -4,7 +4,7 @@ _Langkah diturunkan dari acceptance criteria spec 0041. `/check verify` menjalan
 
 ## Milestone 1: Paket resmi
 
-_Build 2026-11-12 (dev-f41-m1): langkah 1 sampai 3, commit `cb64ad34` (langkah 1 dan 2) dan `44958467` (langkah 3). `manifest_sha256` paket berubah satu kali, menjadi `c568f2e2…`._
+_Build 2026-11-12 (dev-f41-m1): langkah 1 sampai 3, commit `cb64ad34` (langkah 1 dan 2) dan `44958467` (langkah 3). `manifest_sha256` paket berubah satu kali, menjadi `c568f2e2…`; langkah 7a (Milestone 2b) mengubahnya untuk terakhir kalinya, menjadi `c57b6a82…`, dan nilai sha di bawah sudah mengikuti itu._
 
 ### UI / manual
 
@@ -15,13 +15,13 @@ _Build 2026-11-12 (dev-f41-m1): langkah 1 sampai 3, commit `cb64ad34` (langkah 1
 
 ### Commands
 
-- [x] `cargo xtask provider check providers/traefik` → `ok official/traefik 1.0.0 c568f2e2f2be270032d32c8355399fc10101650dce0ef46781ed234057847c82` → AC-1
+- [x] `cargo xtask provider check providers/traefik` → `ok official/traefik 1.0.0 c57b6a8274d55f6c0b0f65fd93abcca1ee661b66e8a4793183728e5bfdd01bd7` → AC-1
 - [x] `cargo xtask provider check` → satu baris `ok` per folder di `providers/`, Traefik dengan sha di atas → AC-1
 - [x] `cargo test -p stackly-core --test provider_packages` → 42 test lulus, termasuk `the_repo_packages_declare_their_connection_entries_in_manifest_order` (Traefik `web`, `ping`), golden `traefik/*.json` dan `*.txt` yang lama tidak berubah, `traefik_remedy_matches_routes_mismatch_only_and_renders_like_the_golden_file` (golden baru `remedies.json`), `traefik_renders_the_dashboard_off_and_never_a_tls_key`, dan `traefik_permissions_are_the_managed_folders_and_the_runtime_binary_only` → AC-1, AC-6, AC-7, AC-13
 - [x] `cargo test -p stackly-core --test open_with_render` → 7 test lulus; `golden/provider/traefik/open_with.json` memuat `routes` lalu `routers` dengan URL `http://127.0.0.1:14000/api/http/routers` → AC-1
 - [x] `cargo test -p stackly-core --test connection_render` → 13 test lulus; golden baru `golden/provider/traefik/connection.json` dengan `web` `http://127.0.0.1:14001` dan `ping` `http://127.0.0.1:14000/ping` → AC-1
 - [x] `cargo test -p stackly-core --test provider_check every_repository_package_is_publishable_with_the_implied_default_scenario` → lulus; Traefik membawa dua skenario `default` dan `one-route`, paket lain satu skenario tersirat → AC-1
-- [x] `cargo test -p stacklyd --test create_form_fixtures` → lulus dengan `protocols/fixtures/instance/create-form-traefik.json` yang membawa `manifestSha256` `c568f2e2…` → AC-1
+- [x] `cargo test -p stacklyd --test create_form_fixtures` → lulus dengan `protocols/fixtures/instance/create-form-traefik.json` yang membawa `manifestSha256` `c57b6a82…` → AC-1
 - [x] `cargo xtask fuzz seed` lalu `git status --short fuzz` → bersih (seed `provider_manifest/traefik.provider.yaml` dan `provider_interpolation/field-*` sudah ikut di commit langkah 2) → AC-1
 - [x] `cargo xtask codegen --check` → `codegen: 20 generated files are up to date` → AC-1
 - [x] `cargo xtask docs check` → `ok docs 26` → AC-1

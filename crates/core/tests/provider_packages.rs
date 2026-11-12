@@ -13,10 +13,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    Command, EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
-    PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject, ResolvedEndpoint,
-    RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage, check_package, read_package,
-    render_remedy, scenarios::Expect,
+    Command, EnvValue, InitStep, Location, MarkerRead, NameCheck, PackageFiles, PlanContext,
+    PlanError, PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject,
+    ResolvedEndpoint, RunSpec, RuntimeContext, Segment, SettingsIssueKind, Stdin, ValidatedPackage,
+    check_package, read_package, render_remedy, scenarios::Expect,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
 use stackly_domain::{
@@ -1038,7 +1038,7 @@ fn traefik_settings(count: usize) -> serde_json::Value {
         serde_json::json!({
             "name": "docs",
             "rule": "Host(\"docs.localhost\") || PathPrefix(`/docs`)",
-            "backendUrl": "http://[::1]:8080/docs",
+            "backendUrl": "http://[::1]:8080",
         }),
     ];
     serde_json::json!({ "routes": routes[..count] })
@@ -1177,16 +1177,35 @@ fn setting_names(schema: &serde_json::Value, names: &mut Vec<String>) {
     }
 }
 
-/// Whether `value` holds a mapping key named `tls` at any depth.
+/// Whether `value` holds a mapping key named `tls`, or one named
+/// `certificatesResolvers`, at any depth (the static file rule of AC-7).
 fn holds_tls_key(value: &serde_yaml_ng::Value) -> bool {
     match value {
-        serde_yaml_ng::Value::Mapping(map) => map
-            .iter()
-            .any(|(key, value)| key.as_str() == Some("tls") || holds_tls_key(value)),
+        serde_yaml_ng::Value::Mapping(map) => map.iter().any(|(key, value)| {
+            matches!(key.as_str(), Some("tls" | "certificatesResolvers")) || holds_tls_key(value)
+        }),
         serde_yaml_ng::Value::Sequence(items) => items.iter().any(holds_tls_key),
         serde_yaml_ng::Value::Tagged(tagged) => holds_tls_key(&tagged.value),
         _ => false,
     }
+}
+
+/// Whether a parsed `dynamic/routes.yaml` configures TLS (the routes file
+/// rule of AC-7): a top level `tls` key, or a `tls` key at any depth inside
+/// the body of one router or one service. A router or service named `tls`
+/// is a name under `http.routers` or `http.services`, not TLS.
+fn routes_hold_tls(value: &serde_yaml_ng::Value) -> bool {
+    let serde_yaml_ng::Value::Mapping(top) = value else {
+        return false;
+    };
+    if top.contains_key("tls") {
+        return true;
+    }
+    ["routers", "services"].iter().any(|section| {
+        value["http"][*section]
+            .as_mapping()
+            .is_some_and(|entries| entries.values().any(holds_tls_key))
+    })
 }
 
 // covers: AC-6, AC-7 (spec 0041)
@@ -1225,10 +1244,35 @@ fn traefik_renders_the_dashboard_off_and_never_a_tls_key() {
             let parsed: serde_yaml_ng::Value =
                 serde_yaml_ng::from_str(&text).expect("a rendered file is YAML");
             assert!(
-                !holds_tls_key(&parsed),
+                !routes_hold_tls(&parsed),
                 "{config} with {count} routes: {text}"
             );
         }
+    }
+    // A route named `tls` is a name, not TLS configuration.
+    let named_tls = serde_json::json!({ "routes": [{
+        "name": "tls",
+        "rule": "Host(`tls.localhost`)",
+        "backendUrl": "http://127.0.0.1:3000",
+    }] });
+    let context = golden_context(&package, named_tls);
+    let reload = package
+        .reload_plan(&context)
+        .expect("the traefik reload plan with a route named tls builds");
+    let renders = rendered(&package, &reload.steps);
+    assert_eq!(renders.len(), 1, "{renders:?}");
+    for (config, text) in renders {
+        let parsed: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&text).expect("a rendered file is YAML");
+        assert!(
+            parsed["http"]["routers"]["tls"].is_mapping(),
+            "{config}: {text}"
+        );
+        assert!(
+            parsed["http"]["services"]["tls"].is_mapping(),
+            "{config}: {text}"
+        );
+        assert!(!routes_hold_tls(&parsed), "{config}: {text}");
     }
 
     assert!(
@@ -1271,6 +1315,70 @@ fn traefik_renders_the_dashboard_off_and_never_a_tls_key() {
         .as_str()
         .expect("backendUrl has a pattern");
     assert!(pattern.starts_with("http://("), "{pattern}");
+    ev.pass();
+}
+
+// covers: AC-15, AC-7 (spec 0041)
+#[test]
+fn traefik_backend_url_is_a_scheme_a_loopback_host_and_a_port_only() {
+    let ev = evidence!(
+        covers = ["REQ-039", "AC-039"],
+        kind = Kind::Fixture,
+        expected = "the settings schema of providers/traefik accepts a backendUrl of http, a loopback host, a port, and at most one trailing slash, and refuses a path, a query, a fragment, another host or scheme, and user info with a pattern issue at routes[0].backendUrl",
+    );
+    let package = validated(&traefik_dir());
+    let schema = package.settings_schema();
+    let settings = |url: &str| {
+        serde_json::json!({ "routes": [{
+            "name": "api",
+            "rule": "Host(`api.localhost`)",
+            "backendUrl": url,
+        }] })
+    };
+
+    for url in [
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3000/",
+        "http://localhost:5173/",
+        "http://[::1]:8080",
+        "http://127.0.0.1:0",
+        "http://127.0.0.1:99999",
+    ] {
+        assert!(schema.validate(&settings(url)).is_ok(), "{url} is accepted");
+    }
+    for url in [
+        "http://127.0.0.1:3000/api",
+        "http://127.0.0.1:3000/%zz",
+        "http://127.0.0.1:3000/%41",
+        "http://127.0.0.1:3000/?a=b",
+        "http://127.0.0.1:3000?a=b",
+        "http://127.0.0.1:3000/#x",
+        "http://127.0.0.1:3000#x",
+        "http://127.0.0.1:3000//",
+        "http://127.0.0.1",
+        "http://127.0.0.1:123456",
+        "http://127.0.0.2:9",
+        "http://example.com:80",
+        "https://127.0.0.1:9",
+        "HTTP://127.0.0.1:9",
+        "http://user@127.0.0.1:9",
+    ] {
+        let Err(error) = schema.validate(&settings(url)) else {
+            panic!("{url} is refused");
+        };
+        assert_eq!(error.issues.len(), 1, "{url}: {:?}", error.issues);
+        let issue = &error.issues[0];
+        assert_eq!(
+            issue.location,
+            Location::Field("routes[0].backendUrl".to_owned()),
+            "{url}: {issue:?}"
+        );
+        assert_eq!(
+            issue.settings_kind,
+            Some(SettingsIssueKind::Pattern),
+            "{url}: {issue:?}"
+        );
+    }
     ev.pass();
 }
 
