@@ -109,7 +109,7 @@ pub fn preview(
             .iter()
             .filter_map(|segment| match segment {
                 Segment::Text(text) => Some(text.as_str()),
-                Segment::Secret { .. } => None,
+                Segment::Secret { .. } | Segment::SecretHash { .. } => None,
             })
             .collect();
         files.push(EffectiveFile {

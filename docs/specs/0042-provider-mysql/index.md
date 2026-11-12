@@ -1,7 +1,7 @@
 # 0042. Provider MySQL
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

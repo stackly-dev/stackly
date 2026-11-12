@@ -34,7 +34,7 @@ use super::settings::{ScalarValue, SettingValue, SettingsError, SettingsItem, Se
 use super::template::{self, OUTPUT_MAX_LEN, TemplateFormat};
 use super::validate::ValidatedPackage;
 use crate::secret::ResolvedSecrets;
-use crate::secret::delivery::render_secret_placeholder;
+use crate::secret::delivery::{self, HashAlgo, render_secret_placeholder};
 
 /// The `PATH` every child process gets. A POSIX constant; the Windows
 /// phase moves it into the platform.
@@ -204,6 +204,15 @@ pub enum Segment {
         secret: PlanSecret,
         /// The format whose escaper writes it.
         format: TemplateFormat,
+    },
+    /// The hash of a secret (`{{ secret.<field> | sha256Hex }}`, spec 0040
+    /// AC-3), written as it is with no escaper. The plan holds only the
+    /// reference; `materialize` computes the hash.
+    SecretHash {
+        /// The secret.
+        secret: PlanSecret,
+        /// The hash to write.
+        algo: HashAlgo,
     },
 }
 
@@ -568,7 +577,8 @@ impl RenderedContent {
     /// Fills the secret segments from the secrets of the action and returns
     /// the final bytes, with the same escaper and the same 1 MiB limit as
     /// the renderer. Each value is read through
-    /// [`render_secret_placeholder`] (spec 0011).
+    /// [`render_secret_placeholder`], and a hash segment through
+    /// [`delivery::hash`] (spec 0011).
     ///
     /// # Errors
     ///
@@ -607,6 +617,12 @@ impl RenderedContent {
                         }
                     })?;
                     out.extend_from_slice(escaped.as_bytes());
+                }
+                Segment::SecretHash { secret, algo } => {
+                    let value = value(secret).ok_or_else(|| PlanError::SecretUnavailable {
+                        field: secret.field.clone(),
+                    })?;
+                    out.extend_from_slice(delivery::hash(*algo, value).as_bytes());
                 }
             }
             if out.len() > OUTPUT_MAX_LEN {

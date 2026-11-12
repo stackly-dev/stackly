@@ -1,0 +1,7 @@
+<clickhouse>
+  <display_name>{{ settings.greeting }}</display_name>
+  <path>{{ instance.data }}/</path>
+  <listen_try>{{ settings.failInit }}</listen_try>
+  <port>{{ settings.readyDelayMs }}</port>
+  <password_sha256_hex>{{ secret.authToken | sha256Hex }}</password_sha256_hex>
+</clickhouse>
