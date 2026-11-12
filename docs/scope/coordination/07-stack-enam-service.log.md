@@ -21,6 +21,7 @@
 | `chk-f41-m1` | checker (verify) | F41 milestone 1 dan 2 | `07-stack-enam-service.md` | `docs/specs/0041-provider-traefik-routing-lokal/verify.md` | `claude/arc-f43-spec-0060e9` | `fable-5-2 · high` | merged `a89aaa12`; Milestone 1 PASS, Milestone 2 PASS |
 | `arc-f41-update` | architect (update) | spec 0041: pola `backendUrl` dan temuan verify 1 sampai 4 | `07-stack-enam-service.md` | `docs/specs/0041-provider-traefik-routing-lokal/{index,rationale}.md` | `claude/arc-f42-spec-bb6818` | `fable-5-2 · high` | dipakai ulang, aktif |
 | `dev-f39-m2` | developer | F39 milestone 2 dan 3 (langkah 4 sampai 9), lanjutan `dev-f39-m1` (milestone 1 `done`, langkah 1 sampai 3, belum di-merge: langkah 2 sampai 8 masuk bersama) | `07-stack-enam-service.md` | `apps/daemon/tests/nats*`, evidence dan catalog NATS | `claude/arc-f39-spec-781b0e` | `opus-5-5 · medium` | aktif |
+| `dev-f40-m1` | developer | F40 milestone 1 sisa (langkah 3 dan 4) dan milestone 2 (langkah 5 sampai 7) | `07-stack-enam-service.md` | `providers/valkey/`, golden dan fixture Valkey, recipe spike Valkey, `apps/daemon/tests/valkey*`, bagian Valkey di file test bersama | `claude/arc-f40-spec-d71756` | `opus-5-5 · medium` | dipakai ulang, aktif |
 
 ## Keputusan
 
