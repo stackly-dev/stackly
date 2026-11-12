@@ -1188,6 +1188,39 @@ async fn run_attempt(
             _ => None,
         })
         .collect();
+    let source = SpoolSource::new(identity.pid, identity.start);
+    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh, source).await;
+    let (exit_slot, exit_rx) = ExitSlot::new();
+    let (done, _) = watch::channel(false);
+    let (probes_stop, probes_stop_rx) = watch::channel(false);
+    // The actor learns the process and its `not_ready` before the commit
+    // that makes the lifecycle `running`, as `spawned` does to the aggregate
+    // (spec 0004), so no reader ever joins `running` with the status of an
+    // instance without a process (spec 0010 AC-3). A commit that fails
+    // finishes the slot again.
+    let generation = actor.update(deps, |state| {
+        let generation = state.next_generation;
+        state.next_generation += 1;
+        state.process = Some(ProcessSlot {
+            generation,
+            identity: identity.clone(),
+            group: facts.group,
+            adopted: false,
+            adoptable: None,
+            lock: lock.identity(),
+            done,
+            probes_stop,
+            drain,
+            sent_signal: None,
+            applied_revision: Some(prepared.revision),
+        });
+        state.op_owns_exit = true;
+        state.stopping = false;
+        state.leftover.clear();
+        state.logs_unavailable = logs_unavailable;
+        state.awaiting_probe(now);
+        generation
+    });
     let recorded = commit_instance(sup, id, None, CommitMode::Operation, |changes| {
         // One change, so the restart rides on the revision `spawned` raises.
         changes.apply(|instance| {
@@ -1218,37 +1251,9 @@ async fn run_attempt(
     if let Err(error) = recorded {
         tracing::warn!(instance = %id, %error, "the identity of a new process could not be recorded");
         let status = discard(sup, child).await;
+        finish_process(sup, &actor, generation, Vec::new());
         return Ok(identity_failed(sup, id, &facts.executable, status).await);
     }
-
-    let source = SpoolSource::new(identity.pid, identity.start);
-    let (drain, logs_unavailable) = DrainSlot::start(sup, id, Opening::Fresh, source).await;
-    let (exit_slot, exit_rx) = ExitSlot::new();
-    let (done, _) = watch::channel(false);
-    let (probes_stop, probes_stop_rx) = watch::channel(false);
-    let generation = actor.update(deps, |state| {
-        let generation = state.next_generation;
-        state.next_generation += 1;
-        state.process = Some(ProcessSlot {
-            generation,
-            identity: identity.clone(),
-            group: facts.group,
-            adopted: false,
-            adoptable: None,
-            lock: lock.identity(),
-            done,
-            probes_stop,
-            drain,
-            sent_signal: None,
-            applied_revision: Some(prepared.revision),
-        });
-        state.op_owns_exit = true;
-        state.stopping = false;
-        state.leftover.clear();
-        state.logs_unavailable = logs_unavailable;
-        state.awaiting_probe(now);
-        generation
-    });
     let watched = {
         let platform = deps.platform.clone();
         blocking(move || platform.processes().watch_exit(pid, Arc::new(exit_slot))).await
