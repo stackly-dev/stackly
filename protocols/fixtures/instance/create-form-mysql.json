@@ -1,0 +1,187 @@
+{
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": false
+    },
+    {
+      "capability": "metrics",
+      "supported": false
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "dataLocation": "/Users/dev/Library/Application Support/Stackly",
+  "dataPath": "instances/<new instance id>/data",
+  "endpoints": [
+    {
+      "defaultPort": 3306,
+      "host": "127.0.0.1",
+      "name": "client",
+      "purpose": "client",
+      "socketName": null,
+      "transport": "tcp"
+    },
+    {
+      "defaultPort": null,
+      "host": null,
+      "name": "socket",
+      "purpose": "client",
+      "socketName": "mysql.sock",
+      "transport": "unix"
+    }
+  ],
+  "fields": [
+    {
+      "apply": "immutable_after_init",
+      "choices": [],
+      "default": null,
+      "description": "Password of the root account, set once when the instance is created.",
+      "itemKey": null,
+      "items": [],
+      "key": "rootPassword",
+      "kind": "text",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": 128,
+      "maximum": null,
+      "minItems": null,
+      "minLength": 8,
+      "minimum": null,
+      "printableOnly": true,
+      "required": true,
+      "secret": true,
+      "title": "Root password",
+      "visibility": "basic"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": 151,
+        "type": "integer"
+      },
+      "description": "Most client connections the server accepts at once.",
+      "itemKey": null,
+      "items": [],
+      "key": "maxConnections",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 10000,
+      "minItems": null,
+      "minLength": null,
+      "minimum": 10,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Max connections",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": 128,
+        "type": "integer"
+      },
+      "description": "Memory the server reserves for caching table and index data.",
+      "itemKey": null,
+      "items": [],
+      "key": "innodbBufferPoolSizeMb",
+      "kind": "integer",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": 65536,
+      "minItems": null,
+      "minLength": null,
+      "minimum": 64,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "InnoDB buffer pool (MB)",
+      "visibility": "advanced"
+    },
+    {
+      "apply": "restart",
+      "choices": [],
+      "default": {
+        "content": false,
+        "type": "boolean"
+      },
+      "description": "Keeps a log of every change. Change data capture tools need it. Uses more disk.",
+      "itemKey": null,
+      "items": [],
+      "key": "binaryLog",
+      "kind": "boolean",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Binary log",
+      "visibility": "advanced"
+    }
+  ],
+  "logsLocation": "/Users/dev/Library/Logs/Stackly",
+  "provider": {
+    "category": "database",
+    "displayName": "MySQL",
+    "manifestSha256": "e6478e381e9eee73185592155e49ae5464f24396512aa26c9fcaaf513f79f204",
+    "name": "official/mysql",
+    "revision": "1.0.0",
+    "source": "bundled_catalog"
+  },
+  "runtime": {
+    "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "dependentRuntimes": [],
+    "displayName": "MySQL",
+    "id": "0192f3a6-0000-7000-8000-0000000000a1",
+    "installMode": "managed",
+    "installedAt": "2026-01-01T00:00:00.000Z",
+    "lastVerifiedAt": null,
+    "line": "8.4",
+    "revision": 1,
+    "software": "mysql",
+    "state": "installed",
+    "support": "unverified",
+    "supportReason": "untested",
+    "target": {
+      "arch": "aarch64",
+      "os": "macos"
+    },
+    "usedBy": [],
+    "version": "8.4.11"
+  },
+  "startupDefault": "manual",
+  "suggestedName": "mysql-8-4"
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MySQL settings",
+  "description": "Root password and the few server settings a MySQL instance exposes.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rootPassword": {
+      "type": "string",
+      "title": "Root password",
+      "description": "Password of the root account, set once when the instance is created.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "immutableAfterInit", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "maxConnections": {
+      "type": "integer",
+      "title": "Max connections",
+      "description": "Most client connections the server accepts at once.",
+      "minimum": 10,
+      "maximum": 10000,
+      "default": 151,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "innodbBufferPoolSizeMb": {
+      "type": "integer",
+      "title": "InnoDB buffer pool (MB)",
+      "description": "Memory the server reserves for caching table and index data.",
+      "minimum": 64,
+      "maximum": 65536,
+      "default": 128,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "binaryLog": {
+      "type": "boolean",
+      "title": "Binary log",
+      "description": "Keeps a log of every change. Change data capture tools need it. Uses more disk.",
+      "default": false,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    }
+  },
+  "required": ["rootPassword"]
+}

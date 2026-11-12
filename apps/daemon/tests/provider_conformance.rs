@@ -626,7 +626,7 @@ fn every_official_package_has_the_step_and_health_limits_its_manifest_gives() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the harness step limits of providers/nats, providers/postgresql, and providers/traefik, whose timeouts blocks are flow-style lines, and of providers/fake, whose block is block style, are the manifest values with the spec 0009 defaults filled in, and each health limit is intervalSeconds times failureThreshold plus one, plus attemptTimeoutMilliseconds",
+        expected = "the harness step limits of providers/nats, providers/postgresql, providers/mysql, and providers/traefik, whose timeouts blocks are flow-style lines, and of providers/fake, whose block is block style, are the manifest values with the spec 0009 defaults filled in, and each health limit is intervalSeconds times failureThreshold plus one, plus attemptTimeoutMilliseconds",
     );
     let limits = |name: &str| {
         let check = stackly_core::provider::check_package(
@@ -645,7 +645,7 @@ fn every_official_package_has_the_step_and_health_limits_its_manifest_gives() {
         )
     };
 
-    let found = ["nats", "postgresql", "traefik", "fake"].map(|name| (name, limits(name)));
+    let found = ["nats", "postgresql", "mysql", "traefik", "fake"].map(|name| (name, limits(name)));
 
     // init, readiness, stop, reload in seconds; health in milliseconds.
     assert_eq!(
@@ -656,6 +656,9 @@ fn every_official_package_has_the_step_and_health_limits_its_manifest_gives() {
             // timeouts { initSeconds: 180, readinessSeconds: 120, stopSeconds: 60,
             // reloadSeconds: 30 }; health 10 s × 4 + 3000 ms.
             ("postgresql", (180, 120, 60, 30, 43_000)),
+            // timeouts { initSeconds: 180, readinessSeconds: 120, recoverySeconds: 600,
+            // stopSeconds: 120 }; no reload; health 10 s × 4 + 3000 ms.
+            ("mysql", (180, 120, 120, 30, 43_000)),
             // timeouts { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }.
             ("traefik", (120, 30, 30, 30, 42_000)),
             // block style: init 30, readiness 30, stop 10, reload 10; health
@@ -791,4 +794,28 @@ fn traefik_3_7_passes_conformance() {
         expected = "conformance::run on providers/traefik line 3.7 with the managed artifact from the runtime cache passes every step of its scenarios, writes a native report with verdict pass, and leaves no process and no root",
     );
     native(&ev, "traefik", "3.7");
+}
+
+// covers: AC-14 (spec 0042)
+#[test]
+#[ignore = "native: needs the managed MySQL 8.4.11 artifact in the runtime cache"]
+fn mysql_8_4_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/mysql line 8.4 with the managed artifact from the runtime cache passes every step of its default and binlog scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "mysql", "8.4");
+}
+
+// covers: AC-14 (spec 0042)
+#[test]
+#[ignore = "native: needs the managed MySQL 9.7.2 artifact in the runtime cache"]
+fn mysql_9_7_passes_conformance() {
+    let ev = evidence!(
+        covers = ["AC-029", "REQ-029"],
+        kind = Kind::Native,
+        expected = "conformance::run on providers/mysql line 9.7 with the managed artifact from the runtime cache passes every step of its default and binlog scenarios, writes a native report with verdict pass, and leaves no process and no root",
+    );
+    native(&ev, "mysql", "9.7");
 }

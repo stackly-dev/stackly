@@ -1,0 +1,9 @@
+# Managed by Stackly. Edits to this file are lost on the next start.
+# Port, bind address, socket, data folder, temp folder, and log files are set
+# on the mysqld command line by Stackly and cannot be changed here.
+# Variables saved with SET PERSIST are not loaded when the instance starts.
+[mysqld]
+max_connections = 151
+innodb_buffer_pool_size = 128M
+default_time_zone = "+00:00"
+disable_log_bin
