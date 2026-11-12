@@ -31,3 +31,11 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 1. Di aplikasi: buat instance MySQL dari Catalog, start, salin connection string, lalu Open In TablePlus, Sequel Ace, dan mysql (Terminal). Ini juga memeriksa bundle ID Sequel Ace `com.sequel-ace.sequel-ace` dan bahwa kedua aplikasi menerima URL `mysql://`.
 2. Di aplikasi: ubah Max connections di halaman Configuration. Harapan: dampak restart ditampilkan.
 3. AC-17, bila test launchd `BLOCKED` di sesi: `cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 mysql` di sesi GUI yang login, lalu tambahkan entri `HANDOVER_PROVEN`.
+
+## Fitur 40 · Provider Valkey (spec 0040)
+
+1. Handover (AC-19). Prasyarat: langkah 11 di `main`, sesi GUI yang login, artefak Valkey di cache xtask. `cargo test -p stacklyd --test native_launchd -- --ignored valkey`. Harapan: instance Valkey bertahan dengan PID dan `startedAt` yang sama melewati `stackly daemon restart` dan `SIGKILL` ke `stacklyd`; record `PASS`. Sesudah itu entri `HandoverProof::new("official/valkey", "1", "spec-0040-ac-19")` boleh masuk (langkah 12).
+2. Form dan Configuration (AC-7). Form create Valkey: teks `Persistence` tampil di bawah kontrolnya. Buat instance `volatile`: halaman Configuration menampilkan field itu terkunci dengan nilai `volatile` dan file `persistence-volatile.conf`.
+3. TablePlus (AC-18). Prasyarat: TablePlus terpasang, instance Valkey `ready`. `Open in TablePlus`: koneksi Redis terbuka ke port instance, password dari clipboard diterima. Kalau TablePlus menolak URL tanpa password, entri `tableplus` dihapus lewat revision paket baru.
+4. Terminal (AC-18). `Open valkey-cli in Terminal`, tempel password: prompt `valkey-cli` terbuka.
+5. Fuzz (AC-2, AC-3). `cargo xtask fuzz run provider_template --time 600` sesudah langkah 1 dan 2: tanpa crash.

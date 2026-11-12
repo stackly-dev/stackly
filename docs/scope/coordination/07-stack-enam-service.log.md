@@ -10,7 +10,7 @@
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `arc-f39-spec` | architect | F39 Provider NATS & JetStream · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0039-provider-nats-jetstream/` | `claude/arc-f39-spec-781b0e` | `fable-5-2 · high` | merged |
-| `arc-f40-spec` | architect | F40 Provider Valkey · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0040-provider-valkey/` | `claude/arc-f40-spec-*` | `fable-5-2 · high` | aktif |
+| `arc-f40-spec` | architect | F40 Provider Valkey · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0040-provider-valkey/` | `claude/arc-f40-spec-d71756` | `fable-5-2 · high` | merged |
 | `arc-f41-spec` | architect | F41 Provider Traefik & routing lokal · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0041-provider-traefik-routing-lokal/` | `claude/arc-f41-spec-ec76d9` | `fable-5-2 · high` | merged |
 | `arc-f42-spec` | architect | F42 Provider MySQL · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0042-provider-mysql/` | `claude/arc-f42-spec-bb6818` | `fable-5-2 · high` | merged, sesi idle menunggu slot build |
 | `arc-f43-spec` | architect | F43 Provider ClickHouse · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0043-provider-clickhouse/` | `claude/arc-f43-spec-0060e9` | `fable-5-2 · high` | merged |
@@ -46,6 +46,7 @@
 - F39 · `Design it (spec)` · laporan `arc-f39-spec` `done` · `claude/arc-f39-spec-781b0e` → `8592e595` · spec punya Requirements (AC-1 sampai AC-14), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
 - F43 · `Design it (spec)` · laporan `arc-f43-spec` `done` · `claude/arc-f43-spec-0060e9` → `9b54186e` · spec punya Requirements (AC-1 sampai AC-17), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
 - F42 · `Design it (spec)` · laporan `arc-f42-spec` `done` · `claude/arc-f42-spec-bb6818` → `6b9eb3f7` · spec punya Requirements (AC-1 sampai AC-18), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
+- F40 · `Design it (spec)` · laporan `arc-f40-spec` `done` · `claude/arc-f40-spec-d71756` → `3ffc0c18` · spec punya Requirements (AC-1 sampai AC-19), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
 
 ## Riwayat wave
 
