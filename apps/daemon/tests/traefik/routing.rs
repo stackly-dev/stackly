@@ -23,19 +23,19 @@ use crate::harness::{
 use crate::support::Api;
 
 /// The rule both instances share (spec 0041 AC-2).
-const APP_RULE: &str = "Host(`app.localhost`)";
+pub(crate) const APP_RULE: &str = "Host(`app.localhost`)";
 
 /// What a test compares to prove an instance was left alone.
 #[derive(Debug, PartialEq, Eq)]
-struct Untouched {
-    pid: u32,
-    revision: u64,
-    routes_file: Vec<u8>,
-    answer: (u16, String),
+pub(crate) struct Untouched {
+    pub(crate) pid: u32,
+    pub(crate) revision: u64,
+    pub(crate) routes_file: Vec<u8>,
+    pub(crate) answer: (u16, String),
 }
 
 /// The routes file of the instance `id`.
-fn routes_file(site: &Site, id: Uuid) -> PathBuf {
+pub(crate) fn routes_file(site: &Site, id: Uuid) -> PathBuf {
     site.instance_paths(id)
         .config
         .join("dynamic")
@@ -43,7 +43,7 @@ fn routes_file(site: &Site, id: Uuid) -> PathBuf {
 }
 
 /// The PID, revision, routes file bytes, and answer for `host` of `id`.
-async fn snapshot(site: &Site, api: &Api, id: Uuid, host: &str) -> Untouched {
+pub(crate) async fn snapshot(site: &Site, api: &Api, id: Uuid, host: &str) -> Untouched {
     let summary = api.get(id).await.expect("the instance can be read");
     let view = Cfg { api }.view(id).await;
     let (status, body) = get(port_of(&summary, "web"), host);
@@ -56,7 +56,7 @@ async fn snapshot(site: &Site, api: &Api, id: Uuid, host: &str) -> Untouched {
 }
 
 /// Waits until the config of `id` names `n` as its last known good.
-async fn last_known_good(api: &Api, id: Uuid, n: u64) {
+pub(crate) async fn last_known_good(api: &Api, id: Uuid, n: u64) {
     Cfg { api }
         .wait_view(id, &format!("revision {n} as last known good"), |view| {
             view.last_known_good.map(|good| good.get()) == Some(n)
@@ -442,7 +442,9 @@ async fn a_backend_url_with_a_path_a_query_a_fragment_or_a_bad_escape_is_refused
 }
 
 /// The `name@file` entries of a Traefik API list, by name.
-fn by_name(list: &serde_json::Value) -> std::collections::BTreeMap<String, serde_json::Value> {
+pub(crate) fn by_name(
+    list: &serde_json::Value,
+) -> std::collections::BTreeMap<String, serde_json::Value> {
     list.as_array()
         .expect("the API answers a list")
         .iter()

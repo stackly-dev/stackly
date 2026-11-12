@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce58-3a5c-7173-a8b7-c59394f776a2",
+  "covers": [
+    "REQ-039",
+    "AC-039"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "traefik",
+    "name": "history::an_apply_on_an_instance_already_not_ready_keeps_the_last_known_good_and_gets_no_ready_at",
+    "file": "apps/daemon/tests/traefik/history.rs",
+    "line": 218
+  },
+  "status": "PASS",
+  "expected": "on an instance not_ready after a rule Traefik rejected, a further apply that keeps the rejected rule ends succeeded (spec 0026 AC-10), its revision gets no ready_at, the last known good stays revision 1, readiness stays routes_mismatch, and the roll back still writes a ready revision from revision 1",
+  "actual": "the apply on the not_ready instance ended succeeded; revision 3 got no ready_at, the last known good stayed 1, and the roll back made revision 4 ready",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "traefik",
+      "version": "3.7.15",
+      "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T06:00:51.036188Z",
+  "finishedAt": "2026-11-12T06:01:36.338164Z",
+  "evidencePath": "output.log"
+}

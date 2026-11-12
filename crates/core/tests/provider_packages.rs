@@ -1872,6 +1872,421 @@ fn traefik_remedy_matches_routes_mismatch_only_and_renders_like_the_golden_file(
     ev.pass();
 }
 
+/// Settings with one route `api` to `url`, for the backendUrl tests.
+fn traefik_backend(url: &str) -> serde_json::Value {
+    serde_json::json!({ "routes": [{
+        "name": "api",
+        "rule": "Host(`api.localhost`)",
+        "backendUrl": url,
+    }] })
+}
+
+// covers: AC-15, AC-3, AC-7 (spec 0041)
+#[test]
+fn traefik_backend_url_refuses_every_form_the_verify_checker_tried_at_the_field() {
+    let ev = evidence!(
+        covers = ["REQ-039", "AC-039", "AC-015"],
+        kind = Kind::Fixture,
+        expected = "the backendUrl pattern of providers/traefik refuses a query, a fragment, a double slash, white space, NBSP, U+2028, fullwidth digits, an upper case scheme or host, localhost., 127.1 and other IPv4 spellings, a zone id, user info, an IPv4 mapped or long IPv6 loopback, https, and a missing or signed port, each with a pattern issue at routes[0].backendUrl and no issue anywhere else",
+    );
+    let package = validated(&traefik_dir());
+    let schema = package.settings_schema();
+
+    let refused = [
+        // query and fragment, with and without a slash
+        "http://127.0.0.1:9?",
+        "http://127.0.0.1:9?x",
+        "http://127.0.0.1:9/?",
+        "http://127.0.0.1:9/?a=%zz",
+        "http://127.0.0.1:9#",
+        "http://127.0.0.1:9/#",
+        "http://127.0.0.1:9/#%zz",
+        // a path, a double slash, and slashes in the wrong place
+        "http://127.0.0.1:9//",
+        "http://127.0.0.1:9///",
+        "http://127.0.0.1:9/.",
+        "http://127.0.0.1:9/%41",
+        "http://127.0.0.1:9\\",
+        "http:///127.0.0.1:9",
+        "http:127.0.0.1:9",
+        "//127.0.0.1:9",
+        "127.0.0.1:9",
+        // white space and invisible characters
+        " http://127.0.0.1:9",
+        "http://127.0.0.1:9 ",
+        "http://127.0.0.1: 9",
+        "http://127.0.0.1:9\t",
+        "http://127.0.0.1:9\n",
+        "http://127.0.0.1:9\u{a0}",
+        "http://127.0.0.1:\u{a0}9",
+        "http://127.0.0.1:9\u{2028}",
+        "http://127.0.0.1:9/\u{200b}",
+        "\u{feff}http://127.0.0.1:9",
+        // digits that are not ASCII
+        "http://127.0.0.1:\u{ff19}",
+        "http://\u{ff11}27.0.0.1:9",
+        "http://127.0.0.1:\u{0669}",
+        // case
+        "HTTP://127.0.0.1:9",
+        "Http://127.0.0.1:9",
+        "http://LOCALHOST:9",
+        "http://Localhost:9",
+        // other spellings of the loopback
+        "http://localhost.:9",
+        "http://localhost.localdomain:9",
+        "http://127.1:9",
+        "http://127.0.1:9",
+        "http://127.0.0.01:9",
+        "http://0x7f.0.0.1:9",
+        "http://2130706433:9",
+        "http://0.0.0.0:9",
+        "http://127.0.0.2:9",
+        "http://[::ffff:127.0.0.1]:9",
+        "http://[0:0:0:0:0:0:0:1]:9",
+        "http://[::0001]:9",
+        "http://[::1]:9]",
+        "http://::1:9",
+        // a zone id
+        "http://[::1%25lo0]:9",
+        "http://[::1%lo0]:9",
+        "http://[fe80::1%25lo0]:9",
+        // user info, or a loopback that is only user info
+        "http://user@127.0.0.1:9",
+        "http://user:pass@127.0.0.1:9",
+        "http://@127.0.0.1:9",
+        "http://127.0.0.1:9@example.com",
+        "http://localhost:9@example.com:80",
+        // another scheme
+        "https://127.0.0.1:9",
+        "https://localhost:9",
+        "https://[::1]:9",
+        "ws://127.0.0.1:9",
+        "h2c://127.0.0.1:9",
+        // the port
+        "http://127.0.0.1",
+        "http://127.0.0.1:",
+        "http://127.0.0.1:/",
+        "http://127.0.0.1:-1",
+        "http://127.0.0.1:+9",
+        "http://127.0.0.1:9:9",
+        "http://127.0.0.1:123456",
+        "http://localhost",
+        "http://[::1]",
+        "",
+    ];
+    for url in refused {
+        let Err(error) = schema.validate(&traefik_backend(url)) else {
+            panic!("{url:?} is refused");
+        };
+        assert!(
+            error
+                .issues
+                .iter()
+                .all(|issue| issue.location == Location::Field("routes[0].backendUrl".to_owned())),
+            "{url:?}: {:?}",
+            error.issues
+        );
+        assert!(
+            error
+                .issues
+                .iter()
+                .any(|issue| issue.settings_kind == Some(SettingsIssueKind::Pattern)),
+            "{url:?}: {:?}",
+            error.issues
+        );
+    }
+    ev.pass_with(&format!("{} forms refused at the field", refused.len()));
+}
+
+// covers: AC-15 (spec 0041)
+#[test]
+fn traefik_backend_url_accepts_the_edge_forms_the_native_test_loads() {
+    let package = validated(&traefik_dir());
+    let schema = package.settings_schema();
+
+    for url in [
+        "http://127.0.0.1:0",
+        "http://127.0.0.1:99999",
+        "http://127.0.0.1:00009",
+        "http://localhost:9",
+        "http://localhost:9/",
+        "http://localhost:0/",
+        "http://[::1]:9",
+        "http://[::1]:9/",
+        "http://[::1]:99999/",
+    ] {
+        assert!(
+            schema.validate(&traefik_backend(url)).is_ok(),
+            "{url} is accepted"
+        );
+    }
+}
+
+// covers: AC-7 (spec 0041)
+#[test]
+fn a_traefik_route_named_tls_is_valid_and_only_a_tls_key_counts_as_tls() {
+    let package = validated(&traefik_dir());
+    let named_tls = serde_json::json!({ "routes": [
+        { "name": "tls", "rule": "Host(`tls.localhost`)", "backendUrl": "http://127.0.0.1:3000" },
+        { "name": "tls-api", "rule": "Host(`tls`) && PathPrefix(`/tls`)", "backendUrl": "http://localhost:3001/" },
+    ] });
+
+    assert!(
+        package.settings_schema().validate(&named_tls).is_ok(),
+        "a route named tls passes the schema"
+    );
+    let context = golden_context(&package, named_tls);
+    let reload = package
+        .reload_plan(&context)
+        .expect("the reload plan with routes named tls builds");
+    let renders = rendered(&package, &reload.steps);
+    let [(_, text)] = renders.as_slice() else {
+        panic!("a traefik reload renders only routes: {renders:?}");
+    };
+    let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(text).expect("routes.yaml is YAML");
+    assert!(!routes_hold_tls(&parsed), "{text}");
+    for name in ["tls", "tls-api"] {
+        assert!(parsed["http"]["routers"][name].is_mapping(), "{text}");
+        assert!(parsed["http"]["services"][name].is_mapping(), "{text}");
+    }
+
+    // `holds_tls_key` reads keys, never values: `tls` as a value, inside a
+    // rule, or as part of a longer key is not TLS.
+    let values_only: serde_yaml_ng::Value = serde_yaml_ng::from_str(
+        "service: tls\nrule: \"Host(`tls`)\"\nlist: [tls]\ntlsOptions: x\nmytls: x\n",
+    )
+    .expect("YAML");
+    assert!(!holds_tls_key(&values_only));
+    for configured in [
+        "tls: {}\n",
+        "a:\n  b:\n    tls: true\n",
+        "a:\n  - b:\n      tls: {}\n",
+        "certificatesResolvers:\n  x: {}\n",
+    ] {
+        let parsed: serde_yaml_ng::Value = serde_yaml_ng::from_str(configured).expect("YAML");
+        assert!(holds_tls_key(&parsed), "{configured}");
+    }
+    // In the routes file, a name is a name; a key in a body is TLS.
+    let body: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str("http:\n  routers:\n    tls:\n      tls: {}\n").expect("YAML");
+    assert!(routes_hold_tls(&body));
+}
+
+// covers: AC-1, AC-13 (spec 0041)
+#[test]
+fn traefik_1_0_0_carries_connection_open_with_remedy_and_two_scenarios() {
+    let root = TestRoot::new().expect("a test root can be created");
+    let copy = root.path().join("providers/traefik");
+    copy_dir(&traefik_dir(), &copy);
+    let platform = FakePlatform::new(&root);
+
+    let check = check_package(platform.fs(), &copy, NameCheck::FolderName);
+
+    assert!(check.findings.is_empty(), "{:#?}", check.findings);
+    assert!(check.publishable());
+    let scenarios: Vec<(&str, &serde_json::Value, Expect)> = check
+        .scenarios
+        .iter()
+        .map(|scenario| (scenario.name.as_str(), &scenario.settings, scenario.expect))
+        .collect();
+    let one_route = serde_json::json!({ "routes": [{
+        "name": "app",
+        "rule": "Host(`app.localhost`)",
+        "backendUrl": "http://127.0.0.1:9",
+    }] });
+    assert_eq!(
+        scenarios,
+        [
+            ("default", &serde_json::json!({}), Expect::Ready),
+            ("one-route", &one_route, Expect::Ready),
+        ]
+    );
+
+    let package = validated(&traefik_dir());
+    assert_eq!(package.key().revision().as_str(), "1.0.0");
+    let manifest = traefik_manifest_yaml();
+    let names = |list: &serde_yaml_ng::Value| -> Vec<String> {
+        list.as_sequence()
+            .expect("a list")
+            .iter()
+            .map(|entry| entry["name"].as_str().expect("a name").to_owned())
+            .collect()
+    };
+    assert_eq!(names(&manifest["connection"]), ["web", "ping"]);
+    assert_eq!(names(&manifest["openWith"]), ["routes", "routers"]);
+    assert_eq!(manifest["openWith"][1]["kind"], "browser");
+    assert_eq!(
+        manifest["openWith"][1]["browser"]["url"],
+        "http://${endpoint.ping.address}/api/http/routers"
+    );
+    assert_eq!(names(&manifest["remedies"]), ["routes_not_loaded"]);
+    assert_eq!(
+        manifest["remedies"][0]["when"]["readinessReasons"],
+        serde_yaml_ng::Value::Sequence(vec!["routes_mismatch".into()])
+    );
+    let mut templates: Vec<&str> = package
+        .files()
+        .iter()
+        .map(|(path, _)| path)
+        .filter(|path| path.starts_with("templates/"))
+        .collect();
+    templates.sort();
+    assert_eq!(
+        templates,
+        ["templates/routes.yaml.tmpl", "templates/traefik.yaml.tmpl"]
+    );
+}
+
+/// The section header each line of `text` sits under, as `(header, line)`.
+fn toml_sections(text: &str) -> Vec<(String, String)> {
+    let mut header = String::new();
+    let mut lines = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            header = line.to_owned();
+        } else if !line.is_empty() && !line.starts_with('#') {
+            lines.push((header.clone(), line.to_owned()));
+        }
+    }
+    lines
+}
+
+// covers: AC-10 (spec 0041)
+#[test]
+fn official_traefik_is_a_catalog_provider_and_its_frozen_copy_is_revision_1_0_0() {
+    let catalog =
+        fs::read_to_string(repo_root().join("providers/catalog.toml")).expect("the catalog reads");
+    let package = validated(&traefik_dir());
+
+    let headers: Vec<&str> = toml_sections(&catalog)
+        .iter()
+        .filter(|(_, line)| line.replace(' ', "") == "id=\"official/traefik\"")
+        .map(|(header, _)| match header.as_str() {
+            "[[provider]]" => "provider",
+            "[[planned]]" => "planned",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(
+        headers,
+        ["provider"],
+        "official/traefik is listed once, as a provider"
+    );
+
+    let frozen_dir = repo_root().join("crates/core/tests/fixtures/compat/traefik/1.0.0");
+    let frozen: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(frozen_dir.join("frozen.json")).expect("frozen.json reads"),
+    )
+    .expect("frozen.json is JSON");
+    assert_eq!(frozen["provider"], "official/traefik");
+    assert_eq!(frozen["revision"], "1.0.0");
+    assert_eq!(
+        frozen["manifestSha256"],
+        package.key().manifest_sha256().to_string().as_str(),
+        "the frozen copy is the package as it is"
+    );
+    for file in [
+        "provider.yaml",
+        "schemas/settings.schema.json",
+        "templates/routes.yaml.tmpl",
+        "templates/traefik.yaml.tmpl",
+    ] {
+        assert_eq!(
+            fs::read(frozen_dir.join("package").join(file))
+                .unwrap_or_else(|err| panic!("{file}: {err}")),
+            fs::read(traefik_dir().join(file)).expect("the package file reads"),
+            "{file} is frozen byte for byte"
+        );
+    }
+}
+
+// covers: AC-11 (spec 0041)
+#[test]
+fn the_traefik_versions_hold_a_passing_native_record_for_revision_1_0_0_with_its_evidence() {
+    let package = validated(&traefik_dir());
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let sha = package.key().manifest_sha256().to_string();
+
+    let records: Vec<&serde_json::Value> = versions["artifacts"]
+        .as_array()
+        .expect("versions.json lists artifacts")
+        .iter()
+        .flat_map(|artifact| artifact["compatibility"].as_array().into_iter().flatten())
+        .filter(|record| {
+            record["scope"] == "provider"
+                && record["providerRevision"]["id"] == "official/traefik"
+                && record["providerRevision"]["revision"] == "1.0.0"
+                && record["providerRevision"]["manifestSha256"] == sha.as_str()
+        })
+        .collect();
+
+    assert!(!records.is_empty(), "a provider record of 1.0.0 for {sha}");
+    for record in records {
+        assert_eq!(record["result"], "pass", "{record}");
+        assert_eq!(
+            record["checks"],
+            serde_json::json!([
+                "health",
+                "http",
+                "init",
+                "invalid_config",
+                "readiness",
+                "rollback",
+                "routing_update",
+                "second_instance",
+                "start",
+                "stop"
+            ]),
+            "{record}"
+        );
+        assert_eq!(
+            record["knownLimitations"],
+            serde_json::json!(["dashboard_not_offered", "https_not_offered"]),
+            "{record}"
+        );
+        let evidence = record["evidence"]
+            .as_str()
+            .expect("the record names its evidence");
+        let mut parts = evidence.split('/');
+        let (Some("compatibility"), Some(run), Some(id), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            panic!("evidence is compatibility/<run>/<record>: {evidence}");
+        };
+        let report_path = repo_root()
+            .join("evidence/compatibility")
+            .join(run)
+            .join("report.json");
+        let report: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&report_path)
+                .unwrap_or_else(|err| panic!("{}: {err}", report_path.display())),
+        )
+        .expect("report.json is JSON");
+        assert_eq!(report["kind"], "native", "{evidence}");
+        let source = report["records"]
+            .as_array()
+            .expect("the report lists records")
+            .iter()
+            .find(|entry| entry["id"] == id)
+            .unwrap_or_else(|| panic!("{evidence}: the report holds the record"));
+        assert_eq!(source["status"], "PASS", "{evidence}");
+        let covers = source["covers"].as_array().expect("the record covers IDs");
+        for id in ["BR-025", "REQ-039", "AC-039"] {
+            assert!(
+                covers.iter().any(|cover| cover == id),
+                "{evidence} covers {id}"
+            );
+        }
+    }
+}
+
 fn postgresql_settings() -> serde_json::Value {
     serde_json::json!({ "superuserPassword": GOLDEN_SECRET_REF })
 }
