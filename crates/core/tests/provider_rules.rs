@@ -1899,6 +1899,83 @@ fn postgresql_conf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
 }
 
 #[test]
+fn valkey_conf_renders_quoted_text_decimal_integers_and_yes_no_booleans() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: valkeyConf")
+        .set(
+            "templates/fake.json.tmpl",
+            "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nignore-term {{ settings.ignoreTerm }}\nready-delay {{ settings.readyDelayMs }}\nrequirepass {{ secret.authToken }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a\"b\\c d ü #x",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        write.content.materialize(&token("x\"y")).expect("the config materializes"),
+        "proc-title-template \"a\\\"b\\\\c d ü #x\"\nfail-init yes\nignore-term no\nready-delay 250\nrequirepass \"x\\\"y\"\n".as_bytes()
+    );
+    let err = write.content.materialize(&token("a\nb")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\nb"), "{err}");
+
+    let home = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\tb",
+    );
+    let package_with_data = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: valkeyConf")
+        .set("templates/fake.json.tmpl", "dir {{ instance.data }}\n")
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let err = package_with_data.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\tb"), "{err}");
+}
+
+#[test]
+fn an_unknown_format_names_every_known_format_in_its_message() {
+    let err = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: ini")
+        .validate()
+        .unwrap_err();
+    let issue = err
+        .issues
+        .iter()
+        .find(|issue| issue.code == IssueCode::UnknownTemplateFormat)
+        .expect("the format is rejected");
+
+    for format in [
+        "yaml",
+        "json",
+        "natsConf",
+        "postgresqlConf",
+        "plain",
+        "valkeyConf",
+    ] {
+        assert!(issue.message.contains(format), "{}", issue.message);
+    }
+}
+
+#[test]
 fn plain_templates_keep_text_and_comments_and_reject_output_and_block_tags() {
     let template = "templates/fake.json.tmpl";
     let package = Edit::fake()

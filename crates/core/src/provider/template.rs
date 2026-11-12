@@ -44,6 +44,26 @@ fn push_yaml_escape(out: &mut String, c: char) {
     }
 }
 
+/// Writes `text` as a double quoted value with `\` as `\\` and `"` as
+/// `\"`, leaving every other character as it is, or returns `None` when the
+/// text holds a control character (U+0000 to U+001F, U+007F to U+009F).
+fn backslash_quoted(text: &str) -> Option<String> {
+    if text.chars().any(char::is_control) {
+        return None;
+    }
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    Some(out)
+}
+
 /// The format of a config file, which picks the escaper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +83,10 @@ pub enum TemplateFormat {
     /// A static file (spec 0019): validation rejects every output and
     /// block tag, so the template comes out as written.
     Plain,
+    /// The Valkey server config (spec 0040): text becomes a double quoted
+    /// value with `\` and `"` escaped by a backslash, text holding a
+    /// control character is rejected, and a boolean is `yes` or `no`.
+    ValkeyConf,
 }
 
 impl TemplateFormat {
@@ -74,6 +98,7 @@ impl TemplateFormat {
             "natsConf" => Some(Self::NatsConf),
             "postgresqlConf" => Some(Self::PostgresqlConf),
             "plain" => Some(Self::Plain),
+            "valkeyConf" => Some(Self::ValkeyConf),
             _ => None,
         }
     }
@@ -144,6 +169,7 @@ impl TemplateFormat {
                 out.push('\'');
                 Some(out)
             }
+            Self::ValkeyConf => backslash_quoted(text),
             // Validation rejects every output tag of a plain template.
             Self::Plain => None,
         }
@@ -154,6 +180,8 @@ impl TemplateFormat {
         match (self, flag) {
             (Self::PostgresqlConf, true) => "on",
             (Self::PostgresqlConf, false) => "off",
+            (Self::ValkeyConf, true) => "yes",
+            (Self::ValkeyConf, false) => "no",
             (_, true) => "true",
             (_, false) => "false",
         }
@@ -170,7 +198,9 @@ impl TemplateFormat {
         match self {
             Self::Yaml => super::raw::yaml_value(text).is_ok(),
             Self::Json => serde_json::from_str::<serde_json::Value>(text).is_ok(),
-            Self::NatsConf | Self::PostgresqlConf | Self::Plain => true,
+            // These formats are not parsed back; tests against the real
+            // binaries in their provider specs guard the escapers.
+            Self::NatsConf | Self::PostgresqlConf | Self::Plain | Self::ValkeyConf => true,
         }
     }
 }
@@ -1250,6 +1280,48 @@ mod tests {
         assert!(!TemplateFormat::Plain.allows_tags());
         assert!(TemplateFormat::PostgresqlConf.allows_tags());
         assert!(TemplateFormat::Plain.output_parses("local all all scram-sha-256\n"));
+    }
+
+    #[test]
+    fn valkey_conf_double_quotes_text_and_escapes_quotes_and_backslashes() {
+        let format = TemplateFormat::ValkeyConf;
+
+        assert_eq!(format.escape_text("none").unwrap(), "\"none\"");
+        assert_eq!(
+            format.escape_text("a\"b\\c d ü #x").unwrap(),
+            "\"a\\\"b\\\\c d ü #x\""
+        );
+        assert_eq!(format.escape_text("").unwrap(), "\"\"");
+        assert_eq!(
+            format.escape_text("$HOME 'q' `id` {x}").unwrap(),
+            "\"$HOME 'q' `id` {x}\""
+        );
+    }
+
+    #[test]
+    fn valkey_conf_rejects_every_control_character() {
+        for bad in [
+            "a\nb", "a\tb", "a\rb", "a\u{0}", "a\u{1f}", "a\u{7f}", "a\u{85}", "a\u{9f}",
+        ] {
+            assert_eq!(TemplateFormat::ValkeyConf.escape_text(bad), None, "{bad:?}");
+        }
+        assert!(TemplateFormat::ValkeyConf.escape_text("a\u{a0}b").is_some());
+    }
+
+    #[test]
+    fn valkey_conf_writes_booleans_as_yes_and_no_and_takes_tags_without_a_parse_back() {
+        let format = TemplateFormat::ValkeyConf;
+
+        assert_eq!(format.boolean(true), "yes");
+        assert_eq!(format.boolean(false), "no");
+        assert!(format.allows_tags());
+        assert!(format.output_parses("port 6379\nunbalanced \"\n"));
+        assert_eq!(
+            TemplateFormat::from_code("valkeyConf"),
+            Some(TemplateFormat::ValkeyConf)
+        );
+        assert_eq!(TemplateFormat::from_code("valkey"), None);
+        assert_eq!(TemplateFormat::from_code("ValkeyConf"), None);
     }
 
     #[test]

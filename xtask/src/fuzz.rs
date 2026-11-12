@@ -610,10 +610,22 @@ fn provider_manifest_seeds(root: &Path) -> Result<Vec<Seed>> {
         .collect()
 }
 
+/// Templates for the setups no example package covers, with the selector
+/// byte of the setup and the seed name. The harness (`template` in
+/// `stackly_core::provider::fuzzing`) puts each in the slot of the fake
+/// `fake.json.tmpl`, a sensitive config, so a sample may use `secret.*`.
+/// Setup numbers: 0 `json`, 1 `yaml`, 2 `natsConf`, 3 the traefik routes
+/// template, 4 `postgresqlConf`, 5 `plain`, 6 `valkeyConf` (spec 0040).
+const FORMAT_SAMPLES: [(&str, u8, &str); 1] = [(
+    "format.valkey.conf.tmpl",
+    6,
+    "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nready-delay {{ settings.readyDelayMs }}\ndir {{ instance.data }}\nrequirepass {{ secret.authToken }}\n",
+)];
+
 /// `provider_template`: every template of the example packages after the
 /// selector byte of its setup: 0 for `json`, 1 for `yaml`, 2 for
 /// `natsConf`, and 3 for the traefik routes template, which the harness
-/// renders with a list.
+/// renders with a list; then each of [`FORMAT_SAMPLES`].
 fn provider_template_seeds(root: &Path) -> Result<Vec<Seed>> {
     let mut seeds = Vec::new();
     for (name, dir) in PROVIDER_PACKAGES {
@@ -640,6 +652,14 @@ fn provider_template_seeds(root: &Path) -> Result<Vec<Seed>> {
                 bytes,
             });
         }
+    }
+    for (name, selector, text) in FORMAT_SAMPLES {
+        let mut bytes = vec![selector];
+        bytes.extend_from_slice(text.as_bytes());
+        seeds.push(Seed {
+            name: name.to_owned(),
+            bytes,
+        });
     }
     Ok(seeds)
 }
@@ -976,6 +996,7 @@ mod tests {
         assert_eq!(selector("nats.nats.conf.tmpl"), 2);
         assert_eq!(selector("traefik.traefik.yaml.tmpl"), 1);
         assert_eq!(selector("traefik.routes.yaml.tmpl"), 3);
+        assert_eq!(selector("format.valkey.conf.tmpl"), 6);
         let fields = provider_interpolation_seeds(&root).unwrap();
         let texts: Vec<&[u8]> = fields.iter().map(|seed| seed.bytes.as_slice()).collect();
         assert!(texts.contains(&b"--data=${instance.data}".as_slice()));
