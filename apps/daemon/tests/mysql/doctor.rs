@@ -10,7 +10,7 @@ use stackly_protocol::instance::InstanceReadinessState;
 use stackly_protocol::{Call, Reply};
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, Site, create_instance, stop_and_shutdown};
+use crate::harness::{MY84, MY97, My, Site, create_instance, stop_and_shutdown};
 
 /// The accounts called `stackly_readiness`, as `root` reads them.
 fn readiness_accounts(mysql: &crate::harness::Mysql, password: &str) -> String {
@@ -116,4 +116,16 @@ async fn mysql_8_4_with_a_dropped_readiness_account_gets_the_readiness_account_r
         expected = "after DROP USER stackly_readiness the instance is not_ready, doctor.run reports not_ready with the readiness_account remedy of official/mysql whose command is rendered with the runtime mysql and the instance socket and holds no password, and the account is still missing afterwards",
     );
     a_dropped_readiness_account_gets_the_provider_remedy(MY84, ev).await;
+}
+
+// covers: AC-18 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_with_a_dropped_readiness_account_gets_the_readiness_account_remedy() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "after DROP USER stackly_readiness the MySQL 9.7 instance is not_ready, doctor.run reports not_ready with the readiness_account remedy of official/mysql whose command is rendered with the runtime mysql and the instance socket and holds no password, and the account is still missing afterwards",
+    );
+    a_dropped_readiness_account_gets_the_provider_remedy(MY97, ev).await;
 }

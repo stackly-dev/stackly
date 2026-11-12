@@ -1742,6 +1742,7 @@ mod tests {
         }
     }
 
+    // covers: AC-2 (spec 0042)
     #[test]
     fn mysql_cnf_double_quotes_text_and_escapes_quotes_and_backslashes() {
         let format = TemplateFormat::MysqlCnf;
@@ -1754,6 +1755,7 @@ mod tests {
         assert_eq!(format.escape_text("$HOME `id`").unwrap(), "\"$HOME `id`\"");
     }
 
+    // covers: AC-2 (spec 0042)
     #[test]
     fn mysql_cnf_rejects_every_control_character() {
         for bad in [
@@ -1764,6 +1766,7 @@ mod tests {
         assert!(TemplateFormat::MysqlCnf.escape_text("a\u{a0}b").is_some());
     }
 
+    // covers: AC-2 (spec 0042)
     #[test]
     fn mysql_cnf_writes_booleans_as_on_and_off_and_takes_tags_without_a_parse_back() {
         let format = TemplateFormat::MysqlCnf;
@@ -1778,6 +1781,160 @@ mod tests {
         );
         assert_eq!(TemplateFormat::from_code("mysql"), None);
         assert_eq!(TemplateFormat::from_code("MysqlCnf"), None);
+    }
+
+    /// The value of one `name = value` line as the option file reader of
+    /// MySQL (`mysys/my_default.cc`) reads it: an end comment outside quotes
+    /// goes, outer whitespace goes, a pair of matching outer quotes goes, and
+    /// `\\`, `\"`, `\'`, `\n`, `\t`, `\r`, `\b`, and `\s` become one character
+    /// while any other backslash stays with the character after it.
+    fn mysql_option_value(raw: &str) -> String {
+        let mut quote = None;
+        let mut escape = false;
+        let mut end = raw.len();
+        for (at, c) in raw.char_indices() {
+            if (c == '\'' || c == '"') && !escape {
+                match quote {
+                    None => quote = Some(c),
+                    Some(open) if open == c => quote = None,
+                    Some(_) => {}
+                }
+            }
+            if quote.is_none() && c == '#' {
+                end = at;
+                break;
+            }
+            escape = quote.is_some() && c == '\\' && !escape;
+        }
+        let mut value = raw[..end].trim();
+        let bytes = value.as_bytes();
+        if bytes.len() >= 2
+            && (bytes[0] == b'"' || bytes[0] == b'\'')
+            && bytes[0] == bytes[bytes.len() - 1]
+        {
+            value = &value[1..value.len() - 1];
+        }
+        let chars: Vec<char> = value.chars().collect();
+        let mut out = String::new();
+        let mut at = 0;
+        while at < chars.len() {
+            if chars[at] == '\\' && at + 1 < chars.len() {
+                at += 1;
+                match chars[at] {
+                    'n' => out.push('\n'),
+                    't' => out.push('\t'),
+                    'r' => out.push('\r'),
+                    'b' => out.push('\u{8}'),
+                    's' => out.push(' '),
+                    '"' => out.push('"'),
+                    '\'' => out.push('\''),
+                    '\\' => out.push('\\'),
+                    other => {
+                        out.push('\\');
+                        out.push(other);
+                    }
+                }
+            } else {
+                out.push(chars[at]);
+            }
+            at += 1;
+        }
+        out
+    }
+
+    // covers: AC-2 (spec 0042)
+    #[test]
+    fn mysql_cnf_text_reads_back_unchanged_for_every_edge_mix() {
+        for text in [
+            "",
+            "\\",
+            "\"",
+            "\\\"",
+            "\"\\",
+            "a\\",
+            "\\\\",
+            "\"\"",
+            "a\"\"b",
+            "\\n\\t\\s\\b",
+            "\\x",
+            "#",
+            "#x",
+            "# x",
+            " # ",
+            ";",
+            ";x",
+            "a ; b",
+            "  ",
+            " a ",
+            "'",
+            "''",
+            "'a\"b'",
+            "\"'",
+            "a\\\\\"b",
+            "\\\" #;",
+            "$HOME `id`",
+            "{{ x }}",
+            "ü 空 \u{1f600}",
+            "\u{a0}\u{2028}\u{2029}\u{feff}",
+            "a\"b\\c d # e ü 空 'q' ; z",
+        ] {
+            let escaped = TemplateFormat::MysqlCnf
+                .escape_text(text)
+                .unwrap_or_else(|| panic!("{text:?} is representable"));
+            assert!(
+                escaped.starts_with('"') && escaped.ends_with('"') && escaped.len() >= 2,
+                "{text:?} as {escaped}"
+            );
+            assert_eq!(
+                mysql_option_value(&format!(" {escaped}  ")),
+                text,
+                "{text:?} as {escaped}"
+            );
+        }
+    }
+
+    // covers: AC-2 (spec 0042)
+    #[test]
+    fn mysql_cnf_never_lets_a_trailing_backslash_escape_the_closing_quote() {
+        let format = TemplateFormat::MysqlCnf;
+
+        assert_eq!(format.escape_text("a\\").unwrap(), "\"a\\\\\"");
+        assert_eq!(format.escape_text("\\\"").unwrap(), "\"\\\\\\\"\"");
+        assert_eq!(format.escape_text("\"\\").unwrap(), "\"\\\"\\\\\"");
+        assert_eq!(format.escape_text("# ;").unwrap(), "\"# ;\"");
+        assert_eq!(format.escape_text(" a ").unwrap(), "\" a \"");
+    }
+
+    // covers: AC-2 (spec 0042)
+    #[test]
+    fn mysql_cnf_rejects_each_c0_del_and_c1_character_wherever_it_stands() {
+        let controls = (0x00..=0x1f_u32).chain(0x7f..=0x9f);
+        for code in controls {
+            let c = char::from_u32(code).expect("a control code point is a char");
+            for text in [
+                format!("{c}"),
+                format!("{c}a"),
+                format!("a{c}"),
+                format!("a{c}b"),
+                format!("\"{c}\\"),
+                format!("#{c};"),
+            ] {
+                assert_eq!(
+                    TemplateFormat::MysqlCnf.escape_text(&text),
+                    None,
+                    "U+{code:04X} in {text:?}"
+                );
+            }
+        }
+        for code in [0x20_u32, 0x7e, 0xa0, 0xff] {
+            let c = char::from_u32(code).expect("a printable code point is a char");
+            assert!(
+                TemplateFormat::MysqlCnf
+                    .escape_text(&format!("a{c}b"))
+                    .is_some(),
+                "U+{code:04X} is kept"
+            );
+        }
     }
 
     #[test]

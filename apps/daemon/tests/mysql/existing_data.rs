@@ -52,9 +52,11 @@ async fn refuses_a_create_on_a_copy_of_valid_data(my: My, ev: Evidence) {
     );
     let data = site.instance_paths(id).data;
     assert!(mysqld_serving(&data).is_empty(), "a mysqld was spawned");
-    if data.exists() {
-        assert_eq!(tree_digest(&data), before, "a planted file was changed");
-    }
+    assert!(
+        data.is_dir(),
+        "the refused create removed the data folder with the planted copy"
+    );
+    assert_eq!(tree_digest(&data), before, "a planted file was changed");
     assert_eq!(tree_digest(&copy), before, "the copy was changed");
     daemon.shutdown().await;
     ev.subject(

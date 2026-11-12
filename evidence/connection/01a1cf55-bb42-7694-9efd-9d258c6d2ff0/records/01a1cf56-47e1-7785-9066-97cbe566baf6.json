@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf56-47e1-7785-9066-97cbe566baf6",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "drift::mysql_8_4_refuses_to_start_on_a_hand_edited_my_cnf_and_keeps_the_edit",
+    "file": "apps/daemon/tests/mysql/drift.rs",
+    "line": 122
+  },
+  "status": "PASS",
+  "expected": "the rendered my.cnf holds the three comment lines that call a hand edit drift and not the words lost on the next start; after a hand edit two starts are refused with config.drift_detected, no mysqld runs, the edit stays byte for byte, and keep revision writes the rendered file back so the next start is ready with max_connections 151",
+  "actual": "my.cnf names drift in three comment lines, a hand edit refused two starts with config.drift_detected and stayed byte for byte, keep revision restored the rendered file",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "8.4.11",
+      "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:38:20.641809Z",
+  "finishedAt": "2026-11-12T10:38:42.036194Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf55-f2a4-7334-b58c-935d45610acf",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "doctor::mysql_9_7_with_a_dropped_readiness_account_gets_the_readiness_account_remedy",
+    "file": "apps/daemon/tests/mysql/doctor.rs",
+    "line": 125
+  },
+  "status": "PASS",
+  "expected": "after DROP USER stackly_readiness the MySQL 9.7 instance is not_ready, doctor.run reports not_ready with the readiness_account remedy of official/mysql whose command is rendered with the runtime mysql and the instance socket and holds no password, and the account is still missing afterwards",
+  "actual": "not_ready, doctor.run showed readiness_account with the rendered mysql command, and ran nothing",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:37:58.821138Z",
+  "finishedAt": "2026-11-12T10:38:20.636421Z",
+  "evidencePath": "output.log"
+}

@@ -22,6 +22,7 @@ mod pid_reuse;
 mod reconcile;
 mod reload;
 mod restart;
+mod running_window;
 mod secret_retry;
 mod session_end;
 mod spool;

@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf56-9b82-7585-a4c0-fd8593878a22",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "existing_data::mysql_8_4_refuses_a_create_on_a_copy_of_valid_data",
+    "file": "apps/daemon/tests/mysql/existing_data.rs",
+    "line": 78
+  },
+  "status": "PASS",
+  "expected": "a copy of a valid MySQL 8.4 data folder planted in the new data folder after the layout fails the create with instance.data_not_empty before init, no mysqld is spawned, and every file of the copy keeps its bytes",
+  "actual": "a copy of 169 valid data files failed the create with instance.data_not_empty before init, nothing spawned, every file unchanged",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "8.4.11",
+      "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:38:42.05096Z",
+  "finishedAt": "2026-11-12T10:39:03.32515Z",
+  "evidencePath": "output.log"
+}

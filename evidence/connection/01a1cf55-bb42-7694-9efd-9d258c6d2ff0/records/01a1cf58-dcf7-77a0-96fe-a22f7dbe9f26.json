@@ -1,0 +1,37 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf58-dcf7-77a0-96fe-a22f7dbe9f26",
+  "covers": [
+    "REQ-055",
+    "BR-009",
+    "AC-081"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "mismatch::mysql_9_7_data_is_refused_by_a_runtime_8_4_and_a_missing_or_changed_marker_is_refused",
+    "file": "apps/daemon/tests/mysql/mismatch.rs",
+    "line": 175
+  },
+  "status": "PASS",
+  "expected": "data initialized by MySQL 9.7 is refused by a runtime 8.4 with supervisor.data_incompatible (incompatible, data 9.7, runtime 8.4) before any mysqld is spawned, every data file keeps its bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, neither refusal changes a data file, and the instance starts once the marker is back",
+  "actual": "data 9.7 refused on runtime 8.4 by the start and rebind::check, a missing marker as data_unavailable, 8.0.40 as marker_mismatch, every data file byte for byte unchanged after each refusal, and a start once the marker was back",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:41:09.879866Z",
+  "finishedAt": "2026-11-12T10:41:54.456132Z",
+  "evidencePath": "output.log"
+}

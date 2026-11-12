@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf5a-2cde-765e-9be1-1c2215307c01",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "persist::mysql_9_7_ignores_persisted_variables_across_an_instance_restart",
+    "file": "apps/daemon/tests/mysql/persist.rs",
+    "line": 135
+  },
+  "status": "PASS",
+  "expected": "SET PERSIST max_connections and SET PERSIST_ONLY of skip_name_resolve, bind_address, port, and admin_address, then instance.restart, give a new mysqld with max_connections from settings, skip_name_resolve 1, the endpoint bind and port, no admin address, one TCP listener, mysqlx off, and stackly_readiness with only USAGE, refused over TCP",
+  "actual": "after instance.restart none of [\"SET PERSIST max_connections = 77\", \"SET PERSIST_ONLY skip_name_resolve = OFF\"] was loaded: max_connections 151, skip_name_resolve 1, bind 127.0.0.1, the endpoint port, no admin address, one listener, mysqlx off, stackly_readiness USAGE only and refused over TCP",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:42:35.870164Z",
+  "finishedAt": "2026-11-12T10:42:58.263905Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf57-8beb-752f-a302-cdcc068f56b0",
+  "covers": [
+    "REQ-055"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "mysql",
+    "name": "handover::mysql_8_4_restart_preview_stops_and_restores_while_the_handover_is_unproven",
+    "file": "apps/daemon/tests/mysql/handover.rs",
+    "line": 56
+  },
+  "status": "PASS",
+  "expected": "daemon.restart_preview of a manual stacklyd lists a running MySQL 8.4 instance as stop_restore with handover_unproven",
+  "actual": "MySQL 8.4.11 is stop_restore with handover_unproven in the restart preview",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "mysql",
+      "version": "8.4.11",
+      "digest": "b96e00493bc3499b9ffd7f08d65c5d64933af0383a8287d9873b64f94c2d6009",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T10:39:43.595214Z",
+  "finishedAt": "2026-11-12T10:40:04.527362Z",
+  "evidencePath": "output.log"
+}

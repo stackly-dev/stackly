@@ -4540,3 +4540,25 @@ fn the_mysql_readiness_remedy_matches_an_account_failure_and_renders_like_the_go
     );
     assert_golden("mysql", "remedies.json", &text);
 }
+
+/// Spec 0042 AC-17: `official/mysql` gets its `HANDOVER_PROVEN` entry only
+/// in the commit that brings `PASS` records of both MySQL launchd tests in
+/// `apps/daemon/tests/native_launchd.rs`. Until then a planned daemon
+/// restart stops and restores a MySQL instance. When that entry lands, this
+/// test turns into the check that it names the ID of that evidence.
+// covers: AC-17 (spec 0042, the list part)
+#[test]
+fn official_mysql_has_no_handover_proof_before_its_launchd_records_pass() {
+    let package = validated(&mysql_dir());
+    let entries: Vec<_> = HANDOVER_PROVEN
+        .iter()
+        .filter(|proof| proof.provider == "official/mysql")
+        .collect();
+
+    assert!(entries.is_empty(), "{entries:?}");
+    assert!(
+        !is_handover_proven(HANDOVER_PROVEN, package.key()),
+        "{} is stop_restore on a planned daemon restart",
+        package.key()
+    );
+}
