@@ -21,3 +21,5 @@ mod readiness;
 mod routing;
 #[path = "supervisor/support.rs"]
 mod support;
+#[path = "traefik/surface.rs"]
+mod surface;
