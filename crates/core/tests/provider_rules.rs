@@ -2007,6 +2007,7 @@ fn mysql_cnf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
     assert!(!err.to_string().contains('\u{85}'), "{err}");
 }
 
+// covers: AC-1, AC-2 (spec 0043)
 #[test]
 fn xml_writes_values_as_element_content_touching_literal_text() {
     let package = Edit::fake()
@@ -2064,6 +2065,84 @@ fn xml_writes_values_as_element_content_touching_literal_text() {
     assert!(!err.to_string().contains('\u{1b}'), "{err}");
 }
 
+// covers: AC-1 (spec 0043)
+#[test]
+fn xml_takes_block_tags_and_escapes_text_inside_both_branches() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse>\n{{#if settings.failInit}}\n  <on>{{ settings.greeting }}</on>\n{{else}}\n  <off>{{ settings.greeting }}</off>\n{{/if}}\n</clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+
+    let mut seen = Vec::new();
+    for flag in [true, false] {
+        let write = first_write(
+            &package,
+            serde_json::json!({
+                "authToken": SECRET_REF,
+                "greeting": "<&'\">",
+                "failInit": flag,
+            }),
+        );
+        seen.push(
+            String::from_utf8(
+                write
+                    .content
+                    .materialize(&token("abc"))
+                    .expect("the config materializes"),
+            )
+            .expect("UTF-8 output"),
+        );
+    }
+
+    assert_eq!(
+        seen,
+        [
+            "<clickhouse>\n  <on>&lt;&amp;&apos;&quot;&gt;</on>\n</clickhouse>\n",
+            "<clickhouse>\n  <off>&lt;&amp;&apos;&quot;&gt;</off>\n</clickhouse>\n",
+        ]
+    );
+}
+
+// covers: AC-1 (spec 0043)
+#[test]
+fn xml_refuses_a_setting_with_a_noncharacter_by_its_field_name_only() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse><display_name>{{ settings.greeting }}</display_name></clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+
+    // Settings validation already refuses control characters in text
+    // (`settings_value`), so the two noncharacters are what reaches the
+    // escaper from a setting.
+    for bad in ["a\u{fffe}b", "a\u{ffff}b"] {
+        let context = context_for(
+            &package,
+            serde_json::json!({ "authToken": SECRET_REF, "greeting": bad }),
+            "/Volumes/T",
+        );
+        let err = package
+            .init_plan(&context)
+            .expect_err("a noncharacter never reaches config.xml");
+        assert_eq!(
+            err,
+            PlanError::UnrepresentableValue {
+                field: "settings.greeting".into()
+            },
+            "{bad:?}"
+        );
+        assert!(!err.to_string().contains(bad), "{err}");
+    }
+}
+
+// covers: AC-1 (spec 0043)
 #[test]
 fn an_unknown_format_names_every_known_format_in_its_message() {
     let err = Edit::fake()

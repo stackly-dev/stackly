@@ -1698,6 +1698,73 @@ mod tests {
         }
     }
 
+    // covers: AC-1 (spec 0043)
+    #[test]
+    fn xml_rejects_every_c0_and_c1_control_and_takes_the_characters_around_them() {
+        let refused: Vec<char> = ('\u{0}'..='\u{1f}')
+            .chain('\u{7f}'..='\u{9f}')
+            .chain(['\u{fffe}', '\u{ffff}'])
+            .collect();
+        assert_eq!(refused.len(), 32 + 33 + 2);
+        for c in refused {
+            let text = format!("a{c}b");
+            assert_eq!(TemplateFormat::Xml.escape_text(&text), None, "{c:?}");
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&c.to_string()),
+                None,
+                "{c:?}"
+            );
+        }
+        for c in [
+            '\u{20}',
+            '\u{7e}',
+            '\u{a0}',
+            '\u{fffd}',
+            '\u{10000}',
+            '\u{10ffff}',
+        ] {
+            let text = format!("a{c}b");
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&text).as_deref(),
+                Some(text.as_str()),
+                "{c:?}"
+            );
+        }
+    }
+
+    // covers: AC-1 (spec 0043)
+    #[test]
+    fn xml_writes_each_of_the_five_markup_characters_as_its_own_entity() {
+        for (raw, entity) in [
+            ("&", "&amp;"),
+            ("<", "&lt;"),
+            (">", "&gt;"),
+            ("\"", "&quot;"),
+            ("'", "&apos;"),
+        ] {
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(raw).as_deref(),
+                Some(entity),
+                "{raw}"
+            );
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&format!("{raw}{raw}")),
+                Some(format!("{entity}{entity}")),
+                "{raw} twice"
+            );
+        }
+        assert_eq!(
+            TemplateFormat::Xml.escape_text("<![CDATA[x]]>").as_deref(),
+            Some("&lt;![CDATA[x]]&gt;"),
+            "a CDATA section in a value stays text"
+        );
+        assert_eq!(
+            TemplateFormat::Xml.escape_text("&#65;").as_deref(),
+            Some("&amp;#65;"),
+            "a character reference in a value stays text"
+        );
+    }
+
     #[test]
     fn xml_writes_booleans_as_true_and_false_and_takes_tags_without_a_parse_back() {
         let format = TemplateFormat::Xml;
