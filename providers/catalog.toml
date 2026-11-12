@@ -7,8 +7,8 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 14
-published_at = 2026-11-12T05:49:58Z
+revision = 15
+published_at = 2026-11-12T06:08:55Z
 
 [[provider]]
 id = "official/postgresql"
@@ -50,6 +50,21 @@ id = "official/valkey"
 mark = "Vk"
 tile = "red"
 
+[[provider]]
+id = "official/clickhouse"
+mark = "Ch"
+tile = "yellow"
+
+[[provider.platform_note]]
+os = "linux"
+status = "planned"
+note = "Linux releases exist upstream; Stackly supports macOS first."
+
+[[provider.platform_note]]
+os = "windows"
+status = "unsupported"
+note = "Upstream runs ClickHouse on Windows only through WSL, which Stackly never installs or uses."
+
 [[planned]]
 id = "official/mysql"
 display_name = "MySQL"
@@ -57,11 +72,3 @@ category = "database"
 description = "Relational server with isolated datadir, socket and tmpdir per instance. Never bound to an existing system service."
 mark = "My"
 tile = "teal"
-
-[[planned]]
-id = "official/clickhouse"
-display_name = "ClickHouse"
-category = "analytics"
-description = "Columnar analytics database. Single node with HTTP and native TCP endpoints."
-mark = "Ch"
-tile = "yellow"

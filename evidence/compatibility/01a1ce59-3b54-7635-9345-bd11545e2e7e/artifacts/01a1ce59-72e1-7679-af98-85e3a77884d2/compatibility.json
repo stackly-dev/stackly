@@ -1,0 +1,19 @@
+{
+  "checks": [
+    "auth",
+    "isolation",
+    "lifecycle",
+    "listeners",
+    "persistence",
+    "readiness_identity",
+    "reload",
+    "stop"
+  ],
+  "knownLimitations": [],
+  "providerRevision": {
+    "id": "official/clickhouse",
+    "manifestSha256": "cce548ff278eb07133243345b0cae701b717db6f30f00f0be59a9c9231e0dc9f",
+    "revision": "1.0.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}

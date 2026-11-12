@@ -107,7 +107,7 @@ Semua test native, satu per satu (`--test-threads 1`), dari `mysql-8.4.11-macos-
 
 - [x] `cargo test -p stacklyd --test mysql -- --ignored --test-threads 1 compat::` → `mysql_8_4_runs_the_package_and_records_what_it_proved` dan `mysql_9_7_runs_the_package_and_records_what_it_proved` lulus dari cache: lewat binary `stacklyd`, `SELECT VERSION()` 8.4.11 dan 9.7.2 sebagai subject, dua instance satu lini dengan baris `stackly_compat.marker` sendiri, restart dengan `mysqld` baru di data yang sama, adopsi PID dan `startedAt` keduanya sesudah `SIGKILL` daemon, stop tanpa proses, lalu data diikat ke runtime lini lain ditolak `supervisor.data_incompatible` tanpa spawn; `compatibility.json` per artefak memuat `adoption`, `init`, `isolation`, `line_mismatch_refusal`, `readiness`, `restart`, `start`, `stop` → AC-16
 - [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test mysql --locked -- --ignored --test-threads 1`, `cargo xtask runtime compat-record`, `cargo xtask codegen` (record `compatibility` per artefak di `providers/mysql/versions.json`) → AC-16
-- [ ] Giliran catalog: entri MySQL ke `[[provider]]` dengan catalog revision 15, `cargo xtask catalog check --update`, `cargo xtask provider freeze providers/mysql` → AC-1
+- [ ] Giliran catalog: entri MySQL ke `[[provider]]` dengan catalog revision 16 (urutan lead: sesudah perbaikan lifecycle di `main`), `cargo xtask catalog check --update`, `cargo xtask provider freeze providers/mysql` → AC-1
 
 ## Milestone 4: Handover
 

@@ -83,7 +83,7 @@ Semua test native: `cargo test -p stacklyd --test clickhouse -- --ignored --test
 ### UI / manual
 
 - Tidak ada langkah manual untuk langkah 10 selain run spike native di Milestone 2.
-- [ ] `NOT_RUN` · owner `@ojiepermana` · Sesudah catalog revision 16: di app, buka Catalog → ClickHouse tampil sebagai provider (bukan planned), dengan catatan platform `windows` `unsupported` yang menyebut WSL, lalu buat instance dari Catalog dan start → AC-13, AC-16
+- [ ] `NOT_RUN` · owner `@ojiepermana` · Sesudah catalog revision 15: di app, buka Catalog → ClickHouse tampil sebagai provider (bukan planned), dengan catatan platform `windows` `unsupported` yang menyebut WSL, lalu buat instance dari Catalog dan start → AC-13, AC-16
 - RISK-07: ClickHouse tidak masuk `HANDOVER_PROVEN` dan tidak mendapat test launchd (keputusan spec), jadi restart daemon terencana memakai `stop_restore` dengan `handover_unproven` untuk instance ClickHouse; tidak ada langkah manual handover.
 
 ### Commands
@@ -94,14 +94,14 @@ Semua test native: `cargo test -p stacklyd --test clickhouse -- --ignored --test
 - [x] `cargo test -p stacklyd --test provider_conformance -- --ignored --test-threads=1 clickhouse_26_8_passes_conformance` (langkah 9, ditunda dari Milestone 2) → lulus: report native ber verdict pass untuk skenario `default`, tanpa proses dan root tersisa → AC-14
 - [x] `cargo test -p stacklyd --test provider_conformance every_official_package_has_the_step_and_health_limits_its_manifest_gives` → baris `("clickhouse", (120, 120, 60, 30, 43_000))` → AC-14
 - [x] `cargo test -p stacklyd --test clickhouse -- --ignored --test-threads=1 clickhouse_compatibility` → lulus dari cache tanpa unduhan: `SELECT version()` 26.8.30.8 sebagai subject, probe readiness menolak server asing dengan ID lain, dua listener registry tanpa UDP, password salah dan kosong ditolak di native dan HTTP, instance kedua dengan `default.events` sendiri, reload `logLevel` dengan PID sama, baris bertahan lewat stop dan start, stop tanpa proses; `compatibility.json` memuat `auth`, `isolation`, `lifecycle`, `listeners`, `persistence`, `readiness_identity`, `reload`, `stop` tanpa `knownLimitations` → AC-16 (BR-025)
-- [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test clickhouse --locked -- --ignored --test-threads=1`, `cargo xtask runtime compat-record`, `cargo xtask codegen`, entri `official/clickhouse` ke `[[provider]]` dengan catatan platform `windows` `unsupported` yang menyebut WSL, catalog revision 16, `cargo xtask catalog check --update` → AC-16, AC-13
-- [ ] Giliran catalog: `cargo xtask provider freeze providers/clickhouse` menulis `crates/core/tests/fixtures/compat/clickhouse/`, lalu `cargo test -p stackly-core --test provider_packages` → AC-16
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test clickhouse --locked -- --ignored --test-threads=1` dari `HEAD` bersih `8c8ee3e9` → 11 record native `PASS`, 0 problem, `sourceDirty` `false`; run `01a1ce59-3b54-7635-9345-bd11545e2e7e`; `cargo xtask runtime compat-record target/evidence/01a1ce59-3b54-7635-9345-bd11545e2e7e/report.json` → `evidence/compatibility/01a1ce59-3b54-7635-9345-bd11545e2e7e/`; `cargo xtask codegen` → `providers/clickhouse/versions.json` mendapat satu record scope `provider` `pass` dengan delapan check dan `manifestSha256` `cce548ff…`; `official/clickhouse` pindah ke `[[provider]]` (mark `Ch`, tile `yellow`) dengan catatan platform `linux` `planned` dan `windows` `unsupported` yang menyebut WSL, catalog revision 15 (urutan lead: ClickHouse sebelum MySQL); `cargo xtask catalog check --update` → `ok catalog revision 15 adb22ac5…` → AC-16, AC-13
+- [x] `cargo xtask provider freeze providers/clickhouse` menulis `crates/core/tests/fixtures/compat/clickhouse/1.0.0/`; `cargo test -p stackly-core` (termasuk `provider_packages` dan `provider_compat`), `cargo test -p xtask`, `cargo test -p stackly-cli`, dan test catalog serta provider `stacklyd` lulus tanpa perubahan fixture → AC-16
 - [x] RISK-07, `git show --numstat` per commit fitur 43 (dan langkah 2 spec 0040, filter bersama) pada `crates/` dan `apps/` tanpa `tests/`, `fixtures/`, dan `golden/`: hanya `5a417824` (format `xml`: `crates/core/src/provider/template.rs` +83 −1 termasuk unit test escaper, `fuzzing.rs` +7 −6, `validate.rs` +1 −1, `secret/delivery/mod.rs` +8 unit test) dan `0d111375` (filter `sha256Hex`, dihitung sekali untuk fitur 40 dan 43: `template.rs` +146 −28, `plan.rs` +18 −2, `secret/delivery/mod.rs` +16, `instance/config/preview.rs` +1 −1); commit langkah 3 sampai 11 tidak mengubah satu pun file non test di `crates/` atau `apps/`. Tidak ada jenis probe, probe native, primitive, token, DTO, method, event, migrasi, atau kode Swift baru → AC-17
 
 ### Acceptance-criteria coverage
 
 - AC-14 · konformitas native dan tabel batas langkah (langkah 9)
 - AC-15 · langkah 10; bentuk hasil spike tidak berubah, run native nya di langkah manual Milestone 2
-- AC-16 · `clickhouse_compatibility` lulus; record evidence, catalog revision 16, dan freeze di giliran catalog
-- AC-13 · catatan platform di giliran catalog; test platform di Milestone 1
+- AC-16 · `clickhouse_compatibility`, record evidence run `01a1ce59`, catalog revision 15, dan corpus `clickhouse/1.0.0`
+- AC-13 · catatan platform di catalog revision 15; test platform di Milestone 1
 - AC-17 · ukuran RISK-07 di atas
