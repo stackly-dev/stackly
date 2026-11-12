@@ -227,6 +227,15 @@ async fn isolation(site: &Site, api: &Api) -> (Uuid, Uuid) {
                 .expect("the publish is acked");
         }
         assert_own_server(site, id, summary);
+    }
+    assert_apart(&a_running, &b_running).await;
+    (a, b)
+}
+
+/// AC-6: each of the running instances `a` and `b` listens only on its own
+/// two loopback ports, and refuses the password of the other.
+async fn assert_apart(a: &InstanceSummary, b: &InstanceSummary) {
+    for (summary, foreign) in [(a, PASSWORD_B), (b, PASSWORD_A)] {
         let pid = summary.process.as_ref().expect("a process").pid;
         let (listening, _) = listeners(pid);
         let mut expected = vec![
@@ -239,8 +248,6 @@ async fn isolation(site: &Site, api: &Api) -> (Uuid, Uuid) {
             "{} listens on its two ports",
             summary.name
         );
-    }
-    for (summary, foreign) in [(&a_running, PASSWORD_B), (&b_running, PASSWORD_A)] {
         let (_, refused) =
             Nats::connect(loopback(port_of(summary, "client")), Some((USER, foreign))).await;
         assert!(
@@ -249,11 +256,11 @@ async fn isolation(site: &Site, api: &Api) -> (Uuid, Uuid) {
             summary.name
         );
     }
-    (a, b)
 }
 
 /// AC-6 after a restart and AC-7: the streams of `a` and `b` survive
-/// `instance.restart`, a file stream survives and a memory stream does not,
+/// `instance.restart` with the listeners and passwords still apart, a file
+/// stream survives and a memory stream does not,
 /// and after `SIGKILL` the file stream is still there. Returns the number
 /// of messages the file stream held after the `SIGKILL`.
 async fn persistence(site: &Site, api: &Api, a: Uuid, b: Uuid) -> u64 {
@@ -269,6 +276,7 @@ async fn persistence(site: &Site, api: &Api, a: Uuid, b: Uuid) -> u64 {
         assert_eq!(payloads(&mut nats, "ORDERS", count).await, expected);
         assert_own_server(site, id, summary);
     }
+    assert_apart(&a_running, &b_running).await;
 
     let mut nats = sign_in(&a_running, PASSWORD_A).await;
     nats.stream_create("F", "f.>", "file")
@@ -411,6 +419,7 @@ async fn monitoring_conflict(site: &Site, api: &Api) {
     stop_instance(api, id).await;
 }
 
+// covers: AC-3, AC-5, AC-6, AC-7, AC-8, AC-12 (spec 0039)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
 async fn nats_compatibility() {
