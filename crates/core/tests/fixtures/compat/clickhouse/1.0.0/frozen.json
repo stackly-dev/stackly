@@ -1,0 +1,23 @@
+{
+  "schema": "stackly.provider-frozen/v1",
+  "provider": "official/clickhouse",
+  "revision": "1.0.0",
+  "manifestSha256": "cce548ff278eb07133243345b0cae701b717db6f30f00f0be59a9c9231e0dc9f",
+  "startArgs": [
+    "server",
+    "--config-file=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/config.xml",
+    "--",
+    "--user_directories.users_xml.path=/frozen/run/i/000000f0/secrets/users.xml"
+  ],
+  "startEnvKeys": [
+    "CLICKHOUSE_WATCHDOG_ENABLE",
+    "HOME",
+    "PATH",
+    "TMPDIR"
+  ],
+  "rendered": {
+    "clientConfig": "1f9c19988b0aeb7530a159c76e9da583c6a59379822ccbb867ea1c4946f020d0",
+    "serverConfig": "8f5a579c82cf5debab60f72f662833ea055809b64006c37311afb6b3e2822ccc",
+    "usersConfig": "168ff28051fe6b0f0d493e6b4eb13464cd8b14d7d0fdbd532070244a5581bef9"
+  }
+}

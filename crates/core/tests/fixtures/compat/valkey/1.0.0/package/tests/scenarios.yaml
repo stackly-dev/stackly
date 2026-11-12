@@ -1,0 +1,9 @@
+# The scenarios cargo xtask provider test runs for this package (spec 0036).
+# Settings never hold a secret: the daemon generates the password.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+  - name: aof
+    settings: { persistence: aof }
+  - name: volatile
+    settings: { persistence: volatile }

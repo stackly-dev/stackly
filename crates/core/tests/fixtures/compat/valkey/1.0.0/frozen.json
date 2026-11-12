@@ -1,0 +1,49 @@
+{
+  "schema": "stackly.provider-frozen/v1",
+  "provider": "official/valkey",
+  "revision": "1.0.0",
+  "manifestSha256": "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6",
+  "startArgs": [
+    "--include",
+    "/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/valkey.conf",
+    "--include",
+    "/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/persistence-rdb.conf",
+    "--include",
+    "/frozen/run/i/000000f0/secrets/users.conf",
+    "--bind",
+    "127.0.0.1",
+    "--port",
+    "6379",
+    "--dir",
+    "/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/data",
+    "--daemonize",
+    "no",
+    "--protected-mode",
+    "yes",
+    "--set-proc-title",
+    "no",
+    "--always-show-logo",
+    "no",
+    "--tcp-backlog",
+    "128",
+    "--enable-protected-configs",
+    "no",
+    "--enable-debug-command",
+    "no",
+    "--enable-module-command",
+    "no"
+  ],
+  "startEnvKeys": [
+    "HOME",
+    "PATH",
+    "TMPDIR",
+    "TZ"
+  ],
+  "rendered": {
+    "persistenceAof": "8bc856c689a7f4736ba3b91f504a7cf866976b82f310edd93dd2ebda11698788",
+    "persistenceRdb": "0a4917911337074ffe7d4f22b64c6187d31088283244d31d6e0c1281c50980f5",
+    "persistenceVolatile": "65aecaaea25bd3d1118becaf76ea23c823abce61960b7538a1819f6b4502d893",
+    "users": "dd03f59439cff18640f485de45ea80becb9b6fa6e0a739fa86a6530947979fe6",
+    "valkeyConf": "ef45800eca1d7b29ea2415ca2d935c063b58cadc6b874d9566223f230a49f181"
+  }
+}
