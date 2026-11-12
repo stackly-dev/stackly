@@ -1,0 +1,80 @@
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling errno v0.3.14
+   Compiling tracing-core v0.1.36
+   Compiling ring v0.17.14
+   Compiling log v0.4.34
+   Compiling vcpkg v0.2.15
+   Compiling pkg-config v0.3.34
+   Compiling nix v0.31.3
+   Compiling regex-automata v0.4.18
+   Compiling signal-hook-registry v1.4.8
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling tracing v0.1.44
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-query v1.1.5
+   Compiling smallvec v1.16.3
+   Compiling colorchoice v1.0.5
+   Compiling anstyle v1.0.14
+   Compiling ureq-proto v0.6.5
+   Compiling libsqlite3-sys v0.38.2
+   Compiling tokio v1.53.3
+   Compiling heck v0.5.0
+   Compiling anstream v1.0.0
+   Compiling clap_lex v1.1.1
+   Compiling fallible-iterator v0.3.0
+   Compiling strsim v0.11.1
+   Compiling lazy_static v1.5.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling clap_builder v4.6.7
+   Compiling sharded-slab v0.1.7
+   Compiling clap_derive v4.6.7
+   Compiling rustix v1.1.5
+   Compiling zip v9.0.5
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.10
+   Compiling nu-ansi-term v0.50.3
+   Compiling tempfile v3.27.0
+   Compiling signal-hook v0.4.5
+   Compiling regex v1.13.1
+   Compiling matchers v0.2.0
+   Compiling serde v1.0.229
+   Compiling uuid v1.28.0
+   Compiling jiff v0.2.38
+   Compiling serde_path_to_error v0.1.20
+   Compiling rustls v0.23.46
+   Compiling zeroize v1.9.1
+   Compiling tracing-serde v0.2.0
+   Compiling serde_yaml_ng v0.10.0
+   Compiling clap v4.6.7
+   Compiling rustls-pki-types v1.15.1
+   Compiling webpki-roots v1.0.10
+   Compiling typeshare v1.0.5
+   Compiling tracing-subscriber v0.3.23
+   Compiling rustls-webpki v0.103.16
+   Compiling rusqlite v0.40.2
+   Compiling stackly-domain v0.1.0 ($REPO/crates/domain)
+   Compiling schemars v1.2.3
+   Compiling stackly-protocol v0.1.0 ($REPO/crates/protocol)
+   Compiling stackly-evidence v0.1.0 ($REPO/crates/evidence)
+   Compiling stackly-platform v0.1.0 ($REPO/crates/platform)
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-storage v0.1.0 ($REPO/crates/storage)
+   Compiling stackly-core v0.1.0 ($REPO/crates/core)
+   Compiling stackly-testkit v0.1.0 ($REPO/crates/testkit)
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stackly-ipc v0.1.0 ($REPO/crates/ipc)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 22.92s
+     Running tests/clickhouse.rs (target/debug/deps/clickhouse-c669c5e891b0f3a4)
+
+running 4 tests
+test binary::clickhouse_journey_through_the_stacklyd_binary_with_a_markup_password ... ok
+test failure::an_auto_port_in_use_moves_the_start_to_a_free_port_and_leaves_the_foreign_process ... ok
+test isolation::two_clickhouse_instances_keep_their_own_events_table ... ok
+test security::the_managed_users_stop_commands_without_a_table_leave_merges_running ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 192.75s
+

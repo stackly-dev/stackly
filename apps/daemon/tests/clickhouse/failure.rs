@@ -80,6 +80,7 @@ async fn attempt(site: &Site, probe: &ProbeSpec, timeout: Duration) -> ProbeOutc
     .await
 }
 
+// covers: AC-7 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn the_readiness_probe_fails_against_a_clickhouse_with_another_id() {
@@ -143,6 +144,7 @@ async fn the_readiness_probe_fails_against_a_clickhouse_with_another_id() {
     ));
 }
 
+// covers: AC-12 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn a_port_in_use_refuses_the_start_and_leaves_the_foreign_process() {
@@ -211,6 +213,7 @@ async fn a_port_in_use_refuses_the_start_and_leaves_the_foreign_process() {
     ));
 }
 
+// covers: AC-12 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn a_data_folder_in_use_fails_the_start_and_is_left_alone() {
@@ -301,5 +304,67 @@ async fn a_data_folder_in_use_fails_the_start_and_is_left_alone() {
     ev.pass_with(&format!(
         "the start failed with process_exited and exit 76, ended {} after the restart budget, logged `{}`, and left the foreign server and status alone",
         failure.code, lines[0]
+    ));
+}
+
+// covers: AC-12 (spec 0043)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
+async fn an_auto_port_in_use_moves_the_start_to_a_free_port_and_leaves_the_foreign_process() {
+    let ev = evidence!(
+        covers = ["REQ-037"],
+        kind = Kind::Native,
+        expected = "a foreign ClickHouse server on the last native port of a stopped instance whose endpoints are auto does not refuse its start: the instance starts ready on another native port with no last failure, listens only on its two new registry ports, and the foreign server keeps running and answering; supervisor.endpoint_in_use is only for a fixed port",
+    );
+    let Some(site) = Site::open(&ev) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let made = create_instance(&site, &api, "moves", json!({})).await;
+    let first = api.start_ready(made.id).await;
+    let first_pid = pid_of(&first);
+    let first_native = port_of(&first, "native");
+    site.subject(&ev, &site.version(port_of(&first, "http"), &made.password));
+    stop_instance(&api, made.id).await;
+    crate::harness::eventually(
+        "the instance server to be gone",
+        Duration::from_secs(60),
+        || !alive(first_pid),
+    )
+    .await;
+    let foreign = Foreign::start(
+        &site,
+        "foreign",
+        &ForeignOptions {
+            native: Some(first_native),
+            wait: true,
+            ..ForeignOptions::default()
+        },
+    );
+
+    let moved = api.start_ready(made.id).await;
+    let http = port_of(&moved, "http");
+    let native = port_of(&moved, "native");
+    assert_ne!(native, first_native, "the auto port moved off the held one");
+    assert!(moved.last_failure.is_none(), "{moved:#?}");
+    crate::harness::assert_two_listeners(pid_of(&moved), http, native);
+    assert_eq!(
+        site.sql_ok(
+            native,
+            "default",
+            Some(&made.password),
+            "SELECT getMacro('stackly_instance_id')"
+        ),
+        made.id.to_string(),
+        "the instance answers on its new port"
+    );
+    assert!(alive(foreign.pid), "the foreign server is never signalled");
+    assert_eq!(http_get(foreign.http, "/ping").0, 200);
+
+    stop_and_shutdown(&api, daemon, made.id).await;
+    drop(foreign);
+    ev.pass_with(&format!(
+        "with native port {first_native} held, the auto endpoint moved to {native} and the instance started ready; the foreign server kept running"
     ));
 }

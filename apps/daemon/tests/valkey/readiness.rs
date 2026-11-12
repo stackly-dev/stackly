@@ -35,6 +35,7 @@ fn probe(site: &Site, port: u16) -> (bool, String) {
     (output.status.success(), format!("{stderr}{stdout}"))
 }
 
+// covers: AC-5 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_is_not_ready_with_loading_while_its_snapshot_loads() {
@@ -109,6 +110,7 @@ async fn valkey_9_1_is_not_ready_with_loading_while_its_snapshot_loads() {
     ));
 }
 
+// covers: AC-5 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_is_not_ready_with_wrongpass_while_the_readiness_user_is_gone() {

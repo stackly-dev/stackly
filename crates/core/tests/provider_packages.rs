@@ -3198,6 +3198,272 @@ fn valkey_offers_tableplus_and_valkey_cli_in_terminal() {
     );
 }
 
+/// The SHA-256 of `bytes` as 64 lowercase hex characters.
+fn valkey_sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// The hash on the `user default` line of the Valkey `users.conf` rendered
+/// with `password` as the secret value.
+fn valkey_users_hash(password: &str) -> String {
+    let package = validated(&valkey_dir());
+    let run = package
+        .run_plan(&golden_context(&package, valkey_settings()))
+        .expect("the valkey run plan builds");
+    let users = run
+        .render
+        .iter()
+        .find_map(|step| match step {
+            InitStep::WriteFile(write) if write.content.config_file == "users" => Some(write),
+            _ => None,
+        })
+        .expect("the run plan renders users.conf");
+    let secrets = ResolvedSecrets::for_tests([(
+        "password".parse().expect("valid field name"),
+        SecretValue::new(password.to_owned()).expect("a valid secret value"),
+    )]);
+    let text = String::from_utf8(
+        users
+            .content
+            .materialize(&secrets)
+            .expect("users.conf materializes"),
+    )
+    .expect("users.conf is UTF-8");
+    let line = text
+        .lines()
+        .find(|line| line.starts_with("user default on #"))
+        .unwrap_or_else(|| panic!("a default user line in {text}"));
+    line.trim_start_matches("user default on #")
+        .split(' ')
+        .next()
+        .expect("split yields at least one part")
+        .to_owned()
+}
+
+// covers: AC-3 (spec 0040)
+#[test]
+fn the_valkey_password_hash_is_the_lowercase_sha256_of_the_exact_secret_bytes() {
+    let long = "z".repeat(512);
+    for password in [
+        "x",
+        "p w\"x\\y'z",
+        "ü 空 \u{1f600}",
+        " leading and trailing ",
+        "{{ secret.password }}",
+        long.as_str(),
+    ] {
+        let hash = valkey_users_hash(password);
+        assert_eq!(hash.len(), 64, "{password:?}: {hash}");
+        assert!(
+            hash.bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+            "{password:?}: {hash} is lowercase hex"
+        );
+        assert_eq!(
+            hash,
+            valkey_sha256_hex(password.as_bytes()),
+            "{password:?}: the hash of the exact bytes, no escaper first"
+        );
+    }
+    assert_ne!(
+        valkey_users_hash("a"),
+        valkey_users_hash("a "),
+        "a trailing space is part of the secret"
+    );
+}
+
+// covers: AC-3 (spec 0040)
+#[test]
+fn the_valkey_golden_plans_show_the_password_hash_only_as_a_secret_reference() {
+    for name in ["run.json", "run-aof.json"] {
+        let path = repo_root()
+            .join("crates/core/tests/golden/provider/valkey")
+            .join(name);
+        let text = fs::read_to_string(&path).expect("the golden plan reads");
+        let plan: serde_json::Value = serde_json::from_str(&text).expect("the golden plan is JSON");
+        let mut hashes = Vec::new();
+        let mut secrets = Vec::new();
+        let mut pending = vec![&plan];
+        while let Some(value) = pending.pop() {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if map.get("type").and_then(serde_json::Value::as_str) == Some("secretHash") {
+                        hashes.push(map["content"].clone());
+                    }
+                    if map.get("type").and_then(serde_json::Value::as_str) == Some("secret") {
+                        secrets.push(map["content"].clone());
+                    }
+                    pending.extend(map.values());
+                }
+                serde_json::Value::Array(items) => pending.extend(items),
+                serde_json::Value::String(text) => {
+                    assert!(
+                        !text.contains(VALKEY_SECRET_REF),
+                        "{name}: the secret reference itself is never in a plan"
+                    );
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(
+            hashes,
+            [serde_json::json!({ "secret": "<secret:password>", "algo": "sha256_hex" })],
+            "{name}: one hash segment, shown as its field"
+        );
+        assert!(
+            secrets.is_empty(),
+            "{name}: the password itself is never a plan segment: {secrets:?}"
+        );
+        for value in ["x", "", VALKEY_SECRET_REF] {
+            let hash = valkey_sha256_hex(value.as_bytes());
+            assert!(!text.contains(&hash), "{name}: holds the hash of {value:?}");
+        }
+    }
+}
+
+// covers: AC-2 (spec 0040, the settings that reach valkeyConf)
+#[test]
+fn the_valkey_keyspace_flags_pattern_is_anchored_and_refuses_a_newline() {
+    let package = validated(&valkey_dir());
+    let schema = package.settings_schema();
+    let with = |flags: &str| serde_json::json!({ "password": VALKEY_SECRET_REF, "notifyKeyspaceEvents": flags });
+    for good in ["", "K", "K$", "Ex", "KEA", "KEg$lshzxetdmnA"] {
+        schema
+            .validate(&with(good))
+            .unwrap_or_else(|err| panic!("{good:?} is valid: {:#?}", err.issues));
+    }
+    for bad in [
+        "bK$",
+        "K$b",
+        "K$\n",
+        "K\n",
+        "\nK",
+        "K\r",
+        "K E",
+        " K",
+        "K#",
+        "K\"",
+        "K\\",
+        "KKKKKKKKKKKKKKKKK",
+    ] {
+        assert!(schema.validate(&with(bad)).is_err(), "{bad:?} is refused");
+    }
+}
+
+// covers: AC-7 (spec 0040, the README part)
+#[test]
+fn the_valkey_readme_says_a_snapshot_you_save_comes_back_in_volatile_mode() {
+    let readme = fs::read_to_string(valkey_dir().join("README.md")).expect("README.md reads");
+    let flat = readme.split_whitespace().collect::<Vec<_>>().join(" ");
+    for phrase in ["`SAVE`", "`BGSAVE`", "`volatile`", "delete `dump.rdb`"] {
+        assert!(flat.contains(phrase), "README.md names {phrase}");
+    }
+}
+
+// covers: AC-17 (spec 0040)
+#[test]
+fn official_valkey_is_a_catalog_provider_and_its_frozen_copy_is_revision_1_0_0() {
+    let catalog =
+        fs::read_to_string(repo_root().join("providers/catalog.toml")).expect("the catalog reads");
+    let package = validated(&valkey_dir());
+
+    let sections = toml_sections(&catalog);
+    let headers: Vec<&str> = sections
+        .iter()
+        .filter(|(_, line)| line.replace(' ', "") == "id=\"official/valkey\"")
+        .map(|(header, _)| header.as_str())
+        .collect();
+    assert_eq!(
+        headers,
+        ["[[provider]]"],
+        "official/valkey is listed once, as a provider"
+    );
+    let entry: Vec<String> = catalog
+        .lines()
+        .map(|line| line.replace(' ', ""))
+        .skip_while(|line| line != "id=\"official/valkey\"")
+        .take(3)
+        .collect();
+    assert_eq!(
+        entry,
+        ["id=\"official/valkey\"", "mark=\"Vk\"", "tile=\"red\""],
+        "mark Vk, tile red"
+    );
+
+    let frozen_dir = repo_root().join("crates/core/tests/fixtures/compat/valkey/1.0.0");
+    let frozen: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(frozen_dir.join("frozen.json")).expect("frozen.json reads"),
+    )
+    .expect("frozen.json is JSON");
+    assert_eq!(frozen["provider"], "official/valkey");
+    assert_eq!(frozen["revision"], "1.0.0");
+    assert_eq!(
+        frozen["manifestSha256"],
+        package.key().manifest_sha256().to_string().as_str(),
+        "the frozen copy is the package as it is"
+    );
+    let mut rendered: Vec<&str> = frozen["rendered"]
+        .as_object()
+        .expect("frozen.json lists the rendered configs")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    rendered.sort_unstable();
+    assert_eq!(
+        rendered,
+        [
+            "persistenceAof",
+            "persistenceRdb",
+            "persistenceVolatile",
+            "users",
+            "valkeyConf"
+        ]
+    );
+    for file in [
+        "provider.yaml",
+        "schemas/settings.schema.json",
+        "templates/persistence-aof.conf.tmpl",
+        "templates/persistence-rdb.conf.tmpl",
+        "templates/persistence-volatile.conf.tmpl",
+        "templates/users.conf.tmpl",
+        "templates/valkey.conf.tmpl",
+    ] {
+        assert_eq!(
+            fs::read(frozen_dir.join("package").join(file))
+                .unwrap_or_else(|err| panic!("{file}: {err}")),
+            fs::read(valkey_dir().join(file)).expect("the package file reads"),
+            "{file} is frozen byte for byte"
+        );
+    }
+}
+
+/// Spec 0040 AC-19: `official/valkey` gets its `HANDOVER_PROVEN` entry only
+/// after `valkey_9_1_survives_planned_restart_and_sigkill` in
+/// `apps/daemon/tests/native_launchd.rs` writes a `PASS` record. Until then
+/// a planned restart stops and restores a Valkey instance. When that entry
+/// lands, this test turns into the check that it names `spec-0040-ac-19`.
+// covers: AC-19 (spec 0040, the list part)
+#[test]
+fn official_valkey_has_no_handover_proof_before_its_launchd_record_passes() {
+    let package = validated(&valkey_dir());
+    let entries: Vec<_> = HANDOVER_PROVEN
+        .iter()
+        .filter(|proof| proof.provider == "official/valkey")
+        .collect();
+
+    assert!(entries.is_empty(), "{entries:?}");
+    assert!(
+        !is_handover_proven(HANDOVER_PROVEN, package.key()),
+        "{} is stop_restore on a planned daemon restart",
+        package.key()
+    );
+}
+
 /// ClickHouse settings with only the default user password, as a secret
 /// reference (spec 0043).
 fn clickhouse_settings() -> serde_json::Value {
@@ -3606,7 +3872,7 @@ fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
     let ev = evidence!(
         covers = ["AC-074"],
         kind = Kind::Fixture,
-        expected = "the clickhouse manifest and versions.json name only macos-aarch64, and a Windows host with a test catalog holding macos and linux artifacts gets no_build_for_host and no native support",
+        expected = "the clickhouse manifest and versions.json name only macos-aarch64, and a windows-aarch64 or windows-x86_64 host with a test catalog holding macos and linux artifacts gets no_build_for_host and no native support",
     );
     let repo = validated(&clickhouse_dir());
     let platforms =
@@ -3654,32 +3920,110 @@ fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
         notes: Vec::new(),
         origin: EntryOrigin::Catalog,
     };
-    let windows = HostFacts::new(
-        "windows-aarch64".parse().expect("a target"),
-        OsVersion::major_minor(11, 0),
-        None,
+    for target in ["windows-aarch64", "windows-x86_64"] {
+        let windows = HostFacts::new(
+            target.parse().expect("a target"),
+            OsVersion::major_minor(11, 0),
+            None,
+        );
+
+        let decision = provider_installability(
+            &entry,
+            &"26.8.30.8".parse().expect("a version"),
+            &windows,
+            &TrustVerdict::Trusted,
+        )
+        .expect("the version is in the entry");
+
+        let Installability::NotInstallable {
+            reason,
+            available_targets,
+        } = decision
+        else {
+            panic!("a {target} host never installs clickhouse: {decision:?}");
+        };
+        assert_eq!(reason, NotInstallableReason::NoBuildForHost, "{target}");
+        assert!(
+            !native_support(&available_targets, windows.target),
+            "{target}: {available_targets:?}"
+        );
+    }
+    ev.pass();
+}
+
+/// The lines of the `[[provider]]` block of `id` in `catalog`, up to the
+/// next `[[provider]]` or `[[planned]]` header.
+fn catalog_block<'a>(catalog: &'a str, id: &str) -> Vec<&'a str> {
+    let wanted = format!("id = \"{id}\"");
+    let mut lines = catalog.lines().map(str::trim);
+    let mut header = "";
+    for line in lines.by_ref() {
+        if line.starts_with("[[") {
+            header = line;
+        } else if line == wanted && header == "[[provider]]" {
+            break;
+        }
+    }
+    lines
+        .take_while(|line| *line != "[[provider]]" && *line != "[[planned]]")
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect()
+}
+
+// covers: AC-13 (spec 0043)
+#[test]
+fn clickhouse_gives_windows_and_wsl_no_native_label_and_never_calls_wsl_or_a_container() {
+    let ev = evidence!(
+        covers = ["AC-074"],
+        kind = Kind::Fixture,
+        expected = "the official/clickhouse catalog entry has exactly a linux planned and a windows unsupported platform note, the windows note names WSL as something Stackly never installs or uses, no note is supported, and the manifest, schema, and templates of the package name no WSL, container, Docker, or Podman",
     );
+    let catalog =
+        fs::read_to_string(repo_root().join("providers/catalog.toml")).expect("the catalog reads");
+    let block = catalog_block(&catalog, "official/clickhouse");
+    assert!(!block.is_empty(), "official/clickhouse is a [[provider]]");
 
-    let decision = provider_installability(
-        &entry,
-        &"26.8.30.8".parse().expect("a version"),
-        &windows,
-        &TrustVerdict::Trusted,
-    )
-    .expect("the version is in the entry");
-
-    let Installability::NotInstallable {
-        reason,
-        available_targets,
-    } = decision
-    else {
-        panic!("a Windows host never installs clickhouse: {decision:?}");
-    };
-    assert_eq!(reason, NotInstallableReason::NoBuildForHost);
+    let mut notes: Vec<(String, String, String)> = Vec::new();
+    for line in &block {
+        if *line == "[[provider.platform_note]]" {
+            notes.push(Default::default());
+            continue;
+        }
+        let Some(note) = notes.last_mut() else {
+            continue;
+        };
+        let (key, value) = line.split_once('=').expect("a key and a value");
+        let value = value.trim().trim_matches('"').to_owned();
+        match key.trim() {
+            "os" => note.0 = value,
+            "status" => note.1 = value,
+            "note" => note.2 = value,
+            other => panic!("unknown platform note key {other}"),
+        }
+    }
+    let shape: Vec<(&str, &str)> = notes
+        .iter()
+        .map(|(os, status, _)| (os.as_str(), status.as_str()))
+        .collect();
+    assert_eq!(shape, [("linux", "planned"), ("windows", "unsupported")]);
+    let windows = &notes[1].2;
+    assert!(windows.contains("WSL"), "{windows}");
+    assert!(windows.contains("never installs or uses"), "{windows}");
     assert!(
-        !native_support(&available_targets, windows.target),
-        "{available_targets:?}"
+        notes.iter().all(|(_, status, _)| status != "supported"),
+        "no platform note gives a native label: {notes:?}"
     );
+
+    let package = validated(&clickhouse_dir());
+    for (path, bytes) in package.files().iter() {
+        if path == "versions.json" {
+            continue;
+        }
+        let text = String::from_utf8_lossy(bytes).to_lowercase();
+        for word in ["wsl", "container", "docker", "podman"] {
+            assert!(!text.contains(word), "{path} names {word}");
+        }
+    }
     ev.pass();
 }
 

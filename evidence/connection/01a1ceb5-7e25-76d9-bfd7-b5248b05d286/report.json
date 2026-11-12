@@ -1,0 +1,384 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+    "sourceDirty": false,
+    "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "clickhouse",
+      "--locked",
+      "--",
+      "--ignored",
+      "--test-threads=1",
+      "clickhouse_journey_through_the_stacklyd_binary",
+      "the_managed_users_stop_commands_without_a_table",
+      "an_auto_port_in_use_moves",
+      "two_clickhouse_instances_keep_their_own_events_table"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T07:42:43.237855Z",
+  "finishedAt": "2026-11-12T07:46:20.666268Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 4,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 4,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 4
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ceb5-de8d-752a-b695-481dc1f253c6",
+      "covers": [
+        "REQ-037"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "clickhouse",
+        "name": "binary::clickhouse_journey_through_the_stacklyd_binary_with_a_markup_password",
+        "file": "apps/daemon/tests/clickhouse/binary.rs",
+        "line": 31
+      },
+      "status": "PASS",
+      "expected": "the stacklyd binary with STACKLY_ROOT on a data root named with an ampersand, a space, and Unicode creates a ClickHouse instance whose password holds & < > \" ' in its file keychain, renders config.xml with &amp; in every path and the server reports the real path, starts it ready, lets the default user in with that password over HTTP and native TCP and refuses it without the markup, keeps users.xml to the SHA-256 of the password with no plain or escaped password in data/preprocessed_configs or anywhere under the test root, restarts it with a new PID and the row kept, and stops it with the process gone and both ports closed",
+      "actual": "stacklyd on `R&D Ünï cödé` ran ClickHouse 26.8.30.8 with a markup password from its file keychain over HTTP and native, restarted it from PID 93104 to 93173 with the row kept, and stopped it cleanly",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:43:07.917499Z",
+      "finishedAt": "2026-11-12T07:44:59.547302Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+        "sourceDirty": false,
+        "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "clickhouse",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "clickhouse_journey_through_the_stacklyd_binary",
+          "the_managed_users_stop_commands_without_a_table",
+          "an_auto_port_in_use_moves",
+          "two_clickhouse_instances_keep_their_own_events_table"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ceb7-92a0-7586-a971-189a8a210ea3",
+      "covers": [
+        "REQ-037"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "clickhouse",
+        "name": "failure::an_auto_port_in_use_moves_the_start_to_a_free_port_and_leaves_the_foreign_process",
+        "file": "apps/daemon/tests/clickhouse/failure.rs",
+        "line": 314
+      },
+      "status": "PASS",
+      "expected": "a foreign ClickHouse server on the last native port of a stopped instance whose endpoints are auto does not refuse its start: the instance starts ready on another native port with no last failure, listens only on its two new registry ports, and the foreign server keeps running and answering; supervisor.endpoint_in_use is only for a fixed port",
+      "actual": "with native port 50088 held, the auto endpoint moved to 50102 and the instance started ready; the foreign server kept running",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:44:59.552695Z",
+      "finishedAt": "2026-11-12T07:45:25.434692Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+        "sourceDirty": false,
+        "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "clickhouse",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "clickhouse_journey_through_the_stacklyd_binary",
+          "the_managed_users_stop_commands_without_a_table",
+          "an_auto_port_in_use_moves",
+          "two_clickhouse_instances_keep_their_own_events_table"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ceb7-f7c0-7164-a5db-f3c30bb5abd6",
+      "covers": [
+        "REQ-037",
+        "AC-037"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "clickhouse",
+        "name": "isolation::two_clickhouse_instances_keep_their_own_events_table",
+        "file": "apps/daemon/tests/clickhouse/isolation.rs",
+        "line": 54
+      },
+      "status": "PASS",
+      "expected": "two ClickHouse 26.8.30.8 instances of one runtime each create default.events and insert their own row, are restarted one after the other, and then each reads only its own row on its own two loopback ports, both listening on exactly their registry ports at the same time; stopping the first leaves the second running with the same PID and row",
+      "actual": "a read only (1, alpha) and b only (2, beta) after both restarts, neither password opened the other, later rows stayed in their own instance, on ports [50113, 50114, 50120, 50121]; b kept PID 94309 when a stopped",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:45:25.440257Z",
+      "finishedAt": "2026-11-12T07:45:53.941275Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+        "sourceDirty": false,
+        "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "clickhouse",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "clickhouse_journey_through_the_stacklyd_binary",
+          "the_managed_users_stop_commands_without_a_table",
+          "an_auto_port_in_use_moves",
+          "two_clickhouse_instances_keep_their_own_events_table"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ceb8-671b-7075-b336-2b6cfcfc27e5",
+      "covers": [
+        "REQ-037"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "clickhouse",
+        "name": "security::the_managed_users_stop_commands_without_a_table_leave_merges_running",
+        "file": "apps/daemon/tests/clickhouse/security.rs",
+        "line": 368
+      },
+      "status": "PASS",
+      "expected": "SYSTEM STOP MERGES, STOP MOVES, STOP TTL MERGES, and STOP FETCHES with no table name exit 0 for stackly_readiness and stackly_reload but stop nothing: OPTIMIZE TABLE default.parts FINAL as default still merges the parts to one, while the same commands naming default.parts are refused for both users, and the default user's own SYSTEM STOP MERGES default.parts does keep the parts apart",
+      "actual": "the four SYSTEM STOP commands without a table exited 0 for both managed users and OPTIMIZE FINAL still merged to one part; the named forms exited [Some(241), Some(241), Some(241), Some(241), Some(241), Some(241), Some(241), Some(241)]",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:45:53.947154Z",
+      "finishedAt": "2026-11-12T07:46:20.655148Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+        "sourceDirty": false,
+        "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "clickhouse",
+          "--locked",
+          "--",
+          "--ignored",
+          "--test-threads=1",
+          "clickhouse_journey_through_the_stacklyd_binary",
+          "the_managed_users_stop_commands_without_a_table",
+          "an_auto_port_in_use_moves",
+          "two_clickhouse_instances_keep_their_own_events_table"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

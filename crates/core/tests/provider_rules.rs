@@ -1898,6 +1898,7 @@ fn postgresql_conf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
     assert!(!err.to_string().contains("a\nb"), "{err}");
 }
 
+// covers: AC-2 (spec 0040)
 #[test]
 fn valkey_conf_renders_quoted_text_decimal_integers_and_yes_no_booleans() {
     let package = Edit::fake()
@@ -2007,6 +2008,7 @@ fn mysql_cnf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
     assert!(!err.to_string().contains('\u{85}'), "{err}");
 }
 
+// covers: AC-1, AC-2 (spec 0043)
 #[test]
 fn xml_writes_values_as_element_content_touching_literal_text() {
     let package = Edit::fake()
@@ -2064,6 +2066,85 @@ fn xml_writes_values_as_element_content_touching_literal_text() {
     assert!(!err.to_string().contains('\u{1b}'), "{err}");
 }
 
+// covers: AC-1 (spec 0043)
+#[test]
+fn xml_takes_block_tags_and_escapes_text_inside_both_branches() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse>\n{{#if settings.failInit}}\n  <on>{{ settings.greeting }}</on>\n{{else}}\n  <off>{{ settings.greeting }}</off>\n{{/if}}\n</clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+
+    let mut seen = Vec::new();
+    for flag in [true, false] {
+        let write = first_write(
+            &package,
+            serde_json::json!({
+                "authToken": SECRET_REF,
+                "greeting": "<&'\">",
+                "failInit": flag,
+            }),
+        );
+        seen.push(
+            String::from_utf8(
+                write
+                    .content
+                    .materialize(&token("abc"))
+                    .expect("the config materializes"),
+            )
+            .expect("UTF-8 output"),
+        );
+    }
+
+    assert_eq!(
+        seen,
+        [
+            "<clickhouse>\n  <on>&lt;&amp;&apos;&quot;&gt;</on>\n</clickhouse>\n",
+            "<clickhouse>\n  <off>&lt;&amp;&apos;&quot;&gt;</off>\n</clickhouse>\n",
+        ]
+    );
+}
+
+// covers: AC-1 (spec 0043)
+#[test]
+fn xml_refuses_a_setting_with_a_noncharacter_by_its_field_name_only() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse><display_name>{{ settings.greeting }}</display_name></clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+
+    // Settings validation already refuses control characters in text
+    // (`settings_value`), so the two noncharacters are what reaches the
+    // escaper from a setting.
+    for bad in ["a\u{fffe}b", "a\u{ffff}b"] {
+        let context = context_for(
+            &package,
+            serde_json::json!({ "authToken": SECRET_REF, "greeting": bad }),
+            "/Volumes/T",
+        );
+        let err = package
+            .init_plan(&context)
+            .expect_err("a noncharacter never reaches config.xml");
+        assert_eq!(
+            err,
+            PlanError::UnrepresentableValue {
+                field: "settings.greeting".into()
+            },
+            "{bad:?}"
+        );
+        assert!(!err.to_string().contains(bad), "{err}");
+    }
+}
+
+// covers: AC-1 (spec 0043)
+// covers: AC-2 (spec 0040)
 #[test]
 fn an_unknown_format_names_every_known_format_in_its_message() {
     let err = Edit::fake()
@@ -2104,6 +2185,7 @@ fn with_hash_template(format: &str, template: &str) -> Edit {
         .set("templates/fake.json.tmpl", template)
 }
 
+// covers: AC-3 (spec 0040)
 #[test]
 fn a_sha256_hex_filter_writes_the_hash_of_the_secret_with_no_escaper() {
     let package = with_hash_template(
@@ -2164,6 +2246,7 @@ fn a_sha256_hex_filter_writes_the_hash_of_the_secret_with_no_escaper() {
     );
 }
 
+// covers: AC-3 (spec 0040)
 #[test]
 fn a_hash_segment_shows_only_the_secret_reference_in_the_plan() {
     let package = with_hash_template(
@@ -2197,6 +2280,7 @@ fn a_hash_segment_shows_only_the_secret_reference_in_the_plan() {
     assert!(shown.contains("<secret:authToken>"), "{shown}");
 }
 
+// covers: AC-3 (spec 0040)
 #[test]
 fn a_filter_is_rejected_off_a_secret_path_with_its_code_and_position() {
     let sensitive = "templates/fake.json.tmpl";
@@ -2243,6 +2327,56 @@ fn a_filter_is_rejected_off_a_secret_path_with_its_code_and_position() {
             IssueCode::SecretNotAllowedHere,
         );
     }
+}
+
+// covers: AC-3 (spec 0040)
+#[test]
+fn a_filter_tag_that_does_not_parse_is_a_syntax_error_and_any_spacing_parses() {
+    let sensitive = "templates/fake.json.tmpl";
+    for template in [
+        "x {{ secret.authToken || sha256Hex }}\n",
+        "x {{ secret.authToken |  }}\n",
+        "x {{ secret.authToken | sha256_hex }}\n",
+        "x {{ secret.authToken | sha 256 }}\n",
+        "x {{ secret.authToken | sha256Hex() }}\n",
+        "x {{ secret.authToken | sh\u{e4}256 }}\n",
+        "x {{ | sha256Hex }}\n",
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            "1:3",
+            IssueCode::TemplateSyntax,
+        );
+    }
+    for template in [
+        "x {{secret.authToken|sha256Hex}}\n",
+        "x {{  secret.authToken \t|\t sha256Hex  }}\n",
+    ] {
+        with_hash_template("valkeyConf", template)
+            .validate()
+            .unwrap_or_else(|err| panic!("{template:?}: {:#?}", err.issues));
+    }
+    for template in [
+        "x {{ settings.greeting | md5 }}\n",
+        "x {{ settings.greeting | sha256Hex | md5 }}\n",
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            "1:3",
+            IssueCode::TemplateType,
+        );
+    }
+    // A secret with a filter that is not sha256Hex, in a config that is not
+    // sensitive: the filter check reports the tag first, as template_type,
+    // and the package is refused all the same. A valid filter there gets
+    // secret_not_allowed_here (a_filter_is_rejected_off_a_secret_path...).
+    let shared = "templates/fake.conf.tmpl";
+    let issues = Edit::fake()
+        .set(shared, "{\"h\": \"{{ secret.authToken | md5 }}\"}\n")
+        .issues();
+    assert_issue(&issues, shared, "1:8", IssueCode::TemplateType);
 }
 
 #[test]

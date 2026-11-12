@@ -39,7 +39,7 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
   - [x] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
   - [x] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
 - [x] Verify it: `/check verify provider Valkey`
-- [ ] Test it: `/test provider Valkey`
+- [x] Test it: `/test provider Valkey`
 
 ### 41. Provider Traefik & routing lokal · in-progress
 
@@ -96,4 +96,4 @@ Binary native yang dipilih, path storage, temp, log, user files, dan config per 
   - [x] ClickHouse 26.8.30.8 asli lewat daemon: harness `apps/daemon/tests/clickhouse.rs`, lifecycle dan kontrak proses, isolasi dua instance dengan tabel sama nama, audit listener, auth dan dua user terkelola, reload lewat `SYSTEM RELOAD CONFIG` dengan rotasi password, kegagalan port dan folder data, lalu konformitas dan install dari cache (spec 0043 AC-4 sampai AC-12, AC-14; build step 6 sampai 9; after milestone 1; needs artefak ClickHouse di cache xtask, tanpa itu `BLOCKED`; step 6 sampai 8 bisa dibagi sesudah harness step 6 masuk)
   - [x] Catalog, corpus, spike, dan ukuran RISK-07: hapus recipe spike dan penanda `F43`, record BR-025 lewat `clickhouse_compatibility` dan `compat-record`, `official/clickhouse` pindah ke `[[provider]]` dengan catatan platform dan revision catalog baru, `cargo xtask provider freeze`, dan catatan ukuran RISK-07 serta tiga langkah manual di `verify.md` (spec 0043 AC-13 bagian catalog, AC-15 sampai AC-17; build step 10 sampai 13; step 11 dan 12 after milestone 2 lulus; step 10 bisa paralel dengan milestone 2; run spike native, fuzz 10 menit, dan sesi GUI adalah langkah manual)
 - [x] Verify it: `/check verify provider ClickHouse`
-- [ ] Test it: `/test provider ClickHouse`
+- [x] Test it: `/test provider ClickHouse`

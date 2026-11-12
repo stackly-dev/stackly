@@ -1,0 +1,43 @@
+{
+  "sourceCommit": "56810367c875f4e78f2c5b66e1cb5098f159298d",
+  "sourceDirty": false,
+  "runId": "01a1ceb5-7e25-76d9-bfd7-b5248b05d286",
+  "runKind": "native",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "stacklyd",
+    "--test",
+    "clickhouse",
+    "--locked",
+    "--",
+    "--ignored",
+    "--test-threads=1",
+    "clickhouse_journey_through_the_stacklyd_binary",
+    "the_managed_users_stop_commands_without_a_table",
+    "an_auto_port_in_use_moves",
+    "two_clickhouse_instances_keep_their_own_events_table"
+  ],
+  "host": {
+    "os": "macos",
+    "arch": "aarch64",
+    "osVersion": "27.0.1",
+    "osBuild": "26A434",
+    "hardwareModel": "Mac13,1",
+    "chip": "Apple M1 Max",
+    "memoryBytes": 34359738368,
+    "performanceCores": 8,
+    "efficiencyCores": 2,
+    "virtualized": false
+  },
+  "baseline": {
+    "matches": true,
+    "osBuildMatches": false
+  },
+  "toolchain": {
+    "rustc": "1.99.1",
+    "xcode": "27.1 (27A9275)",
+    "swift": "6.4"
+  }
+}

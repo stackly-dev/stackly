@@ -32,6 +32,7 @@ async fn log_entries(api: &Api, id: Uuid, contains: Option<&str>) -> Vec<LogEntr
     page.entries.into_iter().map(|entry| entry.kind).collect()
 }
 
+// covers: AC-11 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_stops_on_sigterm_with_a_blocked_client_and_saves_its_snapshot() {

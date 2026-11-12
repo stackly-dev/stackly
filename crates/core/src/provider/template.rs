@@ -1274,6 +1274,7 @@ mod tests {
         }
     }
 
+    // covers: AC-3 (spec 0040)
     #[test]
     fn an_output_tag_takes_filter_names_after_a_bar_with_any_spacing() {
         assert_eq!(filters("{{ secret.x | sha256Hex }}"), ["sha256Hex"]);
@@ -1283,6 +1284,7 @@ mod tests {
         assert!(filters("{{ secret.x }}").is_empty());
     }
 
+    // covers: AC-3 (spec 0040)
     #[test]
     fn an_empty_or_odd_filter_name_is_a_syntax_error_at_the_tag() {
         for bad in [
@@ -1581,6 +1583,7 @@ mod tests {
         assert!(TemplateFormat::Plain.output_parses("local all all scram-sha-256\n"));
     }
 
+    // covers: AC-2 (spec 0040)
     #[test]
     fn valkey_conf_double_quotes_text_and_escapes_quotes_and_backslashes() {
         let format = TemplateFormat::ValkeyConf;
@@ -1597,6 +1600,7 @@ mod tests {
         );
     }
 
+    // covers: AC-2 (spec 0040)
     #[test]
     fn valkey_conf_rejects_every_control_character() {
         for bad in [
@@ -1607,6 +1611,7 @@ mod tests {
         assert!(TemplateFormat::ValkeyConf.escape_text("a\u{a0}b").is_some());
     }
 
+    // covers: AC-2 (spec 0040)
     #[test]
     fn valkey_conf_writes_booleans_as_yes_and_no_and_takes_tags_without_a_parse_back() {
         let format = TemplateFormat::ValkeyConf;
@@ -1621,6 +1626,120 @@ mod tests {
         );
         assert_eq!(TemplateFormat::from_code("valkey"), None);
         assert_eq!(TemplateFormat::from_code("ValkeyConf"), None);
+    }
+
+    /// Reads one double quoted argument the way Valkey's `sdssplitargs`
+    /// does for a config line: `\xHH` is a byte, `\n`, `\r`, `\t`, `\b`, and
+    /// `\a` are control characters, any other `\c` is `c`, and the closing
+    /// quote must end the line or come before a space. `None` for a line
+    /// Valkey would refuse or split into more than one argument.
+    fn valkey_unquote(line: &str) -> Option<String> {
+        let mut bytes = line.as_bytes().iter().copied().peekable();
+        if bytes.next() != Some(b'"') {
+            return None;
+        }
+        let mut out = Vec::new();
+        loop {
+            match bytes.next()? {
+                b'\\' => match bytes.next()? {
+                    b'x' => {
+                        let high = bytes.next()?;
+                        let low = bytes.next()?;
+                        let text = [high, low];
+                        let hex = std::str::from_utf8(&text).ok()?;
+                        out.push(u8::from_str_radix(hex, 16).ok()?);
+                    }
+                    b'n' => out.push(b'\n'),
+                    b'r' => out.push(b'\r'),
+                    b't' => out.push(b'\t'),
+                    b'b' => out.push(0x08),
+                    b'a' => out.push(0x07),
+                    other => out.push(other),
+                },
+                b'"' => {
+                    return match bytes.next() {
+                        None => String::from_utf8(out).ok(),
+                        Some(_) => None,
+                    };
+                }
+                other => out.push(other),
+            }
+        }
+    }
+
+    // covers: AC-2 (spec 0040)
+    #[test]
+    fn valkey_conf_text_reads_back_as_one_unchanged_argument_for_every_edge_mix() {
+        for text in [
+            "",
+            "\\",
+            "\"",
+            "\\\"",
+            "\"\\",
+            "a\\",
+            "\\\\",
+            "\"\"",
+            "a\"\"b",
+            "\\x41",
+            "\\x4",
+            "\\n\\r\\t",
+            "$HOME",
+            "${x}",
+            "$",
+            "#x",
+            "# x",
+            " # ",
+            "  ",
+            " a ",
+            "'",
+            "''",
+            "{{ x }}",
+            "a\\\\\"b",
+            "\\\" #$",
+            "ü 空 \u{1f600}",
+            "\u{a0}\u{2028}\u{2029}\u{feff}",
+            "a\"b\\c d ü #x",
+        ] {
+            let escaped = TemplateFormat::ValkeyConf
+                .escape_text(text)
+                .unwrap_or_else(|| panic!("{text:?} is representable"));
+            assert_eq!(
+                valkey_unquote(&escaped).as_deref(),
+                Some(text),
+                "{text:?} as {escaped}"
+            );
+        }
+    }
+
+    // covers: AC-2 (spec 0040)
+    #[test]
+    fn valkey_conf_rejects_each_c0_del_and_c1_character_wherever_it_stands() {
+        let controls = (0x00..=0x1f_u32).chain(0x7f..=0x9f);
+        for code in controls {
+            let c = char::from_u32(code).expect("a control code point is a char");
+            for text in [
+                format!("{c}"),
+                format!("{c}a"),
+                format!("a{c}"),
+                format!("a{c}b"),
+                format!("\"{c}\\"),
+            ] {
+                assert_eq!(
+                    TemplateFormat::ValkeyConf.escape_text(&text),
+                    None,
+                    "U+{code:04X} in {text:?}"
+                );
+            }
+        }
+        for code in [0x20_u32, 0x7e, 0xa0, 0xff] {
+            let c = char::from_u32(code).expect("a printable code point is a char");
+            assert!(
+                TemplateFormat::ValkeyConf
+                    .escape_text(&format!("a{c}b"))
+                    .is_some(),
+                "U+{code:04X} is kept"
+            );
+        }
     }
 
     #[test]
@@ -1696,6 +1815,73 @@ mod tests {
         for good in ["a\u{a0}b", "a\u{fffd}b", "a\u{1f600}b"] {
             assert!(TemplateFormat::Xml.escape_text(good).is_some(), "{good:?}");
         }
+    }
+
+    // covers: AC-1 (spec 0043)
+    #[test]
+    fn xml_rejects_every_c0_and_c1_control_and_takes_the_characters_around_them() {
+        let refused: Vec<char> = ('\u{0}'..='\u{1f}')
+            .chain('\u{7f}'..='\u{9f}')
+            .chain(['\u{fffe}', '\u{ffff}'])
+            .collect();
+        assert_eq!(refused.len(), 32 + 33 + 2);
+        for c in refused {
+            let text = format!("a{c}b");
+            assert_eq!(TemplateFormat::Xml.escape_text(&text), None, "{c:?}");
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&c.to_string()),
+                None,
+                "{c:?}"
+            );
+        }
+        for c in [
+            '\u{20}',
+            '\u{7e}',
+            '\u{a0}',
+            '\u{fffd}',
+            '\u{10000}',
+            '\u{10ffff}',
+        ] {
+            let text = format!("a{c}b");
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&text).as_deref(),
+                Some(text.as_str()),
+                "{c:?}"
+            );
+        }
+    }
+
+    // covers: AC-1 (spec 0043)
+    #[test]
+    fn xml_writes_each_of_the_five_markup_characters_as_its_own_entity() {
+        for (raw, entity) in [
+            ("&", "&amp;"),
+            ("<", "&lt;"),
+            (">", "&gt;"),
+            ("\"", "&quot;"),
+            ("'", "&apos;"),
+        ] {
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(raw).as_deref(),
+                Some(entity),
+                "{raw}"
+            );
+            assert_eq!(
+                TemplateFormat::Xml.escape_text(&format!("{raw}{raw}")),
+                Some(format!("{entity}{entity}")),
+                "{raw} twice"
+            );
+        }
+        assert_eq!(
+            TemplateFormat::Xml.escape_text("<![CDATA[x]]>").as_deref(),
+            Some("&lt;![CDATA[x]]&gt;"),
+            "a CDATA section in a value stays text"
+        );
+        assert_eq!(
+            TemplateFormat::Xml.escape_text("&#65;").as_deref(),
+            Some("&amp;#65;"),
+            "a character reference in a value stays text"
+        );
     }
 
     #[test]

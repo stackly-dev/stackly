@@ -360,6 +360,21 @@ Misalnya untuk baris log `can't listen to the monitor port`, atau untuk `identit
 
 Tidak ada pesan ke sesi `arc-f40-spec` sampai `arc-f43-spec`. Spec ini tidak menambah kontrak core yang mereka pakai: tidak ada format template, jenis probe, primitive secret, atau filter hash baru. Yang dibagi hanya file (lihat *File bersama yang disentuh* dan paragraf *Sesi paralel* di index), dan urutannya diatur lead.
 
+## Update 2026-11-12: selaras dengan hasil verify
+
+Verify milestone 1 sampai 3 (`chk-f39-m1`) lulus dengan AC-1 sampai AC-14 terpenuhi. Update ini hanya menyamakan teks spec dengan yang dibangun; tidak ada perilaku, paket, template, kode, ID AC, atau keputusan yang berubah.
+
+| No | Temuan verify | Yang diubah di spec | Alasan |
+| --- | --- | --- | --- |
+| 1 | `nats_refuses_reload…` (`lifecycle_ops.rs`) dan `nats_reports_one_process…` (`metrics.rs`) tidak membawa `REQ-036` di `covers`, sedangkan AC-12 menulis "setiap test native fitur ini". | AC-12 dan tabel *Test native*: "fitur ini" dibaca sebagai test yang ditulis fitur ini atau yang membuktikan AC nya. Dua test itu tetap dengan `covers` lamanya. | Lead mengambil bacaan itu saat verify. `covers` adalah klaim "test ini membuktikan ID itu"; dua test itu membuktikan reload dan restart (spec 0026) dan metrics (spec 0028), dan fitur ini hanya memindahkan path `nats.conf` di harness mereka. Menambah `REQ-036` di sana akan membuat matrix traceability mengklaim bukti yang tidak ada. Runner up: tambah `REQ-036` ke keduanya supaya kalimat lama benar secara harfiah. |
+| 2 | Satu doc comment di luar modul test `secret/delivery/mod.rs` berubah di commit `13347faf`. | Catatan di *Ukuran RISK-07* dan baris *File bersama yang disentuh*. | Contoh lama di doc itu ("a NATS config and a value with `"` or `$`") menjadi salah begitu escaper dilonggarkan, jadi membetulkannya benar. Baris barunya tidak memuat `nats`, jadi AC-14 tidak dilanggar; yang dibetulkan hanya kalimat spec "hanya modul `#[cfg(test)]` nya". |
+| 3 | `nats-server` menulis `[WRN] Plaintext passwords detected, use nkeys or bcrypt` di setiap start, dan baris itu tampil di log instance. README belum menyebutnya. | Butir residual di *Security model*, satu butir di Consequences, Follow-up README, dan Follow-up bcrypt yang sudah ada kini menyebutnya. | Peringatan itu akibat Keputusan 2 yang sudah diterima (mekanisme 5, teks biasa di `secrets/nats.conf`), bukan cacat. README tidak ikut `manifest_sha256`, jadi kalimatnya bisa ditambah tanpa revision paket; itu tetap perubahan paket, jadi ditulis sebagai Follow-up, bukan dikerjakan di sini. |
+| 4 | Perintah RISK-07 di `verify.md` (`git diff --numstat 90dc30dc HEAD -- …/template.rs` → `75 13`) tidak lagi memberi angka itu, karena fitur 40, 42, dan 43 mengubah file yang sama. | AC-14 dan langkah 9: angka diukur per commit build. Follow-up untuk pemilik `verify.md`. | Ukuran RISK-07 adalah ukuran fitur ini, jadi rentangnya harus daftar commit build, bukan sampai `HEAD` yang terus bergerak. `verify.md` bukan milik architect, jadi perbaikannya Follow-up. |
+
+Temuan verify yang sudah ditutup tester dan tidak butuh perubahan spec: assertion AC-6 sesudah restart, regresi suntik balasan, dan tag `covers` AC-1 sampai AC-13 (`tst-f39-test`). AC-14 tetap tanpa test, karena ia ukuran atas riwayat commit.
+
+Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
+
 ## Cross check
 
 Cross check dijalankan 2026-11-12 oleh model lain (Opus), read only, terhadap spec, spec yang dirujuk, dan kode. Vonisnya: perlu revisi sebelum `/develop`. Semua temuan diterapkan dengan rekomendasi architect (user mendelegasikan setiap keputusan ke opsi yang direkomendasikan), dan dua di antaranya diuji dulu pada binary asli.

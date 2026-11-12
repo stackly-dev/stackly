@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce96-bf4a-7307-a8d5-f985d84cb29c",
+  "covers": [
+    "REQ-038"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "valkey",
+    "name": "format::valkey_9_1_reads_back_each_edge_keyspace_value_as_a_live_config_set_of_it",
+    "file": "apps/daemon/tests/valkey/format.rs",
+    "line": 124
+  },
+  "status": "PASS",
+  "expected": "for each edge value of notifyKeyspaceEvents (empty, $, K$, E$x, KEA, AKE$, every letter, repeats) the instance starts, and CONFIG GET notify-keyspace-events reads the same flags that CONFIG SET of that value on the running server reads",
+  "actual": "Valkey 9.1.2 read back \"\"->\"\", \"$\"->\"$\", \"K$\"->\"$K\", \"E$x\"->\"$xE\", \"KEA\"->\"AKE\", \"AKE$\"->\"AKE\", \"KEg$lshzxetdmnA\"->\"AKEm\", \"KKEE\"->\"KE\" as a live CONFIG SET does",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "valkey",
+      "version": "9.1.2",
+      "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:09:08.298366Z",
+  "finishedAt": "2026-11-12T07:09:20.991536Z",
+  "evidencePath": "output.log"
+}
