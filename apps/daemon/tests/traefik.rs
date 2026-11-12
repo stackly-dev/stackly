@@ -7,6 +7,8 @@
 //! not in the cache ends a test as `BLOCKED`, never as a download.
 #![cfg(target_os = "macos")]
 
+#[path = "traefik/cli.rs"]
+mod cli;
 #[path = "common/mod.rs"]
 mod common;
 #[path = "traefik/compatibility.rs"]
