@@ -213,12 +213,13 @@ fn the_impact_follows_the_lifecycle_the_capability_and_the_ports() {
 fn nats_refuses_a_managed_field_and_restarts_without_reload() {
     let package = package("nats");
     let schema = package.settings_schema();
-    let active = values(&package, &serde_json::json!({}));
+    let base = serde_json::json!({ "clientPassword": secret("client-password") });
+    let active = values(&package, &base);
 
     let managed = evaluate_change(
         schema,
         &active,
-        &serde_json::json!({ "serverName": "mine" }),
+        &with(&base, "serverName", "mine".into()),
         InstanceLifecycle::Running,
         false,
         false,
@@ -229,7 +230,7 @@ fn nats_refuses_a_managed_field_and_restarts_without_reload() {
     let jetstream = evaluate_change(
         schema,
         &active,
-        &serde_json::json!({ "jetstream": false }),
+        &with(&base, "jetstream", false.into()),
         InstanceLifecycle::Running,
         false,
         false,

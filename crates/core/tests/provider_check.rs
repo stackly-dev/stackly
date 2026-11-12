@@ -118,7 +118,7 @@ fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
     let ev = evidence!(
         covers = ["REQ-030"],
         kind = Kind::Fixture,
-        expected = "check_package finds nothing in providers/fake, nats, postgresql, and traefik, reads apiVersion, gives fake, nats, and postgresql the implied default scenario, and reads the two scenarios of traefik",
+        expected = "check_package finds nothing in providers/fake, nats, postgresql, and traefik, reads apiVersion, gives fake and postgresql the implied default scenario, and reads the two scenarios of nats and of traefik",
     );
     for name in ["fake", "nats", "postgresql", "traefik"] {
         let copy = Copy::of(&repo_root().join("providers").join(name));
@@ -133,6 +133,20 @@ fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
         let direct = ValidatedPackage::from_files(copy.files(), NameCheck::FolderName)
             .expect("from_files accepts the same package");
         assert_eq!(package.key(), direct.key(), "{name}");
+        if name == "nats" {
+            let names: Vec<&str> = check
+                .scenarios
+                .iter()
+                .map(|scenario| scenario.name.as_str())
+                .collect();
+            assert_eq!(names, ["default", "no-jetstream"]);
+            assert_eq!(check.scenarios[0].settings, serde_json::json!({}));
+            assert_eq!(
+                check.scenarios[1].settings,
+                serde_json::json!({ "jetstream": false })
+            );
+            continue;
+        }
         if name == "traefik" {
             // spec 0041 AC-1: the package names its own two scenarios.
             let names: Vec<&str> = check.scenarios.iter().map(|s| s.name.as_str()).collect();

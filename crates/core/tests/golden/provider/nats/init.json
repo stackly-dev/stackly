@@ -6,7 +6,8 @@
         "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
         "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config",
         "/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a",
-        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+        "/private/tmp/skt-golden/stackly-0000000a/i/0000000a"
       ]
     }
   ],

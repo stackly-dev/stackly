@@ -1,0 +1,25 @@
+{
+  "checks": [
+    "adoption",
+    "client_auth",
+    "honest_readiness",
+    "identity_check",
+    "init",
+    "isolation",
+    "jetstream_mode",
+    "monitoring_conflict",
+    "persistence",
+    "readiness",
+    "start",
+    "stop"
+  ],
+  "knownLimitations": [
+    "power_loss_not_covered"
+  ],
+  "providerRevision": {
+    "id": "official/nats",
+    "manifestSha256": "1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621",
+    "revision": "1.1.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}

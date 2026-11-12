@@ -110,15 +110,21 @@ fn the_form_lists_endpoints_and_fields_in_the_order_the_package_declares() {
         [
             "serverName",
             "jetstream",
-            "jetstreamMaxMemoryBytes",
-            "jetstreamMaxFileBytes",
-            "maxPayloadBytes",
+            "clientPassword",
+            "jetstreamMaxMemoryMiB",
+            "jetstreamMaxFileMiB",
+            "maxPayloadKiB",
         ],
         "the order of `properties`, not the order of the names"
     );
     assert!(nats.fields[0].managed);
     assert_eq!(nats.fields[1].kind, FieldKind::Boolean);
-    for field in &nats.fields[2..] {
+    let password = &nats.fields[2];
+    assert_eq!(password.kind, FieldKind::Text);
+    assert!(password.secret && password.required && password.printable_only);
+    assert_eq!(password.visibility, FieldVisibility::Basic);
+    assert_eq!(password.apply, Some(FieldApply::Restart));
+    for field in &nats.fields[3..] {
         assert_eq!(field.kind, FieldKind::Integer, "{}", field.key);
         assert_eq!(field.visibility, FieldVisibility::Advanced, "{}", field.key);
         assert_eq!(field.apply, Some(FieldApply::Restart), "{}", field.key);

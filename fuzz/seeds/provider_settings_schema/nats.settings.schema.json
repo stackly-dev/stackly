@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "NATS settings",
-  "description": "Server identity, JetStream, and message limits of one NATS server.",
+  "description": "Server identity, JetStream, client password, and message limits of one NATS server.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -15,36 +15,45 @@
     "jetstream": {
       "type": "boolean",
       "title": "JetStream",
-      "description": "Persist streams and key value buckets in the instance's data folder.",
+      "description": "Store streams and key value buckets in the instance's data folder. File streams survive a restart, memory streams do not. Off means core messaging only, and nothing is stored.",
       "default": true,
       "x-stackly": { "apply": "restart" }
     },
-    "jetstreamMaxMemoryBytes": {
+    "clientPassword": {
+      "type": "string",
+      "title": "Client password",
+      "description": "Password of the stackly user that clients sign in with. A new value takes effect at the next restart.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "restart", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "jetstreamMaxMemoryMiB": {
       "type": "integer",
-      "title": "JetStream memory limit (bytes)",
+      "title": "JetStream memory limit (MiB)",
       "description": "Most memory JetStream memory streams may use.",
-      "minimum": 1048576,
-      "maximum": 1099511627776,
-      "default": 1073741824,
+      "minimum": 1,
+      "maximum": 1048576,
+      "default": 1024,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
     },
-    "jetstreamMaxFileBytes": {
+    "jetstreamMaxFileMiB": {
       "type": "integer",
-      "title": "JetStream file limit (bytes)",
+      "title": "JetStream file limit (MiB)",
       "description": "Most disk space JetStream file streams may use in the data folder.",
-      "minimum": 1048576,
-      "maximum": 1099511627776,
-      "default": 10737418240,
+      "minimum": 1,
+      "maximum": 1048576,
+      "default": 10240,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
     },
-    "maxPayloadBytes": {
+    "maxPayloadKiB": {
       "type": "integer",
-      "title": "Largest message (bytes)",
+      "title": "Largest message (KiB)",
       "description": "Largest message payload a client may publish.",
-      "minimum": 1024,
-      "maximum": 67108864,
-      "default": 1048576,
+      "minimum": 1,
+      "maximum": 65536,
+      "default": 1024,
       "x-stackly": { "apply": "restart", "visibility": "advanced" }
     }
-  }
+  },
+  "required": ["clientPassword"]
 }

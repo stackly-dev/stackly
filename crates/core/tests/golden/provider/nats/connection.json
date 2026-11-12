@@ -1,11 +1,22 @@
 [
   {
-    "masked": "nats://127.0.0.1:14000",
+    "masked": "nats://stackly:****@127.0.0.1:14000",
     "name": "uri",
     "parts": [
       {
         "kind": "text",
-        "text": "nats://127.0.0.1:14000"
+        "text": "nats://stackly:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "clientPassword",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/client-password"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@127.0.0.1:14000"
       }
     ],
     "portMayChange": true,

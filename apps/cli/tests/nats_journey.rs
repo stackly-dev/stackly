@@ -1,8 +1,9 @@
 //! The NATS journey from the CLI against a real `stacklyd` and a real NATS
-//! 2.15.1 (spec 0023, milestone 4, build step 10, AC-13): `runtime install`
-//! from the download cache, `instance create` with the defaults and with
-//! JetStream off, `instance start`, `instance inspect <name> --json`, and
-//! `instance stop`. The artifact comes from the runtime cache of `cargo
+//! 2.15.1 (spec 0023 AC-13, spec 0039 AC-11): `runtime install` from the
+//! download cache, `instance create` with a generated client password, once
+//! with the defaults and once with JetStream off, `instance start`,
+//! `instance inspect <name> --json`, `instance connection` with the password
+//! masked, and `instance stop`. The artifact comes from the runtime cache of `cargo
 //! xtask` and is copied into the download cache of the test root, so the
 //! install is a cache hit and nothing is downloaded; an artifact that is not
 //! in the cache ends the test as `BLOCKED`.
@@ -140,8 +141,8 @@ fn install_runtime(root: &Path) -> String {
         .to_owned()
 }
 
-/// Creates an instance of `official/nats` with `extra` flags and returns its
-/// ID.
+/// Creates an instance of `official/nats` with a generated client password
+/// and `extra` flags, and returns its ID.
 fn create(root: &Path, name: &str, runtime: &str, extra: &[&str]) -> String {
     let mut args = vec![
         "instance",
@@ -151,6 +152,8 @@ fn create(root: &Path, name: &str, runtime: &str, extra: &[&str]) -> String {
         runtime,
         "--provider",
         "official/nats",
+        "--secret",
+        "clientPassword=generate",
         "--wait",
         "--timeout",
         WAIT,
@@ -236,6 +239,13 @@ fn run_instance(root: &Path, id: &str, name: &str) -> Value {
     let monitoring = port_of(instance, "monitoring");
     assert_ne!(client, monitoring);
     let info = read_info(client);
+    let connection = run(root, &["instance", "connection", name]);
+    assert_eq!(connection.code, Some(0), "{connection:?}");
+    assert_eq!(
+        connection.stdout,
+        format!("nats://stackly:****@127.0.0.1:{client}\n"),
+        "the Client URL names the stackly user and masks the password"
+    );
 
     let stopped = run(root, &["instance", "stop", id, "--wait", "--timeout", WAIT]);
     assert_eq!(stopped.code, Some(0), "{stopped:?}");
@@ -252,14 +262,14 @@ fn note_subject(ev: &Evidence, version: &str, sha256: &str) {
     ev.subject("nats", version, Some(sha256), Source::Managed);
 }
 
-/// Spec 0023 AC-13, the CLI part.
+/// Spec 0023 AC-13 and spec 0039 AC-11, the CLI part.
 #[test]
 #[ignore = "native: needs the managed NATS 2.15.1 artifact in the runtime cache"]
 fn nats_created_with_defaults_and_with_jetstream_off_starts_inspects_and_stops_from_the_cli() {
     let ev = evidence!(
         covers = ["REQ-029", "REQ-036", "AC-029"],
         kind = Kind::Native,
-        expected = "against a real stacklyd and NATS 2.15.1, stackly instance create for official/nats with the defaults and with --set jetstream=false, instance start, instance inspect <name> --json with readiness ready and reason probe_ok, and instance stop all exit 0; the server named after the instance answers INFO with JetStream on for the defaults and off for the second instance, and a stopped instance is not ready",
+        expected = "against a real stacklyd and NATS 2.15.1, stackly instance create for official/nats with --secret clientPassword=generate, with the defaults and with --set jetstream=false, instance start, instance inspect <name> --json with readiness ready and reason probe_ok, instance connection printing nats://stackly:****@127.0.0.1:<client port>, and instance stop all exit 0; the server named after the instance answers INFO with JetStream on for the defaults and off for the second instance, and a stopped instance is not ready",
     );
     let sha256 = artifact_field("sha256")
         .as_str()

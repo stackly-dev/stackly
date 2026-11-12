@@ -15,17 +15,20 @@ struct SchemaFormModelTests {
         let schema = try schema("nats")
         #expect(
             schema.rows.map(\.id) == [
-                "serverName", "jetstream", "jetstreamMaxMemoryBytes", "jetstreamMaxFileBytes",
-                "maxPayloadBytes",
+                "serverName", "jetstream", "clientPassword", "jetstreamMaxMemoryMiB",
+                "jetstreamMaxFileMiB", "maxPayloadKiB",
             ])
         #expect(schema.rows[0].control == .managed)
         #expect(schema.rows[1].control == .toggle)
-        for row in schema.rows.dropFirst(2) {
+        #expect(
+            schema.rows[2].control
+                == .secret(SecretLimits(minLength: 8, maxLength: 128, printableOnly: true)))
+        for row in schema.rows.dropFirst(3) {
             #expect(row.control == .integer)
             #expect(row.isAdvanced)
             #expect(row.boundsHint != nil)
         }
-        #expect(schema.basicRows.map(\.id) == ["serverName", "jetstream"])
+        #expect(schema.basicRows.map(\.id) == ["serverName", "jetstream", "clientPassword"])
         #expect(schema.advancedRows.count == 3)
     }
 
@@ -34,15 +37,16 @@ struct SchemaFormModelTests {
         let members = schema.settings().members
         #expect(members["serverName"] == nil)
         #expect(members["jetstream"] == .bool(true))
-        #expect(members["maxPayloadBytes"] == .number(1_048_576))
+        #expect(members["maxPayloadKiB"] == .number(1024))
+        #expect(members["clientPassword"] == nil)
     }
 
     @Test func theNatsAdvancedIntegersCarryTheirBounds() throws {
         let schema = try schema("nats")
-        let memory = try #require(schema.row("jetstreamMaxMemoryBytes"))
-        #expect(memory.field.minimum == 1_048_576)
-        #expect(memory.field.maximum == 1_099_511_627_776)
-        #expect(memory.boundsHint == "From 1048576 to 1099511627776.")
+        let memory = try #require(schema.row("jetstreamMaxMemoryMiB"))
+        #expect(memory.field.minimum == 1)
+        #expect(memory.field.maximum == 1_048_576)
+        #expect(memory.boundsHint == "From 1 to 1048576.")
         #expect(memory.isSetOnce == false)
     }
 
@@ -72,9 +76,9 @@ struct SchemaFormModelTests {
     @Test func eachNatsAdvancedIntegerHasItsBoundsDefaultAndRestartRule() throws {
         let schema = try schema("nats")
         let expected: [(key: String, hint: String, value: Double)] = [
-            ("jetstreamMaxMemoryBytes", "From 1048576 to 1099511627776.", 1_073_741_824),
-            ("jetstreamMaxFileBytes", "From 1048576 to 1099511627776.", 10_737_418_240),
-            ("maxPayloadBytes", "From 1024 to 67108864.", 1_048_576),
+            ("jetstreamMaxMemoryMiB", "From 1 to 1048576.", 1024),
+            ("jetstreamMaxFileMiB", "From 1 to 1048576.", 10240),
+            ("maxPayloadKiB", "From 1 to 65536.", 1024),
         ]
         for item in expected {
             let row = try #require(schema.row(item.key))
@@ -164,13 +168,13 @@ struct SchemaFormModelTests {
         let schema = try schema("nats")
         schema.apply(issues: [
             FieldError(
-                path: "settings.maxPayloadBytes", code: "out_of_range", message: "x"),
+                path: "settings.maxPayloadKiB", code: "out_of_range", message: "x"),
             FieldError(path: "settings.unknown", code: "unknown_value", message: "x"),
             FieldError(path: "settings", code: "invalid_value", message: "x"),
         ])
         #expect(
-            schema.errorTexts(for: "maxPayloadBytes") == [
-                "Use a whole number from 1024 to 67108864."
+            schema.errorTexts(for: "maxPayloadKiB") == [
+                "Use a whole number from 1 to 65536."
             ])
         #expect(schema.advancedHasIssue)
         #expect(schema.errorTexts(for: "jetstream").isEmpty)
