@@ -15,7 +15,9 @@ use stackly_testkit::evidence::{Kind, evidence};
 use uuid::Uuid;
 
 use crate::config_calls::{Cfg, pid_of, settings_with};
-use crate::harness::{Serve, Site, alive, backend, create_params, get, port_of, stop_instance};
+use crate::harness::{
+    Serve, Site, alive, backend, create_params, get, port_of, server_version, stop_instance,
+};
 use crate::support::Api;
 
 /// Longer than `timeouts.reloadSeconds` of the package (30 s), so a reload
@@ -127,7 +129,7 @@ async fn traefik_routes_readiness_follows_the_routers_traefik_loaded_through_sta
     let running = api.start_ready(id).await;
     let pid = pid_of(&running);
     let (web, ping) = (port_of(&running, "web"), port_of(&running, "ping"));
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
     assert_eq!(running.readiness.state, InstanceReadinessState::Ready);
     let (status, body) = get(web, "a.localhost");
     assert!(

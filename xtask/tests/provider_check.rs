@@ -311,16 +311,21 @@ fn a_copy_of_a_frozen_revision_with_other_bytes_is_refused() {
 
 // covers: AC-6 (spec 0036)
 #[test]
-fn a_planned_provider_is_refused_before_anything_is_written() {
-    let corpus = repo_root().join("crates/core/tests/fixtures/compat/traefik");
-    assert!(!corpus.exists(), "traefik is not frozen before the test");
+fn a_package_that_never_enters_the_catalog_is_refused_before_anything_is_written() {
+    // providers/example (testing/example) never enters the catalog, so the
+    // test holds whichever official providers are still planned (spec 0041
+    // step 9). The rule that refuses an official package outside the
+    // catalog is the unit test of the freeze module.
+    let corpus = repo_root().join("crates/core/tests/fixtures/compat/example");
+    assert!(!corpus.exists(), "example is not frozen before the test");
 
-    let output = provider_freeze(&repo_root().join("providers/traefik"));
+    let output = provider_freeze(&repo_root().join("providers/example"));
 
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("is testing/example"), "{stderr}");
     assert!(
-        stderr.contains("official/traefik is not a [[provider]] of providers/catalog.toml"),
+        stderr.contains("only official/ packages are frozen"),
         "{stderr}"
     );
     assert!(!corpus.exists(), "nothing was written");

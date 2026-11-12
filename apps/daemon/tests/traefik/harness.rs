@@ -17,7 +17,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
 use stackly_core::runtime::fixture::install_cached_artifact;
 use stackly_core::supervisor::fixture::pin_package;
@@ -26,10 +26,12 @@ use stackly_domain::{Registry, WriteBatch, WriteOp};
 use stackly_platform::{Clock, Platform, RootSet, SystemClock};
 use stackly_platform_macos::MacosPlatform;
 use stackly_protocol::Timestamp;
+use stackly_protocol::events::EventKind;
 use stackly_protocol::instance::{
-    CreateInstanceParams, EndpointRequest, InstanceSummary, PortRequest, ProviderSelector,
-    SettingsDocument,
+    CreateInstanceParams, EndpointRequest, InstanceReadinessState, InstanceSummary, PortRequest,
+    ProviderSelector, SettingsDocument,
 };
+use stackly_protocol::json::DecodedFrame;
 use stackly_storage::{OpenOptions, RegistryOpen};
 use stackly_testkit::evidence::{Evidence, Source};
 use stackly_testkit::{
@@ -46,7 +48,7 @@ use crate::support::{Api, PATIENCE, fast};
 pub const OWNER: &str = "@ojiepermana";
 /// The provider of the package.
 pub const PROVIDER: &str = "official/traefik";
-/// The artifact of `providers/nats/versions.json` the tests install.
+/// The artifact of `providers/traefik/versions.json` the tests install.
 pub const ARTIFACT: &str = "traefik-3.7.15-macos-aarch64";
 /// The name of the data root.
 pub const ROOT_NAME: &str = "Test Root";
@@ -234,7 +236,8 @@ impl Site {
     }
 
     /// Notes the running server as the subject of `evidence`, with the
-    /// version `GET /varz` reported.
+    /// version `GET /api/version` on its `ping` port reported (see
+    /// [`server_version`]); never a literal from the test.
     pub fn subject(&self, evidence: &Evidence, server_version: &str) {
         evidence.subject(
             "traefik",
@@ -486,6 +489,26 @@ pub fn get_path(port: u16, host: &str, path: &str) -> (String, String) {
     )
 }
 
+/// `GET <path>` of the read only Traefik API on the `ping` port, as JSON.
+/// The answer must be 200.
+#[must_use]
+pub fn api_json(ping_port: u16, path: &str) -> Value {
+    let (status, body) = get_path(ping_port, "127.0.0.1", path);
+    assert_eq!(status_code(&status), 200, "GET {path}: {status} {body}");
+    serde_json::from_str(&body).unwrap_or_else(|error| panic!("GET {path} is not JSON: {error}"))
+}
+
+/// The `Version` field of `GET /api/version` on the `ping` port: the
+/// version of the running Traefik process, for the evidence subject.
+#[must_use]
+pub fn server_version(ping_port: u16) -> String {
+    let version = api_json(ping_port, "/api/version");
+    version["Version"]
+        .as_str()
+        .unwrap_or_else(|| panic!("/api/version has a Version: {version}"))
+        .to_owned()
+}
+
 /// The status code of a status line such as `HTTP/1.1 200 OK`, or 0.
 #[must_use]
 pub fn status_code(status_line: &str) -> u16 {
@@ -620,4 +643,101 @@ pub async fn eventually(what: &str, limit: Duration, mut done: impl FnMut() -> b
         assert!(Instant::now() < deadline, "{what}");
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+}
+
+/// The checks `traefik_compatibility` proved, in the order they passed. A
+/// name is added only after its assertions passed. Copied from the NATS
+/// harness with the Traefik limitations, so the files of feature 39 stay
+/// untouched (spec 0041, *Evidence kompatibilitas*).
+#[derive(Debug, Default)]
+pub struct Checks(Vec<&'static str>);
+
+impl Checks {
+    /// Notes that `name` passed.
+    pub fn passed(&mut self, name: &'static str) {
+        assert!(!self.0.contains(&name), "check {name} passed twice");
+        self.0.push(name);
+    }
+
+    /// Writes `compatibility.json` into the artifact folder of `evidence`
+    /// (spec 0018, *Compatibility record*): the final `provider.yaml` of the
+    /// run, the checks in alphabetical order, and what is not offered.
+    pub fn write(&self, evidence: &Evidence, site: &Site) {
+        let mut checks = self.0.clone();
+        checks.sort_unstable();
+        let file = json!({
+            "schema": "stackly.compatibility-evidence/v1",
+            "providerRevision": {
+                "id": PROVIDER,
+                "revision": site.revision,
+                "manifestSha256": site.manifest_sha256,
+            },
+            "checks": checks,
+            "knownLimitations": ["dashboard_not_offered", "https_not_offered"],
+        });
+        let path = evidence.artifact_dir().join("compatibility.json");
+        std::fs::write(
+            &path,
+            serde_json::to_vec_pretty(&file).expect("the file is JSON"),
+        )
+        .unwrap_or_else(|error| panic!("cannot write {}: {error}", path.display()));
+    }
+}
+
+/// One readiness observation of an `instance.health_changed` event.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Observed {
+    /// The `statusSeq` of the event.
+    pub seq: u64,
+    /// The readiness state.
+    pub state: InstanceReadinessState,
+    /// The reason code.
+    pub reason: String,
+    /// The detail, if the probe gave one.
+    pub detail: Option<String>,
+}
+
+/// Reads `events` until 500 ms pass without one and returns the readiness
+/// observations of the instance `id` in the order of their `statusSeq`.
+pub async fn drain_readiness(events: &mut stackly_ipc::EventStream, id: Uuid) -> Vec<Observed> {
+    let mut seen = Vec::new();
+    while let Ok(Ok(Some(frame))) =
+        tokio::time::timeout(Duration::from_millis(500), events.next()).await
+    {
+        let DecodedFrame::Event(event) = frame else {
+            continue;
+        };
+        if let EventKind::InstanceHealthChanged(changed) = event.kind
+            && changed.instance_id == id
+        {
+            seen.push(Observed {
+                seq: changed.status_seq.get(),
+                state: changed.readiness.state,
+                reason: changed.readiness.reason.clone(),
+                detail: changed.readiness.detail.clone(),
+            });
+        }
+    }
+    assert!(
+        seen.windows(2).all(|pair| pair[0].seq < pair[1].seq),
+        "statusSeq only goes up: {seen:?}"
+    );
+    seen
+}
+
+/// Asserts that the first `ready` of `seen` comes after a `not_ready` and
+/// has reason `probe_ok`: the daemon never showed the instance ready before
+/// the routers it asked for were loaded.
+pub fn assert_not_ready_before_ready(seen: &[Observed]) {
+    let ready = seen
+        .iter()
+        .position(|observed| observed.state == InstanceReadinessState::Ready)
+        .unwrap_or_else(|| panic!("no ready observation in {seen:#?}"));
+    assert!(
+        seen[..ready]
+            .iter()
+            .any(|observed| observed.state == InstanceReadinessState::NotReady),
+        "ready without a not_ready before it: {seen:#?}"
+    );
+    assert_eq!(seen[ready].reason, "probe_ok", "{seen:#?}");
 }

@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "health",
+    "http",
+    "init",
+    "invalid_config",
+    "readiness",
+    "rollback",
+    "routing_update",
+    "second_instance",
+    "start",
+    "stop"
+  ],
+  "knownLimitations": [
+    "dashboard_not_offered",
+    "https_not_offered"
+  ],
+  "providerRevision": {
+    "id": "official/traefik",
+    "manifestSha256": "c57b6a8274d55f6c0b0f65fd93abcca1ee661b66e8a4793183728e5bfdd01bd7",
+    "revision": "1.0.0"
+  },
+  "schema": "stackly.compatibility-evidence/v1"
+}
