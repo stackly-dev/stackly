@@ -2,7 +2,10 @@
 //! written before a normal stop, one written after it and before a
 //! `SIGKILL` to the ready `valkey-server`, which files each mode leaves in
 //! the data folder, and a mode that `instance.config.validate` refuses to
-//! change. Each mode writes one evidence record with what it kept.
+//! change. Each mode writes one evidence record with what it kept. Two more
+//! tests lock what the spec states around a mode: `instance.config.apply`
+//! refuses another mode as `validate` does, and a `dump.rdb` the user saved
+//! in mode `volatile` comes back at the next start (a declared residual).
 
 use std::time::Duration;
 
@@ -12,7 +15,7 @@ use stackly_protocol::instance::SettingsDocument;
 use stackly_protocol::instance::config::ConfigChangeRequest;
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::config_calls::Cfg;
+use crate::config_calls::{Cfg, settings_with};
 use crate::harness::{
     Reply, Site, Valkey, alive, create_instance, files_under, pid_of, port_of, signal,
     stop_and_shutdown, stop_instance,
@@ -205,6 +208,7 @@ async fn keeps_what_its_mode_promises(mode: Mode, ev: Evidence) {
     ));
 }
 
+// covers: AC-6, AC-8, AC-9 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_rdb_keeps_data_over_a_stop_and_loses_writes_since_the_snapshot_on_a_crash() {
@@ -216,6 +220,7 @@ async fn valkey_9_1_rdb_keeps_data_over_a_stop_and_loses_writes_since_the_snapsh
     keeps_what_its_mode_promises(RDB, ev).await;
 }
 
+// covers: AC-6, AC-8 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_aof_keeps_data_over_a_stop_and_over_a_crash() {
@@ -227,6 +232,7 @@ async fn valkey_9_1_aof_keeps_data_over_a_stop_and_over_a_crash() {
     keeps_what_its_mode_promises(AOF, ev).await;
 }
 
+// covers: AC-7, AC-8 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_volatile_writes_nothing_and_loses_everything_on_a_stop_or_crash() {
@@ -236,4 +242,170 @@ async fn valkey_9_1_volatile_writes_nothing_and_loses_everything_on_a_stop_or_cr
         expected = "mode volatile leaves no file in the data folder, loses a sentinel over a normal stop and start, and loses everything when valkey-server gets SIGKILL and respawns",
     );
     keeps_what_its_mode_promises(VOLATILE, ev).await;
+}
+
+/// The number of operations `operation.list` shows.
+async fn operation_count(api: &crate::support::Api) -> usize {
+    match api
+        .client
+        .call(stackly_protocol::Call::OperationList(
+            stackly_protocol::operation::ListOperationsParams::default(),
+        ))
+        .await
+    {
+        Ok(stackly_protocol::Reply::OperationList(page)) => page.items.len(),
+        other => panic!("operation.list: {other:?}"),
+    }
+}
+
+/// The `save` and `appendonly` values a running instance reports.
+fn mode_values(valkey: &mut Valkey) -> (String, String) {
+    let read = |valkey: &mut Valkey, name: &str| {
+        valkey
+            .cmd(&["CONFIG", "GET", name])
+            .config_value()
+            .unwrap_or_else(|| panic!("CONFIG GET {name} answers"))
+            .to_owned()
+    };
+    (read(valkey, "save"), read(valkey, "appendonly"))
+}
+
+// covers: AC-9 (spec 0040)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
+async fn valkey_9_1_keeps_its_mode_when_validate_and_apply_ask_for_another() {
+    let ev = evidence!(
+        covers = ["REQ-038", "AC-038"],
+        kind = Kind::Native,
+        expected = "for a volatile instance, instance.config.validate of persistence rdb and of aof answers valid false with settings.persistence immutable_after_init, instance.config.apply of each is refused with instance.settings_invalid and the same field error, no operation starts, the config folder and the revision stay the same, and the next start still runs memory only with save empty and appendonly no and an empty data folder",
+    );
+    let Some(site) = Site::open(&ev) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let made = create_instance(&site, &api, "locked", json!({ "persistence": "volatile" })).await;
+    let running = api.start_ready(made.id).await;
+    let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+    let version = valkey.info_server("valkey_version");
+    site.subject(&ev, &version);
+    assert_eq!(mode_values(&mut valkey), (String::new(), "no".to_owned()));
+    drop(valkey);
+
+    let cfg = Cfg { api: &api };
+    let view = cfg.view(made.id).await;
+    let base = view.revision.number.get();
+    let paths = site.instance_paths(made.id);
+    let config_before = files_under(&paths.config);
+    let operations_before = operation_count(&api).await;
+    for other in ["rdb", "aof"] {
+        let change = settings_with(&view, json!({ "persistence": other }));
+        let verdict = cfg.validate(made.id, base, change.clone()).await;
+        assert!(!verdict.valid, "{other}: {verdict:#?}");
+        assert_eq!(verdict.field_errors.len(), 1, "{other}: {verdict:#?}");
+        assert_eq!(verdict.field_errors[0].path(), "settings.persistence");
+        assert_eq!(verdict.field_errors[0].code(), "immutable_after_init");
+
+        let refused = cfg
+            .apply(made.id, base, change)
+            .await
+            .expect_err("apply refuses another mode");
+        assert_eq!(refused.code(), "instance.settings_invalid", "{other}");
+        assert_eq!(refused.fields().len(), 1, "{other}: {refused:?}");
+        assert_eq!(refused.fields()[0].path(), "settings.persistence");
+        assert_eq!(refused.fields()[0].code(), "immutable_after_init");
+    }
+    assert_eq!(
+        operation_count(&api).await,
+        operations_before,
+        "no operation"
+    );
+    assert_eq!(
+        files_under(&paths.config),
+        config_before,
+        "the config folder"
+    );
+    assert_eq!(cfg.view(made.id).await.revision.number.get(), base);
+
+    stop_instance(&api, made.id).await;
+    let running = api.start_ready(made.id).await;
+    let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+    assert_eq!(
+        mode_values(&mut valkey),
+        (String::new(), "no".to_owned()),
+        "still memory only"
+    );
+    drop(valkey);
+    stop_and_shutdown(&api, daemon, made.id).await;
+    assert!(files_under(&paths.data).is_empty(), "nothing on disk");
+    ev.pass_with(&format!(
+        "Valkey {version}: validate and apply of rdb and aof refused with immutable_after_init, the instance stayed volatile"
+    ));
+}
+
+/// A characterization of the residual of spec 0040 (*Edge cases*, rationale
+/// Keputusan 13): mode `volatile` writes nothing on its own, but a `SAVE`
+/// the user runs writes `dump.rdb`, and the next start loads it. Stackly
+/// neither forbids the command nor deletes the file, and the mode stays
+/// `volatile`. The README tells the user to delete `dump.rdb` while the
+/// instance is stopped; after that the next start is empty again.
+// covers: AC-7 (spec 0040, the declared residual)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
+async fn valkey_9_1_volatile_loads_a_dump_rdb_the_user_saved_until_it_is_deleted() {
+    let ev = evidence!(
+        covers = ["REQ-038", "AC-038"],
+        kind = Kind::Native,
+        expected = "in mode volatile a SAVE the user runs writes dump.rdb in the data folder, the next start loads the saved key and still runs with save empty and appendonly no, and after dump.rdb is deleted while the instance is stopped the next start is empty",
+    );
+    let Some(site) = Site::open(&ev) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let made = create_instance(&site, &api, "saved", json!({ "persistence": "volatile" })).await;
+    let running = api.start_ready(made.id).await;
+    let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+    let version = valkey.info_server("valkey_version");
+    site.subject(&ev, &version);
+    assert_eq!(
+        valkey.cmd(&["SET", "saved", "by-the-user"]),
+        Reply::Simple("OK".to_owned())
+    );
+    assert_eq!(valkey.cmd(&["SAVE"]), Reply::Simple("OK".to_owned()));
+    drop(valkey);
+    stop_instance(&api, made.id).await;
+    let paths = site.instance_paths(made.id);
+    assert_eq!(files_under(&paths.data), ["dump.rdb"]);
+
+    let running = api.start_ready(made.id).await;
+    let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+    assert_eq!(
+        get(&mut valkey, "saved").as_deref(),
+        Some("by-the-user"),
+        "the snapshot the user saved is loaded"
+    );
+    assert_eq!(
+        mode_values(&mut valkey),
+        (String::new(), "no".to_owned()),
+        "the mode is still volatile"
+    );
+    drop(valkey);
+    stop_instance(&api, made.id).await;
+    assert_eq!(
+        files_under(&paths.data),
+        ["dump.rdb"],
+        "Stackly does not delete the file"
+    );
+
+    std::fs::remove_file(paths.data.join("dump.rdb")).expect("dump.rdb can be deleted");
+    let running = api.start_ready(made.id).await;
+    let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+    assert_eq!(get(&mut valkey, "saved"), None, "empty again");
+    drop(valkey);
+    stop_and_shutdown(&api, daemon, made.id).await;
+    assert!(files_under(&paths.data).is_empty());
+    ev.pass_with(&format!(
+        "Valkey {version} volatile: SAVE wrote dump.rdb, the next start loaded it, and it was empty again after the file was deleted"
+    ));
 }

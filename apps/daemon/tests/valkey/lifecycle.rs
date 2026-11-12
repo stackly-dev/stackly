@@ -36,6 +36,7 @@ fn valkey_hour(line: &str) -> Option<u32> {
     time.split(':').next()?.parse().ok()
 }
 
+// covers: AC-13 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_runs_its_lifecycle_through_the_daemon() {
@@ -142,6 +143,7 @@ async fn valkey_9_1_runs_its_lifecycle_through_the_daemon() {
     ));
 }
 
+// covers: AC-13 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_is_adopted_by_a_daemon_that_comes_back_after_sigkill() {
@@ -194,6 +196,7 @@ async fn valkey_9_1_is_adopted_by_a_daemon_that_comes_back_after_sigkill() {
     ));
 }
 
+// covers: AC-13 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_takes_a_new_password_from_secret_set_at_the_next_start() {
