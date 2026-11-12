@@ -617,8 +617,8 @@ fn provider_manifest_seeds(root: &Path) -> Result<Vec<Seed>> {
 /// and the `sha256Hex` filter (spec 0040 AC-3).
 /// Setup numbers: 0 `json`, 1 `yaml`, 2 `natsConf`, 3 the traefik routes
 /// template, 4 `postgresqlConf`, 5 `plain`, 6 `valkeyConf` (spec 0040), 7
-/// `mysqlCnf` (spec 0042).
-const FORMAT_SAMPLES: [(&str, u8, &str); 3] = [
+/// `mysqlCnf` (spec 0042), and 8 `xml` (spec 0043).
+const FORMAT_SAMPLES: [(&str, u8, &str); 4] = [
     (
         "filter.sha256hex.json.tmpl",
         0,
@@ -633,6 +633,11 @@ const FORMAT_SAMPLES: [(&str, u8, &str); 3] = [
         "format.mysql.cnf.tmpl",
         7,
         "[mysqld]\ngeneral_log_file = {{ settings.greeting }}\ngeneral_log = {{ settings.failInit }}\nport = {{ settings.readyDelayMs }}\ndatadir = {{ instance.data }}\npassword = {{ secret.authToken }}\n",
+    ),
+    (
+        "format.clickhouse.xml.tmpl",
+        8,
+        "<clickhouse>\n  <display_name>{{ settings.greeting }}</display_name>\n  <path>{{ instance.data }}/</path>\n  <listen_try>{{ settings.failInit }}</listen_try>\n  <port>{{ settings.readyDelayMs }}</port>\n  <password_sha256_hex>{{ secret.authToken | sha256Hex }}</password_sha256_hex>\n</clickhouse>\n",
     ),
 ];
 
@@ -1013,6 +1018,7 @@ mod tests {
         assert_eq!(selector("format.valkey.conf.tmpl"), 6);
         assert_eq!(selector("filter.sha256hex.json.tmpl"), 0);
         assert_eq!(selector("format.mysql.cnf.tmpl"), 7);
+        assert_eq!(selector("format.clickhouse.xml.tmpl"), 8);
         let fields = provider_interpolation_seeds(&root).unwrap();
         let texts: Vec<&[u8]> = fields.iter().map(|seed| seed.bytes.as_slice()).collect();
         assert!(texts.contains(&b"--data=${instance.data}".as_slice()));

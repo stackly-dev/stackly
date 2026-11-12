@@ -2008,6 +2008,63 @@ fn mysql_cnf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
 }
 
 #[test]
+fn xml_writes_values_as_element_content_touching_literal_text() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse>\n  <display_name>{{ settings.greeting }}</display_name>\n  <path>{{ instance.data }}/</path>\n  <listen_try>{{ settings.failInit }}</listen_try>\n  <skip>{{ settings.ignoreTerm }}</skip>\n  <port>{{ settings.readyDelayMs }}</port>\n  <password>{{ secret.authToken }}</password>\n  <password_sha256_hex>{{ secret.authToken | sha256Hex }}</password_sha256_hex>\n</clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a&b<c>\"d'",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        String::from_utf8(
+            write
+                .content
+                .materialize(&token("abc"))
+                .expect("the config materializes")
+        )
+        .expect("UTF-8 output"),
+        format!(
+            "<clickhouse>\n  <display_name>a&amp;b&lt;c&gt;&quot;d&apos;</display_name>\n  <path>/Volumes/T/data/instances/{id}/data/</path>\n  <listen_try>true</listen_try>\n  <skip>false</skip>\n  <port>250</port>\n  <password>abc</password>\n  <password_sha256_hex>{ABC_SHA256_HEX}</password_sha256_hex>\n</clickhouse>\n",
+            id = "0192f000-0000-7000-8000-00000000000b",
+        )
+    );
+    let err = write.content.materialize(&token("a\u{fffe}b")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{fffe}'), "{err}");
+
+    let home = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\u{1b}b",
+    );
+    let err = package.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{1b}'), "{err}");
+}
+
+#[test]
 fn an_unknown_format_names_every_known_format_in_its_message() {
     let err = Edit::fake()
         .replace("provider.yaml", "format: json", "format: ini")
@@ -2027,6 +2084,7 @@ fn an_unknown_format_names_every_known_format_in_its_message() {
         "plain",
         "valkeyConf",
         "mysqlCnf",
+        "xml",
     ] {
         assert!(issue.message.contains(format), "{}", issue.message);
     }

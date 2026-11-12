@@ -1193,7 +1193,7 @@ impl Checker<'_> {
                 self.at(
                     format!("{path}.format"),
                     IssueCode::UnknownTemplateFormat,
-                    "format must be yaml, json, natsConf, postgresqlConf, plain, valkeyConf, or mysqlCnf",
+                    "format must be yaml, json, natsConf, postgresqlConf, plain, valkeyConf, mysqlCnf, or xml",
                 );
             }
             let destination = check_path(

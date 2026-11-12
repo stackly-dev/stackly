@@ -187,5 +187,13 @@ mod tests {
             render_secret_placeholder(&value("a\u{7f}b"), TemplateFormat::MysqlCnf),
             None
         );
+        assert_eq!(
+            render_secret_placeholder(&value("a\"b<&"), TemplateFormat::Xml).as_deref(),
+            Some("a&quot;b&lt;&amp;")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\u{ffff}"), TemplateFormat::Xml),
+            None
+        );
     }
 }

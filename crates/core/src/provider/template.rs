@@ -66,6 +66,31 @@ fn backslash_quoted(text: &str) -> Option<String> {
     Some(out)
 }
 
+/// Writes `text` as XML content with `&`, `<`, `>`, `"`, and `'` as
+/// entities and no quotes around it, or returns `None` when the text holds
+/// a control character (U+0000 to U+001F, U+007F to U+009F), U+FFFE, or
+/// U+FFFF, which an XML document cannot carry as is.
+fn xml_content(text: &str) -> Option<String> {
+    if text
+        .chars()
+        .any(|c| c.is_control() || matches!(c, '\u{fffe}' | '\u{ffff}'))
+    {
+        return None;
+    }
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            c => out.push(c),
+        }
+    }
+    Some(out)
+}
+
 /// The format of a config file, which picks the escaper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +118,11 @@ pub enum TemplateFormat {
     /// value with `\` and `"` escaped by a backslash, text holding a
     /// control character is rejected, and a boolean is `ON` or `OFF`.
     MysqlCnf,
+    /// XML (spec 0043): text becomes element or attribute content with no
+    /// quotes around it and `&`, `<`, `>`, `"`, and `'` as entities, so a
+    /// tag may touch literal text; text holding a control character,
+    /// U+FFFE, or U+FFFF is rejected.
+    Xml,
 }
 
 impl TemplateFormat {
@@ -106,6 +136,7 @@ impl TemplateFormat {
             "plain" => Some(Self::Plain),
             "valkeyConf" => Some(Self::ValkeyConf),
             "mysqlCnf" => Some(Self::MysqlCnf),
+            "xml" => Some(Self::Xml),
             _ => None,
         }
     }
@@ -177,6 +208,7 @@ impl TemplateFormat {
                 Some(out)
             }
             Self::ValkeyConf | Self::MysqlCnf => backslash_quoted(text),
+            Self::Xml => xml_content(text),
             // Validation rejects every output tag of a plain template.
             Self::Plain => None,
         }
@@ -213,7 +245,8 @@ impl TemplateFormat {
             | Self::PostgresqlConf
             | Self::Plain
             | Self::ValkeyConf
-            | Self::MysqlCnf => true,
+            | Self::MysqlCnf
+            | Self::Xml => true,
         }
     }
 }
@@ -1489,6 +1522,55 @@ mod tests {
         );
         assert_eq!(TemplateFormat::from_code("mysql"), None);
         assert_eq!(TemplateFormat::from_code("MysqlCnf"), None);
+    }
+
+    #[test]
+    fn xml_writes_entities_for_markup_characters_and_no_quotes() {
+        let format = TemplateFormat::Xml;
+
+        assert_eq!(
+            format.escape_text("/Volumes/T/data").unwrap(),
+            "/Volumes/T/data"
+        );
+        assert_eq!(
+            format.escape_text("a&b<c>d\"e'f ü 空 $x {y}").unwrap(),
+            "a&amp;b&lt;c&gt;d&quot;e&apos;f ü 空 $x {y}"
+        );
+        assert_eq!(format.escape_text("&amp;").unwrap(), "&amp;amp;");
+        assert_eq!(format.escape_text("").unwrap(), "");
+    }
+
+    #[test]
+    fn xml_rejects_control_characters_and_the_two_noncharacters() {
+        for bad in [
+            "a\nb",
+            "a\tb",
+            "a\rb",
+            "a\u{0}",
+            "a\u{1f}",
+            "a\u{7f}",
+            "a\u{85}",
+            "a\u{9f}",
+            "a\u{fffe}",
+            "a\u{ffff}",
+        ] {
+            assert_eq!(TemplateFormat::Xml.escape_text(bad), None, "{bad:?}");
+        }
+        for good in ["a\u{a0}b", "a\u{fffd}b", "a\u{1f600}b"] {
+            assert!(TemplateFormat::Xml.escape_text(good).is_some(), "{good:?}");
+        }
+    }
+
+    #[test]
+    fn xml_writes_booleans_as_true_and_false_and_takes_tags_without_a_parse_back() {
+        let format = TemplateFormat::Xml;
+
+        assert_eq!(format.boolean(true), "true");
+        assert_eq!(format.boolean(false), "false");
+        assert!(format.allows_tags());
+        assert!(format.output_parses("<clickhouse><unclosed></clickhouse>"));
+        assert_eq!(TemplateFormat::from_code("xml"), Some(TemplateFormat::Xml));
+        assert_eq!(TemplateFormat::from_code("XML"), None);
     }
 
     #[test]
