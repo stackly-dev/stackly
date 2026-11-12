@@ -616,8 +616,9 @@ fn provider_manifest_seeds(root: &Path) -> Result<Vec<Seed>> {
 /// `fake.json.tmpl`, a sensitive config, so a sample may use `secret.*`
 /// and the `sha256Hex` filter (spec 0040 AC-3).
 /// Setup numbers: 0 `json`, 1 `yaml`, 2 `natsConf`, 3 the traefik routes
-/// template, 4 `postgresqlConf`, 5 `plain`, 6 `valkeyConf` (spec 0040).
-const FORMAT_SAMPLES: [(&str, u8, &str); 2] = [
+/// template, 4 `postgresqlConf`, 5 `plain`, 6 `valkeyConf` (spec 0040), 7
+/// `mysqlCnf` (spec 0042).
+const FORMAT_SAMPLES: [(&str, u8, &str); 3] = [
     (
         "filter.sha256hex.json.tmpl",
         0,
@@ -627,6 +628,11 @@ const FORMAT_SAMPLES: [(&str, u8, &str); 2] = [
         "format.valkey.conf.tmpl",
         6,
         "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nready-delay {{ settings.readyDelayMs }}\ndir {{ instance.data }}\nrequirepass {{ secret.authToken }}\n",
+    ),
+    (
+        "format.mysql.cnf.tmpl",
+        7,
+        "[mysqld]\ngeneral_log_file = {{ settings.greeting }}\ngeneral_log = {{ settings.failInit }}\nport = {{ settings.readyDelayMs }}\ndatadir = {{ instance.data }}\npassword = {{ secret.authToken }}\n",
     ),
 ];
 
@@ -1006,6 +1012,7 @@ mod tests {
         assert_eq!(selector("traefik.routes.yaml.tmpl"), 3);
         assert_eq!(selector("format.valkey.conf.tmpl"), 6);
         assert_eq!(selector("filter.sha256hex.json.tmpl"), 0);
+        assert_eq!(selector("format.mysql.cnf.tmpl"), 7);
         let fields = provider_interpolation_seeds(&root).unwrap();
         let texts: Vec<&[u8]> = fields.iter().map(|seed| seed.bytes.as_slice()).collect();
         assert!(texts.contains(&b"--data=${instance.data}".as_slice()));

@@ -116,9 +116,10 @@ pub fn manifest(data: &[u8]) {
 }
 
 /// Target `provider_template`: the first byte picks a setup, the rest is
-/// the template. Setups 0, 1, 2, 4, 5, and 6 replace the fake template and
-/// render it as `json`, `yaml`, `natsConf`, `postgresqlConf`, `plain`, and
-/// `valkeyConf` (spec 0040) against the fake context; setup 3 replaces the
+/// the template. Setups 0, 1, 2, 4, 5, 6, and 7 replace the fake template
+/// and render it as `json`, `yaml`, `natsConf`, `postgresqlConf`, `plain`,
+/// `valkeyConf` (spec 0040), and `mysqlCnf` (spec 0042) against the fake
+/// context; setup 3 replaces the
 /// traefik routes template, whose context has a list. Every setup keeps
 /// the number it had when its format was added, so older seeds still pick
 /// the same setup.
@@ -132,7 +133,7 @@ pub fn template(data: &[u8]) {
     let Some((&selector, template)) = data.split_first() else {
         return;
     };
-    let (folder, mut files, slot) = match selector % 7 {
+    let (folder, mut files, slot) = match selector % 8 {
         3 => ("traefik", package_files(&TRAEFIK), TRAEFIK_ROUTES),
         other => {
             let mut files = package_files(&FAKE);
@@ -142,7 +143,8 @@ pub fn template(data: &[u8]) {
                 2 => "natsConf",
                 4 => "postgresqlConf",
                 5 => "plain",
-                _ => "valkeyConf",
+                6 => "valkeyConf",
+                _ => "mysqlCnf",
             };
             let manifest = FAKE[0]
                 .1

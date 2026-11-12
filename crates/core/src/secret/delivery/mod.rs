@@ -179,5 +179,13 @@ mod tests {
             render_secret_placeholder(&value("a\nb"), TemplateFormat::ValkeyConf),
             None
         );
+        assert_eq!(
+            render_secret_placeholder(&value("a\"b\\c"), TemplateFormat::MysqlCnf).as_deref(),
+            Some("\"a\\\"b\\\\c\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\u{7f}b"), TemplateFormat::MysqlCnf),
+            None
+        );
     }
 }

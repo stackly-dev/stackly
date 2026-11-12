@@ -89,6 +89,10 @@ pub enum TemplateFormat {
     /// value with `\` and `"` escaped by a backslash, text holding a
     /// control character is rejected, and a boolean is `yes` or `no`.
     ValkeyConf,
+    /// The MySQL option file (spec 0042): text becomes a double quoted
+    /// value with `\` and `"` escaped by a backslash, text holding a
+    /// control character is rejected, and a boolean is `ON` or `OFF`.
+    MysqlCnf,
 }
 
 impl TemplateFormat {
@@ -101,6 +105,7 @@ impl TemplateFormat {
             "postgresqlConf" => Some(Self::PostgresqlConf),
             "plain" => Some(Self::Plain),
             "valkeyConf" => Some(Self::ValkeyConf),
+            "mysqlCnf" => Some(Self::MysqlCnf),
             _ => None,
         }
     }
@@ -171,7 +176,7 @@ impl TemplateFormat {
                 out.push('\'');
                 Some(out)
             }
-            Self::ValkeyConf => backslash_quoted(text),
+            Self::ValkeyConf | Self::MysqlCnf => backslash_quoted(text),
             // Validation rejects every output tag of a plain template.
             Self::Plain => None,
         }
@@ -184,6 +189,8 @@ impl TemplateFormat {
             (Self::PostgresqlConf, false) => "off",
             (Self::ValkeyConf, true) => "yes",
             (Self::ValkeyConf, false) => "no",
+            (Self::MysqlCnf, true) => "ON",
+            (Self::MysqlCnf, false) => "OFF",
             (_, true) => "true",
             (_, false) => "false",
         }
@@ -202,7 +209,11 @@ impl TemplateFormat {
             Self::Json => serde_json::from_str::<serde_json::Value>(text).is_ok(),
             // These formats are not parsed back; tests against the real
             // binaries in their provider specs guard the escapers.
-            Self::NatsConf | Self::PostgresqlConf | Self::Plain | Self::ValkeyConf => true,
+            Self::NatsConf
+            | Self::PostgresqlConf
+            | Self::Plain
+            | Self::ValkeyConf
+            | Self::MysqlCnf => true,
         }
     }
 }
@@ -1440,6 +1451,44 @@ mod tests {
         );
         assert_eq!(TemplateFormat::from_code("valkey"), None);
         assert_eq!(TemplateFormat::from_code("ValkeyConf"), None);
+    }
+
+    #[test]
+    fn mysql_cnf_double_quotes_text_and_escapes_quotes_and_backslashes() {
+        let format = TemplateFormat::MysqlCnf;
+
+        assert_eq!(
+            format.escape_text("a\"b\\c d # e ü 空 'q' ; z").unwrap(),
+            "\"a\\\"b\\\\c d # e ü 空 'q' ; z\""
+        );
+        assert_eq!(format.escape_text("").unwrap(), "\"\"");
+        assert_eq!(format.escape_text("$HOME `id`").unwrap(), "\"$HOME `id`\"");
+    }
+
+    #[test]
+    fn mysql_cnf_rejects_every_control_character() {
+        for bad in [
+            "a\nb", "a\tb", "a\rb", "a\u{0}", "a\u{1f}", "a\u{7f}", "a\u{85}", "a\u{9f}",
+        ] {
+            assert_eq!(TemplateFormat::MysqlCnf.escape_text(bad), None, "{bad:?}");
+        }
+        assert!(TemplateFormat::MysqlCnf.escape_text("a\u{a0}b").is_some());
+    }
+
+    #[test]
+    fn mysql_cnf_writes_booleans_as_on_and_off_and_takes_tags_without_a_parse_back() {
+        let format = TemplateFormat::MysqlCnf;
+
+        assert_eq!(format.boolean(true), "ON");
+        assert_eq!(format.boolean(false), "OFF");
+        assert!(format.allows_tags());
+        assert!(format.output_parses("[mysqld]\nunbalanced = \"\n"));
+        assert_eq!(
+            TemplateFormat::from_code("mysqlCnf"),
+            Some(TemplateFormat::MysqlCnf)
+        );
+        assert_eq!(TemplateFormat::from_code("mysql"), None);
+        assert_eq!(TemplateFormat::from_code("MysqlCnf"), None);
     }
 
     #[test]

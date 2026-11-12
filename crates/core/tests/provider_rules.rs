@@ -1952,6 +1952,62 @@ fn valkey_conf_renders_quoted_text_decimal_integers_and_yes_no_booleans() {
 }
 
 #[test]
+fn mysql_cnf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: mysqlCnf")
+        .set(
+            "templates/fake.json.tmpl",
+            "[mysqld]\ngeneral_log_file = {{ settings.greeting }}\ngeneral_log = {{ settings.failInit }}\nskip_name_resolve = {{ settings.ignoreTerm }}\nport = {{ settings.readyDelayMs }}\n\n[client]\npassword = {{ secret.authToken }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a\"b\\c d # e ü 空 'q' ; z",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        write.content.materialize(&token("x\"y")).expect("the config materializes"),
+        "[mysqld]\ngeneral_log_file = \"a\\\"b\\\\c d # e ü 空 'q' ; z\"\ngeneral_log = ON\nskip_name_resolve = OFF\nport = 250\n\n[client]\npassword = \"x\\\"y\"\n".as_bytes()
+    );
+    let err = write.content.materialize(&token("a\rb")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\rb"), "{err}");
+
+    let data = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: mysqlCnf")
+        .set(
+            "templates/fake.json.tmpl",
+            "datadir = {{ instance.data }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let home = context_for(
+        &data,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\u{85}b",
+    );
+    let err = data.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{85}'), "{err}");
+}
+
+#[test]
 fn an_unknown_format_names_every_known_format_in_its_message() {
     let err = Edit::fake()
         .replace("provider.yaml", "format: json", "format: ini")
@@ -1970,6 +2026,7 @@ fn an_unknown_format_names_every_known_format_in_its_message() {
         "postgresqlConf",
         "plain",
         "valkeyConf",
+        "mysqlCnf",
     ] {
         assert!(issue.message.contains(format), "{}", issue.message);
     }
