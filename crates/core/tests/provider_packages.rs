@@ -1,6 +1,7 @@
 //! The provider engine on real packages: `providers/fake`,
-//! `providers/example`, `providers/nats`, `providers/traefik`, and the
-//! `fake-command` fixture are
+//! `providers/example`, `providers/nats`, `providers/traefik`,
+//! `providers/postgresql`, `providers/valkey`, and the `fake-command` fixture
+//! are
 //! copied into a `TestRoot`, read through the `Filesystem` port of
 //! `FakePlatform`, validated, and planned against the fixed golden context
 //! of spec 0009 ("Context golden").
@@ -13,10 +14,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
-    Command, EnvValue, InitStep, MarkerRead, NameCheck, PackageFiles, PlanContext, PlanError,
-    PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject, ResolvedEndpoint,
-    RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage, check_package, read_package,
-    render_remedy, scenarios::Expect,
+    ApplyClass, Command, EnvValue, InitStep, MarkerRead, NameCheck, OpenWithKind, PackageFiles,
+    PlanContext, PlanError, PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject,
+    ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage,
+    check_package, read_package, render_remedy, scenarios::Expect,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
 use stackly_domain::{
@@ -53,6 +54,10 @@ fn nats_dir() -> PathBuf {
 
 fn postgresql_dir() -> PathBuf {
     repo_root().join("providers/postgresql")
+}
+
+fn valkey_dir() -> PathBuf {
+    repo_root().join("providers/valkey")
 }
 
 fn traefik_dir() -> PathBuf {
@@ -301,6 +306,12 @@ fn every_repo_package_reads_its_version_from_the_literal_output_of_its_binary() 
             "--version",
             "postgres (PostgreSQL) 18.6\n",
             "18.6",
+        ),
+        (
+            valkey_dir(),
+            "--version",
+            "Valkey server v=9.1.2 sha=00000000:1 malloc=libc bits=64 build=991715b0e5b85611\n",
+            "9.1.2",
         ),
     ];
     for (dir, arg, output, expected) in cases {
@@ -807,7 +818,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the postgresql, nats, fake, and traefik packages validate with their connection block (sentinel render included)",
+        expected = "the postgresql, nats, fake, traefik, and valkey packages validate with their connection block (sentinel render included)",
     );
     let entries = |dir: &Path| -> Vec<(String, String)> {
         validated(dir)
@@ -838,6 +849,10 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     assert_eq!(
         entries(&traefik_dir()),
         [pair("web", "Web URL"), pair("ping", "Health URL")]
+    );
+    assert_eq!(
+        entries(&valkey_dir()),
+        [pair("uri", "Connection URL"), pair("valkey", "Valkey URL")]
     );
     ev.pass();
 }
@@ -991,6 +1006,7 @@ fn every_package_initializes_with_endpoints_that_have_no_port() {
         ("nats", nats_dir(), serde_json::json!({})),
         ("postgresql", postgresql_dir(), postgresql_settings()),
         ("traefik", traefik_dir(), traefik_settings(1)),
+        ("valkey", valkey_dir(), valkey_settings()),
     ];
     for (name, dir, settings) in packages {
         let package = validated(&dir);
@@ -1818,4 +1834,464 @@ fn the_postgresql_data_marker_names_the_major_and_refuses_the_other_one() {
         );
     }
     ev.pass();
+}
+
+/// The secret reference of the Valkey password in the golden context, in the
+/// daemon's form for the golden instance (spec 0011).
+const VALKEY_SECRET_REF: &str = "local:instance/0192f000-0000-7000-8000-00000000000a/password";
+
+fn valkey_settings() -> serde_json::Value {
+    serde_json::json!({ "password": VALKEY_SECRET_REF })
+}
+
+fn valkey_settings_with(persistence: &str) -> serde_json::Value {
+    serde_json::json!({ "password": VALKEY_SECRET_REF, "persistence": persistence })
+}
+
+/// The exact `description` of the Valkey `persistence` field (spec 0040,
+/// "Settings schema").
+const VALKEY_PERSISTENCE_DESCRIPTION: &str = "What survives a stop. rdb: snapshots on disk now and then and on a normal stop; a crash loses the writes since the last snapshot. aof: every write is logged and synced about once a second. volatile: memory only; every stop, restart, or crash loses all data, and there is nothing to back up or restore. Set once when the instance is created.";
+
+// covers: AC-1 (spec 0040)
+#[test]
+fn the_valkey_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-038", "REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/valkey copied into a test root reads through the Filesystem port without a write, validates, holds exactly the files of spec 0040, and one available artifact",
+    );
+    let package = validated(&valkey_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/valkey");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "valkey");
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::ColdBackup,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).expect("the package folder lists") {
+            let path = entry.expect("the entry reads").path();
+            if path.is_dir() {
+                walk(base, &path, out);
+            } else {
+                let relative = path.strip_prefix(base).expect("under the package");
+                out.push(relative.to_str().expect("UTF-8 path").to_owned());
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(&valkey_dir(), &valkey_dir(), &mut files);
+    files.sort_unstable();
+    assert_eq!(
+        files,
+        [
+            "LICENSE-NOTICES.md",
+            "README.md",
+            "provider.yaml",
+            "schemas/settings.schema.json",
+            "templates/persistence-aof.conf.tmpl",
+            "templates/persistence-rdb.conf.tmpl",
+            "templates/persistence-volatile.conf.tmpl",
+            "templates/users.conf.tmpl",
+            "templates/valkey.conf.tmpl",
+            "tests/scenarios.yaml",
+            "versions.json",
+        ]
+    );
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let available: Vec<(&str, &str)> = versions["artifacts"]
+        .as_array()
+        .expect("artifacts is a list")
+        .iter()
+        .filter(|artifact| artifact["status"] == "available")
+        .map(|artifact| {
+            (
+                artifact["id"].as_str().expect("id is text"),
+                artifact["line"].as_str().expect("line is text"),
+            )
+        })
+        .collect();
+    assert_eq!(available, [("valkey-9.1.2-r2-macos-aarch64", "9.1")]);
+    assert_eq!(
+        package.data_marker_path(&golden_context(&package, valkey_settings()).paths),
+        None,
+        "Valkey writes no version marker in its data folder"
+    );
+    ev.pass();
+}
+
+// covers: AC-1, AC-12 (spec 0040)
+#[test]
+fn valkey_plans_match_the_golden_files() {
+    let ev = evidence!(
+        covers = ["REQ-038"],
+        kind = Kind::Fixture,
+        expected = "the five Valkey configs and the init and run plans of the golden context, with default settings and with persistence aof, equal their golden files byte for byte",
+    );
+    let package = validated(&valkey_dir());
+    let context = golden_context(&package, valkey_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the valkey init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the valkey run plan builds");
+    assert!(
+        matches!(init.steps.as_slice(), [InitStep::EnsureDirectories(_)]),
+        "initialize only creates the folders: {:?}",
+        init.steps
+    );
+    assert_golden("valkey", "init.json", &pretty(&init));
+    assert_golden("valkey", "run.json", &pretty(&run));
+    let renders = rendered(&package, &run.render);
+    let names: Vec<&str> = renders.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "persistenceAof",
+            "persistenceRdb",
+            "persistenceVolatile",
+            "users",
+            "valkeyConf"
+        ]
+    );
+    for (config, text) in &renders {
+        assert_golden("valkey", &format!("render-{config}.txt"), text);
+    }
+
+    let aof = package
+        .run_plan(&golden_context(&package, valkey_settings_with("aof")))
+        .expect("the valkey run plan with persistence aof builds");
+    assert_golden("valkey", "run-aof.json", &pretty(&aof));
+
+    let include = |plan: &RunPlan| -> String {
+        let args = &plan.spawn.args;
+        args.windows(2)
+            .filter(|pair| pair[0] == "--include")
+            .map(|pair| pair[1].clone())
+            .find(|path| path.contains("persistence-"))
+            .expect("the start argv includes one persistence file")
+    };
+    assert!(include(&run).ends_with("/config/persistence-rdb.conf"));
+    assert!(include(&aof).ends_with("/config/persistence-aof.conf"));
+    for plan in [&run, &aof] {
+        for arg in &plan.spawn.args {
+            assert!(
+                arg != "<secret:password>" && !arg.contains(VALKEY_SECRET_REF),
+                "no argument is the secret: {arg}"
+            );
+        }
+    }
+    ev.pass();
+}
+
+// covers: AC-4 (spec 0040, plan part)
+#[test]
+fn valkey_users_conf_holds_only_the_hash_of_the_password_in_the_secrets_folder() {
+    use sha2::{Digest, Sha256};
+
+    let package = validated(&valkey_dir());
+    let context = golden_context(&package, valkey_settings());
+    let run = package
+        .run_plan(&context)
+        .expect("the valkey run plan builds");
+    let users = run
+        .render
+        .iter()
+        .find_map(|step| match step {
+            InitStep::WriteFile(write) if write.content.config_file == "users" => Some(write),
+            _ => None,
+        })
+        .expect("the run plan renders users.conf");
+    assert!(
+        users.path.starts_with(context.paths.run.join("secrets")),
+        "{}",
+        users.path.display()
+    );
+    let password = "p w\"x\\y'z";
+    let secrets = ResolvedSecrets::for_tests([(
+        "password".parse().expect("valid field name"),
+        SecretValue::new(password.to_owned()).expect("a valid secret value"),
+    )]);
+    let text = String::from_utf8(
+        users
+            .content
+            .materialize(&secrets)
+            .expect("users.conf materializes"),
+    )
+    .expect("users.conf is UTF-8");
+    let hash: String = Sha256::digest(password.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert!(
+        text.contains(&format!("user default on #{hash} ~* &* +@all\n")),
+        "{text}"
+    );
+    assert!(text.contains("user stackly-readiness on nopass -@all +ping\n"));
+    assert!(
+        !text.contains(password),
+        "the password itself is never written"
+    );
+    let debug = format!("{users:?}{}", pretty(&run));
+    assert!(!debug.contains(&hash), "the plan never shows the hash");
+}
+
+// covers: AC-12 (spec 0040, plan part)
+#[test]
+fn valkey_programs_are_runtime_executables_with_the_base_env_and_no_redis_fallback() {
+    let ev = evidence!(
+        covers = ["REQ-038"],
+        kind = Kind::Fixture,
+        expected = "the start and probe programs are bin/valkey-server and bin/valkey-cli inside the instance runtime root, their env is the base env plus the manifest env, and provider.yaml names redis only as the redis:// scheme",
+    );
+    let package = validated(&valkey_dir());
+    let context = golden_context(&package, valkey_settings());
+    let run = package
+        .run_plan(&context)
+        .expect("the valkey run plan builds");
+    let probe = match &run.readiness.probe {
+        ProbeSpec::Exec(spec) => spec,
+        other => panic!("readiness should be an exec probe, got {other:?}"),
+    };
+    assert_eq!(
+        run.health.probe, run.readiness.probe,
+        "health reuses readiness"
+    );
+
+    for (command, relative, extra) in [
+        (&run.spawn, "bin/valkey-server", ("TZ", "UTC")),
+        (
+            &probe.command,
+            "bin/valkey-cli",
+            ("VALKEYCLI_AUTH", "nopass"),
+        ),
+    ] {
+        assert_eq!(command.program.runtime_root, context.runtime.root);
+        assert_eq!(
+            command.program.relative.to_str().expect("UTF-8 path"),
+            relative
+        );
+        let keys: Vec<&str> = command.env.iter().map(|(key, _)| key.as_str()).collect();
+        let mut expected = vec!["HOME", "PATH", "TMPDIR", extra.0];
+        expected.sort_unstable();
+        assert_eq!(keys, expected, "{relative}");
+        let value = command
+            .env
+            .iter()
+            .find(|(key, _)| key == extra.0)
+            .map(|(_, value)| value);
+        assert_eq!(value, Some(&EnvValue::Text(extra.1.to_owned())));
+    }
+    assert_eq!(
+        probe.command.args,
+        [
+            "-e",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "14000",
+            "--user",
+            "stackly-readiness",
+            "-t",
+            "2",
+            "PING"
+        ]
+    );
+    assert_eq!(probe.command.cwd, context.paths.temp);
+
+    let manifest =
+        fs::read_to_string(valkey_dir().join("provider.yaml")).expect("provider.yaml reads");
+    for (number, line) in manifest.lines().enumerate() {
+        if line.to_ascii_lowercase().contains("redis") {
+            assert!(
+                line.contains("\"redis://default"),
+                "line {} names redis outside the redis:// scheme: {line}",
+                number + 1
+            );
+        }
+    }
+    ev.pass();
+}
+
+// covers: AC-7, AC-9 (spec 0040, schema part)
+#[test]
+fn the_valkey_persistence_field_is_fixed_after_init_and_says_what_volatile_loses() {
+    let ev = evidence!(
+        covers = ["REQ-038", "AC-038"],
+        kind = Kind::Fixture,
+        expected = "persistence is an immutableAfterInit enum rdb, aof, volatile with default rdb and the exact description of spec 0040; password is a restart, printable only secret",
+    );
+    let package = validated(&valkey_dir());
+    let schema = package.settings_schema();
+    let persistence = schema
+        .field("persistence")
+        .expect("the schema has persistence");
+    assert_eq!(persistence.title(), "Persistence");
+    assert_eq!(
+        persistence.description(),
+        Some(VALKEY_PERSISTENCE_DESCRIPTION)
+    );
+    assert_eq!(persistence.apply(), Some(ApplyClass::ImmutableAfterInit));
+    let description = persistence.description().unwrap_or_default();
+    assert!(description.contains("loses all data"));
+    assert!(description.contains("nothing to back up or restore"));
+    let defaults = schema
+        .validate(&valkey_settings())
+        .expect("the default settings are valid");
+    let defaults = defaults.to_json();
+    assert_eq!(defaults["persistence"], "rdb");
+    for mode in ["rdb", "aof", "volatile"] {
+        schema
+            .validate(&valkey_settings_with(mode))
+            .unwrap_or_else(|err| panic!("{mode} is valid: {:#?}", err.issues));
+    }
+    assert!(schema.validate(&valkey_settings_with("none")).is_err());
+
+    let password = schema.field("password").expect("the schema has password");
+    assert!(password.is_secret());
+    assert!(password.is_printable_only());
+    assert!(password.is_required());
+    assert_eq!(password.apply(), Some(ApplyClass::Restart));
+    let names: Vec<&str> = schema.fields().map(|field| field.name().as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "password",
+            "persistence",
+            "maxMemoryMb",
+            "maxMemoryPolicy",
+            "logLevel",
+            "notifyKeyspaceEvents"
+        ]
+    );
+    let flags = serde_json::json!({ "password": VALKEY_SECRET_REF, "notifyKeyspaceEvents": "K$" });
+    schema
+        .validate(&flags)
+        .expect("flag letters with $ are valid");
+    let bad = serde_json::json!({ "password": VALKEY_SECRET_REF, "notifyKeyspaceEvents": "K\"" });
+    assert!(
+        schema.validate(&bad).is_err(),
+        "a quote is not a flag letter"
+    );
+    ev.pass();
+}
+
+// covers: AC-18 (spec 0040, loader part)
+#[test]
+fn valkey_remedies_match_their_failures_and_render_like_the_golden_file() {
+    let package = validated(&valkey_dir());
+    let manifest = package.manifest();
+    let context = golden_context(&package, valkey_settings());
+    let names: Vec<_> = manifest.remedies().iter().map(RemedySpec::name).collect();
+    assert_eq!(names, ["readiness_user", "aof_damaged"]);
+    let first_match = |subject: &RemedySubject<'_>| {
+        manifest
+            .remedies()
+            .iter()
+            .find(|remedy| remedy.matches(subject))
+            .map(RemedySpec::name)
+    };
+
+    assert_eq!(
+        first_match(&RemedySubject::Readiness {
+            reason: "probe_failed",
+            detail: Some(
+                "AUTH failed: WRONGPASS invalid username-password pair or user is disabled."
+            ),
+        }),
+        Some("readiness_user")
+    );
+    for detail in [
+        "LOADING Valkey is loading the dataset in memory",
+        "Could not connect to Valkey at 127.0.0.1:14000: Connection refused",
+    ] {
+        assert_eq!(
+            first_match(&RemedySubject::Readiness {
+                reason: "probe_failed",
+                detail: Some(detail),
+            }),
+            None,
+            "{detail}"
+        );
+    }
+    let excerpt = [
+        "4242:M 10 Nov 2026 10:00:00.000 # Bad file format reading the append only file appendonly.aof.1.incr.aof: make a backup of your AOF file, then use ./valkey-check-aof --fix <filename.manifest>".to_owned(),
+    ];
+    for code in [FailureCode::PROCESS_EXITED, FailureCode::CRASH_LOOP] {
+        assert_eq!(
+            first_match(&RemedySubject::Failure {
+                code: Some(&code),
+                excerpt: &excerpt,
+            }),
+            Some("aof_damaged")
+        );
+    }
+    assert_eq!(
+        first_match(&RemedySubject::Failure {
+            code: Some(&FailureCode::ENDPOINT_IN_USE),
+            excerpt: &excerpt,
+        }),
+        None,
+        "another failure code"
+    );
+
+    let rendered: Vec<serde_json::Value> = manifest
+        .remedies()
+        .iter()
+        .map(|remedy| {
+            let remedy = render_remedy(manifest, remedy, &context)
+                .unwrap_or_else(|err| panic!("{} renders: {err}", remedy.name()));
+            serde_json::json!({
+                "name": remedy.name,
+                "title": remedy.title,
+                "steps": remedy.steps.iter().map(|step| serde_json::json!({
+                    "text": step.text,
+                    "command": step.command,
+                    "path": step.path,
+                })).collect::<Vec<_>>(),
+                "pidFile": remedy.pid_file,
+            })
+        })
+        .collect();
+    let text = pretty(&rendered);
+    assert!(!text.contains("secret"), "a remedy names no secret: {text}");
+    assert!(!text.contains(VALKEY_SECRET_REF));
+    assert_golden("valkey", "remedies.json", &text);
+}
+
+// covers: AC-18 (spec 0040, loader part)
+#[test]
+fn valkey_offers_tableplus_and_valkey_cli_in_terminal() {
+    let package = validated(&valkey_dir());
+    let entries: Vec<(&str, &str, OpenWithKind)> = package
+        .manifest()
+        .open_with()
+        .iter()
+        .map(|entry| (entry.name(), entry.title(), entry.kind()))
+        .collect();
+    assert_eq!(
+        entries,
+        [
+            ("tableplus", "TablePlus", OpenWithKind::App),
+            ("cli", "valkey-cli", OpenWithKind::Terminal)
+        ]
+    );
 }

@@ -1,0 +1,8 @@
+# Managed by Stackly. Persistence mode: aof (append only file).
+# Used only when the instance's Persistence setting is aof.
+# Valkey logs every write in appendonlydir/ in the data folder and syncs the
+# log to disk about once a second. A power loss can lose about the last second.
+save ""
+appendonly yes
+appendfsync everysec
+aof-use-rdb-preamble yes

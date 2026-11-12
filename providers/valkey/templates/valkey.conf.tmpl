@@ -1,0 +1,8 @@
+{{! Rendered before every start. }}
+# Managed by Stackly. Change these values on the instance's Configuration
+# page, not here. The port, the bind address, the data folder, and the
+# persistence mode are set on the valkey-server command line by Stackly.
+maxmemory {{ settings.maxMemoryMb }}mb
+maxmemory-policy {{ settings.maxMemoryPolicy }}
+loglevel {{ settings.logLevel }}
+notify-keyspace-events {{ settings.notifyKeyspaceEvents }}
