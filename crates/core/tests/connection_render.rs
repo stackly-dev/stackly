@@ -646,6 +646,6 @@ fn the_repo_packages_render_their_connections_as_the_golden_files() {
         "postgresql",
         &golden_entries("postgresql", &["superuserPassword"]),
     );
-    assert_golden("nats", &golden_entries("nats", &[]));
+    assert_golden("nats", &golden_entries("nats", &["clientPassword"]));
     assert_golden("fake", &golden_entries("fake", &["authToken"]));
 }

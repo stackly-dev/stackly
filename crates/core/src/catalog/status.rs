@@ -498,11 +498,14 @@ mod tests {
         assert_eq!(
             cells(&nats),
             [
+                // provisional: F39 step 8 records the provider evidence of
+                // revision 1.1.0, and this cell returns to Supported with
+                // ProviderTested.
                 (
                     Os::Macos,
                     vec![Arch::Aarch64],
-                    SupportStatus::Supported,
-                    Some(SupportReason::ProviderTested),
+                    SupportStatus::Experimental,
+                    Some(SupportReason::RuntimeTested),
                     None
                 ),
                 (

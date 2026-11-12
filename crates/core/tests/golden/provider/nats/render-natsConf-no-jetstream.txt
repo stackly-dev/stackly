@@ -1,0 +1,14 @@
+# Written by Stackly from the official/nats provider; edits are replaced.
+server_name: "golden"
+listen: "127.0.0.1:14000"
+http: "127.0.0.1:14001"
+max_payload: 1024KiB
+accounts {
+  APP: {
+    users: [ { user: "stackly", password: "<secret:clientPassword>" } ]
+  }
+  STACKLY_READINESS: {
+    users: [ { user: "stackly-readiness", permissions: { publish: { deny: ">" }, subscribe: { deny: ">" } } } ]
+  }
+}
+no_auth_user: "stackly-readiness"

@@ -848,7 +848,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
 
     let key = package.key();
     assert_eq!(key.provider().as_str(), "official/nats");
-    assert_eq!(key.revision().as_str(), "1.0.1");
+    assert_eq!(key.revision().as_str(), "1.1.0");
     assert_eq!(package.software().as_str(), "nats");
     assert_eq!(
         package
@@ -864,7 +864,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
         ]
     );
     assert_eq!(
-        package.data_marker_path(&golden_context(&package, serde_json::json!({})).paths),
+        package.data_marker_path(&golden_context(&package, nats_settings()).paths),
         None
     );
     ev.pass();
@@ -873,7 +873,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
 #[test]
 fn nats_plans_match_the_golden_files() {
     let package = validated(&nats_dir());
-    let context = golden_context(&package, serde_json::json!({}));
+    let context = golden_context(&package, nats_settings());
 
     let init = package
         .init_plan(&context)
@@ -892,26 +892,65 @@ fn nats_plans_match_the_golden_files() {
 }
 
 #[test]
-fn nats_without_jetstream_renders_no_jetstream_block() {
+fn nats_without_jetstream_renders_no_jetstream_block_and_denies_the_readiness_user() {
     let package = validated(&nats_dir());
-    let context = golden_context(&package, serde_json::json!({ "jetstream": false }));
+    let context = golden_context(
+        &package,
+        serde_json::json!({ "jetstream": false, "clientPassword": GOLDEN_SECRET_REF }),
+    );
 
     let run = package
         .run_plan(&context)
         .expect("the nats run plan builds");
 
-    let (_, text) = rendered(&package, &run.render)
+    let (config, text) = rendered(&package, &run.render)
         .into_iter()
         .next()
         .expect("nats renders nats.conf");
     assert!(!text.contains("jetstream"), "{text}");
-    assert!(text.contains("max_payload: 1048576\n"), "{text}");
+    assert!(!text.contains("$JS.API.INFO"), "{text}");
+    assert!(text.contains("max_payload: 1024KiB\n"), "{text}");
+    assert!(
+        text.contains("permissions: { publish: { deny: \">\" }, subscribe: { deny: \">\" } }"),
+        "{text}"
+    );
+    assert!(
+        text.contains("password: \"<secret:clientPassword>\""),
+        "{text}"
+    );
+    assert_golden("nats", &format!("render-{config}-no-jetstream.txt"), &text);
+}
+
+#[test]
+fn the_nats_run_plan_writes_nats_conf_to_the_secrets_folder_and_holds_no_secret_value() {
+    let package = validated(&nats_dir());
+    let context = golden_context(&package, nats_settings());
+
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds");
+
+    let plan = pretty(&run);
+    assert!(plan.contains("/secrets/nats.conf"), "{plan}");
+    assert!(!plan.contains("/config/nats.conf"), "{plan}");
+    let (_, text) = rendered(&package, &run.render)
+        .into_iter()
+        .next()
+        .expect("nats renders nats.conf");
+    assert!(
+        text.contains("users: [ { user: \"stackly\", password: \"<secret:clientPassword>\" } ]"),
+        "{text}"
+    );
+    assert!(
+        text.contains("no_auth_user: \"stackly-readiness\""),
+        "{text}"
+    );
 }
 
 #[test]
 fn reload_of_nats_is_unsupported() {
     let package = validated(&nats_dir());
-    let context = golden_context(&package, serde_json::json!({}));
+    let context = golden_context(&package, nats_settings());
 
     assert_eq!(
         package.reload_plan(&context).unwrap_err(),
@@ -927,7 +966,7 @@ fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     let context = context_under(
         Path::new("/Users/o\"q\\r$s/Library/Application Support/Stackly"),
         &package,
-        serde_json::json!({}),
+        nats_settings(),
     );
 
     let run = package
@@ -950,7 +989,7 @@ fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value(
     let context = context_under(
         Path::new("/Users/o\u{1}q/Library/Application Support/Stackly"),
         &package,
-        serde_json::json!({}),
+        nats_settings(),
     );
 
     let err = package.run_plan(&context).unwrap_err();
@@ -976,7 +1015,7 @@ fn without_ports(mut context: PlanContext) -> PlanContext {
 #[test]
 fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
     let package = validated(&nats_dir());
-    let context = golden_context(&package, serde_json::json!({}));
+    let context = golden_context(&package, nats_settings());
     let portless = without_ports(context.clone());
 
     let init = package
@@ -1006,7 +1045,7 @@ fn every_package_initializes_with_endpoints_that_have_no_port() {
     let packages = [
         ("fake", fake_dir(), fake_settings()),
         ("example", example_dir(), example_settings()),
-        ("nats", nats_dir(), serde_json::json!({})),
+        ("nats", nats_dir(), nats_settings()),
         ("postgresql", postgresql_dir(), postgresql_settings()),
         ("traefik", traefik_dir(), traefik_settings(1)),
     ];
@@ -1175,6 +1214,11 @@ fn a_traefik_reload_rewrites_only_routes_and_verifies_readiness() {
         ),
         "the reload plan creates config/dynamic before writing routes"
     );
+}
+
+/// NATS settings with only the client password, as a secret reference.
+fn nats_settings() -> serde_json::Value {
+    serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF })
 }
 
 fn postgresql_settings() -> serde_json::Value {

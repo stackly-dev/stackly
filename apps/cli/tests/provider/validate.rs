@@ -216,7 +216,7 @@ fn a_warning_for_a_deprecated_version_prints_after_the_ok_line_and_still_exits_0
     assert_eq!(text.code, Some(0), "{text:?}");
     assert_eq!(
         text.stdout,
-        "ok official/nats 1.0.1 8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe\n\
+        "ok official/nats 1.1.0 1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621\n\
          warning: nats: provider.yaml apiVersion: deprecated_api_version: apiVersion \"stackly/v1alpha1\" is deprecated; new packages use: stackly/v1beta1\n\
          0 error(s), 1 warning(s)\n"
     );

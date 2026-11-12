@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NATS settings",
+  "description": "Server identity, JetStream, client password, and message limits of one NATS server.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "serverName": {
+      "type": "string",
+      "title": "Server name",
+      "description": "The NATS server_name, always the instance name.",
+      "maxLength": 63,
+      "x-stackly": { "managed": "${instance.name}" }
+    },
+    "jetstream": {
+      "type": "boolean",
+      "title": "JetStream",
+      "description": "Store streams and key value buckets in the instance's data folder. File streams survive a restart, memory streams do not. Off means core messaging only, and nothing is stored.",
+      "default": true,
+      "x-stackly": { "apply": "restart" }
+    },
+    "clientPassword": {
+      "type": "string",
+      "title": "Client password",
+      "description": "Password of the stackly user that clients sign in with. A new value takes effect at the next restart.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "restart", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "jetstreamMaxMemoryMiB": {
+      "type": "integer",
+      "title": "JetStream memory limit (MiB)",
+      "description": "Most memory JetStream memory streams may use.",
+      "minimum": 1,
+      "maximum": 1048576,
+      "default": 1024,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "jetstreamMaxFileMiB": {
+      "type": "integer",
+      "title": "JetStream file limit (MiB)",
+      "description": "Most disk space JetStream file streams may use in the data folder.",
+      "minimum": 1,
+      "maximum": 1048576,
+      "default": 10240,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "maxPayloadKiB": {
+      "type": "integer",
+      "title": "Largest message (KiB)",
+      "description": "Largest message payload a client may publish.",
+      "minimum": 1,
+      "maximum": 65536,
+      "default": 1024,
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    }
+  },
+  "required": ["clientPassword"]
+}

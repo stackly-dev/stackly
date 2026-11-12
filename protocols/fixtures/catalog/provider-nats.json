@@ -9,7 +9,7 @@
     "state": "available",
     "stateReason": null,
     "stateNote": null,
-    "providerRevision": "1.0.1",
+    "providerRevision": "1.1.0",
     "publisher": "Stackly",
     "trust": "official",
     "approval": null,
@@ -24,7 +24,7 @@
     "tile": "green"
   },
   "software": "nats",
-  "manifestSha256": "8e3060924c35cf13ba173773fd1e7285a78d1d17768535fd53db814d51753efe",
+  "manifestSha256": "1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621",
   "capabilities": [
     {
       "capability": "multi_instance",
@@ -69,8 +69,8 @@
           "arches": [
             "aarch64"
           ],
-          "status": "supported",
-          "reason": "provider_tested",
+          "status": "experimental",
+          "reason": "runtime_tested",
           "note": null
         },
         {

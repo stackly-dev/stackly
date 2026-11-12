@@ -107,10 +107,10 @@
             }
           },
           {
-            "field": "maxPayloadBytes",
+            "field": "maxPayloadKiB",
             "value": {
               "type": "integer",
-              "content": 2097152
+              "content": 2048
             }
           },
           {
@@ -152,7 +152,7 @@
         "autostart": false,
         "noAutostart": false
       },
-      "command": "stackly instance create search --runtime nats@2.15 --provider official/nats --set 'serverName=search node' --set jetstream=false --set maxPayloadBytes=2097152 --set-json 'limits=[{\"limit\":-3,\"name\":\"a\",\"on\":true}]'"
+      "command": "stackly instance create search --runtime nats@2.15 --provider official/nats --set 'serverName=search node' --set jetstream=false --set maxPayloadKiB=2048 --set-json 'limits=[{\"limit\":-3,\"name\":\"a\",\"on\":true}]'"
     },
     {
       "name": "every secret source",
