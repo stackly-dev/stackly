@@ -1,1 +1,1 @@
-${secret.authToken}
+--label=${settings.mode}

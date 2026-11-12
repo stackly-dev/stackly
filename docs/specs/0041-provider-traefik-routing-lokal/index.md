@@ -1,7 +1,7 @@
 # 0041. Provider Traefik dan routing lokal
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 
