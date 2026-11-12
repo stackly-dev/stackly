@@ -17,8 +17,8 @@ use uuid::Uuid;
 
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
-    RELOAD_PATIENCE, Serve, Site, alive, apply_until_end, backend, create_instance, create_with,
-    eventually, get, port_of, route, status_code, stop_instance,
+    RELOAD_PATIENCE, Serve, Site, alive, api_json, apply_until_end, backend, create_instance,
+    create_with, eventually, get, port_of, route, server_version, status_code, stop_instance,
 };
 use crate::support::Api;
 
@@ -99,7 +99,7 @@ async fn two_instances_with_the_same_route_name_and_rule_answer_from_their_own_b
     .await;
     let a_running = api.start_ready(a).await;
     let b_running = api.start_ready(b).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&a_running, "ping")));
     let (a_web, b_web) = (port_of(&a_running, "web"), port_of(&b_running, "web"));
     assert_ne!(a_web, b_web);
     assert_ne!(pid_of(&a_running), pid_of(&b_running));
@@ -184,7 +184,7 @@ async fn invalid_route_values_are_refused_and_nothing_is_written() {
     )
     .await;
     let running = api.start_ready(id).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
     last_known_good(&api, id, 1).await;
     let view = cfg.view(id).await;
     let before = snapshot(&site, &api, id, "app.localhost").await;
@@ -287,7 +287,7 @@ async fn a_rule_traefik_rejects_fails_the_apply_keeps_last_known_good_and_rolls_
     let b = create_instance(&site, &api, "edge-b").await;
     let a_running = api.start_ready(a).await;
     api.start_ready(b).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&a_running, "ping")));
     let a_pid = pid_of(&a_running);
     let a_web = port_of(&a_running, "web");
     last_known_good(&api, a, 1).await;
@@ -364,5 +364,193 @@ async fn a_rule_traefik_rejects_fails_the_apply_keeps_last_known_good_and_rolls_
     daemon.shutdown().await;
     ev.pass_with(&format!(
         "Host( failed the apply with traefik {a_pid} unchanged, readiness {readiness}; the roll back made revision 3 ready"
+    ));
+}
+
+// covers: AC-15 (spec 0041)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Traefik 3.7.15 artifact in the runtime cache"]
+async fn a_backend_url_with_a_path_a_query_a_fragment_or_a_bad_escape_is_refused_and_nothing_is_written()
+ {
+    let ev = evidence!(
+        covers = ["REQ-039", "AC-039", "AC-015"],
+        kind = Kind::Native,
+        expected = "validate and apply refuse a backendUrl with a bad escape, a path, a query, or a fragment with instance.settings_invalid at settings.routes[0].backendUrl; no revision is written, routes.yaml keeps its bytes, and the running route still answers",
+    );
+    let Some(site) = Site::open(&ev, Serve::InProcess) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let cfg = Cfg { api: &api };
+    let alpha = backend("alpha");
+
+    let id = create_with(
+        &site,
+        &api,
+        "edge-url",
+        json!({ "routes": [route("api", APP_RULE, alpha)] }),
+    )
+    .await;
+    let running = api.start_ready(id).await;
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
+    last_known_good(&api, id, 1).await;
+    let view = cfg.view(id).await;
+    let before = snapshot(&site, &api, id, "app.localhost").await;
+    assert_eq!(before.answer, (200, "alpha".to_owned()));
+    let history = view.history.len();
+
+    let path = "settings.routes[0].backendUrl";
+    let mut seen = Vec::new();
+    for url in [
+        "http://127.0.0.1:9/%zz",
+        "http://127.0.0.1:9/api",
+        "http://127.0.0.1:9/?a=b",
+        "http://127.0.0.1:9/#x",
+    ] {
+        let change = settings_with(
+            &view,
+            json!({ "routes": [{ "name": "api", "rule": APP_RULE, "backendUrl": url }] }),
+        );
+        let verdict = cfg.validate(id, 1, change.clone()).await;
+        assert!(!verdict.valid, "{url}: {verdict:#?}");
+        let paths: Vec<&str> = verdict.field_errors.iter().map(|e| e.path()).collect();
+        assert_eq!(paths, [path], "{url}");
+        let refused = cfg
+            .apply(id, 1, change)
+            .await
+            .expect_err("the apply is refused");
+        assert_eq!(refused.code(), "instance.settings_invalid", "{url}");
+        let fields: Vec<&str> = refused.fields().iter().map(|e| e.path()).collect();
+        assert_eq!(fields, [path], "{url}");
+        seen.push(url);
+    }
+
+    let after_view = cfg.view(id).await;
+    assert_eq!(after_view.revision.number.get(), 1, "no revision written");
+    assert_eq!(after_view.history.len(), history);
+    let after = snapshot(&site, &api, id, "app.localhost").await;
+    assert_eq!(
+        after, before,
+        "the routes file and the route did not change"
+    );
+
+    stop_instance(&api, id).await;
+    assert!(!alive(pid_of(&running)));
+    daemon.shutdown().await;
+    ev.pass_with(&format!("refused at {path}: {}", seen.join(", ")));
+}
+
+/// The `name@file` entries of a Traefik API list, by name.
+fn by_name(list: &serde_json::Value) -> std::collections::BTreeMap<String, serde_json::Value> {
+    list.as_array()
+        .expect("the API answers a list")
+        .iter()
+        .filter_map(|entry| Some((entry["name"].as_str()?.to_owned(), entry.clone())))
+        .collect()
+}
+
+// covers: AC-15 (spec 0041)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Traefik 3.7.15 artifact in the runtime cache"]
+async fn a_backend_only_change_to_every_accepted_url_form_is_loaded_and_becomes_last_known_good() {
+    let ev = evidence!(
+        covers = ["REQ-039", "AC-039"],
+        kind = Kind::Native,
+        expected = "one apply that moves six routes to the six accepted backendUrl forms succeeds; within reloadSeconds the API on the ping port shows the six services with the new url and every service and router enabled, readiness stays ready with the same pid, the last known good is the new revision, and r1 answers from the second backend",
+    );
+    let Some(site) = Site::open(&ev, Serve::InProcess) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let cfg = Cfg { api: &api };
+    let first = backend("first");
+    let second = backend("second");
+    let rule = |n: usize| format!("Host(`r{n}.localhost`)");
+
+    let routes: Vec<_> = (1..=6)
+        .map(|n| route(&format!("r{n}"), &rule(n), first))
+        .collect();
+    let id = create_with(&site, &api, "edge-forms", json!({ "routes": routes })).await;
+    let running = api.start_ready(id).await;
+    let (web, ping) = (port_of(&running, "web"), port_of(&running, "ping"));
+    site.subject(&ev, &server_version(ping));
+    let pid = pid_of(&running);
+    last_known_good(&api, id, 1).await;
+    assert_eq!(get(web, "r1.localhost").1, "first");
+
+    let urls = [
+        format!("http://127.0.0.1:{second}"),
+        format!("http://127.0.0.1:{second}/"),
+        format!("http://localhost:{second}"),
+        format!("http://[::1]:{second}"),
+        "http://127.0.0.1:0".to_owned(),
+        "http://127.0.0.1:99999".to_owned(),
+    ];
+    let moved: Vec<_> = urls
+        .iter()
+        .enumerate()
+        .map(|(i, url)| json!({ "name": format!("r{}", i + 1), "rule": rule(i + 1), "backendUrl": url }))
+        .collect();
+    let view = cfg.view(id).await;
+    let changed_at = Instant::now();
+    let applied = apply_until_end(
+        &api,
+        id,
+        1,
+        settings_with(&view, json!({ "routes": moved })),
+    )
+    .await;
+    assert_eq!(
+        applied.operation.state,
+        OperationState::Succeeded,
+        "{applied:?}"
+    );
+    let revision = cfg.view(id).await.revision.number.get();
+    assert_eq!(revision, 2);
+
+    let loaded = |services: &std::collections::BTreeMap<String, serde_json::Value>| {
+        urls.iter().enumerate().all(|(i, url)| {
+            services
+                .get(&format!("r{}@file", i + 1))
+                .is_some_and(|service| service["loadBalancer"]["servers"][0]["url"] == **url)
+        })
+    };
+    eventually(
+        "the six services carry the new urls",
+        Duration::from_secs(30).saturating_sub(changed_at.elapsed()),
+        || {
+            loaded(&by_name(&api_json(
+                ping,
+                "/api/http/services?per_page=1000",
+            )))
+        },
+    )
+    .await;
+    let loaded_in = changed_at.elapsed();
+    let services = by_name(&api_json(ping, "/api/http/services?per_page=1000"));
+    let routers = by_name(&api_json(ping, "/api/http/routers?per_page=1000"));
+    for n in 1..=6 {
+        let name = format!("r{n}@file");
+        assert_eq!(services[&name]["status"], "enabled", "service {name}");
+        assert_eq!(routers[&name]["status"], "enabled", "router {name}");
+    }
+    let after = api.get(id).await.expect("the instance can be read");
+    assert_eq!(after.readiness.state, InstanceReadinessState::Ready);
+    assert_eq!(pid_of(&after), pid, "a reload, not a restart");
+    last_known_good(&api, id, revision).await;
+    eventually(
+        "r1 answers from the second backend",
+        RELOAD_PATIENCE,
+        || get(web, "r1.localhost").1 == "second",
+    )
+    .await;
+
+    stop_instance(&api, id).await;
+    assert!(!alive(pid));
+    daemon.shutdown().await;
+    ev.pass_with(&format!(
+        "the six accepted forms loaded enabled {loaded_in:?} after the apply; revision {revision} is the last known good with traefik {pid} unchanged"
     ));
 }

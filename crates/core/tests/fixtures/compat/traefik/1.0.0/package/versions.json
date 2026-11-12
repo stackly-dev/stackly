@@ -1,0 +1,120 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "traefik",
+  "artifacts": [
+    {
+      "id": "traefik-3.7.15-macos-aarch64",
+      "line": "3.7",
+      "version": "3.7.15",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "12.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://github.com/traefik/traefik/releases/download/v3.7.15/traefik_v3.7.15_darwin_arm64.tar.gz"
+      ],
+      "sha256": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "size": 48112917,
+      "signingPolicy": "keep_or_adhoc",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/traefik/traefik/blob/v3.7.15/LICENSE.md",
+      "executables": [
+        "traefik"
+      ],
+      "stable": true,
+      "unpackedSize": 175271061,
+      "entryCount": 3,
+      "dependencies": [
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        },
+        {
+          "name": "libresolv.9.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libresolv.9.dylib"
+        },
+        {
+          "name": "CoreFoundation",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+        },
+        {
+          "name": "Security",
+          "kind": "system",
+          "installName": "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+        }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "launch_agent",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "traefik 3.7.15 ready in 1934 ms, stopped in 1588 ms",
+          "testedAt": "2026-10-18T11:20:24.790Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f33b0d7fd2"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/traefik",
+            "revision": "1.0.0",
+            "manifestSha256": "c57b6a8274d55f6c0b0f65fd93abcca1ee661b66e8a4793183728e5bfdd01bd7"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "health",
+            "http",
+            "init",
+            "invalid_config",
+            "readiness",
+            "rollback",
+            "routing_update",
+            "second_instance",
+            "start",
+            "stop"
+          ],
+          "knownLimitations": [
+            "dashboard_not_offered",
+            "https_not_offered"
+          ],
+          "summary": "Traefik 3.7.15: two instances served their own backend, A answered its new backend 2.292714375s after the apply, refusals wrote nothing, the rejected rule kept revision 2 as last known good and the roll back made revision 4 ready, both stopped clean, /etc/",
+          "testedAt": "2026-11-12T04:54:51.929Z",
+          "evidence": "compatibility/01a1ce19-c83f-7103-9563-678db56045f4/01a1ce1a-f3d6-7017-b562-316f587f9e7c"
+        }
+      ]
+    }
+  ]
+}

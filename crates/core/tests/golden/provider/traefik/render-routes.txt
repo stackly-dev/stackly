@@ -28,4 +28,4 @@ http:
     "docs":
       loadBalancer:
         servers:
-          - url: "http://[::1]:8080/docs"
+          - url: "http://[::1]:8080"

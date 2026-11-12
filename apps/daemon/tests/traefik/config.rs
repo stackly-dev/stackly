@@ -15,7 +15,8 @@ use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
-    Serve, Site, alive, backend, create_instance, eventually, get, port_of, stop_instance,
+    Serve, Site, alive, backend, create_instance, eventually, get, port_of, server_version,
+    stop_instance,
 };
 
 // covers: AC-4, AC-16
@@ -43,7 +44,7 @@ async fn traefik_applies_routes_with_a_reload_on_one_instance_and_leaves_the_oth
     let (a_pid, b_pid) = (pid_of(&a_running), pid_of(&b_running));
     let (a_web, b_web) = (port_of(&a_running, "web"), port_of(&b_running, "web"));
     assert_ne!(a_web, b_web);
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&a_running, "ping")));
 
     let view = cfg
         .wait_view(a, "revision 1 as last known good", |view| {

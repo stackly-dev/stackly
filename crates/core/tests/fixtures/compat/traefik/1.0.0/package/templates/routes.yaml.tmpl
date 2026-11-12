@@ -1,0 +1,21 @@
+# Written by Stackly from the routes setting; edits are replaced.
+{{#if settings.routes}}
+http:
+  routers:
+{{#each settings.routes as route}}
+    {{ route.name }}:
+      rule: {{ route.rule }}
+      service: {{ route.name }}
+      entryPoints:
+        - web
+{{/each}}
+  services:
+{{#each settings.routes as route}}
+    {{ route.name }}:
+      loadBalancer:
+        servers:
+          - url: {{ route.backendUrl }}
+{{/each}}
+{{else}}
+http: {}
+{{/if}}

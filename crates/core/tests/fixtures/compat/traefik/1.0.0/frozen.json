@@ -1,0 +1,18 @@
+{
+  "schema": "stackly.provider-frozen/v1",
+  "provider": "official/traefik",
+  "revision": "1.0.0",
+  "manifestSha256": "c57b6a8274d55f6c0b0f65fd93abcca1ee661b66e8a4793183728e5bfdd01bd7",
+  "startArgs": [
+    "--configFile=/frozen/data/instances/0192f3a6-0000-7000-8000-0000000000f0/config/traefik.yaml"
+  ],
+  "startEnvKeys": [
+    "HOME",
+    "PATH",
+    "TMPDIR"
+  ],
+  "rendered": {
+    "routes": "ec7cc5fb7a7943430ec0e1135b98313500daaeb7327ad18e1ed8fdca9a63a62b",
+    "staticConfig": "e67561dd9ede7c71779216cfe4a6b11677fa4fc83707f755fe9d0f1e8e5db426"
+  }
+}
