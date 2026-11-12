@@ -131,6 +131,54 @@ async fn a_slow_server_reads_running_but_not_ready_until_its_probe_answers() {
 }
 
 #[tokio::test]
+async fn a_spawned_process_reads_not_ready_before_the_registry_says_running() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&Spec::default());
+
+    let op = rig.start(id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    // A status is published with the revision the actor knew then, so a
+    // status older than the `spawned` commit carries a lower revision: a
+    // reader that finds `running` in the registry already finds `not_ready`.
+    let running = rig
+        .events
+        .lifecycles
+        .lock()
+        .expect("the recorder is not poisoned")
+        .iter()
+        .find(|(instance, lifecycle, _)| {
+            *instance == id && *lifecycle == InstanceLifecycle::Running
+        })
+        .map(|(_, _, revision)| *revision)
+        .expect("the instance became running");
+    let awaiting = rig
+        .events
+        .statuses
+        .lock()
+        .expect("the recorder is not poisoned")
+        .iter()
+        .find(|(instance, status, _)| {
+            *instance == id && status.readiness.reason().to_string() == "awaiting_probe"
+        })
+        .map(|(_, status, revision)| (status.clone(), *revision))
+        .expect("a status that waits for its first probe was published");
+    assert_eq!(awaiting.0.readiness.state(), ReadinessState::NotReady);
+    assert_eq!(
+        awaiting.0.process.as_ref().map(|process| process.pid),
+        Some(spawn.pid),
+        "the same status names the process"
+    );
+    assert!(
+        awaiting.1 < running,
+        "not_ready at revision {:?}, running at revision {running:?}",
+        awaiting.1
+    );
+}
+
+#[tokio::test]
 async fn a_start_on_a_running_instance_changes_nothing_and_ten_starts_spawn_once() {
     let rig = Rig::new().await;
     let id = rig.instance(&Spec::default());
@@ -674,6 +722,10 @@ async fn a_failed_commit_of_the_identity_discards_the_suspended_child_before_it_
         instance.last_failure().map(|code| code.as_str()),
         Some("identity_capture_failed")
     );
+    let status = rig.sup.status(id);
+    assert_eq!(status.readiness.state(), ReadinessState::Unknown);
+    assert_eq!(status.readiness.reason().to_string(), "not_running");
+    assert!(status.process.is_none(), "no process is left to show");
 }
 
 #[tokio::test]
