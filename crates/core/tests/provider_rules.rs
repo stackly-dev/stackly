@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
-    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, Stdin, ValidatedPackage,
+    PlanError, ResolvedEndpoint, RuntimeContext, Segment, SettingClass, Stdin, ValidatedPackage,
     read_package,
 };
 use stackly_core::secret::ResolvedSecrets;
@@ -1896,6 +1896,353 @@ fn postgresql_conf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
         }
     );
     assert!(!err.to_string().contains("a\nb"), "{err}");
+}
+
+#[test]
+fn valkey_conf_renders_quoted_text_decimal_integers_and_yes_no_booleans() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: valkeyConf")
+        .set(
+            "templates/fake.json.tmpl",
+            "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nignore-term {{ settings.ignoreTerm }}\nready-delay {{ settings.readyDelayMs }}\nrequirepass {{ secret.authToken }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a\"b\\c d ü #x",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        write.content.materialize(&token("x\"y")).expect("the config materializes"),
+        "proc-title-template \"a\\\"b\\\\c d ü #x\"\nfail-init yes\nignore-term no\nready-delay 250\nrequirepass \"x\\\"y\"\n".as_bytes()
+    );
+    let err = write.content.materialize(&token("a\nb")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\nb"), "{err}");
+
+    let home = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\tb",
+    );
+    let package_with_data = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: valkeyConf")
+        .set("templates/fake.json.tmpl", "dir {{ instance.data }}\n")
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let err = package_with_data.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\tb"), "{err}");
+}
+
+#[test]
+fn mysql_cnf_renders_quoted_text_decimal_integers_and_on_off_booleans() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: mysqlCnf")
+        .set(
+            "templates/fake.json.tmpl",
+            "[mysqld]\ngeneral_log_file = {{ settings.greeting }}\ngeneral_log = {{ settings.failInit }}\nskip_name_resolve = {{ settings.ignoreTerm }}\nport = {{ settings.readyDelayMs }}\n\n[client]\npassword = {{ secret.authToken }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a\"b\\c d # e ü 空 'q' ; z",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        write.content.materialize(&token("x\"y")).expect("the config materializes"),
+        "[mysqld]\ngeneral_log_file = \"a\\\"b\\\\c d # e ü 空 'q' ; z\"\ngeneral_log = ON\nskip_name_resolve = OFF\nport = 250\n\n[client]\npassword = \"x\\\"y\"\n".as_bytes()
+    );
+    let err = write.content.materialize(&token("a\rb")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains("a\rb"), "{err}");
+
+    let data = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: mysqlCnf")
+        .set(
+            "templates/fake.json.tmpl",
+            "datadir = {{ instance.data }}\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let home = context_for(
+        &data,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\u{85}b",
+    );
+    let err = data.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{85}'), "{err}");
+}
+
+#[test]
+fn xml_writes_values_as_element_content_touching_literal_text() {
+    let package = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: xml")
+        .set(
+            "templates/fake.json.tmpl",
+            "<clickhouse>\n  <display_name>{{ settings.greeting }}</display_name>\n  <path>{{ instance.data }}/</path>\n  <listen_try>{{ settings.failInit }}</listen_try>\n  <skip>{{ settings.ignoreTerm }}</skip>\n  <port>{{ settings.readyDelayMs }}</port>\n  <password>{{ secret.authToken }}</password>\n  <password_sha256_hex>{{ secret.authToken | sha256Hex }}</password_sha256_hex>\n</clickhouse>\n",
+        )
+        .validate()
+        .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(
+        &package,
+        serde_json::json!({
+            "authToken": SECRET_REF,
+            "greeting": "a&b<c>\"d'",
+            "failInit": true,
+            "readyDelayMs": 250,
+        }),
+    );
+
+    assert_eq!(
+        String::from_utf8(
+            write
+                .content
+                .materialize(&token("abc"))
+                .expect("the config materializes")
+        )
+        .expect("UTF-8 output"),
+        format!(
+            "<clickhouse>\n  <display_name>a&amp;b&lt;c&gt;&quot;d&apos;</display_name>\n  <path>/Volumes/T/data/instances/{id}/data/</path>\n  <listen_try>true</listen_try>\n  <skip>false</skip>\n  <port>250</port>\n  <password>abc</password>\n  <password_sha256_hex>{ABC_SHA256_HEX}</password_sha256_hex>\n</clickhouse>\n",
+            id = "0192f000-0000-7000-8000-00000000000b",
+        )
+    );
+    let err = write.content.materialize(&token("a\u{fffe}b")).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "secret.authToken".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{fffe}'), "{err}");
+
+    let home = context_for(
+        &package,
+        serde_json::json!({ "authToken": SECRET_REF }),
+        "/Volumes/a\u{1b}b",
+    );
+    let err = package.init_plan(&home).unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::UnrepresentableValue {
+            field: "instance.data".into()
+        }
+    );
+    assert!(!err.to_string().contains('\u{1b}'), "{err}");
+}
+
+#[test]
+fn an_unknown_format_names_every_known_format_in_its_message() {
+    let err = Edit::fake()
+        .replace("provider.yaml", "format: json", "format: ini")
+        .validate()
+        .unwrap_err();
+    let issue = err
+        .issues
+        .iter()
+        .find(|issue| issue.code == IssueCode::UnknownTemplateFormat)
+        .expect("the format is rejected");
+
+    for format in [
+        "yaml",
+        "json",
+        "natsConf",
+        "postgresqlConf",
+        "plain",
+        "valkeyConf",
+        "mysqlCnf",
+        "xml",
+    ] {
+        assert!(issue.message.contains(format), "{}", issue.message);
+    }
+}
+
+/// SHA-256 of `abc` as lowercase hex, the first standard test vector.
+const ABC_SHA256_HEX: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+/// The fake package with `template` in its sensitive `fake.json.tmpl`.
+fn with_hash_template(format: &str, template: &str) -> Edit {
+    Edit::fake()
+        .replace(
+            "provider.yaml",
+            "format: json",
+            &format!("format: {format}"),
+        )
+        .set("templates/fake.json.tmpl", template)
+}
+
+#[test]
+fn a_sha256_hex_filter_writes_the_hash_of_the_secret_with_no_escaper() {
+    let package = with_hash_template(
+        "json",
+        "{\n  \"greeting\": {{ settings.greeting }},\n  \"hash\": \"{{ secret.authToken|sha256Hex }}\",\n  \"token\": {{ secret.authToken }}\n}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&package, serde_json::json!({ "authToken": SECRET_REF }));
+
+    assert!(
+        write
+            .content
+            .segments
+            .iter()
+            .any(|segment| matches!(segment, Segment::SecretHash { .. }))
+    );
+    assert_eq!(
+        String::from_utf8(
+            write
+                .content
+                .materialize(&token("abc"))
+                .expect("the config materializes")
+        )
+        .expect("UTF-8 output"),
+        format!(
+            "{{\n  \"greeting\": \"hello from stackly\",\n  \"hash\": \"{ABC_SHA256_HEX}\",\n  \"token\": \"abc\"\n}}\n"
+        )
+    );
+    let err = write
+        .content
+        .materialize(&ResolvedSecrets::for_tests([]))
+        .unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::SecretUnavailable {
+            field: "authToken".parse().expect("valid field")
+        }
+    );
+
+    let valkey = with_hash_template(
+        "valkeyConf",
+        "user default on #{{ secret.authToken | sha256Hex }}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&valkey, serde_json::json!({ "authToken": SECRET_REF }));
+    assert_eq!(
+        write
+            .content
+            .materialize(&token("a\"b\nc"))
+            .expect("a hash never needs an escape"),
+        format!(
+            "user default on #{}\n",
+            "92d80d9fbccd9c8c8f7e2cadaea972af1ebdefe71bd557129d663a90d5b67ab4"
+        )
+        .as_bytes()
+    );
+}
+
+#[test]
+fn a_hash_segment_shows_only_the_secret_reference_in_the_plan() {
+    let package = with_hash_template(
+        "json",
+        "{\"hash\": \"{{ secret.authToken | sha256Hex }}\"}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&package, serde_json::json!({ "authToken": SECRET_REF }));
+    let segment = write
+        .content
+        .segments
+        .iter()
+        .find(|segment| matches!(segment, Segment::SecretHash { .. }))
+        .expect("the hash segment");
+
+    assert_eq!(
+        serde_json::to_value(segment).expect("segments serialize"),
+        serde_json::json!({
+            "type": "secretHash",
+            "content": { "secret": "<secret:authToken>", "algo": "sha256_hex" }
+        })
+    );
+    let shown = format!(
+        "{:?} {}",
+        write.content,
+        serde_json::to_string(&write.content).expect("serializes")
+    );
+    assert!(!shown.contains(SECRET_REF), "{shown}");
+    assert!(!shown.contains(ABC_SHA256_HEX), "{shown}");
+    assert!(shown.contains("<secret:authToken>"), "{shown}");
+}
+
+#[test]
+fn a_filter_is_rejected_off_a_secret_path_with_its_code_and_position() {
+    let sensitive = "templates/fake.json.tmpl";
+    for (template, location) in [
+        ("x {{ settings.greeting | sha256Hex }}\n", "1:3"),
+        ("x {{ instance.data | sha256Hex }}\n", "1:3"),
+        ("ok\nx {{ secret.authToken | md5 }}\n", "2:3"),
+        ("x {{ secret.authToken | Sha256Hex }}\n", "1:3"),
+        ("x {{ secret.authToken | sha256Hex | sha256Hex }}\n", "1:3"),
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            location,
+            IssueCode::TemplateType,
+        );
+    }
+    for template in [
+        "x {{ secret.authToken | }}\n",
+        "x {{ secret.authToken | sha-256 }}\n",
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            "1:3",
+            IssueCode::TemplateSyntax,
+        );
+    }
+    assert_issue(
+        &with_hash_template("plain", "x {{ secret.authToken | sha256Hex }}\n").issues(),
+        sensitive,
+        "1:3",
+        IssueCode::TemplateType,
+    );
+    let shared = "templates/fake.conf.tmpl";
+    for (template, location) in [
+        ("{\"h\": \"{{ secret.authToken | sha256Hex }}\"}\n", "1:8"),
+        ("{\"h\": {{ secret.authToken }}}\n", "1:7"),
+    ] {
+        assert_issue(
+            &Edit::fake().set(shared, template).issues(),
+            shared,
+            location,
+            IssueCode::SecretNotAllowedHere,
+        );
+    }
 }
 
 #[test]

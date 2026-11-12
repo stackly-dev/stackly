@@ -27,6 +27,7 @@ mod material;
 use std::ffi::OsStr;
 use std::fmt::Write as _;
 
+use serde::{Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use stackly_platform::SecretValue;
 
@@ -52,6 +53,13 @@ pub fn stdin_payload(value: &SecretValue) -> &[u8] {
 pub enum HashAlgo {
     /// SHA-256 as 64 lowercase hex characters, as ClickHouse takes it.
     Sha256Hex,
+}
+
+impl Serialize for HashAlgo {
+    /// Writes [`as_code`](Self::as_code), as plans and their goldens show it.
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_code())
+    }
 }
 
 impl HashAlgo {
@@ -122,6 +130,14 @@ mod tests {
     }
 
     #[test]
+    fn a_hash_algo_serializes_as_its_code() {
+        assert_eq!(
+            serde_json::to_value(HashAlgo::Sha256Hex).unwrap(),
+            serde_json::json!("sha256_hex")
+        );
+    }
+
+    #[test]
     fn stdin_and_env_carry_the_exact_value() {
         let secret = value("fixture value, never a real one");
 
@@ -163,6 +179,30 @@ mod tests {
         assert_eq!(
             render_secret_placeholder(&value("plain"), TemplateFormat::NatsConf).as_deref(),
             Some("\"plain\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\"b\\c"), TemplateFormat::ValkeyConf).as_deref(),
+            Some("\"a\\\"b\\\\c\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\nb"), TemplateFormat::ValkeyConf),
+            None
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\"b\\c"), TemplateFormat::MysqlCnf).as_deref(),
+            Some("\"a\\\"b\\\\c\"")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\u{7f}b"), TemplateFormat::MysqlCnf),
+            None
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\"b<&"), TemplateFormat::Xml).as_deref(),
+            Some("a&quot;b&lt;&amp;")
+        );
+        assert_eq!(
+            render_secret_placeholder(&value("a\u{ffff}"), TemplateFormat::Xml),
+            None
         );
     }
 }

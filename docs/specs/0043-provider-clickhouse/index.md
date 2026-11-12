@@ -1,7 +1,7 @@
 # 0043. Provider ClickHouse
 
 **Date**: 2026-11-12
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

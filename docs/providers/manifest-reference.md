@@ -146,9 +146,9 @@ A map from a config file name to one config file, at most 16 entries. A name is 
 | Field | Required | Rules |
 | --- | --- | --- |
 | `template` | yes | `templates/<file>.tmpl`; the file name is lowercase letters, digits, `.`, `_`, `-` |
-| `format` | yes | How values are escaped when the template is rendered: `yaml`, `json`, `natsConf`, `postgresqlConf`, or `plain` (no value tags at all; the file is written as it is) |
+| `format` | yes | How values are escaped when the template is rendered: `yaml`, `json`, `natsConf`, `postgresqlConf`, `plain` (no value tags at all; the file is written as it is), `valkeyConf` (text in double quotes with `\` and `"` escaped, booleans `yes` and `no`), `mysqlCnf` (the same quoting, booleans `ON` and `OFF`), or `xml` (no quotes; `&`, `<`, `>`, `"`, and `'` become entities, so a value may sit inside an element such as `<path>{{ instance.data }}/</path>`) |
 | `destination` | yes | Where the rendered file goes: one folder token at the start, then one or two literal components, such as `"${instance.config}/nats.conf"` |
-| `sensitive` | no | Default `false`. `true` means the file holds a secret; its destination must then start with `${instance.secrets}`, and only a sensitive template may write `secret.<field>` values. |
+| `sensitive` | no | Default `false`. `true` means the file holds a secret; its destination must then start with `${instance.secrets}`, and only a sensitive template may write `secret.<field>` values. A sensitive template may also write `{{ secret.<field> \| sha256Hex }}`, the SHA-256 of the value as 64 lowercase hex characters, with no escaping and no quotes added; it is the only filter. |
 
 From `providers/traefik/provider.yaml`:
 
