@@ -1,5 +1,7 @@
 //! Text settings reach Valkey through the `valkeyConf` format and are read
-//! back unchanged by the real server (spec 0040 AC-2, the round trip).
+//! back unchanged by the real server (spec 0040 AC-2, the round trip), and
+//! the edge values of the keyspace flags setting reach Valkey as the same
+//! flags a live `CONFIG SET` of that value gives.
 
 use serde_json::json;
 use stackly_testkit::TestRoot;
@@ -42,6 +44,7 @@ fn copy_with_free_text(root: &TestRoot) -> std::path::PathBuf {
     dir
 }
 
+// covers: AC-2 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_reads_back_the_text_the_valkey_conf_escaper_wrote() {
@@ -68,6 +71,7 @@ async fn valkey_9_1_reads_back_the_text_the_valkey_conf_escaper_wrote() {
     ev.pass_with(&format!("{ODD_TEXT} came back unchanged from CONFIG GET"));
 }
 
+// covers: AC-2 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_takes_keyspace_flags_with_a_dollar_sign() {
@@ -97,4 +101,76 @@ async fn valkey_9_1_takes_keyspace_flags_with_a_dollar_sign() {
     assert!(value.contains('K') && value.contains('$'), "{read:?}");
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(&format!("notify-keyspace-events is {value}"));
+}
+
+/// Edge values of `notifyKeyspaceEvents` the anchored schema pattern
+/// accepts: empty, `$` with and without a type letter, `A` (which Valkey
+/// expands), every letter once, and repeats.
+const KEYSPACE_EDGES: &[&str] = &[
+    "",
+    "$",
+    "K$",
+    "E$x",
+    "KEA",
+    "AKE$",
+    "KEg$lshzxetdmnA",
+    "KKEE",
+];
+
+// covers: AC-2 (spec 0040)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
+async fn valkey_9_1_reads_back_each_edge_keyspace_value_as_a_live_config_set_of_it() {
+    let ev = evidence!(
+        covers = ["REQ-038"],
+        kind = Kind::Native,
+        expected = "for each edge value of notifyKeyspaceEvents (empty, $, K$, E$x, KEA, AKE$, every letter, repeats) the instance starts, and CONFIG GET notify-keyspace-events reads the same flags that CONFIG SET of that value on the running server reads",
+    );
+    let Some(site) = Site::open(&ev) else {
+        return;
+    };
+    let daemon = site.in_process(|_| {}).await;
+    let api = site.api().await;
+    let mut version = String::new();
+    let mut seen = Vec::new();
+    for (index, value) in KEYSPACE_EDGES.iter().enumerate() {
+        let made = create_instance(
+            &site,
+            &api,
+            &format!("flags{index}"),
+            json!({ "notifyKeyspaceEvents": value }),
+        )
+        .await;
+        let running = api.start_ready(made.id).await;
+        let mut valkey = Valkey::signed_in(port_of(&running), &made.password);
+        if version.is_empty() {
+            version = valkey.info_server("valkey_version");
+            site.subject(&ev, &version);
+        }
+        let rendered = valkey
+            .cmd(&["CONFIG", "GET", "notify-keyspace-events"])
+            .config_value()
+            .unwrap_or_else(|| panic!("{value:?}: CONFIG GET answers"))
+            .to_owned();
+        let set = valkey.cmd(&["CONFIG", "SET", "notify-keyspace-events", value]);
+        assert_eq!(
+            set,
+            crate::harness::Reply::Simple("OK".to_owned()),
+            "{value:?}"
+        );
+        let live = valkey
+            .cmd(&["CONFIG", "GET", "notify-keyspace-events"])
+            .config_value()
+            .unwrap_or_else(|| panic!("{value:?}: CONFIG GET answers"))
+            .to_owned();
+        assert_eq!(rendered, live, "{value:?} through the config file");
+        seen.push(format!("{value:?}->{rendered:?}"));
+        drop(valkey);
+        crate::harness::stop_instance(&api, made.id).await;
+    }
+    daemon.shutdown().await;
+    ev.pass_with(&format!(
+        "Valkey {version} read back {} as a live CONFIG SET does",
+        seen.join(", ")
+    ));
 }

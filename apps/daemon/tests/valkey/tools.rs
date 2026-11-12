@@ -10,6 +10,7 @@ use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::harness::{Site, VERSION, Valkey, create_with, new_password, port_of, stop_instance};
 
+// covers: AC-12 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_never_runs_a_decoy_valkey_or_redis_from_the_daemon_path() {
