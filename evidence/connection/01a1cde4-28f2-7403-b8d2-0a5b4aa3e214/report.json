@@ -1,12 +1,12 @@
 {
   "schema": "stackly.evidence-report/v1",
-  "runId": "01a1cddf-242c-761e-886e-50a670448b2e",
+  "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
   "kind": "native",
   "wrapperVersion": "0.1.0",
   "context": {
-    "sourceCommit": "f0547395205d7891a42f5bc2e6f0dcb2f93cf6f6",
+    "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
     "sourceDirty": false,
-    "runId": "01a1cddf-242c-761e-886e-50a670448b2e",
+    "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
     "runKind": "native",
     "command": [
       "cargo",
@@ -45,8 +45,8 @@
       "swift": "6.4"
     }
   },
-  "startedAt": "2026-11-12T03:48:35.500176Z",
-  "finishedAt": "2026-11-12T03:50:08.954336Z",
+  "startedAt": "2026-11-12T03:54:04.402816Z",
+  "finishedAt": "2026-11-12T03:55:25.948372Z",
   "commandExitCode": 0,
   "commandSignal": null,
   "interrupted": false,
@@ -68,7 +68,7 @@
   "records": [
     {
       "schema": "stackly.evidence/v1",
-      "id": "01a1cddf-a7f3-70b7-85f3-a73ebebef975",
+      "id": "01a1cde4-9a1c-76a5-a084-edecad612862",
       "covers": [
         "REQ-036"
       ],
@@ -97,13 +97,13 @@
       ],
       "steps": null,
       "reviewer": null,
-      "startedAt": "2026-11-12T03:49:09.235898Z",
-      "finishedAt": "2026-11-12T03:49:12.454869Z",
+      "startedAt": "2026-11-12T03:54:33.372754Z",
+      "finishedAt": "2026-11-12T03:54:36.581576Z",
       "evidencePath": "output.log",
       "context": {
-        "sourceCommit": "f0547395205d7891a42f5bc2e6f0dcb2f93cf6f6",
+        "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
         "sourceDirty": false,
-        "runId": "01a1cddf-242c-761e-886e-50a670448b2e",
+        "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
         "runKind": "native",
         "command": [
           "cargo",
@@ -145,7 +145,7 @@
     },
     {
       "schema": "stackly.evidence/v1",
-      "id": "01a1cddf-b48d-737d-8882-7b8b0c3a0053",
+      "id": "01a1cde4-a6b5-775e-bafa-7eb478eee1f3",
       "covers": [
         "BR-025",
         "REQ-029",
@@ -182,13 +182,13 @@
       ],
       "steps": null,
       "reviewer": null,
-      "startedAt": "2026-11-12T03:49:12.461539Z",
-      "finishedAt": "2026-11-12T03:50:08.9369Z",
-      "evidencePath": "artifacts/01a1cddf-b48d-737d-8882-7b8b0c3a0053/",
+      "startedAt": "2026-11-12T03:54:36.597478Z",
+      "finishedAt": "2026-11-12T03:55:25.934414Z",
+      "evidencePath": "artifacts/01a1cde4-a6b5-775e-bafa-7eb478eee1f3/",
       "context": {
-        "sourceCommit": "f0547395205d7891a42f5bc2e6f0dcb2f93cf6f6",
+        "sourceCommit": "11aecc01f51cf9325cd9271a6b7fe95d8120f39f",
         "sourceDirty": false,
-        "runId": "01a1cddf-242c-761e-886e-50a670448b2e",
+        "runId": "01a1cde4-28f2-7403-b8d2-0a5b4aa3e214",
         "runKind": "native",
         "command": [
           "cargo",

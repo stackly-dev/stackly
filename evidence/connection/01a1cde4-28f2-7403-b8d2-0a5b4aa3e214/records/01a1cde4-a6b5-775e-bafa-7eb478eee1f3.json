@@ -1,6 +1,6 @@
 {
   "schema": "stackly.evidence/v1",
-  "id": "01a1cddf-b48d-737d-8882-7b8b0c3a0053",
+  "id": "01a1cde4-a6b5-775e-bafa-7eb478eee1f3",
   "covers": [
     "BR-025",
     "REQ-029",
@@ -37,7 +37,7 @@
   ],
   "steps": null,
   "reviewer": null,
-  "startedAt": "2026-11-12T03:49:12.461539Z",
-  "finishedAt": "2026-11-12T03:50:08.9369Z",
-  "evidencePath": "artifacts/01a1cddf-b48d-737d-8882-7b8b0c3a0053/"
+  "startedAt": "2026-11-12T03:54:36.597478Z",
+  "finishedAt": "2026-11-12T03:55:25.934414Z",
+  "evidencePath": "artifacts/01a1cde4-a6b5-775e-bafa-7eb478eee1f3/"
 }

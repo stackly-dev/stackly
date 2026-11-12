@@ -1,4 +1,3 @@
-    Blocking waiting for file lock on build directory
    Compiling ring v0.17.14
    Compiling rustls v0.23.46
    Compiling rustls-webpki v0.103.16
@@ -6,12 +5,12 @@
    Compiling ureq v3.4.2
    Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
    Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
-    Finished `test` profile [unoptimized] target(s) in 31.74s
-     Running tests/nats.rs ($HOME/Development/ojiepermana/Stackly/target/debug/deps/nats-d70fff5c2954ee71)
+    Finished `test` profile [unoptimized] target(s) in 26.93s
+     Running tests/nats.rs (target/debug/deps/nats-d70fff5c2954ee71)
 
 running 2 tests
 test auth::a_connection_without_credentials_never_reads_or_changes_the_app_account ... ok
 test compatibility::nats_compatibility ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 59.71s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 52.57s
 
