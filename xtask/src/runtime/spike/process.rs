@@ -161,11 +161,6 @@ pub struct Finished {
 }
 
 impl Finished {
-    /// True when it exited with code 0.
-    pub fn success(&self) -> bool {
-        self.status.is_some_and(|status| status.success())
-    }
-
     /// `stderr`, or `stdout` when stderr is empty, trimmed for a reason.
     pub fn complaint(&self) -> String {
         let text = if self.stderr.trim().is_empty() {
@@ -417,7 +412,7 @@ mod tests {
         let mut command = env.command(Path::new("/usr/bin/env"));
         command.env_remove("NOTHING");
         let finished = run(command, Duration::from_secs(10)).unwrap();
-        assert!(finished.success());
+        assert!(finished.status.is_some_and(|status| status.success()));
         let mut names: Vec<&str> = finished
             .stdout
             .lines()

@@ -654,7 +654,6 @@ mod tests {
             version: version.to_owned(),
             line: line.to_owned(),
             executables: Vec::new(),
-            data_dir: run_dir.join("data"),
             run_dir,
             env,
             socket_dir,
@@ -671,13 +670,18 @@ mod tests {
     // covers: AC-16 (spec 0036)
     #[test]
     fn the_packaged_providers_are_found_by_their_software() {
-        for provider in ["clickhouse", "nats", "postgresql", "traefik", "valkey"] {
+        for provider in [
+            "clickhouse",
+            "nats",
+            "postgresql",
+            "mysql",
+            "traefik",
+            "valkey",
+        ] {
             let dir = find_package(&repo(), provider).unwrap().unwrap();
             assert_eq!(dir.file_name().unwrap().to_string_lossy(), provider);
         }
-        for provider in ["mysql", "redis"] {
-            assert_eq!(find_package(&repo(), provider).unwrap(), None, "{provider}");
-        }
+        assert_eq!(find_package(&repo(), "redis").unwrap(), None);
     }
 
     // covers: AC-16 (spec 0036)

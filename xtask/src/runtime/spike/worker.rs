@@ -518,7 +518,6 @@ impl Spike {
             version: self.artifact.version.clone(),
             line: self.artifact.line.clone(),
             executables: self.artifact.executables.clone(),
-            data_dir: run_dir.join("data"),
             run_dir,
             env,
             socket_dir,

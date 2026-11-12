@@ -83,6 +83,22 @@ pub const POSTGRESQL_18: Line = Line {
     version: "18.6",
 };
 
+/// MySQL 8.4.
+pub const MYSQL_8_4: Line = Line {
+    software: "mysql",
+    artifact: "mysql-8.4.11-macos-aarch64",
+    selector: "8.4",
+    version: "8.4.11",
+};
+
+/// MySQL 9.7.
+pub const MYSQL_9_7: Line = Line {
+    software: "mysql",
+    artifact: "mysql-9.7.2-macos-aarch64",
+    selector: "9.7",
+    version: "9.7.2",
+};
+
 /// ClickHouse 26.8.
 pub const CLICKHOUSE: Line = Line {
     software: "clickhouse",

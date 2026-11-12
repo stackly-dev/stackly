@@ -1,7 +1,7 @@
 //! The provider engine on real packages: `providers/fake`,
 //! `providers/example`, `providers/nats`, `providers/traefik`,
-//! `providers/postgresql`, `providers/valkey`, `providers/clickhouse`, and
-//! the `fake-command` fixture are
+//! `providers/postgresql`, `providers/mysql`, `providers/valkey`,
+//! `providers/clickhouse`, and the `fake-command` fixture are
 //! copied into a `TestRoot`, read through the `Filesystem` port of
 //! `FakePlatform`, validated, and planned against the fixed golden context
 //! of spec 0009 ("Context golden").
@@ -55,6 +55,10 @@ fn nats_dir() -> PathBuf {
 
 fn postgresql_dir() -> PathBuf {
     repo_root().join("providers/postgresql")
+}
+
+fn mysql_dir() -> PathBuf {
+    repo_root().join("providers/mysql")
 }
 
 fn valkey_dir() -> PathBuf {
@@ -284,48 +288,54 @@ fn every_repo_package_reads_its_version_from_the_literal_output_of_its_binary() 
     let cases = [
         (
             fake_dir(),
-            "version",
+            &["version"][..],
             "stackly-fake-server 0.1.0\n",
             "0.1.0",
         ),
         (
             example_dir(),
-            "version",
+            &["version"][..],
             "stackly-fake-server 0.1.0\n",
             "0.1.0",
         ),
         (
             nats_dir(),
-            "--version",
+            &["--version"][..],
             "nats-server: v2.15.1\r\n",
             "2.15.1",
         ),
         (
             traefik_dir(),
-            "version",
+            &["version"][..],
             "Version:      3.7.15\nCodename:     x\nGo version:   go1.26\n",
             "3.7.15",
         ),
         (
             postgresql_dir(),
-            "--version",
+            &["--version"][..],
             "postgres (PostgreSQL) 18.6\n",
             "18.6",
         ),
         (
             valkey_dir(),
-            "--version",
+            &["--version"][..],
             "Valkey server v=9.1.2 sha=00000000:1 malloc=libc bits=64 build=991715b0e5b85611\n",
             "9.1.2",
         ),
+        (
+            mysql_dir(),
+            &["--no-defaults", "--version"][..],
+            "/opt/mysql/bin/mysqld  Ver 8.4.11 for macos15 on arm64 (MySQL Community Server - GPL)\n",
+            "8.4.11",
+        ),
     ];
-    for (dir, arg, output, expected) in cases {
+    for (dir, args, output, expected) in cases {
         let package = validated(&dir);
         let check = package
             .manifest()
             .version_check()
             .unwrap_or_else(|| panic!("{} declares runtime.versionCheck", dir.display()));
-        assert_eq!(check.args(), [arg], "{}", dir.display());
+        assert_eq!(check.args(), args, "{}", dir.display());
         assert_eq!(
             check.read_version(output, ""),
             Some(expected),
@@ -823,7 +833,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the postgresql, nats, fake, traefik, valkey, and clickhouse packages validate with their connection block (sentinel render included)",
+        expected = "the postgresql, mysql, nats, fake, traefik, valkey, and clickhouse packages validate with their connection block (sentinel render included)",
     );
     let entries = |dir: &Path| -> Vec<(String, String)> {
         validated(dir)
@@ -849,6 +859,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
             pair("monitoring", "Monitoring URL")
         ]
     );
+    assert_eq!(entries(&mysql_dir()), [pair("uri", "Connection string")]);
     assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
     assert_eq!(entries(&example_dir()), [pair("config", "Config endpoint")]);
     assert_eq!(
@@ -1365,6 +1376,7 @@ fn every_package_initializes_with_endpoints_that_have_no_port() {
         ("example", example_dir(), example_settings()),
         ("nats", nats_dir(), nats_settings()),
         ("postgresql", postgresql_dir(), postgresql_settings()),
+        ("mysql", mysql_dir(), mysql_settings()),
         ("traefik", traefik_dir(), traefik_settings(1)),
         ("valkey", valkey_dir(), valkey_settings()),
         ("clickhouse", clickhouse_dir(), clickhouse_settings()),
@@ -3145,4 +3157,518 @@ fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
         "{available_targets:?}"
     );
     ev.pass();
+}
+
+fn mysql_settings() -> serde_json::Value {
+    serde_json::json!({ "rootPassword": GOLDEN_SECRET_REF })
+}
+
+/// The rendered `my.cnf` of a MySQL run plan, with each secret written as
+/// `<secret:field>`.
+fn mysql_cnf(package: &ValidatedPackage, settings: serde_json::Value) -> String {
+    let context = golden_context(package, settings);
+    let run = package
+        .run_plan(&context)
+        .expect("the mysql run plan builds");
+    let renders = rendered(package, &run.render);
+    let [(config, text)] = renders.as_slice() else {
+        panic!("the run plan renders my.cnf only: {renders:?}");
+    };
+    assert_eq!(config, "myCnf");
+    text.clone()
+}
+
+// covers: AC-1 (spec 0042)
+#[test]
+fn the_mysql_package_reads_without_writes_and_validates() {
+    let ev = evidence!(
+        covers = ["REQ-055", "REQ-029"],
+        kind = Kind::Fixture,
+        expected = "providers/mysql copied into a test root reads through the Filesystem port without a write, validates with no init port issue, and holds the 8.4.11 and 9.7.2 artifacts",
+    );
+    let package = validated(&mysql_dir());
+
+    let key = package.key();
+    assert_eq!(key.provider().as_str(), "official/mysql");
+    assert_eq!(key.revision().as_str(), "1.0.0");
+    assert_eq!(package.software().as_str(), "mysql");
+    assert!(package.init_port_issues().is_empty());
+    assert_eq!(
+        package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            Capability::ColdBackup,
+            Capability::MultiInstance,
+            Capability::Persistence
+        ]
+    );
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let available: Vec<(&str, &str)> = versions["artifacts"]
+        .as_array()
+        .expect("artifacts is a list")
+        .iter()
+        .filter(|artifact| artifact["status"] == "available")
+        .map(|artifact| {
+            (
+                artifact["id"].as_str().expect("id is text"),
+                artifact["line"].as_str().expect("line is text"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        available,
+        [
+            ("mysql-8.4.11-macos-aarch64", "8.4"),
+            ("mysql-9.7.2-macos-aarch64", "9.7"),
+        ]
+    );
+    ev.pass();
+}
+
+// covers: AC-1, AC-12 (spec 0042)
+#[test]
+fn mysql_plans_match_the_golden_files() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Fixture,
+        expected = "the init and run plans of the golden context and my.cnf with the default settings and with binaryLog equal their golden files byte for byte",
+    );
+    let package = validated(&mysql_dir());
+    let context = golden_context(&package, mysql_settings());
+
+    let init = package
+        .init_plan(&context)
+        .expect("the mysql init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the mysql run plan builds");
+
+    assert_golden("mysql", "init.json", &pretty(&init));
+    assert_golden("mysql", "run.json", &pretty(&run));
+    assert_golden(
+        "mysql",
+        "render-myCnf.txt",
+        &mysql_cnf(&package, mysql_settings()),
+    );
+    assert_golden(
+        "mysql",
+        "render-myCnf-binlog.txt",
+        &mysql_cnf(
+            &package,
+            serde_json::json!({ "rootPassword": GOLDEN_SECRET_REF, "binaryLog": true }),
+        ),
+    );
+    assert!(
+        rendered(&package, &init.steps).is_empty(),
+        "init writes no config file"
+    );
+    ev.pass();
+}
+
+// covers: AC-12 (spec 0042)
+#[test]
+fn mysql_programs_are_runtime_executables_that_read_no_option_file_but_their_own() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Fixture,
+        expected = "every program of the init, run, and probe plans is bin/mysqld or bin/mysql inside the instance runtime root, its first argument is --no-defaults or --defaults-file=<config>/my.cnf, and no argument holds the root password",
+    );
+    let package = validated(&mysql_dir());
+    let context = golden_context(&package, mysql_settings());
+    let init = package
+        .init_plan(&context)
+        .expect("the mysql init plan builds");
+    let run = package
+        .run_plan(&context)
+        .expect("the mysql run plan builds");
+    let probe = match &run.readiness.probe {
+        ProbeSpec::Exec(spec) => spec,
+        other => panic!("readiness should be an exec probe, got {other:?}"),
+    };
+    let health = match &run.health.probe {
+        ProbeSpec::Exec(spec) => spec,
+        other => panic!("health should be an exec probe, got {other:?}"),
+    };
+
+    let mut commands: Vec<&Command> = init
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            InitStep::Run(spec) => Some(&spec.command),
+            _ => None,
+        })
+        .collect();
+    let init_count = commands.len();
+    commands.push(&run.spawn);
+    commands.push(&probe.command);
+    commands.push(&health.command);
+    let relatives: Vec<_> = commands
+        .iter()
+        .map(|command| command.program.relative.to_str().expect("UTF-8 path"))
+        .collect();
+    assert_eq!(
+        relatives,
+        ["bin/mysqld", "bin/mysqld", "bin/mysql", "bin/mysql"]
+    );
+    assert_eq!(init_count, 1);
+    let defaults_file = format!(
+        "--defaults-file={}",
+        context.paths.config.join("my.cnf").display()
+    );
+    for (index, command) in commands.iter().enumerate() {
+        assert_eq!(command.program.runtime_root, context.runtime.root);
+        let first = command.args.first().expect("every argv has an argument");
+        if index == init_count {
+            assert_eq!(first, &defaults_file);
+        } else {
+            assert_eq!(first, "--no-defaults");
+        }
+        for arg in &command.args {
+            assert!(
+                !arg.contains("<secret:") && !arg.contains(GOLDEN_SECRET_REF),
+                "{arg} names a secret"
+            );
+        }
+    }
+    for arg in [
+        "--persisted-globals-load=OFF",
+        "--mysqlx=OFF",
+        "--skip-name-resolve=ON",
+        "--secure-file-priv=NULL",
+    ] {
+        assert!(
+            run.spawn.args.iter().any(|candidate| candidate == arg),
+            "{arg} is on the mysqld command line"
+        );
+    }
+    assert!(
+        !run.spawn
+            .args
+            .iter()
+            .any(|arg| arg.starts_with("--replica-load-tmpdir")),
+        "only init names the secrets folder"
+    );
+    ev.pass();
+}
+
+// covers: AC-3 (spec 0042)
+#[test]
+fn the_mysql_account_script_is_literal_stdin_text_and_the_password_file_is_cleaned_up() {
+    let ev = evidence!(
+        covers = ["REQ-055", "BR-008"],
+        kind = Kind::Fixture,
+        expected = "init is createManagedDirectories, the root-password file in the secrets folder, then one mysqld --initialize-insecure with the account SQL as Stdin::Text, one statement per line, and the password file is cleaned up",
+    );
+    let package = validated(&mysql_dir());
+    let context = golden_context(&package, mysql_settings());
+    let secrets = context.paths.run.join("secrets");
+
+    let init = package
+        .init_plan(&context)
+        .expect("the mysql init plan builds");
+
+    let run = init
+        .steps
+        .iter()
+        .find_map(|step| match step {
+            InitStep::Run(spec) => Some(spec),
+            _ => None,
+        })
+        .expect("init runs mysqld");
+    assert!(matches!(init.steps.last(), Some(InitStep::Run(_))));
+    assert_eq!(
+        &run.command.args[..3],
+        [
+            "--no-defaults",
+            "--initialize-insecure",
+            "--disable-log-bin"
+        ]
+    );
+    assert!(
+        run.command
+            .args
+            .contains(&format!("--replica-load-tmpdir={}", secrets.display()))
+    );
+    assert!(
+        run.command
+            .args
+            .contains(&"--init-file=/dev/stdin".to_owned())
+    );
+    let Stdin::Text(text) = &run.stdin else {
+        panic!("the account SQL is stdin text: {:?}", run.stdin);
+    };
+    assert_eq!(text.lines().count(), 14);
+    assert!(text.lines().all(|line| line.ends_with(';')), "{text}");
+    assert!(text.starts_with("SET @pw = CONVERT(LOAD_FILE("));
+    assert!(text.contains("'stackly_readiness'@'localhost'"));
+    assert!(!text.contains("${"));
+    assert!(
+        init.cleanup.contains(&secrets.join("root-password")),
+        "{:?}",
+        init.cleanup
+    );
+    ev.pass();
+}
+
+#[test]
+fn the_mysql_root_password_is_a_printable_only_secret_field() {
+    let package = validated(&mysql_dir());
+    let field = package
+        .settings_schema()
+        .field("rootPassword")
+        .expect("the package has a root password");
+
+    assert!(field.is_secret());
+    assert!(field.is_printable_only());
+    let rule = SecretFieldRule::from_setting(field).expect("a secret text field has a rule");
+    assert!(rule.printable_only);
+    assert_eq!(rule.min_length, 8);
+    assert_eq!(rule.max_length, Some(128));
+}
+
+#[test]
+fn the_mysql_settings_render_into_my_cnf() {
+    let package = validated(&mysql_dir());
+
+    let conf = mysql_cnf(
+        &package,
+        serde_json::json!({
+            "rootPassword": GOLDEN_SECRET_REF,
+            "maxConnections": 77,
+            "innodbBufferPoolSizeMb": 256,
+        }),
+    );
+
+    assert!(conf.contains("\n[mysqld]\n"), "{conf}");
+    assert!(conf.contains("\nmax_connections = 77\n"), "{conf}");
+    assert!(
+        conf.contains("\ninnodb_buffer_pool_size = 256M\n"),
+        "{conf}"
+    );
+    assert!(
+        conf.contains("\ndefault_time_zone = \"+00:00\"\n"),
+        "{conf}"
+    );
+    assert!(conf.contains("\ndisable_log_bin\n"), "{conf}");
+    assert!(!conf.contains("log_bin = "), "{conf}");
+    let binlog = mysql_cnf(
+        &package,
+        serde_json::json!({ "rootPassword": GOLDEN_SECRET_REF, "binaryLog": true }),
+    );
+    assert!(binlog.contains("\nlog_bin = binlog\n"), "{binlog}");
+    assert!(!binlog.contains("disable_log_bin"), "{binlog}");
+}
+
+// covers: AC-15 (spec 0042)
+#[test]
+fn the_mysql_version_check_reads_the_version_from_a_line_that_starts_with_the_binary_path() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Fixture,
+        expected = "runtime.versionCheck runs bin/mysqld --no-defaults --version, and its unanchored pattern captures 8.4.11 and 9.7.2 from a line that starts with the binary path",
+    );
+    let package = validated(&mysql_dir());
+    let check = package
+        .version_check()
+        .expect("the manifest declares runtime.versionCheck");
+    assert_eq!(check.args(), ["--no-defaults", "--version"]);
+    assert_eq!(check.timeout(), std::time::Duration::from_secs(10));
+    let spec = stackly_core::runtime::validate::VersionCheckSpec::from_check(check);
+
+    for (line, version) in [
+        (
+            "/Users/me/Library/Application Support/Stackly/runtimes/mysql/8.4.11/bin/mysqld  Ver 8.4.11 for macos15 on arm64 (MySQL Community Server - GPL)\n",
+            "8.4.11",
+        ),
+        (
+            "/private/tmp/r/bin/mysqld  Ver 9.7.2 for macos15 on arm64 (MySQL Community Server - GPL)\r\n",
+            "9.7.2",
+        ),
+    ] {
+        assert_eq!(spec.read_version(line, ""), Some(version), "{line}");
+    }
+    for line in [
+        "mysqld  Ver 8.4 for macos15",
+        "mysql  Ver 8.4.11",
+        "mysqld Ver 8.4.11-for",
+    ] {
+        assert_eq!(spec.read_version(line, line), None, "{line}");
+    }
+    ev.pass();
+}
+
+// covers: AC-10 (spec 0042)
+#[test]
+fn the_mysql_data_marker_names_the_line_of_the_last_upgrade_history_entry() {
+    let ev = evidence!(
+        covers = ["REQ-055", "BR-009"],
+        kind = Kind::Fixture,
+        expected = "preflight reads the line of the last version in mysql_upgrade_history, runs 8.4 data on an 8.4 runtime only, refuses 8.4 data on 9.7 and 9.7 data on 8.4, and names a missing, changed, or malformed marker",
+    );
+    let package = validated(&mysql_dir());
+    let context = golden_context(&package, mysql_settings());
+    let line = |text: &str| text.parse::<RuntimeLine>().expect("valid line");
+    let contents = |text: &str| MarkerRead::Contents(text.into());
+    let history = |versions: &[&str]| {
+        let entries: Vec<String> = versions
+            .iter()
+            .map(|version| {
+                format!(
+                    r#"{{"date":"2026-11-12 00:53:09","version":"{version}","maturity":"LTS","initialize":true}}"#
+                )
+            })
+            .collect();
+        format!(
+            r#"{{"file_format":"1","upgrade_history":[{}]}}"#,
+            entries.join(",")
+        )
+    };
+
+    assert_eq!(
+        package.data_marker_path(&context.paths),
+        Some(context.paths.data.join("mysql_upgrade_history"))
+    );
+    for (version, data) in [("8.4.11", "8.4"), ("9.7.2", "9.7")] {
+        assert_eq!(
+            package.preflight(
+                Some(line(data)),
+                contents(&history(&[version])),
+                &line(data)
+            ),
+            PreflightOutcome::Compatible,
+            "{version}"
+        );
+    }
+    for (version, data, runtime) in [("8.4.11", "8.4", "9.7"), ("9.7.2", "9.7", "8.4")] {
+        assert_eq!(
+            package.preflight(
+                Some(line(data)),
+                contents(&history(&[version])),
+                &line(runtime)
+            ),
+            PreflightOutcome::Incompatible {
+                data: line(data),
+                runtime: line(runtime),
+            },
+            "data {data} on runtime {runtime}"
+        );
+    }
+    // The last entry names the version that last wrote the data.
+    assert_eq!(
+        package.preflight(
+            Some(line("8.4")),
+            contents(&history(&["8.4.10", "8.4.11"])),
+            &line("8.4")
+        ),
+        PreflightOutcome::Compatible
+    );
+    assert_eq!(
+        package.preflight(
+            Some(line("8.4")),
+            contents(&format!("{}\n", history(&["8.4.11"]))),
+            &line("8.4")
+        ),
+        PreflightOutcome::Compatible,
+        "a trailing line break is trimmed"
+    );
+    assert_eq!(
+        package.preflight(Some(line("8.4")), MarkerRead::Missing, &line("8.4")),
+        PreflightOutcome::MarkerMissing
+    );
+    assert_eq!(
+        package.preflight(
+            Some(line("8.4")),
+            contents(&history(&["8.0.40"])),
+            &line("8.4")
+        ),
+        PreflightOutcome::MarkerMismatch {
+            recorded: Some(line("8.4")),
+            marker: Some(line("8.0")),
+        }
+    );
+    for text in ["", "8.4.11\n", r#"{"upgrade_history":[]}"#] {
+        assert_eq!(
+            package.preflight(Some(line("8.4")), contents(text), &line("8.4")),
+            PreflightOutcome::MarkerMismatch {
+                recorded: Some(line("8.4")),
+                marker: None,
+            },
+            "{text:?}"
+        );
+    }
+    ev.pass();
+}
+
+// covers: AC-18 (spec 0042)
+#[test]
+fn the_mysql_readiness_remedy_matches_an_account_failure_and_renders_like_the_golden_file() {
+    let package = validated(&mysql_dir());
+    let manifest = package.manifest();
+    let context = golden_context(&package, mysql_settings());
+    let names: Vec<_> = manifest.remedies().iter().map(RemedySpec::name).collect();
+    assert_eq!(names, ["readiness_account"]);
+    let first_match = |subject: &RemedySubject<'_>| {
+        manifest
+            .remedies()
+            .iter()
+            .find(|remedy| remedy.matches(subject))
+            .map(RemedySpec::name)
+    };
+    for detail in [
+        "ERROR 1045 (28000): Access denied for user 'stackly_readiness'@'localhost' (using password: NO)",
+        "ERROR 3118 (HY000): Access denied for user 'stackly_readiness'@'localhost'. Account is locked.",
+    ] {
+        assert_eq!(
+            first_match(&RemedySubject::Readiness {
+                reason: "probe_failed",
+                detail: Some(detail),
+            }),
+            Some("readiness_account"),
+            "{detail}"
+        );
+    }
+    assert_eq!(
+        first_match(&RemedySubject::Readiness {
+            reason: "probe_failed",
+            detail: Some(
+                "ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/x/mysql.sock' (2)"
+            ),
+        }),
+        None
+    );
+
+    let rendered: Vec<serde_json::Value> = manifest
+        .remedies()
+        .iter()
+        .map(|remedy| {
+            let remedy = render_remedy(manifest, remedy, &context)
+                .unwrap_or_else(|err| panic!("{} renders: {err}", remedy.name()));
+            serde_json::json!({
+                "name": remedy.name,
+                "title": remedy.title,
+                "steps": remedy.steps.iter().map(|step| serde_json::json!({
+                    "text": step.text,
+                    "command": step.command,
+                    "path": step.path,
+                })).collect::<Vec<_>>(),
+                "pidFile": remedy.pid_file,
+            })
+        })
+        .collect();
+    let text = pretty(&rendered);
+    assert!(!text.contains(GOLDEN_SECRET_REF));
+    assert!(
+        text.contains("/mysql.sock --user=root --password"),
+        "{text}"
+    );
+    assert_golden("mysql", "remedies.json", &text);
 }

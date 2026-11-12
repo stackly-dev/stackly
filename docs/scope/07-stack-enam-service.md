@@ -69,7 +69,7 @@ Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readi
 
 **Trace:** REQ-055 (tanpa bagian adoption, yang menyusul di fitur 57), AC-081 (tanpa bagian restore, yang menyusul di fase 09), PRD bagian 22.6
 
-**Pointer:** spec [0042](../specs/0042-provider-mysql/index.md)
+**Pointer:** spec [0042](../specs/0042-provider-mysql/index.md) · code in `providers/mysql/`, `apps/daemon/tests/mysql/`, `crates/core/src/provider/template.rs`
 
 - [x] Design it (spec): `/architect provider MySQL`
 - [ ] Build it: `/develop provider MySQL`
