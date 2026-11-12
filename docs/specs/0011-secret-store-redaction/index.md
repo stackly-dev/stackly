@@ -611,7 +611,7 @@ Untuk fitur dan spec lain:
 - [ ] Fitur 27: setiap baris log instance lewat `Redactor` sebelum disimpan, dengan test dummy server yang mencetak fixture credential.
 - [ ] Fitur 31: autostart memakai interaksi `Never`, Keychain yang terkunci menghasilkan blocker needs secret, dan kebijakan kapan mencoba lagi setelah blocker hilang.
 - [ ] Fitur 34, 35, dan 45: bundle diagnosis, `safe_details` audit, dan export environment lewat `Redactor`, masing masing dengan test sentinel. *Fitur 34 dan 35 diterapkan (2026-11-10): bundle lewat `Redactor` dengan test sentinel di spec 0034 (AC-12, AC-14), `safe_details` audit lewat `Redactor` di spec 0035 (AC-4). Tetap terbuka untuk export environment fitur 45, yang belum dibangun.*
-- [ ] Fitur 41: primitive hash bcrypt untuk htpasswd Traefik di `secret::delivery`.
+- [ ] Fitur 41: primitive hash bcrypt untuk htpasswd Traefik di `secret::delivery`. *Catatan [spec 0041](../0041-provider-traefik-routing-lokal/index.md) (2026-11-12):* tidak dibangun di fitur 41 karena belum ada pemakai; baris ini milik fitur pertama yang memakai basic auth Traefik.
 - [ ] Fitur 44 dan 45: `stackly.yaml` hanya menerima reference `local:` dan menolak literal secret (VAL-013); lockfile dan export tidak pernah memuat nilai.
 - [ ] Fitur 48, 49, dan 51: backup registry membawa reference saja dan menandai yang hilang; cold backup mencatat `secret material` dikecualikan; restore as new memakai `SecretEntrySheet` dengan `copyFrom`.
 - [ ] Fitur 54: purge menghapus reference milik instance beserta item Keychain nya lewat use case delete, mengikuti aturan pemilik.
