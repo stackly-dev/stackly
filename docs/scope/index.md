@@ -27,7 +27,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [04-kerja-harian.md](04-kerja-harian.md) | Kerja harian | 26 sampai 32, 70 | 8 done |
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 done |
 | [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 3 done |
-| [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 2 planned, 3 in-progress |
+| [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 1 planned, 4 in-progress |
 | [08-environment-proyek.md](08-environment-proyek.md) | Environment proyek (JOURNEY-04) | 44 sampai 47 | 4 planned |
 | [09-backup-dan-restore.md](09-backup-dan-restore.md) | Backup & restore (JOURNEY-06) | 48 sampai 53 | 6 planned |
 | [10-merawat-runtime-dan-data.md](10-merawat-runtime-dan-data.md) | Merawat runtime & data | 54 sampai 59 | 6 planned |
@@ -79,7 +79,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 39 | Provider NATS & JetStream | Stack enam service | in-progress |
 | 40 | Provider Valkey | Stack enam service | planned |
 | 41 | Provider Traefik & routing lokal | Stack enam service | in-progress |
-| 42 | Provider MySQL | Stack enam service | planned |
+| 42 | Provider MySQL | Stack enam service | in-progress |
 | 43 | Provider ClickHouse | Stack enam service | in-progress |
 | 44 | Manifest environment: validate & plan | Environment proyek | planned |
 | 45 | Lockfile & override lokal | Environment proyek | planned |

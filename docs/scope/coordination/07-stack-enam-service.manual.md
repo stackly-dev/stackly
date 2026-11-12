@@ -25,3 +25,9 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 1. Run spike native dari paket: `clickhouse_runs_from_managed_artifact` di `xtask/tests/native_runtime.rs` lewat wrapper native di tree bersih (bisa mengunduh, butuh sesi login GUI).
 2. Fuzz 10 menit sesudah format `xml` dan filter `sha256Hex` masuk: `cargo xtask fuzz run provider_template --time 600`. Harapan: tanpa crash.
 3. Sesi GUI: buat instance ClickHouse dari form, start, salin connection, buka Play UI, buka `clickhouse client` di Terminal dan tempel password (membuktikan `--ask-password`), lalu stop.
+
+## Fitur 42 · Provider MySQL (spec 0042)
+
+1. Di aplikasi: buat instance MySQL dari Catalog, start, salin connection string, lalu Open In TablePlus, Sequel Ace, dan mysql (Terminal). Ini juga memeriksa bundle ID Sequel Ace `com.sequel-ace.sequel-ace` dan bahwa kedua aplikasi menerima URL `mysql://`.
+2. Di aplikasi: ubah Max connections di halaman Configuration. Harapan: dampak restart ditampilkan.
+3. AC-17, bila test launchd `BLOCKED` di sesi: `cargo test -p stacklyd --test native_launchd -- --ignored --test-threads 1 mysql` di sesi GUI yang login, lalu tambahkan entri `HANDOVER_PROVEN`.
