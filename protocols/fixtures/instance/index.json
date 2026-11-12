@@ -25,6 +25,10 @@
       "type": "CreateForm"
     },
     {
+      "file": "create-form-mysql.json",
+      "type": "CreateForm"
+    },
+    {
       "file": "create-form-nats.json",
       "type": "CreateForm"
     },
