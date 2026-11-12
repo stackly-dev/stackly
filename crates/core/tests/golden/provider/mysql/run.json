@@ -1,0 +1,213 @@
+{
+  "render": [
+    {
+      "type": "ensureDirectories",
+      "content": [
+        "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config"
+      ]
+    },
+    {
+      "type": "writeFile",
+      "content": {
+        "path": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/my.cnf",
+        "content": {
+          "configFile": "myCnf",
+          "segments": [
+            {
+              "type": "text",
+              "content": "# Managed by Stackly. Edits to this file are lost on the next start.\n# Port, bind address, socket, data folder, temp folder, and log files are set\n# on the mysqld command line by Stackly and cannot be changed here.\n# Variables saved with SET PERSIST are not loaded when the instance starts.\n[mysqld]\nmax_connections = 151\ninnodb_buffer_pool_size = 128M\ndefault_time_zone = \"+00:00\"\ndisable_log_bin\n"
+            }
+          ]
+        },
+        "sensitive": false
+      }
+    }
+  ],
+  "spawn": {
+    "program": {
+      "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/mysql/8.4.11/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "relative": "bin/mysqld"
+    },
+    "args": [
+      "--defaults-file=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/config/my.cnf",
+      "--persisted-globals-load=OFF",
+      "--basedir=/Volumes/Test Root/Ünï cödé/data/runtimes/mysql/8.4.11/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+      "--datadir=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+      "--tmpdir=/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+      "--bind-address=127.0.0.1",
+      "--port=14000",
+      "--socket=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/mysql.sock",
+      "--pid-file=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/mysqld.pid",
+      "--mysqlx=OFF",
+      "--skip-name-resolve=ON",
+      "--secure-file-priv=NULL",
+      "--general-log-file=/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a/general.log",
+      "--slow-query-log-file=/Volumes/Test Root/Ünï cödé/logs/instances/0192f000-0000-7000-8000-00000000000a/slow.log"
+    ],
+    "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data",
+    "env": [
+      [
+        "HOME",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ],
+      [
+        "PATH",
+        {
+          "type": "text",
+          "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+        }
+      ],
+      [
+        "TMPDIR",
+        {
+          "type": "text",
+          "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+        }
+      ]
+    ]
+  },
+  "readiness": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/mysql/8.4.11/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/mysql"
+          },
+          "args": [
+            "--no-defaults",
+            "--protocol=socket",
+            "--socket=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/mysql.sock",
+            "--user=stackly_readiness",
+            "--connect-timeout=2",
+            "--batch",
+            "--skip-column-names",
+            "--execute=SELECT 1"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "500ms",
+    "attemptTimeout": "3s",
+    "deadline": "120s"
+  },
+  "recoveryDeadline": "600s",
+  "health": {
+    "probe": {
+      "type": "exec",
+      "content": {
+        "command": {
+          "program": {
+            "runtimeRoot": "/Volumes/Test Root/Ünï cödé/data/runtimes/mysql/8.4.11/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000",
+            "relative": "bin/mysql"
+          },
+          "args": [
+            "--no-defaults",
+            "--protocol=socket",
+            "--socket=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/mysql.sock",
+            "--user=stackly_readiness",
+            "--connect-timeout=2",
+            "--batch",
+            "--skip-column-names",
+            "--execute=SELECT 1"
+          ],
+          "cwd": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp",
+          "env": [
+            [
+              "HOME",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ],
+            [
+              "PATH",
+              {
+                "type": "text",
+                "content": "/usr/bin:/bin:/usr/sbin:/sbin"
+              }
+            ],
+            [
+              "TMPDIR",
+              {
+                "type": "text",
+                "content": "/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp"
+              }
+            ]
+          ]
+        },
+        "stdin": {
+          "type": "null"
+        },
+        "timeout": "3s",
+        "successExitCodes": [
+          0
+        ]
+      }
+    },
+    "interval": "10s",
+    "attemptTimeout": "3s",
+    "failureThreshold": 3
+  },
+  "stop": {
+    "type": "signal",
+    "content": {
+      "signal": "term",
+      "timeout": "120s"
+    }
+  },
+  "logFiles": [],
+  "endpoints": [
+    [
+      "client",
+      {
+        "type": "ip",
+        "content": {
+          "host": "127.0.0.1",
+          "port": 14000
+        }
+      }
+    ],
+    [
+      "socket",
+      {
+        "type": "unix"
+      }
+    ]
+  ]
+}

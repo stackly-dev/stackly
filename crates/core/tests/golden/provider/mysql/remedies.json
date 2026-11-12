@@ -1,0 +1,24 @@
+[
+  {
+    "name": "readiness_account",
+    "pidFile": null,
+    "steps": [
+      {
+        "command": null,
+        "path": null,
+        "text": "Stackly checks that this instance is ready by signing in as the account stackly_readiness, which the instance’s init created. That sign in fails now."
+      },
+      {
+        "command": "'/Volumes/Test Root/Ünï cödé/data/runtimes/mysql/8.4.11/macos-aarch64/0000000000000000000000000000000000000000000000000000000000000000/bin/mysql' --no-defaults --protocol=socket --socket=/private/tmp/skt-golden/stackly-0000000a/i/0000000a/mysql.sock --user=root --password --execute=\"CREATE USER IF NOT EXISTS 'stackly_readiness'@'localhost' IDENTIFIED BY '' WITH MAX_USER_CONNECTIONS 3; ALTER USER 'stackly_readiness'@'localhost' IDENTIFIED BY '' ACCOUNT UNLOCK\"",
+        "path": null,
+        "text": "Run this in Terminal to create the account again and unlock it. mysql asks for the root password, and Stackly never puts it in the command."
+      },
+      {
+        "command": null,
+        "path": null,
+        "text": "The instance becomes ready again on its next readiness check."
+      }
+    ],
+    "title": "The readiness account stackly_readiness is missing or changed"
+  }
+]
