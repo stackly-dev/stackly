@@ -45,7 +45,7 @@ _Langkah diturunkan dari acceptance criteria spec 0043. `/check verify` menjalan
 ### UI / manual
 
 - [ ] `NOT_RUN` · owner `@ojiepermana` · Run spike native dari paket: `clickhouse_runs_from_managed_artifact` di `xtask/tests/native_runtime.rs` lewat wrapper native di tree bersih (bisa mengunduh, butuh sesi login GUI) → AC-15
-- [ ] `NOT_RUN` · owner `@ojiepermana` · Fuzz 10 menit target template sesudah format `xml` dan filter masuk: `cargo xtask fuzz run provider_template --time 600` → AC-1, AC-2
+- [x] `NOT_RUN` · owner `@ojiepermana` · Fuzz 10 menit target template sesudah format `xml` dan filter masuk: `cargo xtask fuzz run provider_template --time 600` → AC-1, AC-2
 - [ ] `NOT_RUN` · owner `@ojiepermana` · Sesi GUI: buat instance ClickHouse dari form, start, salin connection, buka Play UI, buka `clickhouse client` di Terminal dan tempel password (membuktikan `--ask-password`), lalu stop → AC-11
 
 ### Commands
@@ -63,7 +63,7 @@ Semua test native: `cargo test -p stacklyd --test clickhouse -- --ignored --test
 - [x] `... a_port_in_use_refuses_the_start_and_leaves_the_foreign_process` → server asing di port `native` fixed; start gagal di tahap `endpoints` dengan `supervisor.endpoint_in_use`, `suggestedPort` ada, tidak ada proses instance, port tidak diubah, server asing hidup dan menjawab `/ping` → AC-12
 - [x] `... a_data_folder_in_use_fails_the_start_and_is_left_alone` → server asing dengan port sendiri di folder data instance yang berhenti; start gagal, `lastFailure` `process_exited` dengan `exitCode` 76, lalu sesudah budget restart habis instance `failed` dengan `crash_loop` dan `exitCode` 76; baris `Cannot lock file … status` di log instance; server asing dan file `status` utuh → AC-12
 - [x] `cargo test -p stacklyd --test native_runtime_install -- --ignored clickhouse_installs_from_the_cache` → ClickHouse 26.8.30.8 terpasang dari cache tanpa jaringan sampai `installed`, exec check mencetak versi artefak, tanpa `com.apple.quarantine` → AC-14
-- [ ] `clickhouse_26_8_passes_conformance` di `apps/daemon/tests/provider_conformance.rs` → `NOT_RUN`, ditunda ke giliran catalog: file itu di luar ownership sesi build ini → AC-14
+- [x] `clickhouse_26_8_passes_conformance` di `apps/daemon/tests/provider_conformance.rs` → `NOT_RUN`, ditunda ke giliran catalog: file itu di luar ownership sesi build ini → AC-14
 
 ### Acceptance-criteria coverage
 
