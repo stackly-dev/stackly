@@ -197,7 +197,7 @@ async fn a_backend_only_apply_never_makes_a_disabled_route_last_known_good_and_r
     assert!(!alive(pid));
     daemon.shutdown().await;
     ev.pass_with(&format!(
-        "revision 2 moved both backends and became the last known good with every route enabled; the roll back from failed revision 3 made revision 4 ready with traefik {pid} unchanged"
+        "revision 2 moved the three backends and became the last known good with every route enabled; the roll back from failed revision 3 made revision 4 ready with traefik {pid} unchanged"
     ));
 }
 
