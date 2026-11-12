@@ -49,12 +49,12 @@ Entrypoint loopback, routing lewat file provider dengan namespace per instance, 
 
 **Trace:** REQ-039, AC-039, PRD bagian 22.5
 
-**Pointer:** spec [0041](../specs/0041-provider-traefik-routing-lokal/index.md)
+**Pointer:** spec [0041](../specs/0041-provider-traefik-routing-lokal/index.md) · code in `providers/traefik/`, `apps/daemon/tests/traefik/`
 
 - [x] Design it (spec): `/architect provider Traefik & routing lokal`
 - [ ] Build it: `/develop provider Traefik & routing lokal`
-  - [ ] Paket resmi: blok `connection`, entri `openWith` `routers`, remedy `routes_not_loaded`, `tests/scenarios.yaml` (dua skenario), README, lalu golden, fixture form, seed fuzz, dan test fixture render tanpa `tls` dan dashboard mati (spec 0041 AC-1, AC-6, AC-7 bagian statis, AC-13; build step 1 sampai 3; needs fitur 9, 21, 34, 36, 70, sudah done; menyentuh empat file test core bersama)
-  - [ ] Routing terbukti pada Traefik 3.7.15 asli: `apps/daemon/tests/traefik/routing.rs`, `surface.rs`, `watch.rs`, dan run konformitas dengan skenario paket; `BLOCKED` tanpa artefak di cache xtask (spec 0041 AC-2 sampai AC-8, AC-11 bagian konformitas, AC-13; build step 4 sampai 7; after milestone 1; needs fitur 29, sudah done)
+  - [x] Paket resmi: blok `connection`, entri `openWith` `routers`, remedy `routes_not_loaded`, `tests/scenarios.yaml` (dua skenario), README, lalu golden, fixture form, seed fuzz, dan test fixture render tanpa `tls` dan dashboard mati (spec 0041 AC-1, AC-6, AC-7 bagian statis, AC-13; build step 1 sampai 3; needs fitur 9, 21, 34, 36, 70, sudah done; menyentuh empat file test core bersama)
+  - [x] Routing terbukti pada Traefik 3.7.15 asli: `apps/daemon/tests/traefik/routing.rs`, `surface.rs`, `watch.rs`, dan run konformitas dengan skenario paket; `BLOCKED` tanpa artefak di cache xtask (spec 0041 AC-2 sampai AC-8, AC-11 bagian konformitas, AC-13; build step 4 sampai 7; after milestone 1; needs fitur 29, sudah done)
   - [ ] Evidence, catalog, dan handover: `traefik_compatibility` dengan `compat-record` dan `codegen`, `official/traefik` ke `[[provider]]` dengan `catalog check --update` dan `provider freeze`, test launchd Traefik lalu baris `HANDOVER_PROVEN`; run launchd setelah persetujuan kamu, selain itu `BLOCKED` (spec 0041 AC-10, AC-11, AC-12, AC-14, AC-7; build step 8 sampai 10; after milestone 2; needs fitur 17, 18, 30, sudah done; file bersama satu sesi pada satu waktu, nomor revision catalog dari lead)
   - [ ] Journey dari CLI dan GUI: `apps/daemon/tests/traefik/cli.rs` dan langkah manual di `verify.md` (spec 0041 AC-9, AC-13, AC-14; build step 11 dan 12; after milestone 3; langkah GUI manual)
 - [ ] Verify it: `/check verify provider Traefik & routing lokal`
