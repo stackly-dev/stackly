@@ -1,0 +1,48 @@
+[
+  {
+    "masked": "http://default:****@127.0.0.1:14000/",
+    "name": "http",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "http://default:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "defaultPassword",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/default-password"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@127.0.0.1:14000/"
+      }
+    ],
+    "portMayChange": true,
+    "title": "HTTP URL"
+  },
+  {
+    "masked": "clickhouse://default:****@127.0.0.1:14001/default",
+    "name": "native",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "clickhouse://default:"
+      },
+      {
+        "kind": "secret",
+        "secret": {
+          "field": "defaultPassword",
+          "reference": "local:instance/0192f000-0000-7000-8000-00000000000a/default-password"
+        }
+      },
+      {
+        "kind": "text",
+        "text": "@127.0.0.1:14001/default"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Native TCP"
+  }
+]

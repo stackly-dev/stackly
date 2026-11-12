@@ -118,9 +118,9 @@ fn every_repository_package_is_publishable_with_the_implied_default_scenario() {
     let ev = evidence!(
         covers = ["REQ-030"],
         kind = Kind::Fixture,
-        expected = "check_package finds nothing in providers/fake, nats, postgresql, and traefik, reads apiVersion, gives fake and postgresql the implied default scenario, and reads the two scenarios of nats and of traefik",
+        expected = "check_package finds nothing in providers/fake, nats, postgresql, traefik, and clickhouse, reads apiVersion, gives fake, postgresql, and clickhouse the implied default scenario, and reads the two scenarios of nats and of traefik",
     );
-    for name in ["fake", "nats", "postgresql", "traefik"] {
+    for name in ["fake", "nats", "postgresql", "traefik", "clickhouse"] {
         let copy = Copy::of(&repo_root().join("providers").join(name));
 
         let check = copy.check();

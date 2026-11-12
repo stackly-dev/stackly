@@ -266,6 +266,7 @@ fn the_repo_packages_render_their_open_actions_as_the_golden_files() {
     assert_golden("nats", &golden("nats", &[]));
     assert_golden("traefik", &golden("traefik", &[]));
     assert_golden("fake", &golden("fake", &["authToken"]));
+    assert_golden("clickhouse", &golden("clickhouse", &["defaultPassword"]));
 }
 
 #[test]
