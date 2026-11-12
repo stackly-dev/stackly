@@ -1,0 +1,34 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 13.66s
+     Running tests/traefik.rs (target/debug/deps/traefik-c2d793a0c935fade)
+
+running 12 tests
+test cli::cli_applies_routes_with_a_reload_and_the_log_level_with_a_restart ...    Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stackly-cli v0.1.0 ($REPO/apps/cli)
+    Finished `dev` profile [unoptimized] target(s) in 9.54s
+ok
+test compatibility::traefik_compatibility ... ok
+test config::traefik_applies_routes_with_a_reload_on_one_instance_and_leaves_the_other_alone ... ok
+test readiness::traefik_routes_readiness_follows_the_routers_traefik_loaded_through_start_and_reloads ... ok
+test routing::a_backend_only_change_to_every_accepted_url_form_is_loaded_and_becomes_last_known_good ... ok
+test routing::a_backend_url_with_a_path_a_query_a_fragment_or_a_bad_escape_is_refused_and_nothing_is_written ... ok
+test routing::a_rule_traefik_rejects_fails_the_apply_keeps_last_known_good_and_rolls_back ... ok
+test routing::invalid_route_values_are_refused_and_nothing_is_written ... ok
+test routing::two_instances_with_the_same_route_name_and_rule_answer_from_their_own_backend ... ok
+test surface::ping_and_the_api_answer_only_on_the_monitoring_port_and_the_dashboard_is_off ... ok
+test watch::a_router_in_a_file_the_user_added_makes_the_instance_not_ready_until_it_is_moved ... ok
+test watch::ten_applies_in_a_row_never_drop_the_route_that_stays ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 284.14s
+
