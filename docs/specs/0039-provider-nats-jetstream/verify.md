@@ -34,7 +34,7 @@ _Hasil developer 2026-11-12: semua langkah Commands di bawah dijalankan dan lulu
 - [x] `cargo xtask fuzz seed` lalu `git status fuzz/seeds` → bersih → AC-11
 - [x] `swift test --package-path clients/swift --filter CreateContractTests` → form NATS dengan `clientPassword` secret basic dan tiga integer advanced → AC-11
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI` → 2124 test lulus: baris form NATS (password sebagai kontrol secret basic, batas `From 1 to 1048576.` dan `From 1 to 65536.`), revision `1.1.0 · 1a9b16f60a26`, catatan matrix macOS sementara "The runtime ran on this Mac; the provider is not tested with it yet.", dan snapshot `config-nats` dengan baris Client password terkunci → AC-11
-- [x] `cargo xtask build-app` → `Stackly.app` terbangun → AC-11
+- [ ] `cargo xtask build-app` → `Stackly.app` terbangun → AC-11
 
 ### Acceptance-criteria coverage
 

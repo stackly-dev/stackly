@@ -16,10 +16,11 @@ use std::path::{Path, PathBuf};
 use stackly_core::provider::{
     ApplyClass, Command, EnvValue, InitStep, MarkerRead, NameCheck, OpenWithKind, PackageFiles,
     PlanContext, PlanError, PreflightOutcome, ProbeSpec, ReloadAction, RemedySpec, RemedySubject,
-    ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext, Segment, Stdin, ValidatedPackage,
-    check_package, read_package, render_remedy, scenarios::Expect,
+    ResolvedEndpoint, RunPlan, RunSpec, RuntimeContext, Scenarios, Segment, SettingsIssueKind,
+    Stdin, ValidatedPackage, check_package, read_package, render_remedy, scenarios::Expect,
 };
 use stackly_core::secret::{ResolvedSecrets, SecretFieldRule};
+use stackly_core::supervisor::{HANDOVER_PROVEN, is_handover_proven};
 use stackly_domain::{
     Capability, ExactVersion, FailureCode, InstanceId, Port, RuntimeLine, Sha256Digest, Target,
 };
@@ -857,6 +858,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     ev.pass();
 }
 
+// covers: AC-1 (spec 0039)
 #[test]
 fn the_nats_package_reads_without_writes_and_validates() {
     let ev = evidence!(
@@ -890,6 +892,7 @@ fn the_nats_package_reads_without_writes_and_validates() {
     ev.pass();
 }
 
+// covers: AC-1, AC-4, AC-9 (spec 0039)
 #[test]
 fn nats_plans_match_the_golden_files() {
     let package = validated(&nats_dir());
@@ -911,6 +914,7 @@ fn nats_plans_match_the_golden_files() {
     }
 }
 
+// covers: AC-1, AC-3 (spec 0039)
 #[test]
 fn nats_without_jetstream_renders_no_jetstream_block_and_denies_the_readiness_user() {
     let package = validated(&nats_dir());
@@ -941,6 +945,7 @@ fn nats_without_jetstream_renders_no_jetstream_block_and_denies_the_readiness_us
     assert_golden("nats", &format!("render-{config}-no-jetstream.txt"), &text);
 }
 
+// covers: AC-1, AC-4 (spec 0039)
 #[test]
 fn the_nats_run_plan_writes_nats_conf_to_the_secrets_folder_and_holds_no_secret_value() {
     let package = validated(&nats_dir());
@@ -980,6 +985,7 @@ fn reload_of_nats_is_unsupported() {
     );
 }
 
+// covers: AC-2 (spec 0039)
 #[test]
 fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     let package = validated(&nats_dir());
@@ -1003,6 +1009,7 @@ fn a_quote_in_the_data_folder_renders_escaped_in_nats_conf() {
     );
 }
 
+// covers: AC-2 (spec 0039)
 #[test]
 fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value() {
     let package = validated(&nats_dir());
@@ -1021,6 +1028,288 @@ fn a_control_character_in_the_data_folder_fails_the_nats_plan_without_the_value(
     assert!(!err.to_string().contains("o\u{1}q"), "{err}");
 }
 
+/// The settings issues of `document` against the NATS schema, as field path
+/// and kind.
+fn nats_settings_issues(
+    package: &ValidatedPackage,
+    document: serde_json::Value,
+) -> Vec<(String, Option<SettingsIssueKind>)> {
+    match package.settings_schema().validate(&document) {
+        Ok(_) => Vec::new(),
+        Err(err) => err
+            .issues
+            .iter()
+            .map(|issue| (issue.location.to_string(), issue.settings_kind))
+            .collect(),
+    }
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn the_nats_limits_accept_their_bounds_and_refuse_one_past_each_bound() {
+    let package = validated(&nats_dir());
+    let limits = [
+        ("jetstreamMaxMemoryMiB", 1, 1_048_576),
+        ("jetstreamMaxFileMiB", 1, 1_048_576),
+        ("maxPayloadKiB", 1, 65_536),
+    ];
+
+    for (field, minimum, maximum) in limits {
+        for good in [minimum, maximum] {
+            let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, field: good });
+            assert_eq!(
+                nats_settings_issues(&package, document),
+                Vec::new(),
+                "{field} = {good} is in range"
+            );
+        }
+        for bad in [minimum - 1, maximum + 1] {
+            let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, field: bad });
+            let issues = nats_settings_issues(&package, document);
+            assert_eq!(issues.len(), 1, "{field} = {bad}: {issues:?}");
+            assert!(issues[0].0.contains(field), "{field} = {bad}: {issues:?}");
+            assert_eq!(
+                issues[0].1,
+                Some(SettingsIssueKind::OutOfRange),
+                "{field} = {bad}"
+            );
+        }
+    }
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn the_nats_byte_limits_of_revision_1_0_1_are_unknown_settings() {
+    let package = validated(&nats_dir());
+
+    for old in [
+        "jetstreamMaxMemoryBytes",
+        "jetstreamMaxFileBytes",
+        "maxPayloadBytes",
+    ] {
+        let document = serde_json::json!({ "clientPassword": GOLDEN_SECRET_REF, old: 1_048_576 });
+        let issues = nats_settings_issues(&package, document);
+        assert_eq!(
+            issues,
+            vec![(old.to_owned(), Some(SettingsIssueKind::Unknown))],
+            "{old}"
+        );
+    }
+}
+
+// covers: AC-3, AC-4 (spec 0039)
+#[test]
+fn the_nats_schema_requires_a_printable_client_password_of_8_to_128_characters() {
+    let package = validated(&nats_dir());
+
+    let missing = nats_settings_issues(&package, serde_json::json!({}));
+    assert!(
+        missing
+            .iter()
+            .any(|(path, _)| path.contains("clientPassword")),
+        "an instance of 1.1.0 always has a password: {missing:?}"
+    );
+    let field = package
+        .settings_schema()
+        .field("clientPassword")
+        .expect("the schema declares clientPassword");
+    assert!(field.is_secret());
+    let rule = SecretFieldRule::from_setting(field).expect("a secret text field has a rule");
+    assert!(rule.printable_only);
+    assert_eq!(rule.min_length, 8);
+    assert_eq!(rule.max_length, Some(128));
+}
+
+// covers: AC-9 (spec 0039)
+#[test]
+fn nats_renders_custom_limits_with_binary_suffixes_glued_to_the_number() {
+    let package = validated(&nats_dir());
+    let context = golden_context(
+        &package,
+        serde_json::json!({
+            "clientPassword": GOLDEN_SECRET_REF,
+            "jetstreamMaxMemoryMiB": 1,
+            "jetstreamMaxFileMiB": 1_048_576,
+            "maxPayloadKiB": 65_536,
+        }),
+    );
+
+    let run = package
+        .run_plan(&context)
+        .expect("the nats run plan builds with custom limits");
+
+    let (_, text) = rendered(&package, &run.render)
+        .into_iter()
+        .next()
+        .expect("nats renders nats.conf");
+    for line in [
+        "max_payload: 65536KiB\n",
+        "  max_memory_store: 1MiB\n",
+        "  max_file_store: 1048576MiB\n",
+    ] {
+        assert!(text.contains(line), "{line:?} in {text}");
+    }
+}
+
+// covers: AC-7 (spec 0039)
+#[test]
+fn the_nats_package_says_file_streams_survive_a_restart_and_memory_streams_do_not() {
+    let package = validated(&nats_dir());
+    let schema: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("schemas/settings.schema.json")
+            .expect("the package has a settings schema"),
+    )
+    .expect("the schema is JSON");
+    let readme = fs::read_to_string(nats_dir().join("README.md")).expect("the NATS README reads");
+
+    let description = schema["properties"]["jetstream"]["description"]
+        .as_str()
+        .expect("jetstream has a description");
+    assert!(
+        description.contains("File streams survive a restart, memory streams do not."),
+        "{description}"
+    );
+    assert!(
+        readme.contains(
+            "File streams survive a normal restart of the instance. Memory streams do\nnot"
+        ),
+        "the README states the restart rule"
+    );
+    assert!(
+        readme.contains("power loss"),
+        "the README says the last writes can be lost on a power loss"
+    );
+}
+
+// covers: AC-10 (spec 0039)
+#[test]
+fn the_nats_scenarios_are_default_and_no_jetstream_and_pass_the_schema_without_a_secret() {
+    let package = validated(&nats_dir());
+    let text = fs::read_to_string(nats_dir().join("tests/scenarios.yaml"))
+        .expect("the NATS scenarios file reads");
+
+    let scenarios = Scenarios::parse(&text).unwrap_or_else(|issues| panic!("{issues:#?}"));
+
+    let names: Vec<(&str, &serde_json::Value, Expect)> = scenarios
+        .iter()
+        .map(|scenario| (scenario.name.as_str(), &scenario.settings, scenario.expect))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("default", &serde_json::json!({}), Expect::Ready),
+            (
+                "no-jetstream",
+                &serde_json::json!({ "jetstream": false }),
+                Expect::Ready
+            ),
+        ]
+    );
+    Scenarios::validate(&scenarios, package.settings_schema())
+        .unwrap_or_else(|issues| panic!("{issues:#?}"));
+}
+
+// covers: AC-12 (spec 0039)
+#[test]
+fn the_nats_versions_hold_a_passing_native_record_for_revision_1_1_0_with_its_evidence() {
+    let package = validated(&nats_dir());
+    let versions: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("versions.json")
+            .expect("every package has versions.json"),
+    )
+    .expect("versions.json is JSON");
+    let sha = package.key().manifest_sha256().to_string();
+
+    let records: Vec<&serde_json::Value> = versions["artifacts"]
+        .as_array()
+        .expect("versions.json lists artifacts")
+        .iter()
+        .flat_map(|artifact| artifact["compatibility"].as_array().into_iter().flatten())
+        .filter(|record| {
+            record["scope"] == "provider"
+                && record["providerRevision"]["revision"] == "1.1.0"
+                && record["providerRevision"]["manifestSha256"] == sha.as_str()
+        })
+        .collect();
+
+    assert!(!records.is_empty(), "a provider record of 1.1.0 for {sha}");
+    for record in records {
+        assert_eq!(record["result"], "pass", "{record}");
+        assert_eq!(
+            record["checks"],
+            serde_json::json!([
+                "adoption",
+                "client_auth",
+                "honest_readiness",
+                "identity_check",
+                "init",
+                "isolation",
+                "jetstream_mode",
+                "monitoring_conflict",
+                "persistence",
+                "readiness",
+                "start",
+                "stop"
+            ]),
+            "{record}"
+        );
+        assert_eq!(
+            record["knownLimitations"],
+            serde_json::json!(["power_loss_not_covered"]),
+            "{record}"
+        );
+        let evidence = record["evidence"]
+            .as_str()
+            .expect("the record names its evidence");
+        let mut parts = evidence.split('/');
+        let (Some("compatibility"), Some(run), Some(id), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            panic!("evidence is compatibility/<run>/<record>: {evidence}");
+        };
+        let report_path = repo_root()
+            .join("evidence/compatibility")
+            .join(run)
+            .join("report.json");
+        let report: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&report_path)
+                .unwrap_or_else(|err| panic!("{}: {err}", report_path.display())),
+        )
+        .expect("report.json is JSON");
+        assert_eq!(report["kind"], "native", "{evidence}");
+        let source = report["records"]
+            .as_array()
+            .expect("the report lists records")
+            .iter()
+            .find(|entry| entry["id"] == id)
+            .unwrap_or_else(|| panic!("{evidence}: the report holds the record"));
+        assert_eq!(source["status"], "PASS", "{evidence}");
+        let covers = source["covers"].as_array().expect("the record covers IDs");
+        for id in ["REQ-036", "AC-036", "AC-077", "AC-010"] {
+            assert!(
+                covers.iter().any(|cover| cover == id),
+                "{evidence} covers {id}"
+            );
+        }
+    }
+}
+
+// covers: AC-13 (spec 0039)
+#[test]
+fn the_handover_proof_of_the_nats_line_covers_revision_1_1_0() {
+    let package = validated(&nats_dir());
+
+    assert!(
+        is_handover_proven(HANDOVER_PROVEN, package.key()),
+        "{} keeps its process through a planned daemon restart",
+        package.key()
+    );
+}
+
 /// `context` with every TCP and UDP endpoint stripped of its port, the state
 /// of an `Auto` endpoint at initialize.
 fn without_ports(mut context: PlanContext) -> PlanContext {
@@ -1032,6 +1321,7 @@ fn without_ports(mut context: PlanContext) -> PlanContext {
     context
 }
 
+// covers: AC-1 (spec 0039)
 #[test]
 fn nats_initializes_without_ports_and_renders_nats_conf_only_for_the_run() {
     let package = validated(&nats_dir());
