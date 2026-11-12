@@ -59,7 +59,7 @@ Entrypoint loopback, routing lewat file provider dengan namespace per instance, 
   - [x] Evidence, catalog, dan handover: `traefik_compatibility` dengan `compat-record` dan `codegen`, `official/traefik` ke `[[provider]]` dengan `catalog check --update` dan `provider freeze`, test launchd Traefik lalu baris `HANDOVER_PROVEN`; run launchd setelah persetujuan kamu, selain itu `BLOCKED` (spec 0041 AC-10, AC-11, AC-12, AC-14, AC-7; build step 8 sampai 10; after milestone 2b; needs fitur 17, 18, 30, sudah done; file bersama satu sesi pada satu waktu, nomor revision catalog dari lead)
   - [x] Journey dari CLI dan GUI: `apps/daemon/tests/traefik/cli.rs` dan langkah manual di `verify.md` (spec 0041 AC-9, AC-13, AC-14; build step 11 dan 12; after milestone 3; langkah GUI manual)
 - [x] Verify it: `/check verify provider Traefik & routing lokal`
-- [ ] Test it: `/test provider Traefik & routing lokal`
+- [x] Test it: `/test provider Traefik & routing lokal`
 
 ### 42. Provider MySQL · in-progress
 
