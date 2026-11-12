@@ -15,6 +15,8 @@ mod auth;
 mod blocked;
 #[path = "common/mod.rs"]
 mod common;
+#[path = "mysql/compat.rs"]
+mod compat;
 #[path = "supervisor/config_calls.rs"]
 mod config_calls;
 #[path = "mysql/doctor.rs"]
