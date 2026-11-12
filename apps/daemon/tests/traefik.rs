@@ -1,4 +1,5 @@
-//! The Traefik provider through the real daemon (spec 0029, milestone 4): the
+//! The Traefik provider through the real daemon (spec 0029, milestone 4, and
+//! spec 0041): the
 //! managed Traefik 3.7.15 runtime from the runtime cache of `cargo xtask`,
 //! the `official/traefik` package, and real `traefik` processes, one test
 //! root per test. Every test is native: `#[ignore = "native: ..."]`, run with
@@ -16,5 +17,7 @@ mod config_calls;
 mod harness;
 #[path = "traefik/readiness.rs"]
 mod readiness;
+#[path = "traefik/routing.rs"]
+mod routing;
 #[path = "supervisor/support.rs"]
 mod support;
