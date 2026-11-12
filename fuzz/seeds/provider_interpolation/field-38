@@ -1,1 +1,1 @@
-${instance.secrets}/token
+fake.${endpoint.http.port}

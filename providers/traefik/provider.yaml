@@ -56,9 +56,31 @@ timeouts: { readinessSeconds: 30, stopSeconds: 30, reloadSeconds: 30 }
 permissions:
   managedFilesystem: [data, config, logs, temp]
   executeRuntimeBinary: true
+connection:
+  - name: web
+    title: Web URL
+    template: "http://${endpoint.web.address}"
+  - name: ping
+    title: Health URL
+    template: "http://${endpoint.ping.address}/ping"
 openWith:
   - name: routes
     title: Routes File
     kind: reveal
     reveal:
       configFile: routes
+  - name: routers
+    title: Loaded Routers
+    kind: browser
+    browser:
+      url: "http://${endpoint.ping.address}/api/http/routers"
+remedies:
+  - name: routes_not_loaded
+    when:
+      readinessReasons: [routes_mismatch]
+    title: "Traefik hasn’t loaded the routes Stackly wrote"
+    steps:
+      - text: "Open the Logs tab. Traefik logs the router it rejected and why, usually a rule it can’t parse."
+      - text: "Fix the rule in Configuration and apply again, or roll back to the last revision that was ready."
+      - text: "A file you added to this folder also causes this, when it holds a router or Traefik can’t read it. Move that file out of the folder."
+        path: "${instance.config}/dynamic"

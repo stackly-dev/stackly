@@ -805,7 +805,7 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     let ev = evidence!(
         covers = ["REQ-029"],
         kind = Kind::Fixture,
-        expected = "the postgresql, nats, and fake packages validate with their connection block (sentinel render included) and traefik declares none",
+        expected = "the postgresql, nats, fake, and traefik packages validate with their connection block (sentinel render included)",
     );
     let entries = |dir: &Path| -> Vec<(String, String)> {
         validated(dir)
@@ -833,7 +833,10 @@ fn the_repo_packages_declare_their_connection_entries_in_manifest_order() {
     );
     assert_eq!(entries(&fake_dir()), [pair("uri", "Connection string")]);
     assert_eq!(entries(&example_dir()), [pair("config", "Config endpoint")]);
-    assert!(entries(&traefik_dir()).is_empty());
+    assert_eq!(
+        entries(&traefik_dir()),
+        [pair("web", "Web URL"), pair("ping", "Health URL")]
+    );
     ev.pass();
 }
 
@@ -1152,6 +1155,216 @@ fn a_traefik_reload_rewrites_only_routes_and_verifies_readiness() {
         ),
         "the reload plan creates config/dynamic before writing routes"
     );
+}
+
+/// The `provider.yaml` of `providers/traefik` as YAML.
+fn traefik_manifest_yaml() -> serde_yaml_ng::Value {
+    let text = fs::read_to_string(traefik_dir().join("provider.yaml"))
+        .expect("the traefik manifest reads");
+    serde_yaml_ng::from_str(&text).expect("the traefik manifest is YAML")
+}
+
+/// The property names of a settings schema, nested ones included.
+fn setting_names(schema: &serde_json::Value, names: &mut Vec<String>) {
+    if let Some(properties) = schema["properties"].as_object() {
+        for (name, property) in properties {
+            names.push(name.clone());
+            setting_names(property, names);
+            setting_names(&property["items"], names);
+        }
+    }
+}
+
+/// Whether `value` holds a mapping key named `tls` at any depth.
+fn holds_tls_key(value: &serde_yaml_ng::Value) -> bool {
+    match value {
+        serde_yaml_ng::Value::Mapping(map) => map
+            .iter()
+            .any(|(key, value)| key.as_str() == Some("tls") || holds_tls_key(value)),
+        serde_yaml_ng::Value::Sequence(items) => items.iter().any(holds_tls_key),
+        serde_yaml_ng::Value::Tagged(tagged) => holds_tls_key(&tagged.value),
+        _ => false,
+    }
+}
+
+// covers: AC-6, AC-7 (spec 0041)
+#[test]
+fn traefik_renders_the_dashboard_off_and_never_a_tls_key() {
+    let ev = evidence!(
+        covers = ["REQ-039"],
+        kind = Kind::Fixture,
+        expected = "traefik.yaml with default settings holds api.dashboard false and no tls key, routes.yaml for zero, one, and three routes holds no tls key, and the package has no tls capability, no certificate or key setting, and only http backends",
+    );
+    let package = validated(&traefik_dir());
+
+    let context = golden_context(&package, serde_json::json!({}));
+    let run = package
+        .run_plan(&context)
+        .expect("the traefik run plan builds");
+    let renders = rendered(&package, &run.render);
+    let (_, static_config) = renders
+        .iter()
+        .find(|(config, _)| config == "staticConfig")
+        .expect("the run renders staticConfig");
+    let parsed: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(static_config).expect("traefik.yaml is YAML");
+    assert_eq!(
+        parsed["api"]["dashboard"],
+        serde_yaml_ng::Value::Bool(false),
+        "{static_config}"
+    );
+    assert!(!holds_tls_key(&parsed), "{static_config}");
+    for count in [0, 1, 3] {
+        let context = golden_context(&package, traefik_settings(count));
+        let reload = package
+            .reload_plan(&context)
+            .expect("the traefik reload plan builds");
+        for (config, text) in rendered(&package, &reload.steps) {
+            let parsed: serde_yaml_ng::Value =
+                serde_yaml_ng::from_str(&text).expect("a rendered file is YAML");
+            assert!(
+                !holds_tls_key(&parsed),
+                "{config} with {count} routes: {text}"
+            );
+        }
+    }
+
+    assert!(
+        !package
+            .provider_revision()
+            .capabilities()
+            .iter()
+            .any(|capability| format!("{capability:?}").to_lowercase().contains("tls")),
+        "no tls capability"
+    );
+    let schema: serde_json::Value = serde_json::from_slice(
+        package
+            .files()
+            .get("schemas/settings.schema.json")
+            .expect("the package has a settings schema"),
+    )
+    .expect("the settings schema is JSON");
+    let mut names = Vec::new();
+    setting_names(&schema, &mut names);
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "backendUrl",
+            "dynamicDir",
+            "logLevel",
+            "name",
+            "routes",
+            "rule"
+        ]
+    );
+    for name in &names {
+        let lower = name.to_lowercase();
+        for word in ["cert", "key", "tls", "https"] {
+            assert!(!lower.contains(word), "the setting {name} names {word}");
+        }
+    }
+    let backend = &schema["properties"]["routes"]["items"]["properties"]["backendUrl"];
+    let pattern = backend["pattern"]
+        .as_str()
+        .expect("backendUrl has a pattern");
+    assert!(pattern.starts_with("http://("), "{pattern}");
+    ev.pass();
+}
+
+// covers: AC-7 (spec 0041)
+#[test]
+fn traefik_permissions_are_the_managed_folders_and_the_runtime_binary_only() {
+    let ev = evidence!(
+        covers = ["REQ-039"],
+        kind = Kind::Fixture,
+        expected = "the permissions of providers/traefik are exactly managedFilesystem [data, config, logs, temp] and executeRuntimeBinary true",
+    );
+    let manifest = traefik_manifest_yaml();
+
+    let expected: serde_yaml_ng::Value = serde_yaml_ng::from_str(
+        "managedFilesystem: [data, config, logs, temp]\nexecuteRuntimeBinary: true\n",
+    )
+    .expect("the expected permissions are YAML");
+    assert_eq!(manifest["permissions"], expected);
+    assert!(!holds_tls_key(&manifest), "the manifest has no tls key");
+    ev.pass();
+}
+
+// covers: AC-13 (spec 0041)
+#[test]
+fn traefik_remedy_matches_routes_mismatch_only_and_renders_like_the_golden_file() {
+    let ev = evidence!(
+        covers = ["REQ-039"],
+        kind = Kind::Fixture,
+        expected = "the routes_not_loaded remedy of providers/traefik matches readiness routes_mismatch and no other reason or failure, and renders three steps with the dynamic folder as the path of the third",
+    );
+    let package = validated(&traefik_dir());
+    let manifest = package.manifest();
+    let context = golden_context(&package, traefik_settings(1));
+    let names: Vec<_> = manifest.remedies().iter().map(RemedySpec::name).collect();
+    assert_eq!(names, ["routes_not_loaded"]);
+    let first_match = |subject: &RemedySubject<'_>| {
+        manifest
+            .remedies()
+            .iter()
+            .find(|remedy| remedy.matches(subject))
+            .map(RemedySpec::name)
+    };
+
+    assert_eq!(
+        first_match(&RemedySubject::Readiness {
+            reason: "routes_mismatch",
+            detail: Some("router api@file is not loaded"),
+        }),
+        Some("routes_not_loaded")
+    );
+    for reason in ["probe_failed", "timeout", "not_ready"] {
+        assert_eq!(
+            first_match(&RemedySubject::Readiness {
+                reason,
+                detail: Some("routes_mismatch"),
+            }),
+            None,
+            "{reason}"
+        );
+    }
+    for code in [FailureCode::PROCESS_EXITED, FailureCode::ENDPOINT_IN_USE] {
+        assert_eq!(
+            first_match(&RemedySubject::Failure {
+                code: Some(&code),
+                excerpt: &[],
+            }),
+            None
+        );
+    }
+
+    let remedy = render_remedy(manifest, &manifest.remedies()[0], &context)
+        .expect("routes_not_loaded renders");
+    assert_eq!(remedy.steps.len(), 3);
+    assert_eq!(
+        remedy.steps[2].path.as_deref(),
+        Some(
+            context
+                .paths
+                .config
+                .join("dynamic")
+                .to_str()
+                .expect("UTF-8 path")
+        )
+    );
+    let rendered = serde_json::json!([{
+        "name": remedy.name,
+        "title": remedy.title,
+        "steps": remedy.steps.iter().map(|step| serde_json::json!({
+            "text": step.text,
+            "command": step.command,
+            "path": step.path,
+        })).collect::<Vec<_>>(),
+        "pidFile": remedy.pid_file,
+    }]);
+    assert_golden("traefik", "remedies.json", &pretty(&rendered));
+    ev.pass();
 }
 
 fn postgresql_settings() -> serde_json::Value {

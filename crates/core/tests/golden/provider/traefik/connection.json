@@ -1,0 +1,26 @@
+[
+  {
+    "masked": "http://127.0.0.1:14001",
+    "name": "web",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "http://127.0.0.1:14001"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Web URL"
+  },
+  {
+    "masked": "http://127.0.0.1:14000/ping",
+    "name": "ping",
+    "parts": [
+      {
+        "kind": "text",
+        "text": "http://127.0.0.1:14000/ping"
+      }
+    ],
+    "portMayChange": true,
+    "title": "Health URL"
+  }
+]

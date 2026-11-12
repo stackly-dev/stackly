@@ -1,0 +1,10 @@
+# The scenarios cargo xtask provider test runs for this package (spec 0036,
+# *File skenario*, spec 0041). A rule Traefik rejects and a value the schema
+# refuses are proven by the native tests of spec 0041 AC-3 and AC-4, not here.
+schema: stackly.provider-scenarios/v1
+scenarios:
+  - name: default
+  - name: one-route
+    settings:
+      routes:
+        - { name: app, rule: "Host(`app.localhost`)", backendUrl: "http://127.0.0.1:9" }
