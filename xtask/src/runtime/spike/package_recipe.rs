@@ -670,12 +670,12 @@ mod tests {
 
     // covers: AC-16 (spec 0036)
     #[test]
-    fn the_three_packaged_providers_are_found_by_their_software() {
-        for provider in ["nats", "postgresql", "traefik"] {
+    fn the_packaged_providers_are_found_by_their_software() {
+        for provider in ["clickhouse", "nats", "postgresql", "traefik"] {
             let dir = find_package(&repo(), provider).unwrap().unwrap();
             assert_eq!(dir.file_name().unwrap().to_string_lossy(), provider);
         }
-        for provider in ["mysql", "clickhouse", "valkey", "redis"] {
+        for provider in ["mysql", "valkey", "redis"] {
             assert_eq!(find_package(&repo(), provider).unwrap(), None, "{provider}");
         }
     }
@@ -747,6 +747,63 @@ mod tests {
         for key in CLEAN_ENV_KEYS {
             assert!(env.contains(&key.to_owned()), "{env:?}");
         }
+    }
+
+    // covers: AC-15 (spec 0043)
+    #[test]
+    fn clickhouse_starts_from_its_package_with_the_users_file_and_reads_its_version_line() {
+        let root = stackly_testkit::TestRoot::new().unwrap();
+        let recipe = load("clickhouse");
+        let socket = SocketDir::new();
+        let mut ctx = ctx(
+            root.path(),
+            &root.path().join("art"),
+            "26.8.30.8",
+            "26.8",
+            &socket,
+        );
+        ctx.ports = ports::allocate(recipe.ip_endpoints()).unwrap();
+
+        let command = recipe.start(&mut ctx).unwrap();
+
+        assert_eq!(recipe.ip_endpoints(), 2);
+        assert_eq!(
+            command.get_program(),
+            root.path().join("art/clickhouse").as_os_str()
+        );
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "server");
+        let config = args[1].strip_prefix("--config-file=").unwrap();
+        let config = fs::read_to_string(config).unwrap();
+        for port in &ctx.ports {
+            assert!(config.contains(&port.to_string()), "{config}");
+        }
+        assert_eq!(args[2], "--");
+        let users = args[3]
+            .strip_prefix("--user_directories.users_xml.path=")
+            .unwrap();
+        assert!(users.ends_with("/secrets/users.xml"), "{users}");
+        let text = fs::read_to_string(users).unwrap();
+        let password = &recipe.secrets["defaultPassword"];
+        assert!(password.starts_with(FIXTURE_CREDENTIAL_PREFIX));
+        assert!(!text.contains(password.as_str()), "{text}");
+        assert!(text.contains("<password_sha256_hex>"), "{text}");
+        let watchdog = command
+            .get_envs()
+            .find(|(key, _)| *key == "CLICKHOUSE_WATCHDOG_ENABLE")
+            .and_then(|(_, value)| value);
+        assert_eq!(watchdog, Some(std::ffi::OsStr::new("0")));
+        assert_eq!(recipe.version_args(), ["server", "--version"]);
+        assert_eq!(
+            recipe
+                .normalize("ClickHouse server version 26.8.30.8 (official build).\n")
+                .as_deref(),
+            Some("26.8.30.8")
+        );
+        assert_eq!(recipe.normalize("26.8.30.8\n"), None);
     }
 
     // covers: AC-16 (spec 0036)
