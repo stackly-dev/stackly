@@ -1,0 +1,143 @@
+{
+  "capabilities": [
+    {
+      "capability": "multi_instance",
+      "supported": true
+    },
+    {
+      "capability": "persistence",
+      "supported": true
+    },
+    {
+      "capability": "reload",
+      "supported": true
+    },
+    {
+      "capability": "metrics",
+      "supported": false
+    },
+    {
+      "capability": "tls",
+      "supported": false
+    },
+    {
+      "capability": "cold_backup",
+      "supported": true
+    },
+    {
+      "capability": "online_backup",
+      "supported": false
+    },
+    {
+      "capability": "logical_backup",
+      "supported": false
+    }
+  ],
+  "dataLocation": "/Users/dev/Library/Application Support/Stackly",
+  "dataPath": "instances/<new instance id>/data",
+  "endpoints": [
+    {
+      "defaultPort": 8123,
+      "host": "127.0.0.1",
+      "name": "http",
+      "purpose": "client",
+      "socketName": null,
+      "transport": "tcp"
+    },
+    {
+      "defaultPort": 9000,
+      "host": "127.0.0.1",
+      "name": "native",
+      "purpose": "client",
+      "socketName": null,
+      "transport": "tcp"
+    }
+  ],
+  "fields": [
+    {
+      "apply": "reload",
+      "choices": [],
+      "default": null,
+      "description": "Password of the default user. ClickHouse only ever stores its SHA-256 hash.",
+      "itemKey": null,
+      "items": [],
+      "key": "defaultPassword",
+      "kind": "text",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": 128,
+      "maximum": null,
+      "minItems": null,
+      "minLength": 8,
+      "minimum": null,
+      "printableOnly": true,
+      "required": true,
+      "secret": true,
+      "title": "Default user password",
+      "visibility": "basic"
+    },
+    {
+      "apply": "reload",
+      "choices": [
+        "error",
+        "warning",
+        "information",
+        "debug",
+        "trace"
+      ],
+      "default": {
+        "content": "information",
+        "type": "text"
+      },
+      "description": "How much the server writes to the instance log.",
+      "itemKey": null,
+      "items": [],
+      "key": "logLevel",
+      "kind": "choice",
+      "managed": false,
+      "maxItems": null,
+      "maxLength": null,
+      "maximum": null,
+      "minItems": null,
+      "minLength": null,
+      "minimum": null,
+      "printableOnly": false,
+      "required": false,
+      "secret": false,
+      "title": "Log level",
+      "visibility": "basic"
+    }
+  ],
+  "logsLocation": "/Users/dev/Library/Logs/Stackly",
+  "provider": {
+    "category": "analytics",
+    "displayName": "ClickHouse",
+    "manifestSha256": "cce548ff278eb07133243345b0cae701b717db6f30f00f0be59a9c9231e0dc9f",
+    "name": "official/clickhouse",
+    "revision": "1.0.0",
+    "source": "bundled_catalog"
+  },
+  "runtime": {
+    "artifactSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "dependentRuntimes": [],
+    "displayName": "ClickHouse",
+    "id": "0192f3a6-0000-7000-8000-0000000000a1",
+    "installMode": "managed",
+    "installedAt": "2026-01-01T00:00:00.000Z",
+    "lastVerifiedAt": null,
+    "line": "26.8",
+    "revision": 1,
+    "software": "clickhouse",
+    "state": "installed",
+    "support": "unverified",
+    "supportReason": "untested",
+    "target": {
+      "arch": "aarch64",
+      "os": "macos"
+    },
+    "usedBy": [],
+    "version": "26.8.30.8"
+  },
+  "startupDefault": "manual",
+  "suggestedName": "clickhouse-26-8"
+}
