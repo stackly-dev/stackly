@@ -40,8 +40,9 @@
 | `chk-f43-full` | checker (verify penuh) | F43 konformitas dan milestone 3, AC-1 sampai AC-17 | `07-stack-enam-service.md` | `docs/specs/0043-provider-clickhouse/verify.md` | `claude/arc-f41-spec-ec76d9` | `fable-5-2 · high` | merged `20cc8513`; PASS, AC-1 sampai AC-17 met |
 | `tst-f40-test` | tester | F40 `Test it` | `07-stack-enam-service.md` | test Valkey, filter, dan `valkeyConf`; evidence | `claude/arc-f43-spec-0060e9` | `opus-5-5 · high` | merged `396c9486` |
 | `tst-f43-test` | tester | F43 `Test it` | `07-stack-enam-service.md` | test ClickHouse dan `xml`, evidence `evidence/connection/01a1ceb5-…` | `claude/arc-f41-spec-ec76d9` | `opus-5-5 · high` | merged `85cf9e1f` (tip `d6a6f52c`; konflik `provider_rules.rs` dengan `main` diselesaikan pemilik) |
-| `arc-update-07` | architect (update) | selaraskan teks spec 0039 sampai 0043 dengan hasil verify (tanpa perubahan perilaku, paket, atau kode) | `07-stack-enam-service.md` | `docs/specs/00{39,40,41,42,43}-*/{index,rationale}.md` | `claude/arc-f40-spec-d71756` | `fable-5-2 · high` | merged `c009232a`; lima commit `docs(spec)` |
+| `arc-update-07` | architect (update) | selaraskan teks spec 0039 sampai 0043 dengan hasil verify (tanpa perubahan perilaku, paket, atau kode) | `07-stack-enam-service.md` | `docs/specs/00{39,40,41,42,43}-*/{index,rationale}.md` | `claude/arc-f40-spec-d71756` | `fable-5-2 · high` | merged `c009232a` dan `555a7664` (listing template dan temuan verify penuh spec 0042, Follow-up spec 0043) |
 | `chk-f42-full` | checker (verify penuh) | F42 seluruh fitur, AC-1 sampai AC-18 | `07-stack-enam-service.md` | `docs/specs/0042-provider-mysql/verify.md` | `claude/arc-f43-spec-0060e9` | `fable-5-2 · high` | merged `7cf2916a`; PASS, AC-17 `BLOCKED` |
+| `tst-f42-test` | tester | F42 `Test it` | `07-stack-enam-service.md` | test MySQL, `mysqlCnf`, test start supervisor; evidence | `claude/arc-f43-spec-0060e9` | `opus-5-5 · high` | dipakai ulang, aktif |
 
 ## Keputusan
 
