@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce97-b10b-7607-a06f-21ccf4a98eb4",
+  "covers": [
+    "AC-067",
+    "REQ-038"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0040 AC-19 valkey_9_1_survives_planned_restart_and_sigkill in the launchd gui domain",
+    "file": null,
+    "line": null
+  },
+  "status": "BLOCKED",
+  "expected": "cargo test -p stacklyd --test native_launchd valkey_9_1_survives_planned_restart_and_sigkill -- --ignored, run in the launchd gui domain with the Valkey 9.1.2 artifact in the xtask runtime cache, keeps the pid and startedAt of a running Valkey instance through stackly daemon restart and a SIGKILL of stacklyd, so HandoverProof official/valkey line 1 spec-0040-ac-19 can be added to HANDOVER_PROVEN",
+  "actual": null,
+  "reason": "the test runs stacklyd as a LaunchAgent in the launchd gui domain of the user's login session and ends that session with launchctl kickstart -k and bootout; the scope 07 rules leave launchd runs to the user, so this tester session (tst-f40-test) did not run it. The parts that need no launchd job are covered: official_valkey_has_no_handover_proof_before_its_launchd_record_passes (crates/core/tests/provider_packages.rs) and a_restart_preview_stops_and_restores_a_valkey_instance_while_its_handover_is_unproven (apps/daemon/tests/native_launchd.rs, cached artifact only)",
+  "owner": "@ojiepermana",
+  "subjects": [],
+  "steps": [
+    "on this Mac, logged in to the GUI session, with the Valkey 9.1.2 artifact valkey-9.1.2-r2-macos-aarch64 in the xtask runtime cache",
+    "from a clean HEAD run `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored valkey_9_1_survives_planned_restart_and_sigkill`",
+    "expect the test to pass with the same valkey-server pid and startedAt through `stackly daemon restart` and a SIGKILL of stacklyd",
+    "on PASS, add HandoverProof::new(\"official/valkey\", \"1\", \"spec-0040-ac-19\") to HANDOVER_PROVEN and flip official_valkey_has_no_handover_proof_before_its_launchd_record_passes"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-11-12T07:10:10.186805Z",
+  "finishedAt": "2026-11-12T07:10:21.710003Z",
+  "evidencePath": "evidence/manual/2026-11-12-spec-0040-ac-19-valkey-9-1-survives-planned-rest.json",
+  "context": {
+    "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

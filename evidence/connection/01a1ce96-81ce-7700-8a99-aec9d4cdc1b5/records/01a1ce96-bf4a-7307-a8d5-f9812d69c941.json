@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce96-bf4a-7307-a8d5-f9812d69c941",
+  "covers": [
+    "REQ-038"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "valkey",
+    "name": "auth::valkey_9_1_answers_hello_to_the_readiness_user_without_an_acl_check",
+    "file": "apps/daemon/tests/valkey/auth.rs",
+    "line": 296
+  },
+  "status": "PASS",
+  "expected": "signed in as stackly-readiness, HELLO without arguments answers the RESP2 server map with server valkey and the version, because Valkey skips the ACL check for no-auth commands; GET is still NOPERM and PING is PONG",
+  "actual": "Valkey 9.1.2: HELLO answered the readiness user with server valkey and version 9.1.2; GET was NOPERM",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "valkey",
+      "version": "9.1.2",
+      "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:09:08.298349Z",
+  "finishedAt": "2026-11-12T07:09:12.545439Z",
+  "evidencePath": "output.log"
+}

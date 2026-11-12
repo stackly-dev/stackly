@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ce96-bf4a-7307-a8d5-f98238e207cf",
+  "covers": [
+    "REQ-038",
+    "AC-038"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "valkey",
+    "name": "persistence::valkey_9_1_volatile_loads_a_dump_rdb_the_user_saved_until_it_is_deleted",
+    "file": "apps/daemon/tests/valkey/persistence.rs",
+    "line": 356
+  },
+  "status": "PASS",
+  "expected": "in mode volatile a SAVE the user runs writes dump.rdb in the data folder, the next start loads the saved key and still runs with save empty and appendonly no, and after dump.rdb is deleted while the instance is stopped the next start is empty",
+  "actual": "Valkey 9.1.2 volatile: SAVE wrote dump.rdb, the next start loaded it, and it was empty again after the file was deleted",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "valkey",
+      "version": "9.1.2",
+      "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:09:08.298352Z",
+  "finishedAt": "2026-11-12T07:09:14.569886Z",
+  "evidencePath": "output.log"
+}
