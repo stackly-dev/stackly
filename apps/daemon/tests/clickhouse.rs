@@ -9,6 +9,8 @@
 //! the cache ends a test as `BLOCKED`, never as a download.
 #![cfg(target_os = "macos")]
 
+#[path = "clickhouse/binary.rs"]
+mod binary;
 #[path = "common/mod.rs"]
 mod common;
 #[path = "clickhouse/compatibility.rs"]

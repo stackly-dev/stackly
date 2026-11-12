@@ -47,6 +47,7 @@ fn events(site: &Site, made: &Made, native: u16) -> String {
     )
 }
 
+// covers: AC-8, AC-4 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn two_clickhouse_instances_keep_their_own_events_table() {
@@ -116,6 +117,43 @@ async fn two_clickhouse_instances_keep_their_own_events_table() {
         );
         ports.extend([http, native]);
     }
+    for (owner, other, summary) in [(&a, &b, &after_b), (&b, &a, &after_a)] {
+        assert!(
+            !site
+                .sql(
+                    port_of(summary, "native"),
+                    "default",
+                    Some(&owner.password),
+                    "SELECT 1"
+                )
+                .ok(),
+            "after both restarts the password of {} does not open {}",
+            owner.id,
+            other.id
+        );
+    }
+    site.exec(
+        port_of(&after_b, "native"),
+        "default",
+        Some(&b.password),
+        "INSERT INTO default.events VALUES (3, 'gamma')",
+    );
+    assert_eq!(
+        events(&site, &a, port_of(&after_a, "native")),
+        "1\talpha",
+        "a row written to b after both restarts stays in b"
+    );
+    site.exec(
+        port_of(&after_a, "native"),
+        "default",
+        Some(&a.password),
+        "INSERT INTO default.events VALUES (4, 'delta')",
+    );
+    assert_eq!(
+        events(&site, &b, port_of(&after_b, "native")),
+        "2\tbeta\n3\tgamma",
+        "a row written to a after both restarts stays in a"
+    );
     let mut unique = ports.clone();
     unique.sort_unstable();
     unique.dedup();
@@ -140,11 +178,14 @@ async fn two_clickhouse_instances_keep_their_own_events_table() {
         "the second instance keeps its process"
     );
     assert_eq!(still.readiness.state, InstanceReadinessState::Ready);
-    assert_eq!(events(&site, &b, port_of(&still, "native")), "2\tbeta");
+    assert_eq!(
+        events(&site, &b, port_of(&still, "native")),
+        "2\tbeta\n3\tgamma"
+    );
     assert_two_listeners(pid_b, port_of(&still, "http"), port_of(&still, "native"));
 
     stop_and_shutdown(&api, daemon, b.id).await;
     ev.pass_with(&format!(
-        "a read only (1, alpha) and b only (2, beta) after both restarts, on ports {ports:?}; b kept PID {pid_b} when a stopped"
+        "a read only (1, alpha) and b only (2, beta) after both restarts, neither password opened the other, later rows stayed in their own instance, on ports {ports:?}; b kept PID {pid_b} when a stopped"
     ));
 }

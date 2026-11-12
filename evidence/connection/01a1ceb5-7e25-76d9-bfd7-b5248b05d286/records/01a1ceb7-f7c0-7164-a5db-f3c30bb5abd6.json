@@ -1,0 +1,36 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ceb7-f7c0-7164-a5db-f3c30bb5abd6",
+  "covers": [
+    "REQ-037",
+    "AC-037"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "clickhouse",
+    "name": "isolation::two_clickhouse_instances_keep_their_own_events_table",
+    "file": "apps/daemon/tests/clickhouse/isolation.rs",
+    "line": 54
+  },
+  "status": "PASS",
+  "expected": "two ClickHouse 26.8.30.8 instances of one runtime each create default.events and insert their own row, are restarted one after the other, and then each reads only its own row on its own two loopback ports, both listening on exactly their registry ports at the same time; stopping the first leaves the second running with the same PID and row",
+  "actual": "a read only (1, alpha) and b only (2, beta) after both restarts, neither password opened the other, later rows stayed in their own instance, on ports [50113, 50114, 50120, 50121]; b kept PID 94309 when a stopped",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "clickhouse",
+      "version": "26.8.30.8",
+      "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:45:25.440257Z",
+  "finishedAt": "2026-11-12T07:45:53.941275Z",
+  "evidencePath": "output.log"
+}

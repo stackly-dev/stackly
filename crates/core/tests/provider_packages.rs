@@ -3872,7 +3872,7 @@ fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
     let ev = evidence!(
         covers = ["AC-074"],
         kind = Kind::Fixture,
-        expected = "the clickhouse manifest and versions.json name only macos-aarch64, and a Windows host with a test catalog holding macos and linux artifacts gets no_build_for_host and no native support",
+        expected = "the clickhouse manifest and versions.json name only macos-aarch64, and a windows-aarch64 or windows-x86_64 host with a test catalog holding macos and linux artifacts gets no_build_for_host and no native support",
     );
     let repo = validated(&clickhouse_dir());
     let platforms =
@@ -3920,32 +3920,110 @@ fn a_windows_host_never_installs_clickhouse_even_with_a_linux_artifact() {
         notes: Vec::new(),
         origin: EntryOrigin::Catalog,
     };
-    let windows = HostFacts::new(
-        "windows-aarch64".parse().expect("a target"),
-        OsVersion::major_minor(11, 0),
-        None,
+    for target in ["windows-aarch64", "windows-x86_64"] {
+        let windows = HostFacts::new(
+            target.parse().expect("a target"),
+            OsVersion::major_minor(11, 0),
+            None,
+        );
+
+        let decision = provider_installability(
+            &entry,
+            &"26.8.30.8".parse().expect("a version"),
+            &windows,
+            &TrustVerdict::Trusted,
+        )
+        .expect("the version is in the entry");
+
+        let Installability::NotInstallable {
+            reason,
+            available_targets,
+        } = decision
+        else {
+            panic!("a {target} host never installs clickhouse: {decision:?}");
+        };
+        assert_eq!(reason, NotInstallableReason::NoBuildForHost, "{target}");
+        assert!(
+            !native_support(&available_targets, windows.target),
+            "{target}: {available_targets:?}"
+        );
+    }
+    ev.pass();
+}
+
+/// The lines of the `[[provider]]` block of `id` in `catalog`, up to the
+/// next `[[provider]]` or `[[planned]]` header.
+fn catalog_block<'a>(catalog: &'a str, id: &str) -> Vec<&'a str> {
+    let wanted = format!("id = \"{id}\"");
+    let mut lines = catalog.lines().map(str::trim);
+    let mut header = "";
+    for line in lines.by_ref() {
+        if line.starts_with("[[") {
+            header = line;
+        } else if line == wanted && header == "[[provider]]" {
+            break;
+        }
+    }
+    lines
+        .take_while(|line| *line != "[[provider]]" && *line != "[[planned]]")
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect()
+}
+
+// covers: AC-13 (spec 0043)
+#[test]
+fn clickhouse_gives_windows_and_wsl_no_native_label_and_never_calls_wsl_or_a_container() {
+    let ev = evidence!(
+        covers = ["AC-074"],
+        kind = Kind::Fixture,
+        expected = "the official/clickhouse catalog entry has exactly a linux planned and a windows unsupported platform note, the windows note names WSL as something Stackly never installs or uses, no note is supported, and the manifest, schema, and templates of the package name no WSL, container, Docker, or Podman",
     );
+    let catalog =
+        fs::read_to_string(repo_root().join("providers/catalog.toml")).expect("the catalog reads");
+    let block = catalog_block(&catalog, "official/clickhouse");
+    assert!(!block.is_empty(), "official/clickhouse is a [[provider]]");
 
-    let decision = provider_installability(
-        &entry,
-        &"26.8.30.8".parse().expect("a version"),
-        &windows,
-        &TrustVerdict::Trusted,
-    )
-    .expect("the version is in the entry");
-
-    let Installability::NotInstallable {
-        reason,
-        available_targets,
-    } = decision
-    else {
-        panic!("a Windows host never installs clickhouse: {decision:?}");
-    };
-    assert_eq!(reason, NotInstallableReason::NoBuildForHost);
+    let mut notes: Vec<(String, String, String)> = Vec::new();
+    for line in &block {
+        if *line == "[[provider.platform_note]]" {
+            notes.push(Default::default());
+            continue;
+        }
+        let Some(note) = notes.last_mut() else {
+            continue;
+        };
+        let (key, value) = line.split_once('=').expect("a key and a value");
+        let value = value.trim().trim_matches('"').to_owned();
+        match key.trim() {
+            "os" => note.0 = value,
+            "status" => note.1 = value,
+            "note" => note.2 = value,
+            other => panic!("unknown platform note key {other}"),
+        }
+    }
+    let shape: Vec<(&str, &str)> = notes
+        .iter()
+        .map(|(os, status, _)| (os.as_str(), status.as_str()))
+        .collect();
+    assert_eq!(shape, [("linux", "planned"), ("windows", "unsupported")]);
+    let windows = &notes[1].2;
+    assert!(windows.contains("WSL"), "{windows}");
+    assert!(windows.contains("never installs or uses"), "{windows}");
     assert!(
-        !native_support(&available_targets, windows.target),
-        "{available_targets:?}"
+        notes.iter().all(|(_, status, _)| status != "supported"),
+        "no platform note gives a native label: {notes:?}"
     );
+
+    let package = validated(&clickhouse_dir());
+    for (path, bytes) in package.files().iter() {
+        if path == "versions.json" {
+            continue;
+        }
+        let text = String::from_utf8_lossy(bytes).to_lowercase();
+        for word in ["wsl", "container", "docker", "podman"] {
+            assert!(!text.contains(word), "{path} names {word}");
+        }
+    }
     ev.pass();
 }
 

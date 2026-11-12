@@ -21,6 +21,7 @@ use crate::harness::{
     stop_and_shutdown, wait_log,
 };
 
+// covers: AC-10 (spec 0043)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed ClickHouse 26.8.30.8 artifact in the runtime cache"]
 async fn clickhouse_reload_changes_the_log_level_and_the_password() {

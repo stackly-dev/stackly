@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ceb8-671b-7075-b336-2b6cfcfc27e5",
+  "covers": [
+    "REQ-037"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "clickhouse",
+    "name": "security::the_managed_users_stop_commands_without_a_table_leave_merges_running",
+    "file": "apps/daemon/tests/clickhouse/security.rs",
+    "line": 368
+  },
+  "status": "PASS",
+  "expected": "SYSTEM STOP MERGES, STOP MOVES, STOP TTL MERGES, and STOP FETCHES with no table name exit 0 for stackly_readiness and stackly_reload but stop nothing: OPTIMIZE TABLE default.parts FINAL as default still merges the parts to one, while the same commands naming default.parts are refused for both users, and the default user's own SYSTEM STOP MERGES default.parts does keep the parts apart",
+  "actual": "the four SYSTEM STOP commands without a table exited 0 for both managed users and OPTIMIZE FINAL still merged to one part; the named forms exited [Some(241), Some(241), Some(241), Some(241), Some(241), Some(241), Some(241), Some(241)]",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "clickhouse",
+      "version": "26.8.30.8",
+      "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:45:53.947154Z",
+  "finishedAt": "2026-11-12T07:46:20.655148Z",
+  "evidencePath": "output.log"
+}
