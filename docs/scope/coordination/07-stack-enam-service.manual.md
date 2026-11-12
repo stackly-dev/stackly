@@ -23,7 +23,7 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 ## Fitur 43 · Provider ClickHouse (spec 0043)
 
 1. Run spike native dari paket: `clickhouse_runs_from_managed_artifact` di `xtask/tests/native_runtime.rs` lewat wrapper native di tree bersih (bisa mengunduh, butuh sesi login GUI).
-2. Fuzz 10 menit sesudah format `xml` dan filter `sha256Hex` masuk: `cargo xtask fuzz run provider_template --time 600`. Harapan: tanpa crash.
+2. Fuzz 10 menit: sudah dijalankan checker `chk-f43-full` pada 2026-11-12 (99.390 run, 601 s, tanpa crash); tidak perlu diulang.
 3. Sesi GUI: buat instance ClickHouse dari form, start, salin connection, buka Play UI, buka `clickhouse client` di Terminal dan tempel password (membuktikan `--ask-password`), lalu stop. Catatan: open action `client` membaca `~/.clickhouse-client/config.xml` milik user; bila `--ask-password` tampak gagal, periksa file itu dulu.
 4. Di app, sesudah catalog revision 15: ClickHouse tampil sebagai provider dengan catatan Windows tidak didukung (menyebut WSL); buat instance dari Catalog dan start (AC-13, AC-16).
 
