@@ -575,7 +575,7 @@ Tidak ada method IPC, command CLI, atau DTO baru. Permukaannya adalah paket dan 
 
 Spec ini tidak mengubah spec lain. Lead atau pemilik spec menerapkan butir ini:
 
-- **Spec 0009**, tabel *Perluasan additive*: baris "Format template `valkeyConf` | 0040 | fitur 40 langkah 1 | 0040 AC-2" dan baris "Filter template `sha256Hex` dan `Segment::SecretHash` | 0040, 0043 | fitur 40 langkah 2 atau fitur 43, yang masuk lebih dulu | 0040 AC-3". Tabel escaper *Template config* mendapat baris `valkeyConf`, dan grammar template mendapat `{{ secret.<field> | sha256Hex }}`. Baris Follow-up "Format config `valkeyConf`" dicentang untuk bagian Valkey.
+- **Spec 0009**, tabel *Perluasan additive*: baris "Format template `valkeyConf` | 0040 | fitur 40 langkah 1 | 0040 AC-2" dan baris "Filter template `sha256Hex` dan `Segment::SecretHash` | 0040, 0043 | fitur 40 langkah 2 | 0040 AC-3, 0043 AC-2". Tabel escaper *Template config* mendapat baris `valkeyConf`, dan grammar template mendapat `{{ secret.<field> | sha256Hex }}`. Baris Follow-up "Format config `valkeyConf`" dicentang untuk bagian Valkey.
 - **Spec 0011**, Consequences: kalimat "Config plaintext tetap ada untuk Valkey dan NATS" menjadi hanya NATS; Valkey memakai mekanisme 2. Kalimat mekanisme 2 menyebut Valkey di samping ClickHouse.
 - **Spec 0003**: baris Follow-up "Fitur 40, 42, dan 43" dicentang untuk bagian Valkey, dan catatan di bawah tabel *Langkah spike per provider* menyebut baris Valkey tidak dipakai lagi.
 - **Spec 0030**: baris Follow-up "Fitur 36 sampai 43" mendapat catatan bagian Valkey (AC-19).
