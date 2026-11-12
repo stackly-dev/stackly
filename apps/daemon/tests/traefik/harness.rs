@@ -46,7 +46,7 @@ use crate::support::{Api, PATIENCE, fast};
 pub const OWNER: &str = "@ojiepermana";
 /// The provider of the package.
 pub const PROVIDER: &str = "official/traefik";
-/// The artifact of `providers/nats/versions.json` the tests install.
+/// The artifact of `providers/traefik/versions.json` the tests install.
 pub const ARTIFACT: &str = "traefik-3.7.15-macos-aarch64";
 /// The name of the data root.
 pub const ROOT_NAME: &str = "Test Root";
@@ -234,7 +234,8 @@ impl Site {
     }
 
     /// Notes the running server as the subject of `evidence`, with the
-    /// version `GET /varz` reported.
+    /// version `GET /api/version` on its `ping` port reported (see
+    /// [`server_version`]); never a literal from the test.
     pub fn subject(&self, evidence: &Evidence, server_version: &str) {
         evidence.subject(
             "traefik",
@@ -484,6 +485,26 @@ pub fn get_path(port: u16, host: &str, path: &str) -> (String, String) {
         head.lines().next().unwrap_or_default().to_owned(),
         body.to_owned(),
     )
+}
+
+/// `GET <path>` of the read only Traefik API on the `ping` port, as JSON.
+/// The answer must be 200.
+#[must_use]
+pub fn api_json(ping_port: u16, path: &str) -> Value {
+    let (status, body) = get_path(ping_port, "127.0.0.1", path);
+    assert_eq!(status_code(&status), 200, "GET {path}: {status} {body}");
+    serde_json::from_str(&body).unwrap_or_else(|error| panic!("GET {path} is not JSON: {error}"))
+}
+
+/// The `Version` field of `GET /api/version` on the `ping` port: the
+/// version of the running Traefik process, for the evidence subject.
+#[must_use]
+pub fn server_version(ping_port: u16) -> String {
+    let version = api_json(ping_port, "/api/version");
+    version["Version"]
+        .as_str()
+        .unwrap_or_else(|| panic!("/api/version has a Version: {version}"))
+        .to_owned()
 }
 
 /// The status code of a status line such as `HTTP/1.1 200 OK`, or 0.

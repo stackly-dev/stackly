@@ -20,7 +20,7 @@ use stackly_testkit::evidence::{Kind, evidence};
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
     Serve, Site, alive, apply_until_end, backend, create_with, eventually, get, port_of, route,
-    status_code, stop_instance,
+    server_version, status_code, stop_instance,
 };
 
 /// How many applies in a row the test runs (spec 0041 AC-8).
@@ -52,7 +52,7 @@ async fn ten_applies_in_a_row_never_drop_the_route_that_stays() {
 
     let id = create_with(&site, &api, "edge-watch", routes(0)).await;
     let running = api.start_ready(id).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
     let pid = pid_of(&running);
     let web = port_of(&running, "web");
     assert_eq!(get(web, "steady.localhost").1, "stays");
@@ -133,7 +133,7 @@ async fn a_router_in_a_file_the_user_added_makes_the_instance_not_ready_until_it
     )
     .await;
     let running = api.start_ready(id).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
     let pid = pid_of(&running);
     let dynamic = site.instance_paths(id).config.join("dynamic");
     let foreign = dynamic.join("mine.yaml");
