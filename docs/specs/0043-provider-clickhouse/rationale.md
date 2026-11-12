@@ -192,6 +192,8 @@ Yang tidak dicoba: `--ask-password` (butuh terminal interaktif; langkah manual 3
 
 2026-11-12, sesi `arc-f40-spec` (Valkey) mengusulkan kontrak filter hash bersama, karena Valkey menerima password ACL ber hash SHA-256. Bentuk yang disepakati dan ditulis sama di kedua spec: sintaks `{{ secret.<field> | sha256Hex }}`, hanya di config `sensitive`, keluaran 64 hex mentah, segmen plan `Segment::SecretHash`, tanpa kontrak wire. Fitur yang masuk lebih dulu membangunnya.
 
+Sesudah cross check kedua spec, dua hal disamakan lagi: kode issue (`secret_not_allowed_here` untuk config tidak `sensitive`, `template_type` untuk salah pakai filter, `template_syntax` untuk nama filter kosong atau ber karakter lain), dan bentuk JSON segmen `secretHash` di plan, supaya golden dan corpus beku kedua fitur sama byte demi byte. Dua kalimat terakhir AC-2 ditambahkan sesudah lead menerima spec, atas usul `arc-f40-spec`, dan dilaporkan ke lead.
+
 ## Cross check
 
 Dijalankan 2026-11-12 oleh model lain (read only, membaca spec ini dan kode validasi). Yang ia benarkan terhadap kode: token dan executable di probe dan open action, `env` start, `${instance.secrets}` dan `--` di argv, secret ber kelas `reload`, config `sensitive` di `reload.render`, health dengan jenis probe lain, manifest tanpa `logs` dan tanpa `dataMarker`, dan perbandingan versi empat komponen.
