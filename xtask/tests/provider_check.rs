@@ -80,6 +80,7 @@ fn the_repo_packages_pass_with_one_ok_line_each() {
     assert_eq!(
         ids,
         [
+            "official/clickhouse",
             "testing/example",
             "testing/fake",
             "official/nats",
