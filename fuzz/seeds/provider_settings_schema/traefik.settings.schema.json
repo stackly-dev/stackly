@@ -47,7 +47,7 @@
             "title": "Backend URL",
             "description": "A loopback HTTP URL, such as http://127.0.0.1:3000.",
             "maxLength": 2048,
-            "pattern": "http://(127\\.0\\.0\\.1|\\[::1\\]|localhost):[0-9]{1,5}(/[^\\s]*)?"
+            "pattern": "http://(127\\.0\\.0\\.1|\\[::1\\]|localhost):[0-9]{1,5}/?"
           }
         },
         "required": ["name", "rule", "backendUrl"]

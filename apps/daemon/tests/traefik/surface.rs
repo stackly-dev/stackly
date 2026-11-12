@@ -1,7 +1,8 @@
 //! What a real Traefik 3.7.15 instance serves (spec 0041, step 5): `/ping`
 //! and the read only API only on the loopback monitoring port, the
 //! dashboard nowhere, only your routes on `web`, two loopback listeners at
-//! the registry ports and no other, and no `tls` key in a rendered file. The
+//! the registry ports and no other, and no TLS configuration in a rendered
+//! file (the AC-7 rule, read on the parsed key paths). The
 //! test is native, `#[ignore = "native: ..."]`, and ends as `BLOCKED` when
 //! the artifact is not in the runtime cache.
 
@@ -15,7 +16,7 @@ use uuid::Uuid;
 use crate::config_calls::{Cfg, pid_of, settings_with};
 use crate::harness::{
     Serve, Site, alive, apply_until_end, backend, create_instance, get_path, port_of, route,
-    status_code, stop_instance,
+    server_version, status_code, stop_instance,
 };
 
 /// The status code of `GET <path>` on `port` with `host`.
@@ -32,30 +33,108 @@ fn tcp_of(pid: u32) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// Whether a line of the YAML `text` is a `tls` key, at any indent. The
-/// rendered files hold no flow mappings with keys, so a key is always the
-/// start of a line.
-fn holds_tls_key(text: &str) -> bool {
-    text.lines().any(|line| {
-        let key = line.trim_start().trim_start_matches("- ");
-        key.starts_with("tls:") || key.starts_with("\"tls\":") || key == "tls"
+/// The key path of every mapping key in the block YAML `text`, such as
+/// `["http", "routers", "api", "rule"]`. The rendered files are block YAML
+/// with no flow mappings, so indentation alone gives the tree; a list item
+/// (`- `) opens a level of its own, and quotes around a key are dropped.
+/// `stacklyd` has no YAML parser among its dependencies, and this is the
+/// same parse for the two rendered files only.
+fn key_paths(text: &str) -> Vec<Vec<String>> {
+    let mut stack: Vec<(usize, String)> = Vec::new();
+    let mut paths = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut indent = line.len() - trimmed.len();
+        let mut rest = trimmed;
+        while let Some(item) = rest.strip_prefix("- ") {
+            indent += 2;
+            rest = item;
+        }
+        let Some((key, _)) = split_key(rest) else {
+            continue;
+        };
+        while stack.last().is_some_and(|(level, _)| *level >= indent) {
+            stack.pop();
+        }
+        stack.push((indent, key));
+        paths.push(stack.iter().map(|(_, key)| key.clone()).collect());
+    }
+    paths
+}
+
+/// The key of a `key: value` or `key:` line, quotes dropped, or `None` for
+/// a line that holds no key.
+fn split_key(line: &str) -> Option<(String, &str)> {
+    if let Some(quoted) = line.strip_prefix('"') {
+        let (key, rest) = quoted.split_once('"')?;
+        let rest = rest.strip_prefix(':')?;
+        return Some((key.to_owned(), rest));
+    }
+    let (key, rest) = line.split_once(':')?;
+    (!key.is_empty() && !key.contains(' ')).then(|| (key.to_owned(), rest))
+}
+
+/// The static file rule of AC-7: `traefik.yaml` configures TLS when a key
+/// named `tls` or `certificatesResolvers` sits at any depth.
+fn static_holds_tls(text: &str) -> bool {
+    key_paths(text).iter().any(|path| {
+        path.iter()
+            .any(|key| key == "tls" || key == "certificatesResolvers")
     })
 }
 
-/// Reads the two rendered files of `id` and checks they hold no `tls` key
-/// and the dashboard is off.
+/// The routes file rule of AC-7: `dynamic/routes.yaml` configures TLS when
+/// it has a top level `tls` key, or a `tls` key inside the body of one
+/// router or one service. A router or service named `tls` is a name.
+fn routes_hold_tls(text: &str) -> bool {
+    key_paths(text).iter().any(|path| match path.as_slice() {
+        [top, ..] if top == "tls" => true,
+        [http, section, _name, body @ ..]
+            if http == "http" && (section == "routers" || section == "services") =>
+        {
+            body.iter().any(|key| key == "tls")
+        }
+        _ => false,
+    })
+}
+
+/// Reads the two rendered files of `id` and checks they hold no TLS
+/// configuration and the dashboard is off.
 fn rendered_files_hold_no_tls(site: &Site, id: Uuid) {
     let config = site.instance_paths(id).config;
-    for file in ["traefik.yaml", "dynamic/routes.yaml"] {
-        let text = std::fs::read_to_string(config.join(file)).expect("a rendered file reads");
-        assert!(!holds_tls_key(&text), "{file}: {text}");
-        if file == "traefik.yaml" {
-            assert!(
-                text.contains("api:\n  dashboard: false\n"),
-                "the dashboard is off: {text}"
-            );
-        }
-    }
+    let static_config =
+        std::fs::read_to_string(config.join("traefik.yaml")).expect("traefik.yaml reads");
+    assert!(!static_holds_tls(&static_config), "{static_config}");
+    assert!(
+        static_config.contains("api:\n  dashboard: false\n"),
+        "the dashboard is off: {static_config}"
+    );
+    let routes =
+        std::fs::read_to_string(config.join("dynamic/routes.yaml")).expect("routes.yaml reads");
+    assert!(!routes_hold_tls(&routes), "{routes}");
+}
+
+#[test]
+fn the_tls_rules_of_ac_7_read_names_as_names_and_bodies_as_configuration() {
+    let named = "http:\n  routers:\n    \"tls\":\n      rule: \"Host(`tls.localhost`)\"\n      service: \"tls\"\n  services:\n    \"tls\":\n      loadBalancer:\n        servers:\n          - url: \"http://127.0.0.1:9\"\n";
+    assert!(!routes_hold_tls(named));
+    assert!(routes_hold_tls(
+        "http:\n  routers:\n    \"api\":\n      tls: {}\n"
+    ));
+    assert!(routes_hold_tls(
+        "http:\n  services:\n    \"api\":\n      loadBalancer:\n        servers:\n          - url: x\n            tls: true\n"
+    ));
+    assert!(routes_hold_tls("tls:\n  options: {}\n"));
+    assert!(static_holds_tls(
+        "entryPoints:\n  web:\n    http:\n      tls:\n        certResolver: x\n"
+    ));
+    assert!(static_holds_tls("certificatesResolvers:\n  x: {}\n"));
+    assert!(!static_holds_tls(
+        "api:\n  dashboard: false\n  insecure: true\n"
+    ));
 }
 
 // covers: AC-5, AC-6, AC-7 (spec 0041)
@@ -77,7 +156,7 @@ async fn ping_and_the_api_answer_only_on_the_monitoring_port_and_the_dashboard_i
 
     let id = create_instance(&site, &api, "edge-surface").await;
     let running = api.start_ready(id).await;
-    site.subject(&ev, "3.7.15");
+    site.subject(&ev, &server_version(port_of(&running, "ping")));
     let pid = pid_of(&running);
     let (web, ping) = (port_of(&running, "web"), port_of(&running, "ping"));
 

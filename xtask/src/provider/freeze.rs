@@ -283,7 +283,11 @@ mod tests {
         let traefik = root.path().join("providers/traefik");
         copy_dir(&repo().join("providers/traefik"), &traefik);
 
-        let planned = freeze(&corpus, &catalog(), &traefik)
+        let without_traefik: Vec<String> = catalog()
+            .into_iter()
+            .filter(|id| id != "official/traefik")
+            .collect();
+        let planned = freeze(&corpus, &without_traefik, &traefik)
             .unwrap_err()
             .to_string();
         let listed = freeze(

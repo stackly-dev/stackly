@@ -13,6 +13,8 @@
 #![cfg(target_os = "macos")]
 
 mod common;
+#[path = "supervisor/config_calls.rs"]
+mod config_calls;
 #[path = "mysql/harness.rs"]
 mod mysql;
 #[path = "nats/harness.rs"]
@@ -21,6 +23,8 @@ mod nats;
 mod pg;
 #[path = "supervisor/support.rs"]
 mod support;
+#[path = "traefik/harness.rs"]
+mod traefik;
 #[path = "valkey/harness.rs"]
 mod valkey;
 
@@ -925,6 +929,157 @@ fn nats_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_boo
     stop_and_check(&rig, site.runtime_id, id, &last);
     ev.pass_with(&format!(
         "nats-server pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon; kickstart -k and bootout ended the session and the instance ran again as pid {}",
+        seen.pid, seen.started_at, last.pid
+    ));
+}
+
+/// Waits until the Traefik route `app.localhost` on `web` answers from its
+/// backend `alpha`.
+fn traefik_answers(web: u16, when: &str) {
+    let deadline = Instant::now() + PATIENCE;
+    while traefik::get(web, "app.localhost").1 != "alpha" {
+        assert!(
+            Instant::now() < deadline,
+            "{when}: the route does not answer"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// [`survives_every_end`] for Traefik, with `answers` called after every
+/// end of the daemon, so the route is shown to answer each time (spec 0041
+/// step 10). A copy, so the shared sequence of the other providers stays as
+/// it is.
+fn traefik_survives_every_end(
+    rig: &mut Rig,
+    runtime_id: uuid::Uuid,
+    id: uuid::Uuid,
+    seen: &Seen,
+    answers: &dyn Fn(&str),
+) -> Seen {
+    let first = rig.bootstrap();
+    wait_same(rig, runtime_id, id, seen, "after the first daemon");
+    answers("after the first daemon");
+
+    let decision = planned_restart(&rig.socket, id);
+    assert_eq!(
+        (decision.decision, decision.reason),
+        (
+            stackly_protocol::restart::PlanDecision::Keep,
+            stackly_protocol::restart::PlanReason::HandoverProven
+        ),
+        "the provider is in HANDOVER_PROVEN only when this test passes"
+    );
+    let second = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != first.server_instance_id && info.session.is_some()
+        })
+        .expect("the job runs a new daemon after the planned restart");
+    wait_same(rig, runtime_id, id, seen, "after the planned restart");
+    answers("after the planned restart");
+    let plan = wait_info(&rig.socket, SLOW, |info| {
+        info.restart
+            .as_ref()
+            .is_some_and(|plan| plan.state == stackly_protocol::restart::PlanState::Finished)
+    })
+    .and_then(|info| info.restart)
+    .expect("the next daemon finishes the plan");
+    let outcome = plan
+        .instances
+        .iter()
+        .find(|entry| entry.instance_id == id)
+        .and_then(|entry| entry.outcome);
+    assert_eq!(
+        outcome,
+        Some(stackly_protocol::restart::PlanOutcome::Adopted)
+    );
+
+    let status = Command::new("/bin/kill")
+        .args(["-KILL", &second.pid.to_string()])
+        .status()
+        .expect("kill runs");
+    assert!(status.success());
+    let third = rig
+        .wait_launchd(RESTART_BOUND, |info| {
+            info.server_instance_id != second.server_instance_id && info.session.is_some()
+        })
+        .expect("the job runs a new daemon after SIGKILL");
+    wait_same(rig, runtime_id, id, seen, "after SIGKILL of the daemon");
+    answers("after SIGKILL of the daemon");
+
+    rig.agent.kickstart_kill().expect("kickstart -k runs");
+    rig.wait_launchd(RESTART_BOUND, |info| {
+        info.server_instance_id != third.server_instance_id && info.session.is_some()
+    })
+    .expect("the job runs a new daemon after kickstart -k");
+    let restarted = wait_restarted(rig, runtime_id, id, seen, "after kickstart -k");
+    answers("after kickstart -k");
+
+    rig.agent.bootout().expect("the job boots out");
+    assert!(info(&rig.socket).is_none(), "no daemon after bootout");
+    let deadline = Instant::now() + PATIENCE;
+    while support::alive(restarted.pid) {
+        assert!(Instant::now() < deadline, "the process outlived bootout");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    rig.bootstrap();
+    let last = wait_restarted(
+        rig,
+        runtime_id,
+        id,
+        &restarted,
+        "after bootout and bootstrap",
+    );
+    answers("after bootout and bootstrap");
+    last
+}
+
+/// Spec 0030 AC-8, spec 0031 AC-11 and AC-13, and spec 0041 AC-12,
+/// Traefik: the route answers after every end of the daemon.
+#[test]
+#[ignore = "native: launchd gui domain"]
+fn traefik_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout() {
+    let ev = evidence!(
+        covers = ["REQ-013", "AC-013"],
+        kind = Kind::Native,
+        expected = "a running Traefik instance with one route keeps its pid and start time through a planned daemon restart and a SIGKILL of the daemon, every next daemon adopts it as ready with a verified identity, and the route answers from its backend after each; launchctl kickstart -k and launchctl bootout then end the session, so the instance stops, and the next daemon starts it again with another process whose route answers",
+    );
+    if !gui_session(&ev) {
+        return;
+    }
+    let Some(site) = traefik::Site::open(&ev, traefik::Serve::Binary) else {
+        return;
+    };
+    let alpha = traefik::backend("alpha");
+    let manual = site.spawn();
+    let (id, seen, web) = runtime().block_on(async {
+        let api = site.binary_api(&manual).await;
+        let id = traefik::create_with(
+            &site,
+            &api,
+            "survivor",
+            serde_json::json!({
+                "routes": [traefik::route("api", "Host(`app.localhost`)", alpha)],
+            }),
+        )
+        .await;
+        let seen = started(&api, id).await;
+        let running = api.get(id).await.expect("the instance can be read");
+        site.subject(
+            &ev,
+            &traefik::server_version(traefik::port_of(&running, "ping")),
+        );
+        (id, seen, traefik::port_of(&running, "web"))
+    });
+    let answers = |when: &str| traefik_answers(web, when);
+    answers("under the manual daemon");
+    manual.stop().expect("the manual daemon stops");
+    answers("after the manual daemon ended");
+    let mut rig = Rig::at(site.root.path(), &site.data_root, None);
+    let last = traefik_survives_every_end(&mut rig, site.runtime_id, id, &seen, &answers);
+    stop_and_check(&rig, site.runtime_id, id, &last);
+    ev.pass_with(&format!(
+        "traefik pid {} started at {:?} stayed the adopted, ready process through a planned restart and SIGKILL of the daemon with its route answering; kickstart -k and bootout ended the session and the instance ran again as pid {} and answered",
         seen.pid, seen.started_at, last.pid
     ));
 }
