@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ceb5-de8d-752a-b695-481dc1f253c6",
+  "covers": [
+    "REQ-037"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "clickhouse",
+    "name": "binary::clickhouse_journey_through_the_stacklyd_binary_with_a_markup_password",
+    "file": "apps/daemon/tests/clickhouse/binary.rs",
+    "line": 31
+  },
+  "status": "PASS",
+  "expected": "the stacklyd binary with STACKLY_ROOT on a data root named with an ampersand, a space, and Unicode creates a ClickHouse instance whose password holds & < > \" ' in its file keychain, renders config.xml with &amp; in every path and the server reports the real path, starts it ready, lets the default user in with that password over HTTP and native TCP and refuses it without the markup, keeps users.xml to the SHA-256 of the password with no plain or escaped password in data/preprocessed_configs or anywhere under the test root, restarts it with a new PID and the row kept, and stops it with the process gone and both ports closed",
+  "actual": "stacklyd on `R&D Ünï cödé` ran ClickHouse 26.8.30.8 with a markup password from its file keychain over HTTP and native, restarted it from PID 93104 to 93173 with the row kept, and stopped it cleanly",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "clickhouse",
+      "version": "26.8.30.8",
+      "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:43:07.917499Z",
+  "finishedAt": "2026-11-12T07:44:59.547302Z",
+  "evidencePath": "output.log"
+}

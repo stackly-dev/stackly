@@ -1,0 +1,35 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1ceb7-92a0-7586-a971-189a8a210ea3",
+  "covers": [
+    "REQ-037"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "clickhouse",
+    "name": "failure::an_auto_port_in_use_moves_the_start_to_a_free_port_and_leaves_the_foreign_process",
+    "file": "apps/daemon/tests/clickhouse/failure.rs",
+    "line": 314
+  },
+  "status": "PASS",
+  "expected": "a foreign ClickHouse server on the last native port of a stopped instance whose endpoints are auto does not refuse its start: the instance starts ready on another native port with no last failure, listens only on its two new registry ports, and the foreign server keeps running and answering; supervisor.endpoint_in_use is only for a fixed port",
+  "actual": "with native port 50088 held, the auto endpoint moved to 50102 and the instance started ready; the foreign server kept running",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "clickhouse",
+      "version": "26.8.30.8",
+      "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-12T07:44:59.552695Z",
+  "finishedAt": "2026-11-12T07:45:25.434692Z",
+  "evidencePath": "output.log"
+}
