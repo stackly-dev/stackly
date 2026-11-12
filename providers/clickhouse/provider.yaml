@@ -1,0 +1,127 @@
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  id: official/clickhouse
+  software: clickhouse
+  displayName: ClickHouse
+  revision: "1.0.0"
+  category: analytics
+  description: ClickHouse columnar analytics database. One single node server per instance, with HTTP and native TCP on loopback and a password protected default user.
+compatibility:
+  platforms:
+    - { os: macos, arch: aarch64 }
+runtime:
+  executable: clickhouse
+  executionMode: foreground
+  versionCheck:
+    args: ["server", "--version"]
+    pattern: '^ClickHouse server version ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) \(official build\)\.$'
+    timeoutSeconds: 30
+capabilities:
+  reload: true
+  multiInstance: true
+  persistence: true
+  backup: [cold]
+resources:
+  endpoints:
+    http: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 8123 }
+    native: { transport: tcp, purpose: client, defaultHost: "127.0.0.1", defaultPort: 9000 }
+configFiles:
+  serverConfig:
+    template: templates/config.xml.tmpl
+    format: xml
+    destination: "${instance.config}/config.xml"
+  clientConfig:
+    template: templates/client.xml.tmpl
+    format: plain
+    destination: "${instance.config}/client.xml"
+  usersConfig:
+    template: templates/users.xml.tmpl
+    format: xml
+    sensitive: true
+    destination: "${instance.secrets}/users.xml"
+lifecycle:
+  initialize:
+    - { primitive: createManagedDirectories }
+  start:
+    executable: "${runtime.executable}"
+    args:
+      - "server"
+      - "--config-file=${instance.config}/config.xml"
+      - "--"
+      - "--user_directories.users_xml.path=${instance.secrets}/users.xml"
+    cwd: "${instance.data}"
+    env: { CLICKHOUSE_WATCHDOG_ENABLE: "0" }
+  stop: { strategy: gracefulProcess, signal: term }
+  reload:
+    render: [serverConfig, usersConfig]
+    action: run
+    command:
+      executable: "${runtime.executable}"
+      args:
+        - "client"
+        - "--config-file"
+        - "${instance.config}/client.xml"
+        - "--host"
+        - "${endpoint.native.host}"
+        - "--port"
+        - "${endpoint.native.port}"
+        - "--user"
+        - "stackly_reload"
+        - "--query"
+        - "SYSTEM RELOAD CONFIG"
+      cwd: "${instance.temp}"
+    successExitCodes: [0]
+    verify: readiness
+readiness:
+  probe:
+    type: exec
+    command:
+      executable: "${runtime.executable}"
+      args:
+        - "client"
+        - "--config-file"
+        - "${instance.config}/client.xml"
+        - "--host"
+        - "${endpoint.native.host}"
+        - "--port"
+        - "${endpoint.native.port}"
+        - "--user"
+        - "stackly_readiness"
+        - "--query"
+        - "SELECT throwIf(getMacro('stackly_instance_id') != '${instance.id}')"
+      cwd: "${instance.temp}"
+    successExitCodes: [0]
+  intervalMilliseconds: 500
+  attemptTimeoutMilliseconds: 5000
+health:
+  probe: { type: http, endpoint: http, path: /ping }
+  intervalSeconds: 10
+  attemptTimeoutMilliseconds: 3000
+  failureThreshold: 3
+timeouts: { readinessSeconds: 120, stopSeconds: 60, reloadSeconds: 30 }
+backup:
+  cold: { paths: [data] }
+permissions:
+  managedFilesystem: [data, config, temp, run]
+  executeRuntimeBinary: true
+connection:
+  - name: http
+    title: HTTP URL
+    template: "http://default:${secret.defaultPassword}@${endpoint.http.address}/"
+  - name: native
+    title: Native TCP
+    template: "clickhouse://default:${secret.defaultPassword}@${endpoint.native.address}/default"
+openWith:
+  - name: play
+    title: Play UI
+    kind: browser
+    browser:
+      url: "http://${endpoint.http.address}/play"
+  - name: client
+    title: clickhouse client
+    kind: terminal
+    terminal:
+      executable: "${runtime.executable}"
+      args: ["client", "--host", "127.0.0.1", "--port", "${endpoint.native.port}", "--user", "default", "--ask-password"]
+    copySecret: defaultPassword

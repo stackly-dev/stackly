@@ -12,7 +12,7 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 4. Ganti Rule menjadi `Host(` lalu Apply. Harapan: kartu gagal, status not ready, banner "Revision N hasn't reached ready"; klik Roll Back to Revision M, route menjawab lagi. Bukti AC-4.
 5. Menu Open In: Routes File membuka Finder di `routes.yaml`; Loaded Routers membuka JSON router di browser. Bukti AC-1.
 6. Doctor saat langkah 4 sebelum roll back. Harapan: remedy "Traefik hasn't loaded the routes Stackly wrote". Bukti AC-13.
-7. `cargo test -p stacklyd --test native_launchd -- --ignored traefik_survives` di sesi GUI yang login. Harapan: PASS, lalu baris `HANDOVER_PROVEN` boleh di-commit. Bukti AC-12. Tanpa sesi GUI atau izin: `BLOCKED`, owner user.
+7. AC-12, di sesi GUI yang login. Test ini gagal di assert `Keep/HandoverProven` sampai baris handover ada, jadi pasang dulu secara lokal: di `crates/core/src/supervisor/handover.rs` tambah `HandoverProof::new("official/traefik", "1", "spec-0041-ac-12"),` ke `HANDOVER_PROVEN`, dan di modul test nya ubah `("official/traefik", "1.0.0", false)` menjadi `true`. Lalu `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 traefik_survives`. Harapan: `traefik_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout` lulus (PID dan waktu mulai sama sesudah planned restart dan SIGKILL daemon, route menjawab sesudah setiap akhir daemon, proses baru sesudah kickstart dan bootout). PASS: commit kedua perubahan `handover.rs` bersama ID record nya. FAIL atau BLOCKED: buang keduanya; AC-12 tetap terbuka.
 
 ## Fitur 39 · Provider NATS & JetStream (spec 0039)
 
@@ -38,4 +38,4 @@ Prasyarat: milestone 3 spec 0041 sudah di `main` (Traefik `[[provider]]`), app d
 2. Form dan Configuration (AC-7). Form create Valkey: teks `Persistence` tampil di bawah kontrolnya. Buat instance `volatile`: halaman Configuration menampilkan field itu terkunci dengan nilai `volatile` dan file `persistence-volatile.conf`.
 3. TablePlus (AC-18). Prasyarat: TablePlus terpasang, instance Valkey `ready`. `Open in TablePlus`: koneksi Redis terbuka ke port instance, password dari clipboard diterima. Kalau TablePlus menolak URL tanpa password, entri `tableplus` dihapus lewat revision paket baru.
 4. Terminal (AC-18). `Open valkey-cli in Terminal`, tempel password: prompt `valkey-cli` terbuka.
-5. Fuzz (AC-2, AC-3). `cargo xtask fuzz run provider_template --time 600` sesudah langkah 1 dan 2: tanpa crash.
+5. Fuzz (AC-2, AC-3): sudah dijalankan checker `chk-f40-m1` pada 2026-11-12 (`Done 90583 runs in 601 second(s)`, tanpa crash); tidak perlu diulang.

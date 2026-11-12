@@ -1,0 +1,29 @@
+<!-- Managed by Stackly. Edits to this file are lost on the next start. -->
+<clickhouse>
+    <logger>
+        <level>information</level>
+        <console>1</console>
+    </logger>
+    <macros>
+        <stackly_instance_id>0192f000-0000-7000-8000-00000000000a</stackly_instance_id>
+    </macros>
+    <disable_internal_dns_cache>1</disable_internal_dns_cache>
+    <listen_host>127.0.0.1</listen_host>
+    <http_port>14000</http_port>
+    <tcp_port>14001</tcp_port>
+    <path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/</path>
+    <tmp_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/temp/clickhouse/</tmp_path>
+    <user_files_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_files/</user_files_path>
+    <format_schema_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/format_schemas/</format_schema_path>
+    <user_scripts_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_scripts/</user_scripts_path>
+    <user_defined_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/user_defined/</user_defined_path>
+    <dictionaries_lib_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/dictionaries_lib/</dictionaries_lib_path>
+    <top_level_domains_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/top_level_domains/</top_level_domains_path>
+    <google_protos_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/google_protos/</google_protos_path>
+    <dynamic_user_defined_executable_functions_path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/dynamic_user_defined_executable_functions/</dynamic_user_defined_executable_functions_path>
+    <user_directories>
+        <local_directory>
+            <path>/Volumes/Test Root/Ünï cödé/data/instances/0192f000-0000-7000-8000-00000000000a/data/access/</path>
+        </local_directory>
+    </user_directories>
+</clickhouse>

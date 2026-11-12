@@ -83,6 +83,14 @@ pub const POSTGRESQL_18: Line = Line {
     version: "18.6",
 };
 
+/// ClickHouse 26.8.
+pub const CLICKHOUSE: Line = Line {
+    software: "clickhouse",
+    artifact: "clickhouse-26.8.30.8-macos-aarch64",
+    selector: "26.8",
+    version: "26.8.30.8",
+};
+
 /// Valkey 9.1.
 pub const VALKEY: Line = Line {
     software: "valkey",

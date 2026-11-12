@@ -13,6 +13,10 @@
       "type": "OperationPage"
     },
     {
+      "file": "create-form-clickhouse.json",
+      "type": "CreateForm"
+    },
+    {
       "file": "create-form-example.json",
       "type": "CreateForm"
     },
