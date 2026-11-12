@@ -109,7 +109,7 @@ _Build 2026-11-12: kode langkah 8 commit `ff337dea` (dev-f41-m2b); commit eviden
 
 ### UI / manual
 
-- [ ] Tidak ada langkah GUI di bagian ini. Test launchd AC-12 (langkah 10) ada di langkah manual 7 di bagian Milestone 4.
+- [x] Tidak ada langkah GUI di bagian ini. Test launchd AC-12 (langkah 10) ada di langkah manual 7 di bagian Milestone 4.
 
 ### Commands
 
