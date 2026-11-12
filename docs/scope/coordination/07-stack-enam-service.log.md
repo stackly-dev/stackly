@@ -9,12 +9,13 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `arc-f39-spec` | architect | F39 Provider NATS & JetStream · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0039-provider-nats-jetstream/` | `claude/arc-f39-spec-*` | `fable-5-2 · high` | aktif |
+| `arc-f39-spec` | architect | F39 Provider NATS & JetStream · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0039-provider-nats-jetstream/` | `claude/arc-f39-spec-781b0e` | `fable-5-2 · high` | merged |
 | `arc-f40-spec` | architect | F40 Provider Valkey · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0040-provider-valkey/` | `claude/arc-f40-spec-*` | `fable-5-2 · high` | aktif |
 | `arc-f41-spec` | architect | F41 Provider Traefik & routing lokal · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0041-provider-traefik-routing-lokal/` | `claude/arc-f41-spec-ec76d9` | `fable-5-2 · high` | merged |
 | `arc-f42-spec` | architect | F42 Provider MySQL · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0042-provider-mysql/` | `claude/arc-f42-spec-*` | `fable-5-2 · high` | aktif |
 | `arc-f43-spec` | architect | F43 Provider ClickHouse · `Design it (spec)` | `07-stack-enam-service.md` | `docs/specs/0043-provider-clickhouse/` | `claude/arc-f43-spec-*` | `fable-5-2 · high` | aktif |
 | `dev-f41-m1` | developer | F41 milestone 1 dan 2 (Build plan langkah 1 sampai 7) | `07-stack-enam-service.md` | `providers/traefik/`, golden dan fixture Traefik, empat file test core bersama, `apps/daemon/tests/traefik*` | `claude/arc-f41-spec-ec76d9` | `opus-5-5 · medium` | dipakai ulang, aktif |
+| `dev-f39-m1` | developer | F39 milestone 1 (Build plan langkah 1 sampai 3) | `07-stack-enam-service.md` | `crates/core/src/provider/template.rs`, `providers/nats/`, golden, fixture, catalog, dan corpus NATS, test Swift fixture | `claude/arc-f39-spec-781b0e` | `opus-5-5 · medium` | dipakai ulang, aktif |
 
 ## Keputusan
 
@@ -27,6 +28,7 @@
 | `2026-11-12` | Spec 0041 diterima lead atas delegasi user (commit `9aabf5870`, cross check Opus 5 gap diterapkan). Keputusan dengan opsi rekomendasi, dilaporkan ke user: HTTPS tidak ditawarkan di revision `1.0.0` (kalimat scope "HTTPS hanya aktif dengan certificate pengguna" dibaca sebagai batas; runner up path cert/key plus `sniStrict` menjadi Follow-up); dashboard selalu mati, API read only di port `ping` loopback tetap; bcrypt/htpasswd (Follow-up spec 0011) tidak dibangun karena belum ada pemakai; namespace route = instance; revision paket tetap `1.0.0`; BR-025 lewat test native `traefik_compatibility`; nol perubahan core, protokol, storage, dan SwiftUI (RISK-07: satu baris `HANDOVER_PROVEN`). | `user` (delegasi), `lead` |
 | `2026-11-12` | Checkout utama berada di dalam folder Syncthing (`/Users/ojiepermana/Development`, termasuk `.git`). Antara 07:42 dan 07:53 hari ini perangkat lain (`OINHCEJ`) mengirim salinan lama: sekitar 690 file `*.sync-conflict-20261112-*` untracked di working tree, 18 di `.git` (HEAD, index, refs, packed-refs, config), dan dua file lama muncul lagi (`apps/macos/Packages/StacklyUI/Sources/StacklyUI/Settings/SettingsPlaceholder.swift`, `default.profraw`). File ter-track tidak berubah dan `git rev-list HEAD` utuh (2845 commit); `git fsck` hanya mengeluh dua commit di commit-graph basi. Worktree sub sesi di `~/worktrees` tidak ikut sinkron. Lead tidak menghapus apa pun dan tidak mengubah Syncthing; merge dokumen jalan terus, gerbang kode di `main` menunggu keputusan user. | `lead` |
 | `2026-11-12` | Spec 0039 diterima lead atas delegasi user (commit `1dee5b6d`, 14 AC, 9 langkah, 3 milestone; cross check Opus 12 temuan diterapkan, termasuk celah satu akun yang dibuktikan pada NATS 2.15.1 dan ditutup akun readiness terpisah). Keputusan dengan opsi rekomendasi, dilaporkan ke user: auth selalu aktif dengan satu user `stackly` (password dari secret `clientPassword`); password lewat `nats.conf` sensitif di `secrets/` sehingga NATS `1.1.0` kehilangan Effective File, `config-history`, dan deteksi drift (bcrypt ditolak untuk sekarang); readiness lewat `no_auth_user` di akun `STACKLY_READINESS`, probe tidak berubah; satu perubahan core: escaper `natsConf` di `crates/core/src/provider/template.rs` (ukuran RISK-07); field settings menjadi `jetstreamMaxMemoryMiB`, `jetstreamMaxFileMiB`, `maxPayloadKiB`; revision `1.1.0`; bentrok port monitoring lewat jalur spec 0033; instance `1.0.1` tetap tanpa auth. Tanpa protokol atau migrasi baru. Build: langkah 2 sampai 8 masuk `main` bersama; menunggu F41 milestone 1 karena `crates/core/tests/provider_packages.rs` dipakai bersama. | `user` (delegasi), `lead` |
+| `2026-11-12` | Kesalahan lead: `git add docs/scope` di commit `35d2e554` ikut memasukkan sepuluh salinan `sync-conflict` Syncthing di `docs/scope/`. Dilepas dari git (file tetap di disk) sebelum push, dan `*sync-conflict*` ditambahkan ke `.git/info/exclude` lokal supaya tidak terulang; sejak ini lead hanya `git add` path yang disebut satu per satu. F39 milestone 1 dan F41 milestone 1 berjalan bersamaan (dua build, batas disk): keduanya menyentuh `crates/core/tests/provider_packages.rs` pada bagian provider masing masing, konflik diselesaikan pemilik lewat `git merge main`; giliran catalog F39 lebih dulu, F41 milestone 3 sesudahnya. | `lead` |
 
 ## Blocker terbuka
 
@@ -35,6 +37,7 @@
 ## Dicentang pada wave ini
 
 - F41 · `Design it (spec)` · laporan `arc-f41-spec` `done` · `claude/arc-f41-spec-ec76d9` → `e33d41bb` · spec punya Requirements (AC-1 sampai AC-14), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
+- F39 · `Design it (spec)` · laporan `arc-f39-spec` `done` · `claude/arc-f39-spec-781b0e` → `8592e595` · spec punya Requirements (AC-1 sampai AC-14), Decision, Build plan, Consequences, status `Proposed`, tanpa penanda konflik · commit scope ini
 
 ## Riwayat wave
 

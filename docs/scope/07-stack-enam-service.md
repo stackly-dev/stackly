@@ -4,7 +4,7 @@
 
 Lima provider wajib dibangun penuh: NATS dilanjutkan dari fitur 23, lalu Valkey, Traefik, MySQL, dan ClickHouse. Manifest dan template dibuat lewat SDK dari fase 06; probe native atau adapter bawaan yang dibutuhkan provider ditambahkan ke core lewat review, dan jumlah perubahan core per provider dicatat sebagai ukuran RISK-07. Tiap provider menjalani journey yang sama dengan PostgreSQL: catalog, install, create, start, readiness, connection, dan dua instance yang terisolasi. Fase ini selesai kalau setiap provider lulus bagian lifecycle, readiness, persistence, dan endpoint dari matrix minimum di PRD bagian 32.2 tanpa label supported palsu; bagian backup dan restore menyusul di fase 09.
 
-### 39. Provider NATS & JetStream · needs a decision
+### 39. Provider NATS & JetStream · in-progress
 
 Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring di loopback, credential, server name unik, batas resource, dan dua instance.
 
@@ -12,7 +12,15 @@ Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring d
 
 **Trace:** REQ-036, AC-010, AC-036, AC-077 (sebagian), PRD bagian 22.2
 
-- [ ] Design it (spec): `/architect provider NATS & JetStream`
+**Pointer:** spec [0039](../specs/0039-provider-nats-jetstream/index.md)
+
+- [x] Design it (spec): `/architect provider NATS & JetStream`
+- [ ] Build it: `/develop provider NATS & JetStream`
+  - [ ] Paket `1.1.0` dan escaper, di fixture: escaper `natsConf` (`"` dan `\` di escape, `$` literal) di `crates/core/src/provider/template.rs`, lalu paket `providers/nats` revision `1.1.0` (password client lewat secret `clientPassword`, akun `APP` dan `STACKLY_READINESS` dengan `no_auth_user`, `nats.conf` sensitif di `secrets/`, batas MiB dan KiB, `tests/scenarios.yaml`, README), golden, fixture form dan catalog, revision catalog, entri corpus `compat/nats/1.1.0/`, dan test Swift yang mengikuti fixture (spec 0039 AC-1, AC-2 bagian fixture, AC-9 schema, AC-10 file skenario, AC-11 fixture dan Swift, AC-12 catalog dan corpus; build step 1 sampai 3; step 1 boleh masuk `main` sendiri; step 3 after step 2, boleh sesi Swift terpisah; `crates/core/tests/provider_packages.rs` dipakai bersama fitur 41 milestone 1)
+  - [ ] NATS 2.15.1 asli lewat daemon: harness dan client uji NATS di `apps/daemon/tests/nats/`, `nats_auth_in_process` (auth, batas izin tanpa credential, percobaan suntik balasan, kebocoran password, readiness tanpa bacaan secret), check baru `client_auth`, `isolation`, `persistence`, dan `monitoring_conflict` di `nats_compatibility`, konformitas dua skenario, dan `nats_journey` CLI (spec 0039 AC-2 bagian native, AC-3 sampai AC-11; build step 4 sampai 7; after milestone 1; needs artefak `nats-2.15.1-macos-aarch64` di cache xtask, selain itu `BLOCKED`)
+  - [ ] Evidence, catalog, dan ukuran RISK-07: run native dari `HEAD` bersih, `cargo xtask runtime compat-record`, satu commit evidence dengan `versions.json`, ledger catalog, dan golden status dukungan, lalu catatan RISK-07 dan langkah manual di `verify.md` (spec 0039 AC-12, AC-13, AC-14, AC-11 bagian GUI; build step 8 dan 9; after milestone 2; step 2 sampai 8 masuk `main` bersama dalam satu giliran catalog, karena paket `1.1.0` tanpa evidence menurunkan status NATS ke `experimental`; run launchd AC-13 dan pemeriksaan GUI AC-11 adalah langkah manual)
+- [ ] Verify it: `/check verify provider NATS & JetStream`
+- [ ] Test it: `/test provider NATS & JetStream`
 
 ### 40. Provider Valkey · needs a decision
 
