@@ -198,6 +198,24 @@ User mendelegasikan setiap keputusan ke opsi yang direkomendasikan. Daftar ini a
 15. Format `valkeyConf` tetap ada, dengan setting `notifyKeyspaceEvents` sebagai pemakainya (Keputusan 14).
 16. `CONFIG SET bind` dicatat sebagai residual, tidak dilarang.
 
+## Update 2026-11-12: selaras dengan hasil verify
+
+Verify milestone 1 dan 2 (`chk-f40-m1`) dan verify penuh (`chk-f40-full`) lulus: AC-1 sampai AC-18 terpenuhi, AC-19 `BLOCKED` sampai run launchd di sesi GUI. Update ini hanya menyamakan teks spec dengan yang dibangun; tidak ada perilaku, paket, template, kode, ID AC, atau keputusan yang berubah.
+
+| No | Temuan verify | Yang diubah di spec | Alasan |
+| --- | --- | --- | --- |
+| 1 | User `stackly-readiness` juga mendapat jawaban `HELLO`. Valkey tidak menjalankan pemeriksaan ACL perintah untuk perintah ber flag `no-auth` (`HELLO`, `AUTH`), jadi aturan `-@all +ping` tidak menahannya. | AC-4, tabel *Auth lokal*, *Key invariants*, dan *Security model* menyebut pengecualian itu dan test yang menguncinya. Follow-up README. | Ini perilaku Valkey, bukan celah di aturan paket, dan tidak ada aturan ACL yang bisa menutupnya. Yang terbaca hanya nama server, versi, mode, dan role, kelas yang sama dengan `PONG`. Kalimat "hanya `PING`" tanpa pengecualian itu tidak jujur. Runner up: mengganti probe ke cara tanpa user (misalnya connect TCP saja), yang membuang readiness jujur Keputusan 3. |
+| 2 | Pola `notifyKeyspaceEvents` di tabel *Settings schema* tertulis tanpa anchor, sedangkan paket memakai `^[KEg$lshzxetdmnA]*$`. | Tabel memakai pola ber anchor. | Paket yang benar: mesin validasi settings mencocokkan seluruh nilai, dan anchor membuat itu terbaca juga oleh alat JSON Schema lain. Tafsiran developer nomor 4, diterima lead. |
+| 3 | `CONFIG SET bind` atau `port` oleh pemegang password membuka listener lain sampai restart. Spec sudah menyatakannya sebagai residual; README belum. | Follow-up README. | Perubahan README adalah perubahan paket, jadi tidak dikerjakan di update ini. `README.md` tidak ikut `manifest_sha256`, jadi tidak butuh revision baru. |
+| 4 | Test launchd menuntut `Keep` dengan `handover_proven` dari binary yang diuji, jadi entri `HANDOVER_PROVEN` harus ada sebelum run, bukan sesudah `PASS` seperti kalimat lama AC-19 dan langkah 12. Dua test yang menuntut "belum terbukti" (`a_restart_preview_stops_and_restores_a_valkey_instance_while_its_handover_is_unproven`, `official_valkey_has_no_handover_proof_before_its_launchd_record_passes`) sengaja gagal begitu entri ada. | AC-19 dan langkah 12: commit lokal entri, run, pertahankan kalau `PASS`, `git revert` kalau tidak; langkah 12 menyebut dua test yang dibalik dan kalimat spec yang basi sesudahnya. AC-14 menandai `handover` `unproven` sebagai keadaan sementara. | Janji AC-19 tidak berubah: entri hanya ada di `main` bersama record `PASS`. Yang berubah hanya urutan kerjanya, supaya sama dengan test yang dibangun dan dengan spec 0041 AC-12. Commit lebih dulu menjaga record tidak `sourceDirty`. |
+| 5 | Filter `valkey` di langkah manual ikut menjalankan test preview `handover_unproven`. | *Langkah manual* dan tabel *API surface* memakai filter `valkey_9_1_survives` dengan `--test-threads 1`. | Dengan entri sudah dipasang, test preview itu pasti gagal dan mengotori run evidence. |
+| 6 | Mode `volatile` memuat `dump.rdb` yang pengguna simpan sendiri. Sudah dinyatakan (Keputusan 13, F28); tester menambah test native nya. | AC-7 dan baris *Edge cases* merujuk `valkey_9_1_volatile_loads_a_dump_rdb_the_user_saved_until_it_is_deleted`. | Pernyataan yang punya test lebih mudah dijaga daripada yang hanya dirujuk ke catatan uji. |
+| 7 | `owner` record `BLOCKED` konformitas adalah `runtime maintainer` (teks spec 0036), sedangkan suite native paket memakai `@ojiepermana`. | Follow-up untuk pemilik spec 0036 dan 0002. | Dua nilai untuk sebab yang sama (artefak tidak ada di cache). Spec ini tidak mengubah spec lain, jadi hanya dicatat. |
+
+Temuan verify yang sudah ditutup tester dan tidak butuh perubahan spec: pindaian password di run root dan dalam bentuk JSON escape, tepi `valkeyConf`, dan test filter `sha256Hex` (`tst-f40-test`). Dua perintah `verify.md` yang butuh `--` adalah urusan pemilik `verify.md`.
+
+Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
+
 ## Cross check
 
 Dijalankan 2026-11-12 oleh model lain (Opus), read only, terhadap `index.md`, `rationale.md`, spec yang dirujuk, dan kode. Semua temuan diterapkan dengan rekomendasi architect, sesuai delegasi user; tidak ada yang dibiarkan terbuka.

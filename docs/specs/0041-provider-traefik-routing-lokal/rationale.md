@@ -205,6 +205,20 @@ Opsi 2 checker tidak diambil karena lead sudah memutuskannya, dan probe tidak me
 - **Nomor langkah 7a dan 7b, milestone 2b**: nomor langkah lama dipakai `verify.md` dan subject commit, jadi tidak digeser.
 - **Update ini tanpa cross check**: jawaban tetap panel dari lead untuk update kecil. Faktanya diuji langsung pada binary Traefik, bukan dinilai dari bacaan.
 
+## Update 2026-11-12 (kedua): selaras dengan hasil verify penuh
+
+Verify penuh (`chk-f41-m3`) lulus: AC-1 sampai AC-11, AC-13, AC-14, dan AC-15 terpenuhi, dan AC-12 `BLOCKED` sampai run launchd di sesi GUI. Temuan High verify pertama tertutup (25 bentuk URL ditolak di field, 10 bentuk yang lolos pola semuanya `enabled`). Update ini hanya menyamakan teks spec dengan yang dibangun; tidak ada perilaku, paket, template, kode, ID AC, atau keputusan yang berubah.
+
+| No | Temuan | Yang diubah di spec | Alasan |
+| --- | --- | --- | --- |
+| 1 | Medium: apply pada instance yang sudah `not_ready` dilaporkan `succeeded` walau revision nya memuat rule yang ditolak Traefik. Last known good tetap aman dan revision itu tidak mendapat `ready_at`. | Satu kalimat batas di AC-4, catatan di lapis 3 *Apply yang aman*, butir *Edge cases* baru, kalimat Consequences "route yang salah tidak pernah dilaporkan sukses" dibatasi ke instance yang `ready`, satu butir Negative, baris test karakterisasi di *Test native*, dan dua Follow-up (spec 0026 dan 0029; README). | Sebabnya spec 0026 AC-10 ("untuk instance yang belum ready, reload terverifikasi saat aksinya selesai dan PID tidak berubah"), yang sengaja begitu supaya reload bisa dipakai untuk memperbaiki instance yang belum ready. Paket Traefik tidak bisa mengubahnya, dan AC-14 melarang perubahan core di fitur ini. Yang dijanjikan spec ini di jalur itu adalah bagian yang aman (last known good, `ready_at`, roll back), dan itu terbukti. Kalimat lama terlalu luas, jadi dibatasi, bukan dipertahankan. Runner up: menjadikan apply itu gagal lewat perubahan `reload.rs`, yang membalik perilaku spec 0026 untuk semua provider; itu keputusan pemilik spec 0026 dan 0029, jadi masuk Follow-up. |
+| 2 | Langkah manual 7 menjalankan test launchd dengan dua baris `handover.rs` yang belum di commit, jadi record nya `sourceDirty`. | Langkah manual 7 dan catatan di langkah 10: commit dulu kedua baris, jalankan lewat `cargo xtask evidence run`, lalu `git revert` kalau bukan `PASS`. | Janji AC-12 tidak berubah (baris hanya bertahan bersama record `PASS`). `git revert` dipilih, bukan membuang commit, supaya riwayat tetap maju dan aman kalau commit itu sudah terlanjur dibagi. Urutan yang sama dipakai spec 0040 langkah 12. |
+| 3 | `published_at` revision catalog 13 lebih awal sekitar 28 menit dari waktu commit nya, sedangkan spec menulis "waktu UTC commit itu". | Kalimat di *Entri catalog* menyebut nilai itu ditulis sebelum commit dan selisihnya kosmetik. | `catalog check` hanya menolak `published_at` yang lebih awal dari revision sebelumnya. Menyamakan nilai itu dengan waktu commit tidak mungkin persis, karena nilainya bagian dari isi commit. |
+
+Baris basi di `verify.md` yang checker catat adalah urusan pemilik `verify.md`. Test tambahan tester (regresi temuan High, 70 bentuk `backendUrl` yang ditolak, isolasi sesudah restart, route bernama `tls`) tidak butuh perubahan spec.
+
+Update ini tanpa cross check (jawaban tetap panel dari lead untuk update penutup wave).
+
 ## Cross check
 
 Cross check read only dengan model lain (Opus) pada 2026-11-12, terhadap kode di `main`. Yang diubah karenanya:
