@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use stackly_core::provider::{
     EnvValue, InitStep, IssueCode, Location, NameCheck, PackageError, PackageFiles, PlanContext,
-    PlanError, ResolvedEndpoint, RuntimeContext, SettingClass, Stdin, ValidatedPackage,
+    PlanError, ResolvedEndpoint, RuntimeContext, Segment, SettingClass, Stdin, ValidatedPackage,
     read_package,
 };
 use stackly_core::secret::ResolvedSecrets;
@@ -1972,6 +1972,161 @@ fn an_unknown_format_names_every_known_format_in_its_message() {
         "valkeyConf",
     ] {
         assert!(issue.message.contains(format), "{}", issue.message);
+    }
+}
+
+/// SHA-256 of `abc` as lowercase hex, the first standard test vector.
+const ABC_SHA256_HEX: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+/// The fake package with `template` in its sensitive `fake.json.tmpl`.
+fn with_hash_template(format: &str, template: &str) -> Edit {
+    Edit::fake()
+        .replace(
+            "provider.yaml",
+            "format: json",
+            &format!("format: {format}"),
+        )
+        .set("templates/fake.json.tmpl", template)
+}
+
+#[test]
+fn a_sha256_hex_filter_writes_the_hash_of_the_secret_with_no_escaper() {
+    let package = with_hash_template(
+        "json",
+        "{\n  \"greeting\": {{ settings.greeting }},\n  \"hash\": \"{{ secret.authToken|sha256Hex }}\",\n  \"token\": {{ secret.authToken }}\n}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&package, serde_json::json!({ "authToken": SECRET_REF }));
+
+    assert!(
+        write
+            .content
+            .segments
+            .iter()
+            .any(|segment| matches!(segment, Segment::SecretHash { .. }))
+    );
+    assert_eq!(
+        String::from_utf8(
+            write
+                .content
+                .materialize(&token("abc"))
+                .expect("the config materializes")
+        )
+        .expect("UTF-8 output"),
+        format!(
+            "{{\n  \"greeting\": \"hello from stackly\",\n  \"hash\": \"{ABC_SHA256_HEX}\",\n  \"token\": \"abc\"\n}}\n"
+        )
+    );
+    let err = write
+        .content
+        .materialize(&ResolvedSecrets::for_tests([]))
+        .unwrap_err();
+    assert_eq!(
+        err,
+        PlanError::SecretUnavailable {
+            field: "authToken".parse().expect("valid field")
+        }
+    );
+
+    let valkey = with_hash_template(
+        "valkeyConf",
+        "user default on #{{ secret.authToken | sha256Hex }}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&valkey, serde_json::json!({ "authToken": SECRET_REF }));
+    assert_eq!(
+        write
+            .content
+            .materialize(&token("a\"b\nc"))
+            .expect("a hash never needs an escape"),
+        format!(
+            "user default on #{}\n",
+            "92d80d9fbccd9c8c8f7e2cadaea972af1ebdefe71bd557129d663a90d5b67ab4"
+        )
+        .as_bytes()
+    );
+}
+
+#[test]
+fn a_hash_segment_shows_only_the_secret_reference_in_the_plan() {
+    let package = with_hash_template(
+        "json",
+        "{\"hash\": \"{{ secret.authToken | sha256Hex }}\"}\n",
+    )
+    .validate()
+    .unwrap_or_else(|err| panic!("{:#?}", err.issues));
+    let write = first_write(&package, serde_json::json!({ "authToken": SECRET_REF }));
+    let segment = write
+        .content
+        .segments
+        .iter()
+        .find(|segment| matches!(segment, Segment::SecretHash { .. }))
+        .expect("the hash segment");
+
+    assert_eq!(
+        serde_json::to_value(segment).expect("segments serialize"),
+        serde_json::json!({
+            "type": "secretHash",
+            "content": { "secret": "<secret:authToken>", "algo": "sha256_hex" }
+        })
+    );
+    let shown = format!(
+        "{:?} {}",
+        write.content,
+        serde_json::to_string(&write.content).expect("serializes")
+    );
+    assert!(!shown.contains(SECRET_REF), "{shown}");
+    assert!(!shown.contains(ABC_SHA256_HEX), "{shown}");
+    assert!(shown.contains("<secret:authToken>"), "{shown}");
+}
+
+#[test]
+fn a_filter_is_rejected_off_a_secret_path_with_its_code_and_position() {
+    let sensitive = "templates/fake.json.tmpl";
+    for (template, location) in [
+        ("x {{ settings.greeting | sha256Hex }}\n", "1:3"),
+        ("x {{ instance.data | sha256Hex }}\n", "1:3"),
+        ("ok\nx {{ secret.authToken | md5 }}\n", "2:3"),
+        ("x {{ secret.authToken | Sha256Hex }}\n", "1:3"),
+        ("x {{ secret.authToken | sha256Hex | sha256Hex }}\n", "1:3"),
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            location,
+            IssueCode::TemplateType,
+        );
+    }
+    for template in [
+        "x {{ secret.authToken | }}\n",
+        "x {{ secret.authToken | sha-256 }}\n",
+    ] {
+        assert_issue(
+            &with_hash_template("valkeyConf", template).issues(),
+            sensitive,
+            "1:3",
+            IssueCode::TemplateSyntax,
+        );
+    }
+    assert_issue(
+        &with_hash_template("plain", "x {{ secret.authToken | sha256Hex }}\n").issues(),
+        sensitive,
+        "1:3",
+        IssueCode::TemplateType,
+    );
+    let shared = "templates/fake.conf.tmpl";
+    for (template, location) in [
+        ("{\"h\": \"{{ secret.authToken | sha256Hex }}\"}\n", "1:8"),
+        ("{\"h\": {{ secret.authToken }}}\n", "1:7"),
+    ] {
+        assert_issue(
+            &Edit::fake().set(shared, template).issues(),
+            shared,
+            location,
+            IssueCode::SecretNotAllowedHere,
+        );
     }
 }
 

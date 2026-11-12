@@ -613,14 +613,22 @@ fn provider_manifest_seeds(root: &Path) -> Result<Vec<Seed>> {
 /// Templates for the setups no example package covers, with the selector
 /// byte of the setup and the seed name. The harness (`template` in
 /// `stackly_core::provider::fuzzing`) puts each in the slot of the fake
-/// `fake.json.tmpl`, a sensitive config, so a sample may use `secret.*`.
+/// `fake.json.tmpl`, a sensitive config, so a sample may use `secret.*`
+/// and the `sha256Hex` filter (spec 0040 AC-3).
 /// Setup numbers: 0 `json`, 1 `yaml`, 2 `natsConf`, 3 the traefik routes
 /// template, 4 `postgresqlConf`, 5 `plain`, 6 `valkeyConf` (spec 0040).
-const FORMAT_SAMPLES: [(&str, u8, &str); 1] = [(
-    "format.valkey.conf.tmpl",
-    6,
-    "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nready-delay {{ settings.readyDelayMs }}\ndir {{ instance.data }}\nrequirepass {{ secret.authToken }}\n",
-)];
+const FORMAT_SAMPLES: [(&str, u8, &str); 2] = [
+    (
+        "filter.sha256hex.json.tmpl",
+        0,
+        "{\n  \"greeting\": {{ settings.greeting }},\n  \"hash\": \"{{ secret.authToken | sha256Hex }}\"\n}\n",
+    ),
+    (
+        "format.valkey.conf.tmpl",
+        6,
+        "proc-title-template {{ settings.greeting }}\nfail-init {{ settings.failInit }}\nready-delay {{ settings.readyDelayMs }}\ndir {{ instance.data }}\nrequirepass {{ secret.authToken }}\n",
+    ),
+];
 
 /// `provider_template`: every template of the example packages after the
 /// selector byte of its setup: 0 for `json`, 1 for `yaml`, 2 for
@@ -997,6 +1005,7 @@ mod tests {
         assert_eq!(selector("traefik.traefik.yaml.tmpl"), 1);
         assert_eq!(selector("traefik.routes.yaml.tmpl"), 3);
         assert_eq!(selector("format.valkey.conf.tmpl"), 6);
+        assert_eq!(selector("filter.sha256hex.json.tmpl"), 0);
         let fields = provider_interpolation_seeds(&root).unwrap();
         let texts: Vec<&[u8]> = fields.iter().map(|seed| seed.bytes.as_slice()).collect();
         assert!(texts.contains(&b"--data=${instance.data}".as_slice()));

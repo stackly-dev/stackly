@@ -683,7 +683,9 @@ fn plans_show_secrets_only_as_their_field() {
                     .segments
                     .iter()
                     .find_map(|segment| match segment {
-                        Segment::Secret { secret, .. } => Some(secret.clone()),
+                        Segment::Secret { secret, .. } | Segment::SecretHash { secret, .. } => {
+                            Some(secret.clone())
+                        }
                         Segment::Text(_) => None,
                     })
             }

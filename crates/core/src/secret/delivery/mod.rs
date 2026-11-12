@@ -27,6 +27,7 @@ mod material;
 use std::ffi::OsStr;
 use std::fmt::Write as _;
 
+use serde::{Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use stackly_platform::SecretValue;
 
@@ -52,6 +53,13 @@ pub fn stdin_payload(value: &SecretValue) -> &[u8] {
 pub enum HashAlgo {
     /// SHA-256 as 64 lowercase hex characters, as ClickHouse takes it.
     Sha256Hex,
+}
+
+impl Serialize for HashAlgo {
+    /// Writes [`as_code`](Self::as_code), as plans and their goldens show it.
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_code())
+    }
 }
 
 impl HashAlgo {
@@ -119,6 +127,14 @@ mod tests {
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
         );
         assert_eq!(HashAlgo::Sha256Hex.as_code(), "sha256_hex");
+    }
+
+    #[test]
+    fn a_hash_algo_serializes_as_its_code() {
+        assert_eq!(
+            serde_json::to_value(HashAlgo::Sha256Hex).unwrap(),
+            serde_json::json!("sha256_hex")
+        );
     }
 
     #[test]

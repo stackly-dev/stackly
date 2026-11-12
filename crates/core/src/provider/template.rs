@@ -2,7 +2,8 @@
 //! config"): `{{ path }}`, `{{#each path as item}}`, `{{#if path}}` with
 //! `{{else}}`, `{{! comment }}`, and `\{{` for a literal `{{`. Every output
 //! goes through the escaper of the config file's format; there is no raw
-//! mode.
+//! mode, and the one filter, `{{ secret.<field> | sha256Hex }}` (spec
+//! 0040 AC-3), writes a hash of a secret that holds only `[0-9a-f]`.
 
 use serde::Serialize;
 
@@ -11,6 +12,7 @@ use super::issue::{FileIssues, IssueCode, Location};
 use super::names::{RESERVED_LOOP_NAMES, SettingName, is_name, is_segment};
 use super::plan::{PlanError, RenderedContent, Resolver, Segment, Value};
 use super::settings::{FieldKind, ScalarKind, ScalarValue, SettingsItem};
+use crate::secret::delivery::HashAlgo;
 
 /// Most nested blocks.
 const MAX_DEPTH: usize = 4;
@@ -224,37 +226,50 @@ impl Pos {
 /// A parsed template, before its paths are resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Template {
-    nodes: Vec<Node<Vec<String>>>,
+    nodes: Vec<ParsedNode>,
 }
 
 /// A template whose paths resolved against one package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Checked {
-    nodes: Vec<Node<Ref>>,
+    nodes: Vec<CheckedNode>,
     /// Every token the template uses, with where.
     pub(crate) tokens: Vec<(Token, Pos)>,
 }
 
+/// A template node: `P` is the path and `F` the filter of an output tag,
+/// as parsed (names) or as checked (the hash it writes).
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Node<P> {
+enum Node<P, F> {
     Text(String),
     Output {
         path: P,
+        filter: F,
         at: Pos,
     },
     Each {
         path: P,
         var: String,
-        body: Vec<Node<P>>,
+        body: Vec<Node<P, F>>,
         at: Pos,
     },
     If {
         path: P,
-        then: Vec<Node<P>>,
-        otherwise: Vec<Node<P>>,
+        then: Vec<Node<P, F>>,
+        otherwise: Vec<Node<P, F>>,
         at: Pos,
     },
 }
+
+/// A node as parsed: dotted path segments and the filter names after `|`.
+type ParsedNode = Node<Vec<String>, Vec<String>>;
+
+/// A node whose paths resolved; an output tag with the `sha256Hex` filter
+/// carries the hash it writes in place of the secret.
+type CheckedNode = Node<Ref, Option<HashAlgo>>;
+
+/// The one filter name today (spec 0040 AC-3).
+const SHA256_HEX_FILTER: &str = "sha256Hex";
 
 /// A resolved template path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,7 +287,8 @@ enum Ref {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TagKind {
-    Output(Vec<String>),
+    /// A path and the filter names after it.
+    Output(Vec<String>, Vec<String>),
     EachOpen(Vec<String>, String),
     EachClose,
     IfOpen(Vec<String>),
@@ -283,7 +299,7 @@ enum TagKind {
 
 impl TagKind {
     const fn is_block(&self) -> bool {
-        !matches!(self, Self::Output(_))
+        !matches!(self, Self::Output(..))
     }
 }
 
@@ -390,7 +406,20 @@ fn classify(content: &str) -> Result<TagKind, String> {
     if content.starts_with('#') || content.starts_with('/') {
         return Err(format!("unknown block tag {content}"));
     }
-    Ok(TagKind::Output(path(content)?))
+    let mut parts = content.split('|').map(str::trim);
+    let target = path(parts.next().unwrap_or_default())?;
+    let filters = parts
+        .map(|name| {
+            if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric()) {
+                Ok(name.to_owned())
+            } else {
+                Err(format!(
+                    "filter {name:?} is not a name of letters and digits after |"
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(TagKind::Output(target, filters))
 }
 
 fn is_blank(text: &str) -> bool {
@@ -461,19 +490,19 @@ fn build(lexed: Vec<Lex>) -> Result<Template, SyntaxError> {
             path: Vec<String>,
             var: String,
             at: Pos,
-            body: Vec<Node<Vec<String>>>,
+            body: Vec<ParsedNode>,
         },
         If {
             path: Vec<String>,
             at: Pos,
-            then: Vec<Node<Vec<String>>>,
-            otherwise: Option<Vec<Node<Vec<String>>>>,
+            then: Vec<ParsedNode>,
+            otherwise: Option<Vec<ParsedNode>>,
         },
     }
     fn current<'a>(
-        root: &'a mut Vec<Node<Vec<String>>>,
+        root: &'a mut Vec<ParsedNode>,
         stack: &'a mut [Frame],
-    ) -> &'a mut Vec<Node<Vec<String>>> {
+    ) -> &'a mut Vec<ParsedNode> {
         match stack.last_mut() {
             None => root,
             Some(Frame::Each { body, .. }) => body,
@@ -493,8 +522,8 @@ fn build(lexed: Vec<Lex>) -> Result<Template, SyntaxError> {
             }
             Lex::Tag(kind, at) => match kind {
                 TagKind::Comment => {}
-                TagKind::Output(path) => {
-                    current(&mut root, &mut stack).push(Node::Output { path, at })
+                TagKind::Output(path, filter) => {
+                    current(&mut root, &mut stack).push(Node::Output { path, filter, at })
                 }
                 TagKind::EachOpen(..) | TagKind::IfOpen(_) if stack.len() == MAX_DEPTH => {
                     return Err((at, format!("blocks nest more than {MAX_DEPTH} deep")));
@@ -710,26 +739,60 @@ fn check_path<'a>(
     }
 }
 
+/// Checks the filters of an output tag: at most one, only `sha256Hex`, and
+/// only after a `secret.*` path. Returns the hash it writes (`None` for a
+/// tag without a filter), or `None` with an issue when a rule fails.
+#[expect(
+    clippy::option_option,
+    reason = "the outer None is a rejected tag, the inner None a tag without a filter"
+)]
+fn check_filter(
+    path: &[String],
+    filters: &[String],
+    kind: &PathType,
+    at: Pos,
+    issues: &mut FileIssues<'_>,
+) -> Option<Option<HashAlgo>> {
+    let message = match filters {
+        [] => return Some(None),
+        [name] if name != SHA256_HEX_FILTER => {
+            format!("unknown filter {name}; the only filter is {SHA256_HEX_FILTER}")
+        }
+        [_] if !matches!(kind, PathType::Secret) => format!(
+            "{SHA256_HEX_FILTER} only follows a secret.* path, and {} is not one",
+            path.join(".")
+        ),
+        [_] => return Some(Some(HashAlgo::Sha256Hex)),
+        _ => "an output tag takes at most one filter".to_owned(),
+    };
+    issues.push(at.location(), IssueCode::TemplateType, message);
+    None
+}
+
 fn check_nodes<'a>(
-    nodes: &[Node<Vec<String>>],
+    nodes: &[ParsedNode],
     env: &TypeEnv<'a>,
     scopes: &mut Vec<Scope<'a>>,
     tokens: &mut Vec<(Token, Pos)>,
     issues: &mut FileIssues<'_>,
-) -> Vec<Node<Ref>> {
+) -> Vec<CheckedNode> {
     let mut out = Vec::new();
     for node in nodes {
         match node {
             Node::Text(text) => out.push(Node::Text(text.clone())),
-            Node::Output { path, at } => {
+            Node::Output { path, filter, at } => {
                 let Some((reference, kind)) = check_path(path, *at, env, scopes, tokens, issues)
                 else {
+                    continue;
+                };
+                let Some(filter) = check_filter(path, filter, &kind, *at, issues) else {
                     continue;
                 };
                 match kind {
                     PathType::Scalar | PathType::Boolean | PathType::Secret => {
                         out.push(Node::Output {
                             path: reference,
+                            filter,
                             at: *at,
                         });
                     }
@@ -869,6 +932,27 @@ impl Output {
         Ok(())
     }
 
+    /// Ends the current text segment, if any, before a secret segment.
+    fn flush_text(&mut self) {
+        if !self.text.is_empty() {
+            self.segments
+                .push(Segment::Text(std::mem::take(&mut self.text)));
+        }
+    }
+
+    /// Writes the hash of a secret value, which `materialize` computes; the
+    /// static check lets a filter follow only a `secret.*` path.
+    fn push_hash(&mut self, value: Value, algo: HashAlgo, field: &str) -> Result<(), PlanError> {
+        let Value::Secret(secret) = value else {
+            return Err(PlanError::UnrepresentableValue {
+                field: field.to_owned(),
+            });
+        };
+        self.flush_text();
+        self.segments.push(Segment::SecretHash { secret, algo });
+        Ok(())
+    }
+
     fn push_value(&mut self, value: Value, field: &str) -> Result<(), PlanError> {
         match value {
             Value::Text(text) => {
@@ -882,10 +966,7 @@ impl Output {
             Value::Integer(number) => self.push_text(&number.to_string()),
             Value::Boolean(flag) => self.push_text(self.format.boolean(flag)),
             Value::Secret(secret) => {
-                if !self.text.is_empty() {
-                    self.segments
-                        .push(Segment::Text(std::mem::take(&mut self.text)));
-                }
+                self.flush_text();
                 self.segments.push(Segment::Secret {
                     secret,
                     format: self.format,
@@ -968,7 +1049,7 @@ fn field_name(reference: &Ref) -> String {
 }
 
 fn render_nodes<'a>(
-    nodes: &[Node<Ref>],
+    nodes: &[CheckedNode],
     resolver: &'a Resolver<'_>,
     frames: &mut Vec<Frame<'a>>,
     output: &mut Output,
@@ -976,9 +1057,12 @@ fn render_nodes<'a>(
     for node in nodes {
         match node {
             Node::Text(text) => output.push_text(text)?,
-            Node::Output { path, .. } => {
+            Node::Output { path, filter, .. } => {
                 let value = lookup(path, resolver, frames)?;
-                output.push_value(value, &field_name(path))?;
+                match filter {
+                    Some(algo) => output.push_hash(value, *algo, &field_name(path))?,
+                    None => output.push_value(value, &field_name(path))?,
+                }
             }
             Node::Each { path, body, .. } => {
                 let Ref::Token(Token::Setting(name)) = path else {
@@ -1025,7 +1109,7 @@ mod tests {
     use super::*;
 
     fn texts(template: &Template) -> Vec<String> {
-        fn walk(nodes: &[Node<Vec<String>>], out: &mut Vec<String>) {
+        fn walk(nodes: &[ParsedNode], out: &mut Vec<String>) {
             for node in nodes {
                 match node {
                     Node::Text(text) => out.push(text.clone()),
@@ -1125,6 +1209,40 @@ mod tests {
             unknown_block.1
         );
         assert!(parse("{{#if a}}{{#if a}}{{#if a}}{{#if a}}x{{/if}}{{/if}}{{/if}}{{/if}}").is_ok());
+    }
+
+    /// The filter names of the only output tag of a parsed template.
+    fn filters(text: &str) -> Vec<String> {
+        match parse(text).unwrap().nodes.as_slice() {
+            [Node::Output { filter, .. }] => filter.clone(),
+            other => panic!("one output tag expected, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_output_tag_takes_filter_names_after_a_bar_with_any_spacing() {
+        assert_eq!(filters("{{ secret.x | sha256Hex }}"), ["sha256Hex"]);
+        assert_eq!(filters("{{secret.x|sha256Hex}}"), ["sha256Hex"]);
+        assert_eq!(filters("{{  secret.x   |\tsha256Hex  }}"), ["sha256Hex"]);
+        assert_eq!(filters("{{ secret.x | a | b }}"), ["a", "b"]);
+        assert!(filters("{{ secret.x }}").is_empty());
+    }
+
+    #[test]
+    fn an_empty_or_odd_filter_name_is_a_syntax_error_at_the_tag() {
+        for bad in [
+            "ok\n {{ secret.x | }}",
+            "ok\n {{ secret.x || sha256Hex }}",
+            "ok\n {{ secret.x | sha-256 }}",
+            "ok\n {{ secret.x | sha256_hex }}",
+            "ok\n {{ secret.x | sha 256 }}",
+            "ok\n {{ secret.x | ü }}",
+            "ok\n {{ | sha256Hex }}",
+        ] {
+            let (at, message) = parse(bad).unwrap_err();
+            assert_eq!(at, Pos { line: 2, column: 2 }, "{bad:?}");
+            assert!(!message.is_empty());
+        }
     }
 
     #[test]
