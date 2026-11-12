@@ -1,0 +1,457 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+    "sourceDirty": false,
+    "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "valkey",
+      "--locked",
+      "--",
+      "--ignored",
+      "auth::",
+      "format::valkey_9_1_reads_back_each",
+      "persistence::valkey_9_1_keeps",
+      "persistence::valkey_9_1_volatile_loads"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-12T07:08:52.557946Z",
+  "finishedAt": "2026-11-12T07:09:21.009648Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 5,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 5,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 5
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce96-bf4a-7307-a8d5-f9812d69c941",
+      "covers": [
+        "REQ-038"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "valkey",
+        "name": "auth::valkey_9_1_answers_hello_to_the_readiness_user_without_an_acl_check",
+        "file": "apps/daemon/tests/valkey/auth.rs",
+        "line": 296
+      },
+      "status": "PASS",
+      "expected": "signed in as stackly-readiness, HELLO without arguments answers the RESP2 server map with server valkey and the version, because Valkey skips the ACL check for no-auth commands; GET is still NOPERM and PING is PONG",
+      "actual": "Valkey 9.1.2: HELLO answered the readiness user with server valkey and version 9.1.2; GET was NOPERM",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:09:08.298349Z",
+      "finishedAt": "2026-11-12T07:09:12.545439Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+        "sourceDirty": false,
+        "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "valkey",
+          "--locked",
+          "--",
+          "--ignored",
+          "auth::",
+          "format::valkey_9_1_reads_back_each",
+          "persistence::valkey_9_1_keeps",
+          "persistence::valkey_9_1_volatile_loads"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce96-bf4a-7307-a8d5-f98238e207cf",
+      "covers": [
+        "REQ-038",
+        "AC-038"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "valkey",
+        "name": "persistence::valkey_9_1_volatile_loads_a_dump_rdb_the_user_saved_until_it_is_deleted",
+        "file": "apps/daemon/tests/valkey/persistence.rs",
+        "line": 356
+      },
+      "status": "PASS",
+      "expected": "in mode volatile a SAVE the user runs writes dump.rdb in the data folder, the next start loads the saved key and still runs with save empty and appendonly no, and after dump.rdb is deleted while the instance is stopped the next start is empty",
+      "actual": "Valkey 9.1.2 volatile: SAVE wrote dump.rdb, the next start loaded it, and it was empty again after the file was deleted",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:09:08.298352Z",
+      "finishedAt": "2026-11-12T07:09:14.569886Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+        "sourceDirty": false,
+        "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "valkey",
+          "--locked",
+          "--",
+          "--ignored",
+          "auth::",
+          "format::valkey_9_1_reads_back_each",
+          "persistence::valkey_9_1_keeps",
+          "persistence::valkey_9_1_volatile_loads"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce96-bf4a-7307-a8d5-f9831c25f783",
+      "covers": [
+        "REQ-038"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "valkey",
+        "name": "auth::valkey_9_1_listens_on_loopback_only_and_signs_in_only_with_its_password",
+        "file": "apps/daemon/tests/valkey/auth.rs",
+        "line": 151
+      },
+      "status": "PASS",
+      "expected": "valkey-server listens only on its loopback client port with no Unix socket; a command without AUTH gets NOAUTH; AUTH <password> and AUTH default <password> sign in, another value gets WRONGPASS, a password with a space, quotes, and a backslash signs in; stackly-readiness may PING and gets NOPERM for GET, INFO, and CONFIG GET; the password is in no argv, no file of the root, no daemon log, and not in the registry; users.conf is 0600 with only the SHA-256 of the password and is gone after a clean stop",
+      "actual": "Valkey 9.1.2: one listener 127.0.0.1:50254, NOAUTH, WRONGPASS, NOPERM as expected, users.conf held only the hash and was removed",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:09:08.298364Z",
+      "finishedAt": "2026-11-12T07:09:15.323905Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+        "sourceDirty": false,
+        "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "valkey",
+          "--locked",
+          "--",
+          "--ignored",
+          "auth::",
+          "format::valkey_9_1_reads_back_each",
+          "persistence::valkey_9_1_keeps",
+          "persistence::valkey_9_1_volatile_loads"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce96-bf4a-7307-a8d5-f9842e0d5cf6",
+      "covers": [
+        "REQ-038",
+        "AC-038"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "valkey",
+        "name": "persistence::valkey_9_1_keeps_its_mode_when_validate_and_apply_ask_for_another",
+        "file": "apps/daemon/tests/valkey/persistence.rs",
+        "line": 277
+      },
+      "status": "PASS",
+      "expected": "for a volatile instance, instance.config.validate of persistence rdb and of aof answers valid false with settings.persistence immutable_after_init, instance.config.apply of each is refused with instance.settings_invalid and the same field error, no operation starts, the config folder and the revision stay the same, and the next start still runs memory only with save empty and appendonly no and an empty data folder",
+      "actual": "Valkey 9.1.2: validate and apply of rdb and aof refused with immutable_after_init, the instance stayed volatile",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:09:08.298363Z",
+      "finishedAt": "2026-11-12T07:09:13.737189Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+        "sourceDirty": false,
+        "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "valkey",
+          "--locked",
+          "--",
+          "--ignored",
+          "auth::",
+          "format::valkey_9_1_reads_back_each",
+          "persistence::valkey_9_1_keeps",
+          "persistence::valkey_9_1_volatile_loads"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1ce96-bf4a-7307-a8d5-f985d84cb29c",
+      "covers": [
+        "REQ-038"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "valkey",
+        "name": "format::valkey_9_1_reads_back_each_edge_keyspace_value_as_a_live_config_set_of_it",
+        "file": "apps/daemon/tests/valkey/format.rs",
+        "line": 124
+      },
+      "status": "PASS",
+      "expected": "for each edge value of notifyKeyspaceEvents (empty, $, K$, E$x, KEA, AKE$, every letter, repeats) the instance starts, and CONFIG GET notify-keyspace-events reads the same flags that CONFIG SET of that value on the running server reads",
+      "actual": "Valkey 9.1.2 read back \"\"->\"\", \"$\"->\"$\", \"K$\"->\"$K\", \"E$x\"->\"$xE\", \"KEA\"->\"AKE\", \"AKE$\"->\"AKE\", \"KEg$lshzxetdmnA\"->\"AKEm\", \"KKEE\"->\"KE\" as a live CONFIG SET does",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-12T07:09:08.298366Z",
+      "finishedAt": "2026-11-12T07:09:20.991536Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+        "sourceDirty": false,
+        "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "valkey",
+          "--locked",
+          "--",
+          "--ignored",
+          "auth::",
+          "format::valkey_9_1_reads_back_each",
+          "persistence::valkey_9_1_keeps",
+          "persistence::valkey_9_1_volatile_loads"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

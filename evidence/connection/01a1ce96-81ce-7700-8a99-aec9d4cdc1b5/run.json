@@ -1,0 +1,42 @@
+{
+  "sourceCommit": "badc7ce008053317c69324674812d063a3085b4e",
+  "sourceDirty": false,
+  "runId": "01a1ce96-81ce-7700-8a99-aec9d4cdc1b5",
+  "runKind": "native",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "stacklyd",
+    "--test",
+    "valkey",
+    "--locked",
+    "--",
+    "--ignored",
+    "auth::",
+    "format::valkey_9_1_reads_back_each",
+    "persistence::valkey_9_1_keeps",
+    "persistence::valkey_9_1_volatile_loads"
+  ],
+  "host": {
+    "os": "macos",
+    "arch": "aarch64",
+    "osVersion": "27.0.1",
+    "osBuild": "26A434",
+    "hardwareModel": "Mac13,1",
+    "chip": "Apple M1 Max",
+    "memoryBytes": 34359738368,
+    "performanceCores": 8,
+    "efficiencyCores": 2,
+    "virtualized": false
+  },
+  "baseline": {
+    "matches": true,
+    "osBuildMatches": false
+  },
+  "toolchain": {
+    "rustc": "1.99.1",
+    "xcode": "27.1 (27A9275)",
+    "swift": "6.4"
+  }
+}

@@ -113,6 +113,7 @@ async fn assert_stopped_clean(api: &Api, id: Uuid, pid: u32) {
     assert!(stopped.leftover_processes.is_empty(), "{stopped:#?}");
 }
 
+// covers: AC-15 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_compatibility() {

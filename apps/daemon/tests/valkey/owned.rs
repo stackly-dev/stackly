@@ -26,6 +26,7 @@ fn config_files(dir: &std::path::Path) -> Vec<(String, String)> {
     files
 }
 
+// covers: AC-10 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_refuses_to_move_what_stackly_owns_and_forgets_config_set_at_restart() {

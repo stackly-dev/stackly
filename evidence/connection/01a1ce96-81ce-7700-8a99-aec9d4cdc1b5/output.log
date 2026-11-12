@@ -1,0 +1,19 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 14.11s
+     Running tests/valkey.rs (target/debug/deps/valkey-32b562955c4129ec)
+
+running 5 tests
+test auth::valkey_9_1_answers_hello_to_the_readiness_user_without_an_acl_check ... ok
+test persistence::valkey_9_1_keeps_its_mode_when_validate_and_apply_ask_for_another ... ok
+test persistence::valkey_9_1_volatile_loads_a_dump_rdb_the_user_saved_until_it_is_deleted ... ok
+test auth::valkey_9_1_listens_on_loopback_only_and_signs_in_only_with_its_password ... ok
+test format::valkey_9_1_reads_back_each_edge_keyspace_value_as_a_live_config_set_of_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 12.71s
+

@@ -40,6 +40,7 @@ async fn findings(api: &Api, id: Uuid) -> Vec<DoctorFinding> {
         .collect()
 }
 
+// covers: AC-18 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_shows_its_connections_and_open_in_actions_without_the_password() {
@@ -117,6 +118,7 @@ async fn valkey_9_1_shows_its_connections_and_open_in_actions_without_the_passwo
     ev.pass_with("two connections, two Open In actions without the password, and readiness_user");
 }
 
+// covers: AC-18 (spec 0040)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed Valkey 9.1.2 artifact in the runtime cache"]
 async fn valkey_9_1_with_a_damaged_append_only_file_gets_the_aof_damaged_remedy() {
