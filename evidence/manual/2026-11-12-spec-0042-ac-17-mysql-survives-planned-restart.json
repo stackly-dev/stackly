@@ -1,0 +1,62 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1cf54-c1d7-763a-88e1-fc72db735c09",
+  "covers": [
+    "REQ-013",
+    "AC-013"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0042 AC-17 mysql survives planned restart",
+    "file": null,
+    "line": null
+  },
+  "status": "BLOCKED",
+  "expected": "cargo test -p stacklyd --test native_launchd mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout -- --ignored, run in the launchd gui domain with the MySQL 8.4.11 and 9.7.2 artifacts in the xtask runtime cache, keeps the pid and startedAt of a running MySQL instance of each line through stackly daemon restart and a SIGKILL of stacklyd, so HandoverProof official/mysql line 1 with the ID of that evidence can be added to HANDOVER_PROVEN",
+  "actual": null,
+  "reason": "the two tests run stacklyd as a LaunchAgent in the launchd gui domain of the user's login session and end that session with launchctl kickstart -k and bootout; the scope 07 rules leave launchd runs to the user, so this tester session (tst-f42-test) did not run them, HANDOVER_PROVEN gets no official/mysql entry, and a MySQL instance takes the stop_restore path on a planned daemon restart. The parts that need no launchd job are covered: official_mysql_has_no_handover_proof_before_its_launchd_records_pass (crates/core/tests/provider_packages.rs) and mysql_8_4_restart_preview_stops_and_restores_while_the_handover_is_unproven and its 9.7 twin (apps/daemon/tests/mysql/handover.rs, cached artifacts only)",
+  "owner": "@ojiepermana",
+  "subjects": [],
+  "steps": [
+    "on this Mac, logged in to the GUI session, with the MySQL artifacts mysql-8.4.11-macos-aarch64 and mysql-9.7.2-macos-aarch64 in the xtask runtime cache",
+    "from a clean HEAD run `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test native_launchd --locked -- --ignored --test-threads 1 mysql_8_4_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout mysql_9_7_survives_planned_restart_and_sigkill_and_returns_after_kickstart_and_bootout`",
+    "expect both tests to pass with the same mysqld pid and startedAt through `stackly daemon restart` and a SIGKILL of stacklyd, and a new mysqld after kickstart -k and bootout",
+    "on PASS of both, add HandoverProof::new(\"official/mysql\", \"1\", \"<ID of that evidence>\") to HANDOVER_PROVEN in the same commit as the records, and flip official_mysql_has_no_handover_proof_before_its_launchd_records_pass"
+  ],
+  "reviewer": "Claude Code (Claude Opus 5.5)",
+  "startedAt": "2026-11-12T10:36:40.791007Z",
+  "finishedAt": "2026-11-12T10:36:52.129195Z",
+  "evidencePath": "evidence/manual/2026-11-12-spec-0042-ac-17-mysql-survives-planned-restart.json",
+  "context": {
+    "sourceCommit": "b3e80f0babd2b0bd5fe64115669b8d3da45d9c32",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

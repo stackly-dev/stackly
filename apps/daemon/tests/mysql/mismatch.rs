@@ -80,6 +80,7 @@ async fn refuses_data_of_the_other_line_and_a_marker_that_is_missing_or_changed(
     drop(api);
     daemon.shutdown().await;
     let before = markers(&data);
+    let tree = tree_digest(&data);
 
     check_refuses(&site, &made, other_runtime.0, my.line, other.line);
 
@@ -94,6 +95,7 @@ async fn refuses_data_of_the_other_line_and_a_marker_that_is_missing_or_changed(
     assert_eq!(error.detail("runtime"), Some(other.line));
     assert!(mysqld_serving(&data).is_empty(), "a mysqld was spawned");
     assert_eq!(markers(&data), before, "the data was changed in place");
+    assert_eq!(tree_digest(&data), tree, "a data file was changed");
     drop(api);
     daemon.shutdown().await;
 
@@ -102,28 +104,54 @@ async fn refuses_data_of_the_other_line_and_a_marker_that_is_missing_or_changed(
     site.rebind_instance(made.id, &own);
     let marker = data.join("mysql_upgrade_history");
     let original = std::fs::read_to_string(&marker).expect("the marker can be read");
+    let mode = std::fs::metadata(&marker)
+        .expect("the marker has metadata")
+        .permissions();
     std::fs::remove_file(&marker).expect("the marker can be removed");
+    let mut without_marker = tree.clone();
+    without_marker
+        .remove("mysql_upgrade_history")
+        .expect("the tree holds the marker");
     let daemon = site.in_process(|_| {}).await;
     let api = site.api().await;
     let error = refused_start(&api, made.id).await;
     assert_eq!(error.code(), "supervisor.data_unavailable", "{error:?}");
     assert_eq!(error.detail("reason"), Some("the data marker is missing"));
     assert!(mysqld_serving(&data).is_empty());
+    assert!(!marker.exists(), "a refused start wrote the marker again");
+    assert_eq!(
+        tree_digest(&data),
+        without_marker,
+        "a data file was changed while the marker was missing"
+    );
 
-    std::fs::write(&marker, original.replace(my.version, "8.0.40"))
-        .expect("the marker can be written");
+    let changed = original.replace(my.version, "8.0.40");
+    assert_ne!(changed, original, "the marker names {}", my.version);
+    std::fs::write(&marker, &changed).expect("the marker can be written");
     let error = refused_start(&api, made.id).await;
     assert_eq!(error.code(), "supervisor.data_incompatible", "{error:?}");
     assert_eq!(error.detail("outcome"), Some("marker_mismatch"));
     assert!(mysqld_serving(&data).is_empty());
+    assert_eq!(
+        std::fs::read_to_string(&marker).expect("the marker can be read"),
+        changed,
+        "the changed marker was rewritten"
+    );
+    let mut rest = tree_digest(&data);
+    rest.remove("mysql_upgrade_history");
+    assert_eq!(
+        rest, without_marker,
+        "a data file was changed while the marker was wrong"
+    );
 
     std::fs::write(&marker, &original).expect("the marker can be restored");
-    let digest = tree_digest(&data);
-    assert!(!digest.is_empty());
+    // Removing and writing the marker gave it the umask mode; put it back.
+    std::fs::set_permissions(&marker, mode).expect("the marker mode can be restored");
+    assert_eq!(tree_digest(&data), tree, "the data is back as it was");
     api.start_ready(made.id).await;
     stop_and_shutdown(&api, daemon, made.id).await;
     ev.pass_with(&format!(
-        "data {} refused on runtime {} by the start and rebind::check without a byte changed, a missing marker as data_unavailable, 8.0.40 as marker_mismatch, and a start once the marker was back",
+        "data {} refused on runtime {} by the start and rebind::check, a missing marker as data_unavailable, 8.0.40 as marker_mismatch, every data file byte for byte unchanged after each refusal, and a start once the marker was back",
         my.line, other.line
     ));
 }
@@ -135,7 +163,7 @@ async fn mysql_8_4_data_is_refused_by_a_runtime_9_7_and_a_missing_or_changed_mar
     let ev = evidence!(
         covers = ["REQ-055", "BR-009", "AC-081"],
         kind = Kind::Native,
-        expected = "data initialized by MySQL 8.4 is refused by a runtime 9.7 with supervisor.data_incompatible (incompatible, data 8.4, runtime 9.7) before any mysqld is spawned, mysql_upgrade_history and mysql.ibd keep their bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, and the instance starts once the marker is back",
+        expected = "data initialized by MySQL 8.4 is refused by a runtime 9.7 with supervisor.data_incompatible (incompatible, data 8.4, runtime 9.7) before any mysqld is spawned, every data file keeps its bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, neither refusal changes a data file, and the instance starts once the marker is back",
     );
     refuses_data_of_the_other_line_and_a_marker_that_is_missing_or_changed(MY84, MY97, ev).await;
 }
@@ -147,7 +175,7 @@ async fn mysql_9_7_data_is_refused_by_a_runtime_8_4_and_a_missing_or_changed_mar
     let ev = evidence!(
         covers = ["REQ-055", "BR-009", "AC-081"],
         kind = Kind::Native,
-        expected = "data initialized by MySQL 9.7 is refused by a runtime 8.4 with supervisor.data_incompatible (incompatible, data 9.7, runtime 8.4) before any mysqld is spawned, mysql_upgrade_history and mysql.ibd keep their bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, and the instance starts once the marker is back",
+        expected = "data initialized by MySQL 9.7 is refused by a runtime 8.4 with supervisor.data_incompatible (incompatible, data 9.7, runtime 8.4) before any mysqld is spawned, every data file keeps its bytes, rebind::check gives the same outcome, a missing marker is supervisor.data_unavailable, a marker of 8.0.40 is marker_mismatch, neither refusal changes a data file, and the instance starts once the marker is back",
     );
     refuses_data_of_the_other_line_and_a_marker_that_is_missing_or_changed(MY97, MY84, ev).await;
 }

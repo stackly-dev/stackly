@@ -5,7 +5,7 @@
 use stackly_protocol::instance::{ConnectionAvailability, OpenActionKind};
 use stackly_testkit::evidence::{Evidence, Kind, evidence};
 
-use crate::harness::{MY84, My, PASSWORD_FIELD, Site, create_instance, stop_and_shutdown};
+use crate::harness::{MY84, MY97, My, PASSWORD_FIELD, Site, create_instance, stop_and_shutdown};
 
 async fn shows_three_open_actions_with_no_secret_and_the_runtime_mysql(my: My, ev: Evidence) {
     let Some(site) = Site::open(&ev, my) else {
@@ -94,4 +94,16 @@ async fn mysql_8_4_shows_three_open_actions_with_no_secret_and_the_runtime_mysql
         expected = "instance.get_detail of a ready MySQL 8.4 instance lists the open actions tableplus, sequel_ace, and mysql in that order, each copying rootPassword by reference and none holding its value, and the mysql action runs bin/mysql of the instance runtime over the instance socket",
     );
     shows_three_open_actions_with_no_secret_and_the_runtime_mysql(MY84, ev).await;
+}
+
+// covers: AC-18 (spec 0042)
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
+async fn mysql_9_7_shows_three_open_actions_with_no_secret_and_the_runtime_mysql() {
+    let ev = evidence!(
+        covers = ["REQ-055"],
+        kind = Kind::Native,
+        expected = "instance.get_detail of a ready MySQL 9.7 instance lists the open actions tableplus, sequel_ace, and mysql in that order, each copying rootPassword by reference and none holding its value, and the mysql action runs bin/mysql of the instance runtime over the instance socket",
+    );
+    shows_three_open_actions_with_no_secret_and_the_runtime_mysql(MY97, ev).await;
 }

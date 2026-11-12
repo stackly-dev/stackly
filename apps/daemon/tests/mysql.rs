@@ -21,12 +21,16 @@ mod compat;
 mod config_calls;
 #[path = "mysql/doctor.rs"]
 mod doctor;
+#[path = "mysql/drift.rs"]
+mod drift;
 #[path = "mysql/endpoints.rs"]
 mod endpoints;
 #[path = "mysql/existing_data.rs"]
 mod existing_data;
 #[path = "mysql/format.rs"]
 mod format;
+#[path = "mysql/handover.rs"]
+mod handover;
 #[path = "mysql/harness.rs"]
 mod harness;
 #[path = "mysql/init.rs"]
@@ -39,10 +43,14 @@ mod mismatch;
 mod open_with;
 #[path = "mysql/paths.rs"]
 mod paths;
+#[path = "mysql/persist.rs"]
+mod persist;
 #[path = "mysql/readiness.rs"]
 mod readiness;
 #[path = "mysql/sentinel.rs"]
 mod sentinel;
+#[path = "mysql/status_window.rs"]
+mod status_window;
 #[path = "mysql/stop.rs"]
 mod stop;
 #[path = "supervisor/support.rs"]

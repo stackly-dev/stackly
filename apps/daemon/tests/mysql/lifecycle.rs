@@ -180,6 +180,7 @@ async fn is_created_started_served_restarted_and_stopped_through_the_daemon(my: 
     ));
 }
 
+// covers: AC-13 (spec 0042)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed MySQL 8.4 artifact in the runtime cache"]
 async fn mysql_8_4_is_created_started_served_restarted_and_stopped_through_the_daemon() {
@@ -195,6 +196,7 @@ async fn mysql_8_4_is_created_started_served_restarted_and_stopped_through_the_d
     is_created_started_served_restarted_and_stopped_through_the_daemon(my, ev).await;
 }
 
+// covers: AC-13 (spec 0042)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
 async fn mysql_9_7_is_created_started_served_restarted_and_stopped_through_the_daemon() {
@@ -240,6 +242,7 @@ async fn writes_a_binary_log_only_when_the_setting_is_on(my: My, ev: Evidence) {
     ev.pass_with("@@log_bin is 1 and binlog files exist with binaryLog true");
 }
 
+// covers: AC-13 (spec 0042)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed MySQL 8.4 artifact in the runtime cache"]
 async fn mysql_8_4_writes_a_binary_log_only_when_the_setting_is_on() {
@@ -251,6 +254,7 @@ async fn mysql_8_4_writes_a_binary_log_only_when_the_setting_is_on() {
     writes_a_binary_log_only_when_the_setting_is_on(MY84, ev).await;
 }
 
+// covers: AC-13 (spec 0042)
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "native: needs the managed MySQL 9.7 artifact in the runtime cache"]
 async fn mysql_9_7_writes_a_binary_log_only_when_the_setting_is_on() {
