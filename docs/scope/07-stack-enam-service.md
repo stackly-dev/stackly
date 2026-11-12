@@ -22,7 +22,7 @@ Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring d
 - [ ] Verify it: `/check verify provider NATS & JetStream`
 - [ ] Test it: `/test provider NATS & JetStream`
 
-### 40. Provider Valkey · needs a decision
+### 40. Provider Valkey · in-progress
 
 Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan stop, dengan penjelasan jujur soal mode volatile versus durable.
 
@@ -30,7 +30,16 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
 
 **Trace:** REQ-038, AC-038, AC-077 (sebagian), PRD bagian 22.4
 
-- [ ] Design it (spec): `/architect provider Valkey`
+**Pointer:** spec [0040](../specs/0040-provider-valkey/index.md)
+
+- [x] Design it (spec): `/architect provider Valkey`
+- [ ] Build it: `/develop provider Valkey`
+  - [ ] Perubahan core dan paket, dibuktikan di fixture: format `valkeyConf`, filter template `sha256Hex` (dibangun fitur 40, dipakai fitur 43), paket `providers/valkey` dengan golden, fixture form, dan seed fuzz, lalu spike dari paket (hapus recipe `Valkey` dan `// provisional: F40`) (spec 0040 AC-1, AC-2 tanpa round trip, AC-3, AC-7 bagian teks, AC-12 bagian plan, AC-16 bagian spike, AC-18 bagian loader; build step 1 sampai 4; needs fase 06, sudah done; step 1 dan 2 menyentuh `template.rs` dan `plan.rs` bersama fitur 42 dan 43, satu sesi pada satu waktu; fitur 43 needs step 2)
+  - [ ] Valkey 9.1.2 asli lewat daemon: harness dan test native auth, readiness jujur (`LOADING`), parameter milik Stackly, stop, tool dari runtime, lifecycle dan adopsi, durability tiga mode (stop normal dan crash), mode yang tidak bisa diganti, test install dari cache, remedy, connection, dan Open In (spec 0040 AC-2 round trip, AC-4 sampai AC-13, AC-16 bagian version check, AC-18; build step 5 sampai 7; after milestone 1; needs artefak `valkey-9.1.2-r2-macos-aarch64` di cache xtask, selain itu `BLOCKED`; step 7 menyentuh `native_runtime_install.rs` bersama fitur 42 dan 43)
+  - [ ] Konformitas, evidence, dan catalog: test native `valkey_9_1_passes_conformance` dan `cargo xtask provider test providers/valkey` untuk tiga skenario, evidence BR-025 dengan `compat-record`, run spike native dari paket, lalu entri `[[provider]]` di catalog dan `cargo xtask provider freeze` (spec 0040 AC-14 sampai AC-17; build step 8 sampai 10; after milestone 2; revision catalog adalah nomor bebas berikutnya yang ditetapkan lead; `provider_conformance.rs`, `providers/catalog.toml`, dan `catalog-revisions.json` bersama fitur 39 sampai 43)
+  - [ ] Handover: test native launchd `valkey_9_1_survives_planned_restart_and_sigkill`, lalu entri `HANDOVER_PROVEN` sesudah record nya `PASS` (spec 0040 AC-19; build step 11 dan 12; after milestone 3; step 12 needs kamu menjalankan test launchd; `native_launchd.rs` dan `handover.rs` bersama fitur 41 sampai 43)
+- [ ] Verify it: `/check verify provider Valkey`
+- [ ] Test it: `/test provider Valkey`
 
 ### 41. Provider Traefik & routing lokal · in-progress
 
@@ -51,7 +60,7 @@ Entrypoint loopback, routing lewat file provider dengan namespace per instance, 
 - [ ] Verify it: `/check verify provider Traefik & routing lokal`
 - [ ] Test it: `/test provider Traefik & routing lokal`
 
-### 42. Provider MySQL · needs a decision
+### 42. Provider MySQL · in-progress
 
 Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readiness lewat query terautentikasi berhak minimum, serta shutdown terkontrol sesuai versi MySQL yang dipilih.
 
@@ -59,7 +68,16 @@ Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readi
 
 **Trace:** REQ-055 (tanpa bagian adoption, yang menyusul di fitur 57), AC-081 (tanpa bagian restore, yang menyusul di fase 09), PRD bagian 22.6
 
-- [ ] Design it (spec): `/architect provider MySQL`
+**Pointer:** spec [0042](../specs/0042-provider-mysql/index.md)
+
+- [x] Design it (spec): `/architect provider MySQL`
+- [ ] Build it: `/develop provider MySQL`
+  - [ ] Format, paket, dan spike dari paket: format template `mysqlCnf` di core, paket `providers/mysql` dengan golden dan `versions.json`, fixture form `create-form-mysql.json`, lalu recipe spike `MySql` dan penanda `F42` dihapus dan dua test install dari cache menjadi sungguhan (spec 0042 AC-1 tanpa catalog, AC-2 tanpa round trip native, AC-12 bagian plan, AC-14 bagian fixture, spike, dan install, AC-15; build step 1 sampai 4; needs fitur 9, 18, 19, 36, sudah done; step 1 berurutan dengan langkah format fitur 40 dan 43; step 3 dan 4 menyentuh file bersama)
+  - [ ] MySQL 8.4 asli lewat daemon: harness `apps/daemon/tests/mysql/`, lalu init, auth, endpoint, path, round trip format, readiness, stop, tool dari runtime, lifecycle, adopsi, edit config, Open In, dan doctor (spec 0042 AC-2 sampai AC-8, AC-12, AC-13, AC-18, AC-16 jalur `BLOCKED`; build step 5 sampai 8; after milestone 1 step 2; needs artefak `mysql-8.4.11-macos-aarch64` di cache xtask, `BLOCKED` tanpa itu; step 6, 7, dan 8 bisa paralel sesudah step 5)
+  - [ ] MySQL 9.7, isolasi, penolakan line, konformitas, evidence, dan catalog: suite untuk 9.7, sentinel dua instance per lini, penolakan data lini lain dua arah, data yang sudah ada ditolak, dua test konformitas native, MySQL ke `[[provider]]` di catalog dengan `provider freeze`, lalu `compatibility.json` per artefak (spec 0042 AC-9, AC-10, AC-11, AC-14 konformitas, AC-1 bagian catalog, AC-16, AC-3 sampai AC-13 untuk 9.7; build step 9 sampai 12; after milestone 2; needs artefak `mysql-9.7.2-macos-aarch64` di cache xtask; step 10 dan 11 menyentuh file bersama dan berurutan antar fitur 39 sampai 43; step 12 after step 11)
+  - [ ] Handover: dua test native launchd MySQL dan, hanya bersama record `PASS` nya, entri `official/mysql` di `HANDOVER_PROVEN` (spec 0042 AC-17; build step 13; after milestone 2 step 5; needs sesi GUI, `BLOCKED` tanpa itu; file bersama dengan fitur 39 sampai 43)
+- [ ] Verify it: `/check verify provider MySQL`
+- [ ] Test it: `/test provider MySQL`
 
 ### 43. Provider ClickHouse · in-progress
 
