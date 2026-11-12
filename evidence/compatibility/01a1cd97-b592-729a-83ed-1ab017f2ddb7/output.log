@@ -1,0 +1,22 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 11.85s
+     Running tests/nats.rs (target/debug/deps/nats-d70fff5c2954ee71)
+
+running 6 tests
+test metrics::nats_reports_one_process_and_the_tree_equals_the_main_process ... ok
+test lifecycle_ops::nats_refuses_reload_without_an_operation_and_restarts_with_a_new_process ... ok
+test config::nats_applies_a_setting_with_a_restart_and_the_new_revision_becomes_the_last_known_good ... ok
+test compatibility::nats_compatibility ... ok
+test auth::nats_auth_in_process has been running for over 60 seconds
+test lifecycle::nats_lifecycle_in_process has been running for over 60 seconds
+test lifecycle::nats_lifecycle_in_process ... ok
+test auth::nats_auth_in_process ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 67.19s
+

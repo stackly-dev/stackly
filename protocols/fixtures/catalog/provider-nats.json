@@ -69,8 +69,8 @@
           "arches": [
             "aarch64"
           ],
-          "status": "experimental",
-          "reason": "runtime_tested",
+          "status": "supported",
+          "reason": "provider_tested",
           "note": null
         },
         {

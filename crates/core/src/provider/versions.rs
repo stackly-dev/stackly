@@ -1170,6 +1170,7 @@ mod tests {
                 CompatibilityScope::Runtime,
                 CompatibilityScope::Provider,
                 CompatibilityScope::Provider,
+                CompatibilityScope::Provider,
                 CompatibilityScope::Provider
             ],
             "every record of the shipped package decodes"
