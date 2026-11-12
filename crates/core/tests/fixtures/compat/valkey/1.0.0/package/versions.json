@@ -1,0 +1,107 @@
+{
+  "schema": "stackly.provider-versions/v1",
+  "software": "valkey",
+  "artifacts": [
+    {
+      "id": "valkey-9.1.2-r2-macos-aarch64",
+      "line": "9.1",
+      "version": "9.1.2",
+      "os": "macos",
+      "arch": "aarch64",
+      "status": "available",
+      "minOs": "27.0",
+      "format": "tar_gz",
+      "urls": [
+        "https://github.com/stackly-dev/stackly/releases/download/runtime/valkey-9.1.2-r2-macos-aarch64/valkey-9.1.2-r2-macos-aarch64.tar.gz"
+      ],
+      "sha256": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+      "size": 4581661,
+      "archiveRoot": "valkey-9.1.2-r2-macos-aarch64",
+      "signingPolicy": "adhoc_pipeline",
+      "license": "BSD-3-Clause",
+      "licenseUrl": "https://github.com/valkey-io/valkey/blob/9.1.2/COPYING",
+      "executables": [
+        "bin/valkey-server",
+        "bin/valkey-cli"
+      ],
+      "stable": true,
+      "build": 2,
+      "unpackedSize": 12016969,
+      "entryCount": 15,
+      "dependencies": [
+        {
+          "name": "libSystem.B.dylib",
+          "kind": "system",
+          "installName": "/usr/lib/libSystem.B.dylib"
+        }
+      ],
+      "compatibility": [
+        {
+          "scope": "runtime",
+          "result": "pass",
+          "providerRevision": null,
+          "os": "macos",
+          "osVersion": "27.0",
+          "osBuild": "26A428",
+          "arch": "aarch64",
+          "checks": [
+            "archive_report",
+            "closure",
+            "dependencies",
+            "extract",
+            "hash",
+            "init",
+            "launch_agent",
+            "manifest",
+            "min_os",
+            "probes",
+            "ready",
+            "recipe",
+            "runtime_audit",
+            "signing",
+            "start",
+            "static_audit",
+            "stop",
+            "version"
+          ],
+          "knownLimitations": [
+            "provider_integration_not_covered"
+          ],
+          "summary": "valkey 9.1.2 ready in 826 ms, stopped in 139 ms",
+          "testedAt": "2026-10-18T11:20:40.850Z",
+          "evidence": "runtime/01a14ebc-ed84-7260-bcfb-68c50e863955/01a14ebc-f063-74e0-82ef-93f1c16a56ff"
+        },
+        {
+          "scope": "provider",
+          "result": "pass",
+          "providerRevision": {
+            "id": "official/valkey",
+            "revision": "1.0.0",
+            "manifestSha256": "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6"
+          },
+          "os": "macos",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "arch": "aarch64",
+          "checks": [
+            "adoption",
+            "crash_recovery",
+            "init",
+            "persistence_aof",
+            "persistence_rdb",
+            "readiness",
+            "start",
+            "stop",
+            "volatile"
+          ],
+          "knownLimitations": [
+            "power_loss_not_simulated"
+          ],
+          "summary": "Valkey 9.1.2 passed init, start, readiness, adoption, persistence_rdb, crash_recovery, persistence_aof, volatile, stop",
+          "testedAt": "2026-11-12T05:48:26.658Z",
+          "evidence": "compatibility/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/01a1ce4c-8b55-72ba-b2cb-2fdf5f0bc73f"
+        }
+      ]
+    }
+  ]
+}

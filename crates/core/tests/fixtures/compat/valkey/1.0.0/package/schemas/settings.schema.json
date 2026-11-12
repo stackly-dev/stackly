@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Valkey settings",
+  "description": "Password, persistence mode, and the few server settings a Valkey instance exposes.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password of the default user. Every client needs it. A new value takes effect at the next start.",
+      "minLength": 8,
+      "maxLength": 128,
+      "x-stackly": { "apply": "restart", "visibility": "basic", "secret": true, "printableOnly": true }
+    },
+    "persistence": {
+      "type": "string",
+      "title": "Persistence",
+      "description": "What survives a stop. rdb: snapshots on disk now and then and on a normal stop; a crash loses the writes since the last snapshot. aof: every write is logged and synced about once a second. volatile: memory only; every stop, restart, or crash loses all data, and there is nothing to back up or restore. Set once when the instance is created.",
+      "enum": ["rdb", "aof", "volatile"],
+      "default": "rdb",
+      "x-stackly": { "apply": "immutableAfterInit", "visibility": "basic" }
+    },
+    "maxMemoryMb": {
+      "type": "integer",
+      "title": "Max memory (MB)",
+      "description": "Most memory Valkey uses for data. 0 means no limit.",
+      "minimum": 0,
+      "maximum": 1048576,
+      "default": 0,
+      "x-stackly": { "apply": "restart", "visibility": "basic" }
+    },
+    "maxMemoryPolicy": {
+      "type": "string",
+      "title": "Eviction policy",
+      "description": "What Valkey does when the memory limit is reached. noeviction refuses new writes; the others remove keys.",
+      "enum": ["noeviction", "allkeys-lru", "allkeys-lfu", "allkeys-random", "volatile-lru", "volatile-lfu", "volatile-random", "volatile-ttl"],
+      "default": "noeviction",
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "logLevel": {
+      "type": "string",
+      "title": "Log level",
+      "description": "How much Valkey writes to the instance log.",
+      "enum": ["debug", "verbose", "notice", "warning"],
+      "default": "notice",
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    },
+    "notifyKeyspaceEvents": {
+      "type": "string",
+      "title": "Keyspace notifications",
+      "description": "Which key events Valkey publishes, as Valkey flag letters, for example Ex for expired keys. Empty turns them off.",
+      "minLength": 0,
+      "maxLength": 16,
+      "pattern": "^[KEg$lshzxetdmnA]*$",
+      "default": "",
+      "x-stackly": { "apply": "restart", "visibility": "advanced" }
+    }
+  },
+  "required": ["password"]
+}

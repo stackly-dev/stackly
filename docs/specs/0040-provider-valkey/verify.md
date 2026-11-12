@@ -98,15 +98,15 @@ _Bagian ini memuat langkah 8 dan 9 (kode test dan run native nya). Langkah 9 bag
 - [x] `cargo xtask provider test providers/valkey` → `default: pass`, `aof: pass`, `volatile: pass`, `verdict: pass`, exit 0; di report langkah `reload` `skipped` dan `handover` dengan detail `unproven` (`handover_unproven`) di setiap skenario → AC-14
 - [x] `cargo test -p stacklyd --test valkey -- --ignored valkey_compatibility` → lulus: tiga instance (`rdb`, `aof`, `volatile`) lewat binary `stacklyd`, `INFO server` `valkey_version` 9.1.2 sebagai subject, adopsi PID dan `startedAt` sama sesudah `SIGKILL` daemon, kunci bertahan lewat stop di `rdb` dan lewat crash `valkey-server` di `aof`, hilang di `volatile`, respawn sesudah crash, stop tanpa proses tersisa; `compatibility.json` memuat sembilan check `adoption`, `crash_recovery`, `init`, `persistence_aof`, `persistence_rdb`, `readiness`, `start`, `stop`, `volatile` dan `knownLimitations` `power_loss_not_simulated` → AC-15
 - [x] `cargo test -p xtask --test native_runtime -- --ignored valkey_9_1_runs_from_managed_artifact` → `PASS, version 9.1.2` dari paket lewat worker spike di `gui/502` → AC-16 (run native)
-- [ ] Giliran catalog, dari `HEAD` bersih: `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test valkey --locked -- --ignored`, lalu `cargo xtask runtime compat-record` dan `cargo xtask codegen` (record `compatibility` di `providers/valkey/versions.json`) → AC-15
-- [ ] Giliran catalog: entri Valkey pindah ke `[[provider]]` (mark `Vk`, tile `red`) dengan catalog revision 14, `cargo xtask catalog check --update`, `cargo xtask provider freeze providers/valkey` menulis `crates/core/tests/fixtures/compat/valkey/1.0.0/`, `cargo xtask provider check` tanpa argumen lolos → AC-17
+- [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test valkey --locked -- --ignored --test-threads=1` dari `HEAD` bersih `efb186c6` → 17 record native `PASS`, 0 problem, `sourceDirty` `false`; run `01a1ce4c-2e4a-71de-8766-912d1c9d28ad`; lalu `cargo xtask runtime compat-record target/evidence/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/report.json` → `evidence/compatibility/01a1ce4c-2e4a-71de-8766-912d1c9d28ad/`, dan `cargo xtask codegen` → `providers/valkey/versions.json` mendapat satu record scope `provider` `pass` dengan sembilan check, `power_loss_not_simulated`, dan `manifestSha256` `1f5abf17…` → AC-15
+- [x] Entri Valkey pindah ke `[[provider]]` (mark `Vk`, tile `red`, tanpa catatan platform karena spec tidak menyebutnya) dengan catalog revision 14; `cargo xtask catalog check --update` → `ok catalog revision 14 ba9d0c7b…`; `cargo xtask provider freeze providers/valkey` menulis `crates/core/tests/fixtures/compat/valkey/1.0.0/`; `cargo test -p xtask`, `cargo test -p stackly-core`, `cargo test -p stackly-cli`, dan test catalog `stacklyd` lulus tanpa perubahan fixture → AC-17
 
 ### Acceptance-criteria coverage
 
 - AC-14 · konformitas native, tabel batas langkah, dan `provider test` tiga skenario
-- AC-15 · `valkey_compatibility` (kode dan run tanpa wrapper evidence); record dan `compat-record` di giliran catalog
+- AC-15 · `valkey_compatibility` dan record evidence run `01a1ce4c`
 - AC-16 · run spike native dari paket; version check di Milestone 2
-- AC-17 · giliran catalog
+- AC-17 · catalog revision 14 dan corpus `valkey/1.0.0`
 
 ## Milestone 4: Handover
 

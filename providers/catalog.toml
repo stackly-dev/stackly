@@ -7,8 +7,8 @@
 # published_at, then `cargo xtask catalog check --update`.
 
 schema = "stackly.catalog-source/v1"
-revision = 13
-published_at = 2026-11-12T03:41:45Z
+revision = 14
+published_at = 2026-11-12T05:49:58Z
 
 [[provider]]
 id = "official/postgresql"
@@ -45,6 +45,11 @@ os = "windows"
 status = "planned"
 note = "Windows releases exist upstream; per version verification is pending."
 
+[[provider]]
+id = "official/valkey"
+mark = "Vk"
+tile = "red"
+
 [[planned]]
 id = "official/mysql"
 display_name = "MySQL"
@@ -60,11 +65,3 @@ category = "analytics"
 description = "Columnar analytics database. Single node with HTTP and native TCP endpoints."
 mark = "Ch"
 tile = "yellow"
-
-[[planned]]
-id = "official/valkey"
-display_name = "Valkey"
-category = "cache"
-description = "In-memory key-value store. Standalone, with RDB or AOF persistence per instance."
-mark = "Vk"
-tile = "red"
