@@ -218,7 +218,7 @@ async fn set_secrets(api: &Api, planned: &EnvPlan) {
 #[ignore = "native: brings up the six official runtimes from the xtask runtime cache"]
 async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_nothing() {
     let ev = evidence!(
-        covers = ["REQ-021", "AC-021", "JOURNEY-04"],
+        covers = ["REQ-021", "AC-021"],
         kind = Kind::Native,
         expected = "env.up of the ERP example manifest, with the six official runtimes installed from the xtask runtime cache and no download, creates and starts postgresql, mysql, nats, clickhouse, valkey, and traefik until all six are ready, env.get shows lastUp succeeded with each endpoint's bound port, and a second Up keeps all six and starts no child operation",
     );
