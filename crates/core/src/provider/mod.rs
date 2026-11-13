@@ -14,7 +14,7 @@ pub mod fuzzing;
 mod interpolate;
 mod issue;
 #[cfg(feature = "json-schema")]
-mod json_schema;
+pub(crate) mod json_schema;
 mod manifest;
 mod names;
 mod open_with;
@@ -23,7 +23,7 @@ pub(crate) mod permission_facts;
 mod plan;
 mod preflight;
 pub mod probe;
-mod raw;
+pub(crate) mod raw;
 mod remedies;
 pub mod scenarios;
 mod settings;

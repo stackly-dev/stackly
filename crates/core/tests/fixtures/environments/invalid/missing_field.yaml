@@ -1,0 +1,5 @@
+# Expects at least one missing_field finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken

@@ -1,0 +1,45 @@
+{
+  "file": "/Users/dev/erp/stackly.yaml",
+  "valid": false,
+  "apiVersion": "stackly/v1alpha1",
+  "supportedApiVersions": [
+    "stackly/v1alpha1"
+  ],
+  "name": "erp-development",
+  "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "services": [
+    {
+      "alias": "api",
+      "provider": "testing/fake",
+      "ownership": "dedicated",
+      "selector": "0.1",
+      "instanceRef": null,
+      "instanceName": null,
+      "dependsOn": [
+        {
+          "service": "db",
+          "condition": "ready",
+          "timeoutSeconds": 30
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "severity": "error",
+      "code": "dependency_cycle",
+      "location": "services.api.dependsOn",
+      "service": "api",
+      "message": "dependency cycle: api -> db -> api"
+    },
+    {
+      "severity": "error",
+      "code": "secret_literal",
+      "location": "services.db.secretRefs.authToken",
+      "service": "db",
+      "message": "write a secret reference such as local:project/name, never the secret itself"
+    }
+  ],
+  "findingCount": 2,
+  "omitted": 0
+}

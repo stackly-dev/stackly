@@ -277,6 +277,7 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("revision", "INTEGER", true, 0),
             ("created_at", "TEXT", true, 0),
             ("updated_at", "TEXT", true, 0),
+            ("services", "TEXT", true, 0),
         ],
     ),
     (

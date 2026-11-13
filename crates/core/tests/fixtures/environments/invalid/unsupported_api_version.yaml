@@ -1,0 +1,6 @@
+# Expects at least one unsupported_api_version finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v2
+kind: Environment
+metadata:
+  name: broken
+services: {}

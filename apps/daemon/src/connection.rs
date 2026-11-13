@@ -1004,6 +1004,22 @@ async fn dispatch(
         return (Err(error), None);
     }
     match call {
+        // provisional: F44 step 5 adds the env.* handlers.
+        Call::EnvValidate(_)
+        | Call::EnvPlan(_)
+        | Call::EnvList
+        | Call::EnvGet(_)
+        | Call::EnvImport(_)
+        | Call::EnvRemove(_) => (
+            Err(Box::new(
+                ErrorBody::new(
+                    &request::UNKNOWN_METHOD,
+                    "this daemon does not answer env.* yet",
+                )
+                .with_detail("method", call.method()),
+            )),
+            None,
+        ),
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
                 &protocol::HANDSHAKE_REPEATED,

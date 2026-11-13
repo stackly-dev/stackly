@@ -7,6 +7,7 @@
 
 mod coded;
 mod column;
+mod environment;
 mod health;
 mod import;
 mod journal;

@@ -48,6 +48,7 @@
         "endpoints": [],
         "leftoverProcesses": [],
         "logsUnavailable": false,
+        "environments": [],
         "ownership": "manual",
         "initialized": false,
         "capabilities": {

@@ -270,6 +270,14 @@ code_enum! {
         /// Remove an imported provider (spec 0037); its resource is the
         /// manager.
         RemoveProviderImport => "remove_provider_import",
+        /// Register or refresh an environment from its manifest (spec
+        /// 0044); it writes only the registry. Its resource is the
+        /// environment, locked by ID and by name.
+        ImportEnvironment => "import_environment",
+        /// Forget an environment and keep its instances and data (spec
+        /// 0044). Its resource is the environment, locked by ID and by
+        /// name.
+        RemoveEnvironment => "remove_environment",
     }
 }
 

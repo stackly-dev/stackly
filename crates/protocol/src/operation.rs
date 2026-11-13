@@ -207,6 +207,10 @@ pub enum OperationKind {
     /// Remove an imported provider (spec 0037); its resource is the
     /// manager.
     RemoveProviderImport,
+    /// Register or refresh an environment from its manifest (spec 0044).
+    ImportEnvironment,
+    /// Forget an environment and keep its instances (spec 0044).
+    RemoveEnvironment,
     /// A kind this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,

@@ -1,0 +1,6 @@
+# Expects at least one unsupported_kind finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Provider
+metadata:
+  name: broken
+services: {}

@@ -1,0 +1,10 @@
+# Expects at least one endpoint_host_unsupported finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: testing/fake
+    endpoints:
+      http: {host: "0.0.0.0", port: 18080}

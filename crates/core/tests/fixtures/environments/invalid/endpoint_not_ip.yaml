@@ -1,0 +1,10 @@
+# Expects at least one endpoint_not_ip finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  db:
+    provider: official/postgresql
+    endpoints:
+      socket: {port: 5432}

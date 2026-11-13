@@ -1,0 +1,24 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e21",
+    "error": {
+      "code": "env.manifest_unreadable",
+      "category": "invalid_input",
+      "message": "the manifest file can’t be read",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "choose a regular stackly.yaml file, not a folder or a link",
+      "details": [
+        {
+          "key": "reason",
+          "value": "not_a_file"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": []
+    }
+  }
+}

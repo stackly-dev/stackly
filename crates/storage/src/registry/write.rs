@@ -15,9 +15,9 @@ use stackly_domain::{
     ArtifactFormat, ArtifactRecord, BatchError, CommitGuard, Committed, CompatibilityRecordRow,
     DependencyManifestJson, Endpoint, Environment, Generation, GuardDecision, GuardView, Guarded,
     InstallMode, Instance, InstanceFilter, InstancePathEntry, Lease, LeaseHolder, LeaseState,
-    Operation, Ownership, PortRequest, Progress, ProviderRevisionKey, ProviderRevisionRecord,
-    RegistryError, ResourceRef, ResourceRevision, Runtime, RuntimeId, SignatureInfoJson,
-    SoftwareName, StorageLocationId, TrustDecision, WriteBatch, WriteOp,
+    ManifestLocation, Operation, Ownership, PortRequest, Progress, ProviderRevisionKey,
+    ProviderRevisionRecord, RegistryError, ResourceRef, ResourceRevision, Runtime, RuntimeId,
+    SignatureInfoJson, SoftwareName, StorageLocationId, TrustDecision, WriteBatch, WriteOp,
 };
 use stackly_platform::instance_path_entries;
 
@@ -79,6 +79,10 @@ struct TransactionView<'a> {
 }
 
 impl GuardView for TransactionView<'_> {
+    fn environments(&self) -> Result<Vec<Environment>, RegistryError> {
+        read::environments(self.tx, None)
+    }
+
     fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError> {
         read::instances(self.tx, &InstanceSelect::List(filter), self.loaded_at)
     }
@@ -250,6 +254,9 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
             expect_revision(conn, "environments", &id, op, *expected)?;
             check_environment(conn, environment)?;
             write_environment(conn, environment, now, Write::Update)
+        }
+        WriteOp::DeleteEnvironment { id, expected } => {
+            super::environment::delete(conn, *id, *expected, now)
         }
         WriteOp::InsertLease(lease) => {
             expect_new(conn, "instance_demands", &lease.id().to_string(), op)?;
@@ -1063,17 +1070,21 @@ fn write_environment(
         environment.manifest_sha256().map(ToString::to_string),
         int(environment.revision().get(), "revision")?,
         now,
+        environment
+            .manifest_location()
+            .map(ManifestLocation::as_str),
+        super::environment::services_json(environment.declared())?,
     ];
     match write {
         Write::Insert => conn.execute(
             "INSERT INTO environments (id, name, manifest_sha256, revision, created_at, \
-             updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+             updated_at, manifest_location, services) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7)",
             values,
         ),
         Write::Update => conn
             .execute(
                 "UPDATE environments SET name = ?2, manifest_sha256 = ?3, revision = ?4, \
-                 updated_at = ?5 WHERE id = ?1",
+                 updated_at = ?5, manifest_location = ?6, services = ?7 WHERE id = ?1",
                 values,
             )
             .and_then(|_| {

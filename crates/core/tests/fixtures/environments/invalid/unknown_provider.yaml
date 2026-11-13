@@ -1,0 +1,8 @@
+# Expects at least one unknown_provider finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: acme/nothing

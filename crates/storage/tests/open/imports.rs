@@ -38,7 +38,7 @@ fn the_version_13_fixture_reads_its_imports_and_pinned_approval() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(13));
     let (registry, summary) = ready(harness.open());
-    assert_eq!(summary.migrated_from, None);
+    assert_eq!(summary.migrated_from, Some(13));
 
     let imports = registry.provider_imports().unwrap().value;
     let names: Vec<&str> = imports
