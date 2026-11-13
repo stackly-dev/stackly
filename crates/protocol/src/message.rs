@@ -24,6 +24,10 @@ use crate::catalog::{GetProviderParams, ListProvidersReply, ProviderDetail};
 use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, ShutdownParams};
 use crate::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use crate::doctor::{DoctorParams, DoctorReport};
+use crate::env::{
+    EnvGetParams, EnvPlan, EnvPlanParams, EnvValidateParams, EnvValidation, EnvironmentDetail,
+    EnvironmentList, ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
+};
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
 use crate::handshake::{HandshakeAccepted, HandshakeParams};
@@ -310,6 +314,28 @@ pub enum Call {
     /// `remove_provider_import` operation.
     #[serde(rename = "provider.remove")]
     ProviderRemove(ProviderTargetParams),
+    /// Checks a `stackly.yaml` against the catalog (spec 0044). Not an
+    /// operation: it reads the file and writes nothing.
+    #[serde(rename = "env.validate")]
+    EnvValidate(EnvValidateParams),
+    /// What Up would do for a manifest on this Mac (spec 0044). Not an
+    /// operation: it writes nothing, downloads nothing, and spawns nothing.
+    #[serde(rename = "env.plan")]
+    EnvPlan(EnvPlanParams),
+    /// Every registered environment, from the registry only.
+    #[serde(rename = "env.list")]
+    EnvList,
+    /// One registered environment, reading its file only on request.
+    #[serde(rename = "env.get")]
+    EnvGet(EnvGetParams),
+    /// Registers or refreshes an environment from its manifest: an
+    /// `import_environment` operation that writes only the registry.
+    #[serde(rename = "env.import")]
+    EnvImport(ImportEnvironmentParams),
+    /// Forgets an environment and keeps its instances and data: a
+    /// `remove_environment` operation.
+    #[serde(rename = "env.remove")]
+    EnvRemove(RemoveEnvironmentParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -521,6 +547,24 @@ pub enum Reply {
     /// The removed provider.
     #[serde(rename = "provider.remove")]
     ProviderRemove(RemovedProvider),
+    /// What the validator found, also for a manifest that is not valid.
+    #[serde(rename = "env.validate")]
+    EnvValidate(Box<EnvValidation>),
+    /// The plan.
+    #[serde(rename = "env.plan")]
+    EnvPlan(Box<EnvPlan>),
+    /// Every registered environment.
+    #[serde(rename = "env.list")]
+    EnvList(EnvironmentList),
+    /// The environment.
+    #[serde(rename = "env.get")]
+    EnvGet(Box<EnvironmentDetail>),
+    /// The environment after the import.
+    #[serde(rename = "env.import")]
+    EnvImport(Box<EnvironmentDetail>),
+    /// The removed environment.
+    #[serde(rename = "env.remove")]
+    EnvRemove(RemovedEnvironment),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -658,6 +702,12 @@ methods! {
     "provider.approve" => ProviderApprove(DecideProviderParams), recovery refused;
     "provider.revoke" => ProviderRevoke(ProviderTargetParams), recovery refused;
     "provider.remove" => ProviderRemove(ProviderTargetParams), recovery refused;
+    "env.validate" => EnvValidate(EnvValidateParams), recovery refused;
+    "env.plan" => EnvPlan(EnvPlanParams), recovery refused;
+    "env.list" => EnvList, recovery refused;
+    "env.get" => EnvGet(EnvGetParams), recovery refused;
+    "env.import" => EnvImport(ImportEnvironmentParams), recovery refused;
+    "env.remove" => EnvRemove(RemoveEnvironmentParams), recovery refused;
 }
 
 impl Reply {
@@ -866,8 +916,9 @@ mod tests {
             // (spec 0027), `instance.prepare_terminal` (spec 0070), and
             // `instance.get_metrics` (spec 0028), and the 6 config methods
             // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031), and
-            // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1 + 2 + 4,
+            // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032),
+            // and the 6 `env.*` methods (spec 0044).
+            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1 + 2 + 4 + 6,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

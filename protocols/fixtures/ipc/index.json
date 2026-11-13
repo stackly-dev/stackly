@@ -2271,6 +2271,114 @@
       "file": "frame-error-provider-store-failed.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-validate.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-plan.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-plan-registered.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-list.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-get.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-import.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-remove.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "reject-env-validate-relative-path.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-env-import-digest-format.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "frame-response-env-validate.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-plan.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-list.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-get.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-import.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-remove.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-env-manifest-unreadable.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-env-name-taken.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-error-env-lease-active.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-list-unknown-values.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "dto-instance-summary-environment-member.json",
+      "type": "InstanceSummary",
+      "expect": "roundtrip"
     }
   ]
 }

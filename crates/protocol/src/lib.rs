@@ -25,6 +25,7 @@ mod contract_digest;
 pub mod daemon;
 pub mod diagnostics;
 pub mod doctor;
+pub mod env;
 pub mod error;
 pub mod events;
 pub mod fingerprint;

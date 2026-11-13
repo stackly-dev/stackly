@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "id": "0192f3a7-0000-7000-8000-0000000000e1",
+    "name": "erp-development",
+    "revision": 3,
+    "manifestLocation": "/Users/dev/erp/stackly.yaml",
+    "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "status": "partially_ready",
+    "readyCount": 1,
+    "serviceCount": 2,
+    "updatedAt": "2026-11-13T09:00:00.000Z"
+  },
+  "services": [
+    {
+      "alias": "postgres",
+      "provider": "official/postgresql",
+      "ownership": "dedicated",
+      "selector": "18",
+      "instanceRef": null,
+      "instance": null,
+      "notReady": {
+        "reason": "not_created",
+        "detail": null
+      }
+    },
+    {
+      "alias": "cache",
+      "provider": "official/valkey",
+      "ownership": "shared",
+      "selector": null,
+      "instanceRef": "shared-valkey",
+      "instance": {
+        "id": "0192f3a5-0000-7000-8000-000000000001",
+        "name": "shared-valkey",
+        "runtimeVersion": "9.0.1",
+        "lifecycle": "running",
+        "readiness": {
+          "state": "ready",
+          "reason": "probe_ok",
+          "detail": null,
+          "observedAt": "2026-11-13T09:00:00.000Z",
+          "latencyMs": null
+        },
+        "health": {
+          "state": "healthy",
+          "reason": "probe_ok",
+          "detail": null,
+          "observedAt": "2026-11-13T09:00:00.000Z",
+          "latencyMs": null
+        }
+      },
+      "notReady": null
+    }
+  ],
+  "detached": [],
+  "manifestState": "changed",
+  "problems": 0
+}

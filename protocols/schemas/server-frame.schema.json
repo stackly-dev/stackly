@@ -3076,6 +3076,61 @@
         }
       }
     },
+    "DeclaredServiceDto": {
+      "description": "One service a manifest declares.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias, the key in `services`.",
+          "type": "string"
+        },
+        "dependsOn": {
+          "description": "What it waits for, in manifest order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ServiceDependency"
+          }
+        },
+        "instanceName": {
+          "description": "The instance name the manifest wrote.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceRef": {
+          "description": "The instance a shared service borrows.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ownership": {
+          "description": "Dedicated or shared.",
+          "$ref": "#/$defs/EnvOwnership"
+        },
+        "provider": {
+          "description": "The provider, `namespace/name`.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The runtime selector the manifest wrote.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "alias",
+        "provider",
+        "ownership"
+      ]
+    },
     "DefaultLocations": {
       "description": "The default location of each kind.",
       "type": "object",
@@ -3132,6 +3187,21 @@
         },
         {
           "description": "A source this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "DependencyConditionKind": {
+      "description": "What a dependency waits for. Open.",
+      "oneOf": [
+        {
+          "description": "The dependency is running and ready.",
+          "type": "string",
+          "const": "ready"
+        },
+        {
+          "description": "A value this build does not know.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -3227,6 +3297,29 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "DetachedMember": {
+      "description": "A member the manifest no longer declares; never touched.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias.",
+          "type": "string"
+        },
+        "instance": {
+          "description": "The instance.",
+          "$ref": "#/$defs/InstanceRef"
+        },
+        "ownership": {
+          "description": "The member's ownership.",
+          "$ref": "#/$defs/EnvOwnership"
+        }
+      },
+      "required": [
+        "alias",
+        "instance",
+        "ownership"
       ]
     },
     "DetailDependent": {
@@ -4531,6 +4624,62 @@
         "impact"
       ]
     },
+    "EnvFinding": {
+      "description": "One problem in a manifest. The message is a fixed template per code and\nnever holds a value from the file.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "The stable snake_case code of spec 0044, *Aturan validasi*.",
+          "type": "string"
+        },
+        "location": {
+          "description": "`line:column` for syntax, a field path otherwise, or `.`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "What is wrong, in English.",
+          "type": "string"
+        },
+        "service": {
+          "description": "The alias of the service it is about.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "severity": {
+          "description": "How serious it is; every v1alpha1 code is `error`.",
+          "$ref": "#/$defs/FindingSeverity"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "location",
+        "message"
+      ]
+    },
+    "EnvOwnership": {
+      "description": "Whether an environment owns a service's instance.",
+      "oneOf": [
+        {
+          "description": "The environment owns the instance and its data.",
+          "type": "string",
+          "const": "dedicated"
+        },
+        {
+          "description": "The environment borrows an existing instance.",
+          "type": "string",
+          "const": "shared"
+        },
+        {
+          "description": "A value this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "EnvPair": {
       "description": "One env pair of a terminal command.",
       "type": "object",
@@ -4547,6 +4696,437 @@
       "required": [
         "name",
         "value"
+      ]
+    },
+    "EnvPlan": {
+      "description": "Reply of `env.plan`.",
+      "type": "object",
+      "properties": {
+        "applicable": {
+          "description": "Whether the manifest is valid and nothing blocks.",
+          "type": "boolean"
+        },
+        "blockers": {
+          "description": "What blocks the plan.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanBlocker"
+          }
+        },
+        "detached": {
+          "description": "Members the manifest no longer declares.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DetachedMember"
+          }
+        },
+        "environment": {
+          "description": "The environment of the same name, if any.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "items": {
+          "description": "One item per service, in manifest order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanItem"
+          }
+        },
+        "needsSecrets": {
+          "description": "How many secret fields need a value from the user.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "order": {
+          "description": "The start order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "planDigest": {
+          "description": "The digest Up compares, only when applicable.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "registeredLocation": {
+          "description": "Where that environment is registered.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "registration": {
+          "description": "How the name matches; absent for a manifest that is not valid.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanRegistration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "validation": {
+          "description": "What `env.validate` says of the same bytes.",
+          "$ref": "#/$defs/EnvValidation"
+        }
+      },
+      "required": [
+        "validation",
+        "applicable",
+        "needsSecrets"
+      ]
+    },
+    "EnvValidation": {
+      "description": "Reply of `env.validate`: also a success for a manifest that is not\nvalid.",
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "description": "The `apiVersion` of the file, when it is a supported one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "file": {
+          "description": "The file checked, as the request named it.",
+          "type": "string"
+        },
+        "findingCount": {
+          "description": "Every finding, kept or not.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "findings": {
+          "description": "At most [`ENV_FINDINGS_MAX`] findings, in the order found.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvFinding"
+          }
+        },
+        "manifestSha256": {
+          "description": "The SHA-256 of the bytes read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "`metadata.name`, when it is a valid name.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "omitted": {
+          "description": "The findings past the limit.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "services": {
+          "description": "The services that decoded far enough to describe.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DeclaredServiceDto"
+          }
+        },
+        "supportedApiVersions": {
+          "description": "Every `apiVersion` this daemon reads.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "valid": {
+          "description": "Whether no finding is an error.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file",
+        "valid",
+        "supportedApiVersions",
+        "findingCount",
+        "omitted"
+      ]
+    },
+    "EnvironmentDetail": {
+      "description": "Reply of `env.get`, `env.import`.",
+      "type": "object",
+      "properties": {
+        "detached": {
+          "description": "Members the snapshot no longer declares.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DetachedMember"
+          }
+        },
+        "manifestState": {
+          "description": "The manifest state; only with `checkManifest`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ManifestState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "problems": {
+          "description": "The error findings of an `invalid` manifest; only with\n`checkManifest`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "services": {
+          "description": "One per service of the snapshot.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvironmentService"
+          }
+        },
+        "summary": {
+          "description": "The summary.",
+          "$ref": "#/$defs/EnvironmentSummary"
+        }
+      },
+      "required": [
+        "summary"
+      ]
+    },
+    "EnvironmentList": {
+      "description": "Reply of `env.list`: at most [`ENV_LIST_MAX`] environments, by name.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "description": "Every environment.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvironmentSummary"
+          }
+        }
+      }
+    },
+    "EnvironmentRef": {
+      "description": "The environment a plan or detail is about.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "The name.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "revision"
+      ]
+    },
+    "EnvironmentService": {
+      "description": "One service of a registered environment.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias.",
+          "type": "string"
+        },
+        "instance": {
+          "description": "Its instance, absent when it does not exist yet.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceInstance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "instanceRef": {
+          "description": "The instance a shared service borrows.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "notReady": {
+          "description": "Why it is not ready; absent when ready.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServiceNotReady"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownership": {
+          "description": "Its ownership.",
+          "$ref": "#/$defs/EnvOwnership"
+        },
+        "provider": {
+          "description": "The provider.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The runtime selector the manifest wrote.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "alias",
+        "provider",
+        "ownership"
+      ]
+    },
+    "EnvironmentStatus": {
+      "description": "How many services of an environment are ready. Open: spec 0046 may add\nvalues; an older client shows them as \"Unknown\".",
+      "oneOf": [
+        {
+          "description": "Every service is ready.",
+          "type": "string",
+          "const": "ready"
+        },
+        {
+          "description": "Some services are ready.",
+          "type": "string",
+          "const": "partially_ready"
+        },
+        {
+          "description": "No service is ready.",
+          "type": "string",
+          "const": "down"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "EnvironmentSummary": {
+      "description": "One environment in a list.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifestLocation": {
+          "description": "The absolute path of the manifest; clients show home as `~`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "manifestSha256": {
+          "description": "The digest of the manifest last accepted.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "name": {
+          "description": "The unique name.",
+          "type": "string"
+        },
+        "readyCount": {
+          "description": "The services whose instance runs and is ready.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "revision": {
+          "description": "The revision of the registry row.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "serviceCount": {
+          "description": "The services of the snapshot.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "status": {
+          "description": "The status.",
+          "$ref": "#/$defs/EnvironmentStatus"
+        },
+        "updatedAt": {
+          "description": "When the row last changed.",
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "revision",
+        "status",
+        "readyCount",
+        "serviceCount",
+        "updatedAt"
       ]
     },
     "ErrorBody": {
@@ -6572,6 +7152,35 @@
         "connections"
       ]
     },
+    "InstanceEnvironment": {
+      "description": "One environment an instance belongs to.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias of the instance in it.",
+          "type": "string"
+        },
+        "environmentId": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "ownership": {
+          "description": "Whether it owns the instance.",
+          "$ref": "#/$defs/EnvOwnership"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "alias",
+        "ownership"
+      ]
+    },
     "InstanceHealth": {
       "description": "Health as read now (`effective` at the time of the snapshot).",
       "type": "object",
@@ -6854,12 +7463,22 @@
       ]
     },
     "InstanceOwnership": {
-      "description": "How an instance came to be managed here. Open. Not the registry column\n`instances.ownership` (where the data came from: `created`, later\n`restored` and `adopted`, spec 0005), and not the `Ownership` of an\nenvironment in the domain (`Dedicated` or `Shared`): this says whether\na person runs the instance by hand or an environment owns it. `stacklyd`\nsends `manual` until feature 44 adds environment membership.",
+      "description": "How an instance came to be managed here. Open. Not the registry column\n`instances.ownership` (where the data came from: `created`, later\n`restored` and `adopted`, spec 0005), and not the `Ownership` of an\nenvironment in the domain (`Dedicated` or `Shared`): this says whether\na person runs the instance by hand or an environment owns it. `stacklyd`\nsends `dedicated` for a dedicated member of an environment, `shared` for\nan instance only environments borrow, and `manual` otherwise (spec 0044\nAC-15).",
       "oneOf": [
         {
           "description": "A person starts and stops it.",
           "type": "string",
           "const": "manual"
+        },
+        {
+          "description": "An environment owns it and its data.",
+          "type": "string",
+          "const": "dedicated"
+        },
+        {
+          "description": "Environments borrow it; none owns it.",
+          "type": "string",
+          "const": "shared"
         },
         {
           "description": "A value this build does not know. The daemon never sends it.",
@@ -7124,6 +7743,14 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/EndpointStatus"
+          }
+        },
+        "environments": {
+          "description": "The environments it belongs to: the `dedicated` one first, then by\nname (spec 0044 AC-15). Absent in older daemons.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceEnvironment"
           }
         },
         "health": {
@@ -8109,6 +8736,46 @@
         "subscriptionId"
       ]
     },
+    "ManifestState": {
+      "description": "How the manifest file compares to the snapshot. Open.",
+      "oneOf": [
+        {
+          "description": "The file matches.",
+          "type": "string",
+          "const": "in_sync"
+        },
+        {
+          "description": "The file changed since import.",
+          "type": "string",
+          "const": "changed"
+        },
+        {
+          "description": "No location, or the file is gone.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "The file can't be read.",
+          "type": "string",
+          "const": "unreadable"
+        },
+        {
+          "description": "The file has error findings.",
+          "type": "string",
+          "const": "invalid"
+        },
+        {
+          "description": "The file declares another name.",
+          "type": "string",
+          "const": "name_changed"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "MetricsProcess": {
       "description": "The main process the history belongs to.",
       "type": "object",
@@ -8377,6 +9044,51 @@
         },
         {
           "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "NotReadyReason": {
+      "description": "Why a service is not ready. Open.",
+      "oneOf": [
+        {
+          "description": "No instance exists yet.",
+          "type": "string",
+          "const": "not_created"
+        },
+        {
+          "description": "The instance is stopped.",
+          "type": "string",
+          "const": "stopped"
+        },
+        {
+          "description": "The instance is starting.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "The instance is stopping.",
+          "type": "string",
+          "const": "stopping"
+        },
+        {
+          "description": "The instance failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "It runs but is not ready.",
+          "type": "string",
+          "const": "not_ready"
+        },
+        {
+          "description": "Its state is unknown.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "A value this build does not know.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -8814,6 +9526,16 @@
           "description": "Remove an imported provider (spec 0037); its resource is the\nmanager.",
           "type": "string",
           "const": "remove_provider_import"
+        },
+        {
+          "description": "Register or refresh an environment from its manifest (spec 0044).",
+          "type": "string",
+          "const": "import_environment"
+        },
+        {
+          "description": "Forget an environment and keep its instances (spec 0044).",
+          "type": "string",
+          "const": "remove_environment"
         },
         {
           "description": "A kind this build does not know. The daemon never sends it.",
@@ -9637,6 +10359,52 @@
         }
       ]
     },
+    "PlanAction": {
+      "description": "What Up does with a service. Open.",
+      "oneOf": [
+        {
+          "description": "Create an instance, then start it.",
+          "type": "string",
+          "const": "create"
+        },
+        {
+          "description": "Start an existing instance.",
+          "type": "string",
+          "const": "start"
+        },
+        {
+          "description": "Leave an existing instance as it is.",
+          "type": "string",
+          "const": "keep"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanBlocker": {
+      "description": "One problem that makes a plan not applicable.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "The error, with the code create, resolve, or the `env` area uses.",
+          "$ref": "#/$defs/ErrorBody"
+        },
+        "service": {
+          "description": "The alias it is about, if any.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
     "PlanCloseReason": {
       "description": "Why a plan closed without finishing. Open: newer daemons may add\nvalues.",
       "oneOf": [
@@ -9675,6 +10443,179 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PlanDifference": {
+      "description": "How an existing member differs from its service. Never a blocker.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "`provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or\n`instanceRef`.",
+          "type": "string"
+        },
+        "instance": {
+          "description": "What the instance has.",
+          "type": "string"
+        },
+        "manifest": {
+          "description": "What the manifest says.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "manifest",
+        "instance"
+      ]
+    },
+    "PlanEndpoint": {
+      "description": "One endpoint of a plan item.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Its host.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The endpoint.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Its port: what create asks for, or the effective port of an\nexisting instance as `fixed`.",
+          "$ref": "#/$defs/PortRequest"
+        }
+      },
+      "required": [
+        "name",
+        "host",
+        "port"
+      ]
+    },
+    "PlanInstance": {
+      "description": "The instance of a plan item.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Its ID, when it exists.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "PlanItem": {
+      "description": "One service of a plan.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "What Up does.",
+          "$ref": "#/$defs/PlanAction"
+        },
+        "alias": {
+          "description": "The alias.",
+          "type": "string"
+        },
+        "checks": {
+          "description": "The preflight rows of a `create` item.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PreflightCheck"
+          }
+        },
+        "differences": {
+          "description": "How an existing member differs from the manifest.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanDifference"
+          }
+        },
+        "endpoints": {
+          "description": "For `create`: every IP endpoint of the package in package order;\notherwise the IP endpoints of the instance.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanEndpoint"
+          }
+        },
+        "instance": {
+          "description": "The instance.",
+          "$ref": "#/$defs/PlanInstance"
+        },
+        "ownership": {
+          "description": "Its ownership.",
+          "$ref": "#/$defs/EnvOwnership"
+        },
+        "provider": {
+          "description": "The provider.",
+          "type": "string"
+        },
+        "runtime": {
+          "description": "The runtime, for a `create` item whose selector resolved.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanRuntime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "secrets": {
+          "description": "The secret fields of a `create` item, in schema order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanSecret"
+          }
+        },
+        "steps": {
+          "description": "The steps, in order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanStep"
+          }
+        },
+        "trust": {
+          "description": "The trust of the provider, for a `create` item only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanTrust"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "waitsFor": {
+          "description": "The aliases it waits for.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "alias",
+        "ownership",
+        "action",
+        "instance",
+        "provider"
       ]
     },
     "PlanOutcome": {
@@ -9742,6 +10683,145 @@
         }
       ]
     },
+    "PlanRegistration": {
+      "description": "How the manifest's name matches the registry. Open.",
+      "oneOf": [
+        {
+          "description": "No environment has the name.",
+          "type": "string",
+          "const": "new"
+        },
+        {
+          "description": "An environment has the name at this location.",
+          "type": "string",
+          "const": "registered"
+        },
+        {
+          "description": "An environment has the name at another location.",
+          "type": "string",
+          "const": "name_taken"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanRuntime": {
+      "description": "The runtime of a `create` item.",
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "description": "The artifact ID.",
+          "type": "string"
+        },
+        "artifactSha256": {
+          "description": "The artifact digest.",
+          "type": "string"
+        },
+        "downloadSize": {
+          "description": "The download size, when Up installs it.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "install": {
+          "description": "Whether Up installs it.",
+          "type": "boolean"
+        },
+        "runtimeId": {
+          "description": "The installed runtime, when there is one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "selector": {
+          "description": "The selector as the manifest wrote it, `stable` when it wrote none.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The exact version it resolved to.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "version",
+        "artifactId",
+        "artifactSha256",
+        "install"
+      ]
+    },
+    "PlanSecret": {
+      "description": "One secret field of a `create` item.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "The field.",
+          "type": "string"
+        },
+        "reference": {
+          "description": "The reference the manifest names, never a value.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "status": {
+          "description": "Its state.",
+          "$ref": "#/$defs/PlanSecretStatus"
+        }
+      },
+      "required": [
+        "field",
+        "status"
+      ]
+    },
+    "PlanSecretStatus": {
+      "description": "The state of one secret field of a `create` item. Open.",
+      "oneOf": [
+        {
+          "description": "Registered, with a value.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "Registered without a value.",
+          "type": "string",
+          "const": "missing"
+        },
+        {
+          "description": "Not in the registry.",
+          "type": "string",
+          "const": "unregistered"
+        },
+        {
+          "description": "The store could not be asked.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "No reference: create generates the value.",
+          "type": "string",
+          "const": "generated"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "PlanState": {
       "description": "The state of a restart plan. Open: newer daemons may add values.",
       "oneOf": [
@@ -9777,6 +10857,56 @@
         },
         {
           "description": "A state this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanStep": {
+      "description": "One step of a plan item. Open.",
+      "oneOf": [
+        {
+          "description": "Install the runtime.",
+          "type": "string",
+          "const": "install_runtime"
+        },
+        {
+          "description": "Create the instance.",
+          "type": "string",
+          "const": "create_instance"
+        },
+        {
+          "description": "Start the instance.",
+          "type": "string",
+          "const": "start_instance"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "PlanTrust": {
+      "description": "Whether the provider of a `create` item may run. Open.",
+      "oneOf": [
+        {
+          "description": "A catalog entry, or an approved local one.",
+          "type": "string",
+          "const": "trusted"
+        },
+        {
+          "description": "A local entry not approved yet.",
+          "type": "string",
+          "const": "approval_required"
+        },
+        {
+          "description": "A revoked revision.",
+          "type": "string",
+          "const": "revoked"
+        },
+        {
+          "description": "A value this build does not know.",
           "type": "string",
           "const": "unrecognized"
         }
@@ -11058,6 +12188,25 @@
         "text"
       ]
     },
+    "RemovedEnvironment": {
+      "description": "Reply of `env.remove`.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The ID it had.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "The name it had.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ]
+    },
     "RemovedProvider": {
       "description": "Reply of `provider.remove`.",
       "type": "object",
@@ -12198,6 +13347,108 @@
             "type": {
               "type": "string",
               "const": "provider.remove"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What the validator found, also for a manifest that is not valid.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvValidation"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.validate"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The plan.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvPlan"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.plan"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Every registered environment.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvironmentList"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.list"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The environment.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvironmentDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The environment after the import.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvironmentDetail"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The removed environment.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RemovedEnvironment"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.remove"
             }
           },
           "required": [
@@ -13603,6 +14854,94 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "ServiceDependency": {
+      "description": "One `dependsOn` entry.",
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "What it waits for.",
+          "$ref": "#/$defs/DependencyConditionKind"
+        },
+        "service": {
+          "description": "The alias depended on.",
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "description": "The wait limit the manifest wrote; none means the default of Up\n(spec 0046).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "service",
+        "condition"
+      ]
+    },
+    "ServiceInstance": {
+      "description": "The instance of an environment service.",
+      "type": "object",
+      "properties": {
+        "health": {
+          "description": "The health.",
+          "$ref": "#/$defs/InstanceHealth"
+        },
+        "id": {
+          "description": "The ID.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "lifecycle": {
+          "description": "The lifecycle.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "name": {
+          "description": "The name.",
+          "type": "string"
+        },
+        "readiness": {
+          "description": "The readiness.",
+          "$ref": "#/$defs/InstanceReadiness"
+        },
+        "runtimeVersion": {
+          "description": "The exact runtime version.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "runtimeVersion",
+        "lifecycle",
+        "readiness",
+        "health"
+      ]
+    },
+    "ServiceNotReady": {
+      "description": "Why a service is not ready, with a redacted detail.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "The readiness detail or the last failure.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "reason": {
+          "description": "The reason.",
+          "$ref": "#/$defs/NotReadyReason"
+        }
+      },
+      "required": [
+        "reason"
       ]
     },
     "SessionEndKind": {

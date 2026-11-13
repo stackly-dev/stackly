@@ -41,6 +41,10 @@
       "owner": "spec 0009"
     },
     {
+      "name": "env",
+      "owner": "spec 0044"
+    },
+    {
       "name": "catalog",
       "owner": "spec 0017"
     },
@@ -345,6 +349,37 @@
       ],
       "items": null,
       "summary": "the doctor ran and found at least one error; the result holds the report (spec 0034)"
+    },
+    {
+      "code": "cli.env_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "errors",
+        "warnings"
+      ],
+      "items": null,
+      "summary": "the environment manifest has error findings; the result holds the validation or the plan (spec 0044)"
+    },
+    {
+      "code": "cli.env_plan_blocked",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "blockers"
+      ],
+      "items": null,
+      "summary": "the plan is valid but has blockers; the result holds the plan (spec 0044)"
+    },
+    {
+      "code": "cli.environment_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "name"
+      ],
+      "items": null,
+      "summary": "no environment has the name the command was given (spec 0044)"
     },
     {
       "code": "cli.input_required",
@@ -672,6 +707,138 @@
       ],
       "items": null,
       "summary": "the bundle could not be written to the destination; reason is no_space, permission, or io, and no partial file is left"
+    },
+    {
+      "code": "env.instance_blocked",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "service",
+        "instance",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a plan blocker: an existing instance can't be started; reason is its lifecycle, not_initialized, or its blocker"
+    },
+    {
+      "code": "env.instance_ref_mismatch",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "service",
+        "expected",
+        "actual"
+      ],
+      "items": null,
+      "summary": "a plan blocker: the borrowed instance runs another provider"
+    },
+    {
+      "code": "env.instance_ref_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "service",
+        "instanceRef"
+      ],
+      "items": null,
+      "summary": "a plan blocker: no instance has the name a shared service borrows"
+    },
+    {
+      "code": "env.lease_active",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "instance",
+        "fields": [
+          "instanceId",
+          "name"
+        ],
+        "max": 32
+      },
+      "summary": "the environment still holds an active lease, so it can't be removed"
+    },
+    {
+      "code": "env.limit_reached",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "limit"
+      ],
+      "items": null,
+      "summary": "the registry already holds 64 environments"
+    },
+    {
+      "code": "env.manifest_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the manifest digest differs from the one the client planned"
+    },
+    {
+      "code": "env.manifest_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "errors"
+      ],
+      "items": null,
+      "summary": "an import named a manifest with error findings"
+    },
+    {
+      "code": "env.manifest_renamed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "declared",
+        "registered"
+      ],
+      "items": null,
+      "summary": "a plan blocker: the file of a registered environment declares another name"
+    },
+    {
+      "code": "env.manifest_unreadable",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "the manifest file can't be read: not_found, not_a_file (a symlink too), permission_denied, too_large, or io"
+    },
+    {
+      "code": "env.name_taken",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "name",
+        "location"
+      ],
+      "items": null,
+      "summary": "the environment name is registered at another manifest location"
+    },
+    {
+      "code": "env.not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "no environment has that ID"
+    },
+    {
+      "code": "env.relink_mismatch",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "declared",
+        "registered"
+      ],
+      "items": null,
+      "summary": "a relink named an environment whose name differs from the file"
     },
     {
       "code": "events.too_many_subscriptions",

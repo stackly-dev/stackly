@@ -1183,6 +1183,104 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Checks a `stackly.yaml` against the catalog (spec 0044). Not an\noperation: it reads the file and writes nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvValidateParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.validate"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What Up would do for a manifest on this Mac (spec 0044). Not an\noperation: it writes nothing, downloads nothing, and spawns nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvPlanParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.plan"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Every registered environment, from the registry only.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "env.list"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "One registered environment, reading its file only on request.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvGetParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.get"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Registers or refreshes an environment from its manifest: an\n`import_environment` operation that writes only the registry.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/ImportEnvironmentParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.import"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Forgets an environment and keeps its instances and data: a\n`remove_environment` operation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/RemoveEnvironmentParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.remove"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1595,6 +1693,91 @@
         "port"
       ]
     },
+    "EnvGetParams": {
+      "description": "Params of `env.get`.",
+      "type": "object",
+      "properties": {
+        "checkManifest": {
+          "description": "Whether the daemon reads the manifest file for `manifestState`.",
+          "type": "boolean",
+          "default": false
+        },
+        "id": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "EnvPlanParams": {
+      "description": "Params of `env.plan`.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "The manifest.",
+          "$ref": "#/$defs/EnvSource"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "EnvSource": {
+      "description": "Which manifest a plan reads. Tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "The manifest at this absolute path.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "file"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The manifest location of this registered environment.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": {
+              "type": "string",
+              "const": "registered"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        }
+      ]
+    },
+    "EnvValidateParams": {
+      "description": "Params of `env.validate`.",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The absolute path of the manifest file: at most 1024 bytes, no NUL,\nno `.` or `..` segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
     "EventCursor": {
       "description": "A position in the event stream of one daemon run.",
       "type": "object",
@@ -1871,6 +2054,33 @@
         "protocol",
         "client",
         "contractDigest"
+      ]
+    },
+    "ImportEnvironmentParams": {
+      "description": "Params of `env.import`, an `import_environment` operation; the request\ncarries the `idempotencyKey`.",
+      "type": "object",
+      "properties": {
+        "expectedManifestSha256": {
+          "description": "The `manifestSha256` of the plan the client showed.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The absolute path of the manifest, as for [`EnvValidateParams`].",
+          "type": "string"
+        },
+        "relinkEnvironmentId": {
+          "description": "The environment whose manifest location moves to this file.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        }
+      },
+      "required": [
+        "path",
+        "expectedManifestSha256"
       ]
     },
     "ImportProviderParams": {
@@ -2603,6 +2813,28 @@
       },
       "required": [
         "instanceId"
+      ]
+    },
+    "RemoveEnvironmentParams": {
+      "description": "Params of `env.remove`, a `remove_environment` operation.",
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "description": "The revision the client showed.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "id": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id",
+        "expectedRevision"
       ]
     },
     "RenameInstanceParams": {

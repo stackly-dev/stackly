@@ -1,0 +1,9 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e08",
+  "call": {
+    "type": "env.validate",
+    "content": {
+      "path": "erp/stackly.yaml"
+    }
+  }
+}

@@ -101,6 +101,10 @@ public enum OperationKind: String, Codable, Sendable, Equatable {
 	/// Remove an imported provider (spec 0037); its resource is the
 	/// manager.
 	case removeProviderImport = "remove_provider_import"
+	/// Register or refresh an environment from its manifest (spec 0044).
+	case importEnvironment = "import_environment"
+	/// Forget an environment and keep its instances (spec 0044).
+	case removeEnvironment = "remove_environment"
 	/// A kind this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -3705,6 +3709,69 @@ public struct DecideProviderParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Whether an environment owns a service's instance.
+public enum EnvOwnership: String, Codable, Sendable, Equatable {
+	/// The environment owns the instance and its data.
+	case dedicated
+	/// The environment borrows an existing instance.
+	case shared
+	/// A value this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// What a dependency waits for. Open.
+public enum DependencyConditionKind: String, Codable, Sendable, Equatable {
+	/// The dependency is running and ready.
+	case ready
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One `dependsOn` entry.
+public struct ServiceDependency: Codable, Sendable, Equatable {
+	/// The alias depended on.
+	public let service: String
+	/// What it waits for.
+	public let condition: DependencyConditionKind
+	/// The wait limit the manifest wrote; none means the default of Up
+	/// (spec 0046).
+	public let timeoutSeconds: UInt32?
+
+	public init(service: String, condition: DependencyConditionKind, timeoutSeconds: UInt32?) {
+		self.service = service
+		self.condition = condition
+		self.timeoutSeconds = timeoutSeconds
+	}
+}
+
+/// One service a manifest declares.
+public struct DeclaredServiceDto: Codable, Sendable, Equatable {
+	/// The alias, the key in `services`.
+	public let alias: String
+	/// The provider, `namespace/name`.
+	public let provider: String
+	/// Dedicated or shared.
+	public let ownership: EnvOwnership
+	/// The runtime selector the manifest wrote.
+	public let selector: String?
+	/// The instance a shared service borrows.
+	public let instanceRef: String?
+	/// The instance name the manifest wrote.
+	public let instanceName: String?
+	/// What it waits for, in manifest order.
+	public let dependsOn: [ServiceDependency]?
+
+	public init(alias: String, provider: String, ownership: EnvOwnership, selector: String?, instanceRef: String?, instanceName: String?, dependsOn: [ServiceDependency]?) {
+		self.alias = alias
+		self.provider = provider
+		self.ownership = ownership
+		self.selector = selector
+		self.instanceRef = instanceRef
+		self.instanceName = instanceName
+		self.dependsOn = dependsOn
+	}
+}
+
 /// Params of `secret.delete`.
 public struct DeleteSecretParams: Codable, Sendable, Equatable {
 	/// The reference.
@@ -3725,6 +3792,35 @@ public struct DeleteSecretReply: Codable, Sendable, Equatable {
 
 	public init(reference: String) {
 		self.reference = reference
+	}
+}
+
+/// An instance named without its state.
+public struct InstanceRef: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+
+	public init(instanceId: UUID, name: String) {
+		self.instanceId = instanceId
+		self.name = name
+	}
+}
+
+/// A member the manifest no longer declares; never touched.
+public struct DetachedMember: Codable, Sendable, Equatable {
+	/// The alias.
+	public let alias: String
+	/// The instance.
+	public let instance: InstanceRef
+	/// The member's ownership.
+	public let ownership: EnvOwnership
+
+	public init(alias: String, instance: InstanceRef, ownership: EnvOwnership) {
+		self.alias = alias
+		self.instance = instance
+		self.ownership = ownership
 	}
 }
 
@@ -4621,6 +4717,52 @@ public struct EndpointValidation: Codable, Sendable, Equatable {
 	}
 }
 
+/// How serious a [`ValidationFinding`] is.
+public enum FindingSeverity: String, Codable, Sendable, Equatable {
+	/// The package is not publishable.
+	case error
+	/// The package is publishable, but something should change.
+	case warning
+	/// A severity this build does not know.
+	case unrecognized
+}
+
+/// One problem in a manifest. The message is a fixed template per code and
+/// never holds a value from the file.
+public struct EnvFinding: Codable, Sendable, Equatable {
+	/// How serious it is; every v1alpha1 code is `error`.
+	public let severity: FindingSeverity
+	/// The stable snake_case code of spec 0044, *Aturan validasi*.
+	public let code: String
+	/// `line:column` for syntax, a field path otherwise, or `.`.
+	public let location: String
+	/// The alias of the service it is about.
+	public let service: String?
+	/// What is wrong, in English.
+	public let message: String
+
+	public init(severity: FindingSeverity, code: String, location: String, service: String?, message: String) {
+		self.severity = severity
+		self.code = code
+		self.location = location
+		self.service = service
+		self.message = message
+	}
+}
+
+/// Params of `env.get`.
+public struct EnvGetParams: Codable, Sendable, Equatable {
+	/// The environment.
+	public let id: UUID
+	/// Whether the daemon reads the manifest file for `manifestState`.
+	public let checkManifest: Bool?
+
+	public init(id: UUID, checkManifest: Bool?) {
+		self.id = id
+		self.checkManifest = checkManifest
+	}
+}
+
 /// One env pair of a terminal command.
 public struct EnvPair: Codable, Sendable, Equatable {
 	/// The env name.
@@ -4631,6 +4773,666 @@ public struct EnvPair: Codable, Sendable, Equatable {
 	public init(name: String, value: String) {
 		self.name = name
 		self.value = value
+	}
+}
+
+/// Reply of `env.validate`: also a success for a manifest that is not
+/// valid.
+public struct EnvValidation: Codable, Sendable, Equatable {
+	/// The file checked, as the request named it.
+	public let file: String
+	/// Whether no finding is an error.
+	public let valid: Bool
+	/// The `apiVersion` of the file, when it is a supported one.
+	public let apiVersion: String?
+	/// Every `apiVersion` this daemon reads.
+	public let supportedApiVersions: [String]
+	/// `metadata.name`, when it is a valid name.
+	public let name: String?
+	/// The SHA-256 of the bytes read.
+	public let manifestSha256: String?
+	/// The services that decoded far enough to describe.
+	public let services: [DeclaredServiceDto]?
+	/// At most [`ENV_FINDINGS_MAX`] findings, in the order found.
+	public let findings: [EnvFinding]?
+	/// Every finding, kept or not.
+	public let findingCount: UInt64
+	/// The findings past the limit.
+	public let omitted: UInt64
+
+	public init(file: String, valid: Bool, apiVersion: String?, supportedApiVersions: [String], name: String?, manifestSha256: String?, services: [DeclaredServiceDto]?, findings: [EnvFinding]?, findingCount: UInt64, omitted: UInt64) {
+		self.file = file
+		self.valid = valid
+		self.apiVersion = apiVersion
+		self.supportedApiVersions = supportedApiVersions
+		self.name = name
+		self.manifestSha256 = manifestSha256
+		self.services = services
+		self.findings = findings
+		self.findingCount = findingCount
+		self.omitted = omitted
+	}
+}
+
+/// How the manifest's name matches the registry. Open.
+public enum PlanRegistration: String, Codable, Sendable, Equatable {
+	/// No environment has the name.
+	case new
+	/// An environment has the name at this location.
+	case registered
+	/// An environment has the name at another location.
+	case nameTaken = "name_taken"
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// The environment a plan or detail is about.
+public struct EnvironmentRef: Codable, Sendable, Equatable {
+	/// The ID.
+	public let id: UUID
+	/// The name.
+	public let name: String
+	/// The revision.
+	public let revision: UInt64
+
+	public init(id: UUID, name: String, revision: UInt64) {
+		self.id = id
+		self.name = name
+		self.revision = revision
+	}
+}
+
+/// What Up does with a service. Open.
+public enum PlanAction: String, Codable, Sendable, Equatable {
+	/// Create an instance, then start it.
+	case create
+	/// Start an existing instance.
+	case start
+	/// Leave an existing instance as it is.
+	case keep
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One step of a plan item. Open.
+public enum PlanStep: String, Codable, Sendable, Equatable {
+	/// Install the runtime.
+	case installRuntime = "install_runtime"
+	/// Create the instance.
+	case createInstance = "create_instance"
+	/// Start the instance.
+	case startInstance = "start_instance"
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// The instance of a plan item.
+public struct PlanInstance: Codable, Sendable, Equatable {
+	/// Its ID, when it exists.
+	public let id: UUID?
+	/// Its name.
+	public let name: String
+
+	public init(id: UUID?, name: String) {
+		self.id = id
+		self.name = name
+	}
+}
+
+/// Whether the provider of a `create` item may run. Open.
+public enum PlanTrust: String, Codable, Sendable, Equatable {
+	/// A catalog entry, or an approved local one.
+	case trusted
+	/// A local entry not approved yet.
+	case approvalRequired = "approval_required"
+	/// A revoked revision.
+	case revoked
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// The runtime of a `create` item.
+public struct PlanRuntime: Codable, Sendable, Equatable {
+	/// The selector as the manifest wrote it, `stable` when it wrote none.
+	public let selector: String
+	/// The exact version it resolved to.
+	public let version: String
+	/// The artifact ID.
+	public let artifactId: String
+	/// The artifact digest.
+	public let artifactSha256: String
+	/// Whether Up installs it.
+	public let install: Bool
+	/// The installed runtime, when there is one.
+	public let runtimeId: UUID?
+	/// The download size, when Up installs it.
+	public let downloadSize: UInt64?
+
+	public init(selector: String, version: String, artifactId: String, artifactSha256: String, install: Bool, runtimeId: UUID?, downloadSize: UInt64?) {
+		self.selector = selector
+		self.version = version
+		self.artifactId = artifactId
+		self.artifactSha256 = artifactSha256
+		self.install = install
+		self.runtimeId = runtimeId
+		self.downloadSize = downloadSize
+	}
+}
+
+/// One endpoint of a plan item.
+public struct PlanEndpoint: Codable, Sendable, Equatable {
+	/// The endpoint.
+	public let name: String
+	/// Its host.
+	public let host: String
+	/// Its port: what create asks for, or the effective port of an
+	/// existing instance as `fixed`.
+	public let port: PortRequest
+
+	public init(name: String, host: String, port: PortRequest) {
+		self.name = name
+		self.host = host
+		self.port = port
+	}
+}
+
+/// The state of one secret field of a `create` item. Open.
+public enum PlanSecretStatus: String, Codable, Sendable, Equatable {
+	/// Registered, with a value.
+	case present
+	/// Registered without a value.
+	case missing
+	/// Not in the registry.
+	case unregistered
+	/// The store could not be asked.
+	case unknown
+	/// No reference: create generates the value.
+	case generated
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One secret field of a `create` item.
+public struct PlanSecret: Codable, Sendable, Equatable {
+	/// The field.
+	public let field: String
+	/// The reference the manifest names, never a value.
+	public let reference: String?
+	/// Its state.
+	public let status: PlanSecretStatus
+
+	public init(field: String, reference: String?, status: PlanSecretStatus) {
+		self.field = field
+		self.reference = reference
+		self.status = status
+	}
+}
+
+/// How an existing member differs from its service. Never a blocker.
+public struct PlanDifference: Codable, Sendable, Equatable {
+	/// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or
+	/// `instanceRef`.
+	public let field: String
+	/// What the manifest says.
+	public let manifest: String
+	/// What the instance has.
+	public let instance: String
+
+	public init(field: String, manifest: String, instance: String) {
+		self.field = field
+		self.manifest = manifest
+		self.instance = instance
+	}
+}
+
+/// One service of a plan.
+public struct PlanItem: Codable, Sendable, Equatable {
+	/// The alias.
+	public let alias: String
+	/// Its ownership.
+	public let ownership: EnvOwnership
+	/// What Up does.
+	public let action: PlanAction
+	/// The steps, in order.
+	public let steps: [PlanStep]?
+	/// The instance.
+	public let instance: PlanInstance
+	/// The provider.
+	public let provider: String
+	/// The trust of the provider, for a `create` item only.
+	public let trust: PlanTrust?
+	/// The runtime, for a `create` item whose selector resolved.
+	public let runtime: PlanRuntime?
+	/// For `create`: every IP endpoint of the package in package order;
+	/// otherwise the IP endpoints of the instance.
+	public let endpoints: [PlanEndpoint]?
+	/// The secret fields of a `create` item, in schema order.
+	public let secrets: [PlanSecret]?
+	/// The aliases it waits for.
+	public let waitsFor: [String]?
+	/// How an existing member differs from the manifest.
+	public let differences: [PlanDifference]?
+	/// The preflight rows of a `create` item.
+	public let checks: [PreflightCheck]?
+
+	public init(alias: String, ownership: EnvOwnership, action: PlanAction, steps: [PlanStep]?, instance: PlanInstance, provider: String, trust: PlanTrust?, runtime: PlanRuntime?, endpoints: [PlanEndpoint]?, secrets: [PlanSecret]?, waitsFor: [String]?, differences: [PlanDifference]?, checks: [PreflightCheck]?) {
+		self.alias = alias
+		self.ownership = ownership
+		self.action = action
+		self.steps = steps
+		self.instance = instance
+		self.provider = provider
+		self.trust = trust
+		self.runtime = runtime
+		self.endpoints = endpoints
+		self.secrets = secrets
+		self.waitsFor = waitsFor
+		self.differences = differences
+		self.checks = checks
+	}
+}
+
+/// One problem that makes a plan not applicable.
+public struct PlanBlocker: Codable, Sendable, Equatable {
+	/// The alias it is about, if any.
+	public let service: String?
+	/// The error, with the code create, resolve, or the `env` area uses.
+	public let error: ErrorBody
+
+	public init(service: String?, error: ErrorBody) {
+		self.service = service
+		self.error = error
+	}
+}
+
+/// Reply of `env.plan`.
+public struct EnvPlan: Codable, Sendable, Equatable {
+	/// What `env.validate` says of the same bytes.
+	public let validation: EnvValidation
+	/// How the name matches; absent for a manifest that is not valid.
+	public let registration: PlanRegistration?
+	/// The environment of the same name, if any.
+	public let environment: EnvironmentRef?
+	/// Where that environment is registered.
+	public let registeredLocation: String?
+	/// Whether the manifest is valid and nothing blocks.
+	public let applicable: Bool
+	/// The digest Up compares, only when applicable.
+	public let planDigest: String?
+	/// One item per service, in manifest order.
+	public let items: [PlanItem]?
+	/// The start order.
+	public let order: [String]?
+	/// What blocks the plan.
+	public let blockers: [PlanBlocker]?
+	/// Members the manifest no longer declares.
+	public let detached: [DetachedMember]?
+	/// How many secret fields need a value from the user.
+	public let needsSecrets: UInt64
+
+	public init(validation: EnvValidation, registration: PlanRegistration?, environment: EnvironmentRef?, registeredLocation: String?, applicable: Bool, planDigest: String?, items: [PlanItem]?, order: [String]?, blockers: [PlanBlocker]?, detached: [DetachedMember]?, needsSecrets: UInt64) {
+		self.validation = validation
+		self.registration = registration
+		self.environment = environment
+		self.registeredLocation = registeredLocation
+		self.applicable = applicable
+		self.planDigest = planDigest
+		self.items = items
+		self.order = order
+		self.blockers = blockers
+		self.detached = detached
+		self.needsSecrets = needsSecrets
+	}
+}
+
+/// Which manifest a plan reads. Tagged `type` and `content`.
+public enum EnvSource: Codable, Sendable, Equatable {
+	/// The manifest at this absolute path.
+	case file(String)
+	/// The manifest location of this registered environment.
+	case registered(UUID)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case file,
+			registered
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .file:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .file(content)
+					return
+				}
+			case .registered:
+				if let content = try? container.decode(UUID.self, forKey: .content) {
+					self = .registered(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(EnvSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EnvSource"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .file(let content):
+			try container.encode(CodingKeys.file, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .registered(let content):
+			try container.encode(CodingKeys.registered, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Params of `env.plan`.
+public struct EnvPlanParams: Codable, Sendable, Equatable {
+	/// The manifest.
+	public let source: EnvSource
+
+	public init(source: EnvSource) {
+		self.source = source
+	}
+}
+
+/// Params of `env.validate`.
+public struct EnvValidateParams: Codable, Sendable, Equatable {
+	/// The absolute path of the manifest file: at most 1024 bytes, no NUL,
+	/// no `.` or `..` segment.
+	public let path: String
+
+	public init(path: String) {
+		self.path = path
+	}
+}
+
+/// How many services of an environment are ready. Open: spec 0046 may add
+/// values; an older client shows them as "Unknown".
+public enum EnvironmentStatus: String, Codable, Sendable, Equatable {
+	/// Every service is ready.
+	case ready
+	/// Some services are ready.
+	case partiallyReady = "partially_ready"
+	/// No service is ready.
+	case down
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One environment in a list.
+public struct EnvironmentSummary: Codable, Sendable, Equatable {
+	/// The ID.
+	public let id: UUID
+	/// The unique name.
+	public let name: String
+	/// The revision of the registry row.
+	public let revision: UInt64
+	/// The absolute path of the manifest; clients show home as `~`.
+	public let manifestLocation: String?
+	/// The digest of the manifest last accepted.
+	public let manifestSha256: String?
+	/// The status.
+	public let status: EnvironmentStatus
+	/// The services whose instance runs and is ready.
+	public let readyCount: UInt64
+	/// The services of the snapshot.
+	public let serviceCount: UInt64
+	/// When the row last changed.
+	public let updatedAt: Date
+
+	public init(id: UUID, name: String, revision: UInt64, manifestLocation: String?, manifestSha256: String?, status: EnvironmentStatus, readyCount: UInt64, serviceCount: UInt64, updatedAt: Date) {
+		self.id = id
+		self.name = name
+		self.revision = revision
+		self.manifestLocation = manifestLocation
+		self.manifestSha256 = manifestSha256
+		self.status = status
+		self.readyCount = readyCount
+		self.serviceCount = serviceCount
+		self.updatedAt = updatedAt
+	}
+}
+
+/// The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a
+/// real state and the set is fixed, so a new value is a protocol major.
+public enum InstanceLifecycle: String, Codable, Sendable, Equatable {
+	/// Created; the data folder is not initialized yet.
+	case uninitialized
+	/// The data folder is being initialized.
+	case initializing
+	/// Not running.
+	case stopped
+	/// The process is starting.
+	case starting
+	/// The process runs.
+	case running
+	/// The process is stopping.
+	case stopping
+	/// Initialization, a start, or the process failed.
+	case failed
+	/// The process crashed and is being restarted.
+	case recovering
+	/// The identity of the process is lost; it is never signalled.
+	case unknown
+	/// Removed with its data kept.
+	case retained
+}
+
+/// Readiness of an instance as read now. Closed.
+public enum InstanceReadinessState: String, Codable, Sendable, Equatable {
+	/// Nothing is known, or the last observation is too old.
+	case unknown
+	/// The process runs but does not accept work yet.
+	case notReady = "not_ready"
+	/// The instance accepts work.
+	case ready
+}
+
+/// Readiness as read now (`effective` at the time of the snapshot).
+public struct InstanceReadiness: Codable, Sendable, Equatable {
+	/// The state.
+	public let state: InstanceReadinessState
+	/// A snake case code saying why, such as `probe_ok` or
+	/// `daemon_restarted`.
+	public let reason: String
+	/// Redacted text with more about the reason.
+	public let detail: String?
+	/// When the observation was made.
+	public let observedAt: Date
+	/// How long the probe attempt behind this observation took, in
+	/// milliseconds, rounded up and capped at the probe timeout; null when
+	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
+	/// the latency alone sends no event.
+	public let latencyMs: UInt32?
+
+	public init(state: InstanceReadinessState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
+		self.state = state
+		self.reason = reason
+		self.detail = detail
+		self.observedAt = observedAt
+		self.latencyMs = latencyMs
+	}
+}
+
+/// Health of an instance as read now. Closed.
+public enum InstanceHealthState: String, Codable, Sendable, Equatable {
+	/// Nothing is known, or the last observation is too old.
+	case unknown
+	/// Everything works.
+	case healthy
+	/// It works with problems.
+	case degraded
+	/// It does not work.
+	case unhealthy
+}
+
+/// Health as read now (`effective` at the time of the snapshot).
+public struct InstanceHealth: Codable, Sendable, Equatable {
+	/// The state.
+	public let state: InstanceHealthState
+	/// A snake case code saying why.
+	public let reason: String
+	/// Redacted text with more about the reason.
+	public let detail: String?
+	/// When the observation was made.
+	public let observedAt: Date
+	/// How long the probe attempt behind this observation took, in
+	/// milliseconds, rounded up and capped at the probe timeout; null when
+	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
+	/// the latency alone sends no event.
+	public let latencyMs: UInt32?
+
+	public init(state: InstanceHealthState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
+		self.state = state
+		self.reason = reason
+		self.detail = detail
+		self.observedAt = observedAt
+		self.latencyMs = latencyMs
+	}
+}
+
+/// The instance of an environment service.
+public struct ServiceInstance: Codable, Sendable, Equatable {
+	/// The ID.
+	public let id: UUID
+	/// The name.
+	public let name: String
+	/// The exact runtime version.
+	public let runtimeVersion: String
+	/// The lifecycle.
+	public let lifecycle: InstanceLifecycle
+	/// The readiness.
+	public let readiness: InstanceReadiness
+	/// The health.
+	public let health: InstanceHealth
+
+	public init(id: UUID, name: String, runtimeVersion: String, lifecycle: InstanceLifecycle, readiness: InstanceReadiness, health: InstanceHealth) {
+		self.id = id
+		self.name = name
+		self.runtimeVersion = runtimeVersion
+		self.lifecycle = lifecycle
+		self.readiness = readiness
+		self.health = health
+	}
+}
+
+/// Why a service is not ready. Open.
+public enum NotReadyReason: String, Codable, Sendable, Equatable {
+	/// No instance exists yet.
+	case notCreated = "not_created"
+	/// The instance is stopped.
+	case stopped
+	/// The instance is starting.
+	case starting
+	/// The instance is stopping.
+	case stopping
+	/// The instance failed.
+	case failed
+	/// It runs but is not ready.
+	case notReady = "not_ready"
+	/// Its state is unknown.
+	case unavailable
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// Why a service is not ready, with a redacted detail.
+public struct ServiceNotReady: Codable, Sendable, Equatable {
+	/// The reason.
+	public let reason: NotReadyReason
+	/// The readiness detail or the last failure.
+	public let detail: String?
+
+	public init(reason: NotReadyReason, detail: String?) {
+		self.reason = reason
+		self.detail = detail
+	}
+}
+
+/// One service of a registered environment.
+public struct EnvironmentService: Codable, Sendable, Equatable {
+	/// The alias.
+	public let alias: String
+	/// The provider.
+	public let provider: String
+	/// Its ownership.
+	public let ownership: EnvOwnership
+	/// The runtime selector the manifest wrote.
+	public let selector: String?
+	/// The instance a shared service borrows.
+	public let instanceRef: String?
+	/// Its instance, absent when it does not exist yet.
+	public let instance: ServiceInstance?
+	/// Why it is not ready; absent when ready.
+	public let notReady: ServiceNotReady?
+
+	public init(alias: String, provider: String, ownership: EnvOwnership, selector: String?, instanceRef: String?, instance: ServiceInstance?, notReady: ServiceNotReady?) {
+		self.alias = alias
+		self.provider = provider
+		self.ownership = ownership
+		self.selector = selector
+		self.instanceRef = instanceRef
+		self.instance = instance
+		self.notReady = notReady
+	}
+}
+
+/// How the manifest file compares to the snapshot. Open.
+public enum ManifestState: String, Codable, Sendable, Equatable {
+	/// The file matches.
+	case inSync = "in_sync"
+	/// The file changed since import.
+	case changed
+	/// No location, or the file is gone.
+	case missing
+	/// The file can't be read.
+	case unreadable
+	/// The file has error findings.
+	case invalid
+	/// The file declares another name.
+	case nameChanged = "name_changed"
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// Reply of `env.get`, `env.import`.
+public struct EnvironmentDetail: Codable, Sendable, Equatable {
+	/// The summary.
+	public let summary: EnvironmentSummary
+	/// One per service of the snapshot.
+	public let services: [EnvironmentService]?
+	/// Members the snapshot no longer declares.
+	public let detached: [DetachedMember]?
+	/// The manifest state; only with `checkManifest`.
+	public let manifestState: ManifestState?
+	/// The error findings of an `invalid` manifest; only with
+	/// `checkManifest`.
+	public let problems: UInt64?
+
+	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?) {
+		self.summary = summary
+		self.services = services
+		self.detached = detached
+		self.manifestState = manifestState
+		self.problems = problems
+	}
+}
+
+/// Reply of `env.list`: at most [`ENV_LIST_MAX`] environments, by name.
+public struct EnvironmentList: Codable, Sendable, Equatable {
+	/// Every environment.
+	public let items: [EnvironmentSummary]?
+
+	public init(items: [EnvironmentSummary]?) {
+		self.items = items
 	}
 }
 
@@ -5233,6 +6035,23 @@ public struct IdentityBlocker: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `env.import`, an `import_environment` operation; the request
+/// carries the `idempotencyKey`.
+public struct ImportEnvironmentParams: Codable, Sendable, Equatable {
+	/// The absolute path of the manifest, as for [`EnvValidateParams`].
+	public let path: String
+	/// The `manifestSha256` of the plan the client showed.
+	public let expectedManifestSha256: String
+	/// The environment whose manifest location moves to this file.
+	public let relinkEnvironmentId: UUID?
+
+	public init(path: String, expectedManifestSha256: String, relinkEnvironmentId: UUID?) {
+		self.path = path
+		self.expectedManifestSha256 = expectedManifestSha256
+		self.relinkEnvironmentId = relinkEnvironmentId
+	}
+}
+
 /// Where a package runs a program. Open.
 public enum ExecutableUse: String, Codable, Sendable, Equatable {
 	/// It starts the server.
@@ -5363,16 +6182,6 @@ public struct ProviderPermissions: Codable, Sendable, Equatable {
 		self.downloads = downloads
 		self.openWith = openWith
 	}
-}
-
-/// How serious a [`ValidationFinding`] is.
-public enum FindingSeverity: String, Codable, Sendable, Equatable {
-	/// The package is not publishable.
-	case error
-	/// The package is publishable, but something should change.
-	case warning
-	/// A severity this build does not know.
-	case unrecognized
 }
 
 /// Which rule set a [`ValidationFinding`] comes from.
@@ -5975,76 +6784,22 @@ public struct InstanceDetail: Codable, Sendable, Equatable {
 	}
 }
 
-/// Health of an instance as read now. Closed.
-public enum InstanceHealthState: String, Codable, Sendable, Equatable {
-	/// Nothing is known, or the last observation is too old.
-	case unknown
-	/// Everything works.
-	case healthy
-	/// It works with problems.
-	case degraded
-	/// It does not work.
-	case unhealthy
-}
+/// One environment an instance belongs to.
+public struct InstanceEnvironment: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// The alias of the instance in it.
+	public let alias: String
+	/// Whether it owns the instance.
+	public let ownership: EnvOwnership
 
-/// Health as read now (`effective` at the time of the snapshot).
-public struct InstanceHealth: Codable, Sendable, Equatable {
-	/// The state.
-	public let state: InstanceHealthState
-	/// A snake case code saying why.
-	public let reason: String
-	/// Redacted text with more about the reason.
-	public let detail: String?
-	/// When the observation was made.
-	public let observedAt: Date
-	/// How long the probe attempt behind this observation took, in
-	/// milliseconds, rounded up and capped at the probe timeout; null when
-	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
-	/// the latency alone sends no event.
-	public let latencyMs: UInt32?
-
-	public init(state: InstanceHealthState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
-		self.state = state
-		self.reason = reason
-		self.detail = detail
-		self.observedAt = observedAt
-		self.latencyMs = latencyMs
-	}
-}
-
-/// Readiness of an instance as read now. Closed.
-public enum InstanceReadinessState: String, Codable, Sendable, Equatable {
-	/// Nothing is known, or the last observation is too old.
-	case unknown
-	/// The process runs but does not accept work yet.
-	case notReady = "not_ready"
-	/// The instance accepts work.
-	case ready
-}
-
-/// Readiness as read now (`effective` at the time of the snapshot).
-public struct InstanceReadiness: Codable, Sendable, Equatable {
-	/// The state.
-	public let state: InstanceReadinessState
-	/// A snake case code saying why, such as `probe_ok` or
-	/// `daemon_restarted`.
-	public let reason: String
-	/// Redacted text with more about the reason.
-	public let detail: String?
-	/// When the observation was made.
-	public let observedAt: Date
-	/// How long the probe attempt behind this observation took, in
-	/// milliseconds, rounded up and capped at the probe timeout; null when
-	/// no probe made it, as for `daemon_restarted` or `waking`. A change of
-	/// the latency alone sends no event.
-	public let latencyMs: UInt32?
-
-	public init(state: InstanceReadinessState, reason: String, detail: String?, observedAt: Date, latencyMs: UInt32?) {
-		self.state = state
-		self.reason = reason
-		self.detail = detail
-		self.observedAt = observedAt
-		self.latencyMs = latencyMs
+	public init(environmentId: UUID, name: String, alias: String, ownership: EnvOwnership) {
+		self.environmentId = environmentId
+		self.name = name
+		self.alias = alias
+		self.ownership = ownership
 	}
 }
 
@@ -6241,31 +6996,6 @@ public struct ProviderPin: Codable, Sendable, Equatable {
 	}
 }
 
-/// The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a
-/// real state and the set is fixed, so a new value is a protocol major.
-public enum InstanceLifecycle: String, Codable, Sendable, Equatable {
-	/// Created; the data folder is not initialized yet.
-	case uninitialized
-	/// The data folder is being initialized.
-	case initializing
-	/// Not running.
-	case stopped
-	/// The process is starting.
-	case starting
-	/// The process runs.
-	case running
-	/// The process is stopping.
-	case stopping
-	/// Initialization, a start, or the process failed.
-	case failed
-	/// The process crashed and is being restarted.
-	case recovering
-	/// The identity of the process is lost; it is never signalled.
-	case unknown
-	/// Removed with its data kept.
-	case retained
-}
-
 /// Whether the person wants an instance running. Closed.
 public enum InstanceDesired: String, Codable, Sendable, Equatable {
 	/// The person wants it running.
@@ -6279,10 +7009,16 @@ public enum InstanceDesired: String, Codable, Sendable, Equatable {
 /// `restored` and `adopted`, spec 0005), and not the `Ownership` of an
 /// environment in the domain (`Dedicated` or `Shared`): this says whether
 /// a person runs the instance by hand or an environment owns it. `stacklyd`
-/// sends `manual` until feature 44 adds environment membership.
+/// sends `dedicated` for a dedicated member of an environment, `shared` for
+/// an instance only environments borrow, and `manual` otherwise (spec 0044
+/// AC-15).
 public enum InstanceOwnership: String, Codable, Sendable, Equatable {
 	/// A person starts and stops it.
 	case manual
+	/// An environment owns it and its data.
+	case dedicated
+	/// Environments borrow it; none owns it.
+	case shared
 	/// A value this build does not know. The daemon never sends it.
 	case unrecognized
 }
@@ -6367,8 +7103,11 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 	/// Absent in older daemons, which reads as `manual` and `none` (spec
 	/// 0031).
 	public let autostart: InstanceAutostart?
+	/// The environments it belongs to: the `dedicated` one first, then by
+	/// name (spec 0044 AC-15). Absent in older daemons.
+	public let environments: [InstanceEnvironment]?
 
-	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, restartTotal: UInt64?, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?, autostart: InstanceAutostart?) {
+	public init(id: UUID, name: String, displayName: String?, revision: UInt64, software: String, provider: ProviderPin, runtimeId: UUID, runtimeVersion: String, lifecycle: InstanceLifecycle, desired: InstanceDesired, readiness: InstanceReadiness, health: InstanceHealth, statusSeq: UInt64, process: InstanceProcess?, lastFailure: InstanceLastFailure?, restart: InstanceRestart, restartTotal: UInt64?, blocker: InstanceBlocker?, endpoints: [EndpointStatus]?, leftoverProcesses: [UInt32]?, logsUnavailable: Bool, ownership: InstanceOwnership?, initialized: Bool?, capabilities: InstanceCapabilities?, lastExit: InstanceLastExit?, autostart: InstanceAutostart?, environments: [InstanceEnvironment]?) {
 		self.id = id
 		self.name = name
 		self.displayName = displayName
@@ -6395,6 +7134,7 @@ public struct InstanceSummary: Codable, Sendable, Equatable {
 		self.capabilities = capabilities
 		self.lastExit = lastExit
 		self.autostart = autostart
+		self.environments = environments
 	}
 }
 
@@ -6411,19 +7151,6 @@ public struct InstancePage: Codable, Sendable, Equatable {
 	public init(items: [InstanceSummary]?, next: String?) {
 		self.items = items
 		self.next = next
-	}
-}
-
-/// An instance named without its state.
-public struct InstanceRef: Codable, Sendable, Equatable {
-	/// The instance.
-	public let instanceId: UUID
-	/// Its name.
-	public let name: String
-
-	public init(instanceId: UUID, name: String) {
-		self.instanceId = instanceId
-		self.name = name
 	}
 }
 
@@ -7996,6 +8723,32 @@ public struct ReloadInstanceParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `env.remove`, a `remove_environment` operation.
+public struct RemoveEnvironmentParams: Codable, Sendable, Equatable {
+	/// The environment.
+	public let id: UUID
+	/// The revision the client showed.
+	public let expectedRevision: UInt64
+
+	public init(id: UUID, expectedRevision: UInt64) {
+		self.id = id
+		self.expectedRevision = expectedRevision
+	}
+}
+
+/// Reply of `env.remove`.
+public struct RemovedEnvironment: Codable, Sendable, Equatable {
+	/// The ID it had.
+	public let id: UUID
+	/// The name it had.
+	public let name: String
+
+	public init(id: UUID, name: String) {
+		self.id = id
+		self.name = name
+	}
+}
+
 /// Reply of `provider.remove`.
 public struct RemovedProvider: Codable, Sendable, Equatable {
 	/// The provider that was removed.
@@ -8178,6 +8931,22 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Removes an imported provider from the catalog: a
 	/// `remove_provider_import` operation.
 	case providerRemove(ProviderTargetParams)
+	/// Checks a `stackly.yaml` against the catalog (spec 0044). Not an
+	/// operation: it reads the file and writes nothing.
+	case envValidate(EnvValidateParams)
+	/// What Up would do for a manifest on this Mac (spec 0044). Not an
+	/// operation: it writes nothing, downloads nothing, and spawns nothing.
+	case envPlan(EnvPlanParams)
+	/// Every registered environment, from the registry only.
+	case envList
+	/// One registered environment, reading its file only on request.
+	case envGet(EnvGetParams)
+	/// Registers or refreshes an environment from its manifest: an
+	/// `import_environment` operation that writes only the registry.
+	case envImport(ImportEnvironmentParams)
+	/// Forgets an environment and keeps its instances and data: a
+	/// `remove_environment` operation.
+	case envRemove(RemoveEnvironmentParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -8246,7 +9015,13 @@ public enum Call: Codable, Sendable, Equatable {
 			providerImport = "provider.import",
 			providerApprove = "provider.approve",
 			providerRevoke = "provider.revoke",
-			providerRemove = "provider.remove"
+			providerRemove = "provider.remove",
+			envValidate = "env.validate",
+			envPlan = "env.plan",
+			envList = "env.list",
+			envGet = "env.get",
+			envImport = "env.import",
+			envRemove = "env.remove"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -8570,6 +9345,34 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .providerRemove(content)
 					return
 				}
+			case .envValidate:
+				if let content = try? container.decode(EnvValidateParams.self, forKey: .content) {
+					self = .envValidate(content)
+					return
+				}
+			case .envPlan:
+				if let content = try? container.decode(EnvPlanParams.self, forKey: .content) {
+					self = .envPlan(content)
+					return
+				}
+			case .envList:
+				self = .envList
+				return
+			case .envGet:
+				if let content = try? container.decode(EnvGetParams.self, forKey: .content) {
+					self = .envGet(content)
+					return
+				}
+			case .envImport:
+				if let content = try? container.decode(ImportEnvironmentParams.self, forKey: .content) {
+					self = .envImport(content)
+					return
+				}
+			case .envRemove:
+				if let content = try? container.decode(RemoveEnvironmentParams.self, forKey: .content) {
+					self = .envRemove(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -8768,6 +9571,23 @@ public enum Call: Codable, Sendable, Equatable {
 		case .providerRemove(let content):
 			try container.encode(CodingKeys.providerRemove, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .envValidate(let content):
+			try container.encode(CodingKeys.envValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envPlan(let content):
+			try container.encode(CodingKeys.envPlan, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envList:
+			try container.encode(CodingKeys.envList, forKey: .type)
+		case .envGet(let content):
+			try container.encode(CodingKeys.envGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envImport(let content):
+			try container.encode(CodingKeys.envImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envRemove(let content):
+			try container.encode(CodingKeys.envRemove, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -8930,6 +9750,18 @@ public enum Reply: Codable, Sendable, Equatable {
 	case providerRevoke(ProviderDetail)
 	/// The removed provider.
 	case providerRemove(RemovedProvider)
+	/// What the validator found, also for a manifest that is not valid.
+	case envValidate(EnvValidation)
+	/// The plan.
+	case envPlan(EnvPlan)
+	/// Every registered environment.
+	case envList(EnvironmentList)
+	/// The environment.
+	case envGet(EnvironmentDetail)
+	/// The environment after the import.
+	case envImport(EnvironmentDetail)
+	/// The removed environment.
+	case envRemove(RemovedEnvironment)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -8998,7 +9830,13 @@ public enum Reply: Codable, Sendable, Equatable {
 			providerImport = "provider.import",
 			providerApprove = "provider.approve",
 			providerRevoke = "provider.revoke",
-			providerRemove = "provider.remove"
+			providerRemove = "provider.remove",
+			envValidate = "env.validate",
+			envPlan = "env.plan",
+			envList = "env.list",
+			envGet = "env.get",
+			envImport = "env.import",
+			envRemove = "env.remove"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -9340,6 +10178,36 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .providerRemove(content)
 					return
 				}
+			case .envValidate:
+				if let content = try? container.decode(EnvValidation.self, forKey: .content) {
+					self = .envValidate(content)
+					return
+				}
+			case .envPlan:
+				if let content = try? container.decode(EnvPlan.self, forKey: .content) {
+					self = .envPlan(content)
+					return
+				}
+			case .envList:
+				if let content = try? container.decode(EnvironmentList.self, forKey: .content) {
+					self = .envList(content)
+					return
+				}
+			case .envGet:
+				if let content = try? container.decode(EnvironmentDetail.self, forKey: .content) {
+					self = .envGet(content)
+					return
+				}
+			case .envImport:
+				if let content = try? container.decode(EnvironmentDetail.self, forKey: .content) {
+					self = .envImport(content)
+					return
+				}
+			case .envRemove:
+				if let content = try? container.decode(RemovedEnvironment.self, forKey: .content) {
+					self = .envRemove(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -9546,6 +10414,24 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .providerRemove(let content):
 			try container.encode(CodingKeys.providerRemove, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envValidate(let content):
+			try container.encode(CodingKeys.envValidate, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envPlan(let content):
+			try container.encode(CodingKeys.envPlan, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envList(let content):
+			try container.encode(CodingKeys.envList, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envGet(let content):
+			try container.encode(CodingKeys.envGet, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envImport(let content):
+			try container.encode(CodingKeys.envImport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envRemove(let content):
+			try container.encode(CodingKeys.envRemove, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

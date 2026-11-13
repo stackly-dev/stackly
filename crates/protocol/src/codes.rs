@@ -306,6 +306,88 @@ area! {
 }
 
 area! {
+    /// Environment codes (spec 0044, *Kode error di wire*): reading,
+    /// planning, importing, and removing a `stackly.yaml`. None is
+    /// retryable; each has a static hint from [`env::hint`](self::env::hint).
+    pub mod env = "env", owner "spec 0044" {
+        MANIFEST_UNREADABLE = "env.manifest_unreadable", InvalidInput, retryable false,
+            details ["reason"], "the manifest file can't be read: not_found, not_a_file (a symlink too), permission_denied, too_large, or io";
+        MANIFEST_INVALID = "env.manifest_invalid", InvalidInput, retryable false,
+            details ["errors"], "an import named a manifest with error findings";
+        MANIFEST_CHANGED = "env.manifest_changed", Conflict, retryable false,
+            details [], "the manifest digest differs from the one the client planned";
+        NAME_TAKEN = "env.name_taken", Conflict, retryable false,
+            details ["name", "location"], "the environment name is registered at another manifest location";
+        LIMIT_REACHED = "env.limit_reached", Conflict, retryable false,
+            details ["limit"], "the registry already holds 64 environments";
+        NOT_FOUND = "env.not_found", NotFound, retryable false,
+            details [], "no environment has that ID";
+        LEASE_ACTIVE = "env.lease_active", Conflict, retryable false,
+            details ["count", "omitted"],
+            items { kind "instance", fields ["instanceId", "name"], max 32 },
+            "the environment still holds an active lease, so it can't be removed";
+        INSTANCE_REF_NOT_FOUND = "env.instance_ref_not_found", NotFound, retryable false,
+            details ["service", "instanceRef"], "a plan blocker: no instance has the name a shared service borrows";
+        INSTANCE_REF_MISMATCH = "env.instance_ref_mismatch", Conflict, retryable false,
+            details ["service", "expected", "actual"], "a plan blocker: the borrowed instance runs another provider";
+        INSTANCE_BLOCKED = "env.instance_blocked", Conflict, retryable false,
+            details ["service", "instance", "reason"], "a plan blocker: an existing instance can't be started; reason is its lifecycle, not_initialized, or its blocker";
+        MANIFEST_RENAMED = "env.manifest_renamed", Conflict, retryable false,
+            details ["declared", "registered"], "a plan blocker: the file of a registered environment declares another name";
+        RELINK_MISMATCH = "env.relink_mismatch", Conflict, retryable false,
+            details ["declared", "registered"], "a relink named an environment whose name differs from the file";
+
+        @functions
+
+        /// The static hint of an environment error, chosen from its code
+        /// and the values of its `details`; `None` outside the area. A hint
+        /// never holds a value.
+        #[must_use]
+        pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
+            let detail = |key: &str| {
+                details
+                    .iter()
+                    .find(|detail| detail.key() == key)
+                    .map(crate::error::ErrorDetail::value)
+            };
+            Some(match code {
+                c if c == MANIFEST_UNREADABLE.code => match detail("reason") {
+                    Some("permission_denied") => {
+                        "macOS did not let stacklyd read this file; move the project outside Desktop, Documents, and Downloads, or allow Stackly in Privacy & Security > Files and Folders"
+                    }
+                    Some("too_large") => "a manifest is at most 256 KiB",
+                    Some("not_found") => "check the path of the stackly.yaml",
+                    _ => "choose a regular stackly.yaml file, not a folder or a link",
+                },
+                c if c == MANIFEST_INVALID.code => "run stackly env validate and fix each finding",
+                c if c == MANIFEST_CHANGED.code => "review the plan again before you import",
+                c if c == NAME_TAKEN.code => {
+                    "rename metadata.name, or use this file for the registered environment"
+                }
+                c if c == LIMIT_REACHED.code => "remove an environment first",
+                c if c == NOT_FOUND.code => "list the environments again",
+                c if c == LEASE_ACTIVE.code => "bring it down first",
+                c if c == INSTANCE_REF_NOT_FOUND.code => {
+                    "create that instance first, or change instanceRef"
+                }
+                c if c == INSTANCE_REF_MISMATCH.code => {
+                    "point instanceRef at an instance of the same provider"
+                }
+                c if c == INSTANCE_BLOCKED.code => match detail("reason") {
+                    Some("not_initialized") => "open the instance and start it once on its own",
+                    _ => "open the instance to see what blocks it",
+                },
+                c if c == MANIFEST_RENAMED.code => {
+                    "import the file as a new environment, or restore metadata.name"
+                }
+                c if c == RELINK_MISMATCH.code => "choose a file that declares this environment's name",
+                _ => return None,
+            })
+        }
+    }
+}
+
+area! {
     /// Provider package codes (spec 0009, *Kode error di wire*). Each issue
     /// is one `issue` item, with a `reason` field only when the issue code
     /// declares reasons (spec 0021); an issue message never holds a
@@ -1116,6 +1198,12 @@ area! {
             details ["errors", "warnings"], "the doctor ran and found at least one error; the result holds the report (spec 0034)";
         PROVIDER_INVALID = "cli.provider_invalid", InvalidInput, retryable false,
             details ["errors", "warnings"], "the provider package is not publishable; the result holds the validation (spec 0036)";
+        ENV_INVALID = "cli.env_invalid", InvalidInput, retryable false,
+            details ["errors", "warnings"], "the environment manifest has error findings; the result holds the validation or the plan (spec 0044)";
+        ENV_PLAN_BLOCKED = "cli.env_plan_blocked", Conflict, retryable false,
+            details ["blockers"], "the plan is valid but has blockers; the result holds the plan (spec 0044)";
+        ENVIRONMENT_NOT_FOUND = "cli.environment_not_found", NotFound, retryable false,
+            details ["name"], "no environment has the name the command was given (spec 0044)";
     }
 }
 
@@ -1131,6 +1219,7 @@ pub const AREAS: &[Area] = &[
     operation::AREA,
     manifest::AREA,
     provider::AREA,
+    env::AREA,
     catalog::AREA,
     runtime::AREA,
     secret::AREA,
@@ -1545,6 +1634,7 @@ mod tests {
                 ("operation", "spec 0007"),
                 ("manifest", "spec 0009"),
                 ("provider", "spec 0009"),
+                ("env", "spec 0044"),
                 ("catalog", "spec 0017"),
                 ("runtime", "spec 0018"),
                 ("secret", "spec 0011"),
@@ -1711,6 +1801,21 @@ mod tests {
                 "cli.provider_invalid",
                 ErrorCategory::InvalidInput,
                 &["errors", "warnings"],
+            ),
+            (
+                "cli.env_invalid",
+                ErrorCategory::InvalidInput,
+                &["errors", "warnings"],
+            ),
+            (
+                "cli.env_plan_blocked",
+                ErrorCategory::Conflict,
+                &["blockers"],
+            ),
+            (
+                "cli.environment_not_found",
+                ErrorCategory::NotFound,
+                &["name"],
             ),
         ];
         assert_eq!(table, expected);

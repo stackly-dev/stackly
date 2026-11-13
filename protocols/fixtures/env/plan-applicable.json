@@ -1,0 +1,151 @@
+{
+  "validation": {
+    "file": "/Users/dev/erp/stackly.yaml",
+    "valid": true,
+    "apiVersion": "stackly/v1alpha1",
+    "supportedApiVersions": [
+      "stackly/v1alpha1"
+    ],
+    "name": "erp-development",
+    "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "services": [
+      {
+        "alias": "postgres",
+        "provider": "official/postgresql",
+        "ownership": "dedicated",
+        "selector": "18",
+        "instanceRef": null,
+        "instanceName": null,
+        "dependsOn": []
+      },
+      {
+        "alias": "cache",
+        "provider": "official/valkey",
+        "ownership": "shared",
+        "selector": null,
+        "instanceRef": "shared-valkey",
+        "instanceName": null,
+        "dependsOn": []
+      }
+    ],
+    "findings": [],
+    "findingCount": 0,
+    "omitted": 0
+  },
+  "registration": "registered",
+  "environment": {
+    "id": "0192f3a7-0000-7000-8000-0000000000e1",
+    "name": "erp-development",
+    "revision": 3
+  },
+  "registeredLocation": "/Users/dev/erp/stackly.yaml",
+  "applicable": true,
+  "planDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "items": [
+    {
+      "alias": "postgres",
+      "ownership": "dedicated",
+      "action": "create",
+      "steps": [
+        "install_runtime",
+        "create_instance",
+        "start_instance"
+      ],
+      "instance": {
+        "id": null,
+        "name": "erp-development-postgres"
+      },
+      "provider": "official/postgresql",
+      "trust": "trusted",
+      "runtime": {
+        "selector": "18",
+        "version": "18.6",
+        "artifactId": "postgresql-18.6-macos-aarch64",
+        "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "install": true,
+        "runtimeId": null,
+        "downloadSize": 104857600
+      },
+      "endpoints": [
+        {
+          "name": "client",
+          "host": "127.0.0.1",
+          "port": {
+            "type": "fixed",
+            "content": 5432
+          }
+        }
+      ],
+      "secrets": [
+        {
+          "field": "superuserPassword",
+          "reference": "local:erp/postgres/admin",
+          "status": "unregistered"
+        }
+      ],
+      "waitsFor": [],
+      "differences": [],
+      "checks": [
+        {
+          "id": "runtime",
+          "kind": "runtime",
+          "status": "ok",
+          "title": "Runtime PostgreSQL 18.6",
+          "detail": "will be installed",
+          "subject": null,
+          "suggestedPort": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "alias": "cache",
+      "ownership": "shared",
+      "action": "keep",
+      "steps": [],
+      "instance": {
+        "id": "0192f3a5-0000-7000-8000-000000000001",
+        "name": "shared-valkey"
+      },
+      "provider": "official/valkey",
+      "trust": null,
+      "runtime": null,
+      "endpoints": [
+        {
+          "name": "client",
+          "host": "127.0.0.1",
+          "port": {
+            "type": "fixed",
+            "content": 6379
+          }
+        }
+      ],
+      "secrets": [],
+      "waitsFor": [],
+      "differences": [
+        {
+          "field": "endpoint.client.port",
+          "manifest": "6380",
+          "instance": "6379"
+        }
+      ],
+      "checks": []
+    }
+  ],
+  "order": [
+    "postgres",
+    "cache"
+  ],
+  "blockers": [],
+  "detached": [
+    {
+      "alias": "old",
+      "instance": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000002",
+        "name": "erp-old"
+      },
+      "ownership": "dedicated"
+    }
+  ],
+  "needsSecrets": 1
+}
