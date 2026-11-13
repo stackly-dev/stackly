@@ -115,7 +115,7 @@ services:
 | `version`, `line` | `ExactVersion` dan `RuntimeLine` artefak yang dipilih |
 | `artifacts[]` | 1 sampai 16 entri, satu per target, urut teks target; `target` teks `Target` (`<os>-<arch>`), `id` ID artefak catalog, `sha256` digest unduhannya |
 
-Loader: loader ketat spec 0044 (field tak dikenal, key ganda, anchor, alias, dan `apiVersion` atau `kind` lain ditolak). Target ganda dalam satu service ditolak. Baris komentar pertama boleh ada atau tidak.
+Loader: loader ketat spec 0044 (field tak dikenal, key ganda, nilai bertag, merge key, dan `apiVersion` atau `kind` lain ditolak; anchor dan alias YAML diterima dalam anggaran expand, menurut *YAML yang diterima* [spec 0044](../0044-manifest-environment-validate-plan/index.md)) *(diselaraskan 2026-11-13 dengan spec 0044: sebelumnya anchor dan alias ditolak)*. Target ganda dalam satu service ditolak. Baris komentar pertama boleh ada atau tidak.
 
 Emitter: `environment::lock::emit` menulis byte sendiri (bukan `serde_yaml_ng::to_string`): baris komentar di atas, indent dua spasi, setiap nilai string dalam kutip ganda, akhir baris `\n`, satu `\n` di akhir file. Golden test menjaga bentuknya.
 
@@ -198,7 +198,7 @@ Finding memakai `EnvFinding` spec 0044 dengan template pesan tetap per kode. Uru
 
 | Kode | Severity | Kapan |
 | --- | --- | --- |
-| `yaml_syntax`, `unknown_field`, `missing_field`, `invalid_value`, `duplicate_key`, `yaml_alias`, `unsupported_api_version`, `unsupported_kind` | error | bentuk dokumen, sama dengan manifest |
+| `yaml_syntax`, `unknown_field`, `missing_field`, `invalid_value`, `duplicate_key`, `yaml_alias`, `unsupported_api_version`, `unsupported_kind` | error | bentuk dokumen, sama dengan manifest. `yaml_alias` berarti nilai atau key bertag, merge key, atau alias yang mengembangkan dokumen melewati anggaran expand; anchor dan alias biasa bukan finding (*YAML yang diterima* spec 0044) |
 | `override_unknown_service` | warning | alias tidak ada di manifest; override nya diabaikan |
 | `override_not_allowed` | error | service nya `instanceRef` (environment tidak pernah mengonfigurasi instance yang dipinjam) |
 | `unknown_endpoint`, `endpoint_not_ip` | error | nama endpoint bukan endpoint IP paket |
