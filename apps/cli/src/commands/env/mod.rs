@@ -9,6 +9,7 @@
 //! `env.get` (spec 0046 AC-17, AC-18). The daemon reads the manifest; the
 //! CLI only makes its path absolute.
 
+mod down;
 mod export;
 mod import;
 mod list;
@@ -24,6 +25,7 @@ mod validate;
 
 use clap::Subcommand;
 
+use self::down::DownArgs;
 use self::export::ExportArgs;
 use self::import::ImportArgs;
 use self::list::ListArgs;
@@ -57,6 +59,11 @@ pub enum EnvCommand {
         after_help = "Asks nothing. Without --wait it prints the operation it started. With --wait it writes one line per service change to stderr, then the services with the ports they really use, and exits 0 only when every service is ready. Exits 2 with cli.env_invalid for a manifest that is not valid, 3 with cli.env_plan_blocked when something blocks the plan, 5 with cli.env_locked_unsupported when --locked reaches a daemon that does not know it, 6 with secret.needs_secret for a reference without a value, 7 with env.up_incomplete when a service is not ready, and 8 when --timeout runs out (the Up keeps running).\n\nExamples:\n  stackly env up --wait\n  stackly env up ~/Code/erp --wait\n  stackly env up erp-development --locked --wait --timeout 10m\n  stackly env up --json"
     )]
     Up(UpArgs),
+    /// Release the environment's lease and stop only the instances nothing else needs
+    #[command(
+        after_help = "Asks nothing: Down never deletes data, runtimes, or instances. Instances another environment uses, that you started yourself, or that start at login keep running; the preview on stderr names them. Without --wait it prints the operation it started. With --wait it writes one line per instance that ended and exits 0 only when the Down succeeded. Exits 3 with env.down_changed when what stops changed twice since the preview, 7 with env.down_incomplete when an instance did not stop, 8 when --timeout runs out (the Down keeps running), 9 when it was cancelled, and 10 with cli.environment_not_found for an environment that is not registered.\n\nExamples:\n  stackly env down --wait\n  stackly env down ~/Code/erp\n  stackly env down erp-development --wait --timeout 5m\n  stackly env down erp-development --json"
+    )]
+    Down(DownArgs),
     /// Show every service of an environment with its status and ports
     #[command(
         after_help = "Exits 0 whatever the status is, 2 with cli.env_invalid for a manifest that is not valid, and 10 with cli.environment_not_found for an environment that is not registered.\n\nExamples:\n  stackly env status\n  stackly env status ~/Code/erp\n  stackly env status erp-development --json"
@@ -94,6 +101,7 @@ impl EnvCommand {
             Self::Validate(args) => execute(args, cx).await,
             Self::Plan(args) => execute(args, cx).await,
             Self::Up(args) => execute(args, cx).await,
+            Self::Down(args) => execute(args, cx).await,
             Self::Status(args) => execute(args, cx).await,
             Self::Lock(args) => execute(args, cx).await,
             Self::Export(args) => execute(args, cx).await,

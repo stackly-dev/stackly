@@ -12,8 +12,9 @@ use stackly_protocol::{Call, Reply};
 
 use super::resolve::{InstanceTarget, TargetArg};
 use super::stop::StopAll;
-use super::{InstanceAction, Verb, accepted, conclude, next_steps};
+use super::{InstanceAction, Verb, accepted, conclude, lease, next_steps};
 use crate::commands::RunCommand;
+use crate::commands::provider::local::esc;
 use crate::confirm::{Approval, Confirm, ConfirmRequest, ConfirmRole, OnNoninteractive};
 use crate::context::Context;
 use crate::failure::CliFailure;
@@ -31,9 +32,10 @@ pub struct StartArgs {
     pub run: AsyncArgs,
 }
 
-/// `stackly instance stop`. It never overrides a lease: stopping an
-/// instance that an environment holds waits for the environment feature.
-/// With `--all` it stops every service the preview shows, after asking.
+/// `stackly instance stop`. Stopping a running instance an environment
+/// holds a lease on is refused unless `--override-leases` is given (spec
+/// 0047 AC-19); the lease stays either way. With `--all` it stops every
+/// service the preview shows, after asking.
 #[derive(Debug, Args)]
 #[command(group(clap::ArgGroup::new("confirms").args(["force", "all"])))]
 pub struct StopArgs {
@@ -54,6 +56,10 @@ pub struct StopArgs {
     /// Confirm --force or --all without asking; needed noninteractive and with --json
     #[arg(short = 'y', long, requires = "confirms")]
     pub yes: bool,
+    /// Stop it even when an environment holds a lease on it; the
+    /// environment is left partially ready and keeps its lease
+    #[arg(long, conflicts_with = "force")]
+    pub override_leases: bool,
 }
 
 impl StopArgs {
@@ -67,6 +73,7 @@ impl StopArgs {
             Ok(StopAll {
                 yes: self.yes,
                 idempotency_key: self.run.idempotency_key,
+                override_leases: self.override_leases,
             })
         } else {
             Err(self)
@@ -211,11 +218,15 @@ impl RunCommand for StopArgs {
         let call = Call::InstanceStop(StopInstanceParams {
             instance_id: id,
             expected_revision: None,
-            override_leases: false,
+            override_leases: self.override_leases,
         });
         match cx.submit(call, &self.run, extract_stop).await {
             Ok(submission) => conclude(cx, submission, Verb::Stop, Some(id)).await,
-            Err(failure) => CommandOutput::failed(failure),
+            Err(failure) => {
+                let name = named.to_string();
+                let retry = format!("stackly instance stop {}", esc(&name));
+                CommandOutput::failed(lease::explain(cx, failure, &name, &retry))
+            }
         }
     }
 }

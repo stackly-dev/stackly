@@ -1,4 +1,5 @@
 graph  Partially ready  1 of 3 ready  /Users/dev/erp/stackly.yaml
+lease: held on 1 instance since 2026-11-13T09:00:00.000Z
 
 SERVICE  INSTANCE  VERSION  OWNERSHIP  STATUS                ENDPOINTS
 db       graph-db  0.1.0    dedicated  ready                 http 127.0.0.1:49152

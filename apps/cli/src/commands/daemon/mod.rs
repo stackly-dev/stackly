@@ -56,7 +56,7 @@ pub enum DaemonCommand {
     Restart(RestartArgs),
     /// Turn off the background agent: stops the instances, then unregisters the agent. The app, your data, and the command line link stay
     #[command(
-        after_help = "Examples:\n  stackly daemon uninstall\n  stackly daemon uninstall --yes --json"
+        after_help = "An instance an environment holds a lease on keeps the daemon up unless --override-leases is given; with it, that instance stops too and the environment keeps its lease.\n\nExamples:\n  stackly daemon uninstall\n  stackly daemon uninstall --override-leases\n  stackly daemon uninstall --yes --json"
     )]
     Uninstall(UninstallArgs),
 }
@@ -106,6 +106,10 @@ pub struct RestartArgs {
 pub struct UninstallArgs {
     #[command(flatten)]
     confirm: ConfirmArgs,
+    /// Stop the instances environments hold a lease on too; the
+    /// environments keep their leases
+    #[arg(long)]
+    override_leases: bool,
 }
 
 /// What the logic of the verbs runs against.
@@ -251,7 +255,7 @@ impl RunCommand for UninstallArgs {
             probe: &probe,
             interrupt: &mut *interrupt,
         };
-        uninstall(&mut deps, &mut prompt, &key).await
+        uninstall(&mut deps, &mut prompt, &key, self.override_leases).await
     }
 }
 

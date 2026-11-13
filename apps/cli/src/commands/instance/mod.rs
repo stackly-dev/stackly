@@ -18,6 +18,7 @@ mod endpoint;
 mod get;
 pub mod group;
 mod inspect;
+mod lease;
 mod list;
 mod logs;
 mod metrics;
@@ -81,7 +82,7 @@ pub enum InstanceCommand {
     Start(StartArgs),
     /// Stop an instance, force stop one that is still stopping, or stop every running service with --all
     #[command(
-        after_help = "Examples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop orders-db --force --yes --wait\n  stackly instance stop --all\n  stackly instance stop --all --yes --json\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
+        after_help = "Stopping a running instance that an environment holds a lease on exits 3 with supervisor.stop_requires_override unless --override-leases is given; the lease stays either way.\n\nExamples:\n  stackly instance stop orders-db\n  stackly instance stop orders-db --wait --json\n  stackly instance stop orders-db --override-leases --wait\n  stackly instance stop orders-db --force --yes --wait\n  stackly instance stop --all\n  stackly instance stop --all --yes --json\n  stackly instance stop 0192f3a5-0000-7000-8000-000000000001"
     )]
     Stop(StopArgs),
     /// Restart a running instance: stop with the provider's strategy, then start
@@ -272,11 +273,19 @@ impl Render for InstanceAction {
             let name = escaped(&instance.name);
             match self.verb {
                 Verb::Create { .. } => out.line(&format!("created {name} ({})", instance.id)),
-                Verb::Start | Verb::Stop => out.line(&format!(
-                    "{name} {}, readiness {}",
-                    wire_name(&instance.lifecycle),
-                    wire_name(&instance.readiness.state)
-                )),
+                Verb::Start | Verb::Stop => {
+                    out.line(&format!(
+                        "{name} {}, readiness {}",
+                        wire_name(&instance.lifecycle),
+                        wire_name(&instance.readiness.state)
+                    ));
+                    if self.verb == Verb::Stop {
+                        for line in lease::incomplete_lines(&instance.name, &instance.environments)
+                        {
+                            out.line(&line);
+                        }
+                    }
+                }
                 Verb::Restart => match &instance.process {
                     Some(process) => out.line(&format!("restarted {name} (pid {})", process.pid)),
                     None => out.line(&format!("restarted {name}")),

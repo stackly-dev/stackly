@@ -3,7 +3,10 @@
 //! instances it can with `daemon.shutdown { mode: agent_off }`, and
 //! unregisters the agent only when the daemon says it exits. A daemon that
 //! stays up leaves the agent registered and the command ends with a
-//! `conflict` that lists what could not be stopped.
+//! `conflict` that lists what could not be stopped. `--override-leases`
+//! sends `overrideLeases` to the preview and to `agent_off`, so instances
+//! an environment holds a lease on stop too and keep the lease (spec 0047
+//! AC-19).
 
 use serde::Serialize;
 use stackly_platform::BackgroundAgentState;
@@ -119,7 +122,39 @@ pub fn preview_lines(preview: &AgentOffPreview) -> Vec<String> {
         plural(preview.at_login, "instance", "instances"),
     )];
     for item in &preview.preview.items {
-        lines.push(format!("  stops: {}", escape_display(&item.name)));
+        if item.environments.is_empty() {
+            lines.push(format!("  stops: {}", escape_display(&item.name)));
+        } else {
+            let names: Vec<String> = item
+                .environments
+                .iter()
+                .map(|environment| escape_display(&environment.name).into_owned())
+                .collect();
+            lines.push(format!(
+                "  stops: {} (used by {})",
+                escape_display(&item.name),
+                names.join(", ")
+            ));
+        }
+    }
+    let affected = &preview.preview.affected_environments;
+    for environment in affected {
+        let count = environment.instance_count.get();
+        let instances = if count == 1 {
+            "1 instance".to_owned()
+        } else {
+            format!("{count} instances")
+        };
+        lines.push(format!(
+            "affects {} ({instances})",
+            escape_display(&environment.name)
+        ));
+    }
+    if !affected.is_empty() {
+        lines.push(
+            "Environments keep their leases. Bring them up again after you turn Stackly back on."
+                .to_owned(),
+        );
     }
     lines
 }
@@ -143,11 +178,34 @@ fn blockers(entries: &[StopAllEntry], names: &dyn Fn(Uuid) -> String) -> Vec<Str
         .collect()
 }
 
-/// Runs `daemon uninstall` with a fresh idempotency `key`.
+/// The hint of a turn off that environment leases keep from going ahead.
+const LEASED_HINT: &str =
+    "to stop the instances environments hold too, run: stackly daemon uninstall --override-leases";
+
+/// `failure` with [`LEASED_HINT`] when an entry was left alone only for an
+/// environment lease and the lease was not overridden.
+fn with_leased_hint(
+    mut failure: CliFailure,
+    codes: impl IntoIterator<Item = String>,
+    override_leases: bool,
+) -> CliFailure {
+    if !override_leases
+        && codes
+            .into_iter()
+            .any(|code| code == "supervisor.stop_requires_override")
+    {
+        failure.hints.push(LEASED_HINT.to_owned());
+    }
+    failure
+}
+
+/// Runs `daemon uninstall` with a fresh idempotency `key`, overriding
+/// environment leases when `override_leases` is set.
 pub async fn uninstall(
     deps: &mut Deps<'_>,
     prompt: &mut dyn UninstallPrompt,
     key: &str,
+    override_leases: bool,
 ) -> CommandOutput<UninstallResult> {
     let agent = deps.agent;
     let (probe, assessment) = agent.status().await;
@@ -176,7 +234,7 @@ pub async fn uninstall(
         return CommandOutput::ok(finish(false, None, &assessment, false));
     }
 
-    let preview = match deps.probe.agent_off_preview().await {
+    let preview = match deps.probe.agent_off_preview(override_leases).await {
         Ok(preview) => preview,
         Err(failure) if daemon_absent(&failure) => {
             // With no daemon, launchd does not start one while the agent
@@ -235,9 +293,14 @@ pub async fn uninstall(
             .iter()
             .map(|skip| format!("{} · {}", skip.name, reason(&skip.code)))
             .collect();
+        let codes = preview.preview.skipped.iter().map(|skip| skip.code.clone());
         return CommandOutput::partial(
             finish(false, None, &assessment, true),
-            CliFailure::agent_off_blocked(0, &list),
+            with_leased_hint(
+                CliFailure::agent_off_blocked(0, &list),
+                codes,
+                override_leases,
+            ),
         );
     }
     prompt.show(&preview_lines(&preview));
@@ -245,7 +308,11 @@ pub async fn uninstall(
         return CommandOutput::partial(finish(false, None, &assessment, true), failure);
     }
 
-    let reply = match deps.probe.agent_off(key, DAEMON_STOP_WAIT).await {
+    let reply = match deps
+        .probe
+        .agent_off(key, DAEMON_STOP_WAIT, override_leases)
+        .await
+    {
         Ok(reply) => reply,
         Err(failure) => {
             return CommandOutput::partial(finish(false, None, &assessment, true), failure);
@@ -259,9 +326,20 @@ pub async fn uninstall(
             list.extend(blockers(&result.skipped, &name_of));
             list
         });
+        let codes: Vec<String> = stop_all.as_ref().map_or_else(Vec::new, |result| {
+            result
+                .skipped
+                .iter()
+                .map(|entry| entry.code.clone())
+                .collect()
+        });
         return CommandOutput::partial(
             finish(false, stop_all, &assessment, true),
-            CliFailure::agent_off_blocked(stopped, &list),
+            with_leased_hint(
+                CliFailure::agent_off_blocked(stopped, &list),
+                codes,
+                override_leases,
+            ),
         );
     }
     if !reply.eof {
@@ -420,13 +498,22 @@ mod tests {
         probe: &ScriptedProbe,
         prompt: &mut Prompt,
     ) -> CommandOutput<UninstallResult> {
+        uninstall_overriding(rig, probe, prompt, false).await
+    }
+
+    async fn uninstall_overriding(
+        rig: &Rig,
+        probe: &ScriptedProbe,
+        prompt: &mut Prompt,
+        override_leases: bool,
+    ) -> CommandOutput<UninstallResult> {
         let mut interrupt = AfterInterrupt::never();
         let mut deps = Deps {
             agent: &rig.env,
             probe,
             interrupt: &mut interrupt,
         };
-        uninstall(&mut deps, prompt, "key-1").await
+        uninstall(&mut deps, prompt, "key-1", override_leases).await
     }
 
     /// A daemon that answers until the Turn Off reply, then is gone.
@@ -529,6 +616,52 @@ mod tests {
         assert!(probe.agent_off_keys().is_empty(), "nothing was sent");
         assert_eq!(prompt.asked, 0);
         assert_eq!(rig.fake.count(AgentOp::Unregister), 0);
+        assert!(
+            failure.hints.contains(&LEASED_HINT.to_owned()),
+            "the hint names --override-leases: {:?}",
+            failure.hints
+        );
+        assert_eq!(probe.agent_off_overrides(), [false]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn override_leases_reaches_the_preview_and_agent_off_and_names_the_environments() {
+        let rig = Rig::plain();
+        rig.fake.set_registration(AgentRegistration::Enabled);
+        let mut shown = preview(Vec::new());
+        shown.preview.items[0].environments = vec![stackly_protocol::env::InstanceEnvironment {
+            environment_id: Uuid::from_u128(9),
+            name: "erp".to_owned(),
+            alias: "db".to_owned(),
+            ownership: stackly_protocol::env::EnvOwnership::Shared,
+            lease_active: true,
+        }];
+        shown.preview.affected_environments =
+            vec![stackly_protocol::stop_all::AffectedEnvironment {
+                environment_id: Uuid::from_u128(9),
+                name: "erp".to_owned(),
+                instance_count: Count::saturating(1),
+            }];
+        let probe = goes_away(reply(true, stopped_one())).on_agent_off_preview(Ok(shown));
+        let mut prompt = Prompt::yes();
+
+        let _output = uninstall_overriding(&rig, &probe, &mut prompt, true).await;
+
+        assert_eq!(probe.agent_off_overrides(), [true, true]);
+        assert!(
+            prompt
+                .shown
+                .contains(&"  stops: orders-db (used by erp)".to_owned())
+        );
+        assert!(
+            prompt
+                .shown
+                .contains(&"affects erp (1 instance)".to_owned())
+        );
+        assert!(prompt.shown.contains(
+            &"Environments keep their leases. Bring them up again after you turn Stackly back on."
+                .to_owned()
+        ));
     }
 
     #[tokio::test(start_paused = true)]

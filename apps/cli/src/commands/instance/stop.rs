@@ -2,12 +2,16 @@
 //! `instance.preview_stop_all`, prints it, asks, and sends `instance.stop_all`
 //! with the `expectedInstanceIds` of that preview, so only what was shown can
 //! stop. The copy follows the *Copy Stop All* table, the same words the menu
-//! bar popover uses.
+//! bar popover uses. `--override-leases` sends `overrideLeases` to both, so
+//! instances an environment holds a lease on stop too and keep the lease;
+//! the preview then names each environment it affects (spec 0047 AC-19).
 
 use serde::Serialize;
 use stackly_protocol::codes::{self, ErrorSpec};
+use stackly_protocol::env::InstanceEnvironment;
 use stackly_protocol::stop_all::{
-    DemandSourceKind, StopAllEntry, StopAllParams, StopAllPreview, StopAllResult,
+    DemandSourceKind, StopAllEntry, StopAllParams, StopAllPreview, StopAllPreviewParams,
+    StopAllResult,
 };
 use stackly_protocol::{Call, ErrorBody, Reply};
 use uuid::Uuid;
@@ -35,6 +39,8 @@ pub struct StopAll {
     pub yes: bool,
     /// `--idempotency-key`.
     pub idempotency_key: Option<IdempotencyKeyArg>,
+    /// `--override-leases`.
+    pub override_leases: bool,
 }
 
 /// The `result` of `stop --all`: the preview the person saw, and how the stop
@@ -59,11 +65,23 @@ fn reason(code: &str) -> &str {
     }
 }
 
-fn demand_text(source: DemandSourceKind) -> &'static str {
+/// The names of `environments`, joined with ", ".
+fn environment_names(environments: &[InstanceEnvironment]) -> String {
+    environments
+        .iter()
+        .map(|environment| escaped(&environment.name))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The text of a demand source; an environment is named when the preview
+/// says which (spec 0047, *Copy Stop All*).
+fn demand_text(source: DemandSourceKind, environments: &[InstanceEnvironment]) -> String {
     match source {
-        DemandSourceKind::Manual => "Started by you",
-        DemandSourceKind::Startup => "Started at login",
-        _ => "Used by an environment",
+        DemandSourceKind::Manual => "Started by you".to_owned(),
+        DemandSourceKind::Startup => "Started at login".to_owned(),
+        _ if environments.is_empty() => "Used by an environment".to_owned(),
+        _ => format!("Used by {}", environment_names(environments)),
     }
 }
 
@@ -87,7 +105,11 @@ fn footer(preview: &StopAllPreview) -> String {
 fn preview_rows(preview: &StopAllPreview) -> Vec<String> {
     let mut rows = Vec::new();
     for item in &preview.items {
-        let demand: Vec<&str> = item.demand.iter().copied().map(demand_text).collect();
+        let demand: Vec<String> = item
+            .demand
+            .iter()
+            .map(|source| demand_text(*source, &item.environments))
+            .collect();
         let name = escaped(&item.name);
         rows.push(if demand.is_empty() {
             name
@@ -99,13 +121,42 @@ fn preview_rows(preview: &StopAllPreview) -> Vec<String> {
         rows.push(format!("{} · already stopping", escaped(&item.name)));
     }
     for skip in &preview.skipped {
-        rows.push(format!(
-            "{} · won’t stop: {}",
-            escaped(&skip.name),
-            reason(&skip.code)
-        ));
+        let why =
+            if skip.code == "supervisor.stop_requires_override" && !skip.environments.is_empty() {
+                format!("used by {}", environment_names(&skip.environments))
+            } else {
+                reason(&skip.code).to_owned()
+            };
+        rows.push(format!("{} · won’t stop: {why}", escaped(&skip.name)));
     }
     rows
+}
+
+/// One `affects <environment> (<n> instances)` line per environment the
+/// stop leaves incomplete (spec 0047, *CLI*).
+fn affected_rows(preview: &StopAllPreview) -> Vec<String> {
+    preview
+        .affected_environments
+        .iter()
+        .map(|environment| {
+            let count = environment.instance_count.get();
+            let instances = if count == 1 {
+                "1 instance".to_owned()
+            } else {
+                format!("{count} instances")
+            };
+            format!("affects {} ({instances})", escaped(&environment.name))
+        })
+        .collect()
+}
+
+/// Whether the preview leaves an instance alone only because an
+/// environment holds a lease on it.
+fn skips_leased(preview: &StopAllPreview) -> bool {
+    preview
+        .skipped
+        .iter()
+        .any(|skip| skip.code == "supervisor.stop_requires_override")
 }
 
 fn plural(count: usize) -> String {
@@ -188,11 +239,14 @@ fn failure_of(preview: &StopAllPreview, outcome: &StopAllResult) -> Option<CliFa
         .map(|entry| coded(&entry.code, &outcome_text(preview, outcome)))
 }
 
-/// Reads the preview.
-async fn read_preview(cx: &mut Context) -> Result<StopAllPreview, CliFailure> {
+/// Reads the preview, with leases overridden or not.
+async fn read_preview(
+    cx: &mut Context,
+    override_leases: bool,
+) -> Result<StopAllPreview, CliFailure> {
     match cx
         .call(
-            Call::InstancePreviewStopAll(Default::default()),
+            Call::InstancePreviewStopAll(StopAllPreviewParams { override_leases }),
             CallSpec::control(),
         )
         .await?
@@ -208,12 +262,13 @@ async fn send(
     cx: &mut Context,
     expected: Vec<Uuid>,
     key: &str,
+    override_leases: bool,
 ) -> Result<StopAllResult, CliFailure> {
     let mut last = None;
     for _ in 0..SENDS {
         let call = Call::InstanceStopAll(StopAllParams {
             expected_instance_ids: Some(expected.clone()),
-            override_leases: false,
+            override_leases,
         });
         let spec = CallSpec {
             timeout: RequestTimeout::Interactive,
@@ -233,7 +288,7 @@ impl RunCommand for StopAll {
     type Output = StopAllOutput;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<StopAllOutput> {
-        let preview = match read_preview(cx).await {
+        let preview = match read_preview(cx, self.override_leases).await {
             Ok(preview) => preview,
             Err(failure) => return CommandOutput::failed(failure),
         };
@@ -241,12 +296,22 @@ impl RunCommand for StopAll {
             preview,
             outcome: None,
         };
+        let leased_hint = (!self.override_leases && skips_leased(&preview)).then_some(
+            "to stop the instances environments hold too, run: stackly instance stop --all --override-leases",
+        );
         if preview.items.is_empty() {
-            return CommandOutput::ok(nothing_sent(preview));
+            let output = CommandOutput::ok(nothing_sent(preview));
+            return match leased_hint {
+                Some(hint) => output.with_hint(hint),
+                None => output,
+            };
         }
         if cx.output.mode != OutputMode::Json && !cx.output.quiet {
             for row in preview_rows(&preview) {
                 cx.output.stderr.line(&format!("  {row}"));
+            }
+            for row in affected_rows(&preview) {
+                cx.output.stderr.line(&row);
             }
         }
         // With --json the noninteractive path holds even at a terminal, so
@@ -275,16 +340,20 @@ impl RunCommand for StopAll {
             .idempotency_key
             .as_ref()
             .map_or_else(|| Uuid::now_v7().to_string(), |key| key.as_str().to_owned());
-        match send(cx, expected, &key).await {
+        match send(cx, expected, &key, self.override_leases).await {
             Ok(outcome) => {
                 let failure = failure_of(&preview, &outcome);
                 let output = StopAllOutput {
                     preview,
                     outcome: Some(outcome),
                 };
-                match failure {
+                let output = match failure {
                     Some(failure) => CommandOutput::partial(output, failure),
                     None => CommandOutput::ok(output),
+                };
+                match leased_hint {
+                    Some(hint) => output.with_hint(hint),
+                    None => output,
                 }
             }
             Err(failure) if failure.body.is(&codes::instance::STOP_ALL_CHANGED) => {
@@ -378,6 +447,34 @@ mod tests {
                 "held · won’t stop: used by an environment",
             ]
         );
+    }
+
+    fn erp() -> InstanceEnvironment {
+        InstanceEnvironment {
+            environment_id: Uuid::from_u128(9),
+            name: "erp".to_owned(),
+            alias: "db".to_owned(),
+            ownership: stackly_protocol::env::EnvOwnership::Shared,
+            lease_active: true,
+        }
+    }
+
+    #[test]
+    fn an_overridden_preview_names_the_environments_it_affects() {
+        let mut shown = preview();
+        shown.items[2].demand = vec![DemandSourceKind::Environment];
+        shown.items[2].environments = vec![erp()];
+        shown.skipped[0].environments = vec![erp()];
+        shown.affected_environments = vec![stackly_protocol::stop_all::AffectedEnvironment {
+            environment_id: Uuid::from_u128(9),
+            name: "erp".to_owned(),
+            instance_count: Count::saturating(2),
+        }];
+        let rows = preview_rows(&shown);
+        assert_eq!(rows[2], "plain · Used by erp");
+        assert_eq!(rows[4], "held · won’t stop: used by erp");
+        assert_eq!(affected_rows(&shown), ["affects erp (2 instances)"]);
+        assert!(skips_leased(&shown));
     }
 
     #[test]

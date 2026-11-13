@@ -523,3 +523,69 @@ fn a_real_daemon_refuses_an_up_that_needs_a_secret_and_shows_the_status() {
     assert_eq!(envelope(&planned)["result"]["registration"], "registered");
     ev.pass();
 }
+
+// covers: AC-18, AC-22 (spec 0047)
+#[test]
+fn a_real_daemon_brings_down_an_environment_with_nothing_running_even_without_its_manifest() {
+    let ev = evidence!(
+        covers = ["REQ-022", "REQ-028"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd, after env import of a manifest with two services that were never created, env status prints lease: none under the head line; env down ./shop --wait writes Nothing to stop. to stderr, prints Down. 0 stopped, 0 kept running., and exits 0 with one environment_down operation that succeeded; with the manifest deleted, env down ./shop --json still exits 0 for the same environment and sends no env.plan, and no instance exists afterwards",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let dir = built_catalog(&root);
+    let _reap = ReapGuard::new(root.path(), &paths(&root).runtime);
+    let _daemon = start(&root, dir);
+    let work = root.path().join("work");
+    let project = work.join("shop");
+    std::fs::create_dir_all(&project).expect("the project folder can be made");
+    std::fs::write(project.join("stackly.yaml"), MANIFEST).expect("the manifest can be written");
+    let imported = run_in(
+        &root,
+        &work,
+        &["env", "import", "--file", "shop/stackly.yaml"],
+    );
+    assert_eq!(imported.code, Some(0), "{imported:?}");
+
+    let status = run_in(&root, &work, &["env", "status", "shop"]);
+    assert_eq!(status.code, Some(0), "{status:?}");
+    assert_eq!(
+        status.stdout.lines().nth(1),
+        Some("lease: none"),
+        "{}",
+        status.stdout
+    );
+
+    let down = run_in(&root, &work, &["env", "down", "./shop", "--wait"]);
+    assert_eq!(down.code, Some(0), "{down:?}");
+    assert!(
+        down.stderr.contains("Nothing to stop.\n"),
+        "{}",
+        down.stderr
+    );
+    assert_eq!(down.stdout, "Down. 0 stopped, 0 kept running.\n");
+
+    std::fs::remove_file(project.join("stackly.yaml")).expect("the manifest can be removed");
+    let again = run_in(&root, &work, &["env", "down", "./shop", "--json"]);
+    assert_eq!(again.code, Some(0), "{again:?}");
+    let value = envelope(&again);
+    assert_eq!(value["result"]["preview"]["environment"]["name"], "shop");
+    assert_eq!(value["result"]["operation"]["kind"], "environment_down");
+
+    let audit = run_in(&root, &work, &["audit", "list", "--json"]);
+    let downs = envelope(&audit)["result"]["items"]
+        .as_array()
+        .expect("audit items")
+        .iter()
+        .filter(|item| item["operationKind"] == "environment_down")
+        .count();
+    assert!(downs >= 1, "{}", audit.stdout);
+    let instances = run_in(&root, &work, &["instance", "list", "--json"]);
+    assert_eq!(
+        envelope(&instances)["result"]["items"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
+    );
+    ev.pass();
+}
