@@ -1249,10 +1249,19 @@ fn differences(
         ..
     }) = &service.selector
     {
-        let differs = match (version, line) {
-            (Some(version), _) => version != &view.runtime_version,
-            (None, Some(line)) => view.runtime_line.as_ref().is_some_and(|own| own != line),
+        // The resolver reads a text as an exact version or as a line
+        // (`text_match`), so `2.15` matches an instance of 2.15 or of any
+        // version in line 2.15. It differs only when no reading matches; a
+        // line the instance does not know is no answer.
+        let by_version = version
+            .as_ref()
+            .map(|version| version == &view.runtime_version);
+        let by_line = line
+            .as_ref()
+            .and_then(|line| view.runtime_line.as_ref().map(|own| own == line));
+        let differs = match (by_version, by_line) {
             (None, None) => false,
+            (version, line) => version != Some(true) && line != Some(true),
         };
         if differs {
             differ(

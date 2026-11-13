@@ -509,3 +509,58 @@ fn an_unsupported_store_state_reads_unknown() {
     assert_eq!(plan.items[0].secrets[0].status, PlanSecretStatus::Unknown);
     assert_eq!(plan.needs_secrets, 1);
 }
+
+/// Plans the registered `api` member with the selector `version`, with the
+/// instance on `runtime` in line `line`.
+fn runtime_fields(version: &str, runtime: &str, line: &str) -> Vec<(String, String, String)> {
+    let mut site = Site::new();
+    registered(&mut site);
+    site.views[0].runtime_version = runtime.parse().expect("an exact version");
+    site.views[0].runtime_line = Some(line.parse().expect("a line"));
+    let text = manifest(&format!(
+        "  api:\n    provider: testing/fake\n    version: \"{version}\"\n"
+    ));
+    let plan = site.plan(text.as_bytes());
+    assert!(plan.applicable, "{:#?}", plan.blockers);
+    fields(&plan)
+}
+
+// covers: AC-9 (spec 0044, Aturan differences): a selector that reads as a
+// line matches every version of that line, as the resolver reads it
+#[test]
+fn a_line_selector_matches_a_patch_version_of_its_line() {
+    assert_eq!(runtime_fields("2.15", "2.15.1", "2.15"), []);
+    assert_eq!(runtime_fields("2.15", "2.15.0", "2.15"), []);
+}
+
+// covers: AC-9 (spec 0044, Aturan differences): an exact selector equal to
+// the instance's version does not differ, another exact version does
+#[test]
+fn an_exact_selector_differs_only_from_another_version() {
+    assert_eq!(runtime_fields("2.15.1", "2.15.1", "2.15"), []);
+    assert_eq!(
+        runtime_fields("2.15.0", "2.15.1", "2.15"),
+        [(
+            "runtime".to_owned(),
+            "2.15.0".to_owned(),
+            "2.15.1".to_owned()
+        )]
+    );
+}
+
+// covers: AC-9 (spec 0044, Aturan differences): a line the instance is not
+// in differs
+#[test]
+fn a_line_selector_of_another_line_differs() {
+    assert_eq!(
+        runtime_fields("2.14", "2.15.1", "2.15"),
+        [("runtime".to_owned(), "2.14".to_owned(), "2.15.1".to_owned())]
+    );
+}
+
+// covers: AC-9 (spec 0044, Aturan differences): `stable` is never compared,
+// whatever the instance runs
+#[test]
+fn a_stable_selector_never_differs_from_any_version() {
+    assert_eq!(runtime_fields("stable", "9.9.9", "9.9"), []);
+}
