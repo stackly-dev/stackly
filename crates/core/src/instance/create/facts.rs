@@ -229,6 +229,19 @@ pub struct SecretFacts {
     pub sources: BTreeMap<String, SourceFact>,
 }
 
+/// A runtime an environment plan will install, from the catalog artifact
+/// it resolved to (spec 0044, *Evaluasi create di dalam plan*). Only
+/// [`gather_planned`] sets it; preflight and create never do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedRuntime {
+    /// The version of the artifact.
+    pub version: stackly_domain::ExactVersion,
+    /// Its line.
+    pub line: stackly_domain::RuntimeLine,
+    /// The software of the package.
+    pub software: stackly_domain::SoftwareName,
+}
+
 /// Everything [`evaluate`](super::evaluate) needs.
 #[derive(Debug, Clone)]
 pub struct CreateFacts {
@@ -262,6 +275,9 @@ pub struct CreateFacts {
     pub secrets: SecretFacts,
     /// The layout that derives the paths of the new instance.
     pub layout: DirectoryLayout,
+    /// The runtime a plan will install in place of [`CreateFacts::runtime`];
+    /// none for preflight and create.
+    pub planned_runtime: Option<PlannedRuntime>,
 }
 
 /// Why [`gather`] could not read.
@@ -346,7 +362,27 @@ pub fn gather(deps: &CreateDeps<'_>, draft: &CreateDraft) -> Result<CreateFacts,
         locations,
         secrets: gather_secrets(deps, draft)?,
         layout: deps.prepared.layout().clone(),
+        planned_runtime: None,
     })
+}
+
+/// [`gather`] for an environment plan whose runtime is not installed yet:
+/// the facts carry `planned` and the runtime row says it will be
+/// installed, with no check of programs (spec 0044). `draft.runtime_id`
+/// is a placeholder that never reaches a journal, since a plan starts no
+/// operation.
+///
+/// # Errors
+///
+/// Returns the [`GatherError`] of [`gather`].
+pub fn gather_planned(
+    deps: &CreateDeps<'_>,
+    draft: &CreateDraft,
+    planned: PlannedRuntime,
+) -> Result<CreateFacts, GatherError> {
+    let mut facts = gather(deps, draft)?;
+    facts.planned_runtime = Some(planned);
+    Ok(facts)
 }
 
 /// *Resolusi provider dan revision* for a draft.

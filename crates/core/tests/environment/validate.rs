@@ -237,7 +237,10 @@ fn the_graph_fixture_validates_and_keeps_its_snapshot() {
     assert_eq!(declared.len(), 4);
     assert_eq!(declared[0].depends_on()[0].timeout_seconds(), Some(30));
     assert_eq!(declared[1].depends_on().len(), 2);
-    assert!(declared[0].selector().is_none(), "no version written");
+    assert_eq!(
+        declared[0].selector().map(ToString::to_string).as_deref(),
+        Some("0.1")
+    );
 }
 
 // covers: AC-8 (spec 0044)

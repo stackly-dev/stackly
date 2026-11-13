@@ -2,4 +2,7 @@
 //! catalog of the six official packages and the fake one, then the plan.
 
 mod common;
+mod plan;
+mod site;
+mod status;
 mod validate;

@@ -397,6 +397,23 @@ impl Judge<'_> {
 
     fn runtime_row(&mut self) {
         let facts = self.facts;
+        if facts.runtime.is_none()
+            && let Some(planned) = &facts.planned_runtime
+        {
+            let shown = facts.provider.as_ref().map_or_else(
+                |_| planned.software.to_string(),
+                |found| found.display_name.clone(),
+            );
+            self.row(
+                "runtime",
+                CheckKind::Runtime,
+                CheckStatus::Ok,
+                format!("Runtime {shown} {}", planned.version),
+                "will be installed",
+                None,
+            );
+            return;
+        }
         let Some(runtime) = &facts.runtime else {
             self.issue("runtimeId", FieldCode::UnknownValue);
             self.error_row(
@@ -910,15 +927,16 @@ impl Judge<'_> {
             .runtime_root
             .clone()
             .unwrap_or_else(|| layout.roots().runtime().to_path_buf());
+        let planned = facts.planned_runtime.as_ref();
         let (Ok(version), Ok(line)) = (
-            facts
-                .runtime
-                .as_ref()
-                .map_or_else(|| "0".parse(), |runtime| Ok(runtime.version().clone())),
-            facts
-                .runtime
-                .as_ref()
-                .map_or_else(|| "0".parse(), |runtime| Ok(runtime.line().clone())),
+            facts.runtime.as_ref().map_or_else(
+                || planned.map_or_else(|| "0".parse(), |planned| Ok(planned.version.clone())),
+                |runtime| Ok(runtime.version().clone()),
+            ),
+            facts.runtime.as_ref().map_or_else(
+                || planned.map_or_else(|| "0".parse(), |planned| Ok(planned.line.clone())),
+                |runtime| Ok(runtime.line().clone()),
+            ),
         ) else {
             return None;
         };
