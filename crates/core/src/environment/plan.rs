@@ -959,7 +959,8 @@ fn local_overrides(
                     service: found.service.clone(),
                     field: found.field(),
                     value: found.value_text(),
-                    state: found.state(
+                    state: checked.state_of(
+                        found,
                         found
                             .alias
                             .as_ref()

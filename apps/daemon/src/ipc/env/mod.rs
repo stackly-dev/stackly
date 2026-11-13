@@ -650,7 +650,7 @@ async fn side_info(
                                 service: found.service.clone(),
                                 field: found.field(),
                                 value: found.value_text(),
-                                state: found.state(has_member),
+                                state: checked.state_of(found, has_member),
                             },
                             &home,
                         )

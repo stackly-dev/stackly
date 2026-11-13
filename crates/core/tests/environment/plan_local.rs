@@ -177,6 +177,41 @@ fn every_override_rule_has_its_finding_and_an_error_blocks_once() {
     assert_eq!(codes(&planned), ["env.local_unreadable"]);
 }
 
+// covers: AC-9 (K22)
+#[test]
+fn a_file_with_an_error_applies_none_of_its_overrides_and_ignores_each() {
+    let site = site_with_borrowed();
+    // A good port for `api` beside a refused data location for `db`.
+    let planned = plan(
+        &site,
+        SHOP,
+        &local(&overrides(
+            "  api:\n    endpoints:\n      http: {port: 18100}\n  db:\n    storage:\n      dataLocation: relative/path\n",
+        )),
+    );
+
+    let file = planned.local.as_ref().expect("a local file");
+    assert_eq!(file.state, LocalState::Invalid);
+    assert!(file.sha256.is_some(), "the file was read");
+    assert!(!file.overrides.is_empty(), "the requests are still listed");
+    for found in &file.overrides {
+        assert_eq!(found.state, OverrideState::Ignored, "{found:?}");
+    }
+    let api = planned
+        .items
+        .iter()
+        .find(|item| item.alias.as_str() == "api")
+        .expect("the api item");
+    assert!(
+        api.endpoints.iter().all(
+            |e| e.port == PortRequest::Fixed(stackly_domain::Port::new(18080).expect("a port"))
+        ),
+        "the manifest port: {:?}",
+        api.endpoints
+    );
+    assert_eq!(codes(&planned), ["env.local_invalid"]);
+}
+
 // covers: AC-9
 #[test]
 fn validate_reads_no_override_file() {
