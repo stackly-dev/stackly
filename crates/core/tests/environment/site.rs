@@ -7,15 +7,14 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use stackly_core::catalog::{Catalog, CatalogState};
-use stackly_core::environment::{
-    InstanceView, Plan, PlanDeps, PlanInputs, Validation, plan, validate,
-};
+use stackly_core::environment::lock::LockInput;
+use stackly_core::environment::{InstanceView, Plan, PlanDeps, PlanInputs, plan, validate};
 use stackly_core::instance::create::CreateDeps;
 use stackly_core::supervisor::fixture::install_fake_runtime;
 use stackly_core::supervisor::{BindOptions, BindOutcome, PortProbe};
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_domain::{
-    Endpoint, EnvironmentId, HealthState, Instance, InstanceLifecycle, IpEndpoint,
+    Endpoint, EnvironmentId, HealthState, InstallMode, Instance, InstanceLifecycle, IpEndpoint,
     ManifestLocation, Port, PortRequest, ProviderRevisionRecord, ReadinessState, Registry, Runtime,
     Transport, WriteBatch, WriteOp,
 };
@@ -158,6 +157,10 @@ impl Site {
                 IpAddr::V4(Ipv4Addr::LOCALHOST),
                 Some(Port::new(port).expect("a port")),
             )],
+            runtime_artifact_sha256: match self.runtime.install() {
+                InstallMode::Managed { artifact_sha256 } => Some(*artifact_sha256),
+                InstallMode::External { .. } => None,
+            },
         });
         instance
     }
@@ -171,28 +174,38 @@ impl Site {
             .expect("an absolute location")
     }
 
-    pub fn validate(&self, bytes: &[u8]) -> Validation {
-        validate(bytes, &self.catalog)
-    }
-
     pub fn plan_at(
         &self,
         bytes: &[u8],
         location: &ManifestLocation,
         registered: Option<EnvironmentId>,
     ) -> Plan {
-        let validation = self.validate(bytes);
-        let host = self.host();
+        self.plan_with(bytes, location, registered, &Inputs::default())
+    }
+
+    /// A plan with a lock, overrides, or `locked`, on `catalog` when one is
+    /// given and the site's own otherwise.
+    pub fn plan_with(
+        &self,
+        bytes: &[u8],
+        location: &ManifestLocation,
+        registered: Option<EnvironmentId>,
+        extra: &Inputs<'_>,
+    ) -> Plan {
+        let catalog = extra.catalog.unwrap_or(&self.catalog);
+        let validation = validate(bytes, catalog);
+        let state = CatalogState::Loaded(Arc::new(catalog.clone()));
+        let host = extra.host.clone().unwrap_or_else(|| self.host());
         let deps = PlanDeps {
             create: CreateDeps {
                 registry: &self.registry,
-                catalog: &self.state,
+                catalog: &state,
                 source: None,
                 platform: &self.platform,
                 prepared: &self.prepared,
                 probe: &self.probe,
             },
-            catalog: &self.catalog,
+            catalog,
             host: &host,
             instances: &self.views,
         };
@@ -202,9 +215,9 @@ impl Site {
                 manifest: &validation,
                 location,
                 registered,
-                lock: None,
+                lock: extra.lock,
                 overrides: None,
-                locked: false,
+                locked: extra.locked,
             },
         )
         .expect("the plan reads")
@@ -213,4 +226,13 @@ impl Site {
     pub fn plan(&self, bytes: &[u8]) -> Plan {
         self.plan_at(bytes, &self.location("stackly.yaml"), None)
     }
+}
+
+/// What a plan takes past the manifest.
+#[derive(Default)]
+pub struct Inputs<'a> {
+    pub catalog: Option<&'a Catalog>,
+    pub host: Option<HostFacts>,
+    pub lock: Option<&'a LockInput>,
+    pub locked: bool,
 }

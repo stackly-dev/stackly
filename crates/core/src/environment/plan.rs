@@ -17,14 +17,17 @@ use sha2::{Digest, Sha256};
 use stackly_domain::{
     DependencyEdge, EndpointName, Environment, EnvironmentId, EnvironmentName, ExactVersion,
     HealthState, InstallMode, InstanceId, InstanceLifecycle, InstanceName, ManifestLocation,
-    MemberAlias, Ownership, Port, PortRequest, ProviderName, ReadinessState, ResourceRevision,
-    RevisionLabel, RuntimeId, RuntimeLine, RuntimeSelector, RuntimeState, SecretRef, Sha256Digest,
-    StartupPolicy, Target,
+    MemberAlias, Ownership, Port, PortRequest, ProviderName, ProviderRevisionKey, ReadinessState,
+    ResourceRevision, RevisionLabel, RuntimeId, RuntimeLine, RuntimeSelector, RuntimeState,
+    SecretRef, Sha256Digest, StartupPolicy, Target,
 };
 use stackly_platform::{HostFacts, StoreState};
 
 use super::finding::{FindingCode, FindingLocation};
-use super::lock::{ArtifactUnknownReason, LockStaleReason};
+use super::lock::{
+    ArtifactUnknownReason, LockFile, LockInput, LockStaleItem, LockStaleReason, LockState,
+    LockedService, lock_file_name, locked_artifact, stale_reason,
+};
 use super::register::UnreadableReason;
 use super::validate::{ServiceSpec, Validation};
 use crate::catalog::{
@@ -55,20 +58,14 @@ pub fn planned_runtime_placeholder_id() -> RuntimeId {
         .expect("the planned runtime placeholder is a valid UUID version 7")
 }
 
-/// What the lockfile pins, for spec 0045.
-// provisional: F45
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct LockInputs {}
-
 /// The local overrides of `.stackly.local.yaml`, for spec 0045.
 // provisional: F45
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct OverrideInputs {}
 
-/// The one place a plan takes its inputs (spec 0044, *Titik sambung*):
-/// this feature always sends no lock and no overrides.
+/// The one place a plan takes its inputs (spec 0044, *Titik sambung*;
+/// spec 0045 for the lock, the overrides, and `locked`).
 #[derive(Debug, Clone, Copy)]
 pub struct PlanInputs<'a> {
     /// The validated manifest.
@@ -77,13 +74,12 @@ pub struct PlanInputs<'a> {
     pub location: &'a ManifestLocation,
     /// The environment the request named, for a `registered` source.
     pub registered: Option<EnvironmentId>,
-    /// The lockfile, from spec 0045.
-    pub lock: Option<&'a LockInputs>,
+    /// The lock next to the manifest; none reads as no file.
+    pub lock: Option<&'a LockInput>,
     /// The local overrides, from spec 0045.
     pub overrides: Option<&'a OverrideInputs>,
-    /// Whether the request asked for `--locked`, from spec 0045; always
-    /// false here.
-    // provisional: F45
+    /// Whether the request asked for `--locked` (AC-6): nothing is
+    /// resolved from a manifest selector.
     pub locked: bool,
 }
 
@@ -117,6 +113,8 @@ pub struct InstanceView {
     pub detail: Option<String>,
     /// Every IP endpoint with its host and effective port.
     pub endpoints: Vec<(EndpointName, IpAddr, Option<Port>)>,
+    /// The artifact digest of its runtime, when the runtime is managed.
+    pub runtime_artifact_sha256: Option<Sha256Digest>,
 }
 
 /// What a plan reads.
@@ -259,6 +257,26 @@ impl PlanSecretStatus {
     }
 }
 
+/// Where the runtime of a `create` item comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RuntimeSource {
+    /// The artifact the lock names for this Mac.
+    Lock,
+    /// The manifest selector, resolved against the catalog.
+    Catalog,
+}
+
+impl RuntimeSource {
+    /// Returns the stable code.
+    #[must_use]
+    pub const fn as_code(self) -> &'static str {
+        match self {
+            Self::Lock => "lock",
+            Self::Catalog => "catalog",
+        }
+    }
+}
+
 /// The runtime of a `create` item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanRuntime {
@@ -276,6 +294,8 @@ pub struct PlanRuntime {
     pub runtime_id: Option<RuntimeId>,
     /// The download size, when Up installs it.
     pub download_size: Option<u64>,
+    /// Where it comes from.
+    pub source: RuntimeSource,
 }
 
 /// One endpoint of an item.
@@ -305,8 +325,8 @@ pub struct PlanSecret {
 /// `differences`*). Never a blocker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanDifference {
-    /// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or
-    /// `instanceRef`.
+    /// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`,
+    /// `instanceRef`, or `lock`.
     pub field: String,
     /// What the manifest says.
     pub manifest: String,
@@ -333,6 +353,8 @@ pub struct PlanItem {
     pub provider: ProviderName,
     /// The trust of the provider, for a `create` item.
     pub trust: Option<PlanTrust>,
+    /// The key of the catalog entry a `create` item uses.
+    pub provider_revision: Option<ProviderRevisionKey>,
     /// The runtime, for a `create` item whose selector resolved.
     pub runtime: Option<PlanRuntime>,
     /// The endpoints.
@@ -565,6 +587,25 @@ pub struct Plan {
     pub detached: Vec<DetachedMember>,
     /// How many secret fields need a value from the user.
     pub needs_secrets: usize,
+    /// The lock next to the manifest.
+    pub lock: PlanLock,
+}
+
+/// The lock of a plan (AC-5, AC-6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanLock {
+    /// The lock file name.
+    pub file: String,
+    /// Its state.
+    pub state: LockState,
+    /// The digest of a valid lock (`in_sync` or `stale`).
+    pub sha256: Option<Sha256Digest>,
+    /// Whether the plan was made with `locked`.
+    pub locked: bool,
+    /// Every target of every entry, by text.
+    pub targets: Vec<String>,
+    /// The aliases that do not match.
+    pub stale: Vec<LockStaleItem>,
 }
 
 /// Why a plan could not be read.
@@ -589,6 +630,11 @@ impl From<stackly_domain::RegistryError> for PlanError {
 /// Returns a [`PlanError`] when the registry or a platform port cannot be
 /// read; everything the plan finds wrong is a blocker.
 pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanError> {
+    let absent = LockInput {
+        file: lock_file_name(&manifest_file_name(inputs.location)),
+        content: LockFile::Absent,
+    };
+    let lock_input = inputs.lock.unwrap_or(&absent);
     let mut plan = Plan {
         registration: None,
         environment: None,
@@ -600,9 +646,37 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
         blockers: Vec::new(),
         detached: Vec::new(),
         needs_secrets: 0,
+        lock: PlanLock {
+            file: lock_input.file.clone(),
+            state: LockState::Absent,
+            sha256: lock_input.content.sha256(),
+            locked: inputs.locked,
+            targets: lock_input
+                .content
+                .lock()
+                .map(super::lock::EnvironmentLock::targets)
+                .unwrap_or_default(),
+            stale: Vec::new(),
+        },
     };
     let Some(manifest) = &inputs.manifest.manifest else {
+        // A manifest that is not valid: the lock state only as far as
+        // `invalid`, without the stale check.
+        plan.lock.state = match &lock_input.content {
+            LockFile::Absent => LockState::Absent,
+            LockFile::Unreadable(_) => LockState::Unreadable,
+            LockFile::Invalid(_) => LockState::Invalid,
+            LockFile::Valid { .. } => LockState::InSync,
+        };
         return Ok(plan);
+    };
+    let (lock_state, stale) = super::lock::state(manifest, &lock_input.content);
+    plan.lock.state = lock_state;
+    plan.lock.stale = stale;
+    lock_blockers(&mut plan, &lock_input.content, inputs.locked);
+    let lock = LockUse {
+        lock: lock_input.content.lock(),
+        locked: inputs.locked,
     };
     let registry = deps.create.registry;
     let environments = registry.environments()?.value;
@@ -657,12 +731,13 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
                 service,
                 member.instance_id(),
                 Some(member.ownership()),
+                &lock,
                 &mut plan,
             )
         } else if let Some(instance_ref) = &service.instance_ref {
-            borrowed_item(deps, service, instance_ref, &mut plan)
+            borrowed_item(deps, service, instance_ref, &lock, &mut plan)
         } else {
-            Some(create_item(deps, service, &mut plan)?)
+            Some(create_item(deps, service, &lock, &mut plan)?)
         };
         if let Some(item) = item {
             plan.items.push(item);
@@ -693,9 +768,79 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
         .count();
     plan.applicable = plan.blockers.is_empty();
     if plan.applicable {
-        plan.digest = Some(digest(inputs.manifest.sha256, registration, &plan.items));
+        plan.digest = Some(digest(
+            inputs.manifest.sha256,
+            registration,
+            &plan.items,
+            &plan.lock,
+            None,
+        ));
     }
     Ok(plan)
+}
+
+/// The file name of a manifest location.
+#[must_use]
+pub fn manifest_file_name(location: &ManifestLocation) -> String {
+    location
+        .as_path()
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned())
+}
+
+/// The lock a plan uses: the valid lock, if any, and the mode.
+#[derive(Clone, Copy)]
+struct LockUse<'a> {
+    lock: Option<&'a super::lock::EnvironmentLock>,
+    locked: bool,
+}
+
+impl<'a> LockUse<'a> {
+    /// The entry of a dedicated `service` when it is *cocok*.
+    fn matching(&self, service: &ServiceSpec) -> Option<&'a LockedService> {
+        let lock = self.lock?;
+        let entry = lock.service(&service.alias);
+        if service.instance_ref.is_some() || stale_reason(service, entry).is_some() {
+            return None;
+        }
+        entry
+    }
+}
+
+/// The blockers of the lock file itself (*Mode*): one that can't be read
+/// or is not valid always blocks; with `locked`, a missing lock and every
+/// stale alias block too.
+fn lock_blockers(plan: &mut Plan, file: &LockFile, locked: bool) {
+    let mut push = |service: Option<MemberAlias>, kind: BlockerKind| {
+        plan.blockers.push(PlanBlocker { service, kind });
+    };
+    match file {
+        LockFile::Unreadable(reason) => push(None, BlockerKind::LockUnreadable { reason: *reason }),
+        LockFile::Invalid(problem) => push(
+            None,
+            BlockerKind::LockInvalid {
+                code: problem.code,
+                location: problem.location.clone(),
+            },
+        ),
+        LockFile::Absent if locked => push(
+            None,
+            BlockerKind::LockMissing {
+                file: plan.lock.file.clone(),
+            },
+        ),
+        LockFile::Valid { .. } if locked => {
+            for item in plan.lock.stale.clone() {
+                push(
+                    Some(item.service),
+                    BlockerKind::LockStale {
+                        reason: item.reason,
+                    },
+                );
+            }
+        }
+        _ => {}
+    }
 }
 
 fn reference(env: &Environment) -> EnvironmentRef {
@@ -761,6 +906,7 @@ fn existing_item(
     service: &ServiceSpec,
     instance: InstanceId,
     member_ownership: Option<Ownership>,
+    lock: &LockUse<'_>,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
     let view = deps.instances.iter().find(|view| view.id == instance)?;
@@ -775,7 +921,11 @@ fn existing_item(
         });
     }
     let differences = member_ownership
-        .map(|ownership| differences(service, view, ownership))
+        .map(|ownership| {
+            let mut found = differences(service, view, ownership);
+            found.extend(lock_difference(lock.matching(service), deps.host, view));
+            found
+        })
         .unwrap_or_default();
     Some(PlanItem {
         alias: service.alias.clone(),
@@ -786,6 +936,7 @@ fn existing_item(
         instance_name: view.name.clone(),
         provider: service.provider.clone(),
         trust: None,
+        provider_revision: None,
         runtime: None,
         endpoints: view_endpoints(view),
         secrets: Vec::new(),
@@ -808,6 +959,7 @@ fn borrowed_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
     instance_ref: &InstanceName,
+    lock: &LockUse<'_>,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
     // A retained instance gives its name up, so a name never finds one.
@@ -833,7 +985,25 @@ fn borrowed_item(
             },
         });
     }
-    existing_item(deps, service, view.id, None, plan)
+    existing_item(deps, service, view.id, None, lock, plan)
+}
+
+/// The `lock` difference of a member (AC-8): its managed runtime has
+/// another digest than the artifact the matching entry locks for this
+/// Mac. Never a blocker, and the instance is never changed to match.
+fn lock_difference(
+    entry: Option<&LockedService>,
+    host: &HostFacts,
+    view: &InstanceView,
+) -> Option<PlanDifference> {
+    let entry = entry?;
+    let locked = entry.artifact_for(host.target)?;
+    let own = view.runtime_artifact_sha256?;
+    (own != locked.sha256).then(|| PlanDifference {
+        field: "lock".into(),
+        manifest: entry.version.to_string(),
+        instance: view.runtime_version.to_string(),
+    })
 }
 
 /// *Aturan `differences`*, for a member.
@@ -919,6 +1089,7 @@ fn differences(
 fn create_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
+    lock: &LockUse<'_>,
     plan: &mut Plan,
 ) -> Result<PlanItem, PlanError> {
     let registry = deps.create.registry;
@@ -952,26 +1123,67 @@ fn create_item(
             TrustVerdict::ApprovalRequired => PlanTrust::ApprovalRequired,
             TrustVerdict::Revoked(_) => PlanTrust::Revoked,
         });
-        let selector = service.selector.clone().unwrap_or(RuntimeSelector::Stable);
-        let resolved = match resolve(entry, &selector, deps.host, &verdict) {
-            Ok(resolution) => Ok(resolution.artifact),
-            Err(error) => installed_fixture(entry, &selector, deps.host, registry)?.ok_or(error),
+        let matching = lock.matching(service);
+        let source = if matching.is_some() {
+            RuntimeSource::Lock
+        } else {
+            RuntimeSource::Catalog
+        };
+        let resolved = if let Some(locked) = matching {
+            // *Runtime dari lock*: the trust gate first (create's own row
+            // blocks), then the provider revision, then the exact artifact.
+            if !verdict.is_trusted() {
+                None
+            } else if entry.package.key().revision() != &locked.provider_revision
+                || entry.package.key().manifest_sha256() != &locked.provider_manifest_sha256
+            {
+                block(
+                    plan,
+                    BlockerKind::LockProviderMismatch {
+                        provider: service.provider.clone(),
+                        locked_revision: locked.provider_revision.clone(),
+                        available_revision: entry.package.key().revision().clone(),
+                    },
+                );
+                None
+            } else {
+                match locked_artifact(entry, locked, deps.host, &verdict) {
+                    Ok(artifact) => Some(Ok(artifact)),
+                    Err(error) => {
+                        block(plan, error.blocker(written_selector(service)));
+                        None
+                    }
+                }
+            }
+        } else if lock.locked {
+            // With `locked`, nothing resolves from the manifest selector;
+            // the lock blockers already say why.
+            None
+        } else {
+            let selector = service.selector.clone().unwrap_or(RuntimeSelector::Stable);
+            Some(match resolve(entry, &selector, deps.host, &verdict) {
+                Ok(resolution) => Ok(resolution.artifact),
+                Err(error) => {
+                    installed_fixture(entry, &selector, deps.host, registry)?.ok_or(error)
+                }
+            })
         };
         match resolved {
+            None => {}
             // A provider that is `pending` or `revoked` can't resolve
             // either; create's own trust row is its one blocker (AC-7).
-            Err(ResolveError::NotInstallable {
+            Some(Err(ResolveError::NotInstallable {
                 reason: NotInstallableReason::ApprovalRequired | NotInstallableReason::TrustRevoked,
                 ..
-            }) if !matches!(verdict, TrustVerdict::Trusted) => {}
-            Err(error) => block(
+            })) if !matches!(verdict, TrustVerdict::Trusted) => {}
+            Some(Err(error)) => block(
                 plan,
                 BlockerKind::Resolve {
                     error,
                     selector: written_selector(service),
                 },
             ),
-            Ok(artifact) => {
+            Some(Ok(artifact)) => {
                 let runtimes = registry.runtimes()?.value;
                 let managed = |row: &stackly_domain::Runtime| match row.install() {
                     InstallMode::Managed { artifact_sha256 } => Some(*artifact_sha256),
@@ -1016,6 +1228,7 @@ fn create_item(
                         install: installed.is_none(),
                         runtime_id: installed.as_ref().map(stackly_domain::Runtime::id),
                         download_size: if installed.is_none() { size } else { None },
+                        source,
                     });
                 }
             }
@@ -1118,6 +1331,7 @@ fn create_item(
         instance_name,
         provider: service.provider.clone(),
         trust,
+        provider_revision: entry.map(|entry| entry.package.key().clone()),
         runtime,
         endpoints,
         secrets,
@@ -1258,7 +1472,13 @@ pub fn start_order(services: &[ServiceSpec]) -> Vec<MemberAlias> {
 /// one entry per item in manifest order: for `create`, what Up creates;
 /// for an existing instance, only which instance. No check text and no
 /// secret status.
-fn digest(manifest: Sha256Digest, registration: Registration, items: &[PlanItem]) -> Sha256Digest {
+fn digest(
+    manifest: Sha256Digest,
+    registration: Registration,
+    items: &[PlanItem],
+    lock: &PlanLock,
+    local: Option<Sha256Digest>,
+) -> Sha256Digest {
     let items: Vec<Value> = items
         .iter()
         .map(|item| {
@@ -1282,6 +1502,11 @@ fn digest(manifest: Sha256Digest, registration: Registration, items: &[PlanItem]
                 "runtime": item.runtime.as_ref().map(|runtime| json!({
                     "artifactSha256": runtime.artifact_sha256.to_string(),
                     "install": runtime.install,
+                    "source": runtime.source.as_code(),
+                })),
+                "providerRevision": item.provider_revision.as_ref().map(|key| json!({
+                    "revision": key.revision().to_string(),
+                    "manifestSha256": key.manifest_sha256().to_string(),
                 })),
                 "endpoints": item.endpoints.iter().map(|endpoint| json!({
                     "name": endpoint.name.as_str(),
@@ -1298,6 +1523,9 @@ fn digest(manifest: Sha256Digest, registration: Registration, items: &[PlanItem]
         "manifestSha256": manifest.to_string(),
         "registration": registration.as_code(),
         "items": items,
+        "locked": lock.locked,
+        "lockSha256": lock.sha256.map(|sha| sha.to_string()),
+        "localSha256": local.map(|sha| sha.to_string()),
     });
     let canonical = serde_json::to_vec(&sorted(value))
         .expect("a json value always encodes: its map keys are strings");

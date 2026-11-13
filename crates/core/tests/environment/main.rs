@@ -4,6 +4,7 @@
 mod common;
 mod lock;
 mod plan;
+mod plan_lock;
 mod register;
 mod site;
 mod status;

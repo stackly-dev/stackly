@@ -150,10 +150,14 @@ fn view_of(
 ) -> InstanceView {
     // A missing runtime row leaves the line unknown; the instance still
     // gets its view, so a plan never drops its service.
-    let runtime_line = runtimes
+    let runtime = runtimes
         .iter()
-        .find(|runtime| runtime.id() == instance.runtime_id())
-        .map(|runtime| runtime.line().clone());
+        .find(|runtime| runtime.id() == instance.runtime_id());
+    let runtime_line = runtime.map(|runtime| runtime.line().clone());
+    let runtime_artifact_sha256 = runtime.and_then(|runtime| match runtime.install() {
+        stackly_domain::InstallMode::Managed { artifact_sha256 } => Some(*artifact_sha256),
+        stackly_domain::InstallMode::External { .. } => None,
+    });
     let detail = status
         .readiness
         .detail()
@@ -185,6 +189,7 @@ fn view_of(
                 _ => None,
             })
             .collect(),
+        runtime_artifact_sha256,
     }
 }
 

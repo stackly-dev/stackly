@@ -29,10 +29,11 @@ pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
 }
 pub use manifest::{API_VERSION, KIND, MANIFEST_MAX_LEN, SUPPORTED_API_VERSIONS};
 pub use plan::{
-    BlockerKind, DetachedMember, EnvironmentRef, InstanceView, LockInputs, NOT_INITIALIZED,
-    OverrideInputs, Plan, PlanAction, PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint,
-    PlanError, PlanInputs, PlanItem, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep,
-    PlanTrust, Registration, draft_for, plan, planned_runtime_placeholder_id, start_order,
+    BlockerKind, DetachedMember, EnvironmentRef, InstanceView, NOT_INITIALIZED, OverrideInputs,
+    Plan, PlanAction, PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint, PlanError, PlanInputs,
+    PlanItem, PlanLock, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep, PlanTrust,
+    Registration, RuntimeSource, draft_for, manifest_file_name, plan,
+    planned_runtime_placeholder_id, start_order,
 };
 pub use register::{
     ENVIRONMENT_LIMIT, EnvOpError, ImportRequest, LEASE_ITEMS_MAX, RegisterDecision, RegisterInput,
