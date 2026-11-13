@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6a2-7b76-7291-af5f-a19e1d7bb605",
+  "covers": [
+    "REQ-023",
+    "BR-018",
+    "AC-080"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment_lock",
+    "name": "a_lock_of_a_root_with_secret_sentinels_a_running_process_and_a_home_override_holds_none_of_them",
+    "file": "apps/daemon/tests/environment_lock.rs",
+    "line": 280
+  },
+  "status": "PASS",
+  "expected": "spec 0045 AC-1: env.lock of the ERP manifest from a root that stores a sentinel value for each of its five secretRefs, runs a fake instance, and holds a local override with a path under the home writes a stackly.lock with mode 0600 that holds no sentinel, reference, path under the home, override, PID of the daemon or of the instance process, and the daemon logs no sentinel",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T20:38:55.094297Z",
+  "finishedAt": "2026-11-13T20:38:58.353199Z",
+  "evidencePath": "output.log"
+}

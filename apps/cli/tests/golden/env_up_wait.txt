@@ -1,0 +1,6 @@
+SERVICE  INSTANCE     STATUS  ENDPOINTS
+db       graph-db     ready   http 127.0.0.1:49152
+api      graph-api    ready   http 127.0.0.1:49153
+cache    graph-cache  ready   http 127.0.0.1:49154
+
+3 of 3 ready.

@@ -4,8 +4,10 @@
 //! and blockers are the same for the same file. `import` and `remove`
 //! start the daemon's `import_environment` and `remove_environment`
 //! operations, `list` reads `env.list`, `lock` asks `env.lock` to write
-//! `stackly.lock`, and `export` prints the text of `env.export`. The
-//! daemon reads the manifest; the CLI only makes its path absolute.
+//! `stackly.lock`, and `export` prints the text of `env.export`. `up`
+//! starts the daemon's `environment_up` with `env.up` and `status` reads
+//! `env.get` (spec 0046 AC-17, AC-18). The daemon reads the manifest; the
+//! CLI only makes its path absolute.
 
 mod export;
 mod import;
@@ -14,7 +16,10 @@ mod lock;
 mod plan;
 mod remove;
 mod render;
+mod services;
+mod status;
 mod target;
+mod up;
 mod validate;
 
 use clap::Subcommand;
@@ -25,6 +30,8 @@ use self::list::ListArgs;
 use self::lock::LockArgs;
 use self::plan::PlanArgs;
 use self::remove::RemoveArgs;
+use self::status::StatusArgs;
+use self::up::UpArgs;
 use self::validate::ValidateArgs;
 use super::execute;
 use crate::context::Context;
@@ -42,9 +49,19 @@ pub enum EnvCommand {
     Validate(ValidateArgs),
     /// Show what Up would install, create, start, or keep; changes nothing
     #[command(
-        after_help = "Exits 0 when the plan can be applied, 2 with cli.env_invalid for a manifest that is not valid, 3 with cli.env_plan_blocked when something blocks it, and 5 with cli.env_locked_unsupported when --locked reaches a daemon that does not know it.\n\nExamples:\n  stackly env plan\n  stackly env plan --file ../erp/stackly.yaml\n  stackly env plan --locked\n  stackly env plan erp-development --json"
+        after_help = "Exits 0 when the plan can be applied, 2 with cli.env_invalid for a manifest that is not valid, 3 with cli.env_plan_blocked when something blocks it, and 5 with cli.env_locked_unsupported when --locked reaches a daemon that does not know it.\n\nExamples:\n  stackly env plan\n  stackly env plan --file ../erp/stackly.yaml\n  stackly env plan --locked\n  stackly env plan ~/Code/erp\n  stackly env plan erp-development --json"
     )]
     Plan(PlanArgs),
+    /// Install, create, and start every service in dependency order
+    #[command(
+        after_help = "Asks nothing. Without --wait it prints the operation it started. With --wait it writes one line per service change to stderr, then the services with the ports they really use, and exits 0 only when every service is ready. Exits 2 with cli.env_invalid for a manifest that is not valid, 3 with cli.env_plan_blocked when something blocks the plan, 5 with cli.env_locked_unsupported when --locked reaches a daemon that does not know it, 6 with secret.needs_secret for a reference without a value, 7 with env.up_incomplete when a service is not ready, and 8 when --timeout runs out (the Up keeps running).\n\nExamples:\n  stackly env up --wait\n  stackly env up ~/Code/erp --wait\n  stackly env up erp-development --locked --wait --timeout 10m\n  stackly env up --json"
+    )]
+    Up(UpArgs),
+    /// Show every service of an environment with its status and ports
+    #[command(
+        after_help = "Exits 0 whatever the status is, 2 with cli.env_invalid for a manifest that is not valid, and 10 with cli.environment_not_found for an environment that is not registered.\n\nExamples:\n  stackly env status\n  stackly env status ~/Code/erp\n  stackly env status erp-development --json"
+    )]
+    Status(StatusArgs),
     /// Write stackly.lock with the exact versions and artifacts to use
     #[command(
         after_help = "Keeps the versions already locked unless --update is given. Exits 0 when the lock is written or up to date, 2 with cli.env_invalid for a manifest that is not valid, 3 with cli.env_lock_blocked when something blocks it, and 10 for a --service the manifest does not declare.\n\nExamples:\n  stackly env lock\n  stackly env lock --update\n  stackly env lock --update --service postgres\n  stackly env lock erp-development --json"
@@ -76,6 +93,8 @@ impl EnvCommand {
         match self {
             Self::Validate(args) => execute(args, cx).await,
             Self::Plan(args) => execute(args, cx).await,
+            Self::Up(args) => execute(args, cx).await,
+            Self::Status(args) => execute(args, cx).await,
             Self::Lock(args) => execute(args, cx).await,
             Self::Export(args) => execute(args, cx).await,
             Self::Import(args) => execute(args, cx).await,

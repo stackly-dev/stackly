@@ -1,0 +1,23 @@
+ACTION   SERVICE  INSTANCE     PROVIDER             VERSION  SOURCE  ENDPOINTS
+install  db       graph-db     official/postgresql  18.6     lock    client=127.0.0.1:5432
+create   db       graph-db     official/postgresql  18.6     lock    client=127.0.0.1:5432
+start    db       graph-db     official/postgresql  18.6     lock    client=127.0.0.1:5432
+install  cache    graph-cache  official/postgresql  18.6     lock    client=127.0.0.1:5432
+create   cache    graph-cache  official/postgresql  18.6     lock    client=127.0.0.1:5432
+start    cache    graph-cache  official/postgresql  18.6     lock    client=127.0.0.1:5432
+install  api      graph-api    official/postgresql  18.6     lock    client=127.0.0.1:5432
+create   api      graph-api    official/postgresql  18.6     lock    client=127.0.0.1:5432
+start    api      graph-api    official/postgresql  18.6     lock    client=127.0.0.1:5432
+
+Plan: 3 to install, 3 to create, 3 to start, 0 to keep.
+lock: stackly.lock (in_sync, macos-aarch64)
+local: .stackly.local.yaml
+  postgres.storage.dataLocation: /Volumes/Fast/Stackly (applied)
+  cache.endpoints.client.port: 6380 (compared)
+secrets:
+  db superuserPassword local:erp/postgres/admin: unregistered
+  cache superuserPassword local:erp/postgres/admin: unregistered
+  api superuserPassword local:erp/postgres/admin: unregistered
+not in manifest:
+  old erp-old (dedicated)
+hint: wait with: stackly operation inspect 0192f3a4-0000-7000-8000-0000000000f1 --wait

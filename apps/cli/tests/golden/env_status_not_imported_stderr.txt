@@ -1,0 +1,3 @@
+error: not imported
+  code: cli.environment_not_found
+  hint: Run stackly env up or stackly env import.
