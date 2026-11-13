@@ -11,6 +11,7 @@
 //! leaves nothing to compensate. Spec 0046 calls [`register`] from Up for a
 //! manifest that is not registered yet.
 
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -103,9 +104,10 @@ pub fn read_manifest(fs: &dyn Filesystem, path: &Path) -> Result<Vec<u8>, Unread
 
 /// The location of the manifest at `path` as the registry stores and
 /// compares it (AC-11): the canonical parent folder, resolved through the
-/// `Filesystem` port, plus the file name, whose last component is never
-/// followed. `/tmp/x/stackly.yaml` and `/private/tmp/x/stackly.yaml` give
-/// the same location.
+/// `Filesystem` port, plus the file name as that folder's listing spells
+/// it, whose last component is never followed. `/tmp/x/stackly.yaml` and
+/// `/private/tmp/x/stackly.yaml` give the same location, and so do
+/// `Stackly.yaml` and `stackly.yaml` for one file on APFS.
 ///
 /// # Errors
 ///
@@ -121,7 +123,30 @@ pub fn manifest_location(
     let parent = fs
         .canonicalize(parent)
         .map_err(|error| UnreadableReason::of(&error))?;
+    let file = stored_name(fs, &parent, file);
     ManifestLocation::new(parent.join(file)).map_err(|_| UnreadableReason::NotAFile)
+}
+
+/// The name the folder `parent` stores for `file`: the entry with the same
+/// device and inode, read without following it, so a different letter case
+/// or Unicode normalization on APFS gives the one stored name. The name as
+/// written when it is in the listing, when the file doesn't exist yet, or
+/// when the folder can't be listed.
+fn stored_name(fs: &dyn Filesystem, parent: &Path, file: &OsStr) -> OsString {
+    let written = parent.join(file);
+    let Ok(Some(info)) = fs.symlink_metadata(&written) else {
+        return file.to_owned();
+    };
+    let Ok(entries) = fs.read_dir(parent) else {
+        return file.to_owned();
+    };
+    if entries.iter().any(|entry| entry.name == file) {
+        return file.to_owned();
+    }
+    entries
+        .into_iter()
+        .find(|entry| entry.info.identity == info.identity)
+        .map_or_else(|| file.to_owned(), |entry| entry.name)
 }
 
 /// Why an environment operation failed. Every message is fixed text; a

@@ -23,7 +23,9 @@ use stackly_domain::{
 use stackly_platform::{HostFacts, StoreState};
 
 use super::validate::{ServiceSpec, Validation};
-use crate::catalog::{Catalog, CatalogEntry, TrustVerdict, require_entry_trust};
+use crate::catalog::{
+    Catalog, CatalogEntry, NotInstallableReason, TrustVerdict, require_entry_trust,
+};
 use crate::instance::create::{
     Check, CheckStatus, CreateDeps, CreateDraft, CreateError, GatherError, PlannedRuntime,
     PortRequestDraft, ProbeFact, ProviderChoice, SecretSourceKind, SourceFact, evaluate, gather,
@@ -94,8 +96,8 @@ pub struct InstanceView {
     pub provider: ProviderName,
     /// The exact runtime version.
     pub runtime_version: ExactVersion,
-    /// The runtime line.
-    pub runtime_line: RuntimeLine,
+    /// The runtime line, or `None` when its runtime row could not be read.
+    pub runtime_line: Option<RuntimeLine>,
     /// The lifecycle.
     pub lifecycle: InstanceLifecycle,
     /// Whether its data was initialized (`data_initialized_at` is set).
@@ -121,7 +123,8 @@ pub struct PlanDeps<'a> {
     pub catalog: &'a Catalog,
     /// This Mac, for `runtime::resolve`.
     pub host: &'a HostFacts,
-    /// Every instance that is not retained.
+    /// Every instance, retained ones included: a member that is retained
+    /// still gets its item and its `env.instance_blocked` blocker (AC-9).
     pub instances: &'a [InstanceView],
 }
 
@@ -348,7 +351,13 @@ pub enum BlockerKind {
     /// itself refuses with.
     Create(CreateError),
     /// The selector did not resolve to an installable artifact.
-    Resolve(ResolveError),
+    Resolve {
+        /// Why.
+        error: ResolveError,
+        /// The selector as the manifest wrote it, `stable` when it wrote
+        /// none.
+        selector: String,
+    },
     /// `env.name_taken`: the name is registered at another location.
     NameTaken {
         /// The name.
@@ -391,7 +400,7 @@ impl BlockerKind {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Create(error) => error.code(),
-            Self::Resolve(error) => resolve_code(error),
+            Self::Resolve { error, .. } => resolve_code(error),
             Self::NameTaken { .. } => "env.name_taken",
             Self::ManifestRenamed { .. } => "env.manifest_renamed",
             Self::InstanceRefNotFound { .. } => "env.instance_ref_not_found",
@@ -654,6 +663,9 @@ fn waits_for(service: &ServiceSpec) -> Vec<MemberAlias> {
 }
 
 /// An item for an instance that exists: a member, or a borrowed one.
+/// The registry never deletes a member's instance (`ON DELETE RESTRICT`)
+/// and `instances` holds every instance, retained ones included, so the
+/// view is always there for a member.
 fn existing_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
@@ -693,6 +705,14 @@ fn existing_item(
     })
 }
 
+/// The selector as the manifest wrote it, `stable` when it wrote none.
+fn written_selector(service: &ServiceSpec) -> String {
+    service
+        .selector_text
+        .clone()
+        .unwrap_or_else(|| "stable".to_owned())
+}
+
 /// An item for a shared service that is not a member yet.
 fn borrowed_item(
     deps: &PlanDeps<'_>,
@@ -700,10 +720,11 @@ fn borrowed_item(
     instance_ref: &InstanceName,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
+    // A retained instance gives its name up, so a name never finds one.
     let Some(view) = deps
         .instances
         .iter()
-        .find(|view| &view.name == instance_ref)
+        .find(|view| &view.name == instance_ref && view.lifecycle != InstanceLifecycle::Retained)
     else {
         plan.blockers.push(PlanBlocker {
             service: Some(service.alias.clone()),
@@ -755,7 +776,7 @@ fn differences(
     {
         let differs = match (version, line) {
             (Some(version), _) => version != &view.runtime_version,
-            (None, Some(line)) => line != &view.runtime_line,
+            (None, Some(line)) => view.runtime_line.as_ref().is_some_and(|own| own != line),
             (None, None) => false,
         };
         if differs {
@@ -847,7 +868,19 @@ fn create_item(
             Err(error) => installed_fixture(entry, &selector, deps.host, registry)?.ok_or(error),
         };
         match resolved {
-            Err(error) => block(plan, BlockerKind::Resolve(error)),
+            // A provider that is `pending` or `revoked` can't resolve
+            // either; create's own trust row is its one blocker (AC-7).
+            Err(ResolveError::NotInstallable {
+                reason: NotInstallableReason::ApprovalRequired | NotInstallableReason::TrustRevoked,
+                ..
+            }) if !matches!(verdict, TrustVerdict::Trusted) => {}
+            Err(error) => block(
+                plan,
+                BlockerKind::Resolve {
+                    error,
+                    selector: written_selector(service),
+                },
+            ),
             Ok(artifact) => {
                 let runtimes = registry.runtimes()?.value;
                 let managed = |row: &stackly_domain::Runtime| match row.install() {
@@ -886,10 +919,7 @@ fn create_item(
                         });
                     }
                     runtime = Some(PlanRuntime {
-                        selector: service
-                            .selector_text
-                            .clone()
-                            .unwrap_or_else(|| "stable".to_owned()),
+                        selector: written_selector(service),
                         version: artifact.version.clone(),
                         artifact_id: artifact.id.clone(),
                         artifact_sha256: sha256,

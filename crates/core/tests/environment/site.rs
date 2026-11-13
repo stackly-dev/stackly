@@ -142,7 +142,7 @@ impl Site {
             name: instance.name().clone(),
             provider: self.fake_key.provider().clone(),
             runtime_version: self.runtime.version().clone(),
-            runtime_line: self.runtime.line().clone(),
+            runtime_line: Some(self.runtime.line().clone()),
             lifecycle,
             initialized: lifecycle != InstanceLifecycle::Uninitialized,
             readiness: if lifecycle == InstanceLifecycle::Running {

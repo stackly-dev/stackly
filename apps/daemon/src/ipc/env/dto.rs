@@ -168,17 +168,13 @@ fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask) -> 
         BlockerKind::Create(error) => {
             map::create::with_create_hint(map::create::create_error(error, &[]))
         }
-        BlockerKind::Resolve(error) => {
-            let item = items
+        BlockerKind::Resolve { error, selector } => {
+            let provider = items
                 .iter()
-                .find(|item| Some(&item.alias) == blocker.service.as_ref());
-            let provider = item
+                .find(|item| Some(&item.alias) == blocker.service.as_ref())
                 .map(|item| item.provider.to_string())
                 .unwrap_or_default();
-            let selector = item
-                .and_then(|item| item.runtime.as_ref())
-                .map_or_else(|| "stable".to_owned(), |runtime| runtime.selector.clone());
-            map::runtime::resolve_error(error, &provider, &selector)
+            map::runtime::resolve_error(error, &provider, selector)
         }
         BlockerKind::NameTaken { name, location } => {
             let body = ErrorBody::new(

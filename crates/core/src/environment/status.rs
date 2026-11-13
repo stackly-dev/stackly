@@ -123,8 +123,8 @@ pub fn not_ready(view: &InstanceView) -> Option<(NotReadyReason, Option<String>)
     Some((reason, view.detail.clone()))
 }
 
-/// The status of `environment` over `instances`, every instance that is
-/// not retained.
+/// The status of `environment` over `instances`, every instance with the
+/// retained ones: a retained member is `unavailable`, never `not_created`.
 #[must_use]
 pub fn environment_view(environment: &Environment, instances: &[InstanceView]) -> EnvironmentView {
     let by_id = |id| instances.iter().find(|view| view.id == id);
@@ -138,7 +138,10 @@ pub fn environment_view(environment: &Environment, instances: &[InstanceView]) -
                 .find(|member| member.alias() == declared.alias());
             let instance = match (member, declared.instance_ref()) {
                 (Some(member), _) => by_id(member.instance_id()),
-                (None, Some(name)) => instances.iter().find(|view| &view.name == name),
+                // A retained instance gives its name up.
+                (None, Some(name)) => instances.iter().find(|view| {
+                    &view.name == name && view.lifecycle != InstanceLifecycle::Retained
+                }),
                 (None, None) => None,
             };
             let not_ready = match instance {
