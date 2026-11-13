@@ -261,9 +261,10 @@ async fn queued_operations_are_rebuilt_after_a_restart_or_closed_without_a_facto
             ScriptedWork::new().step("drain").boxed(),
         ))
         .await;
+    // Not a coordinator, which would take a slot of its own class and run.
     let orphan = harness
         .begin(request(
-            OperationKind::EnvironmentUp,
+            OperationKind::ImportEnvironment,
             OperationResource::Environment(environment(&harness)),
             ScriptedWork::new().step("start").boxed(),
         ))

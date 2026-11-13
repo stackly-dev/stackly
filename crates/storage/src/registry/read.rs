@@ -557,7 +557,8 @@ pub(super) fn environments(
     collect(
         conn,
         &format!(
-            "SELECT id, name, manifest_location, manifest_sha256, services, revision \
+            "SELECT id, name, manifest_location, manifest_sha256, services, last_operation_id, \
+             last_up, updated_at, revision \
              FROM environments {clause} ORDER BY id"
         ),
         params,
@@ -572,6 +573,10 @@ pub(super) fn environments(
                 declared: super::environment::parse_services(&cells.text("services")?)
                     .map_err(|err| cells.corrupt("services", err))?,
                 members: members.remove(&id).unwrap_or_default(),
+                last_operation: cells.opt_parse("last_operation_id")?,
+                last_up: super::environment::parse_last_up(cells.opt_text("last_up")?.as_deref())
+                    .map_err(|err| cells.corrupt("last_up", err))?,
+                updated_at: Some(cells.ts("updated_at")?),
                 revision: cells.revision()?,
             };
             Environment::restore(stored).map_err(|err| inconsistent("environments", &err))
@@ -587,8 +592,8 @@ fn members(
     let rows = collect(
         conn,
         &format!(
-            "SELECT environment_id, alias, instance_id, ownership FROM environment_instances \
-             {clause} ORDER BY environment_id, position"
+            "SELECT environment_id, alias, instance_id, ownership, dependency_conditions \
+             FROM environment_instances {clause} ORDER BY environment_id, position"
         ),
         params,
         "environment_instances",
@@ -599,6 +604,10 @@ fn members(
                     cells.parse("alias")?,
                     cells.parse("instance_id")?,
                     cells.parse::<Ownership>("ownership")?,
+                )
+                .with_conditions(
+                    super::environment::parse_conditions(&cells.text("dependency_conditions")?)
+                        .map_err(|err| cells.corrupt("dependency_conditions", err))?,
                 ),
             ))
         },

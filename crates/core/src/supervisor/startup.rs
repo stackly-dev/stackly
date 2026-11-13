@@ -68,6 +68,22 @@ pub enum StartTrigger {
     /// The daemon itself (the restart policy or reconciliation): never a
     /// dialog.
     Background,
+    /// An environment Up (spec 0046), with the caller of its `env.up`
+    /// request for the first attempt. It behaves as [`StartTrigger::User`]
+    /// in every branch (it runs while a session ends, whatever the desired
+    /// state, and writes desired `running`) except that it writes no
+    /// `manual` lease: the environment's own lease holds the instance.
+    Environment(SecretCaller),
+}
+
+impl StartTrigger {
+    /// Returns whether a start with this trigger writes a `manual` lease
+    /// with desired `running` (spec 0031 AC-9): only a start a person
+    /// asked for directly does.
+    #[must_use]
+    pub const fn writes_manual_lease(&self) -> bool {
+        matches!(self, Self::User(_))
+    }
 }
 
 /// What [`Supervisor::start_work`] needs.
@@ -92,6 +108,18 @@ impl StartRequest {
         Self {
             instance,
             trigger: StartTrigger::User(caller),
+            respawn: false,
+        }
+    }
+
+    /// A start an environment Up makes as its child operation (spec 0046):
+    /// `caller` answers the first attempt's secret prompts, and no
+    /// `manual` lease is written.
+    #[must_use]
+    pub const fn environment(instance: InstanceId, caller: SecretCaller) -> Self {
+        Self {
+            instance,
+            trigger: StartTrigger::Environment(caller),
             respawn: false,
         }
     }
@@ -199,7 +227,7 @@ async fn run_start(
     let id = request.instance;
     let actor = sup.actor(id);
     let first_caller = match &request.trigger {
-        StartTrigger::User(caller) => caller.clone(),
+        StartTrigger::User(caller) | StartTrigger::Environment(caller) => caller.clone(),
         StartTrigger::Background => SecretCaller::background(),
     }
     .in_operation(ctx.id());
@@ -326,12 +354,14 @@ pub(crate) async fn start_stopped(
 
 /// The manual lease a start a person asked for writes with desired `running`
 /// (spec 0031, AC-9). A start the daemon makes on its own (reconciliation,
-/// login, the restart policy) writes none.
+/// login, the restart policy) writes none, and neither does a start of an
+/// environment Up, whose environment lease already holds the instance
+/// (spec 0046 AC-13).
 async fn manual_lease_ops(
     sup: &Supervisor,
     request: &StartRequest,
 ) -> Result<Vec<WriteOp>, SupervisorError> {
-    if !matches!(request.trigger, StartTrigger::User(_)) {
+    if !request.trigger.writes_manual_lease() {
         return Ok(Vec::new());
     }
     let id = request.instance;

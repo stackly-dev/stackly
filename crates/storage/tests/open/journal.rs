@@ -134,7 +134,7 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
     for (id, kind, origin, interactive, resumable, input) in journals {
         let expected = kind
             .parse::<OperationKind>()
-            .is_ok_and(OperationKind::resumable);
+            .is_ok_and(resumable_at_migration_2);
         assert_eq!(
             (origin.as_str(), interactive, resumable == 1, input.as_str()),
             ("background", 0, expected, "{}"),
@@ -149,6 +149,13 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
         .expect("a backfilled journal reads back");
     assert_eq!(view.journal.trigger().origin(), TriggerOrigin::Background);
     assert!(view.steps.is_empty() && view.created.is_empty() && view.locks.is_empty());
+}
+
+/// The resumable kinds as migration 2 froze them: the domain's, plus
+/// `environment_up`, which spec 0046 made close as interrupted after that
+/// migration was released. A journal keeps the flag it was created with.
+fn resumable_at_migration_2(kind: OperationKind) -> bool {
+    kind.resumable() || kind == OperationKind::EnvironmentUp
 }
 
 #[test]
@@ -171,7 +178,8 @@ fn the_resumable_kinds_of_migration_2_match_the_domain() {
     in_sql.sort_unstable();
     let mut in_domain: Vec<&str> = OperationKind::ALL
         .iter()
-        .filter(|kind| kind.resumable())
+        .copied()
+        .filter(|kind| resumable_at_migration_2(*kind))
         .map(|kind| kind.as_code())
         .collect();
     in_domain.sort_unstable();

@@ -24,7 +24,8 @@ use super::read::{OPERATION_COLUMNS, stored_operation};
 const JOURNAL_COLUMNS: &str = "operation_id, method, request_fingerprint, trigger_origin, \
      trigger_client, trigger_interactive, resumable, input, expected_revision, waiting_on, \
      point_of_no_return_at, cancel_requested_at, compensation_started_at, recovery_cause, \
-     failure_error_code, failure_message, failure_details, failure_items, failure_rule, result";
+     failure_error_code, failure_message, failure_details, failure_items, failure_rule, result, \
+     parent_id";
 
 const STEP_COLUMNS: &str = "seq, name, repeatable, reversible, state, attempts, checkpoint, \
      error_code, started_at, finished_at";
@@ -109,6 +110,7 @@ pub(super) fn write_journal(
         items,
         error.and_then(FailureError::rule).map(|rule| rule.id()),
         journal.result().map(JournalPayload::as_str),
+        journal.parent().map(|parent| parent.to_string()),
     ];
     let sql = if update {
         "UPDATE operation_journal SET method = ?2, request_fingerprint = ?3, trigger_origin = ?4, \
@@ -116,15 +118,15 @@ pub(super) fn write_journal(
          expected_revision = ?9, waiting_on = ?10, point_of_no_return_at = ?11, \
          cancel_requested_at = ?12, compensation_started_at = ?13, recovery_cause = ?14, \
          failure_error_code = ?15, failure_message = ?16, failure_details = ?17, \
-         failure_items = ?18, failure_rule = ?19, result = ?20 \
+         failure_items = ?18, failure_rule = ?19, result = ?20, parent_id = ?21 \
          WHERE operation_id = ?1"
     } else {
         "INSERT INTO operation_journal (operation_id, method, request_fingerprint, \
          trigger_origin, trigger_client, trigger_interactive, resumable, input, \
          expected_revision, waiting_on, point_of_no_return_at, cancel_requested_at, \
          compensation_started_at, recovery_cause, failure_error_code, failure_message, \
-         failure_details, failure_items, failure_rule, result) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
-         ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)"
+         failure_details, failure_items, failure_rule, result, parent_id) VALUES (?1, ?2, ?3, ?4, \
+         ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)"
     };
     conn.execute(sql, values).map_err(sql_error)?;
     Ok(())
@@ -525,6 +527,7 @@ fn stored_journal(cells: Cells<'_, '_>) -> Result<OperationJournal, RegistryErro
             })
             .transpose()?,
         waiting_on: cells.opt_parse("waiting_on")?,
+        parent: cells.opt_parse("parent_id")?,
         point_of_no_return_at: cells.opt_ts("point_of_no_return_at")?,
         cancel_requested_at: cells.opt_ts("cancel_requested_at")?,
         compensation_started_at: cells.opt_ts("compensation_started_at")?,

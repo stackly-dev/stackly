@@ -124,6 +124,14 @@ pub enum ValueKind {
     Ownership,
     /// A [`DependencyCondition`](crate::DependencyCondition).
     DependencyCondition,
+    /// An [`UpState`](crate::UpState).
+    UpState,
+    /// An [`UpPhase`](crate::UpPhase).
+    UpPhase,
+    /// An [`UpStage`](crate::UpStage).
+    UpStage,
+    /// A [`SkipReason`](crate::SkipReason).
+    SkipReason,
     /// A [`ManifestLocation`](crate::ManifestLocation).
     ManifestLocation,
     /// A [`MethodName`](crate::MethodName).
@@ -304,6 +312,10 @@ impl ValueKind {
             Self::OperationKind => "operation kind",
             Self::Ownership => "ownership",
             Self::DependencyCondition => "dependency condition",
+            Self::UpState => "up state",
+            Self::UpPhase => "up phase",
+            Self::UpStage => "up stage",
+            Self::SkipReason => "skip reason",
             Self::ManifestLocation => "manifest location",
             Self::MethodName => "method name",
             Self::ErrorCodeName => "error code name",
@@ -655,6 +667,11 @@ pub enum InvariantDetail {
         /// The instance.
         instance: InstanceId,
     },
+    /// An environment has no member with this alias. Not a BR.
+    UnknownMember {
+        /// The alias.
+        alias: MemberAlias,
+    },
     /// An environment lease carries a session. Not a BR.
     EnvironmentLeaseWithSession {
         /// The lease.
@@ -736,6 +753,7 @@ impl InvariantDetail {
             | Self::RebindOtherSoftware { .. }
             | Self::DuplicateMemberAlias { .. }
             | Self::DuplicateMemberInstance { .. }
+            | Self::UnknownMember { .. }
             | Self::DuplicateDeclaredService { .. }
             | Self::UnknownDeclaredDependency { .. }
             | Self::EnvironmentLeaseWithSession { .. }
@@ -835,6 +853,9 @@ impl fmt::Display for InvariantDetail {
             }
             Self::DuplicateMemberInstance { instance } => {
                 write!(f, "instance {instance} is a member more than once")
+            }
+            Self::UnknownMember { alias } => {
+                write!(f, "the environment has no member {alias}")
             }
             Self::DuplicateDeclaredService { alias } => {
                 write!(f, "service {alias} is declared more than once")

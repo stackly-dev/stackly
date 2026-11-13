@@ -99,12 +99,15 @@ pub(super) fn require(conn: &Connection, source: ProviderSourceId) -> Result<(),
 
 /// `DeleteInstanceCreatedBy`: the instance, its secret uses, and what
 /// cascades (endpoints, paths, config revisions, process observations,
-/// leases), only while `operation` created it and nothing may run.
+/// leases), only while `operation` created it and nothing may run. Its
+/// environment member rows go first, since their key is `restrict`, and
+/// each environment that held one moves on one revision (spec 0046).
 pub(super) fn delete_instance_created_by(
     conn: &Connection,
     id: InstanceId,
     expected: ResourceRevision,
     operation: OperationId,
+    now: &str,
 ) -> Result<(), RegistryError> {
     let resource = ResourceRef::Instance(id);
     let row = first(
@@ -157,6 +160,17 @@ pub(super) fn delete_instance_created_by(
     if let Some(reason) = reason {
         return Err(RegistryError::NotDeletable { resource, reason });
     }
+    conn.execute(
+        "UPDATE environments SET revision = revision + 1, updated_at = ?2 WHERE id IN \
+         (SELECT environment_id FROM environment_instances WHERE instance_id = ?1)",
+        params![id.to_string(), now],
+    )
+    .map_err(sql_error)?;
+    conn.execute(
+        "DELETE FROM environment_instances WHERE instance_id = ?1",
+        [id.to_string()],
+    )
+    .map_err(sql_error)?;
     conn.execute(
         "DELETE FROM secret_reference_uses WHERE resource_kind = 'instance' AND resource_id = ?1",
         [id.to_string()],

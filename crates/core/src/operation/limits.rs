@@ -9,6 +9,9 @@ use stackly_domain::{CreatedRecord, CreatedSeq, JournalStep, OperationJournal, S
 pub const MAX_RUNNING_OPERATIONS: u32 = 8;
 /// The most operations that wait in the queue.
 pub const MAX_QUEUED_OPERATIONS: u32 = 64;
+/// The most coordinators (spec 0046) that run at once; they never use a
+/// running slot of [`MAX_RUNNING_OPERATIONS`].
+pub const MAX_RUNNING_COORDINATORS: u32 = 4;
 /// The shortest time between two commits that change only progress.
 pub const PROGRESS_COMMIT_INTERVAL: Duration = Duration::from_secs(1);
 /// How long shutdown waits for running operations.
@@ -42,6 +45,8 @@ pub struct EngineLimits {
     pub max_running: u32,
     /// The most operations that wait in the queue.
     pub max_queued: u32,
+    /// The most coordinators that run at once, in their own slot class.
+    pub max_coordinators: u32,
     /// The shortest time between two progress only commits.
     pub progress_interval: Duration,
     /// How long to wait before retrying a failed journal write.
@@ -62,6 +67,14 @@ impl EngineLimits {
 }
 
 impl EngineLimits {
+    /// Returns the limits with `max_coordinators` replaced, for tests of
+    /// the coordinator slot class.
+    #[must_use]
+    pub const fn with_coordinators(mut self, max_coordinators: u32) -> Self {
+        self.max_coordinators = max_coordinators;
+        self
+    }
+
     /// Returns the limits with the progress and journal retry intervals
     /// replaced, for tests that should not wait seconds.
     #[must_use]
@@ -77,6 +90,7 @@ impl Default for EngineLimits {
         Self {
             max_running: MAX_RUNNING_OPERATIONS,
             max_queued: MAX_QUEUED_OPERATIONS,
+            max_coordinators: MAX_RUNNING_COORDINATORS,
             progress_interval: PROGRESS_COMMIT_INTERVAL,
             journal_retry: JOURNAL_RETRY_INTERVAL,
             finalize_retries: FINALIZE_RETRIES,

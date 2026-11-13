@@ -182,6 +182,37 @@ extension SnapshotTests {
                 named: "environment-plan-name-taken", size: Self.sheetSize, variants: [.light])
         }
 
+        // MARK: - Sidebar
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The sidebar shows one child row per environment under Environments with its status symbol, name, and ready count"
+            ))
+        @MainActor
+        func sidebarRows() async throws {
+            let runtime = try await settledRuntime(FixtureScenario(.environmentPartiallyReady))
+            defer { runtime.willTerminate() }
+            let model = runtime.model
+            try await waitUntil { model.environments.environments?.count == 3 }
+            let shell = AppShell(
+                presentation: model.presentation, diagnostics: model.diagnostics,
+                counts: model.sidebarCounts, instances: model.instances,
+                catalog: model.catalog, runtimes: model.runtimes,
+                environments: model.environments, operations: model.operations,
+                capacity: model.capacity, instanceActions: model.instanceActions,
+                completedRounds: model.sync.completedRounds, reconnect: {},
+                refreshDiagnostics: {}
+            )
+            .environment(model)
+            .environment(\.fixtureNow, FixtureClock.now)
+            .frame(width: 1280, height: 800)
+            try await assertSnapshot(
+                shell, named: "shell-environments-sidebar",
+                size: .fitting(width: 1280, narrowWidth: 900), variants: [.light, .dark])
+        }
+
         // MARK: - Other surfaces
 
         @Test(

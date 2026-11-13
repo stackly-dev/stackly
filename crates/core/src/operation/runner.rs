@@ -142,7 +142,7 @@ pub(crate) enum Close {
 /// `operation_id` and `kind` (spec 0007 AC-19).
 pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
     // Gives the slot back however the run ends, a panic in it included.
-    let _slot = SlotGuard(inner);
+    let _slot = SlotGuard(inner, entry.coordinator);
     let id = entry.id;
     match inner.handle(id) {
         Some(handle) => {
@@ -153,12 +153,12 @@ pub(crate) async fn run(inner: &Arc<Inner>, entry: QueueEntry) {
     }
 }
 
-/// Gives a running slot back when it drops.
-struct SlotGuard<'a>(&'a Inner);
+/// Gives the slot of its class back when it drops.
+struct SlotGuard<'a>(&'a Inner, bool);
 
 impl Drop for SlotGuard<'_> {
     fn drop(&mut self) {
-        self.0.finish_slot();
+        self.0.finish_slot(self.1);
     }
 }
 
@@ -196,6 +196,9 @@ fn requeue(
         pending: false,
         job: Job::Work(work),
         not_before: Some(Instant::now() + inner.limits.journal_retry),
+        coordinator: inner
+            .handle(id)
+            .is_some_and(|handle| handle.kind.is_coordinator()),
     });
     inner.wake.notify_one();
 }

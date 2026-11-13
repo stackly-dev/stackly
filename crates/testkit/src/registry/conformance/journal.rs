@@ -23,6 +23,7 @@ use crate::registry::OperationBuilder;
 
 pub(super) fn journal(suite: &Suite<'_>) {
     round_trip(suite);
+    parent_round_trip(suite);
     check_order(suite);
     upserts(suite);
     unique_rules(suite);
@@ -52,6 +53,7 @@ fn new_journal(check: &str, operation: OperationId, request: bool) -> OperationJ
             resumable: true,
             input: payload(check, r#"{"name":"orders-db"}"#),
             expected_revision: None,
+            parent: None,
         }),
     )
 }
@@ -303,6 +305,45 @@ fn round_trip(suite: &Suite<'_>) {
     expect_eq(
         &format!("{CHECK}: an operation without a journal has no journal view"),
         view(suite, "read a missing journal", OperationId::generate()),
+        None,
+    );
+}
+
+/// The coordinator of a child operation (spec 0046) is stored with its
+/// journal and read back unchanged.
+fn parent_round_trip(suite: &Suite<'_>) {
+    const CHECK: &str = "journal_parent_round_trips";
+    let parent = OperationBuilder::new().build();
+    let child = OperationBuilder::new().build();
+    let journal = domain(
+        CHECK,
+        OperationJournal::new(NewJournal {
+            operation_id: child.id(),
+            request: None,
+            trigger: OperationTrigger::user(Some(parse(CHECK, "cli")), true),
+            resumable: false,
+            input: payload(CHECK, "{}"),
+            expected_revision: None,
+            parent: Some(parent.id()),
+        }),
+    );
+    suite.commit(
+        CHECK,
+        vec![
+            WriteOp::InsertOperation(parent.clone()),
+            WriteOp::InsertJournal(new_journal(CHECK, parent.id(), false)),
+            WriteOp::InsertOperation(child.clone()),
+            WriteOp::InsertJournal(journal),
+        ],
+    );
+    expect_eq(
+        CHECK,
+        view(suite, CHECK, child.id()).and_then(|stored| stored.journal.parent()),
+        Some(parent.id()),
+    );
+    expect_eq(
+        &format!("{CHECK}: a journal of no coordinator has no parent"),
+        view(suite, CHECK, parent.id()).and_then(|stored| stored.journal.parent()),
         None,
     );
 }

@@ -118,6 +118,17 @@ pub struct RequestOrigin {
     pub interactive: bool,
 }
 
+/// The coordinator a child operation comes from (spec 0046, spec 0007
+/// *Operasi pengatur dan operasi anak*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChildOrigin {
+    /// The coordinator, recorded in the child's `journal.parent`.
+    pub parent: OperationId,
+    /// A copy of the coordinator's trigger: the child keeps its origin,
+    /// client, and interactivity, so Keychain prompts follow the parent.
+    pub trigger: OperationTrigger,
+}
+
 /// Who starts an operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
@@ -125,6 +136,9 @@ pub enum Origin {
     Request(RequestOrigin),
     /// The daemon itself, with no key.
     Background,
+    /// A coordinator, with no key, method, or fingerprint; refused like a
+    /// request while the quiesce of a planned restart is on.
+    Child(ChildOrigin),
 }
 
 /// A request to start an operation.
@@ -525,6 +539,10 @@ pub struct EngineStats {
     pub max_running: u32,
     /// The queue limit.
     pub max_queued: u32,
+    /// Coordinators running now, which `running` does not count.
+    pub coordinators: u32,
+    /// The coordinator limit.
+    pub max_coordinators: u32,
     /// Operations the last start found interrupted.
     pub interrupted_at_start: u32,
     /// Operations the last start queued to resume.
@@ -617,6 +635,9 @@ struct Inner {
     counters: Mutex<Counters>,
     /// Set while a planned daemon restart prepares (spec 0030).
     quiesce: AtomicBool,
+    /// Bumped after every committed state change and when shutdown
+    /// begins, so [`OperationEngine::wait_final`] wakes without polling.
+    changes: tokio::sync::watch::Sender<u64>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -663,6 +684,23 @@ impl Inner {
     fn counters(&self) -> MutexGuard<'_, Counters> {
         lock(&self.counters)
     }
+
+    /// Wakes every [`OperationEngine::wait_final`].
+    fn changed(&self) {
+        self.changes
+            .send_modify(|count| *count = count.wrapping_add(1));
+    }
+}
+
+/// Whether [`OperationEngine::wait_final`] stops at `state`.
+const fn settled(state: OperationState) -> bool {
+    matches!(
+        state,
+        OperationState::Succeeded
+            | OperationState::Failed
+            | OperationState::Cancelled
+            | OperationState::NeedsRecovery
+    )
 }
 
 /// The operation engine. Cloning shares one engine.
@@ -701,6 +739,7 @@ impl OperationEngine {
                 phase: Mutex::new(Phase::Created),
                 counters: Mutex::new(Counters::default()),
                 quiesce: AtomicBool::new(false),
+                changes: tokio::sync::watch::Sender::new(0),
             }),
         }
     }
@@ -817,6 +856,49 @@ impl OperationEngine {
         state::detail(&self.inner, id).await
     }
 
+    /// Waits until operation `id` reaches a final state or
+    /// `needs_recovery`, and returns it with its steps and created items;
+    /// `None` when it does not exist (spec 0046, spec 0007 *Menunggu*). It
+    /// wakes on the engine's own state changes, never by polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError::ShuttingDown`] once shutdown began, and
+    /// [`EngineError::Registry`] when the registry cannot be read.
+    pub async fn wait_final(
+        &self,
+        id: OperationId,
+    ) -> Result<Option<OperationDetailView>, EngineError> {
+        let mut changes = self.inner.changes.subscribe();
+        loop {
+            // Subscribed before the read, so a change between the read and
+            // the wait is never missed.
+            changes.mark_unchanged();
+            if self.inner.phase() == Phase::ShuttingDown {
+                return Err(EngineError::ShuttingDown);
+            }
+            let live = self
+                .inner
+                .handle(id)
+                .is_some_and(|handle| !settled(handle.state()));
+            if !live {
+                let detail = state::detail(&self.inner, id).await?;
+                match detail {
+                    None => return Ok(None),
+                    Some(detail) if settled(detail.view.operation.state()) => {
+                        return Ok(Some(detail));
+                    }
+                    // Not final in the registry and not yet known in
+                    // memory: the begin that created it has not reported.
+                    Some(_) => {}
+                }
+            }
+            if changes.changed().await.is_err() {
+                return Err(EngineError::ShuttingDown);
+            }
+        }
+    }
+
     /// Returns one page of operations, newest first.
     ///
     /// # Errors
@@ -897,10 +979,11 @@ impl OperationEngine {
     }
 
     /// Turns the quiesce of a planned daemon restart on or off (spec 0030
-    /// AC-10). While it is on, `begin` refuses every client request except
-    /// a `daemon_restart` with [`BeginError::RestartPending`]; operations
-    /// the daemon starts itself ([`Origin::Background`]) and the ones that
-    /// already exist are not touched.
+    /// AC-10). While it is on, `begin` refuses every client request and
+    /// every child operation of a coordinator except a `daemon_restart`
+    /// with [`BeginError::RestartPending`]; operations the daemon starts
+    /// itself ([`Origin::Background`]) and the ones that already exist are
+    /// not touched.
     pub fn set_quiesce(&self, on: bool) {
         self.inner.quiesce.store(on, Ordering::SeqCst);
     }

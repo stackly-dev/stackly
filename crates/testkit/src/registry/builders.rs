@@ -626,6 +626,9 @@ impl EnvironmentBuilder {
                 manifest_sha256: None,
                 declared: Vec::new(),
                 members: Vec::new(),
+                last_operation: None,
+                last_up: None,
+                updated_at: None,
                 revision: ResourceRevision::INITIAL,
             },
         }

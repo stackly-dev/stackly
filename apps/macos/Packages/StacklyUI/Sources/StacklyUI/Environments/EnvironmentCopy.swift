@@ -95,6 +95,8 @@ nonisolated enum EnvironmentCopy {
     }
 
     static let willBeCreated = "Will be created"
+    /// The copy item of a service's menu (AC-19).
+    static let copyConnectionURL = "Copy Connection URL"
 
     // MARK: - Validate
 
