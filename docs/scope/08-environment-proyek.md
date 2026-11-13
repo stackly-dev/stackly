@@ -15,11 +15,11 @@ Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, s
 **Pointer:** spec [0044](../specs/0044-manifest-environment-validate-plan/index.md) · code in `crates/core/src/environment/`, `crates/protocol/src/env.rs`, `apps/daemon/src/ipc/env/`, `apps/daemon/src/membership.rs`, `apps/cli/src/commands/env/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Environments/`
 
 - [x] Design it (spec): `/architect manifest environment: validate & plan`
-- [ ] Build it: `/develop manifest environment: validate & plan`
-  - [ ] Manifest, validate, dan plan di daemon: migrasi `environments.services` dan unique index nama serta lokasi, `DeclaredService` dan dua `OperationKind`, loader dan aturan validasi `stackly.yaml` dengan JSON Schema hasil codegen, plan di atas `gather` dan `evaluate` create (`planned_runtime`), kenaikan minor protokol dengan modul `env`, enam method, area kode `env`, `InstanceOwnership` baru, lalu handler `env.validate`, `env.plan`, `env.list`, `env.get`, operasi `import_environment` dan `remove_environment`, cache keanggotaan, dan test tanpa efek samping (spec 0044 AC-1 sampai AC-15, AC-24; build steps 1 to 5; needs scope 01 sampai 07 di `main`)
+- [x] Build it: `/develop manifest environment: validate & plan`
+  - [x] Manifest, validate, dan plan di daemon: migrasi `environments.services` dan unique index nama serta lokasi, `DeclaredService` dan dua `OperationKind`, loader dan aturan validasi `stackly.yaml` dengan JSON Schema hasil codegen, plan di atas `gather` dan `evaluate` create (`planned_runtime`), kenaikan minor protokol dengan modul `env`, enam method, area kode `env`, `InstanceOwnership` baru, lalu handler `env.validate`, `env.plan`, `env.list`, `env.get`, operasi `import_environment` dan `remove_environment`, cache keanggotaan, dan test tanpa efek samping (spec 0044 AC-1 sampai AC-15, AC-24; build steps 1 to 5; needs scope 01 sampai 07 di `main`)
   - [x] `stackly env validate`, `plan`, `import`, `list`, `remove`: grup `env`, resolve target, kode `cli.env_invalid`, `cli.env_plan_blocked`, `cli.environment_not_found`, kolom `ENVIRONMENT` di `instance list`, golden dan binary test (spec 0044 AC-16, AC-17, AC-15; build step 6; after build step 4 untuk golden; binary test needs build step 5; bisa paralel dengan milestone berikutnya)
   - [x] Environments di app: `EnvironmentStore`, baris anak sidebar, halaman daftar dan detail dengan tabel Services dan menu baris (`OpenInMenu`), banner manifest dan partially ready, sheet plan, Import…, Validate, Reload, Remove, seksi Environments di Overview, kolom dan baris Environment di Instances, baris onboarding, fixture `environment-partially-ready`, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0044 AC-18 sampai AC-25; build steps 7 to 11; after build step 4; evidence manual needs build step 5)
-- [ ] Verify it: `/check verify manifest environment: validate & plan`
+- [x] Verify it: `/check verify manifest environment: validate & plan`
 - [ ] Test it: `/test manifest environment: validate & plan`
 
 ### 45. Lockfile & override lokal · in-progress
@@ -67,7 +67,7 @@ Down melepas lease environment dan hanya menghentikan instance yang tidak dibutu
 
 **Trace:** REQ-022, REQ-028, BR-006, BR-014, BR-015, VAL-014, AC-022, AC-073 (bersama fitur 46), PRD bagian 13.2
 
-**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md)
+**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`
 
 - [x] Design it (spec): `/architect env down, shared instance & lease`
 - [ ] Build it: `/develop env down, shared instance & lease`
