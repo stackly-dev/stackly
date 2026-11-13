@@ -222,10 +222,13 @@ struct InstanceInspector: View {
         return "PID \(process.pid) · up \(up)" + (process.adopted ? " · adopted" : "")
     }
 
-    /// "Manual", or "Unknown" for a value this build does not know.
+    /// "Dedicated", "Shared", or "Manual" (spec 0044, AC-23), or "Unknown" for a value this
+    /// build does not know.
     static func ownershipText(_ ownership: InstanceOwnership?) -> String {
         switch ownership ?? .manual {
         case .manual: "Manual"
+        case .dedicated: "Dedicated"
+        case .shared: "Shared"
         case .unrecognized: "Unknown"
         }
     }

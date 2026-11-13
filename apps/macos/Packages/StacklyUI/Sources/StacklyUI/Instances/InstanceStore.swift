@@ -198,7 +198,7 @@ extension InstanceSummary {
             leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable ?? self.logsUnavailable, ownership: ownership,
             initialized: initialized, capabilities: capabilities, lastExit: lastExit,
-            autostart: autostart)
+            autostart: autostart, environments: environments)
     }
 
     /// A copy with another `statusSeq`.

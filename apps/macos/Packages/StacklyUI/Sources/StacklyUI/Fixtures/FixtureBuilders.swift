@@ -91,7 +91,8 @@
                 initialized: true,
                 capabilities: capabilities
                     ?? InstanceCapabilities(reload: provider == "official/postgresql"),
-                lastExit: lastExit, autostart: InstanceAutostart(policy: .manual, session: .none))
+                lastExit: lastExit, autostart: InstanceAutostart(policy: .manual, session: .none),
+                environments: nil)
         }
     }
 
