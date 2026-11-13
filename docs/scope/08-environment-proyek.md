@@ -4,7 +4,7 @@
 
 Journey PRD JOURNEY-04 (contoh environment ERP): import `stackly.yaml`, review trust provider, plan, lock versi exact, up dengan progress dan readiness, lalu down tanpa menghapus data. Fase ini datang setelah stack enam service karena environment ERP memakai keenamnya. Fase ini selesai kalau tim bisa berbagi satu file environment tanpa ikut membagikan data, path pribadi, atau password, dan seluruh jalur itu bekerja dari GUI dan CLI.
 
-### 44. Manifest environment: validate & plan · in-progress
+### 44. Manifest environment: validate & plan · done
 
 Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, secret reference, dependency, ownership) dan plan yang menampilkan diff serta dampak tanpa efek samping. Termasuk halaman Environments untuk import, edit, validasi, dan preview plan.
 
@@ -20,7 +20,7 @@ Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, s
   - [x] `stackly env validate`, `plan`, `import`, `list`, `remove`: grup `env`, resolve target, kode `cli.env_invalid`, `cli.env_plan_blocked`, `cli.environment_not_found`, kolom `ENVIRONMENT` di `instance list`, golden dan binary test (spec 0044 AC-16, AC-17, AC-15; build step 6; after build step 4 untuk golden; binary test needs build step 5; bisa paralel dengan milestone berikutnya)
   - [x] Environments di app: `EnvironmentStore`, baris anak sidebar, halaman daftar dan detail dengan tabel Services dan menu baris (`OpenInMenu`), banner manifest dan partially ready, sheet plan, Import…, Validate, Reload, Remove, seksi Environments di Overview, kolom dan baris Environment di Instances, baris onboarding, fixture `environment-partially-ready`, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0044 AC-18 sampai AC-25; build steps 7 to 11; after build step 4; evidence manual needs build step 5)
 - [x] Verify it: `/check verify manifest environment: validate & plan`
-- [ ] Test it: `/test manifest environment: validate & plan`
+- [x] Test it: `/test manifest environment: validate & plan`
 
 ### 45. Lockfile & override lokal · in-progress
 
@@ -30,13 +30,13 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 
 **Trace:** REQ-023, REQ-028, BR-018, AC-023, AC-080, PRD bagian 13.1 dan 13.3
 
-**Pointer:** spec [0045](../specs/0045-lockfile-override-lokal/index.md)
+**Pointer:** spec [0045](../specs/0045-lockfile-override-lokal/index.md) · code in `crates/core/src/environment/` (`lock.rs`, `local.rs`, `export.rs`, `plan.rs`), `apps/daemon/src/ipc/env/`, `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Environments/`
 
 - [x] Design it (spec): `/architect lockfile & override lokal`
 - [ ] Build it: `/develop lockfile & override lokal`
-  - [ ] Lock, override, dan export di daemon: `environment::lock` (loader, emitter, state, entri yang dipertahankan) dengan JSON Schema, plan dengan lock dan `locked` (*Runtime dari lock*, blocker, `planDigest`), `environment::local` dan `CreateDraft.data_location`, `lock_sha256` di `Environment`, `environment::export` lewat `Redactor`, kenaikan minor protokol dengan `env.lock`, `env.export`, dan kode `env.*` baru, lalu handler, test tanpa efek samping, test sentinel, dan skenario root A ke root B (spec 0045 AC-1 sampai AC-15, AC-20, AC-21; build steps 1 to 6; needs spec 0044 build steps 1 to 5)
+  - [x] Lock, override, dan export di daemon: `environment::lock` (loader, emitter, state, entri yang dipertahankan) dengan JSON Schema, plan dengan lock dan `locked` (*Runtime dari lock*, blocker, `planDigest`), `environment::local` dan `CreateDraft.data_location`, `lock_sha256` di `Environment`, `environment::export` lewat `Redactor`, kenaikan minor protokol dengan `env.lock`, `env.export`, dan kode `env.*` baru, lalu handler, test tanpa efek samping, test sentinel, dan skenario root A ke root B (spec 0045 AC-1 sampai AC-15, AC-20, AC-21; build steps 1 to 6; needs spec 0044 build steps 1 to 5)
   - [ ] `stackly env lock`, `plan --locked`, `export`: flag `--update` dan `--service`, kolom `SOURCE` dan baris `lock:` serta `local:`, kode `cli.env_lock_blocked` dan `cli.env_locked_unsupported`, golden dan binary test (spec 0045 AC-6, AC-16, AC-17; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
-  - [ ] Lock dan override di app: baris Lock dan Local override, Lock Versions, Update Lock…, Copy Environment Variables, tambahan sheet plan, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0045 AC-18, AC-19, AC-21; build steps 8 to 9; after build step 5 dan milestone app spec 0044; evidence manual needs build step 6; override storage sampai instance needs Up spec 0046)
+  - [x] Lock dan override di app: baris Lock dan Local override, Lock Versions, Update Lock…, Copy Environment Variables, tambahan sheet plan, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0045 AC-18, AC-19, AC-21; build steps 8 to 9; after build step 5 dan milestone app spec 0044; evidence manual needs build step 6; override storage sampai instance needs Up spec 0046)
 - [ ] Verify it: `/check verify lockfile & override lokal`
 - [ ] Test it: `/test lockfile & override lokal`
 

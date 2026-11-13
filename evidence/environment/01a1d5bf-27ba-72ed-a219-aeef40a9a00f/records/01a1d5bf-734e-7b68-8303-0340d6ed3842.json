@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "evidencePath" : "output.log",
+  "id" : "01a1d5bf-734e-7b68-8303-0340d6ed3842",
+  "test" : {
+    "line" : 298,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "target" : "StacklyUITests",
+    "language" : "swift",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/overviewShowAll()",
+    "package" : null
+  },
+  "method" : "automated",
+  "subjects" : [
+
+  ],
+  "covers" : [
+    "NFR-012"
+  ],
+  "status" : "PASS",
+  "expected" : "The Overview lists five environments by name and Show All when there are more",
+  "actual" : "all expectations passed",
+  "reason" : null,
+  "startedAt" : "2026-11-13T16:30:56.335Z",
+  "owner" : null,
+  "reviewer" : null,
+  "finishedAt" : "2026-11-13T16:30:57.181Z",
+  "kind" : "fixture",
+  "schema" : "stackly.evidence/v1"
+}

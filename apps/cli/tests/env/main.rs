@@ -9,6 +9,7 @@
 mod common;
 
 mod data;
+mod edges;
 mod manage;
 mod plan;
 mod stacklyd;

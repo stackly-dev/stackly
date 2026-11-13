@@ -1,0 +1,30 @@
+{
+  "actual" : "all expectations passed",
+  "steps" : null,
+  "expected" : "The sidebar shows one child row per environment under Environments with its status symbol, name, and ready count",
+  "id" : "01a1d5bf-769e-792a-88a9-b7a536d54d83",
+  "reviewer" : null,
+  "evidencePath" : "output.log",
+  "schema" : "stackly.evidence/v1",
+  "reason" : null,
+  "test" : {
+    "language" : "swift",
+    "package" : null,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "target" : "StacklyUITests",
+    "line" : 314,
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/sidebarRows()"
+  },
+  "owner" : null,
+  "startedAt" : "2026-11-13T16:30:57.183Z",
+  "finishedAt" : "2026-11-13T16:30:59.168Z",
+  "method" : "automated",
+  "subjects" : [
+
+  ],
+  "covers" : [
+    "NFR-012"
+  ],
+  "kind" : "fixture",
+  "status" : "PASS"
+}

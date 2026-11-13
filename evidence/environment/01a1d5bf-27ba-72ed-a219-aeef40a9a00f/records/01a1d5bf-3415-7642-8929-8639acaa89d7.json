@@ -1,0 +1,31 @@
+{
+  "evidencePath" : "output.log",
+  "id" : "01a1d5bf-3415-7642-8929-8639acaa89d7",
+  "finishedAt" : "2026-11-13T16:30:40.278Z",
+  "schema" : "stackly.evidence/v1",
+  "status" : "PASS",
+  "covers" : [
+    "REQ-023",
+    "NFR-012"
+  ],
+  "subjects" : [
+
+  ],
+  "steps" : null,
+  "kind" : "fixture",
+  "actual" : "all expectations passed",
+  "expected" : "The plan sheet marks a create from the lock with · locked, shows each applied override, the lock difference, and a caution for a stale lock",
+  "method" : "automated",
+  "test" : {
+    "package" : null,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+    "language" : "swift",
+    "name" : "EnvironmentLockTests/thePlanSheetShowsTheLockAndTheOverrides()",
+    "target" : "StacklyUITests",
+    "line" : 254
+  },
+  "reviewer" : null,
+  "reason" : null,
+  "startedAt" : "2026-11-13T16:30:40.150Z",
+  "owner" : null
+}

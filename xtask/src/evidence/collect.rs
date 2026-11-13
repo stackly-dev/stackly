@@ -15,7 +15,8 @@ pub struct Collected {
 }
 
 /// Reads every `records/*.json` file (skipping `*.tmp` files that were
-/// never renamed), then checks the records against the run.
+/// never renamed), writes each one back in the form the Rust guard writes
+/// (see [`normalize_raw`]), then checks the records against the run.
 pub fn collect(
     records_dir: &Path,
     context: &RunContext,
@@ -44,10 +45,16 @@ pub fn collect(
         let parsed = fs::read(&path)
             .map_err(|err| err.to_string())
             .and_then(|bytes| {
-                serde_json::from_slice::<EvidenceRecord>(&bytes).map_err(|err| err.to_string())
+                serde_json::from_slice::<EvidenceRecord>(&bytes)
+                    .map(|record| (bytes, record))
+                    .map_err(|err| err.to_string())
             });
         match parsed {
-            Ok(record) => decoded.push(record),
+            Ok((bytes, mut record)) => {
+                normalize_raw(&path, &bytes, &mut record, workspace_root)
+                    .with_context(|| format!("cannot rewrite records/{file_name}"))?;
+                decoded.push(record);
+            }
             Err(err) => problems.push(Problem {
                 code: ProblemCode::InvalidRecord,
                 record_id: id,
@@ -120,6 +127,30 @@ pub fn check(
         records.push(record);
     }
     Collected { records, problems }
+}
+
+/// Writes a raw record back the way the Rust guard writes it, so the
+/// `records/` folder a run leaves can be committed as it is (spec 0002):
+/// `test.file` relative to the workspace root, and the pretty JSON of
+/// [`stackly_evidence::write_json_atomic`]. A Swift helper writes the
+/// absolute `#filePath` of the test and its own timestamp form (`.150Z`
+/// where the report writes `.15Z`); a Rust record is already in this form
+/// and is not touched.
+fn normalize_raw(
+    path: &Path,
+    bytes: &[u8],
+    record: &mut EvidenceRecord,
+    workspace_root: &Path,
+) -> std::io::Result<()> {
+    if let Some(file) = &record.test.file {
+        record.test.file = Some(relative_to(file, workspace_root));
+    }
+    let mut written = serde_json::to_vec_pretty(&*record).map_err(std::io::Error::other)?;
+    written.push(b'\n');
+    if written != bytes {
+        stackly_evidence::write_json_atomic(path, &*record)?;
+    }
+    Ok(())
 }
 
 /// `file` relative to `root` when it is an absolute path under it, with
@@ -274,6 +305,73 @@ mod tests {
         assert_eq!(exit_code(None, Some(15), 0), 143);
         assert_eq!(exit_code(None, None, 0), 1);
         assert_eq!(exit_code(Some(-1), None, 0), 1);
+    }
+
+    #[test]
+    fn a_swift_record_is_written_back_relative_and_in_the_rust_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let id = Uuid::now_v7();
+        let swift = serde_json::json!({
+            "evidencePath": "output.log",
+            "id": id,
+            "finishedAt": "2026-11-13T16:30:43.150Z",
+            "schema": RECORD_SCHEMA,
+            "status": "PASS",
+            "covers": ["NFR-012"],
+            "subjects": [],
+            "steps": null,
+            "kind": "fixture",
+            "actual": "all expectations passed",
+            "expected": "the list shows",
+            "method": "automated",
+            "test": {
+                "language": "swift",
+                "package": null,
+                "target": "StacklyUITests",
+                "name": "Suite/list()",
+                "file": "/repo/apps/macos/Tests/ListTests.swift",
+                "line": 39,
+            },
+            "reviewer": null,
+            "reason": null,
+            "startedAt": "2026-11-13T16:30:40.150Z",
+            "owner": null,
+        });
+        let path = dir.path().join(format!("{id}.json"));
+        fs::write(&path, serde_json::to_vec_pretty(&swift).unwrap()).unwrap();
+
+        let collected = collect(
+            dir.path(),
+            &context(),
+            Kind::Fixture,
+            Path::new("/repo"),
+            Some(0),
+        )
+        .unwrap();
+        assert!(collected.problems.is_empty());
+        let raw = fs::read_to_string(&path).unwrap();
+        assert!(!raw.contains("/repo"), "{raw}");
+        assert!(raw.contains("\"file\": \"apps/macos/Tests/ListTests.swift\""));
+        assert!(
+            raw.contains("\"startedAt\": \"2026-11-13T16:30:40.15Z\""),
+            "{raw}"
+        );
+        assert!(!raw.contains("\"context\""));
+        let again: EvidenceRecord = serde_json::from_str(&raw).unwrap();
+        assert_eq!(again.id, id);
+
+        // A second collect finds it already in the Rust form and leaves it.
+        let before = fs::metadata(&path).unwrap().modified().unwrap();
+        collect(
+            dir.path(),
+            &context(),
+            Kind::Fixture,
+            Path::new("/repo"),
+            Some(0),
+        )
+        .unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), before);
+        assert_eq!(fs::read_to_string(&path).unwrap(), raw);
     }
 
     #[test]

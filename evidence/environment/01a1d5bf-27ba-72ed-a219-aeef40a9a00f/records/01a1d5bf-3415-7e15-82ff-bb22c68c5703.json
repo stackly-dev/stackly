@@ -1,0 +1,30 @@
+{
+  "evidencePath" : "output.log",
+  "id" : "01a1d5bf-3415-7e15-82ff-bb22c68c5703",
+  "finishedAt" : "2026-11-13T16:30:43.576Z",
+  "schema" : "stackly.evidence/v1",
+  "status" : "PASS",
+  "covers" : [
+    "NFR-012"
+  ],
+  "subjects" : [
+
+  ],
+  "steps" : null,
+  "kind" : "fixture",
+  "actual" : "all expectations passed",
+  "expected" : "The Environments list shows each environment with its status and ready count, the empty state with Import…, and the offline state",
+  "method" : "automated",
+  "test" : {
+    "language" : "swift",
+    "package" : null,
+    "target" : "StacklyUITests",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/list()",
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "line" : 39
+  },
+  "reviewer" : null,
+  "reason" : null,
+  "startedAt" : "2026-11-13T16:30:40.150Z",
+  "owner" : null
+}

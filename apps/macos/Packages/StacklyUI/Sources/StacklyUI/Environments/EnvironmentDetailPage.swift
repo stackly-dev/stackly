@@ -122,10 +122,16 @@ struct EnvironmentDetailPage: View {
     private var moreSections: [[StacklyAction]] {
         let model = model
         let reload: @MainActor () -> Void = { run { await model.reloadManifest() } }
+        let lock = EnvironmentFileActions.lockSection(
+            location: model.manifestLocation, lockFile: model.lockFile,
+            isLocking: model.isLocking, isExporting: model.isExporting,
+            lock: { run { await model.lockVersions(refresh: .none) } },
+            update: { run { await model.lockVersions(refresh: .all) } },
+            copy: { run { await model.copyVariables() } })
         return EnvironmentFileActions.sections(
             location: model.manifestLocation, ports: files,
             reload: model.manifestLocation == nil ? nil : reload,
-            remove: removeAction, isReloading: model.isImporting)
+            lock: lock, remove: removeAction, isReloading: model.isImporting)
     }
 
     private var removeAction: StacklyAction? {
@@ -166,6 +172,16 @@ struct EnvironmentDetailPage: View {
             VStack(alignment: .leading, spacing: Spacing.sectionGap) {
                 if let banner = manifestBanner(detail) {
                     banner
+                }
+                if let blockers = model.lockBlockers {
+                    StateBanner(
+                        tone: .critical, title: EnvironmentCopy.lockBlocked(blockers.count),
+                        items: EnvironmentPlanContent.items(blockers),
+                        actions: [
+                            StateAction(
+                                title: "Dismiss", mutates: false,
+                                perform: { model.closeLockBlockers() })
+                        ])
                 }
                 if detail.summary.readyCount > 0,
                     detail.summary.readyCount < detail.summary.serviceCount
@@ -404,10 +420,22 @@ struct EnvironmentDetailPage: View {
                 }
             }
             LabeledContent("Schema") { Text(EnvironmentCopy.schema) }
-            // The Lock and Local override rows of spec 0045 and the Lease row of spec 0047
-            // go below.
+            LabeledContent("Lock") { detailsValue(EnvironmentCopy.lockText(model.lock)) }
+            LabeledContent("Local override") {
+                detailsValue(EnvironmentCopy.localText(model.local))
+            }
+            // The Lease row of spec 0047 goes below.
         }
         .labeledContentStyle(.stackly)
+    }
+
+    /// A monospaced value of the Details section, as the mockup draws the file rows.
+    private func detailsValue(_ text: String) -> some View {
+        Text(text)
+            .stacklyCode()
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .help(text)
     }
 
     private func problemsSection(_ findings: [EnvFinding]) -> some View {

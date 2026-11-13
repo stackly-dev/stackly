@@ -2,7 +2,9 @@
 //! catalog of the six official packages and the fake one, then the plan.
 
 mod common;
+mod edges;
 mod export;
+mod limits;
 mod lock;
 mod plan;
 mod plan_local;

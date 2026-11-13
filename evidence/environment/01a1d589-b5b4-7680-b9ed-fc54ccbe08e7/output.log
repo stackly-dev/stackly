@@ -1,0 +1,42 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 13.20s
+     Running tests/environment.rs (target/debug/deps/environment-a1303bb5cf066120)
+
+running 12 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+test the_reply_of_a_plan_of_32_services_stays_under_900_kib ... ok
+test an_unresolved_selector_names_the_selector_the_manifest_wrote ... ok
+test a_secret_sentinel_in_the_manifest_never_leaves_the_file ... ok
+test a_plan_reads_this_mac_and_starts_no_operation ... ok
+test get_reads_the_manifest_only_when_asked ... ok
+test an_import_registers_the_file_once_and_a_repeated_key_runs_no_second_operation ... ok
+test validate_reads_the_file_answers_every_finding_and_writes_nothing ... ok
+test a_name_at_another_location_is_taken_until_a_relink_moves_it ... ok
+test a_retained_member_blocks_the_plan_and_shows_unavailable ... ok
+test updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it ... ok
+test membership_shows_on_every_summary_and_remove_waits_for_the_lease ... ok
+test the_65th_environment_is_refused ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.60s
+
+     Running tests/environment_edges.rs (target/debug/deps/environment_edges-fd51033c7aa30bbc)
+
+running 8 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+test a_file_over_256_kib_is_too_large_one_at_256_kib_reads_and_a_closed_file_is_denied ... ok
+test a_sentinel_in_a_registered_manifest_reaches_no_reply_audit_or_log ... ok
+test a_file_name_in_another_case_is_the_registered_location ... ok
+test relinks_at_the_same_time_keep_one_environment_and_a_plain_import_is_name_taken ... ok
+test a_pending_or_revoked_local_provider_blocks_the_plan_and_the_plan_never_decides ... ok
+test a_lease_the_guard_did_not_see_still_refuses_the_remove ... ok
+test the_digest_ignores_a_borrowed_instance_starting_and_stopping ... ok
+test membership_loads_again_when_the_daemon_restarts ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.27s
+

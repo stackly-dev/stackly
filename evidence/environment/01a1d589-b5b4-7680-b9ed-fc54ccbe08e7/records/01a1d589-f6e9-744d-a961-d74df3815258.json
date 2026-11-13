@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d589-f6e9-744d-a961-d74df3815258",
+  "covers": [
+    "REQ-020",
+    "VAL-013"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "validate_reads_the_file_answers_every_finding_and_writes_nothing",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 345
+  },
+  "status": "PASS",
+  "expected": "env.validate reads a stackly.yaml through the daemon, answers valid with its services and digest or every finding, refuses an unreadable path with env.manifest_unreadable, and writes no file, registry row, operation, or audit row",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:32:31.081089Z",
+  "finishedAt": "2026-11-13T15:32:32.013132Z",
+  "evidencePath": "output.log"
+}

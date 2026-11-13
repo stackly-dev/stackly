@@ -127,10 +127,57 @@
                 notReady: notReady(.notCreated, detail: nil)),
         ]
 
+        // MARK: - Lock and local override (spec 0045)
+
+        /// The lock file of a detail in `state`: erp-development locks three services for
+        /// Apple silicon.
+        public static func lockInfo(_ state: LockState, targets: [String] = ["macos-aarch64"])
+            -> EnvLockInfo
+        {
+            let readable = state == .inSync || state == .stale
+            return EnvLockInfo(
+                file: "stackly.lock", state: state, targets: readable ? targets : [],
+                services: readable ? 3 : 0)
+        }
+
+        /// The port override of erp-development: `postgres` on 5434.
+        public static let portOverride = PlanOverride(
+            service: "postgres", field: "endpoints.client.port", value: "5434", state: .applied)
+        /// The storage override of erp-development: `cache` data on the external disk.
+        public static let storageOverride = PlanOverride(
+            service: "cache", field: "storage.dataLocation", value: "/Volumes/Fast/Stackly",
+            state: .applied)
+
+        /// The local override file of a detail: `state` `nil` means there is no file.
+        public static func localInfo(
+            _ state: LocalState?, overrides: [PlanOverride] = [], problems: UInt64 = 0
+        ) -> EnvLocalInfo {
+            EnvLocalInfo(
+                file: ".stackly.local.yaml", state: state, overrides: overrides,
+                problems: problems)
+        }
+
+        /// What `env.get` with `checkManifest` answers for the lock and the local file of an
+        /// environment: erp-development is locked with two overrides, reporting's lock is out
+        /// of date, and billing has neither.
+        static func files(_ id: UUID) -> (EnvLockInfo, EnvLocalInfo) {
+            switch id {
+            case erpID:
+                (
+                    lockInfo(.inSync),
+                    localInfo(.present, overrides: [portOverride, storageOverride])
+                )
+            case reportingID: (lockInfo(.stale), localInfo(nil))
+            default: (lockInfo(.absent), localInfo(nil))
+            }
+        }
+
         /// The detail of an environment, with the manifest state `state` (`nil` for a detail
-        /// read without `checkManifest`).
+        /// read without `checkManifest`). The lock and local file come only with a manifest
+        /// that is `in_sync` or `changed`, as the daemon sends them; `files` replaces them.
         public static func detail(
-            _ id: UUID, manifest state: ManifestState? = .inSync, problems: UInt64? = nil
+            _ id: UUID, manifest state: ManifestState? = .inSync, problems: UInt64? = nil,
+            files override: (EnvLockInfo?, EnvLocalInfo?)? = nil
         ) -> EnvironmentDetail? {
             guard let summary = summaries.first(where: { $0.id == id }) else { return nil }
             let services: [EnvironmentService]
@@ -159,10 +206,13 @@
                         instance: serviceInstance(instance(1)), notReady: nil)
                 ]
             }
+            let sendsFiles = state == .inSync || state == .changed
+            let (lock, local): (EnvLockInfo?, EnvLocalInfo?) =
+                override ?? (sendsFiles ? files(id) : (nil, nil))
             return EnvironmentDetail(
                 summary: summary, services: services, detached: detached,
                 manifestState: state, problems: state == .invalid ? (problems ?? 2) : problems,
-                lock: nil, local: nil, lastUp: nil)
+                lock: lock, local: local, lastUp: nil)
         }
 
         // MARK: - Validation
@@ -204,7 +254,8 @@
         private static func create(
             _ alias: String, provider: String, version: String, port: UInt16?,
             secret: (field: String, status: PlanSecretStatus)? = nil,
-            trust: PlanTrust = .trusted, install: Bool = true, prefix: String = "erp-development"
+            trust: PlanTrust = .trusted, install: Bool = true, prefix: String = "erp-development",
+            source: RuntimeSource? = nil
         ) -> PlanItem {
             PlanItem(
                 alias: alias, ownership: .dedicated, action: .create,
@@ -217,7 +268,7 @@
                     selector: "stable", version: version,
                     artifactId: "\(alias)-\(version)-macos-aarch64",
                     artifactSha256: String(repeating: "a", count: 64), install: install,
-                    runtimeId: nil, downloadSize: install ? 104_857_600 : nil, source: nil),
+                    runtimeId: nil, downloadSize: install ? 104_857_600 : nil, source: source),
                 endpoints: [
                     PlanEndpoint(
                         name: "client", host: "127.0.0.1", port: port.map { .fixed($0) } ?? .auto)
@@ -310,6 +361,201 @@
                         ownership: .dedicated)
                 ], needsSecrets: 1, lock: nil, local: nil)
         }
+
+        /// The plan of erp-development with its lock and local file (spec 0045): a keep whose
+        /// runtime differs from the lock, two creates from the lock, one with the port
+        /// override, a new service from the catalog that the lock does not hold yet, and a
+        /// warning of the local file.
+        public static func lockedPlan() -> EnvPlan {
+            let keep = PlanItem(
+                alias: "postgres", ownership: .dedicated, action: .keep, steps: [],
+                instance: PlanInstance(id: instance(1).id, name: "pg17-dev"),
+                provider: "official/postgresql", trust: nil, runtime: nil,
+                endpoints: [PlanEndpoint(name: "client", host: "127.0.0.1", port: .fixed(5432))],
+                secrets: [], waitsFor: [],
+                differences: [PlanDifference(field: "lock", manifest: "17.7", instance: "17.6")],
+                checks: [], providerRevision: nil, storage: nil)
+            let mysql = create(
+                "mysql", provider: "official/mysql", version: "8.4.6", port: 3307,
+                secret: ("rootPassword", .present), install: false, source: .lock)
+            let nats = create(
+                "nats", provider: "official/nats", version: "2.15.1", port: 4222,
+                secret: ("clientPassword", .present), source: .lock)
+            let search = create(
+                "search", provider: "official/clickhouse", version: "25.8.3", port: 8123,
+                secret: ("defaultPassword", .present), source: .catalog)
+            let items = [keep, mysql, nats, search]
+            return EnvPlan(
+                validation: validation(path: manifest("erp")), registration: .registered,
+                environment: EnvironmentRef(id: erpID, name: "erp-development", revision: 2),
+                registeredLocation: manifest("erp"), applicable: true,
+                planDigest: String(repeating: "e", count: 64), items: items,
+                order: items.map(\.alias), blockers: [], detached: [], needsSecrets: 0,
+                lock: PlanLock(
+                    file: "stackly.lock", state: .stale, sha256: String(repeating: "b", count: 64),
+                    locked: false, targets: ["macos-aarch64", "macos-x86_64"],
+                    stale: [LockStaleItem(service: "search", reason: .notLocked)]),
+                local: PlanLocal(
+                    file: ".stackly.local.yaml", state: .present,
+                    sha256: String(repeating: "c", count: 64),
+                    overrides: [
+                        PlanOverride(
+                            service: "mysql", field: "endpoints.client.port", value: "3307",
+                            state: .applied),
+                        PlanOverride(
+                            service: "postgres", field: "endpoints.client.port", value: "5434",
+                            state: .compared),
+                        PlanOverride(
+                            service: "legacy", field: "endpoints.client.port", value: "6000",
+                            state: .ignored),
+                    ],
+                    findings: [
+                        EnvFinding(
+                            severity: .warning, code: "override_unknown_service",
+                            location: "services.legacy", service: "legacy",
+                            message:
+                                "service legacy is not in the manifest, its override is ignored")
+                    ]))
+        }
+
+        /// The same plan with `locked` true and a local file with an error: the stale entry
+        /// and the local file are blockers, and no override shows as applied.
+        public static func lockedBlockedPlan() -> EnvPlan {
+            let plan = lockedPlan()
+            // A local file with an error is not applied, so mysql keeps the manifest port.
+            let mysql = create(
+                "mysql", provider: "official/mysql", version: "8.4.6", port: 3306,
+                secret: ("rootPassword", .present), install: false, source: .lock)
+            let items = (plan.items ?? []).compactMap { item -> PlanItem? in
+                switch item.alias {
+                case "search": nil
+                case "mysql": mysql
+                default: item
+                }
+            }
+            return EnvPlan(
+                validation: plan.validation, registration: plan.registration,
+                environment: plan.environment, registeredLocation: plan.registeredLocation,
+                applicable: false, planDigest: nil, items: items, order: items.map(\.alias),
+                blockers: [
+                    PlanBlocker(
+                        service: "search",
+                        error: error(
+                            "env.lock_stale", .conflict,
+                            "service search is not in the lock",
+                            hint: "run stackly env lock to update the lock")),
+                    PlanBlocker(
+                        service: nil,
+                        error: error(
+                            "env.local_invalid", .invalidInput,
+                            ".stackly.local.yaml has 1 problem",
+                            hint: "fix the local override file")),
+                ], detached: [], needsSecrets: 0,
+                lock: PlanLock(
+                    file: "stackly.lock", state: .stale, sha256: plan.lock?.sha256,
+                    locked: true, targets: plan.lock?.targets, stale: plan.lock?.stale),
+                local: PlanLocal(
+                    file: ".stackly.local.yaml", state: .invalid, sha256: plan.local?.sha256,
+                    overrides: (plan.local?.overrides ?? []).map {
+                        PlanOverride(
+                            service: $0.service, field: $0.field, value: $0.value, state: .ignored)
+                    },
+                    findings: [
+                        EnvFinding(
+                            severity: .error, code: "unknown_endpoint",
+                            location: "services.mysql.endpoints.admin", service: "mysql",
+                            message: "mysql has no IP endpoint named admin")
+                    ]))
+        }
+
+        /// The plan of a manifest that is not valid next to a lock that reads `in_sync` and a
+        /// local file with an applied override (spec 0045 K23): the sheet shows only Problems.
+        public static func invalidLockedPlan() -> EnvPlan {
+            let invalid = invalidPlan(path: manifest("erp"))
+            let locked = lockedPlan()
+            return EnvPlan(
+                validation: invalid.validation, registration: nil, environment: nil,
+                registeredLocation: nil, applicable: false, planDigest: nil, items: [],
+                order: [], blockers: [], detached: [], needsSecrets: 0,
+                lock: PlanLock(
+                    file: "stackly.lock", state: .inSync, sha256: locked.lock?.sha256,
+                    locked: false, targets: locked.lock?.targets, stale: []),
+                local: locked.local)
+        }
+
+        /// What `env.lock` answers for erp-development: three services written.
+        public static func lockResult(written: Bool = true) -> EnvLockResult {
+            let services = [
+                LockedService(
+                    alias: "postgres", provider: "official/postgresql", selector: "17",
+                    version: "17.7", artifactId: "postgresql-17.7-macos-aarch64",
+                    change: written ? .added : .kept, previousVersion: nil),
+                LockedService(
+                    alias: "cache", provider: "official/valkey", selector: "stable",
+                    version: "8.1.4", artifactId: "valkey-8.1.4-macos-aarch64",
+                    change: written ? .added : .kept, previousVersion: nil),
+                LockedService(
+                    alias: "search", provider: "official/clickhouse", selector: "stable",
+                    version: "25.8.3", artifactId: "clickhouse-25.8.3-macos-aarch64",
+                    change: written ? .added : .kept, previousVersion: nil),
+            ]
+            return EnvLockResult(
+                validation: validation(path: manifest("erp")),
+                lockFile: "\(FixtureDetail.home)/Projects/erp/stackly.lock", written: written,
+                changed: written, sha256: String(repeating: "b", count: 64),
+                targets: ["macos-aarch64"], services: services, blockers: [])
+        }
+
+        /// What `env.lock` answers when a provider needs approval: nothing is written.
+        public static func lockBlocked() -> EnvLockResult {
+            EnvLockResult(
+                validation: validation(path: manifest("erp")),
+                lockFile: "\(FixtureDetail.home)/Projects/erp/stackly.lock", written: false,
+                changed: false, sha256: nil, targets: [], services: [],
+                blockers: [
+                    PlanBlocker(
+                        service: "search",
+                        error: error(
+                            "provider.approval_required", .conflict,
+                            "provider acme/search is not approved",
+                            hint: "review the provider in the Catalog"))
+                ])
+        }
+
+        /// What `env.export` answers for erp-development: the three variables of `postgres`,
+        /// or none before Up.
+        public static func export(empty: Bool = false) -> EnvExport {
+            let variables =
+                empty
+                ? []
+                : [
+                    ExportVariable(
+                        name: "STACKLY_POSTGRES_CLIENT_HOST", value: "127.0.0.1",
+                        service: "postgres", endpoint: "client", kind: .host, mayChange: false),
+                    ExportVariable(
+                        name: "STACKLY_POSTGRES_CLIENT_PORT", value: "5432", service: "postgres",
+                        endpoint: "client", kind: .port, mayChange: false),
+                    ExportVariable(
+                        name: "STACKLY_POSTGRES_CLIENT_ADDRESS", value: "127.0.0.1:5432",
+                        service: "postgres", endpoint: "client", kind: .address,
+                        mayChange: false),
+                ]
+            return EnvExport(
+                environment: EnvironmentRef(id: erpID, name: "erp-development", revision: 2),
+                format: .dotenv,
+                text: variables.map { "\($0.name)=\($0.value)\n" }.joined(),
+                variables: variables,
+                skipped: [ExportSkipped(service: "search", endpoint: nil, reason: .notCreated)])
+        }
+
+        /// More than five environments, for the Show All of the Overview (spec 0044 AC-23).
+        public static let manySummaries: [EnvironmentSummary] =
+            summaries
+            + (4...7).map { number in
+                summary(
+                    id: id(UInt8(number)), name: "project-\(number)", folder: "project-\(number)",
+                    status: .down, ready: 0, total: 2)
+            }
 
         /// The plan of a manifest that is not valid: no items, the findings.
         public static func invalidPlan(path: String = manifest("broken")) -> EnvPlan {
