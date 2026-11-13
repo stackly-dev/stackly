@@ -135,7 +135,14 @@ impl Service {
         if let Some((dependency, reason)) = end.dependency {
             report = report.with_dependency(dependency, reason);
         }
-        if let Some(operation) = end.operation.or(self.report.operation()) {
+        // A skipped service never ran a child of its own in the start
+        // stage, so it names no operation, not even its create's.
+        let operation = if end.phase == UpPhase::Skipped {
+            end.operation
+        } else {
+            end.operation.or(self.report.operation())
+        };
+        if let Some(operation) = operation {
             report = report.with_operation(operation);
         }
         if !end.references.is_empty() {
