@@ -54,7 +54,7 @@
     }
   ],
   "detached": [],
-  "manifestState": "in_sync",
+  "manifestState": "changed",
   "problems": 0,
   "lock": {
     "file": "stackly.lock",

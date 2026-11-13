@@ -11,6 +11,11 @@
       "expect": "roundtrip"
     },
     {
+      "file": "plan-locked-blocked.json",
+      "type": "EnvPlan",
+      "expect": "roundtrip"
+    },
+    {
       "file": "validation-invalid.json",
       "type": "EnvValidation",
       "expect": "roundtrip"

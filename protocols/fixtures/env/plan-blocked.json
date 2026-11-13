@@ -198,81 +198,6 @@
         "rule": null,
         "items": []
       }
-    },
-    {
-      "service": "queue",
-      "error": {
-        "code": "env.lock_stale",
-        "category": "conflict",
-        "message": "the lock does not match this service",
-        "retryable": false,
-        "resource": null,
-        "fields": [],
-        "hint": "run stackly env lock, then commit stackly.lock",
-        "details": [
-          {
-            "key": "service",
-            "value": "queue"
-          },
-          {
-            "key": "reason",
-            "value": "not_locked"
-          }
-        ],
-        "operationId": null,
-        "rule": null,
-        "items": []
-      }
-    },
-    {
-      "service": "postgres",
-      "error": {
-        "code": "env.lock_no_artifact",
-        "category": "unsupported",
-        "message": "the lock has no artifact for this mac",
-        "retryable": false,
-        "resource": null,
-        "fields": [],
-        "hint": "the lock has no artifact this Mac can use; update Stackly, or lock again on this Mac",
-        "details": [
-          {
-            "key": "service",
-            "value": "postgres"
-          },
-          {
-            "key": "target",
-            "value": "macos-aarch64"
-          },
-          {
-            "key": "lockedTargets",
-            "value": "macos-x86_64"
-          }
-        ],
-        "operationId": null,
-        "rule": null,
-        "items": []
-      }
-    },
-    {
-      "service": null,
-      "error": {
-        "code": "env.local_invalid",
-        "category": "invalid_input",
-        "message": "the local override file has errors",
-        "retryable": false,
-        "resource": null,
-        "fields": [],
-        "hint": "fix each finding of .stackly.local.yaml",
-        "details": [
-          {
-            "key": "errors",
-            "value": "1"
-          }
-        ],
-        "operationId": null,
-        "rule": null,
-        "items": []
-      }
     }
   ],
   "detached": [
@@ -288,39 +213,11 @@
   "needsSecrets": 1,
   "lock": {
     "file": "stackly.lock",
-    "state": "stale",
-    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "locked": true,
-    "targets": [
-      "macos-aarch64"
-    ],
-    "stale": [
-      {
-        "service": "queue",
-        "reason": "not_locked"
-      }
-    ]
+    "state": "absent",
+    "sha256": null,
+    "locked": false,
+    "targets": [],
+    "stale": []
   },
-  "local": {
-    "file": ".stackly.local.yaml",
-    "state": "invalid",
-    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac",
-    "overrides": [],
-    "findings": [
-      {
-        "severity": "warning",
-        "code": "override_unknown_service",
-        "location": "services.ghost",
-        "service": null,
-        "message": "the manifest declares no service of this name; the override is ignored"
-      },
-      {
-        "severity": "error",
-        "code": "unknown_endpoint",
-        "location": "services.postgres.endpoints.admin",
-        "service": "postgres",
-        "message": "the provider has no endpoint of this name"
-      }
-    ]
-  }
+  "local": null
 }
