@@ -160,6 +160,14 @@ Temuan kecil yang juga diterapkan: guard `Manual` pada instance yang sudah diam 
 
 Yang dikonfirmasi benar tanpa perubahan: pemetaan `LeaseCheck::None` untuk restart, sub langkah `apply_config` dan `change_endpoints`, start yang dibatalkan, rekonsiliasi, restart terencana, dan akhir sesi; wake, handover, dan handler exit tidak pernah menulis desired `stopped`; kedua urutan Up A dan Down B konsisten; dua Down, Down terhadap Up nya sendiri, dan Down terhadap start, stop, atau restart pengguna konsisten; Up ditolak selagi Down antre atau berjalan; Down yang antre tidak memegang slot pengatur. Keputusan K1 sampai K16 tidak berubah; hanya teks K15 yang disesuaikan (tanpa cabang `recover` baru).
 
+## Perubahan 2026-11-13 (perapian sesudah update spec lain)
+
+Tiga perapian teks atas permintaan lead, dari temuan sesi `arc-update-all`. Keputusan K1 sampai K16 dan setiap AC tidak berubah.
+
+- Nama kolom lease disamakan dengan spec 0005: Down menulis `state` `released` dan `state_changed_at`, bukan `released_at` (*Model data*, *Value sourcing*).
+- Satu Follow-up baru: rollback config spec 0029 AC-8 bisa memulihkan port lama pada instance ber lease, dan aturannya belum diputuskan.
+- "Activity" dijelaskan sekali di *Layar*: yang dimaksud halaman Operations spec 0035.
+
 ## Bahan yang dibaca
 
 - `docs/scope/08-environment-proyek.md` fitur 47; `prd.md` REQ-022, REQ-028, BR-006, BR-014, BR-015, VAL-014, AC-022, AC-073, bagian 13.2 (hanya sebagai input spec).
