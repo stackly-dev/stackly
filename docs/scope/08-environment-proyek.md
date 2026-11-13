@@ -22,7 +22,7 @@ Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, s
 - [ ] Verify it: `/check verify manifest environment: validate & plan`
 - [ ] Test it: `/test manifest environment: validate & plan`
 
-### 45. Lockfile & override lokal · needs a decision
+### 45. Lockfile & override lokal · in-progress
 
 Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, runtime, dan digest per platform, dan `.stackly.local.yaml` untuk override lokal. `stackly env up --locked` tidak pernah melakukan resolusi ulang.
 
@@ -30,7 +30,15 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 
 **Trace:** REQ-023, REQ-028, BR-018, AC-023, AC-080, PRD bagian 13.1 dan 13.3
 
-- [ ] Design it (spec): `/architect lockfile & override lokal`
+**Pointer:** spec [0045](../specs/0045-lockfile-override-lokal/index.md)
+
+- [x] Design it (spec): `/architect lockfile & override lokal`
+- [ ] Build it: `/develop lockfile & override lokal`
+  - [ ] Lock, override, dan export di daemon: `environment::lock` (loader, emitter, state, entri yang dipertahankan) dengan JSON Schema, plan dengan lock dan `locked` (*Runtime dari lock*, blocker, `planDigest`), `environment::local` dan `CreateDraft.data_location`, `lock_sha256` di `Environment`, `environment::export` lewat `Redactor`, kenaikan minor protokol dengan `env.lock`, `env.export`, dan kode `env.*` baru, lalu handler, test tanpa efek samping, test sentinel, dan skenario root A ke root B (spec 0045 AC-1 sampai AC-15, AC-20, AC-21; build steps 1 to 6; needs spec 0044 build steps 1 to 5)
+  - [ ] `stackly env lock`, `plan --locked`, `export`: flag `--update` dan `--service`, kolom `SOURCE` dan baris `lock:` serta `local:`, kode `cli.env_lock_blocked` dan `cli.env_locked_unsupported`, golden dan binary test (spec 0045 AC-6, AC-16, AC-17; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
+  - [ ] Lock dan override di app: baris Lock dan Local override, Lock Versions, Update Lock…, Copy Environment Variables, tambahan sheet plan, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0045 AC-18, AC-19, AC-21; build steps 8 to 9; after build step 5 dan milestone app spec 0044; evidence manual needs build step 6; override storage sampai instance needs Up spec 0046)
+- [ ] Verify it: `/check verify lockfile & override lokal`
+- [ ] Test it: `/test lockfile & override lokal`
 
 ### 46. Env up & dependency graph · needs a decision
 
