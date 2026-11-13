@@ -27,7 +27,7 @@ Spec ini menetapkan `stackly.yaml`, file yang mendeskripsikan service sebuah pro
 - **AC-6** (plan tanpa efek samping, PRD AC-020, AC-080 bagian plan, REQ-020): `env.validate` dan `env.plan` tidak mengunduh, tidak memanggil `ProcessSupervision`, tidak memberi atau mengubah approval, tidak menulis registry (termasuk operasi, audit, dan pin provider), tidak menulis Keychain, dan tidak membuat, mengubah, atau menghapus satu file atau folder pun di data root, cache root, log root, maupun folder manifest. Satu satunya sentuhan ke sistem adalah trial bind port yang sudah dipakai `instance.preflight` (soket dibuka lalu langsung ditutup). Test membandingkan pohon file test root (path, ukuran, mtime) dan generation registry sebelum dan sesudah, dan memeriksa nol panggilan pada fake `Downloader`, `ProcessSupervision`, dan `SecretStore::write`.
 - **AC-7** (blocker sebelum mutasi, VAL-013): plan menandai `applicable` false dan mengisi `blockers` (satu `ErrorBody` per masalah, dengan alias service nya) saat: port fixed sebuah service `create` bentrok dengan port instance terdaftar mana pun, termasuk member environment ini (`supervisor.endpoint_conflict`), atau sedang dipakai proses lain (`supervisor.endpoint_in_use`); provider nya `pending` atau `revoked` (`provider.approval_required`, `provider.revoked`); selector tidak bisa di resolve atau artefaknya tidak installable (`runtime.selector_unresolved`, `runtime.selector_ambiguous`, `catalog.not_installable`); nama instance sudah dipakai instance lain (`instance.name_taken`); provider tanpa `multi_instance` sudah punya instance (`instance.capability_unsupported`); atau nama environment terdaftar di lokasi lain (`env.name_taken`). Kode nya sama dengan yang dipakai create dan resolve, jadi GUI dan CLI menampilkan pesan dan hint yang sama.
 - **AC-8** (`instanceRef`, VAL-014): service dengan `instanceRef` tidak boleh membawa `version`, `instanceName`, `endpoints`, `settings`, `secretRefs`, atau `storage` (finding `instance_ref_conflict`), jadi environment peminjam secara struktur tidak bisa mengubah instance itu. Saat plan, instance bernama itu harus ada di registry user ini (`env.instance_ref_not_found`) dan provider nya harus sama dengan `provider` service (`env.instance_ref_mismatch`). Item nya `start` atau `keep` menurut tabel *Lifecycle ke aksi*, tidak pernah `create`.
-- **AC-9** (member yang sudah ada): untuk environment terdaftar, service yang alias nya sudah punya member diberi `keep` atau `start` menurut tabel *Lifecycle ke aksi*, tanpa menjalankan evaluasi create. Kalau manifest berbeda dari instance nya menurut *Aturan `differences`*, item membawa `differences` (`field`, `manifest`, `instance`); perbedaan tidak pernah menjadi blocker dan Stackly tidak pernah mengubah instance supaya cocok. Member yang alias nya tidak lagi ada di manifest masuk `EnvPlan.detached` (alias, instance, ownership) dan tidak disentuh.
+- **AC-9** (member yang sudah ada): untuk environment terdaftar, service yang alias nya sudah punya member diberi `keep` atau `start` menurut tabel *Lifecycle ke aksi*, tanpa menjalankan evaluasi create. Member atau `instanceRef` yang tidak bisa dinyalakan (lifecycle `unknown` atau `retained`, data belum initialized, atau blocker instance) menjadi blocker `env.instance_blocked` menurut tabel yang sama *(kasus belum initialized ditambah 2026-11-13)*. Kalau manifest berbeda dari instance nya menurut *Aturan `differences`*, item membawa `differences` (`field`, `manifest`, `instance`); perbedaan tidak pernah menjadi blocker dan Stackly tidak pernah mengubah instance supaya cocok. Member yang alias nya tidak lagi ada di manifest masuk `EnvPlan.detached` (alias, instance, ownership) dan tidak disentuh.
 - **AC-10** (reference secret di plan): setiap `secretRefs` sebuah item `create` tampil dengan `status` `present`, `missing` (terdaftar tanpa nilai), `unregistered` (tidak ada di registry), atau `unknown` (store tidak bisa ditanya), dibaca tanpa dialog Keychain. Status selain `present` menaikkan `EnvPlan.needsSecrets` dan tidak mengubah `applicable`. Reference `present` juga selalu ditampilkan GUI dan CLI ("Uses secret {reference}"), supaya manifest dari orang lain tidak bisa memakai secret yang sudah kamu simpan tanpa kamu lihat. Secret field paket yang tidak ditulis di `secretRefs` tampil dengan `status` `generated` (dibangkitkan lokal saat create, aturan spec 0011 AC-6). Plan tidak pernah mengusulkan nilai kosong.
 - **AC-11** (identitas dan keunikan): identitas environment adalah baris `environments` (`id` UUID v7); `name` unik lewat unique index dan diambil dari `metadata.name`. Manifest dicocokkan ke environment terdaftar lewat nama. Kalau nama itu terdaftar dengan `manifest_location` lain, plan membawa blocker `env.name_taken` dan import ditolak dengan kode yang sama, kecuali import dikirim dengan `relinkEnvironmentId` berisi id environment itu, yang memindahkan `manifest_location` ke file baru tanpa mengubah `id`, member, atau lease. Relink ditolak `env.relink_mismatch` kalau `metadata.name` file berbeda dari nama environment itu. `manifest_location` unik di antara environment: import yang lokasinya sudah dipegang environment lain (file itu kini mendeklarasikan nama lain) mengosongkan lokasi environment lama dalam commit yang sama, sehingga environment lama tampil `missing`. Lokasi disimpan dan dibandingkan sebagai folder induk yang sudah di canonicalize (lewat port `Filesystem`, tanpa mengikuti komponen terakhir) ditambah nama file, supaya `/tmp` dan `/private/tmp` atau beda huruf besar di APFS tidak terbaca sebagai dua lokasi.
 - **AC-12** (import): `env.import { path, expectedManifestSha256, relinkEnvironmentId? }` menjalankan operasi `import_environment` yang membaca dan memvalidasi ulang file, menolak `env.manifest_changed` kalau digest nya berbeda dan `env.manifest_invalid` kalau ada finding `error`, lalu lewat `commit_guarded` menulis atau memperbarui baris `environments` (nama, lokasi, `manifest_sha256`, snapshot `services`) tanpa member. Guard menolak nama yang terdaftar di lokasi lain (kecuali relink ke id itu) dan environment ke 65 (`env.limit_reached`). Import tidak memasang runtime, tidak membuat instance, tidak mengambil lease, dan tidak mengubah trust. Permintaan ulang dengan idempotency key yang sama tidak memulai operasi kedua, dan import file yang digest dan lokasinya sama dengan yang tersimpan tidak mengubah baris `environments` (revision tetap); operasi dan baris auditnya tetap tercatat.
@@ -185,7 +185,11 @@ Plan = validate, lalu untuk manifest yang valid:
 
 3. `order` lewat urutan topologis `dependsOn` dengan pemutus seri urutan manifest; `waitsFor` per item.
 4. `applicable` benar kalau manifest valid dan `blockers` kosong.
-5. `planDigest`: SHA-256 dari JSON dengan key terurut (encoding yang sama dengan `crates/protocol/src/fingerprint.rs`) atas `manifestSha256`, `registration`, dan per item `alias`, `action`, `steps`, `instance`, `runtime.artifactSha256`, `runtime.install`, dan `endpoints`, tanpa teks check dan tanpa status secret. Hanya ada saat `applicable`.
+5. `planDigest`: SHA-256 dari JSON dengan key terurut (encoding yang sama dengan `crates/protocol/src/fingerprint.rs`) atas `manifestSha256`, `registration`, dan satu entri per item dalam urutan manifest, tanpa teks check dan tanpa status secret. Hanya ada saat `applicable`. Isi entri bergantung pada jenis item *(diubah 2026-11-13, usulan spec 0046)*:
+   - Item `create`: `alias`, `kind` `"create"`, `steps`, `instance` (nama), `runtime.artifactSha256`, `runtime.install`, dan `endpoints`.
+   - Item untuk instance yang sudah ada (member atau `instanceRef`, `action` `start` atau `keep`): hanya `alias`, `kind` `"existing"`, dan `instance` (`id` dan nama). `action`, `steps`, dan `endpoints` nya tidak ikut dihitung, karena ketiganya turunan keadaan instance saat itu (lifecycle dan port efektif) dan Up spec 0046 menurunkan aksinya lagi saat giliran service itu tiba. Instance yang berhenti, menyala, atau mendapat port `auto` baru di antara plan dan Bring Up karena itu tidak mengubah digest.
+   - Instance yang sudah ada dan berpindah ke keadaan yang menjadi blocker (tabel di bawah) tetap menghentikan Up, karena plan yang dihitung ulang tidak `applicable` lagi.
+   - Spec 0045 menambah masukan nya sendiri (`locked`, digest lock dan override lokal, dan per item `create` sumber runtime, revision provider, dan lokasi storage).
 
 **Lifecycle ke aksi** (untuk instance yang sudah ada, member maupun `instanceRef`):
 
@@ -193,12 +197,15 @@ Plan = validate, lalu untuk manifest yang valid:
 | --- | --- | --- |
 | `running` | `keep` | `not_ready` kalau readiness bukan `ready` |
 | `starting`, `initializing`, `recovering` | `keep` | `starting` |
-| `stopped`, `uninitialized` | `start` | `stopped` |
+| `stopped` | `start` | `stopped` |
+| `uninitialized` | blocker `env.instance_blocked` dengan `reason` `not_initialized`; item tetap ada dengan `action` `keep` | `stopped` |
 | `failed` | `start` | `failed` |
 | `stopping` | `start` | `stopping` |
 | `unknown`, `retained` | blocker `env.instance_blocked` dengan `reason` lifecycle nya; item tetap ada dengan `action` `keep` | `unavailable` |
 
 Instance yang `InstanceSummary.blocker` nya terisi (misalnya drift spec 0029 atau data tidak kompatibel spec 0025) dan aksinya `start` juga menjadi blocker `env.instance_blocked`, dengan `reason` kode blocker itu, karena start nya pasti ditolak.
+
+Instance yang datanya belum initialized juga blocker `env.instance_blocked` dengan `reason` `not_initialized` *(ditambah 2026-11-13, usulan spec 0046)*: lifecycle `uninitialized` (baris tabel di atas), dan lifecycle `stopped` atau `failed` yang `data_initialized_at` nya kosong (`InstanceSummary.initialized` false). `start_instance` selalu menolak keduanya (`supervisor.not_initialized`, atau invariant BR-008 `DataNotInitialized`), dan environment tidak pernah menginisialisasi instance yang sudah ada; jalannya adalah alur instance itu sendiri (Retry create, atau hapus lalu biarkan Up membuatnya lagi). Item nya tetap ada dengan `action` `keep`. Lifecycle `initializing` tidak berubah: `keep`, karena create yang sedang berjalan akan menyelesaikannya. Kalau satu instance kena lebih dari satu aturan, urutannya: lifecycle `unknown` atau `retained`, lalu `not_initialized`, lalu blocker instance; hanya satu blocker `env.instance_blocked` per service.
 
 **Aturan `differences`** (hanya untuk member; `field` salah satu dari nilai di bawah, `manifest` dan `instance` teks tampilan):
 
@@ -210,7 +217,7 @@ Instance yang `InstanceSummary.blocker` nya terisi (misalnya drift spec 0029 ata
 | `ownership` | ownership member berbeda dari ownership service (misalnya member `dedicated` tetapi service kini `instanceRef`) |
 | `instanceRef` | service shared menunjuk nama yang berbeda dari nama instance member |
 
-Settings dan `secretRefs` tidak dibandingkan di v1alpha1.
+Settings dan `secretRefs` tidak dibandingkan di v1alpha1. Spec 0045 menambah `field` `lock` (runtime member berbeda dari artefak yang dikunci).
 
 **Evaluasi create di dalam plan.** Draft dibuat dari service: `name` nama efektif, `provider` entri catalog, `endpoints` dari manifest, `settings` dari manifest, setiap `secretRefs` sebagai `SecretSourceKind::Bind(reference)` dan secret field lain `Generate`, `start` true, `startup` manual. `CreateDraft` tidak berubah. Untuk runtime yang belum terpasang, `gather` mendapat varian `gather_planned(deps, draft, PlannedRuntime)` yang mengisi `CreateFacts.planned_runtime` (versi, line, dan software dari artefak catalog) dan `runtime_row` memberi status ok dengan detail "will be installed" saat field itu terisi, tanpa cek program di folder runtime; `draft.runtime_id` saat itu berisi ID placeholder (pola `placeholder_instance_id`) yang tidak pernah sampai ke jurnal, karena plan tidak memulai operasi. `instance.preflight` dan `instance.create` tidak pernah mengisi `planned_runtime`, dan golden mereka tidak berubah. Cek disk tetap aturan create per instance; plan tidak menjumlah ukuran unduhan.
 
@@ -306,7 +313,7 @@ Area baru `env` (pemilik spec ini; ditambahkan ke `AREAS`). Semua `retryable` fa
 | `env.lease_active` | `conflict` | remove saat masih ada lease | `count`; `items` ber kind `instance` (`instanceId`, `name`), paling banyak 32 |
 | `env.instance_ref_not_found` | `not_found` | blocker plan: `instanceRef` tidak ada | `service`, `instanceRef` |
 | `env.instance_ref_mismatch` | `conflict` | blocker plan: provider instance berbeda | `service`, `expected`, `actual` |
-| `env.instance_blocked` | `conflict` | blocker plan: instance member atau `instanceRef` tidak bisa dinyalakan (*Aksi plan*) | `service`, `instance`, `reason` |
+| `env.instance_blocked` | `conflict` | blocker plan: instance member atau `instanceRef` tidak bisa dinyalakan (*Aksi plan*) | `service`, `instance`, `reason`: lifecycle (`unknown`, `retained`), `not_initialized`, atau kode blocker instance |
 | `env.manifest_renamed` | `conflict` | blocker plan: sumber `registered` tetapi file nya mendeklarasikan nama lain | `declared`, `registered` |
 | `env.relink_mismatch` | `conflict` | relink ke environment yang namanya berbeda dari `metadata.name` file | `declared`, `registered` |
 
@@ -385,7 +392,7 @@ Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris dari
 | list, get | `readyCount`, `status`, `notReady` | snapshot `services`, `environment_instances`, dan status instance di supervisor |
 | get | `manifestState`, `problems` | *State manifest*; hanya saat `checkManifest` true |
 | plan | `PlanEndpoint.host` | `defaultHost` endpoint di paket provider |
-| plan | `keep`, `start`, blocker instance | tabel *Lifecycle ke aksi* atas lifecycle dan `blocker` instance |
+| plan | `keep`, `start`, blocker instance | tabel *Lifecycle ke aksi* atas lifecycle, `data_initialized_at` (`InstanceSummary.initialized`), dan `blocker` instance |
 | import | snapshot | `services` hasil validate file yang sama |
 | GUI | "{file}" | `manifestLocation` dengan home diganti `~` di klien |
 | GUI | software dan versi di sheet | `DisplayNames` catalog (spec 0017) dan `runtime.version` |
@@ -420,33 +427,38 @@ Tidak ada variabel environment atau credential baru.
 - Plan dan validate terhadap test root: pohon file dan generation registry sama sebelum dan sesudah, fake downloader, supervision, dan secret write nol panggilan; verifies **AC-4**, **AC-6**.
 - Blocker: port fixed bentrok dengan instance lain, provider lokal `pending`, selector tanpa artefak, nama instance terpakai, nama environment di lokasi lain; `applicable` false dan kode sesuai; verifies **AC-7**, **AC-11**.
 - `instanceRef`: tidak ada, provider berbeda, field terlarang, instance berjalan (`keep`) dan berhenti (`start`); verifies **AC-8**.
-- Environment dengan member (registry test menulis member langsung): setiap baris *Lifecycle ke aksi*, instance ber `blocker`, setiap `field` `differences`, port fixed service baru yang sama dengan port member (blocker), dan `detached`; summary dari event membawa `environments` yang sama dengan `instance.list`; verifies **AC-9**, **AC-14**, **AC-15**.
+- Environment dengan member (registry test menulis member langsung): setiap baris *Lifecycle ke aksi*, instance `uninitialized` dan instance `stopped` tanpa data (blocker `not_initialized`), instance ber `blocker`, setiap `field` `differences`, port fixed service baru yang sama dengan port member (blocker), dan `detached`; summary dari event membawa `environments` yang sama dengan `instance.list`; verifies **AC-9**, **AC-14**, **AC-15**.
 - Reference `present`, `missing`, `unregistered`, dan field tanpa `secretRefs` (`generated`); `needsSecrets` benar dan `applicable` tetap true; verifies **AC-10**.
 - Import: baru, sama (revision tetap), berubah, relink (termasuk nama berbeda dan lokasi yang sudah dipegang environment lain), `/tmp` lawan `/private/tmp`, digest berbeda, tidak valid, environment ke 65, key yang sama dua kali; verifies **AC-12**.
 - Remove: dengan lease `active` ditolak; tanpa lease menghapus baris dan demand `released`, instance dan data tetap, ownership kembali `manual`; verifies **AC-13**.
 - CLI: golden manusia dan `--json` untuk validate valid dan tidak valid, plan applicable, blocked, dan tidak valid, dengan exit code; binary test membandingkan `result` CLI dengan balasan daemon; verifies **AC-16**, **AC-17**.
 - Snapshot GUI terang, gelap, dan sempit: daftar kosong dan terisi, detail ready, partially ready, dan down, setiap banner manifest, sheet plan dengan ketiga kata kerja, blocker, dan Problems, Overview dengan seksi Environments; verifies **AC-18** sampai **AC-23**.
+- `planDigest`: sama saat member berpindah `stopped` ke `running` dan saat port efektif member berubah; berbeda saat item `create` berubah (endpoint, artefak, `install`) dan saat sebuah member diganti instance lain; verifies **AC-5**, **AC-9**.
 - Kontrak: fixture `protocols/fixtures/env/` terbaca Rust dan Swift, `cargo xtask codegen --check`, test anggaran frame, klien lama membaca `ownership` baru sebagai `unrecognized`; verifies **AC-24**.
 
 ### Titik sambung untuk spec 0045, 0046, 0047
 
-**Spec 0045 (lockfile dan override)**
+**Spec 0045 (lockfile dan override)** *(diselaraskan 2026-11-13 dengan spec 0045 yang sudah diterima; spec 0045 yang berlaku kalau ada beda)*
 
-- Plan menerima masukan tambahan di satu tempat: `environment::plan::PlanInputs { manifest, lock: Option<..>, overrides: Option<..> }`. Fitur ini selalu mengirim `None`; spec 0045 mengisi keduanya dari `stackly.lock` dan `.stackly.local.yaml` di folder manifest dan menambah field ke `EnvPlan` (minor protokol).
-- Selector: `PlanRuntime.selector` adalah teks manifest; `version` dan `artifactId` adalah hasil resolve. Lock menggantikan pemanggilan `runtime::resolve` dengan artefak yang dikunci; revision provider untuk validasi diambil dari entri catalog sampai lock mem pin nya.
-- Override port dan storage masuk sebelum evaluasi create (mengganti `endpoints` draft), tidak pernah mengubah `manifestSha256` atau snapshot.
-- `environments.lock_sha256` belum diisi. JSON Schema lockfile ditaruh di `schemas/environment/` di samping `environment.v1alpha1.schema.json`.
-- UI: baris Lock dan Local override di seksi Details; `EnvFinding.severity` `warning` tersedia; `stackly env lock` dan `export` masuk grup `apps/cli/src/commands/env/`.
+- Plan menerima masukan tambahan di satu tempat: `environment::plan::PlanInputs { manifest, lock, overrides, locked }`. Fitur ini selalu mengirim `lock` dan `overrides` kosong dan `locked` false; spec 0045 mengisinya dari `<stem>.lock` dan `.<stem>.local.yaml` di folder manifest dan dari `EnvPlanParams.locked`.
+- Field yang spec 0045 tambahkan (minor protokol sendiri, semuanya `#[serde(default)]`): `EnvPlan.lock: PlanLock` dan `EnvPlan.local?: PlanLocal`; `PlanItem.providerRevision?` dan `PlanItem.storage?`; `PlanRuntime.source` (`lock` atau `catalog`); nilai `lock` untuk `PlanDifference.field`; `EnvironmentDetail.lock?` dan `local?`; `EnvironmentSummary.lockSha256?`.
+- Selector: `PlanRuntime.selector` adalah teks manifest; `version` dan `artifactId` adalah hasil resolve. Untuk service yang entri lock nya cocok, spec 0045 mengganti pemanggilan `runtime::resolve` atas selector dengan jalur digest atas artefak yang dikunci, dan memeriksa revision provider entri catalog terhadap lock.
+- Override port mengganti permintaan port draft create sebelum evaluasi; override storage masuk lewat `CreateDraft.data_location` (field baru spec 0045, dibaca `gather_locations`). Keduanya tidak pernah mengubah `manifestSha256` atau snapshot.
+- `planDigest`: spec 0045 menambah `locked`, `lock.sha256`, `local.sha256`, dan per item `create` `runtime.source`, `providerRevision`, dan `storage.locationId`.
+- `environments.lock_sha256` tidak diisi fitur ini. Spec 0045 menambah argumen `lock_sha256` ke `Environment::set_manifest` dan `environment::register`; Up spec 0046 yang mengisinya, dan import meneruskan nilai yang tersimpan. JSON Schema lock dan override ditaruh di `schemas/environment/` di samping `environment.v1alpha1.schema.json`.
+- CLI dan UI: `stackly env lock` dan `export` masuk grup `apps/cli/src/commands/env/`; `stackly env plan` mendapat `--locked`, kolom `SOURCE`, dan baris `lock:` serta `local:`; seksi Details mendapat baris Lock dan Local override; menu More mendapat Lock Versions, Update Lock…, dan Copy Environment Variables; sheet plan mendapat catatan lock dan override. `EnvFinding.severity` `warning` dipakai finding file override.
 
-**Spec 0046 (up dan graph)**
+**Spec 0046 (up dan graph)** *(diselaraskan 2026-11-13 dengan spec 0046 yang sudah diterima; spec 0046 yang berlaku kalau ada beda)*
 
-- `env.up` menerima `source: EnvSource` dan `expectedPlanDigest`; daemon menghitung ulang plan dan menolak kalau digest berbeda. Up untuk manifest yang belum terdaftar memanggil `environment::register` yang sama dengan import di dalam operasinya.
-- `PlanItem` adalah daftar kerja: `create` (dengan `runtime.install`), `start`, `keep`; `order` dan `waitsFor` adalah graph nya; `ServiceDependency.timeoutSeconds` kosong berarti default yang diputuskan spec 0046.
-- Up yang menulis member juga menulis snapshot (`Environment::set_manifest`) dan `manifest_sha256`; `dependency_conditions` dan `last_operation_id` milik spec 0046.
-- `PlanSecretStatus` selain `present` dan `generated` adalah bahan status needs secret; `secretRefs` dikirim ke create sebagai `SecretInput::Bind`.
-- `EnvPlan.detached` dan `PlanItem.differences`: aturan fitur ini adalah "tidak disentuh". Kalau Up ingin melepas member `detached`, itu keputusan spec 0046.
-- `EnvironmentStatus` dan `NotReadyReason` enum terbuka untuk nilai baru; `EventKind` baru untuk environment berarti kenaikan major dan diputuskan di sana.
-- UI: tombol Up… di toolbar menggantikan Plan… (sheet yang sama mendapat Bring Up), item menu "Create with Up…" menggantikan Show Plan…, banner partially ready mendapat alasan dari operasi Up, dan kalimat onboarding.
+- `env.up { source, expectedPlanDigest, locked, idempotencyKey }`: daemon menghitung ulang plan dan menolak dengan `env.plan_blocked` kalau tidak `applicable` atau `env.plan_changed` kalau digest berbeda (kedua kode milik spec 0046). Up untuk manifest yang belum terdaftar memanggil `environment::register` yang sama dengan import di dalam operasinya.
+- `PlanItem` adalah daftar kerja: `create` (dengan `runtime.install`), dan instance yang sudah ada; `order` dan `waitsFor` adalah graph nya. Untuk instance yang sudah ada, Up menurunkan aksinya dari lifecycle saat giliran service itu tiba dengan tabel *Lifecycle ke aksi*, bukan dari `action` plan; karena itu `planDigest` tidak memuat `action`, `steps`, dan `endpoints` item itu (*Aksi plan*, langkah 5).
+- `ServiceDependency.timeoutSeconds` kosong berarti default spec 0046 (600 detik).
+- Up yang menulis member juga menulis snapshot (`Environment::set_manifest`) dan `manifest_sha256`; `dependency_conditions`, `last_operation_id`, dan `last_up` milik spec 0046. Draft create dibangun `environment::plan::draft_for`, fungsi yang sama untuk plan dan Up.
+- `PlanSecretStatus` `missing` dan `unregistered` membuat `env.up` ditolak `secret.needs_secret`; `unknown` tidak. `secretRefs` dikirim ke create sebagai `SecretInput::Bind`.
+- `EnvPlan.detached` dan `PlanItem.differences`: tidak disentuh Up; member `detached` tetap memegang lease nya sampai Down.
+- Field dan nilai yang spec 0046 tambahkan (minor protokol sendiri): `EnvironmentSummary.activeOperation?`; `EnvironmentDetail.lastUp?`; `ServiceInstance.endpoints`; `ServiceNotReady` dengan `phase?`, `waitingOn`, `references`, `dependency?`, `dependencyReason?`, `stage?`, `code?`, `operationId?`; nilai `NotReadyReason` `bringing_up`, `needs_secret`, `dependency_not_ready`, `up_failed`. Tidak ada `EventKind` baru.
+- CLI: `stackly env up` dan `status` memakai resolver target yang juga menerima path sebagai argumen posisi; `stackly env plan` ikut memakai resolver itu saat langkah CLI spec 0046 dibangun. Sampai saat itu bentuk AC-16 yang berlaku.
+- UI: tombol Up… di toolbar menggantikan Plan… (sheet yang sama mendapat Cancel dan Bring Up), item menu "Create with Up…" menggantikan Show Plan…, catatan kaki sheet berganti, banner partially ready mendapat alasan dari operasi Up, dan kalimat onboarding.
 
 **Spec 0047 (down dan lease)**
 
@@ -540,8 +552,8 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 ## Follow-up
 
 - [ ] Lead: tetapkan nomor minor protokol dan nomor migrasi saat build, dan terapkan *Update spec lain* lewat `architect (update)`.
-- [ ] Spec 0045: isi `PlanInputs.lock` dan `overrides`, baris Lock dan Local override, schema lockfile.
-- [ ] Spec 0046: `env.up` dengan `expectedPlanDigest`, penulisan member dan snapshot, default `timeoutSeconds`, nasib member `detached`, tombol Up… dan Bring Up, kalimat onboarding.
+- [x] Spec 0045: isi `PlanInputs.lock` dan `overrides`, baris Lock dan Local override, schema lockfile. Dijawab spec 0045 (2026-11-13); *Titik sambung* di atas sudah diselaraskan.
+- [x] Spec 0046: `env.up` dengan `expectedPlanDigest`, penulisan member dan snapshot, default `timeoutSeconds`, nasib member `detached`, tombol Up… dan Bring Up, kalimat onboarding. Dijawab spec 0046 (2026-11-13); dua usulan perilakunya (masukan `planDigest`, instance belum initialized) diterapkan di *Aksi plan*.
 - [ ] Spec 0047: tombol Down, baris Lease, jawaban Follow-up spec 0026 tentang restart pada instance yang dipinjam.
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa `env.validate` dan `env.plan` read only dan bukan operasi, bahwa plan memakai `gather` dan `evaluate` create, dan perintah `stackly env`.
 
