@@ -11,7 +11,7 @@ mod common;
 #[path = "supervisor/support.rs"]
 mod support;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -254,20 +254,32 @@ async fn down(api: &Api, id: Uuid) -> (EnvDownPreview, EnvDownReply) {
     (shown, reply)
 }
 
-/// Files a database writes only while it runs, which a normal stop removes.
+/// Files a database writes only while it runs, which a normal stop removes:
+/// pid, lock, and socket files, the `status` file of ClickHouse, and the
+/// temporary tablespaces of MySQL.
 fn is_run_file(path: &Path) -> bool {
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_default();
-    name.ends_with(".pid") || name.ends_with(".lock") || name.ends_with(".sock")
+    let in_temp = path.components().any(|part| {
+        part.as_os_str()
+            .to_string_lossy()
+            .starts_with("#innodb_temp")
+    });
+    in_temp
+        || name == "status"
+        || name == "ibtmp1"
+        || name.ends_with(".pid")
+        || name.ends_with(".lock")
+        || name.ends_with(".sock")
 }
 
-/// How many files the data folder of `instance` holds, outside the files of
-/// a running process.
-fn data_count(site: &Site, instance: Uuid) -> usize {
+/// The files of the data folder of `instance`, relative to it, outside the
+/// files of a running process.
+fn data_files(site: &Site, instance: Uuid) -> BTreeSet<PathBuf> {
     let paths = site.instance_paths(instance);
-    let mut count = 0;
+    let mut files = BTreeSet::new();
     let mut stack = vec![paths.data.clone()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -281,11 +293,12 @@ fn data_count(site: &Site, instance: Uuid) -> usize {
             if meta.is_dir() {
                 stack.push(path);
             } else if meta.is_file() && !is_run_file(&path) {
-                count += 1;
+                let relative = path.strip_prefix(&paths.data).unwrap_or(&path);
+                files.insert(relative.to_path_buf());
             }
         }
     }
-    count
+    files
 }
 
 /// Installs the runtime of every create in `planned` from the xtask runtime
@@ -368,7 +381,7 @@ async fn the_erp_manifest_goes_down_keeping_its_data_and_comes_up_again_with_it(
     let ev = evidence!(
         covers = ["REQ-022", "AC-022"],
         kind = Kind::Native,
-        expected = "after env.up of the ERP example manifest with the six official runtimes from the xtask runtime cache, env.preview_down lists all six to stop and none to keep, env.down succeeds and leaves all six stopped with their data folders in place and the same number of data files, the environment holds no active lease, and a second Up brings all six back to ready on the same instances",
+        expected = "after env.up of the ERP example manifest with the six official runtimes from the xtask runtime cache, env.preview_down lists all six to stop and none to keep, env.down succeeds and leaves all six stopped with their data folders in place and every data file still there, the environment holds no active lease, and a second Up brings all six back to ready on the same instances",
     );
     let site = Site::new();
     let path = manifest(&site);
@@ -408,13 +421,13 @@ async fn the_erp_manifest_goes_down_keeping_its_data_and_comes_up_again_with_it(
     assert_eq!(members.len(), 6);
     let lease = detail.lease.as_ref().expect("the detail carries the lease");
     assert_eq!(lease.active_count.get(), 6, "{lease:?}");
-    let before: BTreeMap<String, usize> = members
+    let before: BTreeMap<String, BTreeSet<PathBuf>> = members
         .iter()
-        .map(|(alias, id)| (alias.clone(), data_count(&site, *id)))
+        .map(|(alias, id)| (alias.clone(), data_files(&site, *id)))
         .collect();
     // NATS and Traefik keep no data files; the databases do.
     assert!(
-        before.values().sum::<usize>() > 0,
+        before.values().any(|files| !files.is_empty()),
         "the data folders hold files: {before:?}"
     );
 
@@ -438,9 +451,15 @@ async fn the_erp_manifest_goes_down_keeping_its_data_and_comes_up_again_with_it(
         );
         let paths = site.instance_paths(*id);
         assert!(paths.data.is_dir(), "{alias}: the data folder stays");
-        let after = data_count(&site, *id);
-        assert_eq!(after, before[alias], "{alias}: the data files stay");
-        observed.push(format!("{alias} stopped with {after} data files"));
+        let after = data_files(&site, *id);
+        // A clean shutdown may write a file (a checkpoint, a dump), but no
+        // data file goes away.
+        let gone: Vec<_> = before[alias].difference(&after).collect();
+        assert!(
+            gone.is_empty(),
+            "{alias}: the data files stay; gone {gone:?}"
+        );
+        observed.push(format!("{alias} stopped with {} data files", after.len()));
     }
     let detail = get(&api, environment).await;
     let lease = detail.lease.as_ref().expect("the detail carries the lease");
