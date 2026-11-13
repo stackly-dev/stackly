@@ -5,6 +5,7 @@ pub mod agent_off;
 pub mod audit;
 pub mod diagnostics;
 pub mod doctor;
+pub mod env;
 pub mod instance;
 pub mod logs;
 pub mod operation;
