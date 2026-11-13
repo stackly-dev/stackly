@@ -6,7 +6,7 @@ use std::any::Any;
 use std::fmt;
 
 use crate::environment::Environment;
-use crate::id::{InstanceId, RuntimeId};
+use crate::id::{EnvironmentId, InstanceId, RuntimeId};
 use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::location::{DaemonSettings, StorageLocation};
@@ -89,6 +89,19 @@ pub trait GuardView {
     fn leases(
         &self,
         instance: InstanceId,
+        filter: LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError>;
+
+    /// Returns what
+    /// [`Registry::leases_of_environment`](crate::Registry::leases_of_environment)
+    /// returns, read inside the guarded commit (spec 0047).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn leases_of_environment(
+        &self,
+        environment: EnvironmentId,
         filter: LeaseFilter,
     ) -> Result<Vec<Lease>, RegistryError>;
 

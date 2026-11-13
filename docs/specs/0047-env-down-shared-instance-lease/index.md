@@ -1,7 +1,7 @@
 # 0047. Env down, shared instance, dan lease
 
 **Date**: 2026-11-13
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

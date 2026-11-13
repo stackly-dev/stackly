@@ -418,6 +418,7 @@ impl Registry for FaultyRegistry {
         environment(id: stackly_domain::EnvironmentId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Environment>>, stackly_domain::RegistryError>;
         environments() -> Result<stackly_domain::Versioned<Vec<stackly_domain::Environment>>, stackly_domain::RegistryError>;
         leases(instance: InstanceId, filter: stackly_domain::LeaseFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::Lease>>, stackly_domain::RegistryError>;
+        leases_of_environment(environment: stackly_domain::EnvironmentId, filter: stackly_domain::LeaseFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::Lease>>, stackly_domain::RegistryError>;
         operation(id: OperationId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Operation>>, stackly_domain::RegistryError>;
         operations(query: stackly_domain::OperationQuery) -> Result<stackly_domain::Versioned<stackly_domain::OperationPage>, stackly_domain::RegistryError>;
         operation_journal(id: OperationId) -> Result<stackly_domain::Versioned<Option<stackly_domain::JournalView>>, stackly_domain::RegistryError>;

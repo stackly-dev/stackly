@@ -235,6 +235,14 @@ impl GuardView for StateView<'_> {
         Ok(self.state.leases_of(instance, filter))
     }
 
+    fn leases_of_environment(
+        &self,
+        environment: EnvironmentId,
+        filter: LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError> {
+        Ok(self.state.leases_held_by(environment, filter))
+    }
+
     fn latest_session(&self) -> Result<Option<DaemonSession>, RegistryError> {
         Ok(self.state.recent_sessions(1).into_iter().next())
     }
@@ -497,6 +505,14 @@ impl Registry for FakeRegistry {
         filter: LeaseFilter,
     ) -> Result<Versioned<Vec<Lease>>, RegistryError> {
         self.read(|state| Ok(state.leases_of(instance, filter)))
+    }
+
+    fn leases_of_environment(
+        &self,
+        environment: EnvironmentId,
+        filter: LeaseFilter,
+    ) -> Result<Versioned<Vec<Lease>>, RegistryError> {
+        self.read(|state| Ok(state.leases_held_by(environment, filter)))
     }
 
     fn operation(&self, id: OperationId) -> Result<Versioned<Option<Operation>>, RegistryError> {
@@ -1527,10 +1543,23 @@ impl State {
 
     /// The leases of an instance that `filter` selects, oldest first.
     fn leases_of(&self, instance: InstanceId, filter: LeaseFilter) -> Vec<Lease> {
+        self.leases_where(filter, |lease| lease.instance_id() == instance)
+    }
+
+    /// The leases `environment` holds on any instance (spec 0047).
+    fn leases_held_by(&self, environment: EnvironmentId, filter: LeaseFilter) -> Vec<Lease> {
+        self.leases_where(filter, |lease| {
+            lease.holder() == LeaseHolder::Environment(environment)
+        })
+    }
+
+    /// The leases `matches` and `filter` select, ordered by `acquired_at`
+    /// and then ID, as the SQLite registry orders them.
+    fn leases_where(&self, filter: LeaseFilter, matches: impl Fn(&Lease) -> bool) -> Vec<Lease> {
         let mut leases: Vec<Lease> = self
             .leases
             .values()
-            .filter(|lease| lease.instance_id() == instance)
+            .filter(|lease| matches(lease))
             .filter(|lease| match filter {
                 LeaseFilter::All => true,
                 LeaseFilter::Unreleased => !matches!(lease.state(), LeaseState::Released { .. }),

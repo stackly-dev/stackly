@@ -347,6 +347,20 @@ pub trait Registry: Send + Sync {
         filter: LeaseFilter,
     ) -> Result<Versioned<Vec<Lease>>, RegistryError>;
 
+    /// Returns the leases an environment holds that `filter` selects: the
+    /// leases with source kind `environment` and that environment as their
+    /// source, on any instance, ordered by `acquired_at` and then ID (spec
+    /// 0047).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn leases_of_environment(
+        &self,
+        environment: EnvironmentId,
+        filter: LeaseFilter,
+    ) -> Result<Versioned<Vec<Lease>>, RegistryError>;
+
     /// Returns an operation.
     ///
     /// # Errors
