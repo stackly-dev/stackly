@@ -410,6 +410,7 @@ public struct AppShell: View {
                     operations: operations,
                     instances: instances,
                     runtimes: runtimes,
+                    environments: environments,
                     actions: instanceActions,
                     service: daemon.map(OperationsService.live) ?? .disconnected,
                     waiting: presentation.pageFailure,

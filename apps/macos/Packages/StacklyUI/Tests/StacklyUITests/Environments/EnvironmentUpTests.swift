@@ -304,3 +304,46 @@ struct EnvironmentUpProgressTests {
         }
     }
 }
+
+/// The Up in Activity (spec 0046, AC-22).
+struct EnvironmentUpActivityTests {
+    @Test(
+        .evidence(
+            covers: ["REQ-054", "NFR-012"],
+            expected:
+                "An Up is titled Bring up environment {name}, reads Partial with {ready} of {total} services ready, and its children follow it nested"
+        ))
+    func anUpIsTitledMarkedPartialAndHoldsItsChildren() throws {
+        let operations = FixtureEnvironmentUp.incompleteOperations + FixtureOperations.rows
+        let up = operations[0]
+        #expect(
+            OperationTitle.title(
+                for: up, instanceNames: [:],
+                environments: [FixtureEnvironments.erpID: "erp-development"])
+                == "Bring up environment erp-development")
+        #expect(OperationTitle.title(for: up, instanceNames: [:]) == "Bring up environment")
+        #expect(OperationCancel.appearance(of: up).label == "Partial")
+        #expect(OperationCancel.appearance(of: up).tone == .caution)
+        #expect(OperationNote.line(for: up).text == "2 of 4 services ready")
+
+        let rows = OperationNesting.rows(operations.reversed())
+        let index = try #require(rows.firstIndex { $0.id == FixtureEnvironmentUp.upID })
+        #expect(rows[index].isChild == false)
+        #expect(
+            rows[(index + 1)...(index + 3)].allSatisfy {
+                $0.isChild && $0.operation.parent == FixtureEnvironmentUp.upID
+            })
+        #expect(rows.count == operations.count)
+    }
+
+    @Test func anUpWithNoServiceReadyIsFailedNotPartial() {
+        let up = FixtureEnvironmentUp.upOperation(
+            state: .failed, done: 4, total: 4,
+            failure: FixtureEnvironmentUp.incompleteFailure(ready: 0, total: 4))
+        #expect(OperationCancel.appearance(of: up).label == "Failed")
+        let orphan = FixtureEnvironmentUp.child(
+            1, kind: .startInstance, instance: FixtureEnvironments.instances[0],
+            state: .succeeded)
+        #expect(OperationNesting.rows([orphan]).map(\.isChild) == [false])
+    }
+}

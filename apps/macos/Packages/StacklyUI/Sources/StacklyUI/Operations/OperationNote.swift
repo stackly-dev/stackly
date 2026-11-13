@@ -36,6 +36,9 @@ nonisolated public enum OperationNote {
         case .needsRecovery:
             return plain(recovery(operation.recovery?.hint))
         case .failed:
+            if let (ready, total) = StatusAdapter.upIncomplete(operation) {
+                return plain("\(ready) of \(total) services ready")
+            }
             guard let error = operation.failure?.error else {
                 return Line(text: "Failed", isCritical: true)
             }

@@ -57,11 +57,10 @@ nonisolated public enum OnboardingCopy {
     static let verifiedRuntimes = Feature(
         title: "Verified runtimes",
         detail: "Downloaded, checked against a pinned digest, then committed.")
-    /// The Environments as files row (spec 0044, AC-23). The sentence about bringing an
-    /// environment up comes with spec 0046.
+    /// The Environments as files row (specs 0044 AC-23, 0046 AC-22).
     static let environmentsAsFiles = Feature(
         title: "Environments as files",
-        detail: "A stackly.yaml per project. Review the plan before anything runs.")
+        detail: "A stackly.yaml per project. Plan, then bring everything up in order.")
     /// The No account needed row.
     static let noAccount = Feature(
         title: "No account needed",
@@ -230,7 +229,7 @@ nonisolated extension OnboardingCopy {
     /// The commands of the example block; commands of later features join with them
     /// (spec 0016, *Fitur yang belum ada*).
     static let commandExamples = [
-        "stackly daemon status", "stackly provider list", "stackly doctor",
+        "stackly instance list", "stackly env up ~/Code/erp", "stackly doctor",
     ]
     /// The example block as it shows: one command per line, each after `$ `.
     static var commandExamplesText: String {

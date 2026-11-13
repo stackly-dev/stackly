@@ -37,6 +37,7 @@ public struct OperationsPage: View {
     private let operations: OperationCenter
     private let instances: InstanceStore?
     private let runtimes: RuntimeStore?
+    private let environments: EnvironmentStore?
     private let instanceActions: InstanceActionModel?
     private let waiting: FailureContent?
     private let hasConnection: Bool
@@ -63,6 +64,7 @@ public struct OperationsPage: View {
         operations: OperationCenter,
         instances: InstanceStore? = nil,
         runtimes: RuntimeStore? = nil,
+        environments: EnvironmentStore? = nil,
         actions: InstanceActionModel? = nil,
         service: OperationsService,
         waiting: FailureContent?,
@@ -73,8 +75,9 @@ public struct OperationsPage: View {
     ) {
         self.init(
             model: OperationsPageModel(service: service, center: operations),
-            operations: operations, instances: instances, runtimes: runtimes, actions: actions,
-            waiting: waiting, hasConnection: hasConnection, reconnect: reconnect,
+            operations: operations, instances: instances, runtimes: runtimes,
+            environments: environments, actions: actions, waiting: waiting,
+            hasConnection: hasConnection, reconnect: reconnect,
             openDiagnostics: openDiagnostics, selection: selection)
     }
 
@@ -84,6 +87,7 @@ public struct OperationsPage: View {
         operations: OperationCenter,
         instances: InstanceStore? = nil,
         runtimes: RuntimeStore? = nil,
+        environments: EnvironmentStore? = nil,
         actions: InstanceActionModel? = nil,
         waiting: FailureContent?,
         hasConnection: Bool,
@@ -96,6 +100,7 @@ public struct OperationsPage: View {
         self.operations = operations
         self.instances = instances
         self.runtimes = runtimes
+        self.environments = environments
         self.instanceActions = actions
         self.waiting = waiting
         self.hasConnection = hasConnection
@@ -150,14 +155,18 @@ public struct OperationsPage: View {
     private func content(_ rows: [OperationSnapshot]) -> some View {
         let names = instanceNames
         let runtimeNames = OperationTitle.RuntimeNames(store: runtimes)
+        let environmentNames = environments?.names ?? [:]
         return VStack(alignment: .leading, spacing: 0) {
             List(selection: selectionBinding) {
-                ForEach(rows) { operation in
+                ForEach(OperationNesting.rows(rows)) { row in
+                    let operation = row.operation
                     let title = OperationTitle.title(
-                        for: operation, instanceNames: names, runtimes: runtimeNames)
+                        for: operation, instanceNames: names, runtimes: runtimeNames,
+                        environments: environmentNames)
                     OperationRow(
                         operation: operation, title: title,
-                        actions: rowActions(for: operation, title: title, rows: rows)
+                        actions: rowActions(for: operation, title: title, rows: rows),
+                        isChild: row.isChild
                     )
                     .tag(operation.id)
                 }
@@ -208,7 +217,8 @@ public struct OperationsPage: View {
                 shown.map {
                     OperationTitle.title(
                         for: $0, instanceNames: instanceNames,
-                        runtimes: OperationTitle.RuntimeNames(store: runtimes))
+                        runtimes: OperationTitle.RuntimeNames(store: runtimes),
+                        environments: environments?.names ?? [:])
                 } ?? SidebarSection.operations.title
             OperationInspector(
                 operation: operation, phase: phase, title: title,
