@@ -193,6 +193,10 @@ Role architect meminta opsi yang paling murah dibalik bila dua opsi setara, dan 
 - Tag `%TAG` dan `!<…>` yang hasilnya berawalan `!` tetap muncul sebagai `Value::Tagged` dan ditolak; hanya yang menunjuk URI `tag:` yang hilang.
 - Spec 0045 mengutip "loader ketat spec 0044 (… anchor, alias … ditolak)" untuk lock dan file override; penyelarasannya dicatat sebagai Follow-up untuk lead, karena spec itu bukan milik sesi ini.
 
+### Keputusan lead
+
+Lead membalas `accept` 2026-11-13 untuk keduanya: opsi B (bertanda `berat`), dan anggaran expand yang menghitung byte string di `yaml_value`, termasuk untuk `provider.yaml`. Dua Follow-up teks diterapkan sesi ini atas izin lead: kalimat *Loader* dan baris `yaml_alias` di spec 0045, dan kalimat anggaran di `index.md` serta `rationale.md` spec 0009.
+
 ### Cross check
 
 Dijalankan 2026-11-13 oleh model lain (Opus) sebagai pembaca saja, untuk keputusan ini saja. Temuan yang diterapkan: lubang anggaran node di atas (diverifikasi ulang dengan percobaan sebelum ditulis); bom bersarang berakhir `yaml_syntax`, bukan `yaml_alias`; klaim `%TAG` dipersempit; lokasi key bertag ditulis; isi fixture bentuk checker dimasukkan ke *Untuk developer* karena `verify.md` hanya memuat deskripsinya; tiga test yang dihapus disebut namanya; kalimat `location` di *Aturan validasi* mendapat kasus `.`; hitungan pass parse dan argumen `v1alpha1` dikoreksi; catatan bahwa tidak ada yang menulis balik manifest. Ia juga memastikan tidak ada spec lain selain 0045 yang mengutip aturan lama. Tidak diambil: mengganti kata "size limit" di pesan dengan "node limit", karena anggaran kini menghitung byte juga dan pesan itu untuk pengguna.
