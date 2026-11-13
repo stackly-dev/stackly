@@ -67,7 +67,7 @@ Down melepas lease environment dan hanya menghentikan instance yang tidak dibutu
 
 **Trace:** REQ-022, REQ-028, BR-006, BR-014, BR-015, VAL-014, AC-022, AC-073 (bersama fitur 46), PRD bagian 13.2
 
-**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`
+**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`, `crates/core/src/environment/down/`, `apps/daemon/src/ipc/env/down.rs`
 
 - [x] Design it (spec): `/architect env down, shared instance & lease`
 - [ ] Build it: `/develop env down, shared instance & lease`
