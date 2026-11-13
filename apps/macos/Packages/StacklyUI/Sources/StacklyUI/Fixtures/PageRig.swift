@@ -357,6 +357,39 @@
             .actionHost()
         }
 
+        /// What the More menu of an environment opened and revealed, in order.
+        private(set) var openedFiles: [URL] = []
+
+        /// The Environments section over these stores, inside the action host of a window:
+        /// the list, or the detail page of `selected` loaded with the script's manifest state.
+        /// A `plan` source opens the plan sheet, loaded, over the page.
+        func environmentsPage(
+            selected: UUID? = nil, waiting: FailureContent? = nil, hasConnection: Bool = true,
+            plan: EnvironmentPlanPresenter.Source? = nil, validate: Bool = false,
+            picker: any FilePicking = FixtureFilePicker(path: nil)
+        ) async -> some View {
+            var detailModel: EnvironmentDetailModel?
+            if let selected {
+                let model = EnvironmentDetailModel(id: selected, store: environments)
+                await model.load(checkManifest: true)
+                if validate { _ = await model.validate() }
+                detailModel = model
+            }
+            let presenter = EnvironmentPlanPresenter(store: environments, picker: picker)
+            if let plan { await presenter.read(plan) }
+            let files = ManifestFilePorts(
+                open: { [weak self] in self?.openedFiles.append($0) },
+                reveal: { [weak self] in self?.openedFiles.append($0) })
+            return EnvironmentsPage(
+                environments: environments, instances: instances, catalog: catalog,
+                actions: actions, selected: selected, waiting: waiting,
+                hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
+                detail: detail, openIn: openIn.ports, files: files, picker: picker,
+                home: FixtureDetail.home, presenter: presenter, detailModel: detailModel
+            )
+            .actionHost()
+        }
+
         /// The Overview over these stores, inside the action host of a window.
         func overviewPage(
             isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true,

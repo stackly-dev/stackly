@@ -358,8 +358,22 @@ public struct AppShell: View {
                 UnbuiltScrollPage(section: .instances)
             }
         case .environments:
-            // provisional: F44 step 8 builds the page.
-            UnbuiltScrollPage(section: .environments)
+            if let environments {
+                EnvironmentsPage(
+                    environments: environments,
+                    instances: instances,
+                    catalog: catalog,
+                    actions: instanceActions,
+                    selected: navigator.environment,
+                    waiting: presentation.pageFailure,
+                    hasConnection: presentation.hasConnection,
+                    reconnect: reconnect,
+                    openDiagnostics: { select(.diagnostics) },
+                    detail: daemon.map(InstanceDetailService.live)
+                )
+            } else {
+                UnbuiltScrollPage(section: .environments)
+            }
         case .catalog:
             if let catalog {
                 CatalogPage(

@@ -22,6 +22,9 @@ public final class EnvironmentStore {
     public let store: ResourceStore<EnvironmentSummary>
     /// Counts the loads that followed an event, so an open detail page reads its detail again.
     public private(set) var changes = 0
+    /// The last environment operation that ended, so the detail page of that environment reads
+    /// its manifest again.
+    public private(set) var lastEnded: EndedOperation?
     /// Sends one read to the daemon.
     @ObservationIgnored let call: (Call) async throws(ClientError) -> Reply
     /// Sends one mutation with its idempotency key through the mutation path.
@@ -91,6 +94,9 @@ public final class EnvironmentStore {
             else { return }
             pendingInstanceReload?.cancel()
             pendingInstanceReload = nil
+            lastEnded = EndedOperation(
+                operation: operation.id,
+                environment: operation.resource.flatMap { UUID(uuidString: $0.id) })
             refresher.request()
         case .instanceStateChanged, .instanceHealthChanged, .instanceRemoved:
             pendingInstanceReload?.cancel()
@@ -185,4 +191,12 @@ public final class EnvironmentStore {
         }
         return plan
     }
+}
+
+/// An environment operation that ended (spec 0044, *Event*).
+public struct EndedOperation: Equatable, Sendable {
+    /// The operation.
+    public let operation: UUID
+    /// The environment it worked on, when its resource ID reads as one.
+    public let environment: UUID?
 }

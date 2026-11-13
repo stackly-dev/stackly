@@ -352,3 +352,17 @@
         }
     }
 #endif
+
+#if DEBUG
+    /// A file panel that answers a fixed path, or cancels with `nil`.
+    struct FixtureFilePicker: FilePicking {
+        /// The path it answers.
+        let path: String?
+
+        func chooseFile(message: String, extensions: [String], startingAt: String?) async
+            -> String?
+        {
+            path
+        }
+    }
+#endif
