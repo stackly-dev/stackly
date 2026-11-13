@@ -262,6 +262,115 @@ pub fn stop<'a>(
     })
 }
 
+/// What the precheck of a child stop of a Down decided (spec 0047,
+/// *Precheck stop anak*). It never writes, and it never chooses an
+/// instance: the driver chose it through `down::select`.
+pub(crate) enum DownStopCheck {
+    /// Refused with an existing code: gone, retained, `unknown`, or
+    /// `initializing`.
+    Refused(SupervisorError),
+    /// Another lease holds it: no operation.
+    Kept,
+    /// It is not alive and its desired state is `stopped`: no operation.
+    AlreadyStopped,
+    /// The stop runs.
+    Proceed,
+}
+
+/// *Precheck stop anak* for `id` and the `environment` that goes down.
+pub(crate) fn down_stop_check(
+    registry: &dyn Registry,
+    id: InstanceId,
+    environment: stackly_domain::EnvironmentId,
+) -> DownStopCheck {
+    let instance = match registry.instance(id) {
+        Ok(read) => match read.value {
+            Some(instance) => instance,
+            None => return DownStopCheck::Refused(SupervisorError::NotFound(id)),
+        },
+        Err(error) => return DownStopCheck::Refused(SupervisorError::Registry(error)),
+    };
+    match instance.lifecycle() {
+        InstanceLifecycle::Retained => {
+            return DownStopCheck::Refused(SupervisorError::InstanceRetained);
+        }
+        InstanceLifecycle::Initializing => {
+            return DownStopCheck::Refused(SupervisorError::InstanceInitializing);
+        }
+        InstanceLifecycle::Unknown => {
+            return DownStopCheck::Refused(SupervisorError::IdentityUnproven { pid: None });
+        }
+        _ => {}
+    }
+    let leases = match registry.leases(id, LeaseFilter::Unreleased) {
+        Ok(leases) => leases.value,
+        Err(error) => return DownStopCheck::Refused(SupervisorError::Registry(error)),
+    };
+    if matches!(
+        evaluate_stop(id, &leases, &LeaseStopRequest::EnvironmentDown(environment)),
+        StopDecision::KeepRunning { .. }
+    ) {
+        return DownStopCheck::Kept;
+    }
+    let alive = matches!(
+        instance.lifecycle(),
+        InstanceLifecycle::Starting
+            | InstanceLifecycle::Running
+            | InstanceLifecycle::Recovering
+            | InstanceLifecycle::Stopping
+    );
+    if !alive && instance.desired() == DesiredState::Stopped {
+        return DownStopCheck::AlreadyStopped;
+    }
+    DownStopCheck::Proceed
+}
+
+/// The `stop_instance` a Down begins as a child for `id` (spec 0047): the
+/// request of an environment that goes down, `BusyPolicy::Queue` (a client
+/// stop is `Reject`), the `environment_down` trigger in its input, and the
+/// precheck of a child stop, whose no operation answers the caller tells
+/// apart with [`down_stop_check`] before it begins.
+pub(crate) fn down_stop_request(
+    core: &DaemonCore,
+    id: InstanceId,
+    environment: stackly_domain::EnvironmentId,
+) -> Result<Box<dyn FnOnce(Origin) -> BeginRequest + Send>, Box<ErrorBody>> {
+    let supervisor = core.supervision().supervisor()?;
+    let registry = registry_of(core)?;
+    let work = supervisor.stop_work(StopRequest::environment_down(id, environment));
+    let input = JournalPayload::new(
+        stackly_core::supervisor::ENVIRONMENT_DOWN_INPUT.to_owned(),
+        stackly_domain::OperationJournal::INPUT_MAX,
+    )
+    .map_err(|_| {
+        Box::new(ErrorBody::new(
+            &stackly_protocol::codes::internal::UNEXPECTED,
+            "the input of a child stop does not fit the journal",
+        ))
+    })?;
+    let precheck: Box<dyn Precheck> =
+        Box::new(move || match down_stop_check(&registry, id, environment) {
+            DownStopCheck::Refused(error) => reject(error),
+            DownStopCheck::Kept | DownStopCheck::AlreadyStopped => {
+                PrecheckOutcome::NoOp(NoOpReply::nothing())
+            }
+            DownStopCheck::Proceed => PrecheckOutcome::Proceed,
+        });
+    Ok(Box::new(move |origin: Origin| BeginRequest {
+        kind: OperationKind::StopInstance,
+        resource: OperationResource::Instance(id),
+        creates_resource: false,
+        extra_locks: Vec::new(),
+        // A Down's stop waits behind the operation that holds the instance.
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin,
+        input,
+        work,
+        precheck: Some(precheck),
+    }))
+}
+
 /// The real `instance.restart` (spec 0026): one `restart_instance`
 /// operation that waits behind the operation holding the instance.
 pub fn restart<'a>(

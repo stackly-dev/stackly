@@ -5,12 +5,17 @@
 //! reconciliation publishes the first summary, and again after every commit
 //! that changes `environments` or `environment_instances`, so
 //! `instance.list`, `instance.get`, the `instance.*` events, and doctor read
-//! the same value without the registry.
+//! the same value without the registry. Each entry also says whether the
+//! environment's lease on the instance is active (spec 0047 AC-12), read
+//! with the environments, so a commit that writes a lease of an environment
+//! reloads the book too.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{PoisonError, RwLock};
 
-use stackly_domain::{Environment, InstanceId, Ownership, Registry};
+use stackly_domain::{
+    Environment, EnvironmentId, InstanceId, LeaseFilter, Ownership, Registry, RegistryError,
+};
 use stackly_protocol::env::{EnvOwnership, InstanceEnvironment};
 use stackly_protocol::instance::InstanceOwnership;
 
@@ -54,15 +59,25 @@ impl MembershipBook {
             .unwrap_or_default()
     }
 
-    /// Replaces the book with the membership of `environments`.
-    pub fn load(&self, environments: &[Environment]) {
-        *self.members.write().unwrap_or_else(PoisonError::into_inner) = book_of(environments);
+    /// Replaces the book with the membership of `environments`, with the
+    /// `(environment, instance)` pairs whose environment lease is active.
+    pub fn load(
+        &self,
+        environments: &[Environment],
+        leased: &HashSet<(EnvironmentId, InstanceId)>,
+    ) {
+        *self.members.write().unwrap_or_else(PoisonError::into_inner) =
+            book_of(environments, leased);
     }
 }
 
-/// The membership of every instance in `environments`.
+/// The membership of every instance in `environments`; `leased` holds the
+/// pairs whose environment lease is active.
 #[must_use]
-pub fn book_of(environments: &[Environment]) -> HashMap<InstanceId, Membership> {
+pub fn book_of(
+    environments: &[Environment],
+    leased: &HashSet<(EnvironmentId, InstanceId)>,
+) -> HashMap<InstanceId, Membership> {
     let mut book: HashMap<InstanceId, Membership> = HashMap::new();
     for environment in environments {
         for member in environment.members() {
@@ -74,8 +89,7 @@ pub fn book_of(environments: &[Environment]) -> HashMap<InstanceId, Membership> 
                     name: environment.name().to_string(),
                     alias: member.alias().to_string(),
                     ownership: env_ownership(member.ownership()),
-                    // provisional: F47 step 5 reads the leases.
-                    lease_active: false,
+                    lease_active: leased.contains(&(environment.id(), member.instance_id())),
                 });
         }
     }
@@ -107,14 +121,36 @@ pub async fn reload(core: &DaemonCore) {
     let Some(registry) = core.registry() else {
         return;
     };
-    let read = tokio::task::spawn_blocking(move || registry.environments()).await;
+    let read = tokio::task::spawn_blocking(move || read_book(&registry)).await;
     match read {
-        Ok(Ok(environments)) => core.supervision().membership().load(&environments.value),
+        Ok(Ok((environments, leased))) => {
+            core.supervision().membership().load(&environments, &leased)
+        }
         Ok(Err(error)) => {
             tracing::warn!(%error, "the environment membership can't be read; it stays as it was");
         }
         Err(error) => tracing::warn!(%error, "the environment membership read did not run"),
     }
+}
+
+/// The `(environment, instance)` pairs whose environment lease is active.
+pub type Leased = HashSet<(EnvironmentId, InstanceId)>;
+
+/// Every environment, and the pairs whose environment lease is active.
+fn read_book(registry: &dyn Registry) -> Result<(Vec<Environment>, Leased), RegistryError> {
+    let environments = registry.environments()?.value;
+    let mut leased = HashSet::new();
+    for environment in &environments {
+        for lease in registry
+            .leases_of_environment(environment.id(), LeaseFilter::Unreleased)?
+            .value
+        {
+            if lease.is_active() {
+                leased.insert((environment.id(), lease.instance_id()));
+            }
+        }
+    }
+    Ok((environments, leased))
 }
 
 #[cfg(test)]
@@ -149,17 +185,24 @@ mod tests {
     fn a_dedicated_member_comes_first_and_a_borrowed_only_instance_is_shared() {
         let owned = InstanceId::generate();
         let borrowed = InstanceId::generate();
-        let book = book_of(&[
-            environment("zeta", &[("db", owned, Ownership::Shared)]),
-            environment("beta", &[("cache", borrowed, Ownership::Shared)]),
-            environment("omega", &[("db", owned, Ownership::Dedicated)]),
-            environment("alpha", &[("cache", borrowed, Ownership::Shared)]),
-        ]);
+        let omega = environment("omega", &[("db", owned, Ownership::Dedicated)]);
+        let leased = HashSet::from([(omega.id(), owned)]);
+        let book = book_of(
+            &[
+                environment("zeta", &[("db", owned, Ownership::Shared)]),
+                environment("beta", &[("cache", borrowed, Ownership::Shared)]),
+                omega,
+                environment("alpha", &[("cache", borrowed, Ownership::Shared)]),
+            ],
+            &leased,
+        );
 
         let owned = &book[&owned];
         assert_eq!(owned.ownership, InstanceOwnership::Dedicated);
         let names: Vec<_> = owned.environments.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["omega", "zeta"]);
+        let active: Vec<_> = owned.environments.iter().map(|e| e.lease_active).collect();
+        assert_eq!(active, [true, false], "only omega's lease is active");
         let borrowed = &book[&borrowed];
         assert_eq!(borrowed.ownership, InstanceOwnership::Shared);
         let names: Vec<_> = borrowed
@@ -173,7 +216,7 @@ mod tests {
     #[test]
     fn an_instance_of_no_environment_is_manual() {
         let book = MembershipBook::default();
-        book.load(&[environment("solo", &[])]);
+        book.load(&[environment("solo", &[])], &HashSet::new());
         let membership = book.get(InstanceId::generate());
         assert_eq!(membership.ownership, InstanceOwnership::Manual);
         assert!(membership.environments.is_empty());
