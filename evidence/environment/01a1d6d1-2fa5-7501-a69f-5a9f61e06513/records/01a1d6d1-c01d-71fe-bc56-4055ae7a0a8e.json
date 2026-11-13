@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-4055ae7a0a8e",
+  "covers": [
+    "AC-073"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "two_environments_that_borrow_one_stopped_instance_at_once_get_two_leases_and_one_process",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 664
+  },
+  "status": "PASS",
+  "expected": "two env.up runs of two environments that borrow the same stopped instance, sent at once, both succeed with exactly two active environment leases on it, one serving process, and a restart count of 0",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861367Z",
+  "finishedAt": "2026-11-13T21:30:44.772397Z",
+  "evidencePath": "output.log"
+}

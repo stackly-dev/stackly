@@ -1,0 +1,192 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d6d2-3b03-70a9-a19a-97878318f92d",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "2eab74e80c52c0d0314ad782fdbb19d890c2f858",
+    "sourceDirty": false,
+    "runId": "01a1d6d2-3b03-70a9-a19a-97878318f92d",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stackly-cli",
+      "--test",
+      "env",
+      "up_wait"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T21:31:04.323371Z",
+  "finishedAt": "2026-11-13T21:31:22.386566Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 2,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 2,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 2,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6d2-74ca-70e6-8785-23de248225dd",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "up_wait::up_wait_that_runs_out_of_its_timeout_exits_8_and_never_cancels_the_up",
+        "file": "apps/cli/tests/env/up_wait.rs",
+        "line": 94
+      },
+      "status": "PASS",
+      "expected": "env up --wait --timeout 1s against an Up that keeps running ends in about a second with cli.wait_timeout, exit 8, the Up's operation id and state running, and never sends operation.cancel",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T21:31:19.114066Z",
+      "finishedAt": "2026-11-13T21:31:22.206718Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "2eab74e80c52c0d0314ad782fdbb19d890c2f858",
+        "sourceDirty": false,
+        "runId": "01a1d6d2-3b03-70a9-a19a-97878318f92d",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "up_wait"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6d2-74ca-70e6-8785-23df3e9ca3ff",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "up_wait::ctrl_c_during_up_wait_exits_130_and_leaves_the_up_running",
+        "file": "apps/cli/tests/env/up_wait.rs",
+        "line": 181
+      },
+      "status": "PASS",
+      "expected": "SIGINT while env up --wait waits ends it at once with cli.interrupted and exit 130, says the Up's operation is still running, and never sends operation.cancel",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T21:31:19.114067Z",
+      "finishedAt": "2026-11-13T21:31:22.001851Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "2eab74e80c52c0d0314ad782fdbb19d890c2f858",
+        "sourceDirty": false,
+        "runId": "01a1d6d2-3b03-70a9-a19a-97878318f92d",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "up_wait"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

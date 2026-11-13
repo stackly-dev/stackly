@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-405714bf3d59",
+  "covers": [
+    "REQ-021",
+    "BR-023"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_cancel_in_the_create_stage_compensates_only_what_that_create_made",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 969
+  },
+  "status": "PASS",
+  "expected": "operation.cancel on an Up while its create runs ends it cancelled with lastUp cancelled, removes the instance, member, and lease that create made, and leaves a user instance with a similar name, its files, and every runtime as they were",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861383Z",
+  "finishedAt": "2026-11-13T21:30:41.382154Z",
+  "evidencePath": "output.log"
+}
