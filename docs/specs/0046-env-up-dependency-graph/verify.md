@@ -399,3 +399,5 @@ Verdict fitur 46: **PASS untuk semua bagian otomatis** AC-1 sampai AC-25. `Build
 - CLI: Up sukses lewat binary terhadap daemon nyata (cocok sebagai test native), Ctrl-C yang tidak membatalkan Up, kolom `ENVIRONMENT` di `stackly instance list` sesudah Up, `env up --locked` tanpa lock dan dengan lock basi, `--wait` yang kehabisan `--timeout` (exit 8), dan `cli.env_locked_unsupported` di luar daemon berskrip.
 - App: tidak ada test ujung ke ujung Up terhadap `stacklyd` asli di `EnvironmentEndToEndTests`; snapshot toolbar yang menggambar toolbar apa adanya.
 - Native: anak install nyata lewat daemon (butuh unduhan).
+
+Catatan 2026-11-14: temuan terbuka nomor 3 Verify penuh (`differs: runtime` untuk selector line seperti `2.15`) tertutup di `6a41187d`; empat test `edges::` untuk selector line, exact, line lain, dan `stable` lulus.
