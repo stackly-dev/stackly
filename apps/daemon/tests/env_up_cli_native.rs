@@ -350,5 +350,10 @@ fn stackly_env_up_brings_two_nats_services_up_through_the_real_binaries() {
         layout.keychain_dir().join("stackly.keychain-db").is_file(),
         "the file keychain of the root exists"
     );
-    ev.pass();
+    ev.pass_with(&format!(
+        "nats {version} from the cache; env up --wait exited 0 with 2 of 2 ready.; env status: {head}; bound ports {} each accepted a TCP connection; instance list showed {} instances of shop; export held every port and no reference or root path; env up --locked --wait exited 0 and stackly.lock kept its {} bytes; the file keychain of the root exists",
+        ports.join(", "),
+        members.len(),
+        lock_bytes.len()
+    ));
 }
