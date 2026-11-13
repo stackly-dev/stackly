@@ -192,3 +192,45 @@ extension SnapshotTests {
         }
     }
 }
+
+extension SnapshotTests {
+    /// The toolbar controls of the environment detail page (spec 0046, AC-19): the off screen
+    /// snapshot window draws no toolbar, so the same actions the toolbar builds are drawn with
+    /// the same buttons in a row, Up… on and off with its reason.
+    struct EnvironmentUpToolbarSnapshotTests {
+        @MainActor
+        private static func row(_ summary: EnvironmentSummary) -> some View {
+            let validate = EnvironmentDetailPage.validateAction(
+                location: summary.manifestLocation, isValidating: false, perform: {})
+            let up = EnvironmentDetailPage.upAction(
+                summary: summary, manifestState: .inSync, problemCount: 0, declaredName: nil,
+                perform: {})
+            return HStack(spacing: Spacing.s8) {
+                ActionButton(validate, prominence: .secondary, showsReason: false)
+                ActionButton(up, prominence: .primary, showsReason: false)
+                if let reason = up.disabledReason {
+                    DisabledReasonText(reason)
+                }
+            }
+            .padding(Spacing.s12)
+            .actionHost()
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The detail toolbar has Validate and the accent Up…; Up… is off with Already bringing up while an Up runs"
+            ))
+        @MainActor
+        func toolbarWithUp() async throws {
+            let size = SnapshotSize.fitting(width: 420, narrowWidth: 420)
+            try await assertSnapshot(
+                Self.row(FixtureEnvironments.summaries[1]), named: "environment-toolbar-up",
+                size: size, variants: [.light, .dark])
+            try await assertSnapshot(
+                Self.row(FixtureEnvironmentUp.bringingUpSummary),
+                named: "environment-toolbar-up-off", size: size, variants: [.light, .dark])
+        }
+    }
+}

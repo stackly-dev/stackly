@@ -118,20 +118,24 @@ nonisolated enum EnvironmentCopy {
 
     /// A short sentence for an error code an Up reports, or the code itself.
     static func codeMessage(_ code: String) -> String {
-        switch code {
-        case "supervisor.readiness_timeout": "readiness timed out"
-        case "supervisor.endpoint_in_use": "the port is used by another process"
-        case "supervisor.endpoint_conflict": "the port is used by another instance"
-        case "supervisor.endpoint_unavailable": "the port can’t be used on this Mac"
-        case "supervisor.retry_budget_exhausted": "it kept crashing"
-        case "supervisor.data_in_use": "its data is in use"
-        case "runtime.download_failed": "the download failed"
-        case "runtime.checksum_mismatch": "the download did not match its checksum"
-        case "provider.approval_required": "the provider needs approval"
-        case "resource.busy": "it waited too long for its turn"
-        default: code
-        }
+        codeMessages[code] ?? code
     }
+
+    /// The sentences of the error codes an Up reports most, by code. Every code is in the
+    /// catalog `protocols/error-codes.json`.
+    static let codeMessages: [String: String] = [
+        "supervisor.readiness_timeout": "readiness timed out",
+        "supervisor.init_failed": "its data folder could not be initialized",
+        "supervisor.endpoint_in_use": "the port is used by another process",
+        "supervisor.endpoint_conflict": "the port is used by another instance",
+        "supervisor.endpoint_unavailable": "the port can’t be used on this Mac",
+        "supervisor.retry_budget_exhausted": "it kept crashing",
+        "supervisor.data_in_use": "its data is in use",
+        "runtime.download_failed": "the download failed",
+        "runtime.digest_mismatch": "the download did not match its checksum",
+        "provider.approval_required": "the provider needs approval",
+        "resource.busy": "it waited too long for its turn",
+    ]
 
     // MARK: - Services table
 

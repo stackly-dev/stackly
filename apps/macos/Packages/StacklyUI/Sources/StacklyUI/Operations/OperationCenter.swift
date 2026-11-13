@@ -98,10 +98,14 @@ public final class OperationCenter {
     }
 
     /// The operations that are running or cancelling, or `nil` before the first snapshot
-    /// loaded, so no badge or subtitle shows a number the daemon never sent.
+    /// loaded, so no badge or subtitle shows a number the daemon never sent. A child of a
+    /// coordinator (`parent` set) counts only through its coordinator, as in the Overview
+    /// (spec 0046).
     public var runningCount: Int? {
         guard store.loadedAt != nil else { return nil }
-        return store.items.values.count { $0.state == .running || $0.state == .cancelRequested }
+        return store.items.values.count {
+            $0.parent == nil && ($0.state == .running || $0.state == .cancelRequested)
+        }
     }
 
     /// The Operations page subtitle, or `nil` before the first snapshot loaded.
