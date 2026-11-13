@@ -93,41 +93,12 @@ pub fn install<'a>(
         }
 
         let registry = registry_of(core)?;
-        let selection = select(core, &params)?;
-        let runtime_id = RuntimeId::generate();
-        let payload = selection.input.to_payload().map_err(|error| {
-            tracing::error!(%error, "an install input does not fit the journal");
-            unexpected("the install input does not fit the journal")
-        })?;
-        let work = install_runtime_work(
-            InstallDeps {
-                platform: Arc::new(core.platform().clone()),
-                layout: Arc::new(core.prepared().clone()),
-                policy: DownloadPolicy::default(),
-            },
-            &selection.input,
-            runtime_id,
-        )
-        .map_err(|_| unexpected("the install input does not build a work"))?;
-        let sha256 = selection.sha256;
-        let precheck: Box<dyn Precheck> = {
-            let registry = registry.clone();
-            Box::new(move || install_precheck(&registry, &sha256))
-        };
-        let request = move |origin: Origin| BeginRequest {
-            kind: OperationKind::InstallRuntime,
-            resource: OperationResource::Runtime(runtime_id),
-            creates_resource: true,
-            extra_locks: vec![LockKey::Artifact(sha256)],
-            // Two installs of one artifact run one after the other and end
-            // in one runtime.
-            busy: BusyPolicy::Queue,
-            expected_revision: None,
-            origin,
-            input: payload,
-            work,
-            precheck: Some(precheck),
-        };
+        let PreparedInstall {
+            selection,
+            sha256,
+            request,
+            ..
+        } = install_request(core, &params)?;
         let outcome = start_operation(
             core,
             &context,
@@ -151,6 +122,97 @@ pub fn install<'a>(
             outcome,
         }))
     })
+}
+
+/// An `install_runtime` begin request and what it installs.
+pub(crate) struct PreparedInstall {
+    selection: Selection,
+    /// The artifact.
+    pub sha256: Sha256Digest,
+    /// The request.
+    pub request: Box<dyn FnOnce(Origin) -> BeginRequest + Send>,
+}
+
+/// Resolves `params` and builds the `install_runtime` request with its
+/// precheck: `runtime.install` and the install children of Up (spec 0046,
+/// selector `sha256:<digest>`) both build theirs here, so the trust gate
+/// and `install_precheck` run the same for both.
+///
+/// # Errors
+///
+/// Returns the error body of the resolve, or when a dependency is not
+/// available.
+pub(crate) fn install_request(
+    core: &DaemonCore,
+    params: &InstallRuntimeParams,
+) -> Result<PreparedInstall, Box<ErrorBody>> {
+    let registry = registry_of(core)?;
+    let selection = select(core, params)?;
+    let runtime_id = RuntimeId::generate();
+    let payload = selection.input.to_payload().map_err(|error| {
+        tracing::error!(%error, "an install input does not fit the journal");
+        unexpected("the install input does not fit the journal")
+    })?;
+    let work = install_runtime_work(
+        InstallDeps {
+            platform: Arc::new(core.platform().clone()),
+            layout: Arc::new(core.prepared().clone()),
+            policy: DownloadPolicy::default(),
+        },
+        &selection.input,
+        runtime_id,
+    )
+    .map_err(|_| unexpected("the install input does not build a work"))?;
+    let sha256 = selection.sha256;
+    let precheck: Box<dyn Precheck> = Box::new(move || install_precheck(&registry, &sha256));
+    let request = move |origin: Origin| BeginRequest {
+        kind: OperationKind::InstallRuntime,
+        resource: OperationResource::Runtime(runtime_id),
+        creates_resource: true,
+        extra_locks: vec![LockKey::Artifact(sha256)],
+        // Two installs of one artifact run one after the other and end
+        // in one runtime.
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin,
+        input: payload,
+        work,
+        precheck: Some(precheck),
+    };
+    Ok(PreparedInstall {
+        selection,
+        sha256,
+        request: Box::new(request),
+    })
+}
+
+/// The ID of the installed runtime of `sha256`, after a precheck answered
+/// that it is there.
+///
+/// # Errors
+///
+/// Returns the error body of a failed registry read, or
+/// `internal.unexpected` when no installed runtime has that digest.
+pub(crate) async fn installed_runtime_id(
+    core: &DaemonCore,
+    sha256: &Sha256Digest,
+) -> Result<RuntimeId, Box<ErrorBody>> {
+    let registry = registry_of(core)?;
+    let digest = *sha256;
+    let read = tokio::task::spawn_blocking(move || read_runtimes(&registry, false))
+        .await
+        .map_err(|_| unexpected("the runtime read task failed"))?
+        .map_err(|error| Box::new(map::registry_error(&error)))?;
+    read.runtimes
+        .iter()
+        .find(|runtime| {
+            matches!(
+                runtime.install(),
+                InstallMode::Managed { artifact_sha256 } if *artifact_sha256 == digest
+            )
+        })
+        .map(Runtime::id)
+        .ok_or_else(|| unexpected("the installed runtime vanished"))
 }
 
 /// The real `runtime.list`: ordered by ID, a page that stops before its

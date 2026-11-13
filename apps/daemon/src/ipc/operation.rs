@@ -394,6 +394,36 @@ async fn start_operation_gated(
     })
 }
 
+/// Starts a child operation of a coordinator (spec 0046, *Operasi anak*):
+/// the same begin as [`start_operation`] with `Origin::Child`, so the
+/// child keeps the coordinator's trigger and carries `parent`, has no
+/// idempotency key, and is refused while the quiesce of a planned restart
+/// is on. A child is never a replay.
+///
+/// # Errors
+///
+/// Returns the error body of the refusal, mapped by [`begin_error`].
+pub async fn start_child(
+    core: &DaemonCore,
+    origin: stackly_core::operation::ChildOrigin,
+    method: &'static str,
+    build: impl FnOnce(Origin) -> BeginRequest,
+) -> Result<StartOutcome, Box<ErrorBody>> {
+    let engine = core.operations().writer()?;
+    let request = build(Origin::Child(origin));
+    let outcome = engine
+        .begin(request)
+        .await
+        .map_err(|error| boxed(begin_error(&error, method)))?;
+    Ok(match outcome {
+        BeginOutcome::Created(view) | BeginOutcome::Replayed(view) => accepted(&view, false),
+        BeginOutcome::NoOp(no_op) => match no_op.recorded {
+            Some(view) => accepted(&view, false),
+            None => StartOutcome::NothingToDo,
+        },
+    })
+}
+
 /// What [`replay_operation`] found: the operation a repeated request
 /// names, and the input it recorded.
 #[non_exhaustive]

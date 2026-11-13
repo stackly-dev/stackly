@@ -15,7 +15,7 @@ use stackly_protocol::env::{
     EnvValidation, EnvironmentRef, EnvironmentService, EnvironmentSummary, LockStaleItem,
     PlanBlocker, PlanDifference, PlanEndpoint, PlanInstance, PlanItem, PlanLocal, PlanLock,
     PlanOverride, PlanProviderRevision, PlanRuntime, PlanSecret, PlanStorage, ServiceDependency,
-    ServiceInstance, ServiceNotReady,
+    ServiceInstance,
 };
 use stackly_protocol::instance::{InstanceSummary, PortRequest};
 use stackly_protocol::stop_all::InstanceRef;
@@ -479,18 +479,7 @@ pub fn service(status: &ServiceStatus, summaries: &[InstanceSummary]) -> Environ
         not_ready: status
             .not_ready
             .as_ref()
-            .map(|(reason, detail)| ServiceNotReady {
-                reason: wire(reason.as_code()),
-                detail: detail.clone(),
-                phase: None,
-                waiting_on: Vec::new(),
-                references: Vec::new(),
-                dependency: None,
-                dependency_reason: None,
-                stage: None,
-                code: None,
-                operation_id: None,
-            }),
+            .map(|(reason, detail)| super::status::plain(wire(reason.as_code()), detail.clone())),
     }
 }
 
