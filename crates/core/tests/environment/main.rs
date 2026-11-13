@@ -3,6 +3,7 @@
 
 mod common;
 mod plan;
+mod register;
 mod site;
 mod status;
 mod validate;

@@ -1004,20 +1004,50 @@ async fn dispatch(
         return (Err(error), None);
     }
     match call {
-        // provisional: F44 step 5 adds the env.* handlers.
-        Call::EnvValidate(_)
-        | Call::EnvPlan(_)
-        | Call::EnvList
-        | Call::EnvGet(_)
-        | Call::EnvImport(_)
-        | Call::EnvRemove(_) => (
-            Err(Box::new(
-                ErrorBody::new(
-                    &request::UNKNOWN_METHOD,
-                    "this daemon does not answer env.* yet",
-                )
-                .with_detail("method", call.method()),
-            )),
+        Call::EnvValidate(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.validate_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvValidate),
+            None,
+        ),
+        Call::EnvPlan(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.plan_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvPlan),
+            None,
+        ),
+        Call::EnvList => (
+            guarded(core, handlers, context, |h, c, x| h.list_environments(c, x))
+                .await
+                .map(Reply::EnvList),
+            None,
+        ),
+        Call::EnvGet(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.get_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvGet),
+            None,
+        ),
+        Call::EnvImport(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.import_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvImport),
+            None,
+        ),
+        Call::EnvRemove(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.remove_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvRemove),
             None,
         ),
         Call::DaemonHandshake(_) => (

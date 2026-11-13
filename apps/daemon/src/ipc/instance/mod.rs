@@ -53,6 +53,7 @@ use uuid::Uuid;
 pub use config::{
     apply_config, change_endpoints, get_config, keep_revision, rename, validate_config,
 };
+pub(crate) use create::{catalog_state, serialized_probe};
 pub use create::{create, work_deps};
 pub use detail::{get_data_usage, get_instance_detail};
 pub use duplicate::get_duplicate_form;
@@ -734,7 +735,11 @@ fn expected_revision(
 }
 
 /// The snapshot of `instance` with the status the supervisor shows now.
-fn summary_of(core: &DaemonCore, supervisor: &Supervisor, instance: &Instance) -> InstanceSummary {
+pub(crate) fn summary_of(
+    core: &DaemonCore,
+    supervisor: &Supervisor,
+    instance: &Instance,
+) -> InstanceSummary {
     let status = supervisor.status(instance.id());
     let excerpt = if instance.last_failure().is_some() {
         supervisor
@@ -756,6 +761,7 @@ fn summary_of(core: &DaemonCore, supervisor: &Supervisor, instance: &Instance) -
         excerpt,
         &sockets,
         core.supervision().autostart().get(instance.id()),
+        core.supervision().membership().get(instance.id()),
     )
 }
 

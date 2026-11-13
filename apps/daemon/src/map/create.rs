@@ -355,7 +355,8 @@ pub fn with_create_hint(body: ErrorBody) -> ErrorBody {
     }
 }
 
-fn check(check: &Check, issues: &[FieldIssue]) -> dto::PreflightCheck {
+/// One preflight row on the wire.
+pub(crate) fn check(check: &Check, issues: &[FieldIssue]) -> dto::PreflightCheck {
     dto::PreflightCheck {
         id: check.id.clone(),
         kind: match check.kind {
