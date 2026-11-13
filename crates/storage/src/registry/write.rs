@@ -364,7 +364,7 @@ fn apply(conn: &Connection, op: &WriteOp, now: &str) -> Result<(), RegistryError
             id,
             expected,
             operation,
-        } => source::delete_instance_created_by(conn, *id, *expected, *operation),
+        } => source::delete_instance_created_by(conn, *id, *expected, *operation, now),
         WriteOp::InsertRestartPlan(plan) => super::restart::insert_plan(conn, plan, op),
         WriteOp::UpdateRestartPlan(plan) => super::restart::update_plan(conn, plan),
         WriteOp::InsertSession(session) => super::session::insert(conn, session, op),
@@ -1074,17 +1074,24 @@ fn write_environment(
             .manifest_location()
             .map(ManifestLocation::as_str),
         super::environment::services_json(environment.declared())?,
+        environment.last_operation().map(|id| id.to_string()),
+        environment
+            .last_up()
+            .map(super::environment::last_up_json)
+            .transpose()?,
     ];
     match write {
         Write::Insert => conn.execute(
             "INSERT INTO environments (id, name, manifest_sha256, revision, created_at, \
-             updated_at, manifest_location, services) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7)",
+             updated_at, manifest_location, services, last_operation_id, last_up) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9)",
             values,
         ),
         Write::Update => conn
             .execute(
                 "UPDATE environments SET name = ?2, manifest_sha256 = ?3, revision = ?4, \
-                 updated_at = ?5, manifest_location = ?6, services = ?7 WHERE id = ?1",
+                 updated_at = ?5, manifest_location = ?6, services = ?7, \
+                 last_operation_id = ?8, last_up = ?9 WHERE id = ?1",
                 values,
             )
             .and_then(|_| {
@@ -1098,13 +1105,14 @@ fn write_environment(
     for (position, member) in environment.members().iter().enumerate() {
         conn.execute(
             "INSERT INTO environment_instances (environment_id, position, alias, instance_id, \
-             ownership) VALUES (?1, ?2, ?3, ?4, ?5)",
+             ownership, dependency_conditions) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 id,
                 position_of(position)?,
                 member.alias().as_str(),
                 member.instance_id().to_string(),
                 member.ownership().as_code(),
+                super::environment::conditions_json(member.dependency_conditions())?,
             ],
         )
         .map_err(sql_error)?;

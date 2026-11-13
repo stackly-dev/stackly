@@ -104,6 +104,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     writes::leases(&suite);
     creates::provider_sources(&suite);
     creates::delete_created_instance(&suite);
+    creates::delete_created_member(&suite);
     imports::imports(&suite);
     guarded::guarded(&suite);
     reads::round_trip(&suite);

@@ -13,7 +13,7 @@ use stackly_domain::{
 };
 
 use super::{Suite, at, batch, domain, expect_eq, parse, rev, suffix};
-use crate::registry::ProviderRevisionBuilder;
+use crate::registry::{EnvironmentBuilder, LeaseBuilder, ProviderRevisionBuilder};
 
 fn fresh_source(suite: &Suite<'_>) -> ProviderSourceRecord {
     let id = ProviderSourceId::generate();
@@ -339,5 +339,78 @@ pub(super) fn delete_created_instance(suite: &Suite<'_>) {
     suite.commit(
         "the same instance can be stored again",
         vec![WriteOp::InsertInstance(instance)],
+    );
+}
+
+/// `DeleteInstanceCreatedBy` of an environment member (spec 0046 AC-7,
+/// AC-12): its member row and its lease go with it, its environment moves
+/// on one revision, and the other members stay.
+pub(super) fn delete_created_member(suite: &Suite<'_>) {
+    let stack = suite.stack("store a stack for the member delete");
+    let created = Suite::instance(&stack).build();
+    let kept = Suite::instance(&stack).build();
+    let environment = EnvironmentBuilder::new()
+        .no_members()
+        .dedicated(created.id())
+        .shared(kept.id());
+    let id = environment.id();
+    suite.commit(
+        "store an environment with a created member and a lease",
+        vec![
+            WriteOp::InsertInstance(created.clone()),
+            WriteOp::InsertInstance(kept.clone()),
+            WriteOp::InsertEnvironment(environment.clone().build()),
+            WriteOp::InsertLease(LeaseBuilder::new(created.id()).environment(id).build()),
+            WriteOp::InsertLease(LeaseBuilder::new(kept.id()).environment(id).build()),
+        ],
+    );
+    suite.commit(
+        "delete the created member",
+        vec![WriteOp::DeleteInstanceCreatedBy {
+            id: created.id(),
+            expected: rev(1),
+            operation: created.created_by(),
+        }],
+    );
+    let stored = suite
+        .value("read the environment", suite.registry.environment(id))
+        .unwrap_or_else(|| super::fail("delete_created_member", "the environment is gone"));
+    expect_eq(
+        "the environment moved on one revision",
+        stored.revision(),
+        rev(2),
+    );
+    expect_eq(
+        "only the other member stays",
+        stored
+            .members()
+            .iter()
+            .map(stackly_domain::EnvironmentMember::instance_id)
+            .collect::<Vec<_>>(),
+        vec![kept.id()],
+    );
+    expect_eq(
+        "the lease of the deleted instance is gone",
+        suite
+            .value(
+                "read its leases",
+                suite
+                    .registry
+                    .leases(created.id(), stackly_domain::LeaseFilter::All),
+            )
+            .len(),
+        0,
+    );
+    expect_eq(
+        "the other lease stays",
+        suite
+            .value(
+                "read the other leases",
+                suite
+                    .registry
+                    .leases(kept.id(), stackly_domain::LeaseFilter::All),
+            )
+            .len(),
+        1,
     );
 }

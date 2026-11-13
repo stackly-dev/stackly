@@ -1,7 +1,9 @@
 //! Environment manifests (spec 0044 step 1): the snapshot and location
 //! read back, names and locations are unique, a guard reads every
 //! environment, and `DeleteEnvironment` refuses an active lease, then
-//! keeps instances and moves owned secret references to the user.
+//! keeps instances and moves owned secret references to the user. Spec
+//! 0046 step 2: the last operation, the last Up report, the members'
+//! dependency conditions, and the write stamp read back.
 
 use stackly_domain::{
     BatchError, DeclaredService, DependencyCondition, DependencyEdge, GuardDecision, Guarded,
@@ -15,7 +17,99 @@ use crate::registry::{EnvironmentBuilder, LeaseBuilder};
 
 pub(super) fn environments(suite: &Suite<'_>) {
     snapshot_and_uniqueness(suite);
+    up_report(suite);
     delete(suite);
+}
+
+/// The last Up report, the last operation, and the dependency conditions
+/// of a member read back as written, and every write moves the stamp.
+fn up_report(suite: &Suite<'_>) {
+    const CHECK: &str = "environment_up_report_round_trips";
+    let stack = suite.stack("store a stack for the up report");
+    let instance = Suite::instance(&stack).build();
+    let builder = EnvironmentBuilder::new()
+        .no_members()
+        .dedicated(instance.id());
+    suite.commit(
+        "store an environment with one member",
+        vec![
+            WriteOp::InsertInstance(instance.clone()),
+            WriteOp::InsertEnvironment(builder.clone().build()),
+        ],
+    );
+    let read = |check: &str| {
+        suite
+            .value(check, suite.registry.environment(builder.id()))
+            .unwrap_or_else(|| fail(CHECK, "the environment is gone"))
+    };
+    let first = read("read the new environment");
+    expect(CHECK, first.updated_at().is_some(), || {
+        "a stored environment has a write stamp".to_owned()
+    });
+    expect_eq(CHECK, first.last_up(), None);
+
+    // Each mutation raises the revision by 1, and an update carries one
+    // revision step, so one batch holds one update per mutation.
+    let operation = stackly_domain::OperationId::generate();
+    let mut next = first.clone();
+    next.begin_up(operation, suite.clock_now());
+    let begun = next.clone();
+    let alias = next.members()[0].alias().clone();
+    next.set_member_conditions(
+        &alias,
+        vec![stackly_domain::MemberDependency::new(
+            parse("make an alias", "cache"),
+            DependencyCondition::Ready,
+            600,
+        )],
+    )
+    .unwrap_or_else(|err| fail(CHECK, &err.to_string()));
+    let conditioned = next.clone();
+    let report = stackly_domain::UpReport::new(
+        operation,
+        stackly_domain::UpState::Failed,
+        suite.clock_now(),
+        Some(suite.clock_now()),
+        vec![
+            stackly_domain::ServiceReport::new(alias.clone(), stackly_domain::UpPhase::Failed)
+                .with_stage(stackly_domain::UpStage::Start)
+                .with_code(parse("make a code", "supervisor.readiness_timeout"))
+                .with_operation(stackly_domain::OperationId::generate()),
+            stackly_domain::ServiceReport::new(
+                parse("make an alias", "api"),
+                stackly_domain::UpPhase::Skipped,
+            )
+            .with_dependency(alias, stackly_domain::SkipReason::Failed),
+            stackly_domain::ServiceReport::new(
+                parse("make an alias", "web"),
+                stackly_domain::UpPhase::NeedsSecret,
+            )
+            .with_references(vec![parse("make a reference", "local:shop/db/admin")]),
+        ],
+    );
+    next.finish_up(report);
+    suite.commit(
+        "write the up report",
+        vec![
+            WriteOp::UpdateEnvironment {
+                environment: begun.clone(),
+                expected: first.revision(),
+            },
+            WriteOp::UpdateEnvironment {
+                environment: conditioned.clone(),
+                expected: begun.revision(),
+            },
+            WriteOp::UpdateEnvironment {
+                environment: next.clone(),
+                expected: conditioned.revision(),
+            },
+        ],
+    );
+    let stored = read("read the reported environment");
+    expect_eq(CHECK, &stored, &next);
+    expect(CHECK, stored.updated_at().is_some(), || {
+        "an updated environment keeps a write stamp".to_owned()
+    });
 }
 
 fn service(alias: &str, depends_on: &[&str]) -> DeclaredService {

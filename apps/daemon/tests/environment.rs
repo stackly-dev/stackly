@@ -828,6 +828,9 @@ fn join(daemon: &DaemonHandle, environment: Uuid, alias: &str, instance: Uuid) -
             instance,
             Ownership::Dedicated,
         )],
+        last_operation: None,
+        last_up: None,
+        updated_at: None,
         revision: stored.revision().next(),
     })
     .expect("a valid environment");
