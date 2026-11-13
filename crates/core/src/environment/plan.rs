@@ -387,6 +387,9 @@ pub enum BlockerKind {
     Create(CreateError),
     /// The selector did not resolve to an installable artifact.
     Resolve {
+        /// The provider of the service, so the message names it also where
+        /// no plan item carries it (`env.lock`).
+        provider: ProviderName,
         /// Why.
         error: ResolveError,
         /// The selector as the manifest wrote it, `stable` when it wrote
@@ -478,6 +481,8 @@ pub enum BlockerKind {
     },
     /// `env.lock_artifact_unknown`.
     LockArtifactUnknown {
+        /// This Mac's target, which the hint names.
+        target: Target,
         /// The locked artifact ID.
         artifact_id: String,
         /// The locked digest.
@@ -1374,7 +1379,10 @@ fn create_item(
                 match locked_artifact(entry, locked, deps.host, &verdict) {
                     Ok(artifact) => Some(Ok(artifact)),
                     Err(error) => {
-                        block(plan, error.blocker(written_selector(service)));
+                        block(
+                            plan,
+                            error.blocker(service.provider.clone(), written_selector(service)),
+                        );
                         None
                     }
                 }
@@ -1403,6 +1411,7 @@ fn create_item(
             Some(Err(error)) => block(
                 plan,
                 BlockerKind::Resolve {
+                    provider: service.provider.clone(),
                     error,
                     selector: written_selector(service),
                 },
