@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-71fb-b44d-140132356335",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentDownEdgeTests/downAndUpAreOffWithTheRightReasonInEachState()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 226
+  },
+  "status": "PASS",
+  "expected": "Down is off with Already bringing down while a Down runs, on while an Up runs, and off through the mutation gate while offline; Up… is off with Bringing down while a Down runs, Already bringing up while an Up runs, and through the gate while offline",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.91Z",
+  "evidencePath": "output.log"
+}

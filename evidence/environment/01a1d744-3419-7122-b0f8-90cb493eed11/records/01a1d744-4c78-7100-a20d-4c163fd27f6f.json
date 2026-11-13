@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7100-a20d-4c163fd27f6f",
+  "covers": [
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentStopAllEdgeTests/turnOffSendsTheOverrideWithThePreviewAndAgentOff()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 541
+  },
+  "status": "PASS",
+  "expected": "Turn Off reads the preview with overrideLeases true, lists the instance an environment holds, and sends daemon.shutdown agent_off with overrideLeases true",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.91Z",
+  "evidencePath": "output.log"
+}

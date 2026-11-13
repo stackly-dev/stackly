@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7a40-b1ce-2371b8f46950",
+  "covers": [
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentDownEdgeTests/bringDownSendsTheIDsOfThePreviewItShowedNotAFresherOne()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 127
+  },
+  "status": "PASS",
+  "expected": "Bring Down sends env.down with exactly the stop IDs of the preview the confirmation showed, even when the daemon would answer another preview by then",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.909Z",
+  "evidencePath": "output.log"
+}

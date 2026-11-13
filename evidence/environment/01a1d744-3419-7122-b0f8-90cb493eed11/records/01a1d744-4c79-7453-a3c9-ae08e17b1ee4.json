@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c79-7453-a3c9-ae08e17b1ee4",
+  "covers": [
+    "REQ-028",
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentLeaseEdgeTests/cancellingTheOverrideConfirmationSendsNothing()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 328
+  },
+  "status": "PASS",
+  "expected": "Cancel on the override confirmation of a refused Stop sends nothing more: one instance.stop with overrideLeases false, no feedback",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.911Z",
+  "evidencePath": "output.log"
+}

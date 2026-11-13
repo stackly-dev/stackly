@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7141-8d38-0c5e16595154",
+  "covers": [
+    "REQ-022",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentDownEndToEndTests/theGUIBringsDownAnImportedEnvironmentAgainstARealDaemonAndChangesNoFile()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEndToEndTests.swift",
+    "line": 68
+  },
+  "status": "PASS",
+  "expected": "against a real stacklyd the GUI's Down model reads env.preview_down of an imported ERP environment, says Nothing to bring down. without a confirmation or env.down, then a Bring Down sends env.down with the empty stop list, its operation succeeds, the result card says erp-development released its lease. Nothing needed to stop., the Lease row says No lease, and no file of the root changes",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:41.591Z",
+  "evidencePath": "output.log"
+}
