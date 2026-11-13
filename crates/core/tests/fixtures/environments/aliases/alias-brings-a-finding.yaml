@@ -1,0 +1,16 @@
+# An alias copies a secret literal and a fixed port; both still fail (spec 0044).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  primary:
+    provider: official/valkey
+    endpoints: &e
+      client: {port: 16379}
+    secretRefs: &r
+      password: SENTINELalias7k
+  replica:
+    provider: official/valkey
+    endpoints: *e
+    secretRefs: *r

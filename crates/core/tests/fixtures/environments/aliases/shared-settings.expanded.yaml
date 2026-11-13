@@ -1,0 +1,14 @@
+# shared-settings.yaml with its alias written out.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  primary:
+    provider: official/valkey
+    settings:
+      persistence: aof
+  replica:
+    provider: official/valkey
+    settings:
+      persistence: aof

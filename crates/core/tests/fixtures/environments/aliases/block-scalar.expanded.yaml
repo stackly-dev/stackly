@@ -1,0 +1,21 @@
+# block-scalar.yaml with its alias written out.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  db:
+    provider: testing/fake
+    version: "0.1"
+  api:
+    provider: testing/fake
+    version: "0.1"
+    dependsOn:
+    - service: db
+      condition: ready
+  web:
+    provider: testing/fake
+    version: "0.1"
+    dependsOn:
+    - service: api
+      condition: ready

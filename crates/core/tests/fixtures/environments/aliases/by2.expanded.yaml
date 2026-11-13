@@ -1,0 +1,18 @@
+# by2.yaml with its alias written out.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  proxy:
+    provider: official/traefik
+    version: "3.7"
+    settings:
+      routes:
+        - name: web
+          rule: 'Host(`a.localhost`) [ - "v'
+          backendUrl: "http://127.0.0.1:3000"
+  cache:
+    provider: official/valkey
+  other:
+    provider: official/valkey

@@ -153,106 +153,208 @@ services:
     );
 }
 
-// covers: AC-1 (spec 0044, K2)
-#[test]
-fn an_anchor_and_an_alias_after_a_block_scalar_in_a_sequence_item_are_found() {
-    let text = "\
-apiVersion: stackly/v1alpha1
-kind: Environment
-metadata:
-  name: shop
-services:
-  db:
-    provider: testing/fake
-    version: \"0.1\"
-  api:
-    provider: testing/fake
-    version: \"0.1\"
-    dependsOn:
-    - service: |-
-        db
-      condition: &c ready
-  web:
-    provider: testing/fake
-    version: \"0.1\"
-    dependsOn:
-    - service: api
-      condition: *c
-";
-    let validation = validate(text.as_bytes(), &catalog());
-    assert_eq!(
-        alias_locations(&validation),
-        ["15:18", "21:18"],
-        "the anchor and the alias"
-    );
+/// A manifest from its services block, under a fixed header.
+fn manifest(services: &str) -> String {
+    format!(
+        "apiVersion: stackly/v1alpha1\nkind: Environment\nmetadata:\n  name: shop\nservices:\n{services}"
+    )
 }
 
-fn alias_locations(validation: &Validation) -> Vec<String> {
+/// The codes and locations of every finding, in order.
+fn findings(validation: &Validation) -> Vec<(String, String)> {
     validation
         .findings
         .list()
         .iter()
-        .filter(|f| f.code() == FindingCode::YamlAlias)
-        .map(|f| f.location().to_string())
+        .map(|f| (f.code().as_code().to_owned(), f.location().to_string()))
         .collect()
 }
 
-// covers: AC-1 (spec 0044, K2)
+// covers: AC-1 (spec 0044, YAML yang diterima)
 #[test]
-fn a_quote_that_starts_a_plain_scalar_continuation_is_refused_and_hides_nothing() {
-    let text = "\
-apiVersion: stackly/v1alpha1
-kind: Environment
-metadata:
-  name: shop
-services:
-  proxy:
-    provider: official/traefik
-    version: \"3.7\"
-    settings:
-      routes:
-        - name: web
-          rule: Host(`a.localhost`) || Host(`b.localhost`) || Header(`X-A`,
-            \"v)
-          backendUrl: \"http://127.0.0.1:3000\"
-  cache: &c
-    provider: official/valkey
-  other: *c
-";
-    let validation = validate(text.as_bytes(), &catalog());
+fn a_manifest_with_aliases_validates_like_the_one_that_writes_them_out() {
+    let catalog = catalog();
+    let dir = fixtures().join("aliases");
+    let mut names = Vec::new();
+    for entry in fs::read_dir(&dir).expect("the aliases folder") {
+        let path = entry.expect("an entry").path();
+        let name = path.file_name().and_then(|n| n.to_str()).expect("a name");
+        let Some(stem) = name.strip_suffix(".yaml") else {
+            continue;
+        };
+        if stem.ends_with(".expanded") {
+            continue;
+        }
+        let aliased = fs::read(&path).expect("the fixture");
+        let expanded = fs::read(dir.join(format!("{stem}.expanded.yaml"))).expect("its pair");
+        assert!(
+            String::from_utf8_lossy(&aliased).contains(" *"),
+            "{stem} uses an alias"
+        );
+        let aliased = validate(&aliased, &catalog);
+        let expanded = validate(&expanded, &catalog);
+
+        assert_eq!(aliased.is_valid(), expanded.is_valid(), "{stem}: valid");
+        assert_eq!(
+            format!("{:?}", aliased.services),
+            format!("{:?}", expanded.services),
+            "{stem}: services"
+        );
+        assert_eq!(findings(&aliased), findings(&expanded), "{stem}: findings");
+        assert!(
+            !codes(&aliased).contains(&"yaml_alias"),
+            "{stem}: {:?}",
+            findings(&aliased)
+        );
+        names.push(stem.to_owned());
+    }
+    names.sort();
     assert_eq!(
-        alias_locations(&validation),
-        ["13:13", "15:10", "17:10"],
-        "the open quote, the anchor, and the alias"
+        names,
+        [
+            "alias-brings-a-finding",
+            "block-scalar",
+            "by1",
+            "by2",
+            "by3",
+            "exotic3",
+            "shared-settings"
+        ]
     );
 }
 
-// covers: AC-1 (spec 0044, K2)
+// covers: AC-1, AC-3 (spec 0044)
 #[test]
-fn a_quote_inside_a_block_scalar_with_an_indentation_indicator_hides_nothing() {
-    let text = "\
-apiVersion: stackly/v1alpha1
-kind: Environment
-metadata:
-  name: shop
-services:
-  db:
-    provider: testing/fake
-    version: \"0.1\"
-    settings:
-      note: |2-
-            first
-          \"second
-  cache: &c
-    provider: testing/fake
-  other: *c
-";
-    let validation = validate(text.as_bytes(), &catalog());
-    assert_eq!(
-        alias_locations(&validation),
-        ["13:10", "15:10"],
-        "the anchor and the alias after the block"
+fn an_alias_never_carries_a_value_past_a_rule() {
+    let validation = validate(&fixture("aliases/alias-brings-a-finding.yaml"), &catalog());
+    let found = findings(&validation);
+    for location in [
+        "services.primary.secretRefs.password",
+        "services.replica.secretRefs.password",
+    ] {
+        assert!(
+            found.contains(&("secret_literal".to_owned(), location.to_owned())),
+            "{location} in {found:?}"
+        );
+    }
+    assert!(
+        codes(&validation).contains(&"endpoint_conflict"),
+        "{found:?}"
     );
+    for finding in validation.findings.list() {
+        assert!(!finding.message().contains("SENTINEL"));
+        assert!(!finding.location().to_string().contains("SENTINEL"));
+    }
+}
+
+// covers: AC-1 (spec 0044, YAML yang diterima)
+#[test]
+fn tags_merge_keys_missing_anchors_and_extra_documents_are_refused() {
+    let fake = "    provider: testing/fake\n    version: \"0.1\"\n";
+    let cases = [
+        (
+            manifest(&format!(
+                "  api:\n{fake}    settings:\n      note: !local x\n"
+            )),
+            "yaml_alias",
+            "services.api.settings.note",
+        ),
+        (
+            manifest(&format!(
+                "  api:\n{fake}    settings:\n      !local note: x\n"
+            )),
+            "yaml_alias",
+            "services.api.settings",
+        ),
+        (
+            manifest(&format!("  api: &a\n{fake}  web:\n    \"<<\": *a\n")),
+            "yaml_alias",
+            "services.web.<<",
+        ),
+        (
+            manifest(&format!("  api:\n{fake}  web: *missing\n")),
+            "yaml_syntax",
+            "",
+        ),
+        (
+            format!("{}---\nother: 1\n", manifest(&format!("  api:\n{fake}"))),
+            "yaml_syntax",
+            ".",
+        ),
+    ];
+    for (text, code, location) in cases {
+        let validation = validate(text.as_bytes(), &catalog());
+        let found = findings(&validation);
+        assert_eq!(found.len(), 1, "{text}: {found:?}");
+        assert_eq!(found[0].0, code, "{text}");
+        if location.is_empty() {
+            assert!(found[0].1.contains(':'), "{text}: a position, {found:?}");
+        } else {
+            assert_eq!(found[0].1, location, "{text}");
+        }
+    }
+}
+
+// covers: AC-1 (spec 0044, YAML yang diterima)
+#[test]
+fn the_merge_key_fixture_points_at_its_mapping() {
+    let validation = validate(&fixture("invalid/yaml_alias.yaml"), &catalog());
+    assert_eq!(
+        findings(&validation),
+        [("yaml_alias".to_owned(), "services.web.<<".to_owned())]
+    );
+}
+
+// covers: AC-1 (spec 0044, YAML yang diterima, Security model)
+#[test]
+fn alias_bombs_under_256_kib_are_refused_within_two_seconds() {
+    const LIMIT: usize = 256 * 1024;
+    // One large anchor behind a chain of nine way aliases.
+    let mut anchor = format!("a0: &a0 [{}]\n", vec!["x"; 1000].join(", "));
+    for level in 1..=6 {
+        let alias = format!("*a{}", level - 1);
+        anchor.push_str(&format!(
+            "a{level}: &a{level} [{}]\n",
+            [alias.as_str(); 9].join(", ")
+        ));
+    }
+    // A 100 KiB string behind as many aliases as fit.
+    let mut string = format!("a: &a {}\nl:\n", "x".repeat(100 * 1024));
+    while string.len() < LIMIT - 8 {
+        string.push_str("- *a\n");
+    }
+    // The classic nested billion laughs.
+    let mut nested = String::from("a0: &a0 [lol, lol, lol, lol, lol, lol, lol, lol, lol]\n");
+    for n in 1..10 {
+        let alias = format!("*a{}", n - 1);
+        nested.push_str(&format!(
+            "a{n}: &a{n} [{}]\n",
+            [alias.as_str(); 9].join(", ")
+        ));
+    }
+    let cases = [
+        ("large anchor", anchor, &["yaml_alias"][..]),
+        ("large string", string, &["yaml_alias"][..]),
+        ("nested", nested, &["yaml_alias", "yaml_syntax"][..]),
+    ];
+    for (name, text, allowed) in cases {
+        assert!(text.len() < LIMIT, "{name}: {}", text.len());
+        let start = std::time::Instant::now();
+
+        let validation = validate(text.as_bytes(), &catalog());
+
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "{name}: {:?}",
+            start.elapsed()
+        );
+        let found = findings(&validation);
+        assert_eq!(found.len(), 1, "{name}: {found:?}");
+        assert!(allowed.contains(&found[0].0.as_str()), "{name}: {found:?}");
+        if found[0].0 == "yaml_alias" {
+            assert_eq!(found[0].1, ".", "{name}");
+        }
+    }
 }
 
 // covers: AC-1 (spec 0044, K2)
@@ -292,24 +394,64 @@ services:
     );
 }
 
+// covers: AC-1 (spec 0044, YAML yang diterima)
+#[test]
+fn quotes_block_scalars_unused_anchors_and_resolved_tags_stay_valid() {
+    let route = |rule: &str| {
+        manifest(&format!(
+            "  proxy:\n    provider: official/traefik\n    version: \"3.7\"\n    settings:\n      routes:\n        - name: web\n{rule}\n          backendUrl: \"http://127.0.0.1:3000\"\n"
+        ))
+    };
+    // Settings text holds no control character, so each block keeps one
+    // line and strips its final line break.
+    let note = |block: &str| {
+        manifest(&format!(
+            "  db:\n    provider: testing/fake\n    version: \"0.1\"\n    settings:\n      greeting: {block}\n"
+        ))
+    };
+    let cases = [
+        (
+            "a quote that starts on its own line",
+            route(
+                "          rule:\n            \"Host(`a.localhost`) &&\n            PathPrefix(`/`)\"",
+            ),
+        ),
+        ("a literal block", note("|-\n        &one *two \"three")),
+        ("a folded block", note(">-\n        &one *two 'three")),
+        (
+            "an indentation indicator",
+            note("|2-\n          &one *two \"three"),
+        ),
+        (
+            "an unused anchor",
+            manifest("  db: &unused\n    provider: testing/fake\n    version: \"0.1\"\n"),
+        ),
+        (
+            "a version with a resolved tag",
+            manifest("  db:\n    provider: testing/fake\n    version: !!str 0.1\n"),
+        ),
+    ];
+    for (name, text) in cases {
+        let validation = validate(text.as_bytes(), &catalog());
+        assert!(
+            validation.findings.list().is_empty(),
+            "{name}: {:#?}",
+            validation.findings.list()
+        );
+    }
+    let erp = validate(&fixture("erp-development.yaml"), &catalog());
+    assert!(erp.is_valid());
+}
+
 // covers: AC-1 (spec 0044)
 #[test]
 fn syntax_findings_point_at_a_line_and_column() {
-    let validation = validate(&fixture("invalid/yaml_alias.yaml"), &catalog());
-    let locations: Vec<String> = validation
-        .findings
-        .list()
-        .iter()
-        .map(|f| f.location().to_string())
-        .collect();
-    assert_eq!(locations, ["7:8", "9:8"], "the anchor and the alias");
     let validation = validate(&fixture("invalid/yaml_syntax.yaml"), &catalog());
-    assert!(
-        validation.findings.list()[0]
-            .location()
-            .to_string()
-            .contains(':')
-    );
+    let found = findings(&validation);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].0, "yaml_syntax");
+    let (line, column) = found[0].1.split_once(':').expect("line:column");
+    assert!(line.parse::<usize>().is_ok() && column.parse::<usize>().is_ok());
 }
 
 // covers: AC-1 (spec 0044)

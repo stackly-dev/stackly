@@ -68,7 +68,8 @@ finding_codes! {
     InvalidValue => "invalid_value",
     /// A key appears twice in one mapping.
     DuplicateKey => "duplicate_key",
-    /// A YAML anchor, alias, tag, or merge key.
+    /// A tagged value or key, a merge key, or aliases that expand the file
+    /// past its budget; plain anchors and aliases are accepted.
     YamlAlias => "yaml_alias",
     /// `apiVersion` is not `stackly/v1alpha1`.
     UnsupportedApiVersion => "unsupported_api_version",
@@ -139,7 +140,9 @@ impl FindingCode {
             Self::MissingField => "missing field",
             Self::InvalidValue => "invalid value",
             Self::DuplicateKey => "a key appears twice in one mapping",
-            Self::YamlAlias => "YAML anchors, aliases, tags, and merge keys are not allowed",
+            Self::YamlAlias => {
+                "YAML tags and merge keys are not allowed, and aliases can't expand the file past its size limit"
+            }
             Self::UnsupportedApiVersion => "apiVersion must be stackly/v1alpha1",
             Self::UnsupportedKind => "kind must be Environment",
             Self::InvalidName => {

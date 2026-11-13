@@ -876,7 +876,7 @@ pub(crate) struct RawBlocked {
 }
 
 /// Parses YAML text into a value. Aliases may expand the document to at
-/// most [`yaml_node_budget`] nodes, and the rest stays within the recursion
+/// most [`yaml_node_budget`] nodes and string bytes, and the rest stays within the recursion
 /// and repetition limits of `serde_yaml_ng`; tags and merge keys are
 /// rejected afterwards by [`check_yaml_value`].
 pub(crate) fn parse_yaml(file: &str, text: &str) -> Result<serde_yaml_ng::Value, Issue> {
@@ -905,15 +905,19 @@ pub(crate) fn parse_yaml(file: &str, text: &str) -> Result<serde_yaml_ng::Value,
     })
 }
 
-/// Nodes a YAML document may hold for each byte of its text, once its
-/// aliases expand. Without aliases a node takes at least one byte, so only
-/// alias expansion reaches the budget.
+/// Budget a YAML document may spend for each byte of its text, once its
+/// aliases expand: every node costs 1, and a string (keys included) also
+/// costs its length in bytes. Without aliases every node and every string
+/// byte comes from at least one byte of text (an escape such as `\L`
+/// yields at most 1.5 bytes per byte), so only alias expansion reaches the
+/// budget (spec 0009, extended by spec 0044).
 const YAML_NODES_PER_BYTE: usize = 2;
 /// Nodes any YAML document may hold besides [`YAML_NODES_PER_BYTE`], so a
 /// short text may still use a few aliases.
 const YAML_NODES_EXTRA: usize = 1024;
 
-/// The most nodes a YAML text of `len` bytes may expand to.
+/// The most nodes and string bytes a YAML text of `len` bytes may expand
+/// to.
 pub(crate) const fn yaml_node_budget(len: usize) -> usize {
     len.saturating_mul(YAML_NODES_PER_BYTE)
         .saturating_add(YAML_NODES_EXTRA)
@@ -932,13 +936,14 @@ pub(crate) enum YamlError {
 }
 
 /// Parses YAML text into a value, refusing a document whose aliases expand
-/// it past [`yaml_node_budget`] nodes.
+/// it past [`yaml_node_budget`] nodes and string bytes.
 ///
 /// `serde_yaml_ng` copies the anchored node for every alias and limits only
 /// the number of alias jumps, so one large anchor behind a short chain of
 /// aliases expands to millions of nodes (a billion laughs with a big
-/// anchor). A first pass therefore visits the document without storing it
-/// and stops at the budget; only a document within the budget is built.
+/// anchor), and one large string behind thousands of aliases expands to
+/// gigabytes. A first pass therefore visits the document without storing
+/// it and stops at the budget; only a document within the budget is built.
 pub(crate) fn yaml_value(text: &str) -> Result<serde_yaml_ng::Value, YamlError> {
     let budget = yaml_node_budget(text.len());
     let counter = NodeCounter {
@@ -956,7 +961,7 @@ pub(crate) fn yaml_value(text: &str) -> Result<serde_yaml_ng::Value, YamlError> 
     }
 }
 
-/// The nodes a counting pass may still visit.
+/// The budget a counting pass may still spend.
 struct NodeCounter {
     left: Cell<usize>,
     exceeded: Cell<bool>,
@@ -965,7 +970,12 @@ struct NodeCounter {
 impl NodeCounter {
     /// Counts one node, failing once the budget is spent.
     fn tick<E: de::Error>(&self) -> Result<(), E> {
-        match self.left.get().checked_sub(1) {
+        self.spend(1)
+    }
+
+    /// Spends `cost` from the budget, failing once it is spent.
+    fn spend<E: de::Error>(&self, cost: usize) -> Result<(), E> {
+        match self.left.get().checked_sub(cost) {
             Some(left) => {
                 self.left.set(left);
                 Ok(())
@@ -979,7 +989,7 @@ impl NodeCounter {
 }
 
 /// Visits one YAML node and everything under it, aliases expanded, storing
-/// nothing.
+/// nothing. A string costs 1 plus its length in bytes; any other node 1.
 #[derive(Clone, Copy)]
 struct NodeBudget<'a>(&'a NodeCounter);
 
@@ -1026,12 +1036,12 @@ impl<'de> Visitor<'de> for NodeBudget<'_> {
         self.0.tick()
     }
 
-    fn visit_str<E: de::Error>(self, _: &str) -> Result<(), E> {
-        self.0.tick()
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<(), E> {
+        self.0.spend(value.len().saturating_add(1))
     }
 
-    fn visit_bytes<E: de::Error>(self, _: &[u8]) -> Result<(), E> {
-        self.0.tick()
+    fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<(), E> {
+        self.0.spend(value.len().saturating_add(1))
     }
 
     fn visit_unit<E: de::Error>(self) -> Result<(), E> {
@@ -1533,6 +1543,45 @@ mod tests {
             text.push_str(&format!("x{level}: &x{level} [{list}]\n"));
         }
         text
+    }
+
+    #[test]
+    fn a_large_string_behind_thousands_of_aliases_stops_at_the_budget() {
+        // 5005 nodes, but 102 MB of copied strings (spec 0044).
+        let mut text = format!("a: &a {}\nl:\n", "x".repeat(20 * 1024));
+        for _ in 0..5000 {
+            text.push_str("- *a\n");
+        }
+        let start = std::time::Instant::now();
+
+        let result = yaml_value(&text);
+
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
+        assert!(
+            matches!(result, Err(YamlError::TooLarge { budget }) if budget == yaml_node_budget(text.len())),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn a_256_kib_document_without_aliases_stays_within_the_budget() {
+        let limit = 256 * 1024;
+        // One plain string, one double quoted string of `\L` escapes (three
+        // bytes each from two bytes of text), and many short nodes.
+        let plain = format!("a: {}\n", "x".repeat(limit - 4));
+        let escapes = format!("a: \"{}\"\n", "\\L".repeat((limit - 7) / 2));
+        let mut nodes = String::from("a:\n");
+        while nodes.len() < limit - 8 {
+            nodes.push_str("- {b: c}\n");
+        }
+        for text in [plain, escapes, nodes] {
+            assert!(text.len() <= limit, "{}", text.len());
+            assert!(yaml_value(&text).is_ok(), "{} bytes", text.len());
+        }
     }
 
     #[test]
