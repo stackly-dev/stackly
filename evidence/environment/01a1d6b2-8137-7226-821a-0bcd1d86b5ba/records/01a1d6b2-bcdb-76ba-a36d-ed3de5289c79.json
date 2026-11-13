@@ -1,0 +1,66 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6b2-bcdb-76ba-a36d-ed3de5289c79",
+  "covers": [
+    "REQ-022",
+    "AC-022"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_native",
+    "name": "the_erp_manifest_goes_down_keeping_its_data_and_comes_up_again_with_it",
+    "file": "apps/daemon/tests/env_down_native.rs",
+    "line": 381
+  },
+  "status": "PASS",
+  "expected": "after env.up of the ERP example manifest with the six official runtimes from the xtask runtime cache, env.preview_down lists all six to stop and none to keep, env.down succeeds and leaves all six stopped with their data folders in place and every data file still there, the environment holds no active lease, and a second Up brings all six back to ready on the same instances",
+  "actual": "Down stopped 6 of 6 and kept none: clickhouse stopped with 12 data files; mysql stopped with 172 data files; nats stopped with 0 data files; postgres stopped with 973 data files; traefik stopped with 0 data files; valkey stopped with 3 data files; the lease count went 6 to 0; the second Up brought the same six back to ready",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "postgresql",
+      "version": "18.6",
+      "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+      "source": "managed"
+    },
+    {
+      "provider": "mysql",
+      "version": "9.7.2",
+      "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+      "source": "managed"
+    },
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    },
+    {
+      "provider": "clickhouse",
+      "version": "26.8.30.8",
+      "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+      "source": "managed"
+    },
+    {
+      "provider": "valkey",
+      "version": "9.1.2",
+      "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+      "source": "managed"
+    },
+    {
+      "provider": "traefik",
+      "version": "3.7.15",
+      "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T20:56:40.411464Z",
+  "finishedAt": "2026-11-13T20:58:06.11188Z",
+  "evidencePath": "output.log"
+}
