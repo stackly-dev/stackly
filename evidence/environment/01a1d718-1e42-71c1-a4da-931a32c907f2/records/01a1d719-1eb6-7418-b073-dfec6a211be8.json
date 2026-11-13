@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb6-7418-b073-dfec6a211be8",
+  "covers": [
+    "REQ-022",
+    "BR-006"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "a_daemon_restart_after_release_leaves_the_rest_running_without_a_lease_and_the_next_down_stops_it",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 918
+  },
+  "status": "PASS",
+  "expected": "a daemon that stops while Down of a chain waits on web's stop comes back with the Down failed interrupted, no stop operation left queued or running, db still running with no lease and never stopped by itself, every file keeping its bytes; once web exits, the next Down stops db and succeeds; a Down that fails env.down_incomplete keeps every byte too",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.134134Z",
+  "finishedAt": "2026-11-13T22:49:00.187335Z",
+  "evidencePath": "output.log"
+}

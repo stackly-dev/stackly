@@ -1,0 +1,42 @@
+    Blocking waiting for file lock on package cache
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 17.77s
+     Running tests/env_down.rs (target/debug/deps/env_down-b198a8abc9278922)
+
+running 7 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+test a_down_while_up_runs_cancels_the_up_and_a_new_up_is_busy ... ok
+test a_down_whose_client_goes_away_still_runs_to_the_end ... ok
+test a_down_keeps_an_instance_another_environment_holds_and_the_last_down_stops_it ... ok
+test a_changed_stop_set_or_an_unknown_environment_is_refused_without_an_operation ... ok
+test a_daemon_restart_in_the_middle_of_a_down_closes_it_interrupted_with_the_leases_released ... ok
+test a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes ... ok
+test up_of_one_environment_and_down_of_another_on_a_shared_instance_agree_fifty_times ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.40s
+
+     Running tests/env_down_edges.rs (target/debug/deps/env_down_edges-ed08de664e98c65e)
+
+running 11 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+test a_lease_that_appears_between_the_dry_run_and_the_apply_refuses_the_port_change ... ok
+test a_stop_set_that_changed_after_the_preview_is_refused_in_both_directions ... ok
+test three_environments_on_one_instance_keep_it_running_until_the_last_down ... ok
+test a_persons_stop_with_the_override_keeps_every_lease_and_the_next_up_starts_it_again ... ok
+test stop_all_refuses_a_set_shown_with_the_other_override_mode_in_both_directions ... ok
+test restart_reload_a_settings_apply_and_a_rename_of_a_leased_instance_need_no_override ... ok
+    Finished `dev` profile [unoptimized] target(s) in 0.34s
+test killing_stackly_env_down_in_the_middle_leaves_the_down_running_to_its_end ... ok
+test a_cancel_in_the_middle_of_a_down_waits_for_the_running_stop_and_cancels_the_rest ... ok
+test up_of_one_environment_with_downs_of_two_others_on_a_shared_instance_agree ... ok
+test two_downs_at_once_on_a_shared_instance_never_both_succeed_while_it_runs_unwanted ... ok
+test a_daemon_restart_after_release_leaves_the_rest_running_without_a_lease_and_the_next_down_stops_it ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.06s
+

@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d718-6bbe-75b9-969e-a2b42c3272c8",
+  "covers": [
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "a_down_whose_client_goes_away_still_runs_to_the_end",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 688
+  },
+  "status": "PASS",
+  "expected": "a client that closes its connection right after env.down is accepted leaves the Down running: another client sees it succeed, the instance stopped, and the lease released",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:47:44.31846Z",
+  "finishedAt": "2026-11-13T22:47:49.695902Z",
+  "evidencePath": "output.log"
+}

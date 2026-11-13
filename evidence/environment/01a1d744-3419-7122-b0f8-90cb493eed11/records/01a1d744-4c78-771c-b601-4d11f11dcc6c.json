@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-771c-b601-4d11f11dcc6c",
+  "covers": [
+    "REQ-028",
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentLeaseEdgeTests/aLeaseAfterTheDryRunShowsTheCautionWithoutSendingAgain()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 400
+  },
+  "status": "PASS",
+  "expected": "A port change that instance.endpoints_require_override refuses, because a lease came after the dry run, is reported, judged again, and shows the caution and Change Anyway without sending again on its own; the caution names one environment",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.911Z",
+  "evidencePath": "output.log"
+}

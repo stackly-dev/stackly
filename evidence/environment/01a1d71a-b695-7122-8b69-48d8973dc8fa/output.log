@@ -1,0 +1,50 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stackly-cli v0.1.0 ($REPO/apps/cli)
+    Finished `test` profile [unoptimized] target(s) in 9.04s
+     Running tests/env/main.rs (target/debug/deps/env-d3dc582818372948)
+
+running 6 tests
+   Compiling ring v0.17.14
+test down_edges::the_preview_names_every_keep_reason_and_the_up_it_cancels ... ok
+test down_edges::a_down_that_fails_writes_one_json_envelope_with_its_error_and_exit_code ... ok
+test down_edges::the_lease_line_reads_many_instances_none_and_nothing_from_an_older_daemon ... ok
+test down_edges::a_cancelled_down_exits_9_without_the_down_summary ... ok
+   Compiling rustls v0.23.46
+test down_edges::a_wait_that_runs_out_of_its_timeout_exits_8_and_never_cancels_the_down ... ok
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling xtask v0.1.0 ($REPO/xtask)
+    Finished `dev` profile [unoptimized] target(s) in 9.17s
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls v0.23.46
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `dev` profile [unoptimized] target(s) in 13.03s
+test lock_edges::a_real_daemon_ignores_an_override_file_with_an_error_and_refuses_a_lock_it_cannot_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 25.64s
+
+     Running tests/instance/main.rs (target/debug/deps/instance-bad6b35d5f1650c0)
+
+running 9 tests
+test override_leases::the_override_cannot_be_given_with_force ... ok
+test override_edges::a_stop_with_the_override_names_no_environment_whose_lease_is_gone ... ok
+test override_edges::a_refused_port_change_with_json_is_one_envelope_and_exit_3 ... ok
+test override_leases::a_refused_stop_exits_3_naming_the_environment_and_the_way_around_it ... ok
+test action::start_and_stop_send_the_instance_id_in_lower_case_and_never_override_leases ... ok
+test override_leases::stop_all_with_the_override_sends_it_to_the_preview_and_the_stop_and_names_the_environment ... ok
+test override_edges::a_refused_stop_names_each_environment_on_its_own_line_and_json_carries_the_items ... ok
+test override_leases::endpoint_set_sends_the_override_and_a_refusal_names_the_flag ... ok
+test override_leases::a_stop_with_the_override_sends_it_and_names_the_environment_left_incomplete ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 144 filtered out; finished in 0.29s
+

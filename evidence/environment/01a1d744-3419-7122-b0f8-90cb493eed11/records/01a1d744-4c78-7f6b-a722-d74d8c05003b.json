@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7f6b-a722-d74d8c05003b",
+  "covers": [
+    "REQ-022",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentDownEdgeTests/theConfirmationNamesEveryReasonAnInstanceKeepsRunning()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 83
+  },
+  "status": "PASS",
+  "expected": "The confirmation names why each instance keeps running: used by every other environment, started by you, starts at login, and both reasons of one instance joined with and",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.91Z",
+  "evidencePath": "output.log"
+}

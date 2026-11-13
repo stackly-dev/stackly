@@ -1,0 +1,32 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d718-6bbc-7731-8ce3-7ec7e4cb66ba",
+  "covers": [
+    "AC-022",
+    "REQ-022",
+    "BR-014",
+    "BR-015",
+    "BR-006"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "a_down_keeps_an_instance_another_environment_holds_and_the_last_down_stops_it",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 309
+  },
+  "status": "PASS",
+  "expected": "with shop creating shop-db and blog borrowing it, a stop without override is refused supervisor.stop_requires_override naming both environments, the preview of shop keeps shop-db for blog, Down of shop succeeds with nothing stopped, releases only shop's lease, and leaves the same PID ready; Down of blog then stops it; data, members, and rows stay",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:47:44.316608Z",
+  "finishedAt": "2026-11-13T22:47:49.753286Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,142 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d719-c81f-763a-ac69-06dff75e6276",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+    "sourceDirty": false,
+    "runId": "01a1d719-c81f-763a-ac69-06dff75e6276",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "env_down_cli_native",
+      "--",
+      "--ignored"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T22:49:13.50361Z",
+  "finishedAt": "2026-11-13T22:49:50.978797Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71a-1a6e-72bb-8090-438b8b7b15a4",
+      "covers": [
+        "AC-022",
+        "REQ-022",
+        "REQ-028",
+        "BR-014",
+        "BR-015",
+        "BR-006"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down_cli_native",
+        "name": "stackly_env_down_keeps_a_shared_nats_instance_for_the_other_environment_then_stops_it",
+        "file": "apps/daemon/tests/env_down_cli_native.rs",
+        "line": 233
+      },
+      "status": "PASS",
+      "expected": "with NATS installed from the xtask runtime cache and no download, shop creates shop-bus and blog borrows it through the real binaries; stackly env down shop --wait exits 0 writing keep shop-bus: used by blog and Down. 0 stopped, 1 kept running., the same PID keeps accepting TCP connections, env status shows lease: none for shop and lease: held on 1 instance for blog; stackly instance stop shop-bus exits 3 with shop-bus is used by blog (bus); stackly env down blog --wait exits 0 writing stopped shop-bus and the port refuses connections; every file of the root outside logs, run, and the registry keeps its bytes; env up shop --wait brings it back ready",
+      "actual": "nats 2.15.1 from the cache; env down shop --wait exited 0 with keep shop-bus: used by blog and Down. 0 stopped, 1 kept running.; PID 45987 kept answering on port 55485; env status shop read lease: none and blog read lease: held on 1 instance since 2026-11-13T22:49:49.166Z; instance stop shop-bus exited 3 with shop-bus is used by blog (bus); env down blog --wait --json exited 0 succeeded and the port refused connections; 47 files kept their bytes; env up shop --wait brought it back on port 55485",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:49:34.57456Z",
+      "finishedAt": "2026-11-13T22:49:50.967308Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d719-c81f-763a-ac69-06dff75e6276",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down_cli_native",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

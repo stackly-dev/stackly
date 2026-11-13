@@ -1,0 +1,699 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+    "sourceDirty": false,
+    "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+    "runKind": "fixture",
+    "command": [
+      "swift",
+      "test",
+      "--package-path",
+      "apps/macos/Packages/StacklyUI",
+      "--filter",
+      "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T23:35:33.657659Z",
+  "finishedAt": "2026-11-13T23:35:41.652214Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 10,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 10,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 10,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7100-a20d-4c163fd27f6f",
+      "covers": [
+        "BR-015"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentStopAllEdgeTests/turnOffSendsTheOverrideWithThePreviewAndAgentOff()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 541
+      },
+      "status": "PASS",
+      "expected": "Turn Off reads the preview with overrideLeases true, lists the instance an environment holds, and sends daemon.shutdown agent_off with overrideLeases true",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.91Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7100-a418-ffd30e6598ec",
+      "covers": [
+        "REQ-022",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentDownEdgeTests/onlyTheWindowThatSentTheDownShowsItsResult()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 196
+      },
+      "status": "PASS",
+      "expected": "Only the window that sent a Down shows its result card; another window's Down model shows nothing when that operation ends",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.91Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7141-8d38-0c5e16595154",
+      "covers": [
+        "REQ-022",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentDownEndToEndTests/theGUIBringsDownAnImportedEnvironmentAgainstARealDaemonAndChangesNoFile()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEndToEndTests.swift",
+        "line": 68
+      },
+      "status": "PASS",
+      "expected": "against a real stacklyd the GUI's Down model reads env.preview_down of an imported ERP environment, says Nothing to bring down. without a confirmation or env.down, then a Bring Down sends env.down with the empty stop list, its operation succeeds, the result card says erp-development released its lease. Nothing needed to stop., the Lease row says No lease, and no file of the root changes",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:41.591Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-71fb-b44d-140132356335",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentDownEdgeTests/downAndUpAreOffWithTheRightReasonInEachState()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 226
+      },
+      "status": "PASS",
+      "expected": "Down is off with Already bringing down while a Down runs, on while an Up runs, and off through the mutation gate while offline; Up… is off with Bringing down while a Down runs, Already bringing up while an Up runs, and through the gate while offline",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.91Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7702-9787-6149ee2203c2",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentStopAllEdgeTests/theStopsOfADownNestUnderItAndAnOrphanShowsOnItsOwn()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 578
+      },
+      "status": "PASS",
+      "expected": "In Operations the stops of a Down follow it, indented, the Down reads Partial, and a stop whose Down is not in the list shows on its own",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.91Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-771c-b601-4d11f11dcc6c",
+      "covers": [
+        "REQ-028",
+        "BR-015"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLeaseEdgeTests/aLeaseAfterTheDryRunShowsTheCautionWithoutSendingAgain()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 400
+      },
+      "status": "PASS",
+      "expected": "A port change that instance.endpoints_require_override refuses, because a lease came after the dry run, is reported, judged again, and shows the caution and Change Anyway without sending again on its own; the caution names one environment",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.911Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7a40-b1ce-2371b8f46950",
+      "covers": [
+        "REQ-022"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentDownEdgeTests/bringDownSendsTheIDsOfThePreviewItShowedNotAFresherOne()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 127
+      },
+      "status": "PASS",
+      "expected": "Bring Down sends env.down with exactly the stop IDs of the preview the confirmation showed, even when the daemon would answer another preview by then",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.909Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c78-7f6b-a722-d74d8c05003b",
+      "covers": [
+        "REQ-022",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentDownEdgeTests/theConfirmationNamesEveryReasonAnInstanceKeepsRunning()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 83
+      },
+      "status": "PASS",
+      "expected": "The confirmation names why each instance keeps running: used by every other environment, started by you, starts at login, and both reasons of one instance joined with and",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.91Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c79-7453-a3c9-ae08e17b1ee4",
+      "covers": [
+        "REQ-028",
+        "BR-015"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLeaseEdgeTests/cancellingTheOverrideConfirmationSendsNothing()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 328
+      },
+      "status": "PASS",
+      "expected": "Cancel on the override confirmation of a refused Stop sends nothing more: one instance.stop with overrideLeases false, no feedback",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.911Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-4c79-7a70-904e-340a25d3b907",
+      "covers": [
+        "REQ-027",
+        "BR-015"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentStopAllEdgeTests/theMenuBarSendsTheOverrideAndTheIDsOfThePreviewItShowed()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+        "line": 500
+      },
+      "status": "PASS",
+      "expected": "The menu bar's own client reads instance.preview_stop_all with overrideLeases true and sends instance.stop_all with overrideLeases true and exactly the IDs of that preview",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:35:39.897Z",
+      "finishedAt": "2026-11-13T23:35:39.92Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-3419-7122-b0f8-90cb493eed11",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentDownEdgeTests|EnvironmentLeaseEdgeTests|EnvironmentStopAllEdgeTests|EnvironmentDownEndToEndTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

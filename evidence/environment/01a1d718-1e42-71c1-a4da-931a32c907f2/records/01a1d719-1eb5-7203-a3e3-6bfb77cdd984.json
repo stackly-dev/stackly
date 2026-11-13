@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb5-7203-a3e3-6bfb77cdd984",
+  "covers": [
+    "REQ-022",
+    "BR-006"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "a_cancel_in_the_middle_of_a_down_waits_for_the_running_stop_and_cancels_the_rest",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 844
+  },
+  "status": "PASS",
+  "expected": "Down of a chain whose web ignores SIGTERM, cancelled while web stops: web's stop runs to its timeout and is never cancelled, db is never stopped, the Down ends cancelled at stage stop with every lease released, and every file outside logs, run, and the registry keeps its bytes, as do the config revisions; once web exits, the next Down stops db and succeeds",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.133974Z",
+  "finishedAt": "2026-11-13T22:48:49.580702Z",
+  "evidencePath": "output.log"
+}

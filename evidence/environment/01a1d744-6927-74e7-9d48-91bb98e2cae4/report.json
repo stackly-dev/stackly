@@ -1,0 +1,169 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d744-6927-74e7-9d48-91bb98e2cae4",
+  "kind": "native",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+    "sourceDirty": false,
+    "runId": "01a1d744-6927-74e7-9d48-91bb98e2cae4",
+    "runKind": "native",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "env_down_data_native",
+      "--",
+      "--ignored"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T23:35:47.239673Z",
+  "finishedAt": "2026-11-13T23:37:20.02Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 0,
+      "native": 1
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d744-aac8-7012-86d4-a55c4bbea621",
+      "covers": [
+        "REQ-022",
+        "BR-006",
+        "AC-022"
+      ],
+      "kind": "native",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down_data_native",
+        "name": "down_keeps_a_sentinel_in_every_provider_and_changes_no_runtime_file",
+        "file": "apps/daemon/tests/env_down_data_native.rs",
+        "line": 778
+      },
+      "status": "PASS",
+      "expected": "after env.up of the ERP example manifest with the six official runtimes from the xtask runtime cache, a sentinel written to PostgreSQL, MySQL, ClickHouse, Valkey, and a NATS JetStream file stream is read back from each after env.down and a second env.up; no data file outside the files only a running process owns goes away or loses its content across Down, every file a clean shutdown rewrote is named in the note, and the runtime folder keeps every file with its size through Down and the second Up",
+      "actual": "sentinels in clickhouse, mysql, nats, postgres, valkey read back after Down and Up; 2292 runtime files kept name and size through Down and the second Up; no data file went away or lost its content; files a clean shutdown rewrote: mysql/#ib_16384_0.dblwr, mysql/#innodb_redo/#ib_redo5, mysql/ib_buffer_pool, mysql/ibdata1, mysql/mysql.ibd, mysql/stackly_sentinel/t.ibd, mysql/sys/sys_config.ibd, mysql/undo_001, mysql/undo_002, postgres/global/pg_control, postgres/pg_wal/000000010000000000000001, postgres/pg_xact/0000",
+      "reason": null,
+      "owner": null,
+      "subjects": [
+        {
+          "provider": "postgresql",
+          "version": "18.6",
+          "digest": "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590",
+          "source": "managed"
+        },
+        {
+          "provider": "mysql",
+          "version": "9.7.2",
+          "digest": "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6",
+          "source": "managed"
+        },
+        {
+          "provider": "nats",
+          "version": "2.15.1",
+          "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+          "source": "managed"
+        },
+        {
+          "provider": "clickhouse",
+          "version": "26.8.30.8",
+          "digest": "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402",
+          "source": "managed"
+        },
+        {
+          "provider": "valkey",
+          "version": "9.1.2",
+          "digest": "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370",
+          "source": "managed"
+        },
+        {
+          "provider": "traefik",
+          "version": "3.7.15",
+          "digest": "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323",
+          "source": "managed"
+        }
+      ],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T23:36:04.040343Z",
+      "finishedAt": "2026-11-13T23:37:20.003914Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "fb506933d15767ea5f65d37b40738348c413acd1",
+        "sourceDirty": false,
+        "runId": "01a1d744-6927-74e7-9d48-91bb98e2cae4",
+        "runKind": "native",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down_data_native",
+          "--",
+          "--ignored"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

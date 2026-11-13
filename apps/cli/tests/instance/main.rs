@@ -28,6 +28,7 @@ mod list;
 mod logs_real;
 mod metrics;
 mod open;
+mod override_edges;
 mod override_leases;
 mod parity;
 #[path = "../operation/play.rs"]

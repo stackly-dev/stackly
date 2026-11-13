@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d718-6bbc-7731-8ce3-7eca7681b09f",
+  "covers": [
+    "AC-073",
+    "BR-014"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "up_of_one_environment_and_down_of_another_on_a_shared_instance_agree_fifty_times",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 715
+  },
+  "status": "PASS",
+  "expected": "50 times, Up of alpha and Down of beta at once, both borrowing one instance, end with exactly one active lease of alpha, none of beta, one instance, no member or lease row twice, and when the Up succeeds the instance runs ready",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:47:44.316937Z",
+  "finishedAt": "2026-11-13T22:48:28.704389Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb6-7418-b073-dfeb7a755f1f",
+  "covers": [
+    "REQ-022",
+    "BR-014"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "a_stop_set_that_changed_after_the_preview_is_refused_in_both_directions",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 753
+  },
+  "status": "PASS",
+  "expected": "a preview that kept shop-db for blog is refused env.down_changed once blog went down and shop-db became stoppable; a preview that would stop it is refused env.down_changed once your restart wrote a manual lease; the fresh preview keeps it as started by you and the Down leaves it running",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.134108Z",
+  "finishedAt": "2026-11-13T22:48:39.038336Z",
+  "evidencePath": "output.log"
+}

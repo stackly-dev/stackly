@@ -12,6 +12,7 @@ mod data_compat;
 mod doctor;
 mod force_restart;
 mod guarded_stop;
+mod guarded_stop_edges;
 mod init;
 mod integrity;
 mod launch;
