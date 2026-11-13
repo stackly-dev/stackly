@@ -153,6 +153,43 @@ services:
     );
 }
 
+// covers: AC-1 (spec 0044, K2)
+#[test]
+fn an_anchor_and_an_alias_after_a_block_scalar_in_a_sequence_item_are_found() {
+    let text = "\
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  db:
+    provider: testing/fake
+    version: \"0.1\"
+  api:
+    provider: testing/fake
+    version: \"0.1\"
+    dependsOn:
+    - service: |-
+        db
+      condition: &c ready
+  web:
+    provider: testing/fake
+    version: \"0.1\"
+    dependsOn:
+    - service: api
+      condition: *c
+";
+    let validation = validate(text.as_bytes(), &catalog());
+    let aliases: Vec<String> = validation
+        .findings
+        .list()
+        .iter()
+        .filter(|f| f.code() == FindingCode::YamlAlias)
+        .map(|f| f.location().to_string())
+        .collect();
+    assert_eq!(aliases, ["15:18", "21:18"], "the anchor and the alias");
+}
+
 // covers: AC-1 (spec 0044)
 #[test]
 fn syntax_findings_point_at_a_line_and_column() {

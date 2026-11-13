@@ -424,6 +424,14 @@ fn tag_or_merge_key(value: &serde_yaml_ng::Value, path: &str) -> Option<String> 
 /// `*` that starts a node is an anchor or an alias, because a plain scalar
 /// can't start with either.
 pub(crate) fn anchors_and_aliases(text: &str) -> Vec<(usize, usize)> {
+    /// Where a block scalar is.
+    #[derive(Clone, Copy)]
+    enum Block {
+        /// Opened on a line with this indent; no content line yet.
+        Opened { opener: usize },
+        /// Its content lines are indented at least this far.
+        Content { indent: usize },
+    }
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Quote {
         None,
@@ -432,17 +440,21 @@ pub(crate) fn anchors_and_aliases(text: &str) -> Vec<(usize, usize)> {
     }
     let mut found = Vec::new();
     let mut quote = Quote::None;
-    // The indent of the line that opened a block scalar.
-    let mut block: Option<usize> = None;
+    let mut block: Option<Block> = None;
     for (line_index, line) in text.lines().enumerate() {
         let chars: Vec<char> = line.chars().collect();
         let indent = chars.iter().take_while(|c| **c == ' ').count();
         let blank = chars.iter().all(|c| c.is_whitespace());
-        if let Some(parent) = block {
-            if blank || indent > parent {
+        match block {
+            _ if blank && block.is_some() => continue,
+            // The first line that is not blank sets the content indent; a
+            // line no deeper than the opener leaves the scalar empty.
+            Some(Block::Opened { opener }) if indent > opener => {
+                block = Some(Block::Content { indent });
                 continue;
             }
-            block = None;
+            Some(Block::Content { indent: content }) if indent >= content => continue,
+            _ => block = None,
         }
         let mut last_significant: Option<char> = None;
         let mut index = 0;
@@ -514,7 +526,7 @@ pub(crate) fn anchors_and_aliases(text: &str) -> Vec<(usize, usize)> {
                             .chars()
                             .all(|h| h.is_ascii_digit() || h == '+' || h == '-')
                         {
-                            block = Some(indent);
+                            block = Some(Block::Opened { opener: indent });
                             break;
                         }
                     }
@@ -551,6 +563,38 @@ h:
             anchors_and_aliases(text),
             [(1, 4), (2, 4), (8, 5), (8, 12), (11, 5)]
         );
+    }
+
+    #[test]
+    fn a_key_after_a_block_scalar_in_a_sequence_item_is_scanned_again() {
+        let text = "\
+services:
+  api:
+    dependsOn:
+    - service: |-
+        db
+      condition: &c ready
+  web:
+    dependsOn:
+    - service: api
+      condition: *c
+";
+        assert_eq!(anchors_and_aliases(text), [(6, 18), (10, 18)]);
+    }
+
+    #[test]
+    fn a_block_scalar_ends_at_the_first_line_less_indented_than_its_content() {
+        let text = "\
+a: >
+    &deep
+    *deep
+
+    still *inside
+  b: *out
+c: |
+d: *empty
+";
+        assert_eq!(anchors_and_aliases(text), [(6, 6), (8, 4)]);
     }
 
     #[test]
