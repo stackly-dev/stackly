@@ -149,9 +149,9 @@ _Status semua langkah di bawah: `NOT_RUN`, owner: user (record `evidence/manual/
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentLockTests` → 13 test lulus: teks baris Lock untuk `in_sync` (satu dan dua target), `stale`, `absent`, `invalid`, `unreadable`, dan "—"; teks baris Local override untuk tanpa file, tanpa override, satu override, " and 1 more", "1 problem", "2 problems", "can’t be read", dan "—"; lock yang terbaca tidak pernah tampil di samping manifest `invalid` dan pembacaan tanpa file mempertahankan baris dari pengecekan terakhir; Lock Versions mengirim `env.lock` `refresh` `none`, Update Lock… `all`, dengan feedback "Locked 3 services." dan "The lock is up to date."; blocker `env.lock` menjadi item banner dengan hint dan tidak menulis apa pun; manifest tidak valid membuka Problems; kegagalan memberi feedback critical; Lock Versions dan Update Lock… ber `mutates` (nonaktif saat offline), Update Lock… meminta konfirmasi dengan teks spec, Copy tetap aktif; urutan menu More; Copy Environment Variables menulis tepat `text` dotenv dan "Copied 3 variables.", tanpa variabel "Nothing to copy yet. Bring the environment up first." tanpa menulis; sheet plan " · locked", "Local override: port 3307", "Differs from lock: 17.7", caution lock basi, warning file override; plan `locked` dengan file override error: setiap entri `ignored` dan tidak ada catatan "Local override:"; override `ignored` dan `compared` tidak pernah tampil sebagai diterapkan → AC-18, AC-19
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentsSnapshotTests` → suite lulus; PNG di `Tests/StacklyUITests/SnapshotTests/__Snapshots__/EnvironmentsSnapshotTests/`: `environment-partially-ready` (Lock "stackly.lock · macos-aarch64", Local override "postgres.endpoints.client.port: 5434 and 1 more"), `environment-lock-stale` terang, gelap, sempit ("stackly.lock · out of date", ".stackly.local.yaml · 2 problems"), `environment-lock-absent` ("Not locked", "None"), `environment-lock-unreadable` (dua "can’t be read"), `environment-lock-blocked` terang dan gelap (banner critical "1 problem blocks the lock." dengan item `search` dan hint), `environment-plan-locked` terang, gelap, sempit, `environment-plan-locked-blocked` terang dan gelap, `environment-plan-invalid-locked` terang (manifest tidak valid dengan lock `in_sync` dan override `applied`: hanya Problems, tanpa " · locked", catatan lock basi, atau "Local override:"; K23), `environment-manifest-*` (Lock dan Local override "—" untuk `missing`, `invalid`, `name_changed`), dan dari F44 `environment-offline` terang, gelap, sempit ("Waiting for stacklyd") serta `overview-environments-show-all` terang dan gelap (lima environment lalu Show All) → AC-18, AC-19
 - [x] `cargo xtask snapshot review --base main` → `target/snapshot-review/index.html` menampilkan PNG lama dan baru; perubahan PNG lama hanya dua baris baru di seksi Details → AC-18
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → suite penuh lulus (butuh `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed`) → AC-18, AC-19
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → suite penuh lulus (butuh `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed`) → AC-18, AC-19
 - [x] `swift test --package-path clients/swift` → lulus (tidak ada perubahan klien; `EnvironmentStore.lock` dan `export` memakai `Call.envLock` dan `Call.envExport` hasil codegen 4.3) → AC-20
-- [ ] `cargo xtask build-app` → BUILD SUCCEEDED → AC-18
+- [x] `cargo xtask build-app` → BUILD SUCCEEDED → AC-18
 - [x] `xcrun swift-format lint --strict` atas file Swift yang berubah di milestone ini → tanpa keluaran → AC-18
 - [x] `cargo xtask evidence check` → semua record valid, termasuk run fixture milestone ini di `evidence/environment/` dan record manual `NOT_RUN` di atas → AC-1, AC-7, AC-15, AC-21
 
@@ -184,3 +184,52 @@ Penilaian langkah manual: 13 langkah itu cukup untuk AC-18 dan AC-19. Yang hanya
 - AC-21 · daemon: run `01a1d5bf-99cc` dan run `01a1d5a0` (`a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first`); GUI hanya menampilkan apa yang daemon kirim, jadi tidak ada langkah GUI khusus selain catatan basi dan blocker
 - AC-1, AC-7, AC-15 · record evidence fixture daemon (`env_lock_writes_only_the_lock_file_and_a_second_run_writes_nothing`, `a_lock_moved_to_another_root…` yang juga memeriksa `env.lock_no_artifact` tanpa substitusi, `export_prints_the_ports_of_the_members_and_never_a_redacted_value`)
 - AC-16, AC-17 · Milestone 2; AC-1 sampai AC-15 dan AC-20 bagian daemon · Milestone 1
+
+## Verify penuh 2026-11-14
+
+Verdict fitur 45: **PASS untuk semua bagian otomatis** AC-1 sampai AC-21. GUI nyata belum terbukti: 13 langkah `### UI / manual` Milestone 3 tetap `NOT_RUN`, `owner: user` (`F45-1`). Kode yang diperiksa `31b25de2` (protokol 4.5).
+
+**Yang dicek ulang sesudah merge terakhir** (langkah `[x]` lama tidak diulang satu per satu): `cargo test -p stackly-core --test environment` 109 lulus (`lock::` 8, `plan_lock::` 5, `plan_local::` 6, `export::` 2); `stacklyd --test environment` 17 lulus; `stackly-cli --test env` 29 lulus; `stackly-protocol` lulus; `codegen --check` bersih dengan kontrak 4.5; `swift test` klien 285 dan `EnvironmentLockTests|EnvironmentsSnapshotTests|EnvironmentStoreTests` 39 lulus. Tambahan DTO env di protokol 4.4 dan 4.5 tidak mengubah hasil langkah lama. Dua kotak suite penuh Milestone 3 (`swift test` StacklyUI penuh dan `cargo xtask build-app`) dicentang atas dasar gerbang lead di `main` `31b25de2`, tidak diulang checker.
+
+**K22 kini dibangun.** Probe `stackly env plan` terhadap binary daemon: file override dengan satu error memberi `local.state` `invalid`, `sha256` terisi, setiap entri `(ignored)`, port plan dari manifest, dan blocker `env.local_invalid`; file yang hanya punya warning tetap `present` dengan override yang benar `(applied)` dan alias tak dikenal `(ignored)`.
+
+**`env.up` dengan `locked`** (probe native NATS 2.15.1 dari cache xtask): tanpa lock ditolak `env.plan_blocked` dengan `env.lock_missing`; dengan lock basi ditolak `env.plan_blocked` dengan `env.lock_stale` dan item tanpa runtime; nol instance dan nol environment tertulis; file lock tidak disentuh. Dengan lock yang cocok, Up memakai artefak yang dikunci (verify spec 0046 Milestone 2). Di CLI, `stackly env up` belum ada (Milestone 3 spec 0046), jadi "`stackly env up --locked` tidak pernah resolusi ulang" baru terbukti di daemon dan lewat `stackly env plan --locked`.
+
+| AC | Hasil | Bukti utama |
+| --- | --- | --- |
+| AC-1 | PASS | Milestone 1: isi lock tanpa path home, PID, port, setting, atau reference |
+| AC-2 | PASS | `env.lock` hanya menulis `stackly.lock`, nol proses anak (Milestone 1 dan 2) |
+| AC-3 | PASS | jalan kedua byte sama, baris `kept` |
+| AC-4 | PASS | test `lock::`, state `absent`, `stale`, `in_sync` di probe |
+| AC-5 | PASS | `SOURCE` `lock`, `planDigest` berubah bersama lock |
+| AC-6 | PASS | `locked` tanpa lock atau lock basi: blocker, tanpa versi, tanpa digest; `env.up` `locked` ditolak sebelum mutasi |
+| AC-7 | PASS | target lain dan digest asing: `env.lock_no_artifact`, `env.lock_artifact_unknown`, tanpa substitusi |
+| AC-8 | PASS | test `plan_lock::` |
+| AC-9 | PASS | K22: file dengan error tidak menerapkan apa pun dan setiap entri `ignored` |
+| AC-10, AC-11 | PASS | override port dan storage di plan; `storage.locationId` sampai ke create (probe spec 0046 Milestone 2) |
+| AC-12 | PASS | `PlanLock`, `PlanLocal`, `providerRevision`; `lock_sha256` ditulis Up (probe native spec 0046) |
+| AC-13 | PASS | `env.get` dengan `checkManifest` |
+| AC-14, AC-15 | PASS | test daemon export; nilai nyata lewat binary CLI tidak di probe (`BLOCKED`, butuh unduhan) |
+| AC-16, AC-17 | PASS | Milestone 2: probe CLI, exit code, `--json` sama dengan daemon |
+| AC-18, AC-19 | PASS (otomatis) | Milestone 3: test dan snapshot; GUI nyata `NOT_RUN` |
+| AC-20 | PASS | kontrak 4.3 untuk fitur ini, `codegen --check` bersih di 4.5 |
+| AC-21 | PASS | Milestone 1: root B dengan hanya manifest dan lock; bagian GUI `NOT_RUN` |
+
+**Trace.** REQ-023: AC-1, AC-2, AC-5, AC-6, AC-7, AC-9, AC-21 lulus. REQ-028: AC-16, AC-17 lulus. BR-018: AC-1, AC-15 lulus. AC-023: AC-6, AC-7, AC-21 lulus. AC-080 bagian export dan lockfile: AC-1, AC-15, AC-21 lulus. PRD 13.1: AC-2, AC-6 lulus. PRD 13.3: AC-1, AC-7, AC-9, AC-10, AC-11, AC-14 lulus.
+
+**Done when.** Lockfile tanpa password, home, atau PID: terbukti (probe Milestone 1). `stackly env lock` tidak menjalankan provider: terbukti (pohon root sama, nol proses anak). Mesin tanpa artefak kompatibel gagal jelas tanpa substitusi: terbukti di plan, CLI, dan `env.up`. Override port dan storage tidak mengubah manifest tim: terbukti (byte `stackly.yaml` dan `stackly.lock` sama). `stackly env export` tidak membawa secret: terbukti di test daemon dan struktur balasan; lewat binary CLI hanya keadaan tanpa instance. "`stackly env up --locked` tidak pernah resolusi ulang": terbukti di daemon, belum di CLI.
+
+**Temuan rendah yang masih terbuka.**
+
+1. Blocker `env.lock` kehilangan nama provider di pesannya ("runtime.selector_unresolved:  has no version matching 8").
+2. Hint `env.lock_no_artifact` dan `env.lock_artifact_unknown` tidak menyebut nama target Mac ini; target hanya ada di details dan baris `lock:`.
+3. Test yang diminta teks AC belum lengkap: sentinel secret untuk test lock (AC-1), sentinel per service dan PID proses untuk export (AC-15).
+4. `appliedOverrides` di sheet masih menyaring lewat blocker `env.local_invalid`; sesudah K22 `local.state` saja cukup.
+5. Hint blocker di banner app menyebut perintah CLI, sedangkan di app aksinya Lock Versions.
+6. Keadaan offline dengan data termuat hanya diuji di model, tanpa snapshot.
+7. Penulis record evidence Swift menulis path absolut, sehingga record harus diedit tangan.
+8. `stackly env up --locked` di CLI menunggu Milestone 3 spec 0046; cek `cli.env_locked_unsupported` nya harus diuji di sana.
+
+Tertutup sejak catatan milestone: `local.overrides` `applied` untuk file tidak valid (K22), `EnvLocalInfo.state` opsional (K24), dan lock `in_sync` untuk manifest tidak valid (K23, tidak ditampilkan CLI dan app).
+
+Catatan 2026-11-14: dua hal yang tadinya belum terbukti kini tertutup lewat probe native verify spec 0046 Milestone 3. `stackly env export` dengan nilai nyata lewat binary CLI sama persis dengan `text` daemon dan tanpa secret, path, atau reference (AC-15, AC-17). `stackly env up --locked` di CLI gagal jelas tanpa lock (`env.lock_missing`) dan dengan lock basi (`env.lock_stale`), exit 3, tanpa membuat instance (AC-6; temuan terbuka nomor 8).

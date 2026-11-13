@@ -65,7 +65,7 @@ Langkah Build plan 4 sampai 6: core `environment::up` (precheck, guard `accept`,
 
 - [x] Buka `crates/core/src/environment/up/graph.rs` → `next` fungsi murni tanpa IO dan tanpa jam: dependency yang berakhir bukan `ready` membuat dependent `skipped` `failed` dan merambat dalam satu panggilan, timer edge hanya berjalan sejak dependency `starting`, paling banyak `UP_START_CONCURRENCY` start dipilih menurut `order` → AC-8
 - [x] Buka `crates/core/src/environment/up/accept.rs` → guard membaca environment dan instance di dalam transaksi, menolak `env.plan_changed` bila instance milik service hilang, `retained`, atau provider nya lain, dan menulis satu `UpdateEnvironment` per mutasi (revision tepat naik satu), member `shared` untuk `instanceRef`, `dependency_conditions`, lease `active` untuk setiap member yang alias nya ada di manifest (member `detached` tidak), dan `begin_up` → AC-4, AC-5, AC-13
-- [ ] Buka `crates/core/src/environment/up/driver.rs` → driver hanya memulai anak lewat `UpChildren` dan menunggu lewat `wait_final`, tidak pernah memanggil `ProcessSupervision`, downloader, atau menulis file; cancel meneruskan `OperationEngine::cancel` ke anak dengan pemicu induk; anak start yang `queued` lebih dari `CHILD_QUEUE_TIMEOUT_SECONDS` dibatalkan dengan `resource.busy`; penolakan `daemon.restart_pending` menghentikan anak baru dan menandai sisanya `cancelled`; `ShuttingDown` dari `wait_final` berarti abandon tanpa commit penutup → AC-3, AC-8, AC-11, AC-12, AC-15
+- [x] Buka `crates/core/src/environment/up/driver.rs` → driver hanya memulai anak lewat `UpChildren` dan menunggu lewat `wait_final`, tidak pernah memanggil `ProcessSupervision`, downloader, atau menulis file; cancel meneruskan `OperationEngine::cancel` ke anak dengan pemicu induk; anak start yang `queued` lebih dari `CHILD_QUEUE_TIMEOUT_SECONDS` dibatalkan dengan `resource.busy`; penolakan `daemon.restart_pending` menghentikan anak baru dan menandai sisanya `cancelled`; `ShuttingDown` dari `wait_final` berarti abandon tanpa commit penutup → AC-3, AC-8, AC-11, AC-12, AC-15
 - [x] Buka `apps/daemon/src/ipc/env/children.rs` dan `apps/daemon/src/ipc/{runtime.rs,instance/create.rs,instance/mod.rs}` → install, create, dan start anak dibangun oleh `install_request`, `create_request`, dan `start_request` yang sama dengan handler `runtime.install`, `instance.create`, dan `instance.start`, dan dimulai lewat `start_child` dengan `Origin::Child`; tidak ada jalur install, create, atau start kedua (BR-023); `instance.create` dari klien tetap tanpa ikatan (`create_request(..., None)`) → AC-6, AC-7
 - [x] Buka `apps/daemon/src/ipc/env/status.rs` → `lastUp` diambil dari `UpBoard` selama operasi `environment_up` itu aktif, dari kolom `last_up` sesudahnya, dan `running` tanpa operasi aktif tampil `interrupted`; urutan aturan *Alasan belum ready* 1 sampai 7 sama dengan spec → AC-15, AC-16
 
@@ -73,11 +73,11 @@ Langkah Build plan 4 sampai 6: core `environment::up` (precheck, guard `accept`,
 
 - [x] `cargo test -p stackly-core --lib environment::up` → 11 test lulus: graph rantai, berlian, gagal merambat, `needs_secret`/`skipped`/`cancelled` dihitung gagal, timer edge, dependency yang menunggu tanpa timer, batas start, `UpBoard`, dan laporan `env.up_incomplete` → AC-8, AC-10
 - [x] `cargo test -p stackly-core --test environment up` → 13 test lulus dengan engine nyata dan port palsu: Up mendaftarkan, membuat, memberi lease, dan menyalakan sesuai dependency; dependency gagal membuat dependent `skipped` dan Up `env.up_incomplete` dengan tahap `start`; Up kedua hanya mengerjakan sisanya tanpa lease kedua; timeout edge; cancel; `instanceRef` yang sudah jalan `ready` tanpa anak dengan satu lease dan baris instance tak berubah; `accept` gagal `env.plan_changed` tanpa tulisan; dua service satu artefak satu install dan install gagal menutup keduanya di tahap `install`; create `needs_secret` dengan reference nya; penolakan quiesce; precheck menolak manifest tidak valid, digest lain, dan reference kosong urut teks → AC-1, AC-2, AC-4, AC-5, AC-6, AC-8, AC-9, AC-10, AC-11
-- [ ] `cargo test -p stacklyd --test env_up` → 6 test lulus dengan provider `fake`: penolakan tanpa mutasi (`env.manifest_invalid`, `env.plan_changed`, `secret.needs_secret`), rantai db, api, web naik berurutan dengan lease, laporan, endpoint ber port, dan `parent` di anak; create gagal di init membuat dependent `skipped`, Up `env.up_incomplete` (`ready` 1 dari 3, `stage` `create`), dan `env.get` memberi `up_failed` dan `dependency_not_ready`; Up kedua `resource.busy` dan cancel menulis `cancelled`; instance pinjaman satu lease `shared` tanpa restart; restart daemon di tengah Up memberi `lastUp` `interrupted` dan lease tetap → AC-1 sampai AC-5, AC-7, AC-8, AC-10, AC-11, AC-13, AC-15, AC-16
+- [x] `cargo test -p stacklyd --test env_up` → 6 test lulus dengan provider `fake`: penolakan tanpa mutasi (`env.manifest_invalid`, `env.plan_changed`, `secret.needs_secret`), rantai db, api, web naik berurutan dengan lease, laporan, endpoint ber port, dan `parent` di anak; create gagal di init membuat dependent `skipped`, Up `env.up_incomplete` (`ready` 1 dari 3, `stage` `create`), dan `env.get` memberi `up_failed` dan `dependency_not_ready`; Up kedua `resource.busy` dan cancel menulis `cancelled`; instance pinjaman satu lease `shared` tanpa restart; restart daemon di tengah Up memberi `lastUp` `interrupted` dan lease tetap → AC-1 sampai AC-5, AC-7, AC-8, AC-10, AC-11, AC-13, AC-15, AC-16
 - [x] `cargo test -p stackly-protocol --no-fail-fast` → lulus, termasuk fixture `env/detail-bringing-up.json`, `env/detail-up-incomplete.json`, `ipc/request-env-up.json`, `ipc/frame-response-env-up.json`, `ipc/frame-error-env-up-incomplete.json`, `ipc/frame-error-env-plan-blocked.json`, penolakan `ipc/reject-env-up-digest-format.json`, enum terbuka baru dibaca `unrecognized`, dan katalog kode lima kode `env` baru dengan hint → AC-16, AC-23
 - [x] `cargo xtask codegen --check` → lulus; `protocols/contract-versions.json` mencatat 4.4; `cargo xtask fuzz seed` tidak mengubah apa pun lagi → AC-23
-- [ ] `cargo test -p stacklyd --no-fail-fast` dan `cargo test -p stackly-core --no-fail-fast` → lulus, golden `instance.*` dan `runtime.*` yang ada tidak berubah oleh pemecahan handler → AC-7, BR-023
-- [ ] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden yang berubah hanya menambah `parent`, `activeOperation`, dan field baru lain, isi lain identik → AC-23
+- [x] `cargo test -p stacklyd --no-fail-fast` dan `cargo test -p stackly-core --no-fail-fast` → lulus, golden `instance.*` dan `runtime.*` yang ada tidak berubah oleh pemecahan handler → AC-7, BR-023
+- [x] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden yang berubah hanya menambah `parent`, `activeOperation`, dan field baru lain, isi lain identik → AC-23
 - [x] `swift test --package-path clients/swift` dan `swift build --package-path apps/macos/Packages/StacklyUI --build-tests` → lulus dengan tipe hasil codegen 4.4 → AC-23
 - [x] `cargo xtask check-deps`, `cargo xtask evidence check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus → AC-23
 
@@ -138,6 +138,21 @@ Rendah:
 6. Item service `skipped` di `env.up_incomplete` membawa `operationId` operasi create nya, yang bisa terbaca sebagai operasi yang gagal.
 7. Belum ada test untuk: batas `CHILD_QUEUE_TIMEOUT_SECONDS` (`resource.busy`), `SERVICE_SETTLE_TIMEOUT_SECONDS` (`env.service_not_ready`), instance `stopping` yang ditunggu lalu dinyalakan, batas `UP_INSTALL_CONCURRENCY`, `lock_sha256` yang ditulis Up, `storage.locationId` sampai ke create, `env.plan_blocked` lewat socket, member ber blocker `needsSecret`, dan setiap baris tabel probe di atas selain tiga penolakan dasar. Semua itu lulus di probe checker, tetapi belum dikunci test.
 
+### Ulang Milestone 2, 2026-11-14 (kode `31b25de2`)
+
+Verdict: **PASS**. Kedua hal yang membuat FAIL sudah benar, dan Milestone 2 siap dicentang lead. Dua kotak suite penuh tetap kosong karena checker tidak mengulangnya; gerbang lead pada `31b25de2` mencatat `stackly-core` 1861, `stacklyd` 764, dan `stackly-cli` 658 tanpa gagal.
+
+| Temuan lama | Hasil |
+| --- | --- |
+| 1. AC-15, race saat daemon berhenti | **Selesai.** `wait_child` kini menandai `ShuttingDown` dan driver abandon di ketiga tahap, plus satu cek berhenti sebelum `run` kembali. Test restart dijalankan sendiri 24 kali: 24 lulus (sebelumnya 7 dari 12). Probe 20 putaran sendiri, lalu empat salinan serentak bersama empat test Up lain (80 putaran di bawah beban): 0 dari 100 putaran salah; setiap kali `lastUp` `interrupted`, operasi `operation.interrupted`, anak start `interrupted`. |
+| 2. AC-10, hint | **Selesai.** `env.up_incomplete` lewat `operation.get` membawa hint "fix the services listed, then bring the environment up again; services that are ready keep running". Fixture diganti `frame-response-operation-get-env-up-incomplete.json`. |
+| 3. `lastUp.services[].references` | **Selesai.** Probe store terkunci: `lastUp` dan `notReady` sama sama menulis `store_locked` dan `generateAllowed` false, diambil dari item kegagalan operasi anak; tetap begitu sesudah store dibuka. Kolom `last_up` tetap hanya menyimpan teks reference. |
+| 4. `generateAllowed` turunan | **Selesai.** Penolakan `env.up` memakai `SecretService::generate_allowed`, aturan yang sama dengan `resolve_for_start`; test `secret_service generate` 4 lulus. |
+| 6. `operationId` pada item `skipped` | **Selesai.** Item `skipped` tidak lagi membawa `operationId`. |
+| 5. `lastUp` `interrupted` tanpa isi per service | **Tidak dikerjakan, dan bukan pelanggaran AC.** AC-15 hanya meminta `lastUp.state` `interrupted`, dan AC-16 tidak mewajibkan `services` terisi. Service yang terputus tampil dengan alasan spec 0044 (`stopped` atau `not_created`). Tetap catatan rendah. |
+
+`cargo test -p stacklyd --test env_up` kini 7 test (bertambah `a_service_that_meets_a_locked_store_reports_its_real_reason_in_last_up`), lulus. Celah test di temuan 7 catatan pertama masih berlaku untuk `/test`.
+
 ### Acceptance-criteria coverage
 
 - AC-1, AC-2 · precheck core (`up::check`) dan handler `env.up`; test penolakan di core dan `env_up.rs`
@@ -161,18 +176,49 @@ Langkah Build plan 7: resolver target ber path (dipakai juga `stackly env plan`)
 
 ### UI / manual
 
-- [ ] Buka `apps/cli/src/commands/env/target.rs` → argumen posisi yang memuat `/`, diawali `.` atau `~`, atau berakhiran `.yaml`/`.yml` adalah path; `~` diganti folder home, folder berarti `<folder>/stackly.yaml`, file dipakai apa adanya; argumen lain nama atau UUID environment dari `env.list`; `--file` dan argumen posisi saling menolak; tanpa keduanya `./stackly.yaml`; `plan`, `up`, dan `status` memakai `TargetArgs` yang sama → AC-17, AC-18
-- [ ] Buka `apps/cli/src/commands/env/up.rs` → `env.plan` (dengan `locked`) lebih dulu; `--locked` dengan `lock.locked` bukan true berhenti `cli.env_locked_unsupported` sebelum `env.up`; manifest tidak valid `cli.env_invalid` dan plan terblokir `cli.env_plan_blocked` tanpa `env.up`; plan yang hanya terblokir reference tanpa nilai tetap dikirim dengan digest nol supaya daemon menjawab `secret.needs_secret`, lalu satu hint `stackly secret set <reference>` per reference; tanpa konfirmasi → AC-17, AC-2
-- [ ] Buka `apps/cli/src/commands/env/services.rs` dan `apps/cli/src/wait.rs` → `--wait` berlangganan semua event `operation.` (`Watch::wide`), membaca `env.get` dengan `checkManifest` false sesudah tiap `operation.get`, dan menulis satu baris per perubahan phase di `lastUp` operasi itu (`install`, `create`, `start`, `ready <instance> <host>:<port>`, `wait`, `skip <service>: waiting for <dependency>`, `failed`, `needs secret`, `cancelled`); `ENDPOINTS` memakai `ServiceInstance.endpoints` dengan port yang di bind dan `<name> -` untuk yang belum → AC-17
-- [ ] Jalankan `cargo build -p stacklyd -p stackly-cli`, lalu di root uji (`STACKLY_ROOT=$(mktemp -d)`, `STACKLY_CATALOG_DIR` dari `cargo xtask catalog build --out <dir>`) tulis `shop/stackly.yaml` dengan `official/valkey` ber `secretRefs: {password: "local:shop/valkey"}` dan `official/nats`, lalu `stackly env up ./shop --wait` → exit 6, `code: secret.needs_secret`, `hint: stackly secret set local:shop/valkey`, dan `stackly instance list` kosong; `stackly env status ./shop` → exit 10 dengan "Run stackly env up or stackly env import."; sesudah `stackly env import --file shop/stackly.yaml`, `stackly env status ./shop` → `shop  Down  0 of 2 ready  <file>`, tabel enam kolom, dan `not ready:` → AC-17, AC-18
+- [x] Buka `apps/cli/src/commands/env/target.rs` → argumen posisi yang memuat `/`, diawali `.` atau `~`, atau berakhiran `.yaml`/`.yml` adalah path; `~` diganti folder home, folder berarti `<folder>/stackly.yaml`, file dipakai apa adanya; argumen lain nama atau UUID environment dari `env.list`; `--file` dan argumen posisi saling menolak; tanpa keduanya `./stackly.yaml`; `plan`, `up`, dan `status` memakai `TargetArgs` yang sama → AC-17, AC-18
+- [x] Buka `apps/cli/src/commands/env/up.rs` → `env.plan` (dengan `locked`) lebih dulu; `--locked` dengan `lock.locked` bukan true berhenti `cli.env_locked_unsupported` sebelum `env.up`; manifest tidak valid `cli.env_invalid` dan plan terblokir `cli.env_plan_blocked` tanpa `env.up`; plan yang hanya terblokir reference tanpa nilai tetap dikirim dengan digest nol supaya daemon menjawab `secret.needs_secret`, lalu satu hint `stackly secret set <reference>` per reference; tanpa konfirmasi → AC-17, AC-2
+- [x] Buka `apps/cli/src/commands/env/services.rs` dan `apps/cli/src/wait.rs` → `--wait` berlangganan semua event `operation.` (`Watch::wide`), membaca `env.get` dengan `checkManifest` false sesudah tiap `operation.get`, dan menulis satu baris per perubahan phase di `lastUp` operasi itu (`install`, `create`, `start`, `ready <instance> <host>:<port>`, `wait`, `skip <service>: waiting for <dependency>`, `failed`, `needs secret`, `cancelled`); `ENDPOINTS` memakai `ServiceInstance.endpoints` dengan port yang di bind dan `<name> -` untuk yang belum → AC-17
+- [x] Jalankan `cargo build -p stacklyd -p stackly-cli`, lalu di root uji (`STACKLY_ROOT=$(mktemp -d)`, `STACKLY_CATALOG_DIR` dari `cargo xtask catalog build --out <dir>`) tulis `shop/stackly.yaml` dengan `official/valkey` ber `secretRefs: {password: "local:shop/valkey"}` dan `official/nats`, lalu `stackly env up ./shop --wait` → exit 6, `code: secret.needs_secret`, `hint: stackly secret set local:shop/valkey`, dan `stackly instance list` kosong; `stackly env status ./shop` → exit 10 dengan "Run stackly env up or stackly env import."; sesudah `stackly env import --file shop/stackly.yaml`, `stackly env status ./shop` → `shop  Down  0 of 2 ready  <file>`, tabel enam kolom, dan `not ready:` → AC-17, AC-18
 
 ### Commands
 
-- [ ] `cargo test -p stackly-cli --bin stackly env::` → lulus: aturan path, folder ke `stackly.yaml`, `~`, digest nol hanya untuk plan yang terblokir reference saja, teks setiap alasan belum ready, satu baris per perubahan phase → AC-17, AC-18
-- [ ] `cargo test -p stackly-cli --test env -- up:: status::` → 9 test lulus dengan daemon berskrip dan fixture `protocols/fixtures/env/`: tanpa `--wait` "Started bringing up graph (operation <id>)" dan `environment` null; `--wait` lima baris progress lalu tabel dengan port `auto` 49152 sampai 49154 dan "3 of 3 ready."; `env.up_incomplete` exit 7 dengan tabel, `not ready:`, dan hint daemon; `secret.needs_secret` exit 6 dengan dua hint; terblokir 3, tidak valid 2, `--locked` 5 tanpa `env.up`; folder dan nama; `status` dengan kepala, tabel, alasan, `manifest: changed`, Up yang berjalan, path lewat plan, tidak terdaftar 10, nama tidak dikenal 10, manifest tidak valid 2; golden `env_up*.txt`, `env_up.json`, `env_status.txt`, `env_status.json` → AC-17, AC-18
-- [ ] `cargo test -p stackly-cli --test env -- stacklyd::` → 3 test lulus dengan `stacklyd` nyata dan catalog `providers/`, termasuk `a_real_daemon_refuses_an_up_that_needs_a_secret_and_shows_the_status`: Up ditolak `secret.needs_secret` tanpa instance, environment, atau operasi; `status` lewat path dan nama memberi `result` yang sama → AC-17, AC-18
-- [ ] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden `env plan` yang ada tidak berubah oleh resolver baru → AC-17
-- [ ] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask docs check` → lulus
+- [x] `cargo test -p stackly-cli --bin stackly env::` → lulus: aturan path, folder ke `stackly.yaml`, `~`, digest nol hanya untuk plan yang terblokir reference saja, teks setiap alasan belum ready, satu baris per perubahan phase → AC-17, AC-18
+- [x] `cargo test -p stackly-cli --test env -- up:: status::` → 9 test lulus dengan daemon berskrip dan fixture `protocols/fixtures/env/`: tanpa `--wait` "Started bringing up graph (operation <id>)" dan `environment` null; `--wait` lima baris progress lalu tabel dengan port `auto` 49152 sampai 49154 dan "3 of 3 ready."; `env.up_incomplete` exit 7 dengan tabel, `not ready:`, dan hint daemon; `secret.needs_secret` exit 6 dengan dua hint; terblokir 3, tidak valid 2, `--locked` 5 tanpa `env.up`; folder dan nama; `status` dengan kepala, tabel, alasan, `manifest: changed`, Up yang berjalan, path lewat plan, tidak terdaftar 10, nama tidak dikenal 10, manifest tidak valid 2; golden `env_up*.txt`, `env_up.json`, `env_status.txt`, `env_status.json` → AC-17, AC-18
+- [x] `cargo test -p stackly-cli --test env -- stacklyd::` → 3 test lulus dengan `stacklyd` nyata dan catalog `providers/`, termasuk `a_real_daemon_refuses_an_up_that_needs_a_secret_and_shows_the_status`: Up ditolak `secret.needs_secret` tanpa instance, environment, atau operasi; `status` lewat path dan nama memberi `result` yang sama → AC-17, AC-18
+- [x] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden `env plan` yang ada tidak berubah oleh resolver baru → AC-17
+- [x] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask docs check` → lulus
+
+### Catatan `/check verify` 2026-11-14 (sesi `chk-f46-m3`, kode `038ce547`)
+
+Verdict Milestone 3: **PASS** untuk AC-17 dan AC-18. Delapan kotak dijalankan checker dan lulus. Satu kotak kosong: suite penuh `cargo test -p stackly-cli --no-fail-fast` tidak diulang (gerbang lead: 676 lulus); bagian golden `env plan` nya tercakup `--test env` (39 lulus, `plan::` 4).
+
+**Hasil perintah.** `--bin stackly env::` 19 lulus; `--test env -- up:: status::` 9 lulus; `--test env -- stacklyd::` 3 lulus; `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, dan `cargo xtask docs check` lulus.
+
+**Langkah keempat UI / manual** (binary `stackly` dan `stacklyd`, root sementara, catalog resmi): `stackly env up ./shop --wait` exit 6 dengan `secret.needs_secret` dan hint `stackly secret set local:shop/valkey`; `stackly instance list` "No instances."; `stackly env status ./shop` exit 10 "not imported" dengan hint "Run stackly env up or stackly env import."; sesudah import, `shop  Down  0 of 2 ready  ~/work/shop/stackly.yaml`, tabel enam kolom, dan `not ready:`. Nama tak dikenal exit 10; `--file` bersama argumen posisi ditolak clap.
+
+**Probe native** (binary `stackly` terhadap binary `stacklyd` di root sementara dengan runtime NATS 2.15.1 dari cache xtask, tanpa unduhan; secret tersimpan di keychain file milik root itu, bukan Keychain login; root dibersihkan sesudahnya). Ini menutup celah "Up sukses lewat binary CLI terhadap daemon nyata":
+
+| Probe | Hasil |
+| --- | --- |
+| `env up ./shop --locked --wait` tanpa lock | exit 3, `env.lock_missing`, baris tanpa versi, `stackly instance list` kosong |
+| `env lock`, lalu `env up ./shop --locked --wait` dengan Ctrl-C di tengah | exit 130, `cli.interrupted` "stopped waiting; operation … is still running"; Up tetap berjalan di daemon sampai `2 of 2 ready` |
+| `env status ./shop` | `shop  Ready  2 of 2 ready  <file>`, tabel `SERVICE INSTANCE VERSION OWNERSHIP STATUS ENDPOINTS` dengan port `auto` yang di bind (`client 127.0.0.1:58007, monitoring 127.0.0.1:58008`) |
+| `env up ./shop --locked --wait` lagi | plan `keep` ke stderr, baris `ready shop-bus 127.0.0.1:58007, 127.0.0.1:58008`, tabel dan "2 of 2 ready." ke stdout, exit 0 |
+| `env up shop` tanpa `--wait` | "Started bringing up shop (operation <id>)", exit 0, hint cara menunggu |
+| `--json` | `env status --json` sama persis dengan `env.get` daemon; `env up --wait --json` berisi `operation`, `idempotencyKey`, `environment`, dan `environment` sama dengan `env.get` |
+| `stackly instance list` | kolom `ENVIRONMENT` berisi `shop`, `OWNERSHIP` `dedicated` |
+| `env export shop` | 12 baris `HOST`, `PORT`, `ADDRESS` dengan port nyata; stdout sama persis dengan `text` daemon; tanpa reference, path home, path root, atau kata sandi; `--format shell` menulis `export NAME='value'` |
+| Manifest mendapat service yang tidak ada di lock, `env up --locked` | exit 3, `lock: … (stale)` dengan `extra: not_locked`, `env.lock_stale`; tidak ada instance baru |
+| Reference tanpa nilai di item `create` | exit 6, `secret.needs_secret`, hint daemon lalu `stackly secret set local:needs/nats` |
+
+**Tafsiran developer.** (1) Digest nol untuk plan yang hanya terblokir reference: diterima. Itu sesuai *Precheck Up* (plan yang tidak `applicable` tidak punya digest, dan baris keempat selalu menolak), dan digest nol tidak bisa memulai Up: untuk plan `applicable` daemon membandingkan digest dan menjawab `env.plan_changed`, untuk plan yang tidak `applicable` daemon selalu menolak. (2) Baris phase dengan `wait`, `failed`, `needs secret`, `cancelled`: diterima. (3) Plan ke stderr, tabel dan ringkasan ke stdout, `not ready:` ke stderr sesudah Up tidak lengkap: diterima. (4) Kolom STATUS dan "not imported" exit 10: diterima. (5) Resolver ber path dipakai juga `env plan`: diterima; golden `env plan` tetap lulus.
+
+Temuan, rendah:
+
+1. Di luar kode CLI (plan spec 0044): member yang dibuat dari manifest ber selector `2.15` selalu dilaporkan `differs: bus runtime: manifest 2.15, instance 2.15.1`. `2.15` terbaca sebagai versi exact sekaligus line, dan `differences` di `crates/core/src/environment/plan.rs` membandingkan versi exact lebih dulu, padahal resolver memperlakukannya sebagai line. Baris itu muncul di `env up`, `env plan`, dan sheet plan ("Differs from manifest: runtime") untuk environment yang baru saja dinaikkan dari manifest yang sama. Tidak pernah jadi blocker.
+2. Up sukses lewat binary CLI belum punya test yang tersimpan; probe di atas lulus. Cocok ditambahkan ke test native.
+3. `--timeout` paling kecil 1 detik, jadi `--wait` yang kehabisan waktu (exit 8) tidak di probe; Ctrl-C di probe menunjukkan Up tidak dibatalkan.
 
 ### Acceptance-criteria coverage
 
@@ -212,8 +258,8 @@ Langkah ini hanya dijalankan kamu (GUI nyata, Keychain login, dan runtime asli).
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'EnvironmentUpSnapshotTests|EnvironmentsSnapshotTests|OnboardingSnapshotTests'` → snapshot terang, gelap, dan sempit lulus: `environment-plan-up`, `environment-plan-changed`, `environment-plan-up-offline`, `environment-plan-blocked` (Bring Up nonaktif), `environment-bringing-up`, `environment-up-incomplete`, `environment-up-failed`, `environment-up-interrupted`, `environments-list-bringing-up`, `operations-environment-up`, dan onboarding dengan contoh perintah baru → AC-19 sampai AC-22
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'FixtureScenarioTests|FixtureShellTests'` → katalog memuat `environment-bringing-up` dan `environment-up-incomplete` dan keduanya tersambung tanpa banner → AC-23
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'Onboarding'` → `commandExamples` `stackly instance list`, `stackly env up ~/Code/erp`, `stackly doctor`, dan baris "Environments as files" dengan "A stackly.yaml per project. Plan, then bring everything up in order." → AC-22
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` (penuh) dan `swift test --package-path clients/swift` → lulus
-- [ ] `cargo xtask build-app` → build scheme Stackly lulus
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` (penuh) dan `swift test --package-path clients/swift` → lulus
+- [x] `cargo xtask build-app` → build scheme Stackly lulus
 - [x] `cargo test -p stacklyd --test env_up_native -- --ignored --test-threads=1` → native: enam runtime ERP dipasang dari cache xtask tanpa unduhan, Up sampai enam service `ready` dengan port terikat, Up kedua semuanya Keep tanpa anak; tanpa artefak di cache test berakhir `BLOCKED` (`owner: user`) → AC-25
 - [x] `cargo xtask evidence check` → lulus, termasuk record native `env_up_native` dan record fixture `env_up` di `evidence/environment/` → AC-25
 
@@ -279,3 +325,77 @@ Verdict: **bagian otomatis Milestone 4 lulus dan siap dicentang lead**; 15 langk
 - AC-23 · bagian GUI: skenario fixture `environment-bringing-up` dan `environment-up-incomplete`
 - AC-25 · test native `apps/daemon/tests/env_up_native.rs`; langkah manual di atas untuk JOURNEY-04 di app
 - AC-1 sampai AC-18, AC-24 · milik Milestone 1 sampai 3
+
+## Verify penuh 2026-11-14
+
+Verdict fitur 46: **PASS untuk semua bagian otomatis** AC-1 sampai AC-25. `Build it` dan `Verify it` siap dicentang dengan dua sisa yang tercatat: GUI nyata `NOT_RUN` (15 langkah `### UI / manual` Milestone 4, `F46-1`, `owner: user`) dan anak install nyata lewat daemon `BLOCKED` (butuh unduhan runtime, `owner: user`). Kode yang diperiksa `35b4cfd6` (protokol 4.5).
+
+**Yang dicek ulang sesudah merge terakhir** (langkah `[x]` lama tidak diulang satu per satu): `stackly-core --lib environment::up` 11, `--test environment` 109, `--test operation_engine coordinator` 9, `--test create_operation bound` 4; `stackly-protocol` lulus; `stacklyd --test env_up` 7; `stacklyd --test env_up_native -- --ignored` lulus dalam 69,72 detik (enam runtime ERP dari cache xtask, tanpa unduhan); `stackly-cli --test env` 39; `codegen --check` bersih dengan kontrak 4.5; `check-deps` dan `evidence check` lulus; `swift test --filter 'EnvironmentUp|EnvironmentStoreTests|FixtureScenarioTests'` 53 lulus. Down di daemon, CLI, dan fix app tidak mengubah hasil langkah lama.
+
+**Kotak suite penuh** dicentang atas dasar gerbang lead, tidak diulang checker: Milestone 2 (`stackly-core` 1861, `stacklyd` 764, `stackly-cli` 658 pada `31b25de2`), Milestone 3 (`stackly-cli` 676 pada `038ce547`), dan Milestone 4 (StacklyUI penuh, Swift klien, dan `build-app` pada `071b55d8`).
+
+| AC | Hasil | Bukti utama |
+| --- | --- | --- |
+| AC-1 | PASS | penolakan tanpa mutasi: test daemon dan probe pohon file (Milestone 2) |
+| AC-2 | PASS | reference urut teks, member ber blocker `needsSecret`, `generateAllowed` dari aturan secret service |
+| AC-3 | PASS | kelas pengatur (Milestone 1), Up kedua `resource.busy`, `coordinators` 1 dan `running` hanya anak |
+| AC-4 | PASS | guard `accept`: member, kondisi, lease, `last_up`; `lock_sha256` di probe native |
+| AC-5 | PASS | instance pinjaman: satu lease, tanpa restart, baris sama |
+| AC-6 | PASS (fixture) · `BLOCKED` | satu install per artefak di test core; anak install nyata lewat daemon butuh unduhan (`owner: user`) |
+| AC-7 | PASS | handler dipecah tanpa mengubah golden; create terikat (Milestone 1) |
+| AC-8 | PASS | graph murni 11 test; start gagal membuat dependent `skipped` tanpa spawn (probe) |
+| AC-9 | PASS | PID, `restart_total`, revision instance sehat tetap saat Up gagal (probe) |
+| AC-10 | PASS | `env.up_incomplete` dengan items, `stage`, dan hint lewat `operation.get`; Up berikutnya hanya sisanya |
+| AC-11 | PASS | test cancel core dan daemon |
+| AC-12 | PASS | instance pengguna bernama mirip utuh byte demi byte (probe) |
+| AC-13 | PASS | lease bertahan sesudah klien putus, restart daemon, rotasi sesi `new` (probe) |
+| AC-14 | PASS | dua environment satu instance, dua manifest satu nama (probe); 50 putaran Up dan Down (spec 0047) |
+| AC-15 | PASS | 124 putaran restart tanpa laporan salah sesudah fix |
+| AC-16 | PASS | `activeOperation`, `lastUp`, `endpoints`, *Alasan belum ready*; aturan muat ulang klien dibangun di app |
+| AC-17 | PASS | Milestone 3: test dan probe native binary CLI |
+| AC-18 | PASS | Milestone 3: `env status` dengan port yang di bind, exit 10 |
+| AC-19 sampai AC-22 | PASS (otomatis) | Milestone 4: test, snapshot, fixture; GUI nyata `NOT_RUN` |
+| AC-23 | PASS | protokol 4.4 untuk fitur ini, `env.up` `recovery refused`, fixture, skenario GUI |
+| AC-24 | PASS | engine (Milestone 1); `parent` dan `coordinators` di wire |
+| AC-25 | PASS | test native ERP dijalankan ulang; evidence `01a1d626-71d1…` sah; graph hanya dengan `testing/fake` |
+
+**Trace.** REQ-021: AC-1, AC-4, AC-6 (fixture), AC-7, AC-8, AC-10, AC-12 lulus. REQ-028: AC-17, AC-18 lulus. BR-023: AC-7, AC-11, AC-12 lulus. VAL-014: AC-5 lulus. AC-021: AC-8, AC-9, AC-10 lulus. AC-073 bagian Up: AC-13, AC-14 lulus (bagian Down di spec 0047). PRD 13.1: AC-1, AC-2, AC-17 lulus. PRD 13.2: AC-5, AC-8, AC-13, AC-25 lulus.
+
+**Done when**, satu per satu:
+
+| Kalimat | Hasil |
+| --- | --- |
+| Dependency yang tidak ready membuat dependent tidak ditandai sukses | terbukti (graph, test daemon, probe start gagal) |
+| Instance yang sudah ada dan sehat tidak dihapus | terbukti (AC-9, AC-12) |
+| Up dengan `instanceRef` menambah lease tanpa membuat instance baru | terbukti (AC-5, probe dua environment) |
+| Reference yang belum diisi menghentikan Up dengan needs secret yang menunjuk reference itu, tidak pernah password kosong | terbukti di daemon dan CLI (exit 6 dengan hint per reference); di app lewat test dan fixture, GUI nyata `NOT_RUN` |
+| Operasi menunjukkan tahap yang gagal dan langkah recovery | terbukti (`stage`, items, hint lewat `operation.get`; CLI mencetaknya); banner app `NOT_RUN` |
+| `stackly env up` dan `status` menampilkan port `auto` yang dipakai | terbukti (probe native CLI) |
+| Graph diuji dengan provider fixture tanpa dependency palsu antar database | terbukti: fixture graph dan test daemon hanya memakai `testing/fake`; manifest ERP tidak punya `dependsOn` |
+| Banner partially ready menunjuk service yang belum ready beserta alasannya, seperti mockup | terbukti di snapshot (bentuk `{instance} ({alias}) · {alasan}` dan aksi); GUI nyata `NOT_RUN` |
+
+**Sisa `NOT_RUN` dan `BLOCKED`.**
+
+- `NOT_RUN`, `owner: user`: 15 langkah `### UI / manual` Milestone 4 (`F46-1`), termasuk warna accent Up… dan Bring Up, Cancel di banner, Up dari terminal selagi halaman terbuka, dan "Create with Up…".
+- `BLOCKED`, `reason`: butuh unduhan runtime, `owner: user`: anak `install_runtime` nyata yang dimulai Up lewat daemon (AC-6). Test native memasang runtime lebih dulu dari cache.
+
+**Temuan rendah yang masih terbuka.**
+
+1. `lastUp` `interrupted` tidak punya isi per service; service yang terputus tampil dengan alasan spec 0044. Bukan pelanggaran AC.
+2. `leaseActive` di summary instance bisa tertinggal sebentar selama Up atau Down masih berjalan; `env.get.lease` selalu segar (verify spec 0047).
+3. Member yang dibuat dari manifest ber selector seperti `2.15` dilaporkan `differs: runtime` (plan spec 0044); sedang diperbaiki `dev-f47-m2`.
+4. Snapshot toolbar nonaktif menggambar teks alasan yang di toolbar asli hanya muncul sebagai tooltip; warna accent hanya bisa dinilai manual.
+5. Spec 0013 AC-18 masih mendefinisikan badge Operations tanpa pengecualian operasi anak; kode sudah tidak menghitung anak.
+6. Teks spec dan verify yang perlu diselaraskan lewat `/sync` atau `/architect`: cuplikan `ChildStart::Started { operation, subject }` (kode hanya `operation`), `EnvUpParams.idempotencyKey` (ada di envelope), dan angka di langkah verify Milestone 2 (`--test environment up` berisi 11 test `up::`, `env_up` kini 7 test).
+7. Daemon tidak pernah mengisi `detail` untuk `up_failed`; app memakai kalimat per kode.
+8. Fixture `environment-up-failed` menampilkan dependent yang dilewati sebagai "Not created", padahal daemon sudah membuatnya (berhenti). Hanya data contoh.
+9. Baris progress `ready <instance>` menulis alamat tanpa nama endpoint saat lebih dari satu.
+10. `wait_final` membalas `ShuttingDown` juga untuk operasi yang sudah final sesudah shutdown mulai (catatan Milestone 1).
+
+**Celah test untuk `/test`** (semuanya lulus di probe checker, belum dikunci test):
+
+- Daemon: `env.plan_blocked` lewat socket; plan yang berubah sesudah ditinjau (manifest diedit) ditolak `env.plan_changed`; member ber blocker `needsSecret` menjadi `secret.needs_secret`; start dependency yang gagal membuat dependent `skipped` tanpa operasi start; PID dan `restart_total` instance sehat saat Up gagal (AC-9); instance pengguna bernama mirip utuh byte demi byte (AC-12); dua environment meminjam satu instance serentak dan dua manifest membuat nama instance yang sama (AC-14); klien putus di tengah Up dan rotasi sesi `new` (AC-13); `lock_sha256` yang ditulis Up dan `storage.locationId` sampai ke create (butuh provider yang bisa dikunci).
+- Core: batas antre anak `CHILD_QUEUE_TIMEOUT_SECONDS` (`resource.busy`), `SERVICE_SETTLE_TIMEOUT_SECONDS` (`env.service_not_ready`), instance `stopping` yang ditunggu lalu dinyalakan, batas `UP_INSTALL_CONCURRENCY`, dan `ShuttingDown` dari anak yang membuat driver abandon (kini hanya terbukti lewat pengulangan test restart).
+- CLI: Up sukses lewat binary terhadap daemon nyata (cocok sebagai test native), Ctrl-C yang tidak membatalkan Up, kolom `ENVIRONMENT` di `stackly instance list` sesudah Up, `env up --locked` tanpa lock dan dengan lock basi, `--wait` yang kehabisan `--timeout` (exit 8), dan `cli.env_locked_unsupported` di luar daemon berskrip.
+- App: tidak ada test ujung ke ujung Up terhadap `stacklyd` asli di `EnvironmentEndToEndTests`; snapshot toolbar yang menggambar toolbar apa adanya.
+- Native: anak install nyata lewat daemon (butuh unduhan).
