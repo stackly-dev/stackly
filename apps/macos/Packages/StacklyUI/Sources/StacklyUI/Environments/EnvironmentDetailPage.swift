@@ -92,10 +92,11 @@ struct EnvironmentDetailPage: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             ActionButton(validateAction, prominence: .secondary, showsReason: false)
-            if let plan = planAction {
-                ActionButton(plan, prominence: .secondary, showsReason: false)
+            // Down of spec 0047 goes here, left of Up….
+            if let up = upAction {
+                ActionButton(up, prominence: .primary, showsReason: false)
+                    .mutationGated()
             }
-            // Up… and Down of specs 0046 and 0047 go here, right of Plan….
             ActionMenu(moreSections, help: "More actions for this environment")
         }
     }
@@ -104,19 +105,42 @@ struct EnvironmentDetailPage: View {
         StacklyAction(
             id: "environment.validate", title: "Validate", mutates: false,
             disabledReason: model.manifestLocation == nil
-                ? "This environment has no manifest file." : nil,
+                ? EnvironmentCopy.noManifest : nil,
             isBusy: model.isValidating,
             perform: { run { await model.validate() } })
     }
 
-    /// Plan…: the plan sheet for the registered manifest, from the detail page with Done only.
-    private var planAction: StacklyAction? {
+    /// Up…: the plan sheet for the registered manifest with Cancel and Bring Up (spec 0046,
+    /// AC-19), off with its reason while an Up or a Down runs or while the manifest can't be
+    /// used.
+    private var upAction: StacklyAction? {
         guard let planPresenter, let summary = model.summary else { return nil }
         return StacklyAction(
-            id: "environment.plan", title: "Plan…", mutates: false,
-            disabledReason: summary.manifestLocation == nil
-                ? "This environment has no manifest file." : nil,
+            id: "environment.up", title: EnvironmentCopy.up, mutates: true,
+            disabledReason: Self.upDisabledReason(
+                summary: summary, manifestState: model.manifestState,
+                problemCount: model.problemCount, declaredName: model.declaredName),
             perform: { planPresenter.review(environment: summary.id, name: summary.name) })
+    }
+
+    /// Why Up… is off, or `nil` (spec 0046, *Layar*): an operation of this environment that has
+    /// not ended, no manifest file, or a manifest that is `missing`, `unreadable`, `invalid`,
+    /// or `name_changed`, with the words of its banner.
+    static func upDisabledReason(
+        summary: EnvironmentSummary, manifestState: ManifestState?, problemCount: UInt64,
+        declaredName: String?
+    ) -> String? {
+        if let active = summary.activeOperation {
+            return active.kind == .environmentDown
+                ? EnvironmentCopy.bringingDown : EnvironmentCopy.alreadyBringingUp
+        }
+        guard summary.manifestLocation != nil else { return EnvironmentCopy.noManifest }
+        switch manifestState {
+        case .missing, .unreadable: return EnvironmentCopy.unreadableTitle
+        case .invalid: return EnvironmentCopy.invalidTitle(problemCount)
+        case .nameChanged: return EnvironmentCopy.nameChangedTitle(declaredName)
+        case .inSync, .changed, .unrecognized, nil: return nil
+        }
     }
 
     private var moreSections: [[StacklyAction]] {

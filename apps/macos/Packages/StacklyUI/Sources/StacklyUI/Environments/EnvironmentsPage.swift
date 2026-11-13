@@ -107,7 +107,8 @@ public struct EnvironmentsPage: View {
             .environment(\.environmentPlan, presenter)
             .sheet(isPresented: sheetShown) {
                 EnvironmentPlanSheet(
-                    presenter: presenter, catalog: catalog, instances: instances, home: home,
+                    presenter: presenter, catalog: catalog, secrets: detail?.secrets,
+                    instances: instances, home: home,
                     reviewProvider: { provider in
                         presenter.close()
                         navigator?.show(.provider(provider))

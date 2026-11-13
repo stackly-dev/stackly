@@ -138,8 +138,8 @@ extension SnapshotTests {
                 store: rig.environments, picker: FixtureFilePicker(path: nil))
             await presenter.read(source)
             return EnvironmentPlanSheet(
-                presenter: presenter, catalog: rig.catalog, instances: rig.instances,
-                home: FixtureDetail.home, reviewProvider: { _ in })
+                presenter: presenter, catalog: rig.catalog, secrets: rig.detail.secrets,
+                instances: rig.instances, home: FixtureDetail.home, reviewProvider: { _ in })
         }
 
         @Test(
@@ -160,7 +160,7 @@ extension SnapshotTests {
             .evidence(
                 covers: ["AC-020", "VAL-013"],
                 expected:
-                    "The plan of a registered manifest shows Keep, Start, and Create, a difference, approval, and the blockers, with Done only"
+                    "The plan of a registered manifest shows Keep, Start, and Create, a difference, approval, the blockers, Set… on a missing secret, and Cancel with Bring Up off for its blockers"
             ))
         @MainActor
         func registeredPlan() async throws {

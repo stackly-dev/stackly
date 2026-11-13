@@ -154,7 +154,21 @@ nonisolated enum EnvironmentCopy {
     }
 
     static let planSubtitle = "Review what Up will do. Nothing runs until you confirm."
-    static let planFootnote = "Services start in dependency order and wait for readiness."
+    static let planFootnote =
+        "Services start in dependency order and wait for readiness. If one fails, the rest stay up and the environment is marked partially ready."
+
+    // MARK: - Up (spec 0046, *Layar*)
+
+    static let up = "Up…"
+    static let bringUp = "Bring Up"
+    static let createWithUp = "Create with Up…"
+    static let reviewPlan = "Review Plan"
+    static let setSecret = "Set…"
+    static let resolveBlockers = "Resolve the blockers above first."
+    static let planChanged = "The plan changed. Review it again."
+    static let alreadyBringingUp = "Already bringing up"
+    static let bringingDown = "Bringing down"
+    static let noManifest = "This environment has no manifest file."
     static let needsApproval = "Needs approval"
     static let reviewInCatalog = "Review in Catalog"
 

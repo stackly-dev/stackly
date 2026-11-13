@@ -66,7 +66,7 @@ struct ServiceRowModel: Identifiable, Equatable {
 
 /// The menu of a service row (spec 0044, AC-19): Open In, Copy Connection URL, Show
 /// Instance and Show Logs, then Start, Stop, or Retry. A service whose instance does not exist
-/// has only Show Plan….
+/// has only Create with Up… (spec 0046, AC-19), which opens the plan sheet.
 enum ServiceMenu {
     /// The sections of the menu.
     /// - Parameters:
@@ -76,7 +76,7 @@ enum ServiceMenu {
     ///   - lifecycle: The main action of the instance, or `nil` when it has none here.
     ///   - open: Opens the detail page of an instance.
     ///   - openLogs: Opens the Logs tab of an instance.
-    ///   - showPlan: Opens the plan sheet, or `nil` where the page has none.
+    ///   - showPlan: Opens the plan sheet with Bring Up, or `nil` where the page has none.
     @MainActor
     static func sections(
         for row: ServiceRowModel, openIn: OpenInContent, copy: StacklyAction?,
@@ -88,7 +88,8 @@ enum ServiceMenu {
             return [
                 [
                     StacklyAction(
-                        id: "environment.showPlan", title: "Show Plan…", mutates: false,
+                        id: "environment.createWithUp", title: EnvironmentCopy.createWithUp,
+                        mutates: false,
                         perform: showPlan)
                 ]
             ]
