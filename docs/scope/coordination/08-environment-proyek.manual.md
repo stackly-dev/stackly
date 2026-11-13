@@ -8,8 +8,8 @@ Keputusan yang diambil atas namamu ada di `08-environment-proyek.log.md` bagian 
 
 | ID | Langkah | AC | Kotak yang dicentang dengan langkah ini `NOT_RUN` | Bisa dijalankan sesudah | Hasil |
 | --- | --- | --- | --- | --- | --- |
-| `F44-1` | Import manifest contoh ERP di app, baca sheet plan, banner manifest, Validate, Reload, Locate, Remove, Overview, Instances, mode gelap (18 langkah) | `spec 0044 AC-18 sampai AC-23, AC-25` (dan AC-6 lewat GUI) | F44 milestone 3 "Environments di app" | F44 milestone 1 sampai 3 di `main` (`dfd1f3c6`) | `NOT_RUN` |
-| `F44-2` | Menu baris service yang sudah punya instance lewat `instanceRef` (Open In, Copy Connection URL, Show Instance, Show Logs, Stop atau Start, klik ganda); mengunduh runtime Valkey | `spec 0044 AC-19` | F44 milestone 3 "Environments di app" | F44 milestone 3 dan fix app di `main` (`be9ff7a3`) | `NOT_RUN` |
+| `F44-1` | Import manifest contoh ERP di app, baca sheet plan, banner manifest, Validate, Reload, Locate, Remove, Overview, Instances, mode gelap (18 langkah) | `spec 0044 AC-18 sampai AC-23, AC-25` (dan AC-6 lewat GUI) | F44 milestone 3 "Environments di app", `Build it`, `Verify it` | F44 milestone 1 sampai 3 di `main` (`dfd1f3c6`) | `NOT_RUN` |
+| `F44-2` | Menu baris service yang sudah punya instance lewat `instanceRef` (Open In, Copy Connection URL, Show Instance, Show Logs, Stop atau Start, klik ganda); mengunduh runtime Valkey | `spec 0044 AC-19` | F44 milestone 3 "Environments di app", `Build it`, `Verify it` | F44 milestone 3 dan fix app di `main` (`be9ff7a3`) | `NOT_RUN` |
 
 ## Nilai dari user
 
