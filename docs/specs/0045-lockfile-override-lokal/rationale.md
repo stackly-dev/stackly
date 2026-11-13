@@ -136,6 +136,29 @@ Untuk export, tafsir yang dipilih (K1) adalah yang menutup kebutuhan yang belum 
 - Kontrak `--locked` dengan `arc-f46-spec` (spec 0046), disepakati 2026-11-13: Up tidak pernah me resolve sendiri dan hanya memakai isi `PlanItem`; `locked` adalah masukan plan yang Up teruskan apa adanya; semua kode blocker lock dan override milik spec ini dan tampil sebagai `EnvPlan.blockers`; `planDigest` diperluas di sini; Up menulis `lock_sha256` dari `EnvPlan.lock.sha256`; Up meneruskan `PlanItem.storage.locationId` ke `CreateDraft.data_location`; Up tidak pernah menulis file lock atau override.
 - File satu pemilik saat build (`crates/protocol/`, `protocols/`, `schemas/`, hasil codegen) hanya disentuh langkah 1, 3, dan 5, sesudah langkah yang sama di spec 0044 masuk.
 
+## Perubahan 2026-11-13 (sesudah verify Milestone 1)
+
+Update `/architect` (mode Update, sesi `arc-update-44c`), mode keputusan `auto`, tanpa cross check atas permintaan lead. Tiga temuan rendah checker pada Milestone 1 dijawab. ID AC tidak berubah; AC-9, AC-12, dan AC-13 masing masing mendapat satu kalimat. Wire tidak berubah (protokol tetap 4.3).
+
+### K22: state override saat file override tidak valid (`biasa`)
+
+- **Diambil: setiap entri `local.overrides` ber state `ignored`, dan tidak ada override yang diterapkan.** Daftarnya tetap menunjukkan apa yang file minta, jadi kamu bisa melihat mana yang tidak berlaku, dan `ignored` sudah berarti "ditulis tetapi tidak dipakai" untuk alias tak dikenal. Tidak ada nilai enum baru. Kontra: satu nilai kini punya dua sebab, yang dibedakan lewat `local.state` (`invalid`) dan finding nya.
+- Runner up: daftar `overrides` kosong saat file tidak valid. Pro: tidak ada makna ganda. Kontra: layar dan `--json` kehilangan isi file tepat saat kamu sedang memperbaikinya.
+- Opsi ketiga: nilai baru `not_applied`. Ditolak: `OverrideState` enum terbuka, jadi itu kenaikan minor untuk membedakan sesuatu yang `local.state` sudah katakan.
+
+Penerapan sebagian (terapkan override yang benar, tolak yang salah) tidak dipertimbangkan lagi: plan toh terblokir `env.local_invalid`, dan menerapkan separuh file membuat `PlanItem.endpoints` dan `planDigest` bergantung pada urutan aturan.
+
+### K23: `lock.state` untuk manifest yang tidak valid (`biasa`)
+
+- **Diambil: wire tetap; `in_sync` di kasus itu didefinisikan sebagai "terbaca dan valid", dan klien tidak menampilkan state lock saat `validation.valid` false.** Basi memang tidak bisa dihitung tanpa manifest, plan seperti itu tidak pernah `applicable`, `env.get` sudah tidak mengirim `lock` untuk `manifestState` `invalid`, dan sheet serta CLI untuk manifest tidak valid hanya menampilkan finding. Kontra: konsumen `--json` harus tahu aturan bacanya, yang kini tertulis di *State lock* dan AC-12.
+- Runner up: nilai `LockState` baru `unchecked`. Pro: tidak ada makna bersyarat. Kontra: kenaikan minor protokol, klien 4.3 membacanya `unrecognized`, dan tidak ada layar yang akan menampilkannya.
+- Opsi ketiga: jangan kirim `EnvPlan.lock` untuk manifest tidak valid. Ditolak: AC-12 menjanjikan `lock` selalu ada, dan mengubahnya memutus klien yang sudah dibangun.
+
+### K24: `EnvLocalInfo.state` opsional (`biasa`)
+
+- **Diambil: teks DTO diselaraskan dengan kontrak 4.3 yang sudah dibangun: `state?`, kosong berarti tidak ada file override.** Layar butuh membedakan "tidak ada file" (baris "None") dari "ada file", dan `local` yang selalu dikirim memberi nama file nya untuk ditampilkan. Tidak ada perubahan kode.
+- Runner up: `local` tidak dikirim saat file tidak ada, seperti `EnvPlan.local`. Kontra: perubahan perilaku pada kontrak yang sudah di merge, tanpa manfaat bagi layar.
+
 ## Cross check
 
 Dijalankan 2026-11-13 oleh model lain (Opus) sebagai pembaca saja, sesuai aturan umum koordinasi. Ia menemukan 18 butir; mode `auto` menerapkan perbaikan yang direkomendasikan, semuanya sebelum spec diajukan ke lead:
