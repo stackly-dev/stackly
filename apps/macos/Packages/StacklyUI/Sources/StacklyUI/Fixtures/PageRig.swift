@@ -60,6 +60,14 @@
             var environmentOutcome: MutationOutcome?
             /// The environment mutations sent, in order.
             var environmentSent: [Call] = []
+            /// What `env.lock` answers, or `nil` for the fixture result (spec 0045).
+            var lockResult: EnvLockResult?
+            /// What `env.export` answers, or `nil` for the fixture export.
+            var export: EnvExport?
+            /// The failure `env.lock` and `env.export` answer, or `nil`.
+            var lockFailure: ClientError?
+            /// The `env.lock` and `env.export` calls sent, in order.
+            var lockCalls: [Call] = []
 
             /// What the environment reads answer.
             func environmentReply(_ call: Call) throws(ClientError) -> Reply {
@@ -89,6 +97,14 @@
                     case .file(let path): return .envPlan(FixtureEnvironments.freshPlan(path: path))
                     case .registered: return .envPlan(FixtureEnvironments.registeredPlan())
                     }
+                case .envLock:
+                    lockCalls.append(call)
+                    if let lockFailure { throw lockFailure }
+                    return .envLock(lockResult ?? FixtureEnvironments.lockResult())
+                case .envExport:
+                    lockCalls.append(call)
+                    if let lockFailure { throw lockFailure }
+                    return .envExport(export ?? FixtureEnvironments.export())
                 default:
                     throw .rejected(PageRig.unknownMethod)
                 }
@@ -109,7 +125,7 @@
                                 id: id, name: "erp-development", folder: "erp", status: .down,
                                 ready: 0, total: 6, revision: 1),
                             services: [], detached: [], manifestState: nil, problems: nil,
-                            lock: nil, local: nil)
+                            lock: nil, local: nil, lastUp: nil)
                     return .completed(.envImport(detail))
                 case .envRemove(let params):
                     let name = environments.first { $0.id == params.id }?.name ?? "environment"
@@ -362,6 +378,8 @@
 
         /// What the More menu of an environment opened and revealed, in order.
         private(set) var openedFiles: [URL] = []
+        /// What Copy Environment Variables wrote to the pasteboard, in order (spec 0045).
+        private(set) var copiedTexts: [String] = []
 
         /// The Environments section over these stores, inside the action host of a window:
         /// the list, or the detail page of `selected` loaded with the script's manifest state.
@@ -369,13 +387,16 @@
         func environmentsPage(
             selected: UUID? = nil, waiting: FailureContent? = nil, hasConnection: Bool = true,
             plan: EnvironmentPlanPresenter.Source? = nil, validate: Bool = false,
-            picker: any FilePicking = FixtureFilePicker(path: nil)
+            lock: LockRefresh? = nil, picker: any FilePicking = FixtureFilePicker(path: nil)
         ) async -> some View {
             var detailModel: EnvironmentDetailModel?
             if let selected {
-                let model = EnvironmentDetailModel(id: selected, store: environments)
+                let model = EnvironmentDetailModel(
+                    id: selected, store: environments,
+                    copyText: { [weak self] in self?.copiedTexts.append($0) })
                 await model.load(checkManifest: true)
                 if validate { _ = await model.validate() }
+                if let lock { _ = await model.lockVersions(refresh: lock) }
                 detailModel = model
             }
             let presenter = EnvironmentPlanPresenter(store: environments, picker: picker)

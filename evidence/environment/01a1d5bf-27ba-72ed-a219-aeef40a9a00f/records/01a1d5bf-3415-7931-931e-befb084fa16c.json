@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "finishedAt" : "2026-11-13T16:30:40.151Z",
+  "startedAt" : "2026-11-13T16:30:40.149Z",
+  "expected" : "Copy Environment Variables writes exactly the dotenv text of env.export and says Copied 3 variables.; with no variable it copies nothing",
+  "actual" : "all expectations passed",
+  "subjects" : [
+
+  ],
+  "evidencePath" : "output.log",
+  "test" : {
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+    "name" : "EnvironmentLockTests/copyEnvironmentVariablesWritesTheExportText()",
+    "line" : 221,
+    "target" : "StacklyUITests",
+    "package" : null,
+    "language" : "swift"
+  },
+  "method" : "automated",
+  "covers" : [
+    "NFR-012"
+  ],
+  "status" : "PASS",
+  "reviewer" : null,
+  "id" : "01a1d5bf-3415-7931-931e-befb084fa16c",
+  "owner" : null,
+  "kind" : "fixture",
+  "schema" : "stackly.evidence/v1",
+  "reason" : null
+}

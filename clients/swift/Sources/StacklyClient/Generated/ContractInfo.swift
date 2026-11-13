@@ -3,7 +3,7 @@
 /// The contract this client was generated from (spec 0006).
 public enum ContractInfo {
 	/// SHA-256 of the normalized contract, sent as `contractDigest` in the handshake.
-	public static let digest = "a24e9ac97177fea9b02390bf97ef17666f75d71138b9c32d0e6184a549c78249"
+	public static let digest = "84f0090e1bee656e44f9532c1609b144ed1cc9071725c499d4c382cfb7654785"
 	/// The protocol version this client speaks.
-	public static let protocolVersion = ProtocolVersion(major: 4, minor: 3)
+	public static let protocolVersion = ProtocolVersion(major: 4, minor: 4)
 }

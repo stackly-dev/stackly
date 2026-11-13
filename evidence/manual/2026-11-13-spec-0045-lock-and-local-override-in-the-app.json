@@ -1,0 +1,59 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d5c0-db0f-737c-9489-9ea58864d0df",
+  "covers": [
+    "REQ-023",
+    "NFR-012",
+    "AC-023",
+    "AC-080"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0045 lock and local override in the app",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "Lock Versions on the ERP manifest writes stackly.lock and changes the Lock row, Update Lock… confirms first, a one port .stackly.local.yaml shows in the Local override row and the plan sheet, an override file with an error is a blocker and applies nothing, and Copy Environment Variables copies only host and port variables, with pointer only",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T16:32:28.430841Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-13-spec-0045-lock-and-local-override-in-the-app.json",
+  "context": {
+    "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

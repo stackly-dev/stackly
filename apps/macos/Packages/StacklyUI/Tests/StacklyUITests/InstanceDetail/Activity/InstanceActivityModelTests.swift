@@ -84,7 +84,7 @@ struct InstanceActivityModelTests {
             cancelRequestedAt: nil, pointOfNoReturnAt: nil, failure: nil, recovery: nil,
             result: nil, trigger: OperationTriggerInfo(origin: .user, client: .gui),
             createdAt: ActivitySample.base, startedAt: ActivitySample.base,
-            updatedAt: ActivitySample.base, revision: revision, cancel: nil)
+            updatedAt: ActivitySample.base, revision: revision, cancel: nil, parent: nil)
     }
 
     private func opened(changes: AsyncStream<OperationCenterChange>? = nil) async

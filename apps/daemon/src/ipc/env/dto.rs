@@ -15,7 +15,7 @@ use stackly_protocol::env::{
     EnvValidation, EnvironmentRef, EnvironmentService, EnvironmentSummary, LockStaleItem,
     PlanBlocker, PlanDifference, PlanEndpoint, PlanInstance, PlanItem, PlanLocal, PlanLock,
     PlanOverride, PlanProviderRevision, PlanRuntime, PlanSecret, PlanStorage, ServiceDependency,
-    ServiceInstance, ServiceNotReady,
+    ServiceInstance,
 };
 use stackly_protocol::instance::{InstanceSummary, PortRequest};
 use stackly_protocol::stop_all::InstanceRef;
@@ -449,6 +449,7 @@ pub fn summary(
         ready_count: Count::saturating(view.ready_count as u64),
         service_count: Count::saturating(view.service_count as u64),
         updated_at,
+        active_operation: None,
     }
 }
 
@@ -473,14 +474,12 @@ pub fn service(status: &ServiceStatus, summaries: &[InstanceSummary]) -> Environ
                 lifecycle: summary.lifecycle,
                 readiness: summary.readiness.clone(),
                 health: summary.health.clone(),
+                endpoints: summary.endpoints.clone(),
             }),
         not_ready: status
             .not_ready
             .as_ref()
-            .map(|(reason, detail)| ServiceNotReady {
-                reason: wire(reason.as_code()),
-                detail: detail.clone(),
-            }),
+            .map(|(reason, detail)| super::status::plain(wire(reason.as_code()), detail.clone())),
     }
 }
 

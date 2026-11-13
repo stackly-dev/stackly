@@ -1,0 +1,30 @@
+{
+  "reviewer" : null,
+  "schema" : "stackly.evidence/v1",
+  "status" : "PASS",
+  "startedAt" : "2026-11-13T16:30:59.169Z",
+  "steps" : null,
+  "subjects" : [
+
+  ],
+  "id" : "01a1d5bf-7e61-7c1a-920a-89c745a9856c",
+  "reason" : null,
+  "expected" : "The Overview shows an Environments section above Operations; Instances shows the Environment column",
+  "owner" : null,
+  "finishedAt" : "2026-11-13T16:31:02.422Z",
+  "actual" : "all expectations passed",
+  "test" : {
+    "package" : null,
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/otherSurfaces()",
+    "language" : "swift",
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "line" : 345,
+    "target" : "StacklyUITests"
+  },
+  "kind" : "fixture",
+  "covers" : [
+    "NFR-012"
+  ],
+  "evidencePath" : "output.log",
+  "method" : "automated"
+}

@@ -177,6 +177,11 @@ pub struct DaemonCore {
     local_problem: Mutex<Option<String>>,
     catalog_options: Mutex<stackly_core::catalog::CatalogOptions>,
     catalog_refresher: OnceLock<Arc<dyn stackly_core::catalog::import::CatalogRefresher>>,
+    /// The progress of every running Up, in memory only (spec 0046).
+    up_board: Arc<stackly_core::environment::up::UpBoard>,
+    /// The ports Up starts its children and reads instances through, set
+    /// once the core is shared (spec 0046).
+    env_ports: OnceLock<Arc<crate::ipc::env::children::EnvPorts>>,
     catalog_source: Arc<catalog::CatalogSource>,
     catalog_accesses: AtomicU64,
     pinned_packages: PinnedPackages,
@@ -259,6 +264,8 @@ impl DaemonCore {
             local_problem: Mutex::new(None),
             catalog_options: Mutex::new(stackly_core::catalog::CatalogOptions::default()),
             catalog_refresher: OnceLock::new(),
+            up_board: Arc::new(stackly_core::environment::up::UpBoard::new()),
+            env_ports: OnceLock::new(),
             catalog_source: Arc::new(catalog::CatalogSource::default()),
             catalog_accesses: AtomicU64::new(0),
             pinned_packages: PinnedPackages::default(),
@@ -581,6 +588,23 @@ impl DaemonCore {
         &self,
     ) -> Option<Arc<dyn stackly_core::catalog::import::CatalogRefresher>> {
         self.catalog_refresher.get().cloned()
+    }
+
+    /// The progress table of every running Up (spec 0046).
+    #[must_use]
+    pub fn up_board(&self) -> &Arc<stackly_core::environment::up::UpBoard> {
+        &self.up_board
+    }
+
+    /// The ports of Up, once the start slot set them.
+    #[must_use]
+    pub fn env_ports(&self) -> Option<Arc<crate::ipc::env::children::EnvPorts>> {
+        self.env_ports.get().cloned()
+    }
+
+    /// Sets the ports of Up; the first call wins.
+    pub fn set_env_ports(&self, ports: Arc<crate::ipc::env::children::EnvPorts>) {
+        let _ = self.env_ports.set(ports);
     }
 
     /// Sets the refresher; the first call wins.

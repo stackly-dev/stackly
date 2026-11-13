@@ -580,6 +580,7 @@ mod tests {
                 updated_at: Timestamp::UNIX_EPOCH,
                 revision: Revision::new(1).unwrap(),
                 cancel: None,
+                parent: None,
             },
             steps: Vec::new(),
             created: Vec::new(),

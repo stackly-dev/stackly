@@ -362,6 +362,24 @@
       "summary": "the environment manifest has error findings; the result holds the validation or the plan (spec 0044)"
     },
     {
+      "code": "cli.env_lock_blocked",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "blockers"
+      ],
+      "items": null,
+      "summary": "the lock cannot be written because something blocks it; the result holds the lock result (spec 0045)"
+    },
+    {
+      "code": "cli.env_locked_unsupported",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the daemon does not know the locked plan mode, so the plan was not checked against the lock (spec 0045)"
+    },
+    {
       "code": "cli.env_plan_blocked",
       "category": "conflict",
       "retryable": false,
@@ -709,6 +727,19 @@
       "summary": "the bundle could not be written to the destination; reason is no_space, permission, or io, and no partial file is left"
     },
     {
+      "code": "env.dependency_not_ready",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "service",
+        "dependency",
+        "reason",
+        "timeoutSeconds"
+      ],
+      "items": null,
+      "summary": "the code of a skipped service in an Up report: a dependency failed, timed out, or was not ready (spec 0046)"
+    },
+    {
       "code": "env.instance_blocked",
       "category": "conflict",
       "retryable": false,
@@ -961,6 +992,33 @@
       "summary": "a plan blocker of spec 0045: dataLocation is not a registered data location"
     },
     {
+      "code": "env.plan_blocked",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "blocker",
+        "fields": [
+          "service",
+          "code",
+          "message"
+        ],
+        "max": 32
+      },
+      "summary": "an Up was asked for a plan that is not applicable; items lists each blocker (spec 0046)"
+    },
+    {
+      "code": "env.plan_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the plan differs from the one the client reviewed, or an instance it binds changed before accept (spec 0046)"
+    },
+    {
       "code": "env.relink_mismatch",
       "category": "conflict",
       "retryable": false,
@@ -980,6 +1038,42 @@
       ],
       "items": null,
       "summary": "env.lock named an alias that is not a dedicated service of the manifest"
+    },
+    {
+      "code": "env.service_not_ready",
+      "category": "timeout",
+      "retryable": false,
+      "details": [
+        "service",
+        "instance",
+        "timeoutSeconds"
+      ],
+      "items": null,
+      "summary": "the code of a service whose running instance did not become ready in time (spec 0046)"
+    },
+    {
+      "code": "env.up_incomplete",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "ready",
+        "total",
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "service",
+        "fields": [
+          "service",
+          "phase",
+          "stage",
+          "code",
+          "dependency",
+          "operationId"
+        ],
+        "max": 32
+      },
+      "summary": "an Up ended with services that are not ready; items lists each one (spec 0046)"
     },
     {
       "code": "events.too_many_subscriptions",

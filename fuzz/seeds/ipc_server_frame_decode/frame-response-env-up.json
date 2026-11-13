@@ -1,0 +1,45 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e41",
+    "reply": {
+      "type": "env.up",
+      "content": {
+        "environmentId": "0192f3a7-0000-7000-8000-0000000000e1",
+        "name": "erp-development",
+        "operation": {
+          "operation": {
+            "id": "0192f3a4-0000-7000-8000-0000000000f1",
+            "kind": "environment_up",
+            "resource": {
+              "kind": "environment",
+              "id": "0192f3a7-0000-7000-8000-0000000000e1"
+            },
+            "state": "queued",
+            "stage": null,
+            "progress": {
+              "type": "indeterminate"
+            },
+            "waitingOn": null,
+            "cancelRequestedAt": null,
+            "pointOfNoReturnAt": null,
+            "failure": null,
+            "recovery": null,
+            "result": null,
+            "trigger": {
+              "origin": "user",
+              "client": "cli"
+            },
+            "createdAt": "2026-11-13T09:00:00.000Z",
+            "startedAt": null,
+            "updatedAt": "2026-11-13T09:00:00.000Z",
+            "revision": 1,
+            "cancel": "available",
+            "parent": null
+          },
+          "replayed": false
+        }
+      }
+    }
+  }
+}

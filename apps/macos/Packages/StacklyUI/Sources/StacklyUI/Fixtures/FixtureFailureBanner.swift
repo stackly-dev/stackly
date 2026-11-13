@@ -309,7 +309,7 @@
                 progress: .indeterminate, waitingOn: nil, cancelRequestedAt: nil,
                 pointOfNoReturnAt: nil, failure: failure, recovery: nil, result: nil,
                 trigger: OperationTriggerInfo(origin: .user, client: .gui), createdAt: createdAt,
-                startedAt: createdAt, updatedAt: endedAt, revision: 3, cancel: nil)
+                startedAt: createdAt, updatedAt: endedAt, revision: 3, cancel: nil, parent: nil)
         }
     }
 

@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "test" : {
+    "line" : 87,
+    "language" : "swift",
+    "package" : null,
+    "target" : "StacklyUITests",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/manifestBanners()",
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift"
+  },
+  "evidencePath" : "output.log",
+  "subjects" : [
+
+  ],
+  "actual" : "all expectations passed",
+  "id" : "01a1d5bf-4894-7f90-bea7-a2af584cf305",
+  "status" : "PASS",
+  "owner" : null,
+  "expected" : "Each manifest state shows its banner: changed, can't be read, problems, and a new name",
+  "covers" : [
+    "NFR-012"
+  ],
+  "reviewer" : null,
+  "startedAt" : "2026-11-13T16:30:45.397Z",
+  "finishedAt" : "2026-11-13T16:30:46.996Z",
+  "kind" : "fixture",
+  "schema" : "stackly.evidence/v1",
+  "method" : "automated",
+  "reason" : null
+}

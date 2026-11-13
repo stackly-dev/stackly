@@ -36,7 +36,8 @@
             "startedAt": "2026-10-19T08:00:00.120Z",
             "updatedAt": "2026-10-19T08:00:05.500Z",
             "revision": 4,
-            "cancel": "available"
+            "cancel": "available",
+            "parent": null
           },
           {
             "id": "0192f3a4-0000-7000-8000-000000000003",
@@ -64,7 +65,8 @@
             "startedAt": null,
             "updatedAt": "2026-10-19T07:59:59.123Z",
             "revision": 1,
-            "cancel": "available"
+            "cancel": "available",
+            "parent": null
           }
         ],
         "next": "2026-10-19T07:59:59.123456789Z_0192f3a4-0000-7000-8000-000000000003"
