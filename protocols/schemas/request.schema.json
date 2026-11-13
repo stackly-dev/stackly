@@ -1281,6 +1281,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Writes the lock next to a manifest from the catalog in memory\n(spec 0045). Not an operation: it writes that one file, never the\nregistry, and downloads and spawns nothing.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvLockParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.lock"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The host and port of every endpoint of an environment as variables\n(spec 0045). It reads the registry and pinned packages only.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvExportParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.export"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1693,6 +1727,24 @@
         "port"
       ]
     },
+    "EnvExportParams": {
+      "description": "Params of `env.export`.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "How the text is written.",
+          "$ref": "#/$defs/ExportFormat",
+          "default": "dotenv"
+        },
+        "source": {
+          "description": "The environment: a registered one, or the file it was imported\nfrom.",
+          "$ref": "#/$defs/EnvSource"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
     "EnvGetParams": {
       "description": "Params of `env.get`.",
       "type": "object",
@@ -1712,10 +1764,33 @@
         "id"
       ]
     },
+    "EnvLockParams": {
+      "description": "Params of `env.lock`: writes the lock next to the manifest. Not an\noperation: it writes that one file and never the registry.",
+      "type": "object",
+      "properties": {
+        "refresh": {
+          "description": "What is picked again.",
+          "$ref": "#/$defs/LockRefresh"
+        },
+        "source": {
+          "description": "The manifest.",
+          "$ref": "#/$defs/EnvSource"
+        }
+      },
+      "required": [
+        "source",
+        "refresh"
+      ]
+    },
     "EnvPlanParams": {
       "description": "Params of `env.plan`.",
       "type": "object",
       "properties": {
+        "locked": {
+          "description": "Whether nothing may be resolved from a manifest selector (spec\n0045 AC-6). A daemon that does not know the field ignores it, so a\nclient that sends true checks `EnvPlan.lock.locked`.",
+          "type": "boolean",
+          "default": false
+        },
         "source": {
           "description": "The manifest.",
           "$ref": "#/$defs/EnvSource"
@@ -1822,6 +1897,26 @@
       "required": [
         "previewId",
         "destination"
+      ]
+    },
+    "ExportFormat": {
+      "description": "How `env.export` writes its text. Open.",
+      "oneOf": [
+        {
+          "description": "`NAME=value` per line.",
+          "type": "string",
+          "const": "dotenv"
+        },
+        {
+          "description": "`export NAME='value'` per line.",
+          "type": "string",
+          "const": "shell"
+        },
+        {
+          "description": "A value this build does not know; the daemon refuses it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "ForceStopInstanceParams": {
@@ -2360,6 +2455,57 @@
           },
           "required": [
             "type"
+          ]
+        }
+      ]
+    },
+    "LockRefresh": {
+      "description": "What `env.lock` picks again. Tagged `type` and `content`.",
+      "oneOf": [
+        {
+          "description": "Keep every entry that is still good.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Pick every entry again.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "all"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Pick these aliases again: 1 to 32.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "services"
+            }
+          },
+          "required": [
+            "type",
+            "content"
           ]
         }
       ]

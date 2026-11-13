@@ -1,7 +1,7 @@
 //! The create draft and the constants of the create use case (spec 0020,
 //! *Evaluator create* and *Konstanta*).
 
-use stackly_domain::{InstanceId, RuntimeId, StartupPolicy};
+use stackly_domain::{InstanceId, RuntimeId, StartupPolicy, StorageLocationId};
 
 pub use crate::secret::SecretValueShape;
 
@@ -93,4 +93,9 @@ pub struct CreateDraft {
     /// audit note of the create reads it, and it never enters the journal,
     /// so an instance that is gone by then is ignored.
     pub duplicate_of: Option<InstanceId>,
+    /// The data location of the new instance (spec 0045 AC-11): a
+    /// registered `data` location an environment override chose, or
+    /// `None` for the default of the settings. `instance.create` and
+    /// `instance.preflight` always send `None`.
+    pub data_location: Option<StorageLocationId>,
 }

@@ -2308,6 +2308,26 @@
       "expect": "roundtrip"
     },
     {
+      "file": "request-env-plan-locked.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-lock.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-lock-services.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-env-export.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
       "file": "reject-env-validate-relative-path.json",
       "type": "Request",
       "expect": "reject",
@@ -2318,6 +2338,15 @@
     },
     {
       "file": "reject-env-import-digest-format.json",
+      "type": "Request",
+      "expect": "reject",
+      "code": "request.invalid_params",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "reject-env-lock-empty-services.json",
       "type": "Request",
       "expect": "reject",
       "code": "request.invalid_params",
@@ -2352,6 +2381,16 @@
     },
     {
       "file": "frame-response-env-remove.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-lock.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-env-export.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
     },

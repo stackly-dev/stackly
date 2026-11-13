@@ -73,6 +73,7 @@ pub fn build_duplicate(facts: &DuplicateFacts) -> DuplicateModel {
         start: false,
         startup: None,
         duplicate_of: None,
+        data_location: None,
     };
     let secret_sources = secret_fields
         .iter()

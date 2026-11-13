@@ -8,7 +8,8 @@
     "status": "partially_ready",
     "readyCount": 1,
     "serviceCount": 2,
-    "updatedAt": "2026-11-13T09:00:00.000Z"
+    "updatedAt": "2026-11-13T09:00:00.000Z",
+    "lockSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "services": [
     {
@@ -54,5 +55,26 @@
   ],
   "detached": [],
   "manifestState": "changed",
-  "problems": 0
+  "problems": 0,
+  "lock": {
+    "file": "stackly.lock",
+    "state": "in_sync",
+    "targets": [
+      "macos-aarch64"
+    ],
+    "services": 1
+  },
+  "local": {
+    "file": ".stackly.local.yaml",
+    "state": "present",
+    "overrides": [
+      {
+        "service": "postgres",
+        "field": "endpoints.client.port",
+        "value": "5434",
+        "state": "applied"
+      }
+    ],
+    "problems": 0
+  }
 }

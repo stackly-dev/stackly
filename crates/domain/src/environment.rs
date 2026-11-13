@@ -336,6 +336,8 @@ pub struct StoredEnvironment {
     pub manifest_location: Option<ManifestLocation>,
     /// The digest of the environment manifest it came from, if any.
     pub manifest_sha256: Option<Sha256Digest>,
+    /// The digest of the lock the last Up used, if any (spec 0045).
+    pub lock_sha256: Option<Sha256Digest>,
     /// The services its manifest declared when it was last accepted.
     pub declared: Vec<DeclaredService>,
     /// The members, in order.
@@ -361,6 +363,7 @@ pub struct Environment {
     name: EnvironmentName,
     manifest_location: Option<ManifestLocation>,
     manifest_sha256: Option<Sha256Digest>,
+    lock_sha256: Option<Sha256Digest>,
     declared: Vec<DeclaredService>,
     members: Vec<EnvironmentMember>,
     last_operation: Option<OperationId>,
@@ -375,6 +378,7 @@ impl PartialEq for Environment {
             && self.name == other.name
             && self.manifest_location == other.manifest_location
             && self.manifest_sha256 == other.manifest_sha256
+            && self.lock_sha256 == other.lock_sha256
             && self.declared == other.declared
             && self.members == other.members
             && self.last_operation == other.last_operation
@@ -403,6 +407,7 @@ impl Environment {
             name,
             manifest_location: None,
             manifest_sha256,
+            lock_sha256: None,
             declared: Vec::new(),
             members,
             last_operation: None,
@@ -427,6 +432,7 @@ impl Environment {
             name: stored.name,
             manifest_location: stored.manifest_location,
             manifest_sha256: stored.manifest_sha256,
+            lock_sha256: stored.lock_sha256,
             declared: stored.declared,
             members: stored.members,
             last_operation: stored.last_operation,
@@ -529,8 +535,9 @@ impl Environment {
     }
 
     /// Records the manifest this environment was accepted from: where it
-    /// lives, its digest, and the services it declares. Raises the
-    /// revision by 1.
+    /// lives, its digest, the services it declares, and the digest of the
+    /// lock the plan used, if any (spec 0045 AC-12). Raises the revision
+    /// by 1.
     ///
     /// # Errors
     ///
@@ -544,10 +551,12 @@ impl Environment {
         location: ManifestLocation,
         sha256: Sha256Digest,
         declared: Vec<DeclaredService>,
+        lock_sha256: Option<Sha256Digest>,
     ) -> Result<(), InvariantError> {
         check_declared(&declared)?;
         self.manifest_location = Some(location);
         self.manifest_sha256 = Some(sha256);
+        self.lock_sha256 = lock_sha256;
         self.declared = declared;
         self.revision = self.revision.next();
         Ok(())
@@ -582,6 +591,12 @@ impl Environment {
     #[must_use]
     pub const fn manifest_sha256(&self) -> Option<&Sha256Digest> {
         self.manifest_sha256.as_ref()
+    }
+
+    /// Returns the digest of the lock the last Up used, if any.
+    #[must_use]
+    pub const fn lock_sha256(&self) -> Option<&Sha256Digest> {
+        self.lock_sha256.as_ref()
     }
 
     /// Returns the services its manifest declared, in manifest order.
@@ -771,6 +786,7 @@ mod tests {
             location(),
             Sha256Digest::from_bytes([1; 32]),
             vec![declared("api", &["db"]), declared("db", &[])],
+            None,
         )
         .unwrap();
 
@@ -793,6 +809,7 @@ mod tests {
                 location(),
                 Sha256Digest::from_bytes([2; 32]),
                 vec![declared("db", &[]), declared("db", &[])],
+                None,
             )
             .unwrap_err();
         assert!(matches!(
@@ -804,6 +821,7 @@ mod tests {
                 location(),
                 Sha256Digest::from_bytes([2; 32]),
                 vec![declared("api", &["cache"])],
+                None,
             )
             .unwrap_err();
         assert!(matches!(

@@ -95,6 +95,7 @@ pub(super) fn from_preflight(params: &PreflightCreateParams) -> CreateDraft {
         start: params.start,
         startup: startup_of(params.startup),
         duplicate_of: None,
+        data_location: None,
     }
 }
 
@@ -137,6 +138,7 @@ pub(super) fn from_create(
         duplicate_of: params
             .duplicate_of
             .and_then(|id| stackly_domain::InstanceId::from_uuid(id).ok()),
+        data_location: None,
     };
     draft.secret_values = values
         .iter()

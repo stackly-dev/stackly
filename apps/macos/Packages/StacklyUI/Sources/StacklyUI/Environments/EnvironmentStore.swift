@@ -185,7 +185,9 @@ public final class EnvironmentStore {
 
     /// `env.plan` for `source`.
     func plan(_ source: EnvSource) async throws(ClientError) -> EnvPlan {
-        guard case .envPlan(let plan) = try await call(.envPlan(EnvPlanParams(source: source)))
+        guard
+            case .envPlan(let plan) = try await call(
+                .envPlan(EnvPlanParams(source: source, locked: nil)))
         else {
             throw .rejected(ClientErrorCatalog.protocolViolation())
         }

@@ -70,7 +70,8 @@
               "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "install": true,
               "runtimeId": null,
-              "downloadSize": 104857600
+              "downloadSize": 104857600,
+              "source": "catalog"
             },
             "endpoints": [
               {
@@ -102,7 +103,9 @@
                 "suggestedPort": null,
                 "error": null
               }
-            ]
+            ],
+            "providerRevision": null,
+            "storage": null
           },
           {
             "alias": "cache",
@@ -135,7 +138,9 @@
                 "instance": "6379"
               }
             ],
-            "checks": []
+            "checks": [],
+            "providerRevision": null,
+            "storage": null
           }
         ],
         "order": [
@@ -153,7 +158,16 @@
             "ownership": "dedicated"
           }
         ],
-        "needsSecrets": 1
+        "needsSecrets": 1,
+        "lock": {
+          "file": "stackly.lock",
+          "state": "absent",
+          "sha256": null,
+          "locked": false,
+          "targets": [],
+          "stale": []
+        },
+        "local": null
       }
     }
   }

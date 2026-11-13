@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnvironmentLock",
+  "description": "`stackly.lock`, as it decodes.",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "description": "Always `stackly/v1alpha1`.",
+      "type": "string",
+      "pattern": "^stackly/v1alpha1$"
+    },
+    "kind": {
+      "description": "Always `EnvironmentLock`.",
+      "type": "string",
+      "pattern": "^EnvironmentLock$"
+    },
+    "services": {
+      "description": "The locked services, by alias: 0 to 32.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LockedService"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "services"
+  ],
+  "$defs": {
+    "LockedArtifact": {
+      "description": "One locked artifact.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The catalog artifact ID.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "The digest of the download.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "target": {
+          "description": "`<os>-<arch>`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "id",
+        "sha256"
+      ]
+    },
+    "LockedService": {
+      "description": "One locked service.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "One artifact per target: 1 to 16.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LockedArtifact"
+          }
+        },
+        "line": {
+          "description": "Its runtime line.",
+          "type": "string"
+        },
+        "provider": {
+          "description": "`<namespace>/<name>` of the provider.",
+          "type": "string",
+          "pattern": "^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?/[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$"
+        },
+        "providerManifestSha256": {
+          "description": "The manifest digest of that revision.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "providerRevision": {
+          "description": "The revision of the catalog entry when it was locked.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The selector the manifest wrote, `stable` when it wrote none.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The exact version locked.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "providerRevision",
+        "providerManifestSha256",
+        "selector",
+        "version",
+        "line",
+        "artifacts"
+      ]
+    }
+  }
+}

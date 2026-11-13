@@ -178,7 +178,10 @@ async fn validate(api: &support::Api, path: &Path) -> Result<EnvValidation, Box<
 
 async fn plan_reply(api: &support::Api, source: EnvSource) -> Result<Reply, Box<ErrorBody>> {
     api.client
-        .call(Call::EnvPlan(EnvPlanParams { source }))
+        .call(Call::EnvPlan(EnvPlanParams {
+            source,
+            locked: false,
+        }))
         .await
 }
 
@@ -823,6 +826,7 @@ fn join(daemon: &DaemonHandle, environment: Uuid, alias: &str, instance: Uuid) -
         name: stored.name().clone(),
         manifest_location: stored.manifest_location().cloned(),
         manifest_sha256: stored.manifest_sha256().copied(),
+        lock_sha256: stored.lock_sha256().copied(),
         declared: stored.declared().to_vec(),
         members: vec![EnvironmentMember::new(
             alias.parse().expect("an alias"),
@@ -1219,4 +1223,426 @@ async fn updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it() {
     assert_ne!(changed.summary.updated_at, first, "a changed row moves it");
     drop(api);
     stop(daemon).await;
+}
+
+async fn lock_call(
+    api: &support::Api,
+    path: &Path,
+    refresh: stackly_protocol::env::LockRefresh,
+) -> Result<stackly_protocol::env::EnvLockResult, Box<ErrorBody>> {
+    let params = stackly_protocol::env::EnvLockParams {
+        source: EnvSource::File(path.display().to_string()),
+        refresh,
+    };
+    match api.client.call(Call::EnvLock(params)).await? {
+        Reply::EnvLock(result) => Ok(*result),
+        other => panic!("not a lock reply: {other:?}"),
+    }
+}
+
+async fn plan_locked(api: &support::Api, path: &Path) -> EnvPlan {
+    match api
+        .client
+        .call(Call::EnvPlan(EnvPlanParams {
+            source: EnvSource::File(path.display().to_string()),
+            locked: true,
+        }))
+        .await
+        .expect("plans")
+    {
+        Reply::EnvPlan(plan) => *plan,
+        other => panic!("not a plan: {other:?}"),
+    }
+}
+
+async fn export_call(
+    api: &support::Api,
+    source: EnvSource,
+    format: stackly_protocol::env::ExportFormat,
+) -> Result<stackly_protocol::env::EnvExport, Box<ErrorBody>> {
+    let params = stackly_protocol::env::EnvExportParams { source, format };
+    match api.client.call(Call::EnvExport(params)).await? {
+        Reply::EnvExport(export) => Ok(*export),
+        other => panic!("not an export: {other:?}"),
+    }
+}
+
+// covers: AC-1, AC-2, AC-3 (spec 0045)
+#[tokio::test(flavor = "multi_thread")]
+async fn env_lock_writes_only_the_lock_file_and_a_second_run_writes_nothing() {
+    use stackly_protocol::env::{LockChange, LockRefresh};
+    let ev = evidence!(
+        covers = ["REQ-023", "BR-018"],
+        kind = Kind::Fixture,
+        expected = "env.lock of the ERP manifest writes stackly.lock with six entries next to the manifest and nothing else, no registry row, operation, or audit row, the lock holds no reference, setting, port, path under the home, or PID, and a second run answers written false",
+    );
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let dir = project(&site);
+    let path = write(&dir.join("stackly.yaml"), &erp());
+    // A local override with a path under the home of this root.
+    write(
+        &dir.join(".stackly.local.yaml"),
+        &format!(
+            "apiVersion: stackly/v1alpha1\nkind: EnvironmentLocal\nservices:\n  postgres:\n    storage:\n      dataLocation: {}\n",
+            site.root.path().display()
+        ),
+    );
+    let before_counts = counts(&daemon);
+    let before_tree = tree(site.root.path());
+    let listed = |dir: &Path| {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .expect("lists")
+            .map(|e| {
+                e.expect("an entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+    let before_files = listed(&dir);
+
+    let first = lock_call(&api, &path, LockRefresh::None)
+        .await
+        .expect("locks");
+    assert!(first.blockers.is_empty(), "{:#?}", first.blockers);
+    assert!(first.written && first.changed);
+    assert_eq!(first.services.len(), 6);
+    assert!(first.services.iter().all(|s| s.change == LockChange::Added));
+    let mut expected = before_files.clone();
+    expected.push("stackly.lock".to_owned());
+    expected.sort();
+    assert_eq!(listed(&dir), expected, "only the lock is new");
+    assert_eq!(counts(&daemon), before_counts, "the registry is untouched");
+    assert_eq!(tree(site.root.path()), before_tree, "no other file changes");
+
+    let text = std::fs::read_to_string(dir.join("stackly.lock")).expect("the lock reads");
+    let home = site.root.path().display().to_string();
+    for absent in [
+        "local:",
+        "5432",
+        "maxConnections",
+        home.as_str(),
+        "https://",
+    ] {
+        assert!(!text.contains(absent), "{absent} is in the lock");
+    }
+    let pid = std::process::id().to_string();
+    assert!(
+        text.lines()
+            .filter(|line| !line.contains("sha256") && !line.contains("Sha256"))
+            .all(|line| !line.contains(&pid)),
+        "the PID is in the lock"
+    );
+
+    let second = lock_call(&api, &path, LockRefresh::None)
+        .await
+        .expect("locks again");
+    assert!(!second.written && !second.changed);
+    assert_eq!(second.sha256, first.sha256);
+    assert!(second.services.iter().all(|s| s.change == LockChange::Kept));
+
+    let unknown = lock_call(&api, &path, LockRefresh::Services(vec!["nope".into()]))
+        .await
+        .expect_err("an unknown alias");
+    assert_eq!(unknown.code(), "env.service_not_found");
+    drop(api);
+    stop(daemon).await;
+    ev.pass();
+}
+
+// covers: AC-2 (spec 0045)
+#[tokio::test(flavor = "multi_thread")]
+async fn env_lock_blocks_and_writes_nothing_for_an_unresolved_selector_or_a_folder() {
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let dir = project(&site);
+    let path = write(
+        &dir.join("stackly.yaml"),
+        &erp().replace("version: \"18\"", "version: \"99\""),
+    );
+    let blocked = lock_call(&api, &path, stackly_protocol::env::LockRefresh::None)
+        .await
+        .expect("answers");
+    assert!(!blocked.written && blocked.sha256.is_none());
+    assert_eq!(
+        blocked
+            .blockers
+            .iter()
+            .map(|b| b.error.code())
+            .collect::<Vec<_>>(),
+        ["runtime.selector_unresolved"]
+    );
+    assert!(!dir.join("stackly.lock").exists());
+
+    write(&path, &erp());
+    std::fs::create_dir_all(dir.join("stackly.lock")).expect("a folder");
+    let refused = lock_call(&api, &path, stackly_protocol::env::LockRefresh::All)
+        .await
+        .expect_err("a folder is not a file");
+    assert_eq!(refused.code(), "env.lock_unwritable");
+    assert_eq!(detail(&refused, "reason").as_deref(), Some("not_a_file"));
+    drop(api);
+    stop(daemon).await;
+}
+
+// covers: AC-5, AC-6, AC-13 (spec 0045)
+#[tokio::test(flavor = "multi_thread")]
+async fn plan_and_get_read_the_lock_and_the_overrides_next_to_the_manifest() {
+    use stackly_protocol::env::{LocalState, LockState, OverrideState, RuntimeSource};
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let dir = project(&site);
+    let path = write(&dir.join("stackly.yaml"), &erp());
+
+    let missing = plan_locked(&api, &path).await;
+    assert!(missing.lock.locked);
+    assert_eq!(missing.lock.state, LockState::Absent);
+    assert!(
+        missing
+            .blockers
+            .iter()
+            .any(|b| b.error.code() == "env.lock_missing")
+    );
+    assert!(missing.plan_digest.is_none());
+
+    lock_call(&api, &path, stackly_protocol::env::LockRefresh::None)
+        .await
+        .expect("locks");
+    write(
+        &dir.join(".stackly.local.yaml"),
+        "apiVersion: stackly/v1alpha1\nkind: EnvironmentLocal\nservices:\n  postgres:\n    endpoints:\n      client: {port: 15433}\n",
+    );
+    let locked = plan_locked(&api, &path).await;
+    assert_eq!(locked.lock.state, LockState::InSync);
+    assert!(
+        locked
+            .blockers
+            .iter()
+            .all(|b| b.error.code() == "supervisor.endpoint_in_use"),
+        "{:#?}",
+        locked.blockers
+    );
+    assert!(
+        locked
+            .items
+            .iter()
+            .all(|item| item.runtime.as_ref().map(|r| r.source) == Some(RuntimeSource::Lock))
+    );
+    let local = locked.local.as_ref().expect("the override file");
+    assert_eq!(local.state, LocalState::Present);
+    assert_eq!(local.overrides[0].state, OverrideState::Applied);
+    let postgres = &locked.items[0];
+    assert!(
+        postgres
+            .endpoints
+            .iter()
+            .any(|e| e.port == stackly_protocol::instance::PortRequest::Fixed(15433))
+    );
+
+    let imported = import(&api, &path).await.expect("imports");
+    let shown = get(&api, imported.summary.id, true).await.expect("gets");
+    let lock = shown.lock.as_ref().expect("the lock");
+    assert_eq!(lock.state, LockState::InSync);
+    assert_eq!(u64::from(lock.services), 6);
+    let local = shown.local.as_ref().expect("the local file");
+    assert_eq!(local.state, Some(LocalState::Present));
+    assert_eq!(local.overrides.len(), 1);
+    assert_eq!(shown.summary.lock_sha256, None, "only Up writes the column");
+    let unchecked = get(&api, imported.summary.id, false).await.expect("gets");
+    assert!(unchecked.lock.is_none() && unchecked.local.is_none());
+    drop(api);
+    stop(daemon).await;
+}
+
+// covers: AC-14, AC-15 (spec 0045)
+#[tokio::test(flavor = "multi_thread")]
+async fn export_prints_the_ports_of_the_members_and_never_a_redacted_value() {
+    use stackly_protocol::env::{ExportFormat, ExportSkipReason};
+    let ev = evidence!(
+        covers = ["BR-018", "AC-080"],
+        kind = Kind::Fixture,
+        expected = "env.export answers HOST, PORT, and ADDRESS of the running member in dotenv and shell, skips a service without an instance, holds no path, and leaves out a value the redactor knows",
+    );
+    let logs = logs();
+    let site = Site::new();
+    let mut empty = fast();
+    empty.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(
+        Catalog::for_tests(&[]),
+    ));
+    let first = site.start_with(empty).await;
+    let instance = site
+        .api()
+        .await
+        .create_ready("shop-db", serde_json::Value::Null)
+        .await;
+    stop(first).await;
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let path = write(
+        &project(&site).join("stackly.yaml"),
+        &fake_manifest("shop", &["db", "cache"]),
+    );
+    let imported = import(&api, &path).await.expect("imports");
+    join(&daemon, imported.summary.id, "db", instance);
+    api.start_ready(instance).await;
+
+    let registered = EnvSource::Registered(imported.summary.id);
+    let dotenv = export_call(&api, registered.clone(), ExportFormat::Dotenv)
+        .await
+        .expect("exports");
+    let names: Vec<&str> = dotenv.variables.iter().map(|v| v.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "STACKLY_DB_HTTP_HOST",
+            "STACKLY_DB_HTTP_PORT",
+            "STACKLY_DB_HTTP_ADDRESS"
+        ]
+    );
+    assert!(
+        dotenv
+            .skipped
+            .iter()
+            .any(|s| s.service == "cache" && s.reason == ExportSkipReason::NotCreated)
+    );
+    assert_eq!(dotenv.text.lines().count(), 3);
+    let shell = export_call(
+        &api,
+        EnvSource::File(path.display().to_string()),
+        ExportFormat::Shell,
+    )
+    .await
+    .expect("exports from the file");
+    assert!(shell.text.starts_with("export STACKLY_DB_HTTP_HOST='"));
+
+    let address = dotenv.variables[2].value.clone();
+    let encoded = serde_json::to_string(&dotenv).expect("encodes");
+    assert!(!encoded.contains(&site.root.path().display().to_string()));
+    for variable in &dotenv.variables {
+        assert!(
+            variable
+                .value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || ".:[]".contains(c))
+        );
+    }
+    daemon
+        .core()
+        .redactor()
+        .learn(&stackly_platform::SecretValue::new(address.clone()).expect("a secret value"));
+    let redacted = export_call(&api, registered, ExportFormat::Dotenv)
+        .await
+        .expect("exports");
+    assert!(!redacted.text.contains(&address));
+    assert!(
+        redacted
+            .skipped
+            .iter()
+            .any(|s| s.reason == ExportSkipReason::Redacted)
+    );
+
+    let other = write(
+        &project(&site).join("other.yaml"),
+        &fake_manifest("other", &["db"]),
+    );
+    let unknown = export_call(
+        &api,
+        EnvSource::File(other.display().to_string()),
+        ExportFormat::Dotenv,
+    )
+    .await
+    .expect_err("not registered");
+    assert_eq!(unknown.code(), "env.not_registered");
+    stop(daemon).await;
+    drop(api);
+    let logged =
+        String::from_utf8_lossy(&logs.lock().unwrap_or_else(PoisonError::into_inner)).into_owned();
+    assert!(
+        !logged.contains(&format!("={address}")),
+        "the daemon logged a variable"
+    );
+    ev.pass();
+}
+
+// covers: AC-21 (spec 0045)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first() {
+    use stackly_protocol::env::{LockRefresh, PlanSecretStatus, RuntimeSource};
+    let ev = evidence!(
+        covers = ["AC-023", "AC-080", "REQ-023"],
+        kind = Kind::Fixture,
+        expected = "a second root that receives only stackly.yaml and stackly.lock plans with locked true the same artifacts as the first, holds no path, override, or reference status of the first, and a lock without an artifact for this Mac blocks with env.lock_no_artifact and no item uses another artifact",
+    );
+    let first = Site::new();
+    let daemon_a = start(&first).await;
+    let api_a = first.api().await;
+    let dir_a = project(&first);
+    let path_a = write(&dir_a.join("stackly.yaml"), &erp());
+    write(
+        &dir_a.join(".stackly.local.yaml"),
+        "apiVersion: stackly/v1alpha1\nkind: EnvironmentLocal\nservices:\n  postgres:\n    endpoints:\n      client: {port: 15999}\n",
+    );
+    lock_call(&api_a, &path_a, LockRefresh::None)
+        .await
+        .expect("locks");
+    let plan_a = plan_locked(&api_a, &path_a).await;
+    drop(api_a);
+    stop(daemon_a).await;
+
+    let second = Site::new();
+    let daemon_b = start(&second).await;
+    let api_b = second.api().await;
+    let dir_b = project(&second);
+    let path_b = write(&dir_b.join("stackly.yaml"), &erp());
+    let lock_text = std::fs::read_to_string(dir_a.join("stackly.lock")).expect("reads");
+    write(&dir_b.join("stackly.lock"), &lock_text);
+
+    let plan_b = plan_locked(&api_b, &path_b).await;
+    let artifacts = |plan: &EnvPlan| {
+        plan.items
+            .iter()
+            .map(|item| {
+                let runtime = item.runtime.as_ref().expect("a runtime");
+                assert_eq!(runtime.source, RuntimeSource::Lock);
+                runtime.artifact_sha256.clone()
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(artifacts(&plan_b), artifacts(&plan_a));
+    assert!(plan_b.local.is_none());
+    let encoded = serde_json::to_string(&plan_b).expect("encodes");
+    assert!(!encoded.contains(&first.root.path().display().to_string()));
+    assert!(!encoded.contains("15999"));
+    assert!(
+        plan_b
+            .items
+            .iter()
+            .flat_map(|item| &item.secrets)
+            .filter(|secret| secret.reference.is_some())
+            .all(|secret| secret.status == PlanSecretStatus::Unregistered)
+    );
+
+    // A lock with no artifact for this Mac.
+    write(
+        &dir_b.join("stackly.lock"),
+        &lock_text.replace("\"macos-aarch64\"", "\"linux-aarch64\""),
+    );
+    let other = plan_locked(&api_b, &path_b).await;
+    assert!(
+        other
+            .blockers
+            .iter()
+            .any(|b| b.error.code() == "env.lock_no_artifact")
+    );
+    assert!(other.items.iter().all(|item| item.runtime.is_none()));
+    drop(api_b);
+    stop(daemon_b).await;
+    ev.pass();
 }

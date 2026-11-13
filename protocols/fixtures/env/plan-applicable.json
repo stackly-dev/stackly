@@ -64,7 +64,8 @@
         "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "install": true,
         "runtimeId": null,
-        "downloadSize": 104857600
+        "downloadSize": 104857600,
+        "source": "lock"
       },
       "endpoints": [
         {
@@ -96,7 +97,15 @@
           "suggestedPort": null,
           "error": null
         }
-      ]
+      ],
+      "providerRevision": {
+        "revision": "1.0.2",
+        "manifestSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "storage": {
+        "locationId": "0192f3a7-0000-7000-8000-0000000000f1",
+        "path": "/Volumes/Fast/Stackly"
+      }
     },
     {
       "alias": "cache",
@@ -129,7 +138,9 @@
           "instance": "6379"
         }
       ],
-      "checks": []
+      "checks": [],
+      "providerRevision": null,
+      "storage": null
     }
   ],
   "order": [
@@ -147,5 +158,35 @@
       "ownership": "dedicated"
     }
   ],
-  "needsSecrets": 1
+  "needsSecrets": 1,
+  "lock": {
+    "file": "stackly.lock",
+    "state": "in_sync",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "locked": true,
+    "targets": [
+      "macos-aarch64"
+    ],
+    "stale": []
+  },
+  "local": {
+    "file": ".stackly.local.yaml",
+    "state": "present",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+    "overrides": [
+      {
+        "service": "postgres",
+        "field": "storage.dataLocation",
+        "value": "/Volumes/Fast/Stackly",
+        "state": "applied"
+      },
+      {
+        "service": "cache",
+        "field": "endpoints.client.port",
+        "value": "6380",
+        "state": "compared"
+      }
+    ],
+    "findings": []
+  }
 }

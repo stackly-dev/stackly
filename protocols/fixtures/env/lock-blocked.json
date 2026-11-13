@@ -1,0 +1,78 @@
+{
+  "validation": {
+    "file": "/Users/dev/erp/stackly.yaml",
+    "valid": true,
+    "apiVersion": "stackly/v1alpha1",
+    "supportedApiVersions": [
+      "stackly/v1alpha1"
+    ],
+    "name": "erp-development",
+    "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "services": [
+      {
+        "alias": "postgres",
+        "provider": "official/postgresql",
+        "ownership": "dedicated",
+        "selector": "18",
+        "instanceRef": null,
+        "instanceName": null,
+        "dependsOn": []
+      },
+      {
+        "alias": "cache",
+        "provider": "official/valkey",
+        "ownership": "shared",
+        "selector": null,
+        "instanceRef": "shared-valkey",
+        "instanceName": null,
+        "dependsOn": []
+      }
+    ],
+    "findings": [],
+    "findingCount": 0,
+    "omitted": 0
+  },
+  "lockFile": "/Users/dev/erp/stackly.lock",
+  "written": false,
+  "changed": false,
+  "sha256": null,
+  "targets": [],
+  "services": [
+    {
+      "alias": "postgres",
+      "provider": "official/postgresql",
+      "selector": "99",
+      "version": null,
+      "artifactId": null,
+      "change": "added",
+      "previousVersion": null
+    }
+  ],
+  "blockers": [
+    {
+      "service": null,
+      "error": {
+        "code": "env.lock_invalid",
+        "category": "invalid_input",
+        "message": "the lock file is not a valid lock",
+        "retryable": false,
+        "resource": null,
+        "fields": [],
+        "hint": "run stackly env lock --update to write it again, or update Stackly if a newer one wrote it",
+        "details": [
+          {
+            "key": "code",
+            "value": "unsupported_api_version"
+          },
+          {
+            "key": "location",
+            "value": "apiVersion"
+          }
+        ],
+        "operationId": null,
+        "rule": null,
+        "items": []
+      }
+    }
+  ]
+}

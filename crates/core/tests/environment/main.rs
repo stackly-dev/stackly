@@ -3,8 +3,12 @@
 
 mod common;
 mod edges;
+mod export;
 mod limits;
+mod lock;
 mod plan;
+mod plan_local;
+mod plan_lock;
 mod register;
 mod site;
 mod status;

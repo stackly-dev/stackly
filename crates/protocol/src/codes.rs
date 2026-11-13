@@ -307,8 +307,9 @@ area! {
 
 area! {
     /// Environment codes (spec 0044, *Kode error di wire*): reading,
-    /// planning, importing, and removing a `stackly.yaml`. None is
-    /// retryable; each has a static hint from [`env::hint`](self::env::hint).
+    /// planning, importing, and removing a `stackly.yaml`, and its lock,
+    /// local overrides, and export (spec 0045). None is retryable; each has
+    /// a static hint from [`env::hint`](self::env::hint).
     pub mod env = "env", owner "spec 0044" {
         MANIFEST_UNREADABLE = "env.manifest_unreadable", InvalidInput, retryable false,
             details ["reason"], "the manifest file can't be read: not_found, not_a_file (a symlink too), permission_denied, too_large, or io";
@@ -336,6 +337,32 @@ area! {
             details ["declared", "registered"], "a plan blocker: the file of a registered environment declares another name";
         RELINK_MISMATCH = "env.relink_mismatch", Conflict, retryable false,
             details ["declared", "registered"], "a relink named an environment whose name differs from the file";
+        LOCK_MISSING = "env.lock_missing", Conflict, retryable false,
+            details ["file"], "a plan blocker of spec 0045: locked without a lock file";
+        LOCK_UNREADABLE = "env.lock_unreadable", InvalidInput, retryable false,
+            details ["reason"], "a plan blocker of spec 0045: the lock file can't be read; reason as for env.manifest_unreadable";
+        LOCK_INVALID = "env.lock_invalid", InvalidInput, retryable false,
+            details ["code", "location"], "a blocker of spec 0045: the loader refused the lock";
+        LOCK_STALE = "env.lock_stale", Conflict, retryable false,
+            details ["service", "reason"], "a plan blocker of spec 0045 with locked: one alias does not match the lock";
+        LOCK_PROVIDER_MISMATCH = "env.lock_provider_mismatch", Conflict, retryable false,
+            details ["service", "provider", "lockedRevision", "availableRevision"], "a plan blocker of spec 0045: the catalog holds another provider revision than the lock";
+        LOCK_NO_ARTIFACT = "env.lock_no_artifact", Unsupported, retryable false,
+            details ["service", "target", "lockedTargets"], "a plan blocker of spec 0045: the lock has no artifact for this Mac";
+        LOCK_ARTIFACT_UNKNOWN = "env.lock_artifact_unknown", Unsupported, retryable false,
+            details ["service", "artifactId", "sha256", "reason"], "a plan blocker of spec 0045: the locked digest is not in the catalog, or its version, target, or ID differ";
+        LOCK_UNWRITABLE = "env.lock_unwritable", Failed, retryable false,
+            details ["reason"], "env.lock can't write the lock file: not_a_file, permission_denied, or io";
+        LOCAL_UNREADABLE = "env.local_unreadable", InvalidInput, retryable false,
+            details ["reason"], "a plan blocker of spec 0045: the local override file can't be read";
+        LOCAL_INVALID = "env.local_invalid", InvalidInput, retryable false,
+            details ["errors"], "a plan blocker of spec 0045: the local override file has error findings";
+        OVERRIDE_LOCATION_UNKNOWN = "env.override_location_unknown", NotFound, retryable false,
+            details ["service", "path"], "a plan blocker of spec 0045: dataLocation is not a registered data location";
+        SERVICE_NOT_FOUND = "env.service_not_found", NotFound, retryable false,
+            details ["service"], "env.lock named an alias that is not a dedicated service of the manifest";
+        NOT_REGISTERED = "env.not_registered", NotFound, retryable false,
+            details ["name"], "env.export named a file whose environment is not registered at that location";
 
         @functions
 
@@ -381,6 +408,32 @@ area! {
                     "import the file as a new environment, or restore metadata.name"
                 }
                 c if c == RELINK_MISMATCH.code => "choose a file that declares this environment's name",
+                c if c == LOCK_MISSING.code
+                    || c == LOCK_STALE.code
+                    || c == LOCK_PROVIDER_MISMATCH.code =>
+                {
+                    "run stackly env lock, then commit stackly.lock"
+                }
+                c if c == LOCK_UNREADABLE.code => "check that stackly.lock is a regular file you can read",
+                c if c == LOCK_INVALID.code => {
+                    "run stackly env lock --update to write it again, or update Stackly if a newer one wrote it"
+                }
+                c if c == LOCK_NO_ARTIFACT.code || c == LOCK_ARTIFACT_UNKNOWN.code => {
+                    "the lock has no artifact this Mac can use; update Stackly, or lock again on this Mac"
+                }
+                c if c == LOCK_UNWRITABLE.code => match detail("reason") {
+                    Some("not_a_file") => "stackly.lock must be a regular file, not a folder or a link",
+                    _ => "check that stacklyd can write to the folder of the manifest",
+                },
+                c if c == LOCAL_UNREADABLE.code => {
+                    "check that .stackly.local.yaml is a regular file you can read"
+                }
+                c if c == LOCAL_INVALID.code => "fix each finding of .stackly.local.yaml",
+                c if c == OVERRIDE_LOCATION_UNKNOWN.code => {
+                    "add the location in Settings, Storage, then plan again"
+                }
+                c if c == SERVICE_NOT_FOUND.code => "name a dedicated service of the manifest",
+                c if c == NOT_REGISTERED.code => "import the environment first",
                 _ => return None,
             })
         }
