@@ -11,10 +11,10 @@
 
 | Nama | Peran | Item | Scope | Ownership | Branch | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `arc-f44-spec` | architect | F44 `Design it (spec)`, spec 0044 | `08-environment-proyek.md` | `docs/specs/0044-manifest-environment-validate-plan/` | `claude/arc-f44-spec-*` | `fable-5-2 · high` | `standby` |
-| `arc-f45-spec` | architect | F45 `Design it (spec)`, spec 0045; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0045-lockfile-override-lokal/` | `claude/arc-f45-spec-*` | `fable-5-2 · high` | `standby` |
-| `arc-f46-spec` | architect | F46 `Design it (spec)`, spec 0046; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0046-env-up-dependency-graph/` | `claude/arc-f46-spec-*` | `fable-5-2 · high` | `standby` |
-| `arc-f47-spec` | architect | F47 `Design it (spec)`, spec 0047; mulai sesudah 0046 di-merge | `08-environment-proyek.md` | `docs/specs/0047-env-down-shared-instance-lease/` | `claude/arc-f47-spec-*` | `fable-5-2 · high` | `standby` |
+| `arc-f44-spec` | architect | F44 `Design it (spec)`, spec 0044 | `08-environment-proyek.md` | `docs/specs/0044-manifest-environment-validate-plan/` | `claude/arc-f44-spec-96c1cb` | `fable-5-2 · high` | `aktif` |
+| `arc-f45-spec` | architect | F45 `Design it (spec)`, spec 0045; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0045-lockfile-override-lokal/` | `claude/arc-f45-spec-b1b5b7` | `fable-5-2 · high` | `standby` |
+| `arc-f46-spec` | architect | F46 `Design it (spec)`, spec 0046; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0046-env-up-dependency-graph/` | `claude/arc-f46-spec-d260ff` | `fable-5-2 · high` | `standby` |
+| `arc-f47-spec` | architect | F47 `Design it (spec)`, spec 0047; mulai sesudah 0046 di-merge | `08-environment-proyek.md` | `docs/specs/0047-env-down-shared-instance-lease/` | `claude/arc-f47-spec-7de0ba` | `fable-5-2 · high` | `standby` |
 
 ## Keputusan
 
