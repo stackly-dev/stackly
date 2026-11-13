@@ -94,6 +94,33 @@
         "operation"
       ]
     },
+    "AffectedEnvironment": {
+      "description": "An environment Stop All leaves incomplete: it holds an active lease on\nat least one instance of `items` (spec 0047 AC-16).",
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "instanceCount": {
+          "description": "How many instances of `items` it holds.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "instanceCount"
+      ]
+    },
     "ApiVersionStatus": {
       "description": "The status of a supported `apiVersion`.",
       "oneOf": [
@@ -4720,6 +4747,14 @@
         "impact": {
           "description": "What applying it now does.",
           "$ref": "#/$defs/ConfigImpact"
+        },
+        "leases": {
+          "description": "The environments whose lease on the instance is active, ordered by\nname, so their part shows before Apply (spec 0047 AC-15). Empty from\nan older daemon.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceEnvironment"
+          }
         },
         "problems": {
           "description": "Every request that cannot be applied, in the order asked.",
@@ -16919,6 +16954,14 @@
             "$ref": "#/$defs/DemandSourceKind"
           }
         },
+        "environments": {
+          "description": "The environments whose lease on it is active, ordered by name (spec\n0047 AC-16). Empty from an older daemon.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceEnvironment"
+          }
+        },
         "instanceId": {
           "description": "The instance.",
           "type": "string",
@@ -16945,6 +16988,14 @@
       "description": "Reply of `instance.preview_stop_all`. Every list is ordered by name and\nthen ID.",
       "type": "object",
       "properties": {
+        "affectedEnvironments": {
+          "description": "The environments with an active lease on at least one instance of\n`items`, ordered by name (spec 0047 AC-16). Empty from an older\ndaemon.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AffectedEnvironment"
+          }
+        },
         "alreadyStopping": {
           "description": "The instances that are stopping already, on their own.",
           "type": "array",
@@ -17021,6 +17072,14 @@
         "code": {
           "description": "The error code that says why, such as `supervisor.identity_unproven`.",
           "type": "string"
+        },
+        "environments": {
+          "description": "The environments whose lease on it is active, ordered by name (spec\n0047 AC-16). Empty from an older daemon.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceEnvironment"
+          }
         },
         "instanceId": {
           "description": "The instance.",

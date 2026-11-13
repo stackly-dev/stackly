@@ -177,7 +177,7 @@ struct ConfigurationSheetsTests {
                         EndpointProblem(
                             endpoint: "main", code: "supervisor.endpoint_conflict",
                             suggestedPort: 5601)
-                    ], changes: [], impact: .restart)))
+                    ], changes: [], impact: .restart, leases: nil)))
         let model = endpoints(script)
         await model.load()
         model.setPortText("5600", of: "main")
@@ -239,7 +239,7 @@ struct ConfigurationSheetsTests {
                         EndpointProblem(
                             endpoint: "main", code: "supervisor.endpoint_in_use",
                             suggestedPort: 5602)
-                    ], changes: [], impact: .restart)))
+                    ], changes: [], impact: .restart, leases: nil)))
         let model = EndpointsModel(
             source: source, service: script.service, prefill: ["main": 5601])
         await model.open()

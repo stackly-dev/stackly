@@ -16,7 +16,16 @@
             }
           ],
           "changes": [],
-          "impact": "restart"
+          "impact": "restart",
+          "leases": [
+            {
+              "environmentId": "0192f3a6-0000-7000-8000-000000000001",
+              "name": "shop",
+              "alias": "db",
+              "ownership": "shared",
+              "leaseActive": true
+            }
+          ]
         }
       }
     }

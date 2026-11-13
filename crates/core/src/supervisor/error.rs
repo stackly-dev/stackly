@@ -299,6 +299,14 @@ pub enum SupervisorError {
         /// by name and then ID.
         holders: Vec<EnvironmentHolder>,
     },
+    /// An environment lease holds the instance, so changing its ports
+    /// needs the override (BR-015, spec 0047 AC-15).
+    #[error("an environment holds the instance, so changing its ports needs an override")]
+    EndpointsRequireOverride {
+        /// The environments whose active lease holds the instance, ordered
+        /// by name and then ID.
+        holders: Vec<EnvironmentHolder>,
+    },
     /// The stop command exited with a code it does not accept.
     #[error("the stop command exited with code {exit_code}")]
     StopCommandFailed {
@@ -507,6 +515,7 @@ impl OperationError for SupervisorError {
             Self::RetryBudgetExhausted { .. } => codes::RETRY_BUDGET_EXHAUSTED,
             Self::StopTimeout { .. } => codes::STOP_TIMEOUT,
             Self::StopRequiresOverride { .. } => codes::STOP_REQUIRES_OVERRIDE,
+            Self::EndpointsRequireOverride { .. } => codes::ENDPOINTS_REQUIRE_OVERRIDE,
             Self::StopCommandFailed { .. } => codes::STOP_COMMAND_FAILED,
             Self::ConfigDrift { .. } => crate::instance::config::codes::DRIFT_DETECTED,
             Self::ReloadFailed { .. } => codes::RELOAD_FAILED,
@@ -671,6 +680,14 @@ impl OperationError for SupervisorError {
                 (key("expected"), expected.to_string()),
                 (key("actual"), actual.to_string()),
             ],
+            Self::EndpointsRequireOverride { holders } => {
+                let omitted = holders.len().saturating_sub(STOP_OVERRIDE_ITEMS_MAX);
+                let mut details = vec![(key("count"), holders.len().to_string())];
+                if omitted > 0 {
+                    details.push((key("omitted"), omitted.to_string()));
+                }
+                details
+            }
             Self::StopRequiresOverride { holders } => {
                 let omitted = holders.len().saturating_sub(STOP_OVERRIDE_ITEMS_MAX);
                 if omitted == 0 {
@@ -692,23 +709,25 @@ impl OperationError for SupervisorError {
     fn items(&self) -> Vec<FailureItem> {
         match self {
             Self::Secret(error) => OperationError::items(error),
-            Self::StopRequiresOverride { holders } => holders
-                .iter()
-                .take(STOP_OVERRIDE_ITEMS_MAX)
-                .filter_map(|holder| {
-                    let mut fields = vec![
-                        (key("environmentId"), holder.environment.to_string()),
-                        (key("name"), holder.name.to_string()),
-                    ];
-                    if let Some(alias) = &holder.alias {
-                        fields.push((key("alias"), alias.to_string()));
-                    }
-                    if let Some(ownership) = holder.ownership {
-                        fields.push((key("ownership"), ownership.as_code().to_owned()));
-                    }
-                    FailureItem::new(ReasonCode::from_static("environment"), fields).ok()
-                })
-                .collect(),
+            Self::StopRequiresOverride { holders } | Self::EndpointsRequireOverride { holders } => {
+                holders
+                    .iter()
+                    .take(STOP_OVERRIDE_ITEMS_MAX)
+                    .filter_map(|holder| {
+                        let mut fields = vec![
+                            (key("environmentId"), holder.environment.to_string()),
+                            (key("name"), holder.name.to_string()),
+                        ];
+                        if let Some(alias) = &holder.alias {
+                            fields.push((key("alias"), alias.to_string()));
+                        }
+                        if let Some(ownership) = holder.ownership {
+                            fields.push((key("ownership"), ownership.as_code().to_owned()));
+                        }
+                        FailureItem::new(ReasonCode::from_static("environment"), fields).ok()
+                    })
+                    .collect()
+            }
             _ => Vec::new(),
         }
     }

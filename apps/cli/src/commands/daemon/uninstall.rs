@@ -374,6 +374,7 @@ mod tests {
                 policy: StartupPolicyKind::Manual,
                 session: AutostartSession::None,
             },
+            environments: Vec::new(),
         }
     }
 
@@ -387,6 +388,7 @@ mod tests {
                 }],
                 skipped,
                 at_login_count: Count::saturating(0),
+                affected_environments: Vec::new(),
             },
             at_login: 2,
         }
@@ -509,6 +511,7 @@ mod tests {
             instance_id: Uuid::from_u128(3),
             name: "held".to_owned(),
             code: "supervisor.stop_requires_override".to_owned(),
+            environments: Vec::new(),
         };
         let probe = ScriptedProbe::running(run(1)).on_agent_off_preview(Ok(preview(vec![skip])));
         let mut prompt = Prompt::yes();
@@ -595,6 +598,7 @@ mod tests {
                 already_stopping: Vec::new(),
                 skipped: Vec::new(),
                 at_login_count: Count::saturating(0),
+                affected_environments: Vec::new(),
             },
             at_login: 0,
         };

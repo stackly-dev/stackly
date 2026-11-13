@@ -63,6 +63,9 @@ codes! {
     STOP_TIMEOUT = "supervisor.stop_timeout";
     /// An environment lease needs an override to stop the instance.
     STOP_REQUIRES_OVERRIDE = "supervisor.stop_requires_override";
+    /// An environment lease needs an override to change the ports (spec
+    /// 0047 AC-15).
+    ENDPOINTS_REQUIRE_OVERRIDE = "instance.endpoints_require_override";
     /// The stop command exited with a code it does not accept.
     STOP_COMMAND_FAILED = "supervisor.stop_command_failed";
     /// The reload action or its verification failed.

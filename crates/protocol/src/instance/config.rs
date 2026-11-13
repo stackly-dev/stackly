@@ -19,6 +19,7 @@ use super::{
     CREATE_ENDPOINTS_MAX, EndpointRequest, EndpointTransport, FormField, INSTANCE_KEY_MAX,
     INSTANCE_NAME_MAX, PortRequest, SettingsDocument, length_code, settings_has_unsafe_integer,
 };
+use crate::env::InstanceEnvironment;
 use crate::error::FieldError;
 use crate::json::{FieldCode, Validate};
 use crate::operation::OperationAccepted;
@@ -176,6 +177,11 @@ pub struct ChangeEndpointsParams {
     pub endpoints: Vec<EndpointRequest>,
     /// True to judge the ports and write nothing.
     pub dry_run: bool,
+    /// True to change the ports of an instance an environment lease holds;
+    /// the leases stay active (spec 0047 AC-15). Without it such a change
+    /// is refused with `instance.endpoints_require_override`.
+    #[serde(default)]
+    pub override_leases: bool,
 }
 
 impl Validate for ChangeEndpointsParams {
@@ -523,6 +529,11 @@ pub struct EndpointValidation {
     pub changes: Vec<EndpointChange>,
     /// What applying it now does.
     pub impact: ConfigImpact,
+    /// The environments whose lease on the instance is active, ordered by
+    /// name, so their part shows before Apply (spec 0047 AC-15). Empty from
+    /// an older daemon.
+    #[serde(default)]
+    pub leases: Vec<InstanceEnvironment>,
 }
 
 /// Reply of `instance.change_endpoints`: the operation that changes the
@@ -615,6 +626,7 @@ mod tests {
             base_revision: number(1),
             endpoints: Vec::new(),
             dry_run: false,
+            override_leases: false,
         };
         assert_eq!(
             codes(params.validate()),

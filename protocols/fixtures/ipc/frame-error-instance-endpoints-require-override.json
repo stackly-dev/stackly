@@ -1,0 +1,49 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000004707",
+    "error": {
+      "code": "instance.endpoints_require_override",
+      "category": "conflict",
+      "message": "an environment holds the instance, so changing its ports needs an override",
+      "retryable": false,
+      "resource": {
+        "kind": "instance",
+        "id": "0192f3a5-0000-7000-8000-000000000001"
+      },
+      "fields": [],
+      "hint": "change the ports anyway with the override, or bring the environment down first",
+      "details": [
+        {
+          "key": "count",
+          "value": "1"
+        }
+      ],
+      "operationId": null,
+      "rule": null,
+      "items": [
+        {
+          "kind": "environment",
+          "fields": [
+            {
+              "key": "environmentId",
+              "value": "0192f3a6-0000-7000-8000-000000000001"
+            },
+            {
+              "key": "name",
+              "value": "shop"
+            },
+            {
+              "key": "alias",
+              "value": "db"
+            },
+            {
+              "key": "ownership",
+              "value": "shared"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -9,22 +9,24 @@
 use std::time::Duration;
 
 use stackly_core::instance::stop_all::{
-    DemandSource, StopAllEntry as CoreEntry, confirmed_steps, read_view, select,
+    DemandSource, StopAllEntry as CoreEntry, StopAllOptions, StopAllSelection, confirmed_steps,
+    read_view, select,
 };
 use stackly_core::operation::{
     BeginRequest, BusyPolicy, OperationDetailView, OperationOutcome, Origin, PartialOutcome,
 };
 use stackly_core::supervisor::{StopAllRequest, Supervisor};
 use stackly_domain::{
-    InstanceId, JournalPayload, LockKey, OperationId, OperationKind, OperationResource,
-    OperationState,
+    Environment, EnvironmentId, InstanceId, JournalPayload, LockKey, OperationId, OperationKind,
+    OperationResource, OperationState,
 };
+use stackly_protocol::env::InstanceEnvironment;
 use stackly_protocol::fingerprint::request_fingerprint;
 use stackly_protocol::instance::{InstanceAutostart, StartupPolicyKind};
 use stackly_protocol::message::Call;
 use stackly_protocol::stop_all::{
-    DemandSourceKind, InstanceRef, StopAllEntry, StopAllItem, StopAllParams, StopAllPreview,
-    StopAllResult, StopAllSkip,
+    AffectedEnvironment, DemandSourceKind, InstanceRef, StopAllEntry, StopAllItem, StopAllParams,
+    StopAllPreview, StopAllPreviewParams, StopAllResult, StopAllSkip,
 };
 use stackly_protocol::{Count, ErrorBody};
 use uuid::Uuid;
@@ -36,6 +38,7 @@ use crate::ipc::operation::{
     StartRequest as OperationStart, payload_too_large, replay_operation, start_operation,
 };
 use crate::map::detail::startup_kind;
+use crate::membership::env_ownership;
 use crate::session::autostart_of;
 use crate::state::DaemonCore;
 
@@ -68,7 +71,7 @@ fn demand_kind(source: DemandSource) -> DemandSourceKind {
     }
 }
 
-fn item(entry: &CoreEntry) -> StopAllItem {
+fn item(entry: &CoreEntry, environments: &[Environment]) -> StopAllItem {
     StopAllItem {
         instance_id: entry.id.as_uuid(),
         name: entry.name.to_string(),
@@ -78,13 +81,75 @@ fn item(entry: &CoreEntry) -> StopAllItem {
             policy: startup_kind(entry.startup),
             session: autostart_of(entry.session_lease),
         },
+        environments: instance_environments(entry.id, &entry.environments, environments),
     }
 }
 
-/// The selection the registry gives now.
-pub(crate) async fn current_selection(
+/// The environments `held` of the instance `id` as its entries (spec 0047
+/// AC-16), ordered by name and then ID: each with the alias and ownership
+/// of its member row and `leaseActive` true. An environment that is gone or
+/// has no member row for the instance is left out; its demand still shows.
+fn instance_environments(
+    id: InstanceId,
+    held: &[EnvironmentId],
+    environments: &[Environment],
+) -> Vec<InstanceEnvironment> {
+    let mut entries: Vec<InstanceEnvironment> = held
+        .iter()
+        .filter_map(|holder| environments.iter().find(|env| env.id() == *holder))
+        .filter_map(|environment| {
+            let member = environment
+                .members()
+                .iter()
+                .find(|member| member.instance_id() == id)?;
+            Some(InstanceEnvironment {
+                environment_id: environment.id().as_uuid(),
+                name: environment.name().to_string(),
+                alias: member.alias().to_string(),
+                ownership: env_ownership(member.ownership()),
+                lease_active: true,
+            })
+        })
+        .collect();
+    entries.sort_by(|a, b| (&a.name, a.environment_id).cmp(&(&b.name, b.environment_id)));
+    entries
+}
+
+/// The environments with an active lease on at least one instance Stop All
+/// stops, with how many of those they hold, ordered by name and then ID.
+fn affected_environments(
+    selection: &StopAllSelection,
+    environments: &[Environment],
+) -> Vec<AffectedEnvironment> {
+    let mut affected: Vec<AffectedEnvironment> = Vec::new();
+    for entry in &selection.stop {
+        for holder in &entry.environments {
+            let Some(environment) = environments.iter().find(|env| env.id() == *holder) else {
+                continue;
+            };
+            let uuid = environment.id().as_uuid();
+            match affected.iter_mut().find(|item| item.environment_id == uuid) {
+                Some(item) => {
+                    item.instance_count = Count::saturating(item.instance_count.get() + 1);
+                }
+                None => affected.push(AffectedEnvironment {
+                    environment_id: uuid,
+                    name: environment.name().to_string(),
+                    instance_count: Count::saturating(1),
+                }),
+            }
+        }
+    }
+    affected.sort_by(|a, b| (&a.name, a.environment_id).cmp(&(&b.name, b.environment_id)));
+    affected
+}
+
+/// The selection the registry gives now under `options`, and every
+/// environment, from one read task.
+async fn read_selection(
     core: &DaemonCore,
-) -> Result<stackly_core::instance::stop_all::StopAllSelection, Box<ErrorBody>> {
+    options: StopAllOptions,
+) -> Result<(StopAllSelection, Vec<Environment>), Box<ErrorBody>> {
     let registry = core.registry().ok_or_else(|| {
         Box::new(ErrorBody::new(
             &stackly_protocol::codes::registry::UNAVAILABLE,
@@ -92,23 +157,46 @@ pub(crate) async fn current_selection(
         ))
     })?;
     let session = core.session().login().map(|login| login.id.clone());
-    let view = tokio::task::spawn_blocking(move || read_view(&registry, session.as_ref()))
+    let (view, environments) = tokio::task::spawn_blocking(move || {
+        let view = read_view(&registry, session.as_ref())?;
+        let environments = stackly_domain::Registry::environments(&registry)?.value;
+        Ok::<_, stackly_domain::RegistryError>((view, environments))
+    })
+    .await
+    .map_err(|_| unexpected("the stop all read task failed"))?
+    .map_err(|error| Box::new(crate::map::registry_error(&error)))?;
+    Ok((select(&view, options), environments))
+}
+
+/// The selection the registry gives now under `options`.
+pub(crate) async fn current_selection(
+    core: &DaemonCore,
+    options: StopAllOptions,
+) -> Result<StopAllSelection, Box<ErrorBody>> {
+    read_selection(core, options)
         .await
-        .map_err(|_| unexpected("the stop all read task failed"))?
-        .map_err(|error| Box::new(crate::map::registry_error(&error)))?;
-    Ok(select(&view))
+        .map(|(selection, _)| selection)
 }
 
 /// The real `instance.preview_stop_all`.
-pub fn preview(core: &DaemonCore) -> HandlerFuture<'_, Box<StopAllPreview>> {
+pub fn preview(
+    core: &DaemonCore,
+    params: StopAllPreviewParams,
+) -> HandlerFuture<'_, Box<StopAllPreview>> {
     Box::pin(async move {
         core.supervision().supervisor()?;
-        let selection = current_selection(core).await?;
-        let items: Vec<StopAllItem> = selection.stop.iter().map(item).collect();
+        let options = StopAllOptions::new(params.override_leases);
+        let (selection, environments) = read_selection(core, options).await?;
+        let items: Vec<StopAllItem> = selection
+            .stop
+            .iter()
+            .map(|entry| item(entry, &environments))
+            .collect();
         let at_login = items
             .iter()
             .filter(|item| item.autostart.policy == StartupPolicyKind::AtLogin)
             .count();
+        let affected = affected_environments(&selection, &environments);
         Ok(Box::new(StopAllPreview {
             items,
             already_stopping: selection
@@ -126,9 +214,15 @@ pub fn preview(core: &DaemonCore) -> HandlerFuture<'_, Box<StopAllPreview>> {
                     instance_id: entry.id.as_uuid(),
                     name: entry.name.to_string(),
                     code: entry.code.to_string(),
+                    environments: instance_environments(
+                        entry.id,
+                        &entry.environments,
+                        &environments,
+                    ),
                 })
                 .collect(),
             at_login_count: Count::saturating(at_login as u64),
+            affected_environments: affected,
         }))
     })
 }
@@ -139,6 +233,8 @@ pub(crate) struct StopAllInput {
     pub(crate) source: &'static str,
     pub(crate) steps: Vec<Uuid>,
     pub(crate) skipped: Vec<(Uuid, String)>,
+    /// Whether the steps override environment leases (spec 0047 AC-16).
+    pub(crate) override_leases: bool,
 }
 
 impl StopAllInput {
@@ -151,6 +247,7 @@ impl StopAllInput {
                 .iter()
                 .map(|(id, code)| serde_json::json!({ "instanceId": id.to_string(), "code": code }))
                 .collect::<Vec<_>>(),
+            "overrideLeases": self.override_leases,
         })
         .to_string()
     }
@@ -177,10 +274,17 @@ impl StopAllInput {
                 ))
             })
             .collect::<Option<Vec<_>>>()?;
+        // An input written before protocol 4.6 has no flag: it never
+        // overrode.
+        let override_leases = value
+            .get("overrideLeases")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
         Some(Self {
             source: "",
             steps,
             skipped,
+            override_leases,
         })
     }
 }
@@ -282,6 +386,7 @@ pub fn stop_all<'a>(
             expected.dedup();
         }
         let expected = params.expected_instance_ids.clone();
+        let options = StopAllOptions::new(params.override_leases);
         let fingerprint = request_fingerprint(&Call::InstanceStopAll(params));
         let start = || OperationStart::new(METHOD, context.idempotency_key.as_deref(), fingerprint);
         // A request that came again with its key answers from the operation
@@ -291,7 +396,7 @@ pub fn stop_all<'a>(
             return reply_of(&detail).map(Box::new);
         }
         let supervisor: Supervisor = core.supervision().supervisor()?;
-        let selection = current_selection(core).await?;
+        let selection = current_selection(core, options).await?;
         // An ID that is no instance ID can match nothing the rule chose.
         let expected = expected
             .map(|ids| {
@@ -310,6 +415,7 @@ pub fn stop_all<'a>(
                 .iter()
                 .map(|entry| (entry.id.as_uuid(), entry.code.to_string()))
                 .collect(),
+            override_leases: options.override_leases,
         };
         let input =
             JournalPayload::new(input.to_json(), stackly_core::operation::limits::INPUT_MAX)
@@ -319,7 +425,9 @@ pub fn stop_all<'a>(
                         stackly_core::operation::limits::INPUT_MAX,
                     ))
                 })?;
-        let work = supervisor.stop_all_work(StopAllRequest::new(steps.clone()));
+        let work = supervisor.stop_all_work(
+            StopAllRequest::new(steps.clone()).overriding_leases(options.override_leases),
+        );
         let locks: Vec<LockKey> = steps
             .iter()
             .map(|id| LockKey::for_resource(OperationResource::Instance(*id)))
@@ -359,10 +467,12 @@ mod tests {
             source: "stop_all",
             steps: vec![first],
             skipped: vec![(second, "supervisor.identity_unproven".to_owned())],
+            override_leases: true,
         };
 
         let parsed = StopAllInput::parse(&input.to_json()).expect("the input parses");
 
+        assert!(parsed.override_leases);
         assert_eq!(parsed.steps, vec![first]);
         assert_eq!(
             parsed.skipped,

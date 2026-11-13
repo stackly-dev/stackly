@@ -10,9 +10,9 @@
 use std::collections::BTreeSet;
 
 use stackly_domain::{
-    DesiredState, ErrorCodeName, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
-    InstanceName, Lease, LeaseFilter, LeaseHolder, LeaseState, OperationKind, OperationResource,
-    OperationState, Registry, RegistryError, SessionId, StartupPolicy,
+    DesiredState, EnvironmentId, ErrorCodeName, Instance, InstanceFilter, InstanceId,
+    InstanceLifecycle, InstanceName, Lease, LeaseFilter, LeaseHolder, LeaseState, OperationKind,
+    OperationResource, OperationState, Registry, RegistryError, SessionId, StartupPolicy,
 };
 
 use crate::operation::codes::RECOVERY_REQUIRED;
@@ -81,6 +81,23 @@ pub enum DemandSource {
     Environment,
 }
 
+/// How [`select`] treats the instances an environment lease holds (spec
+/// 0047 AC-16, AC-17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StopAllOptions {
+    /// True to stop them too; their leases stay active. False skips them
+    /// with `supervisor.stop_requires_override` (rule 6).
+    pub override_leases: bool,
+}
+
+impl StopAllOptions {
+    /// The options of a request that does or does not override leases.
+    #[must_use]
+    pub const fn new(override_leases: bool) -> Self {
+        Self { override_leases }
+    }
+}
+
 /// An instance the rule stops.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -97,6 +114,9 @@ pub struct StopAllEntry {
     pub startup: StartupPolicy,
     /// The startup lease of this session.
     pub session_lease: StartupLeaseState,
+    /// The environments whose lease on it is active, without repeats, in
+    /// the order of the leases.
+    pub environments: Vec<EnvironmentId>,
 }
 
 /// An instance the rule names without stopping it.
@@ -119,6 +139,9 @@ pub struct StopAllSkipped {
     pub name: InstanceName,
     /// Why.
     pub code: ErrorCodeName,
+    /// The environments whose lease on it is active, without repeats, in
+    /// the order of the leases.
+    pub environments: Vec<EnvironmentId>,
 }
 
 /// What [`select`] decided, each list ordered by name and then ID.
@@ -143,20 +166,22 @@ pub struct StopAllSelection {
 /// 4. an operation of it needs recovery: skipped,
 ///    `operation.recovery_required`;
 /// 5. `stopping` with no start or restart open: already stopping;
-/// 6. an active environment lease: skipped,
-///    `supervisor.stop_requires_override`;
+/// 6. an active environment lease, unless `options` overrides leases:
+///    skipped, `supervisor.stop_requires_override`;
 /// 7. otherwise: stop.
 #[must_use]
-pub fn select(view: &StopAllView) -> StopAllSelection {
+pub fn select(view: &StopAllView, options: StopAllOptions) -> StopAllSelection {
     let mut selection = StopAllSelection::default();
     for item in &view.instances {
         if item.retained {
             continue;
         }
+        let environments = environments_of(&item.leases);
         let skip = |code: ErrorCodeName| StopAllSkipped {
             id: item.id,
             name: item.name.clone(),
             code,
+            environments: environments.clone(),
         };
         if item.lifecycle == InstanceLifecycle::Unknown {
             selection.skipped.push(skip(IDENTITY_UNPROVEN));
@@ -185,10 +210,7 @@ pub fn select(view: &StopAllView) -> StopAllSelection {
             .iter()
             .filter(|lease| lease.is_active())
             .collect();
-        if active
-            .iter()
-            .any(|lease| matches!(lease.holder(), LeaseHolder::Environment(_)))
-        {
+        if !options.override_leases && !environments.is_empty() {
             selection.skipped.push(skip(STOP_REQUIRES_OVERRIDE));
             continue;
         }
@@ -209,6 +231,7 @@ pub fn select(view: &StopAllView) -> StopAllSelection {
             demand,
             startup: item.startup,
             session_lease: startup_lease_state(item.id, &item.leases, view.session.as_ref()),
+            environments,
         });
     }
     selection
@@ -221,6 +244,20 @@ pub fn select(view: &StopAllView) -> StopAllSelection {
         .skipped
         .sort_by(|a, b| (&a.name, a.id).cmp(&(&b.name, b.id)));
     selection
+}
+
+/// The environments of the active leases in `leases`, without repeats, in
+/// the order of the leases.
+fn environments_of(leases: &[Lease]) -> Vec<EnvironmentId> {
+    let mut environments = Vec::new();
+    for lease in leases.iter().filter(|lease| lease.is_active()) {
+        if let LeaseHolder::Environment(id) = lease.holder()
+            && !environments.contains(&id)
+        {
+            environments.push(id);
+        }
+    }
+    environments
 }
 
 /// The instances `instance.stop_all` stops when the client confirmed

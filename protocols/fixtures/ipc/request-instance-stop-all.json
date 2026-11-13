@@ -4,7 +4,8 @@
   "call": {
     "type": "instance.stop_all",
     "content": {
-      "expectedInstanceIds": null
+      "expectedInstanceIds": null,
+      "overrideLeases": false
     }
   }
 }

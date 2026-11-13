@@ -49,7 +49,8 @@
                 instanceId: instance.id, name: instance.name, lifecycle: instance.lifecycle,
                 demand: demand,
                 autostart: InstanceAutostart(
-                    policy: demand.contains(.startup) ? .atLogin : .manual, session: .none))
+                    policy: demand.contains(.startup) ? .atLogin : .manual, session: .none),
+                environments: nil)
         }
 
         private static func stopPreview(
@@ -58,7 +59,8 @@
         ) -> StopAllPreview {
             StopAllPreview(
                 items: items, alreadyStopping: alreadyStopping, skipped: skipped,
-                atLoginCount: UInt64(items.filter { $0.autostart.policy == .atLogin }.count))
+                atLoginCount: UInt64(items.filter { $0.autostart.policy == .atLogin }.count),
+                affectedEnvironments: nil)
         }
 
         // MARK: - Settings
@@ -193,10 +195,10 @@
                     skipped: [
                         StopAllSkip(
                             instanceId: held.id, name: held.name,
-                            code: "supervisor.identity_unproven"),
+                            code: "supervisor.identity_unproven", environments: nil),
                         StopAllSkip(
                             instanceId: environment.id, name: environment.name,
-                            code: "supervisor.stop_requires_override"),
+                            code: "supervisor.stop_requires_override", environments: nil),
                     ])
                 return connectedWith(
                     normalServices + [stopping, held, environment],

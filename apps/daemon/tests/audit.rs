@@ -208,6 +208,7 @@ async fn change_port(api: &Api, id: Uuid, base: u64, port: u16) -> Result<Uuid, 
                     port: PortRequest::Fixed(port),
                 }],
                 dry_run: false,
+                override_leases: false,
             }),
             CallOptions::default().with_idempotency_key(key()),
         )

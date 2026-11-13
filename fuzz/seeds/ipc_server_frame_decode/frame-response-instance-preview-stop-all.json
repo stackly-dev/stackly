@@ -17,7 +17,16 @@
             "autostart": {
               "policy": "at_login",
               "session": "active"
-            }
+            },
+            "environments": [
+              {
+                "environmentId": "0192f3a6-0000-7000-8000-000000000001",
+                "name": "shop",
+                "alias": "db",
+                "ownership": "shared",
+                "leaseActive": true
+              }
+            ]
           },
           {
             "instanceId": "0192f3a5-0000-7000-8000-000000000002",
@@ -29,7 +38,8 @@
             "autostart": {
               "policy": "manual",
               "session": "none"
-            }
+            },
+            "environments": []
           }
         ],
         "alreadyStopping": [
@@ -42,10 +52,18 @@
           {
             "instanceId": "0192f3a5-0000-7000-8000-000000000004",
             "name": "lost",
-            "code": "supervisor.identity_unproven"
+            "code": "supervisor.identity_unproven",
+            "environments": []
           }
         ],
-        "atLoginCount": 1
+        "atLoginCount": 1,
+        "affectedEnvironments": [
+          {
+            "environmentId": "0192f3a6-0000-7000-8000-000000000001",
+            "name": "shop",
+            "instanceCount": 1
+          }
+        ]
       }
     }
   }

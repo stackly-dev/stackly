@@ -1189,6 +1189,26 @@
       "summary": "an endpoint is not in the manifest, has a port outside 1 to 65535, asks for a port on a unix endpoint, or is Auto while the provider’s initialize needs its port"
     },
     {
+      "code": "instance.endpoints_require_override",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "environment",
+        "fields": [
+          "environmentId",
+          "name",
+          "alias",
+          "ownership"
+        ],
+        "max": 100
+      },
+      "summary": "an active environment lease needs an override to change the ports of the instance (spec 0047)"
+    },
+    {
       "code": "instance.insufficient_space",
       "category": "unavailable",
       "retryable": false,

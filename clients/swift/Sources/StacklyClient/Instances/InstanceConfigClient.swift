@@ -72,7 +72,7 @@ public struct InstanceConfigClient: Sendable {
     ) async throws(ClientError) -> EndpointValidation {
         let params = ChangeEndpointsParams(
             instanceId: instanceId, baseRevision: baseRevision, endpoints: endpoints,
-            dryRun: true)
+            dryRun: true, overrideLeases: nil)
         let reply = try await send(.instanceChangeEndpoints(params), .standard)
         guard case .instanceChangeEndpoints(.dryRun(let validation)) = reply else {
             throw Self.unexpectedReply()

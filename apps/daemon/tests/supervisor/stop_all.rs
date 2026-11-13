@@ -17,7 +17,10 @@ use crate::support::{Api, Site, key};
 async fn preview(api: &Api) -> StopAllPreview {
     match api
         .client
-        .call_detailed(Call::InstancePreviewStopAll, CallOptions::default())
+        .call_detailed(
+            Call::InstancePreviewStopAll(Default::default()),
+            CallOptions::default(),
+        )
         .await
         .expect("the preview answers")
     {

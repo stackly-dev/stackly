@@ -1053,6 +1053,10 @@ area! {
             details [], "the instances Stop All would stop are not the ones the client confirmed, so nothing was stopped (spec 0032)";
         STORAGE_LOCATION_MISSING = "instance.storage_location_missing", Unavailable, retryable false,
             details ["kind", "path"], "the folder of the data or log location this instance was created in does not exist (spec 0032)";
+        ENDPOINTS_REQUIRE_OVERRIDE = "instance.endpoints_require_override", Conflict, retryable false,
+            details ["count", "omitted"],
+            items { kind "environment", fields ["environmentId", "name", "alias", "ownership"], max 100 },
+            "an active environment lease needs an override to change the ports of the instance (spec 0047)";
 
         @functions
 
@@ -1062,6 +1066,9 @@ area! {
         #[must_use]
         pub fn hint(code: &str, details: &[crate::error::ErrorDetail]) -> Option<&'static str> {
             Some(match code {
+                "instance.endpoints_require_override" => {
+                    "change the ports anyway with the override, or bring the environment down first"
+                }
                 "instance.endpoint_invalid" => {
                     "check the endpoint name and port; some providers need a fixed port for an endpoint when the instance is created"
                 }
@@ -2348,6 +2355,11 @@ mod tests {
                 "instance.storage_location_missing",
                 ErrorCategory::Unavailable,
                 &["kind", "path"],
+            ),
+            (
+                "instance.endpoints_require_override",
+                ErrorCategory::Conflict,
+                &["count", "omitted"],
             ),
         ];
         assert_eq!(table, expected);

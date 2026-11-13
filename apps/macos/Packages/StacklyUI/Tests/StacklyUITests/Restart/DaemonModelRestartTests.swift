@@ -156,7 +156,9 @@ struct DaemonModelRestartTests {
         #expect(
             last.0
                 == .daemonShutdown(
-                    ShutdownParams(mode: .restart, expectedPlanDigest: "abc", force: false)))
+                    ShutdownParams(
+                        mode: .restart, expectedPlanDigest: "abc", force: false, overrideLeases: nil
+                    )))
         #expect(UUID(uuidString: try #require(last.1)) != nil)
         #expect(model.restart.confirmation == nil)
         #expect(model.restart.isAwaitingPlan)

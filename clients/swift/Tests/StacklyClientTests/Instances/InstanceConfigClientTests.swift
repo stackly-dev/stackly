@@ -102,7 +102,7 @@ struct InstanceConfigClientTests {
                 .instanceChangeEndpoints(
                     ChangeEndpointsParams(
                         instanceId: Self.instance, baseRevision: 2, endpoints: [request],
-                        dryRun: true))
+                        dryRun: true, overrideLeases: nil))
             ])
         #expect(verdict.valid == false)
         #expect(verdict.problems.first?.suggestedPort == 5434)

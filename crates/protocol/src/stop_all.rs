@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use uuid::Uuid;
 
+use crate::env::InstanceEnvironment;
 use crate::error::FieldError;
 use crate::instance::{InstanceAutostart, InstanceLifecycle};
 use crate::json::{FieldCode, Validate};
@@ -52,6 +53,10 @@ pub struct StopAllItem {
     pub demand: Vec<DemandSourceKind>,
     /// Its startup policy and the lease of this session.
     pub autostart: InstanceAutostart,
+    /// The environments whose lease on it is active, ordered by name (spec
+    /// 0047 AC-16). Empty from an older daemon.
+    #[serde(default)]
+    pub environments: Vec<InstanceEnvironment>,
 }
 
 /// An instance named without its state.
@@ -76,6 +81,24 @@ pub struct StopAllSkip {
     pub name: String,
     /// The error code that says why, such as `supervisor.identity_unproven`.
     pub code: String,
+    /// The environments whose lease on it is active, ordered by name (spec
+    /// 0047 AC-16). Empty from an older daemon.
+    #[serde(default)]
+    pub environments: Vec<InstanceEnvironment>,
+}
+
+/// An environment Stop All leaves incomplete: it holds an active lease on
+/// at least one instance of `items` (spec 0047 AC-16).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AffectedEnvironment {
+    /// The environment.
+    pub environment_id: Uuid,
+    /// Its name.
+    pub name: String,
+    /// How many instances of `items` it holds.
+    pub instance_count: Count,
 }
 
 /// Reply of `instance.preview_stop_all`. Every list is ordered by name and
@@ -92,6 +115,31 @@ pub struct StopAllPreview {
     pub skipped: Vec<StopAllSkip>,
     /// How many of `items` start at login.
     pub at_login_count: Count,
+    /// The environments with an active lease on at least one instance of
+    /// `items`, ordered by name (spec 0047 AC-16). Empty from an older
+    /// daemon.
+    #[serde(default)]
+    pub affected_environments: Vec<AffectedEnvironment>,
+}
+
+/// Params of `instance.preview_stop_all` (spec 0047 AC-16). A request with
+/// no params, `null`, or an empty object reads as the default, so a client
+/// from before protocol 4.6 stays valid.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StopAllPreviewParams {
+    /// True to put the instances an environment lease holds in `items`
+    /// instead of `skipped`.
+    #[serde(default)]
+    pub override_leases: bool,
+}
+
+impl Validate for StopAllPreviewParams {
+    /// Nothing to check: one flag.
+    fn validate(&self) -> Vec<FieldError> {
+        Vec::new()
+    }
 }
 
 /// Params of `instance.stop_all`.
@@ -105,6 +153,11 @@ pub struct StopAllParams {
     /// Absent: stop what the rule chooses (`agent_off` does this).
     #[serde(default)]
     pub expected_instance_ids: Option<Vec<Uuid>>,
+    /// True to stop the instances an environment lease holds too; their
+    /// leases stay active (spec 0047 AC-16). Part of the idempotency
+    /// fingerprint.
+    #[serde(default)]
+    pub override_leases: bool,
 }
 
 impl Validate for StopAllParams {
@@ -152,6 +205,7 @@ mod tests {
     fn stop_all_refuses_more_expected_instance_ids_than_the_contract_limit() {
         let ids = |len: usize| StopAllParams {
             expected_instance_ids: Some((0..len).map(|_| Uuid::nil()).collect()),
+            override_leases: false,
         };
         assert!(StopAllParams::default().validate().is_empty());
         assert!(ids(STOP_ALL_EXPECTED_IDS_MAX).validate().is_empty());

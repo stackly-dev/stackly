@@ -53,7 +53,9 @@ struct DaemonRestartClientTests {
         #expect(
             made.call
                 == .daemonShutdown(
-                    ShutdownParams(mode: .restart, expectedPlanDigest: "abc123", force: true)))
+                    ShutdownParams(
+                        mode: .restart, expectedPlanDigest: "abc123", force: true,
+                        overrideLeases: nil)))
         #expect(made.key == "key-1")
         #expect(made.timeout == .seconds(190))
         #expect(made.timeout == SecretsClient.interactiveTimeout)
@@ -72,7 +74,9 @@ struct DaemonRestartClientTests {
 
         let made = try #require(fake.made.first)
         #expect(
-            made.call == .instanceStopAll(StopAllParams(expectedInstanceIds: [first, second])))
+            made.call
+                == .instanceStopAll(
+                    StopAllParams(expectedInstanceIds: [first, second], overrideLeases: nil)))
         #expect(made.key == "key-2")
         #expect(made.timeout == SecretsClient.interactiveTimeout)
         #expect(reply == result)
@@ -80,13 +84,14 @@ struct DaemonRestartClientTests {
 
     @Test func theStopAllPreviewReadsWithoutAKey() async throws {
         let preview = StopAllPreview(
-            items: [], alreadyStopping: [], skipped: [], atLoginCount: 0)
+            items: [], alreadyStopping: [], skipped: [], atLoginCount: 0,
+            affectedEnvironments: nil)
         let fake = Fake(.success(.instancePreviewStopAll(preview)))
 
         let reply = try await fake.client.previewStopAll()
 
         let made = try #require(fake.made.first)
-        #expect(made.call == .instancePreviewStopAll)
+        #expect(made.call == .instancePreviewStopAll(StopAllPreviewParams(overrideLeases: nil)))
         #expect(made.key == nil)
         #expect(reply == preview)
     }
