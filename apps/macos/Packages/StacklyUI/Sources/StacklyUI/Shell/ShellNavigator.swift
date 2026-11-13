@@ -21,6 +21,11 @@ public enum ShellDestination: Hashable, Sendable {
     case operations
     /// The Diagnostics page.
     case diagnostics
+    /// The Environments list (spec 0044).
+    case environments
+    /// The detail page of one environment, a child row of Environments in the sidebar
+    /// (spec 0044).
+    case environment(UUID)
 
     /// The sidebar section the destination shows.
     public var section: SidebarSection {
@@ -31,6 +36,7 @@ public enum ShellDestination: Hashable, Sendable {
         case .runtimes: .runtimes
         case .operations: .operations
         case .diagnostics: .diagnostics
+        case .environments, .environment: .environments
         }
     }
 }
@@ -124,6 +130,32 @@ public final class ShellNavigator {
             if section != .catalog {
                 catalogRequest = nil
             }
+            if section != .environments {
+                environment = nil
+            }
+        }
+    }
+    /// The environment whose detail page shows, while the Environments section shows; `nil`
+    /// for the Environments list (spec 0044, *Sidebar*).
+    public var environment: UUID?
+
+    /// The sidebar row that shows: a section, or the child row of one environment.
+    public var selection: SidebarSelection {
+        get {
+            if section == .environments, let environment {
+                return .environment(environment)
+            }
+            return .section(section)
+        }
+        set {
+            switch newValue {
+            case .section(let newSection):
+                section = newSection
+                environment = nil
+            case .environment(let id):
+                section = .environments
+                environment = id
+            }
         }
     }
     /// The last request for the Instances page, while the Instances section shows.
@@ -159,6 +191,17 @@ public final class ShellNavigator {
             break
         }
         section = destination.section
+        switch destination {
+        case .environment(let id): environment = id
+        case .environments: environment = nil
+        default: break
+        }
+    }
+
+    /// Opens the detail page of an environment (spec 0044).
+    /// - Parameter id: The environment.
+    public func openEnvironment(_ id: UUID) {
+        show(.environment(id))
     }
 
     /// Opens the detail page of an instance: the Instances page applies the request to its

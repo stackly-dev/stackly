@@ -100,6 +100,9 @@
             case settingsOffline = "settings-offline"
             /// A change that the daemon refuses because the settings changed elsewhere.
             case settingsConflict = "settings-conflict"
+            /// The mixed cases with three environments: erp-development partially ready,
+            /// billing down, and reporting ready (spec 0044, spec 0068).
+            case environmentPartiallyReady = "environment-partially-ready"
         }
 
         /// The scenario's name.

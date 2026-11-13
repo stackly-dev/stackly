@@ -99,6 +99,9 @@ public final class DaemonModel {
     /// The managed runtimes and the installs that have not ended, for the Runtimes page and
     /// the Get action of the Catalog (spec 0018).
     public let runtimes: RuntimeStore
+    /// The registered environments, for the sidebar, the Environments page, and the Overview
+    /// (spec 0044).
+    public let environments: EnvironmentStore
     /// The space left on the disk that holds Stackly data, for the Overview (spec 0022).
     public let capacity: CapacityModel
     /// The last doctor report, for the Diagnostics page and its sidebar badge (spec 0034).
@@ -238,6 +241,16 @@ public final class DaemonModel {
             serverInstance: { serverInstance.id },
             now: now)
         sync.register(runtimes.store)
+        environments = EnvironmentStore(
+            call: { call throws(ClientError) in try await link.call(call, nil, .standard) },
+            send: { call, key in
+                guard let path = mutations.path else {
+                    return .notSent(ClientErrorCatalog.notConnected())
+                }
+                return await path.perform(call, idempotencyKey: key)
+            },
+            now: now)
+        sync.register(environments.store)
         let restartClient = DaemonRestartClient { call, key, options throws(ClientError) in
             try await link.call(call, key, options)
         }

@@ -278,6 +278,18 @@ Another open enum of the catalog shows as neutral text and is never guessed into
 An install that has not ended shows as an Installing row on the Runtimes page and as a small progress in the Get column of the Catalog, with the stage and the percent of `StagedProgressValue`: the five stages Download, Verify digest, Extract, Validate binary, and Commit. A Catalog card whose software has installed runtimes shows "{n} installed" (`positive`, `checkmark.circle.fill`) instead of Available; it is not shown for 0. The Get column shows Get, the progress, or Installed (`positive` text with `checkmark.circle.fill`) for the artifact built for this Mac, matched to runtimes and running installs by the digest of the artifact.
 
 
+### Environment status
+
+`StatusAppearance.environment(status: EnvironmentStatus)` (spec 0044, AC-18). The daemon computes the status from the ready count of the environment's services; the GUI only shows it, in the sidebar child row (symbol only, next to the name and "{ready}/{total}"), the Environments list, the detail page, and the Overview, always with the label written except in the sidebar. A service whose instance does not exist yet shows "Not created" in the Services table instead of an instance status.
+
+| Value | Label | Tone | Status symbol |
+| --- | --- | --- | --- |
+| `EnvironmentStatus.ready` | Ready | `positive` | `checkmark.circle.fill` |
+| `EnvironmentStatus.partiallyReady` | Partially Ready | `caution` | `circle.lefthalf.filled` |
+| `EnvironmentStatus.down` | Down | `neutral` | `circle` |
+| `EnvironmentStatus.unrecognized` | Unknown | `neutral` | `questionmark.circle` |
+| Service not created (`StatusAppearance.serviceNotCreated`) | Not created | `neutral` | `circle.dashed` |
+
 ### StatusLabel
 
 `StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).

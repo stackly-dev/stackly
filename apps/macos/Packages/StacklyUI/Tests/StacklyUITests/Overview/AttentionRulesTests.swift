@@ -97,7 +97,8 @@ struct AttentionRulesTests {
             restart: sick.restart, restartTotal: 0, blocker: nil, endpoints: nil,
             leftoverProcesses: nil,
             logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
-            lastExit: nil, autostart: InstanceAutostart(policy: .manual, session: .none))
+            lastExit: nil, autostart: InstanceAutostart(policy: .manual, session: .none),
+            environments: nil)
         #expect(try items(instances: [bare]).first?.message == "Its health check is failing.")
     }
 
@@ -130,7 +131,7 @@ struct AttentionRulesTests {
                     exhausted: false), restartTotal: 0, blocker: nil, endpoints: nil,
                 leftoverProcesses: nil, logsUnavailable: false, ownership: .manual,
                 initialized: true, capabilities: nil, lastExit: nil,
-                autostart: InstanceAutostart(policy: .manual, session: .none))
+                autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
             return try items(instances: [summary]).first.map { Self.plain($0.message) }
         }
         #expect(try message(attempts: 1)?.hasPrefix("It crashed. Restart 1 of 5 at ") == true)
@@ -150,7 +151,7 @@ struct AttentionRulesTests {
                 restartTotal: 0,
                 blocker: nil, endpoints: nil, leftoverProcesses: nil, logsUnavailable: false,
                 ownership: .manual, initialized: true, capabilities: nil, lastExit: nil,
-                autostart: InstanceAutostart(policy: .manual, session: .none))
+                autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
         }
         let plain = "It crashed and Stackly is starting it again."
         let noTime = InstanceRestart(
@@ -175,7 +176,7 @@ struct AttentionRulesTests {
             endpoints: nil,
             leftoverProcesses: nil, logsUnavailable: false, ownership: .manual, initialized: true,
             capabilities: nil, lastExit: nil,
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
         let message = try #require(try items(instances: [summary]).first?.message)
         #expect(Self.plain(message) == "It crashed. Restart 1 of 5 at 10/21/2026, 9:00 AM.")
     }

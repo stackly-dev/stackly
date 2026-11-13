@@ -13,6 +13,7 @@ struct FixtureShellTests {
     nonisolated static let bannerTitles: [FixtureScenario.ID: String?] = [
         .connectedEmpty: nil,
         .connectedMixed: nil,
+        .environmentPartiallyReady: nil,
         .daemonDegraded: nil,
         .daemonHealthUnrecognized: nil,
         .daemonRefreshing: nil,

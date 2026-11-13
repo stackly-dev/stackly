@@ -22,6 +22,7 @@ public struct OverviewPage: View {
     private let instances: InstanceStore
     private let catalog: CatalogStore?
     private let runtimes: RuntimeStore?
+    private let environments: EnvironmentStore?
     private let operations: OperationCenter
     private let capacity: CapacityModel
     private let actions: InstanceActionModel
@@ -31,6 +32,7 @@ public struct OverviewPage: View {
     private let hasConnection: Bool
     private let reconnect: @MainActor () -> Void
     private let openDiagnostics: @MainActor () -> Void
+    private let home: String
 
     /// Creates the page.
     /// - Parameters:
@@ -38,6 +40,8 @@ public struct OverviewPage: View {
     ///   - catalog: The catalog, for the provider names and tiles, or `nil`.
     ///   - runtimes: The runtime store, for the Runtimes card and the names of the install
     ///     operations, or `nil`: the card is then not drawn.
+    ///   - environments: The environment store, for the Environments section above
+    ///     Operations, or `nil`: the section is then not drawn (spec 0044, AC-23).
     ///   - operations: The operation center.
     ///   - capacity: The disk reading.
     ///   - actions: Start, Stop, and Retry.
@@ -51,10 +55,12 @@ public struct OverviewPage: View {
     ///     list again, else it reconnects.
     ///   - reconnect: Tries to connect now.
     ///   - openDiagnostics: Opens Diagnostics.
+    ///   - home: The home folder, written as `~` in the Environments section.
     public init(
         instances: InstanceStore,
         catalog: CatalogStore? = nil,
         runtimes: RuntimeStore? = nil,
+        environments: EnvironmentStore? = nil,
         operations: OperationCenter,
         capacity: CapacityModel,
         actions: InstanceActionModel,
@@ -63,11 +69,14 @@ public struct OverviewPage: View {
         waiting: FailureContent?,
         hasConnection: Bool,
         reconnect: @escaping @MainActor () -> Void,
-        openDiagnostics: @escaping @MainActor () -> Void
+        openDiagnostics: @escaping @MainActor () -> Void,
+        home: String = NSHomeDirectory()
     ) {
+        self.home = home
         self.instances = instances
         self.catalog = catalog
         self.runtimes = runtimes
+        self.environments = environments
         self.operations = operations
         self.capacity = capacity
         self.actions = actions
@@ -159,13 +168,17 @@ public struct OverviewPage: View {
                             instancesSection(rows)
                         }
                         .frame(maxWidth: .infinity, alignment: .top)
-                        operationsSection(names: names)
-                            .frame(minWidth: 300, maxWidth: 360, alignment: .top)
+                        VStack(alignment: .leading, spacing: Spacing.sectionGap) {
+                            environmentsSection
+                            operationsSection(names: names)
+                        }
+                        .frame(minWidth: 300, maxWidth: 360, alignment: .top)
                     }
                     .frame(minWidth: Self.twoColumnMinWidth)
                     VStack(alignment: .leading, spacing: Spacing.sectionGap) {
                         attentionSection(attention)
                         instancesSection(rows)
+                        environmentsSection
                         operationsSection(names: names)
                     }
                 }
@@ -198,6 +211,16 @@ public struct OverviewPage: View {
             open: { navigator?.openInstance($0) },
             showAll: { navigator?.show(.instances(filter: .all)) },
             browseCatalog: { navigator?.show(.catalog) })
+    }
+
+    /// The Environments section, only while there is an environment (spec 0044, AC-23).
+    @ViewBuilder private var environmentsSection: some View {
+        if let list = environments?.environments, list.isEmpty == false {
+            OverviewEnvironments(
+                environments: list, home: home,
+                open: { navigator?.openEnvironment($0) },
+                showAll: { navigator?.show(.environments) })
+        }
     }
 
     private func operationsSection(names: [UUID: String]) -> some View {

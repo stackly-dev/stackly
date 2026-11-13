@@ -19,7 +19,7 @@ struct InstanceActionTests {
             process: nil, lastFailure: nil, restart: base.restart, restartTotal: 0, blocker: nil,
             endpoints: base.endpoints, leftoverProcesses: nil, logsUnavailable: false,
             ownership: .manual, initialized: initialized, capabilities: nil, lastExit: nil,
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
         return InstanceAction.resolve(summary: summary, local: local)
     }
 
