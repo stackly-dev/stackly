@@ -685,6 +685,17 @@ impl CliFailure {
         )
     }
 
+    /// `cli.environment_not_found` (spec 0046 AC-18): no environment is
+    /// registered at the manifest `file`. Exits 10.
+    #[must_use]
+    pub fn environment_not_imported(file: &str) -> Self {
+        Self::local(
+            ErrorBody::new(&cli::ENVIRONMENT_NOT_FOUND, "not imported")
+                .with_detail("name", file)
+                .with_hint("Run stackly env up or stackly env import."),
+        )
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
     /// restart is sent or while it is sent, or `agent_call` after a macOS call that

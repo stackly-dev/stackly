@@ -161,6 +161,34 @@ enum Stop {
     Followed(Result<(), CliFailure>),
 }
 
+/// Something a command looks at while it waits, such as the services of
+/// an Up (spec 0046 AC-17): after each `operation.get` it may read more and
+/// write lines to stderr.
+pub trait Watch: Send {
+    /// Whether every operation event wakes the wait, not only those of the
+    /// waited operation: an Up changes through its child operations.
+    fn wide(&self) -> bool;
+
+    /// Called after each read of the operation, with its newest snapshot.
+    fn seen(
+        &mut self,
+        cx: &mut Context,
+        detail: &OperationDetail,
+    ) -> impl Future<Output = ()> + Send;
+}
+
+/// The [`Watch`] of a plain wait: nothing.
+#[derive(Debug)]
+pub struct NoWatch;
+
+impl Watch for NoWatch {
+    fn wide(&self) -> bool {
+        false
+    }
+
+    async fn seen(&mut self, _cx: &mut Context, _detail: &OperationDetail) {}
+}
+
 /// Waits for operations.
 #[derive(Debug)]
 pub struct Waiter;
@@ -170,6 +198,17 @@ impl Waiter {
     /// `waiting for operation` line, so a Ctrl+C after that line is always
     /// caught.
     pub async fn wait(cx: &mut Context, id: Uuid, args: &WaitArgs, mode: WaitMode) -> WaitOutcome {
+        Self::watch(cx, id, args, mode, &mut NoWatch).await
+    }
+
+    /// [`Self::wait`], calling `watch` after each read of the operation.
+    pub async fn watch<W: Watch>(
+        cx: &mut Context,
+        id: Uuid,
+        args: &WaitArgs,
+        mode: WaitMode,
+        watch: &mut W,
+    ) -> WaitOutcome {
         let mut interrupt = signal(SignalKind::interrupt()).ok();
         if interrupt.is_some() {
             // A hidden prompt before this wait left a listener that ends the
@@ -186,7 +225,7 @@ impl Waiter {
         let mut progress = Progress::new(cx.progress);
         let mut last: Option<OperationDetail> = None;
         let stop = {
-            let follow = follow(cx, id, &mut last, &mut progress, started);
+            let follow = follow(cx, id, &mut last, &mut progress, started, watch);
             tokio::pin!(follow);
             tokio::select! {
                 biased;
@@ -270,18 +309,19 @@ fn state_of(last: Option<&OperationDetail>) -> String {
 
 /// Subscribes, then gets, then refreshes on events and ticks, reconnecting
 /// when the connection breaks. Returns once the operation settled.
-async fn follow(
+async fn follow<W: Watch>(
     cx: &mut Context,
     id: Uuid,
     last: &mut Option<OperationDetail>,
     progress: &mut Progress,
     started: Instant,
+    watch: &mut W,
 ) -> Result<(), CliFailure> {
     let mut trouble = Trouble::default();
     let params = SubscribeParams {
         since: None,
         kinds: vec!["operation.".to_owned()],
-        resource: Some(ResourceRef {
+        resource: (!watch.wide()).then(|| ResourceRef {
             kind: ResourceKind::Operation,
             id: id.to_string(),
         }),
@@ -333,6 +373,9 @@ async fn follow(
                             },
                             _ => None,
                         };
+                        if let Some(detail) = last.as_ref() {
+                            watch.seen(cx, detail).await;
+                        }
                         show(
                             cx,
                             progress,

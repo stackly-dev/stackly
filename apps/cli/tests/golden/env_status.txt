@@ -1,0 +1,10 @@
+graph  Partially ready  1 of 3 ready  /Users/dev/erp/stackly.yaml
+
+SERVICE  INSTANCE  VERSION  OWNERSHIP  STATUS                ENDPOINTS
+db       graph-db  0.1.0    dedicated  ready                 http 127.0.0.1:49152
+cache    -         0.1      dedicated  needs_secret          -
+api      -         0.1      dedicated  dependency_not_ready  -
+
+not ready:
+  cache: needs secret local:graph/cache-token (missing); set it with stackly secret set local:graph/cache-token
+  api: not started: dependency cache failed
