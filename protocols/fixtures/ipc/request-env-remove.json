@@ -1,0 +1,11 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e07",
+  "idempotencyKey": "0192f3a1-0000-7000-8000-00000000ab01",
+  "call": {
+    "type": "env.remove",
+    "content": {
+      "id": "0192f3a7-0000-7000-8000-0000000000e1",
+      "expectedRevision": 3
+    }
+  }
+}

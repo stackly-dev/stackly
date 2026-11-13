@@ -1,0 +1,8 @@
+# Expects at least one provider_unreadable finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: testing/broken

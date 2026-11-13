@@ -153,7 +153,9 @@ pub enum InstanceHealthState {
 /// `restored` and `adopted`, spec 0005), and not the `Ownership` of an
 /// environment in the domain (`Dedicated` or `Shared`): this says whether
 /// a person runs the instance by hand or an environment owns it. `stacklyd`
-/// sends `manual` until feature 44 adds environment membership.
+/// sends `dedicated` for a dedicated member of an environment, `shared` for
+/// an instance only environments borrow, and `manual` otherwise (spec 0044
+/// AC-15).
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -161,6 +163,10 @@ pub enum InstanceOwnership {
     /// A person starts and stops it.
     #[default]
     Manual,
+    /// An environment owns it and its data.
+    Dedicated,
+    /// Environments borrow it; none owns it.
+    Shared,
     /// A value this build does not know. The daemon never sends it.
     #[serde(other)]
     Unrecognized,
@@ -633,6 +639,10 @@ pub struct InstanceSummary {
     /// 0031).
     #[serde(default)]
     pub autostart: InstanceAutostart,
+    /// The environments it belongs to: the `dedicated` one first, then by
+    /// name (spec 0044 AC-15). Absent in older daemons.
+    #[serde(default)]
+    pub environments: Vec<crate::env::InstanceEnvironment>,
 }
 
 impl InstanceSummary {

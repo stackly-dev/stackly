@@ -1,0 +1,24 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e13",
+    "reply": {
+      "type": "env.list",
+      "content": {
+        "items": [
+          {
+            "id": "0192f3a7-0000-7000-8000-0000000000e1",
+            "name": "erp-development",
+            "revision": 3,
+            "manifestLocation": "/Users/dev/erp/stackly.yaml",
+            "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "status": "partially_ready",
+            "readyCount": 1,
+            "serviceCount": 2,
+            "updatedAt": "2026-11-13T09:00:00.000Z"
+          }
+        ]
+      }
+    }
+  }
+}

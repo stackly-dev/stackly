@@ -196,7 +196,7 @@ pub const PREVIEW_IMPORT_ISSUES_MAX: usize = 100;
 /// `path` of an import request: 1 to [`IMPORT_PATH_MAX`] bytes, absolute,
 /// without NUL and without a `.` or `..` component (refused, never
 /// normalized).
-fn import_path_code(path: &str) -> Option<FieldCode> {
+pub(crate) fn import_path_code(path: &str) -> Option<FieldCode> {
     if path.is_empty() {
         Some(FieldCode::TooShort)
     } else if path.len() > IMPORT_PATH_MAX {
@@ -225,7 +225,7 @@ fn namespaced_provider_code(provider: &str) -> Option<FieldCode> {
 }
 
 /// A SHA-256 digest: 64 lowercase hex characters.
-fn is_sha256(text: &str) -> bool {
+pub(crate) fn is_sha256(text: &str) -> bool {
     text.len() == 64
         && text
             .bytes()

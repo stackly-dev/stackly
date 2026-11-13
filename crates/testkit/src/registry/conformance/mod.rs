@@ -3,6 +3,7 @@
 //! apart unnoticed (spec 0005, AC-8 to AC-11, AC-14, AC-16).
 
 mod creates;
+mod environments;
 mod guarded;
 mod imports;
 mod journal;
@@ -99,6 +100,7 @@ pub fn registry_conformance(registry: &dyn Registry, seed: &dyn RegistrySeed, cl
     writes::names_and_short_keys(&suite);
     writes::software(&suite);
     writes::environments(&suite);
+    environments::environments(&suite);
     writes::leases(&suite);
     creates::provider_sources(&suite);
     creates::delete_created_instance(&suite);

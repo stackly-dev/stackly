@@ -93,6 +93,12 @@ extension Call {
 		case .providerApprove: "provider.approve"
 		case .providerRevoke: "provider.revoke"
 		case .providerRemove: "provider.remove"
+		case .envValidate: "env.validate"
+		case .envPlan: "env.plan"
+		case .envList: "env.list"
+		case .envGet: "env.get"
+		case .envImport: "env.import"
+		case .envRemove: "env.remove"
 		}
 	}
 }
@@ -168,6 +174,12 @@ extension Reply {
 		case .providerApprove: "provider.approve"
 		case .providerRevoke: "provider.revoke"
 		case .providerRemove: "provider.remove"
+		case .envValidate: "env.validate"
+		case .envPlan: "env.plan"
+		case .envList: "env.list"
+		case .envGet: "env.get"
+		case .envImport: "env.import"
+		case .envRemove: "env.remove"
 		}
 	}
 }

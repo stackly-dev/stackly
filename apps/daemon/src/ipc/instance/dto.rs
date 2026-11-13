@@ -94,6 +94,9 @@ pub fn summary(
             policy: startup_kind(instance.startup()),
             session: autostart,
         },
+        // provisional: F44 step 5 fills ownership and environments from the
+        // membership cache.
+        environments: Vec::new(),
     }
 }
 

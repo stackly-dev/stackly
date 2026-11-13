@@ -8,6 +8,7 @@ mod audit;
 mod common;
 mod create;
 mod detect;
+mod environments;
 mod failure;
 mod fixture;
 mod health;

@@ -1,0 +1,3 @@
+# Expects at least one yaml_syntax finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: [Environment
