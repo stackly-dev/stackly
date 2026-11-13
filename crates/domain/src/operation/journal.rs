@@ -425,6 +425,9 @@ pub struct NewJournal {
     pub input: JournalPayload,
     /// The resource revision the request expects, if any.
     pub expected_revision: Option<ResourceRevision>,
+    /// The coordinator that started it, for a child operation (spec
+    /// 0046); never changes afterwards.
+    pub parent: Option<OperationId>,
 }
 
 /// Every field of an [`OperationJournal`] as the registry stores it, for
@@ -447,6 +450,8 @@ pub struct StoredJournal {
     pub expected_revision: Option<ResourceRevision>,
     /// The operation it waits on.
     pub waiting_on: Option<OperationId>,
+    /// The coordinator that started it.
+    pub parent: Option<OperationId>,
     /// When its first irreversible step began.
     pub point_of_no_return_at: Option<Timestamp>,
     /// When a cancel was asked for.
@@ -472,6 +477,7 @@ pub struct OperationJournal {
     input: JournalPayload,
     expected_revision: Option<ResourceRevision>,
     waiting_on: Option<OperationId>,
+    parent: Option<OperationId>,
     point_of_no_return_at: Option<Timestamp>,
     cancel_requested_at: Option<Timestamp>,
     compensation_started_at: Option<Timestamp>,
@@ -503,6 +509,7 @@ impl OperationJournal {
             input: new.input,
             expected_revision: new.expected_revision,
             waiting_on: None,
+            parent: new.parent,
             point_of_no_return_at: None,
             cancel_requested_at: None,
             compensation_started_at: None,
@@ -550,6 +557,7 @@ impl OperationJournal {
             input: stored.input,
             expected_revision: stored.expected_revision,
             waiting_on: stored.waiting_on,
+            parent: stored.parent,
             point_of_no_return_at: stored.point_of_no_return_at,
             cancel_requested_at: stored.cancel_requested_at,
             compensation_started_at: stored.compensation_started_at,
@@ -605,6 +613,13 @@ impl OperationJournal {
     #[must_use]
     pub const fn waiting_on(&self) -> Option<OperationId> {
         self.waiting_on
+    }
+
+    /// Returns the coordinator that started it, for a child operation
+    /// (spec 0046).
+    #[must_use]
+    pub const fn parent(&self) -> Option<OperationId> {
+        self.parent
     }
 
     /// Returns when its first irreversible step began.
@@ -1358,6 +1373,7 @@ mod tests {
             resumable: false,
             input: payload(r#"{"name":"orders-db"}"#),
             expected_revision: None,
+            parent: None,
         }
     }
 
@@ -1503,6 +1519,7 @@ mod tests {
             input: journal.input().clone(),
             expected_revision: None,
             waiting_on: None,
+            parent: None,
             point_of_no_return_at: None,
             cancel_requested_at: None,
             compensation_started_at: None,

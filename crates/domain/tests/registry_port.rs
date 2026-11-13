@@ -195,6 +195,9 @@ fn stored_environment(environment: &Environment) -> StoredEnvironment {
         manifest_sha256: environment.manifest_sha256().copied(),
         declared: environment.declared().to_vec(),
         members: environment.members().to_vec(),
+        last_operation: environment.last_operation(),
+        last_up: environment.last_up().cloned(),
+        updated_at: environment.updated_at(),
         revision: environment.revision(),
     }
 }

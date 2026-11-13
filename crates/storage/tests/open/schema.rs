@@ -278,6 +278,7 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("created_at", "TEXT", true, 0),
             ("updated_at", "TEXT", true, 0),
             ("services", "TEXT", true, 0),
+            ("last_up", "TEXT", false, 0),
         ],
     ),
     (
@@ -348,6 +349,7 @@ const DATA_MODEL: &[(&str, &[ColumnSpec])] = &[
             ("result", "TEXT", false, 0),
             ("failure_items", "TEXT", true, 0),
             ("failure_rule", "TEXT", false, 0),
+            ("parent_id", "TEXT", false, 0),
         ],
     ),
     (

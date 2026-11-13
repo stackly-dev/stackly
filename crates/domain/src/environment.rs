@@ -6,10 +6,13 @@ use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
+use jiff::Timestamp;
+
 use crate::code::code_enum;
 use crate::error::{InvariantDetail, InvariantError, ValueError, ValueKind};
-use crate::id::{EnvironmentId, InstanceId};
+use crate::id::{EnvironmentId, InstanceId, OperationId};
 use crate::runtime::RuntimeSelector;
+use crate::up::UpReport;
 use crate::value::{
     EnvironmentName, InstanceName, MemberAlias, ProviderName, ResourceRevision, Sha256Digest,
 };
@@ -224,23 +227,82 @@ impl DeclaredService {
     }
 }
 
+/// One edge an Up used for a member, with its effective timeout (spec
+/// 0046): an element of `environment_instances.dependency_conditions`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MemberDependency {
+    service: MemberAlias,
+    condition: DependencyCondition,
+    timeout_seconds: u32,
+}
+
+impl MemberDependency {
+    /// Creates the edge to `service`.
+    #[must_use]
+    pub const fn new(
+        service: MemberAlias,
+        condition: DependencyCondition,
+        timeout_seconds: u32,
+    ) -> Self {
+        Self {
+            service,
+            condition,
+            timeout_seconds,
+        }
+    }
+
+    /// Returns the alias depended on.
+    #[must_use]
+    pub const fn service(&self) -> &MemberAlias {
+        &self.service
+    }
+
+    /// Returns what the member waits for.
+    #[must_use]
+    pub const fn condition(&self) -> DependencyCondition {
+        self.condition
+    }
+
+    /// Returns the effective wait limit, in seconds.
+    #[must_use]
+    pub const fn timeout_seconds(&self) -> u32 {
+        self.timeout_seconds
+    }
+}
+
 /// One instance in an environment, under an alias.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnvironmentMember {
     alias: MemberAlias,
     instance_id: InstanceId,
     ownership: Ownership,
+    dependency_conditions: Vec<MemberDependency>,
 }
 
 impl EnvironmentMember {
-    /// Creates a member.
+    /// Creates a member with no dependency conditions.
     #[must_use]
     pub const fn new(alias: MemberAlias, instance_id: InstanceId, ownership: Ownership) -> Self {
         Self {
             alias,
             instance_id,
             ownership,
+            dependency_conditions: Vec::new(),
         }
+    }
+
+    /// Returns the member with the edges the last Up used for it.
+    #[must_use]
+    pub fn with_conditions(mut self, conditions: Vec<MemberDependency>) -> Self {
+        self.dependency_conditions = conditions;
+        self
+    }
+
+    /// Returns the edges the last Up used for it, with their effective
+    /// timeouts (spec 0046); empty before the first Up.
+    #[must_use]
+    pub fn dependency_conditions(&self) -> &[MemberDependency] {
+        &self.dependency_conditions
     }
 
     /// Returns the alias, unique in its environment.
@@ -278,14 +340,22 @@ pub struct StoredEnvironment {
     pub declared: Vec<DeclaredService>,
     /// The members, in order.
     pub members: Vec<EnvironmentMember>,
+    /// The last `environment_up` operation, if any (spec 0046).
+    pub last_operation: Option<OperationId>,
+    /// The report of the last Up, if any (spec 0046).
+    pub last_up: Option<UpReport>,
+    /// When the registry last wrote the row; `None` before the first
+    /// write.
+    pub updated_at: Option<Timestamp>,
     /// The revision.
     pub revision: ResourceRevision,
 }
 
 /// A named group of instances.
 ///
-/// Every mutation raises [`Environment::revision`] by exactly 1.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Every mutation raises [`Environment::revision`] by exactly 1. Equality
+/// leaves out [`Environment::updated_at`], the registry's write stamp.
+#[derive(Debug, Clone, Eq)]
 pub struct Environment {
     id: EnvironmentId,
     name: EnvironmentName,
@@ -293,7 +363,24 @@ pub struct Environment {
     manifest_sha256: Option<Sha256Digest>,
     declared: Vec<DeclaredService>,
     members: Vec<EnvironmentMember>,
+    last_operation: Option<OperationId>,
+    last_up: Option<UpReport>,
+    updated_at: Option<Timestamp>,
     revision: ResourceRevision,
+}
+
+impl PartialEq for Environment {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.name == other.name
+            && self.manifest_location == other.manifest_location
+            && self.manifest_sha256 == other.manifest_sha256
+            && self.declared == other.declared
+            && self.members == other.members
+            && self.last_operation == other.last_operation
+            && self.last_up == other.last_up
+            && self.revision == other.revision
+    }
 }
 
 impl Environment {
@@ -318,6 +405,9 @@ impl Environment {
             manifest_sha256,
             declared: Vec::new(),
             members,
+            last_operation: None,
+            last_up: None,
+            updated_at: None,
             revision: ResourceRevision::INITIAL,
         })
     }
@@ -331,22 +421,7 @@ impl Environment {
     /// of [`Environment::set_manifest`] for the declared services.
     pub fn restore(stored: StoredEnvironment) -> Result<Self, InvariantError> {
         check_declared(&stored.declared)?;
-        let mut aliases = BTreeSet::new();
-        let mut instances = BTreeSet::new();
-        for member in &stored.members {
-            if !aliases.insert(&member.alias) {
-                return Err(InvariantDetail::DuplicateMemberAlias {
-                    alias: member.alias.clone(),
-                }
-                .into());
-            }
-            if !instances.insert(member.instance_id) {
-                return Err(InvariantDetail::DuplicateMemberInstance {
-                    instance: member.instance_id,
-                }
-                .into());
-            }
-        }
+        check_members(&stored.members)?;
         Ok(Self {
             id: stored.id,
             name: stored.name,
@@ -354,8 +429,93 @@ impl Environment {
             manifest_sha256: stored.manifest_sha256,
             declared: stored.declared,
             members: stored.members,
+            last_operation: stored.last_operation,
+            last_up: stored.last_up,
+            updated_at: stored.updated_at,
             revision: stored.revision,
         })
+    }
+
+    /// Returns it with the registry's write stamp. Only the registry and
+    /// test fakes call it; it does not change the revision.
+    #[must_use]
+    pub const fn stamped(mut self, at: Timestamp) -> Self {
+        self.updated_at = Some(at);
+        self
+    }
+
+    /// Adds `member` after the others (spec 0046: a shared `instanceRef`
+    /// at accept, or a dedicated instance a create made). Raises the
+    /// revision by 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] when its alias or instance is already
+    /// a member; the environment does not change.
+    pub fn bind_member(&mut self, member: EnvironmentMember) -> Result<(), InvariantError> {
+        let mut members = self.members.clone();
+        members.push(member);
+        check_members(&members)?;
+        self.members = members;
+        self.revision = self.revision.next();
+        Ok(())
+    }
+
+    /// Replaces the dependency conditions of the member `alias`. Raises the
+    /// revision by 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`InvariantError`] with [`InvariantDetail::UnknownMember`]
+    /// when no member has that alias.
+    pub fn set_member_conditions(
+        &mut self,
+        alias: &MemberAlias,
+        conditions: Vec<MemberDependency>,
+    ) -> Result<(), InvariantError> {
+        let Some(member) = self
+            .members
+            .iter_mut()
+            .find(|member| &member.alias == alias)
+        else {
+            return Err(InvariantDetail::UnknownMember {
+                alias: alias.clone(),
+            }
+            .into());
+        };
+        member.dependency_conditions = conditions;
+        self.revision = self.revision.next();
+        Ok(())
+    }
+
+    /// Removes the member that holds `instance`, as deleting the instance
+    /// a create made does. Raises the revision by 1 and returns true when
+    /// there was one; otherwise nothing changes.
+    pub fn remove_member(&mut self, instance: InstanceId) -> bool {
+        let before = self.members.len();
+        self.members.retain(|member| member.instance_id != instance);
+        let removed = self.members.len() != before;
+        if removed {
+            self.revision = self.revision.next();
+        }
+        removed
+    }
+
+    /// Records that the Up `operation` started at `started_at`: it is the
+    /// last operation, and the last Up report is running with no service
+    /// yet. Raises the revision by 1.
+    pub fn begin_up(&mut self, operation: OperationId, started_at: Timestamp) {
+        self.last_operation = Some(operation);
+        self.last_up = Some(UpReport::running(operation, started_at));
+        self.revision = self.revision.next();
+    }
+
+    /// Records the report of the Up that ends now. Raises the revision by
+    /// 1.
+    pub fn finish_up(&mut self, report: UpReport) {
+        self.last_operation = Some(report.operation());
+        self.last_up = Some(report);
+        self.revision = self.revision.next();
     }
 
     /// Records the manifest this environment was accepted from: where it
@@ -426,6 +586,31 @@ impl Environment {
         &self.members
     }
 
+    /// Returns the member with `alias`, if any.
+    #[must_use]
+    pub fn member(&self, alias: &MemberAlias) -> Option<&EnvironmentMember> {
+        self.members.iter().find(|member| &member.alias == alias)
+    }
+
+    /// Returns the last `environment_up` operation, if any (spec 0046).
+    #[must_use]
+    pub const fn last_operation(&self) -> Option<OperationId> {
+        self.last_operation
+    }
+
+    /// Returns the report of the last Up, if any (spec 0046).
+    #[must_use]
+    pub const fn last_up(&self) -> Option<&UpReport> {
+        self.last_up.as_ref()
+    }
+
+    /// Returns when the registry last wrote the row (spec 0044 AC-14),
+    /// `None` for an environment that was never written.
+    #[must_use]
+    pub const fn updated_at(&self) -> Option<Timestamp> {
+        self.updated_at
+    }
+
     /// Returns the revision: 1 when created. The registry compares it
     /// before every update.
     #[must_use]
@@ -441,6 +626,26 @@ impl Environment {
             .filter(|member| member.ownership == Ownership::Dedicated)
             .map(EnvironmentMember::instance_id)
     }
+}
+
+fn check_members(members: &[EnvironmentMember]) -> Result<(), InvariantError> {
+    let mut aliases = BTreeSet::new();
+    let mut instances = BTreeSet::new();
+    for member in members {
+        if !aliases.insert(&member.alias) {
+            return Err(InvariantDetail::DuplicateMemberAlias {
+                alias: member.alias.clone(),
+            }
+            .into());
+        }
+        if !instances.insert(member.instance_id) {
+            return Err(InvariantDetail::DuplicateMemberInstance {
+                instance: member.instance_id,
+            }
+            .into());
+        }
+    }
+    Ok(())
 }
 
 fn check_declared(declared: &[DeclaredService]) -> Result<(), InvariantError> {
@@ -600,6 +805,109 @@ mod tests {
             1,
             "a refused change keeps the revision"
         );
+    }
+
+    #[test]
+    fn bind_member_adds_a_unique_member_and_raises_the_revision_by_one() {
+        let (db, cache) = (InstanceId::generate(), InstanceId::generate());
+        let mut env = environment(vec![member("db", db, Ownership::Dedicated)]).unwrap();
+
+        env.bind_member(member("cache", cache, Ownership::Shared))
+            .unwrap();
+        assert_eq!(env.revision().get(), 2);
+        assert_eq!(env.members().len(), 2);
+
+        let err = env
+            .bind_member(member("cache", InstanceId::generate(), Ownership::Shared))
+            .unwrap_err();
+        assert!(matches!(
+            err.detail(),
+            InvariantDetail::DuplicateMemberAlias { .. }
+        ));
+        let err = env
+            .bind_member(member("replica", db, Ownership::Shared))
+            .unwrap_err();
+        assert_eq!(
+            err.detail(),
+            &InvariantDetail::DuplicateMemberInstance { instance: db }
+        );
+        assert_eq!(env.revision().get(), 2, "a refused bind keeps the revision");
+    }
+
+    #[test]
+    fn member_conditions_change_only_for_a_known_alias() {
+        let db = InstanceId::generate();
+        let mut env = environment(vec![member("db", db, Ownership::Dedicated)]).unwrap();
+        let conditions = vec![MemberDependency::new(
+            "cache".parse().unwrap(),
+            DependencyCondition::Ready,
+            600,
+        )];
+
+        env.set_member_conditions(&"db".parse().unwrap(), conditions.clone())
+            .unwrap();
+        assert_eq!(env.revision().get(), 2);
+        assert_eq!(
+            env.member(&"db".parse().unwrap())
+                .map(EnvironmentMember::dependency_conditions),
+            Some(conditions.as_slice())
+        );
+
+        let err = env
+            .set_member_conditions(&"api".parse().unwrap(), Vec::new())
+            .unwrap_err();
+        assert!(matches!(
+            err.detail(),
+            InvariantDetail::UnknownMember { .. }
+        ));
+        assert_eq!(env.revision().get(), 2);
+    }
+
+    #[test]
+    fn remove_member_drops_the_instance_and_raises_the_revision_only_when_present() {
+        let db = InstanceId::generate();
+        let mut env = environment(vec![member("db", db, Ownership::Dedicated)]).unwrap();
+
+        assert!(!env.remove_member(InstanceId::generate()));
+        assert_eq!(env.revision().get(), 1);
+        assert!(env.remove_member(db));
+        assert!(env.members().is_empty());
+        assert_eq!(env.revision().get(), 2);
+    }
+
+    #[test]
+    fn begin_and_finish_up_record_the_last_operation_and_report() {
+        use crate::up::{ServiceReport, UpPhase, UpState};
+
+        let mut env = environment(Vec::new()).unwrap();
+        let operation = OperationId::generate();
+        let started = Timestamp::UNIX_EPOCH;
+
+        env.begin_up(operation, started);
+        assert_eq!(env.revision().get(), 2);
+        assert_eq!(env.last_operation(), Some(operation));
+        assert_eq!(env.last_up().map(UpReport::state), Some(UpState::Running));
+
+        let report = UpReport::new(
+            operation,
+            UpState::Failed,
+            started,
+            Some(started),
+            vec![ServiceReport::new("db".parse().unwrap(), UpPhase::Failed)],
+        );
+        env.finish_up(report.clone());
+        assert_eq!(env.revision().get(), 3);
+        assert_eq!(env.last_up(), Some(&report));
+    }
+
+    #[test]
+    fn equality_leaves_out_the_write_stamp() {
+        let env = environment(Vec::new()).unwrap();
+        let stamped = env.clone().stamped(Timestamp::UNIX_EPOCH);
+
+        assert_eq!(stamped, env);
+        assert_eq!(stamped.updated_at(), Some(Timestamp::UNIX_EPOCH));
+        assert_eq!(env.updated_at(), None);
     }
 
     #[test]

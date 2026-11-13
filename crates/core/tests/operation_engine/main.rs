@@ -8,6 +8,7 @@ mod cancel;
 mod close_interrupted;
 mod common;
 mod compensation;
+mod coordinator;
 mod failures;
 mod flow;
 mod guarded;

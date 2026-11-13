@@ -1046,7 +1046,7 @@ impl State {
                 id,
                 expected,
                 operation,
-            } => self.delete_instance_created_by(id, expected, operation),
+            } => self.delete_instance_created_by(id, expected, operation, now),
             WriteOp::InsertRestartPlan(plan) => self.insert_restart_plan(plan),
             WriteOp::UpdateRestartPlan(plan) => self.update_restart_plan(plan),
             WriteOp::PutProviderImport { record, expected } => {
@@ -1201,11 +1201,14 @@ impl State {
 
     /// `DeleteInstanceCreatedBy`: the instance and everything that goes
     /// with it, only while the operation created it and nothing may run.
+    /// Every environment member that holds it goes too, and its
+    /// environment moves on one revision (spec 0046).
     fn delete_instance_created_by(
         &mut self,
         id: InstanceId,
         expected: ResourceRevision,
         operation: OperationId,
+        now: Timestamp,
     ) -> Result<(), RegistryError> {
         let resource = ResourceRef::Instance(id);
         let Some(instance) = self.instances.get(&id) else {
@@ -1235,17 +1238,15 @@ impl State {
         if let Some(reason) = reason {
             return Err(RegistryError::NotDeletable { resource, reason });
         }
-        if let Some(environment) = self
-            .environments
-            .values()
-            .find(|environment| environment.members().iter().any(|m| m.instance_id() == id))
-        {
-            return Err(RegistryError::Integrity {
-                detail: format!(
-                    "environment_instances: instance {id} is a member of environment {}",
-                    environment.id()
-                ),
-            });
+        let mut held = Vec::new();
+        for environment in self.environments.values_mut() {
+            if environment.remove_member(id) {
+                *environment = environment.clone().stamped(now);
+                held.push(ResourceRef::Environment(environment.id()));
+            }
+        }
+        for resource in held {
+            self.stamp(resource, None, now);
         }
         self.instances.remove(&id);
         self.paths.remove(&id);
@@ -1473,7 +1474,7 @@ impl State {
             }
         }
         self.stamp(resource, None, now);
-        self.environments.insert(id, environment);
+        self.environments.insert(id, environment.stamped(now));
         Ok(())
     }
 

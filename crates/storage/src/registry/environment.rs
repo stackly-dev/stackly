@@ -1,11 +1,13 @@
 //! The environment rows of spec 0044: the `services` snapshot as JSON and
-//! `WriteOp::DeleteEnvironment`.
+//! `WriteOp::DeleteEnvironment`; and those of spec 0046: the last Up report
+//! in `environments.last_up` and the members' `dependency_conditions`.
 
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use stackly_domain::{
-    DeclaredService, DependencyCondition, DependencyEdge, EnvironmentId, NotDeletableReason,
-    Ownership, RegistryError, ResourceRef, ResourceRevision,
+    DeclaredService, DependencyCondition, DependencyEdge, EnvironmentId, MemberDependency,
+    NotDeletableReason, Ownership, RegistryError, ResourceRef, ResourceRevision, ServiceReport,
+    UpReport,
 };
 
 use super::column::{exists, first, sql_error};
@@ -91,6 +93,156 @@ pub(super) fn parse_services(text: &str) -> Result<Vec<DeclaredService>, String>
             ))
         })
         .collect()
+}
+
+/// One element of `environment_instances.dependency_conditions`.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConditionJson {
+    service: String,
+    condition: String,
+    timeout_seconds: u32,
+}
+
+/// Writes the conditions of a member as the JSON text of
+/// `environment_instances.dependency_conditions`.
+pub(super) fn conditions_json(conditions: &[MemberDependency]) -> Result<String, RegistryError> {
+    let rows: Vec<ConditionJson> = conditions
+        .iter()
+        .map(|condition| ConditionJson {
+            service: condition.service().to_string(),
+            condition: condition.condition().as_code().to_owned(),
+            timeout_seconds: condition.timeout_seconds(),
+        })
+        .collect();
+    encode("dependency conditions", &rows)
+}
+
+/// Reads the JSON text of `environment_instances.dependency_conditions`;
+/// the error is the corrupt detail.
+pub(super) fn parse_conditions(text: &str) -> Result<Vec<MemberDependency>, String> {
+    let rows: Vec<ConditionJson> = serde_json::from_str(text).map_err(|err| err.to_string())?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(MemberDependency::new(
+                parse(&row.service)?,
+                parse::<DependencyCondition>(&row.condition)?,
+                row.timeout_seconds,
+            ))
+        })
+        .collect()
+}
+
+/// `environments.last_up`.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LastUpJson {
+    operation_id: String,
+    state: String,
+    started_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    finished_at: Option<String>,
+    services: Vec<ServiceReportJson>,
+}
+
+/// One element of `services` in `environments.last_up`.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ServiceReportJson {
+    alias: String,
+    phase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stage: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    dependency: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    references: Vec<String>,
+}
+
+/// Writes an Up report as the JSON text of `environments.last_up`.
+pub(super) fn last_up_json(report: &UpReport) -> Result<String, RegistryError> {
+    let row = LastUpJson {
+        operation_id: report.operation().to_string(),
+        state: report.state().as_code().to_owned(),
+        started_at: super::column::ts(report.started_at()),
+        finished_at: report.finished_at().map(super::column::ts),
+        services: report
+            .services()
+            .iter()
+            .map(|service| ServiceReportJson {
+                alias: service.alias().to_string(),
+                phase: service.phase().as_code().to_owned(),
+                stage: service.stage().map(|stage| stage.as_code().to_owned()),
+                code: service.code().map(ToString::to_string),
+                dependency: service.dependency().map(ToString::to_string),
+                reason: service.reason().map(|reason| reason.as_code().to_owned()),
+                operation_id: service.operation().map(|id| id.to_string()),
+                references: service
+                    .references()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+            })
+            .collect(),
+    };
+    encode("the last up report", &row)
+}
+
+/// Reads `environments.last_up`, `None` when the column is null; the error
+/// is the corrupt detail.
+pub(super) fn parse_last_up(text: Option<&str>) -> Result<Option<UpReport>, String> {
+    let Some(text) = text else {
+        return Ok(None);
+    };
+    let row: LastUpJson = serde_json::from_str(text).map_err(|err| err.to_string())?;
+    let services = row
+        .services
+        .into_iter()
+        .map(|service| {
+            let mut report = ServiceReport::new(parse(&service.alias)?, parse(&service.phase)?);
+            if let Some(stage) = service.stage {
+                report = report.with_stage(parse(&stage)?);
+            }
+            if let Some(code) = service.code {
+                report = report.with_code(parse(&code)?);
+            }
+            match (service.dependency, service.reason) {
+                (Some(dependency), Some(reason)) => {
+                    report = report.with_dependency(parse(&dependency)?, parse(&reason)?);
+                }
+                (None, None) => {}
+                _ => return Err("dependency and reason are not set together".to_owned()),
+            }
+            if let Some(operation) = service.operation_id {
+                report = report.with_operation(parse(&operation)?);
+            }
+            let references = service
+                .references
+                .iter()
+                .map(|reference| parse(reference))
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(report.with_references(references))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(Some(UpReport::new(
+        parse(&row.operation_id)?,
+        parse(&row.state)?,
+        parse(&row.started_at)?,
+        row.finished_at.as_deref().map(parse).transpose()?,
+        services,
+    )))
+}
+
+fn encode<T: Serialize>(what: &str, value: &T) -> Result<String, RegistryError> {
+    serde_json::to_string(value).map_err(|err| RegistryError::Io {
+        detail: format!("{what} do not serialize: {err}"),
+    })
 }
 
 fn parse<T>(text: &str) -> Result<T, String>

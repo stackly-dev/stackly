@@ -139,6 +139,9 @@ fn rewriting_an_instance_and_an_environment_keeps_the_new_list_order() {
             member("cache", cache.id(), Ownership::Dedicated),
             member("db", instance.id(), Ownership::Shared),
         ],
+        last_operation: None,
+        last_up: None,
+        updated_at: None,
         revision: environment.revision().next(),
     })
     .unwrap();

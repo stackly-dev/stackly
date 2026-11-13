@@ -426,6 +426,9 @@ pub fn register(
                 manifest_sha256: Some(input.sha256),
                 declared: input.declared.clone(),
                 members: Vec::new(),
+                last_operation: None,
+                last_up: None,
+                updated_at: None,
                 revision: ResourceRevision::INITIAL,
             }) else {
                 return Ok(RegisterDecision::Refuse(EnvOpError::Internal(

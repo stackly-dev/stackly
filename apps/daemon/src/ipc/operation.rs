@@ -1115,6 +1115,7 @@ mod tests {
             resumable: false,
             input: JournalPayload::new(input.to_owned(), 16_384).unwrap(),
             expected_revision: None,
+            parent: None,
         })
         .unwrap();
         OperationView {

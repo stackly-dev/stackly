@@ -82,6 +82,11 @@ const BUILTIN_MIGRATIONS: &[Migration] = &[
         name: "environment_manifest",
         sql: include_str!("../migrations/0014_environment_manifest.sql"),
     },
+    Migration {
+        version: 15,
+        name: "environment_up",
+        sql: include_str!("../migrations/0015_environment_up.sql"),
+    },
 ];
 
 /// The expected schema fingerprint after each built in version. They are
@@ -144,6 +149,10 @@ const BUILTIN_FINGERPRINTS: &[(u32, &str)] = &[
     (
         14,
         "da91a3a3cac4476a7ac41daefaed5a4c20142193a6a28f233e5c9dd976f10c0d",
+    ),
+    (
+        15,
+        "ce93c75e5e9d66287d0b0a69320f75d81bab60139d9570fa116dc7d388c49ff5",
     ),
 ];
 
@@ -370,7 +379,7 @@ mod tests {
                 migration.name
             );
         }
-        assert_eq!(set.latest(), 14);
+        assert_eq!(set.latest(), 15);
     }
 
     #[test]

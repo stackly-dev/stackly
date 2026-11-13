@@ -351,6 +351,7 @@ mod tests {
             resumable: false,
             input: JournalPayload::empty(),
             expected_revision: None,
+            parent: None,
         })
         .unwrap();
         (operation, journal)

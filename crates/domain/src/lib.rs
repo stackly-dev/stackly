@@ -44,6 +44,7 @@ mod session;
 mod supervisor;
 mod target;
 mod text;
+mod up;
 mod value;
 
 pub use artifact_format::ArtifactFormat;
@@ -55,7 +56,7 @@ pub use endpoint::{
 };
 pub use environment::{
     DeclaredService, DependencyCondition, DependencyEdge, Environment, EnvironmentMember,
-    ManifestLocation, Ownership, StoredEnvironment,
+    ManifestLocation, MemberDependency, Ownership, StoredEnvironment,
 };
 pub use error::{
     DomainError, InvariantDetail, InvariantError, JournalError, Machine, ProgressError,
@@ -139,6 +140,7 @@ pub use secret::{
 };
 pub use session::{DaemonSession, SESSIONS_KEPT, SessionEndReason, StoredSession};
 pub use target::{Arch, Os, Target, native_support};
+pub use up::{ServiceReport, SkipReason, UpPhase, UpReport, UpStage, UpState};
 pub use value::{
     ClientCode, CompensatorName, CustomItemKey, DetailKey, DisplayName, EndpointName,
     EnvironmentName, ErrorCodeName, ExactVersion, FailureCode, IdempotencyKey, InstanceName,

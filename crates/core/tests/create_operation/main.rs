@@ -7,5 +7,6 @@
 #[path = "../supervisor_start/common.rs"]
 mod common;
 
+mod bound;
 mod cases;
 mod harness;

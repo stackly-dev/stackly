@@ -451,6 +451,7 @@ async fn an_operation_that_needs_recovery_and_a_folder_without_a_row_are_reporte
         resumable: false,
         input: stackly_domain::JournalPayload::empty(),
         expected_revision: None,
+        parent: None,
     })
     .expect("a journal");
     rig.registry

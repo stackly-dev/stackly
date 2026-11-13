@@ -857,7 +857,9 @@ fn origin_of(
 ) -> stackly_core::operation::RequestOrigin {
     match &request.origin {
         stackly_core::operation::Origin::Request(origin) => origin.clone(),
-        stackly_core::operation::Origin::Background => panic!("a background request has no key"),
+        stackly_core::operation::Origin::Background | stackly_core::operation::Origin::Child(_) => {
+            panic!("only a client request has a key")
+        }
     }
 }
 

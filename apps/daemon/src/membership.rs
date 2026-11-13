@@ -134,6 +134,9 @@ mod tests {
                     EnvironmentMember::new(alias.parse().unwrap(), *id, *ownership)
                 })
                 .collect(),
+            last_operation: None,
+            last_up: None,
+            updated_at: None,
             revision: stackly_domain::ResourceRevision::INITIAL,
         })
         .unwrap()
