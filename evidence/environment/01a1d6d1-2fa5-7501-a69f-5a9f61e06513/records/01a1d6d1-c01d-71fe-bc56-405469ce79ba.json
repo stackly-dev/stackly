@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-405469ce79ba",
+  "covers": [
+    "VAL-014"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_borrowed_stopped_instance_is_started_and_keeps_its_config_ports_secrets_and_startup",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 604
+  },
+  "status": "PASS",
+  "expected": "env.up of a manifest that borrows a stopped instance through instanceRef starts it through start_instance with no manual lease, and leaves its name, provider pin, runtime, data, endpoints and ports, startup policy, active config revision, secret uses, and config folder byte for byte as they were",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861366Z",
+  "finishedAt": "2026-11-13T21:30:46.048994Z",
+  "evidencePath": "output.log"
+}

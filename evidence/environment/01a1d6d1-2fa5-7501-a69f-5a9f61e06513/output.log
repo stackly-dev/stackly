@@ -1,0 +1,40 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 22.09s
+     Running tests/env_up.rs (target/debug/deps/env_up-3d8028f29eafd4af)
+
+running 7 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.12s
+test a_refused_up_starts_no_operation_and_writes_nothing ... ok
+test a_service_that_meets_a_locked_store_reports_its_real_reason_in_last_up ... ok
+test a_daemon_restart_in_the_middle_of_an_up_shows_it_interrupted_and_keeps_the_leases ... ok
+test a_second_up_is_busy_and_a_cancel_records_the_rest_cancelled ... ok
+test a_borrowed_instance_gets_one_shared_lease_and_is_left_as_it_was ... ok
+test a_failed_create_skips_its_dependents_and_ends_the_up_incomplete ... ok
+test up_brings_a_chain_up_in_order_with_leases_and_a_report ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.27s
+
+     Running tests/env_up_edges.rs (target/debug/deps/env_up_edges-7e997ee20aefecfc)
+
+running 11 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.11s
+test a_blocked_plan_is_refused_through_the_socket_with_its_blockers_and_writes_nothing ... ok
+test a_create_that_meets_a_locked_store_records_store_locked_and_no_generate_in_last_up ... ok
+test a_borrowed_instance_with_a_needs_secret_blocker_is_refused_with_its_reference ... ok
+test a_cancel_in_the_create_stage_compensates_only_what_that_create_made ... ok
+test a_new_login_session_keeps_the_environment_lease_and_the_desired_state ... ok
+test two_environments_that_borrow_one_stopped_instance_at_once_get_two_leases_and_one_process ... ok
+test a_client_that_disconnects_in_the_middle_of_an_up_leaves_it_running_to_success ... ok
+test a_borrowed_stopped_instance_is_started_and_keeps_its_config_ports_secrets_and_startup ... ok
+test a_manifest_edited_after_its_review_is_refused_with_plan_changed_and_writes_nothing ... ok
+test a_daemon_restart_in_the_create_stage_closes_the_up_interrupted_and_the_next_up_finishes ... ok
+test two_manifests_that_create_one_instance_name_at_once_end_with_exactly_one_instance ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.14s
+

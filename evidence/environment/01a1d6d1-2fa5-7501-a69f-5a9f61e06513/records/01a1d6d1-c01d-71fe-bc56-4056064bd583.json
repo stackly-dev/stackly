@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-4056064bd583",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_daemon_restart_in_the_create_stage_closes_the_up_interrupted_and_the_next_up_finishes",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 896
+  },
+  "status": "PASS",
+  "expected": "a daemon that stops while an Up waits for a slow create comes back with the Up failed operation.interrupted, lastUp interrupted, no operation left queued or running, and the next env.up creates and starts every service",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861365Z",
+  "finishedAt": "2026-11-13T21:30:47.604608Z",
+  "evidencePath": "output.log"
+}

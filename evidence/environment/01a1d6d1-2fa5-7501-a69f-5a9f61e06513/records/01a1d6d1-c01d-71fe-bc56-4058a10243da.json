@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-4058a10243da",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_borrowed_instance_with_a_needs_secret_blocker_is_refused_with_its_reference",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 507
+  },
+  "status": "PASS",
+  "expected": "after the start of an instance met a locked store and left a needsSecret blocker, env.up of a manifest that borrows it through instanceRef answers secret.needs_secret with the blocker's reference and reason store_locked, and writes nothing",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861365Z",
+  "finishedAt": "2026-11-13T21:30:41.096943Z",
+  "evidencePath": "output.log"
+}

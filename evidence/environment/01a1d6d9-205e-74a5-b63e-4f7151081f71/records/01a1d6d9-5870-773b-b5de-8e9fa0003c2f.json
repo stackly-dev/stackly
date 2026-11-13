@@ -1,0 +1,37 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d9-5870-773b-b5de-8e9fa0003c2f",
+  "covers": [
+    "REQ-021",
+    "REQ-028",
+    "AC-021"
+  ],
+  "kind": "native",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_cli_native",
+    "name": "stackly_env_up_brings_two_nats_services_up_through_the_real_binaries",
+    "file": "apps/daemon/tests/env_up_cli_native.rs",
+    "line": 181
+  },
+  "status": "PASS",
+  "expected": "with NATS installed from the xtask runtime cache and no download, stackly env up ./shop --wait against the stacklyd binary exits 0 with 2 of 2 ready. and real ports, env status shows Ready 2 of 2 ready with every endpoint bound on a real port that accepts a TCP connection, instance list names the environment shop for both instances, env export prints those ports and no reference or root path, env up --locked --wait after env lock exits 0 and leaves stackly.lock as it was, and the secrets live in the file keychain of the test root",
+  "actual": "nats 2.15.1 from the cache; env up --wait exited 0 with 2 of 2 ready.; env status: shop  Ready  2 of 2 ready  /private/var/folders/sx/35k0wvh13dg0cgpr19hnkjb80000gp/T/stackly-test-LfsddS/work/shop/stackly.yaml; bound ports bus client 59163, bus monitoring 59164, events client 59169, events monitoring 59170 each accepted a TCP connection; instance list showed 2 instances of shop; export held every port and no reference or root path; env up --locked --wait exited 3 with env.lock_missing before env lock, exited 0 after it with lockSha256 0aa19dec2d5f490248403426a0055f5663941d19cd68e5131e3e30965b69a7e3 and stackly.lock kept its 927 bytes, and exited 3 with env.lock_stale once the manifest gained a service, creating nothing; the file keychain of the root exists",
+  "reason": null,
+  "owner": null,
+  "subjects": [
+    {
+      "provider": "nats",
+      "version": "2.15.1",
+      "digest": "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd",
+      "source": "managed"
+    }
+  ],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:38:50.608163Z",
+  "finishedAt": "2026-11-13T21:38:57.118771Z",
+  "evidencePath": "output.log"
+}

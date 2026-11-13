@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-4053841bf8aa",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_blocked_plan_is_refused_through_the_socket_with_its_blockers_and_writes_nothing",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 408
+  },
+  "status": "PASS",
+  "expected": "env.up of a manifest whose instanceRef names no instance answers env.plan_blocked with one blocker item per plan blocker, and moves neither the registry generation nor the count of operations, instances, environments, runtimes, or leases",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861363Z",
+  "finishedAt": "2026-11-13T21:30:36.051344Z",
+  "evidencePath": "output.log"
+}
