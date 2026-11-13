@@ -102,6 +102,8 @@ extension Call {
 		case .envLock: "env.lock"
 		case .envExport: "env.export"
 		case .envUp: "env.up"
+		case .envPreviewDown: "env.preview_down"
+		case .envDown: "env.down"
 		}
 	}
 }
@@ -186,6 +188,8 @@ extension Reply {
 		case .envLock: "env.lock"
 		case .envExport: "env.export"
 		case .envUp: "env.up"
+		case .envPreviewDown: "env.preview_down"
+		case .envDown: "env.down"
 		}
 	}
 }

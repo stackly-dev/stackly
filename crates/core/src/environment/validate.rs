@@ -7,9 +7,9 @@ use std::net::IpAddr;
 
 use sha2::{Digest, Sha256};
 use stackly_domain::{
-    DeclaredService, DependencyCondition, DependencyEdge, EndpointName, EnvironmentName,
-    InstanceName, MemberAlias, Ownership, Port, PortRequest, ProviderName, RuntimeSelector,
-    SecretFieldName, SecretRef, Sha256Digest,
+    Capability, DeclaredService, DependencyCondition, DependencyEdge, EndpointName,
+    EnvironmentName, InstanceName, MemberAlias, Ownership, Port, PortRequest, ProviderName,
+    RuntimeSelector, SecretFieldName, SecretRef, Sha256Digest,
 };
 
 use super::finding::{Finding, FindingCode, FindingLocation, Findings};
@@ -180,6 +180,9 @@ struct Partial {
     /// Every fixed endpoint with its host.
     fixed: Vec<(EndpointName, IpAddr, Port)>,
     depends_on: Vec<DependencyEdge>,
+    /// The provider of a dedicated service whose package loaded and is not
+    /// `multiInstance`; `None` for every other service.
+    single_instance: Option<ProviderName>,
 }
 
 impl<'a> Checker<'a> {
@@ -320,6 +323,19 @@ impl<'a> Checker<'a> {
             self.push(FindingCode::OwnershipConflict, &at("ownership"), service);
         }
         let shared = raw.instance_ref.is_some();
+        let single_instance = match (&provider, &entry) {
+            (Some(provider), Some(entry))
+                if !shared
+                    && !entry
+                        .package
+                        .manifest()
+                        .capabilities()
+                        .contains(Capability::MultiInstance) =>
+            {
+                Some(provider.clone())
+            }
+            _ => None,
+        };
         if shared {
             let forbidden = [
                 ("version", raw.version.is_some()),
@@ -548,6 +564,7 @@ impl<'a> Checker<'a> {
             instance_name_written,
             fixed,
             depends_on,
+            single_instance,
         }
     }
 
@@ -782,6 +799,21 @@ impl<'a> Checker<'a> {
                     base.clone()
                 };
                 self.push(FindingCode::InstanceNameDuplicate, &path, alias);
+            }
+        }
+
+        // A second dedicated service of a provider that runs one instance
+        // at a time, in manifest order: the first one passes.
+        let mut single: BTreeSet<&ProviderName> = BTreeSet::new();
+        for partial in partials {
+            if let Some(provider) = &partial.single_instance
+                && !single.insert(provider)
+            {
+                self.push(
+                    FindingCode::ProviderSingleInstance,
+                    &format!("services.{}.provider", safe_segment(&partial.raw_alias)),
+                    partial.alias.as_ref(),
+                );
             }
         }
 

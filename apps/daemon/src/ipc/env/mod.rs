@@ -19,10 +19,12 @@
 //! packages only.
 
 pub mod children;
+mod down;
 mod dto;
 mod status;
 mod up;
 
+pub use down::{down, preview_down};
 pub use up::up;
 
 use std::path::{Path, PathBuf};
@@ -50,9 +52,9 @@ use stackly_domain::{
 };
 use stackly_protocol::codes::{env as env_codes, internal};
 use stackly_protocol::env::{
-    EnvExport, EnvExportParams, EnvGetParams, EnvLocalInfo, EnvLockInfo, EnvLockParams,
-    EnvLockResult, EnvPlan, EnvPlanParams, EnvSource, EnvValidateParams, EnvValidation,
-    EnvironmentDetail, EnvironmentList, ImportEnvironmentParams, LockedService,
+    EnvExport, EnvExportParams, EnvGetParams, EnvLeaseInfo, EnvLocalInfo, EnvLockInfo,
+    EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams, EnvSource, EnvValidateParams,
+    EnvValidation, EnvironmentDetail, EnvironmentList, ImportEnvironmentParams, LockedService,
     RemoveEnvironmentParams, RemovedEnvironment,
 };
 use stackly_protocol::fingerprint::request_fingerprint;
@@ -479,6 +481,30 @@ pub fn list(core: &DaemonCore) -> HandlerFuture<'_, EnvironmentList> {
     })
 }
 
+/// The active leases of `environment` (spec 0047 AC-12): their count and
+/// the oldest `acquired_at`, read from the registry.
+async fn lease_info(
+    registry: &SqliteRegistry,
+    environment: EnvironmentId,
+) -> Result<EnvLeaseInfo, Box<ErrorBody>> {
+    let read = registry.clone();
+    let leases = blocking(move || {
+        read.leases_of_environment(environment, stackly_domain::LeaseFilter::Unreleased)
+    })
+    .await?
+    .map_err(|error| registry_error(&error))?
+    .value;
+    let active: Vec<_> = leases.iter().filter(|lease| lease.is_active()).collect();
+    Ok(EnvLeaseInfo {
+        active_count: Count::saturating(active.len() as u64),
+        held_since: active
+            .iter()
+            .map(|lease| lease.acquired_at())
+            .min()
+            .map(Timestamp::from_jiff),
+    })
+}
+
 /// The detail of the environment `id`, reading its file only when
 /// `check_manifest` is true.
 async fn detail_of(
@@ -520,7 +546,10 @@ async fn detail_of(
         Some(stackly_domain::OperationResource::Environment(id)),
     )
     .await;
-    let up = status::up_now(core, &environment, &active);
+    let mut up = status::up_now(core, &environment, &active);
+    if let Some(report) = up.last_up.as_mut() {
+        status::refine_references(core, &environment, report).await;
+    }
     let mut summary = dto::summary(&environment, &view, updated);
     summary.active_operation = up.active.clone();
     let services = view
@@ -554,6 +583,7 @@ async fn detail_of(
         lock,
         local,
         last_up: up.last_up,
+        lease: Some(lease_info(&registry, id).await?),
     }))
 }
 
@@ -650,7 +680,7 @@ async fn side_info(
                                 service: found.service.clone(),
                                 field: found.field(),
                                 value: found.value_text(),
-                                state: found.state(has_member),
+                                state: checked.state_of(found, has_member),
                             },
                             &home,
                         )

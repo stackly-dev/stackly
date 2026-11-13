@@ -272,6 +272,10 @@ async fn a_dependency_that_fails_skips_its_dependents_and_the_up_ends_incomplete
     assert_eq!(reports["api"].reason(), Some(SkipReason::Failed));
     assert_eq!(reports["web"].phase(), UpPhase::Skipped);
     assert_eq!(reports["web"].dependency(), Some(&alias("api")));
+    // A skipped service names no operation, not even the create that made
+    // its instance: none of its own failed.
+    assert_eq!(reports["api"].operation(), None);
+    assert_eq!(reports["web"].operation(), None);
     let log = rig.table.log();
     assert!(!log.contains(&format!("start {}", names["api"])), "{log:?}");
     assert!(!log.contains(&format!("start {}", names["web"])), "{log:?}");

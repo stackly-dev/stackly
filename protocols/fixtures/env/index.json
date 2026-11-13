@@ -49,6 +49,11 @@
       "file": "detail-up-incomplete.json",
       "type": "EnvironmentDetail",
       "expect": "roundtrip"
+    },
+    {
+      "file": "down-preview.json",
+      "type": "EnvDownPreview",
+      "expect": "roundtrip"
     }
   ]
 }

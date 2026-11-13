@@ -45,23 +45,25 @@
             "pg17-dev": [
                 InstanceEnvironment(
                     environmentId: erpID, name: "erp-development", alias: "postgres",
-                    ownership: .dedicated),
+                    ownership: .dedicated, leaseActive: false),
                 InstanceEnvironment(
-                    environmentId: reportingID, name: "reporting", alias: "db", ownership: .shared),
+                    environmentId: reportingID, name: "reporting", alias: "db", ownership: .shared,
+                    leaseActive: false),
             ],
             "cache": [
                 InstanceEnvironment(
                     environmentId: erpID, name: "erp-development", alias: "cache",
-                    ownership: .dedicated)
+                    ownership: .dedicated, leaseActive: false)
             ],
             "queue": [
                 InstanceEnvironment(
                     environmentId: erpID, name: "erp-development", alias: "queue",
-                    ownership: .shared)
+                    ownership: .shared, leaseActive: false)
             ],
             "mysql-erp": [
                 InstanceEnvironment(
-                    environmentId: billingID, name: "billing", alias: "db", ownership: .dedicated)
+                    environmentId: billingID, name: "billing", alias: "db", ownership: .dedicated,
+                    leaseActive: false)
             ],
         ]
 
@@ -212,7 +214,7 @@
             return EnvironmentDetail(
                 summary: summary, services: services, detached: detached,
                 manifestState: state, problems: state == .invalid ? (problems ?? 2) : problems,
-                lock: lock, local: local, lastUp: nil)
+                lock: lock, local: local, lastUp: nil, lease: nil)
         }
 
         // MARK: - Validation

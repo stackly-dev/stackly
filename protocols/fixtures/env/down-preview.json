@@ -1,0 +1,70 @@
+{
+  "environment": {
+    "id": "0192f3a7-0000-7000-8000-0000000000e1",
+    "name": "erp-development",
+    "revision": 4
+  },
+  "stop": [
+    {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000002",
+      "name": "erp-development-nats",
+      "alias": "nats",
+      "ownership": "dedicated",
+      "lifecycle": "running"
+    },
+    {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000001",
+      "name": "erp-development-postgres",
+      "alias": "postgres",
+      "ownership": "dedicated",
+      "lifecycle": "running"
+    }
+  ],
+  "keep": [
+    {
+      "instance": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000003",
+        "name": "shared-valkey",
+        "alias": "valkey",
+        "ownership": "shared",
+        "lifecycle": "running"
+      },
+      "demand": [
+        "manual",
+        "environment"
+      ],
+      "environments": [
+        {
+          "environmentId": "0192f3a7-0000-7000-8000-0000000000e2",
+          "name": "reporting",
+          "alias": "cache",
+          "ownership": "shared",
+          "leaseActive": true
+        }
+      ]
+    }
+  ],
+  "idle": [
+    {
+      "instanceId": "0192f3a5-0000-7000-8000-000000000004",
+      "name": "erp-development-traefik",
+      "alias": "traefik",
+      "ownership": "dedicated",
+      "lifecycle": "stopped"
+    }
+  ],
+  "blocked": [
+    {
+      "instance": {
+        "instanceId": "0192f3a5-0000-7000-8000-000000000005",
+        "name": "leftover",
+        "alias": null,
+        "ownership": null,
+        "lifecycle": "unknown"
+      },
+      "code": "supervisor.identity_unproven"
+    }
+  ],
+  "leaseCount": 4,
+  "cancelsUp": false
+}

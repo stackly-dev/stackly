@@ -4482,6 +4482,118 @@ public struct DoctorReport: Codable, Sendable, Equatable {
 	}
 }
 
+/// The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a
+/// real state and the set is fixed, so a new value is a protocol major.
+public enum InstanceLifecycle: String, Codable, Sendable, Equatable {
+	/// Created; the data folder is not initialized yet.
+	case uninitialized
+	/// The data folder is being initialized.
+	case initializing
+	/// Not running.
+	case stopped
+	/// The process is starting.
+	case starting
+	/// The process runs.
+	case running
+	/// The process is stopping.
+	case stopping
+	/// Initialization, a start, or the process failed.
+	case failed
+	/// The process crashed and is being restarted.
+	case recovering
+	/// The identity of the process is lost; it is never signalled.
+	case unknown
+	/// Removed with its data kept.
+	case retained
+}
+
+/// One instance of a Down preview.
+public struct DownInstance: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instanceId: UUID
+	/// Its name.
+	public let name: String
+	/// Its alias in the environment; empty for an instance that holds only
+	/// a lease of it.
+	public let alias: String?
+	/// How the environment holds it, when it is a member.
+	public let ownership: EnvOwnership?
+	/// Its lifecycle now.
+	public let lifecycle: InstanceLifecycle
+
+	public init(instanceId: UUID, name: String, alias: String?, ownership: EnvOwnership?, lifecycle: InstanceLifecycle) {
+		self.instanceId = instanceId
+		self.name = name
+		self.alias = alias
+		self.ownership = ownership
+		self.lifecycle = lifecycle
+	}
+}
+
+/// An instance Down can't stop.
+public struct DownBlocked: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instance: DownInstance
+	/// Why, such as `supervisor.identity_unproven`.
+	public let code: String
+
+	public init(instance: DownInstance, code: String) {
+		self.instance = instance
+		self.code = code
+	}
+}
+
+/// Why an instance is wanted running, from its active lease. Open.
+public enum DemandSourceKind: String, Codable, Sendable, Equatable {
+	/// A person started it.
+	case manual
+	/// It starts at login and this session holds the lease.
+	case startup
+	/// An environment holds it.
+	case environment
+	/// A source this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One environment an instance belongs to.
+public struct InstanceEnvironment: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// The alias of the instance in it.
+	public let alias: String
+	/// Whether it owns the instance.
+	public let ownership: EnvOwnership
+	/// Whether the environment's lease on the instance is active (spec
+	/// 0047 AC-12), read from the registry.
+	public let leaseActive: Bool?
+
+	public init(environmentId: UUID, name: String, alias: String, ownership: EnvOwnership, leaseActive: Bool?) {
+		self.environmentId = environmentId
+		self.name = name
+		self.alias = alias
+		self.ownership = ownership
+		self.leaseActive = leaseActive
+	}
+}
+
+/// An instance Down leaves running, and why.
+public struct DownKeep: Codable, Sendable, Equatable {
+	/// The instance.
+	public let instance: DownInstance
+	/// The sources of the other active leases.
+	public let demand: [DemandSourceKind]
+	/// The other environments whose lease is active, by name.
+	public let environments: [InstanceEnvironment]?
+
+	public init(instance: DownInstance, demand: [DemandSourceKind], environments: [InstanceEnvironment]?) {
+		self.instance = instance
+		self.demand = demand
+		self.environments = environments
+	}
+}
+
 /// The instance a duplicate form was built from.
 public struct DuplicateSource: Codable, Sendable, Equatable {
 	/// The source instance.
@@ -4720,6 +4832,20 @@ public struct EndpointValidation: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `env.down`, an `environment_down` operation (spec 0047
+/// AC-2); the request carries the `idempotencyKey`.
+public struct EnvDownParams: Codable, Sendable, Equatable {
+	/// The environment.
+	public let id: UUID
+	/// The IDs of `EnvDownPreview.stop` the client showed; may be empty.
+	public let expectedStopInstanceIds: [UUID]
+
+	public init(id: UUID, expectedStopInstanceIds: [UUID]) {
+		self.id = id
+		self.expectedStopInstanceIds = expectedStopInstanceIds
+	}
+}
+
 /// The environment a plan or detail is about.
 public struct EnvironmentRef: Codable, Sendable, Equatable {
 	/// The ID.
@@ -4733,6 +4859,52 @@ public struct EnvironmentRef: Codable, Sendable, Equatable {
 		self.id = id
 		self.name = name
 		self.revision = revision
+	}
+}
+
+/// Reply of `env.preview_down`: what Down would stop and keep now, from
+/// the one rule `env.down` uses. Each list is ordered by name.
+public struct EnvDownPreview: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environment: EnvironmentRef
+	/// The instances Down stops; the client sends their IDs back.
+	public let stop: [DownInstance]
+	/// The instances that keep running, with their reason.
+	public let keep: [DownKeep]
+	/// The instances that are stopped already.
+	public let idle: [DownInstance]
+	/// The instances Down can't stop.
+	public let blocked: [DownBlocked]
+	/// How many leases of the environment are active.
+	public let leaseCount: UInt64
+	/// Whether an `environment_up` of the environment has not ended, so
+	/// Down cancels it.
+	public let cancelsUp: Bool
+
+	public init(environment: EnvironmentRef, stop: [DownInstance], keep: [DownKeep], idle: [DownInstance], blocked: [DownBlocked], leaseCount: UInt64, cancelsUp: Bool) {
+		self.environment = environment
+		self.stop = stop
+		self.keep = keep
+		self.idle = idle
+		self.blocked = blocked
+		self.leaseCount = leaseCount
+		self.cancelsUp = cancelsUp
+	}
+}
+
+/// Reply of `env.down`, as soon as the operation is accepted.
+public struct EnvDownReply: Codable, Sendable, Equatable {
+	/// The environment that goes down.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// The operation.
+	public let operation: OperationAccepted
+
+	public init(environmentId: UUID, name: String, operation: OperationAccepted) {
+		self.environmentId = environmentId
+		self.name = name
+		self.operation = operation
 	}
 }
 
@@ -4946,6 +5118,19 @@ public struct EnvGetParams: Codable, Sendable, Equatable {
 	public init(id: UUID, checkManifest: Bool?) {
 		self.id = id
 		self.checkManifest = checkManifest
+	}
+}
+
+/// The active leases an environment holds (spec 0047 AC-12).
+public struct EnvLeaseInfo: Codable, Sendable, Equatable {
+	/// How many leases are active.
+	public let activeCount: UInt64
+	/// The oldest `acquired_at` among them; empty when none is active.
+	public let heldSince: Date?
+
+	public init(activeCount: UInt64, heldSince: Date?) {
+		self.activeCount = activeCount
+		self.heldSince = heldSince
 	}
 }
 
@@ -5652,6 +5837,17 @@ public struct EnvPlanParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `env.preview_down` (spec 0047 AC-1): a read, not an
+/// operation.
+public struct EnvPreviewDownParams: Codable, Sendable, Equatable {
+	/// The environment.
+	public let id: UUID
+
+	public init(id: UUID) {
+		self.id = id
+	}
+}
+
 /// Params of `env.up`, an `environment_up` operation (spec 0046); the
 /// request carries the `idempotencyKey`.
 public struct EnvUpParams: Codable, Sendable, Equatable {
@@ -5906,31 +6102,6 @@ public struct EnvironmentSummary: Codable, Sendable, Equatable {
 	}
 }
 
-/// The lifecycle of an instance (PRD section 19.1). Closed: `unknown` is a
-/// real state and the set is fixed, so a new value is a protocol major.
-public enum InstanceLifecycle: String, Codable, Sendable, Equatable {
-	/// Created; the data folder is not initialized yet.
-	case uninitialized
-	/// The data folder is being initialized.
-	case initializing
-	/// Not running.
-	case stopped
-	/// The process is starting.
-	case starting
-	/// The process runs.
-	case running
-	/// The process is stopping.
-	case stopping
-	/// Initialization, a start, or the process failed.
-	case failed
-	/// The process crashed and is being restarted.
-	case recovering
-	/// The identity of the process is lost; it is never signalled.
-	case unknown
-	/// Removed with its data kept.
-	case retained
-}
-
 /// Readiness of an instance as read now. Closed.
 public enum InstanceReadinessState: String, Codable, Sendable, Equatable {
 	/// Nothing is known, or the last observation is too old.
@@ -6165,8 +6336,11 @@ public struct EnvironmentDetail: Codable, Sendable, Equatable {
 	/// The last Up: from the daemon's memory while it runs, from the
 	/// registry afterwards (spec 0046).
 	public let lastUp: EnvUpReport?
+	/// The environment's leases, from the registry (spec 0047 AC-12);
+	/// empty only from an older daemon.
+	public let lease: EnvLeaseInfo?
 
-	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?, lock: EnvLockInfo?, local: EnvLocalInfo?, lastUp: EnvUpReport?) {
+	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?, lock: EnvLockInfo?, local: EnvLocalInfo?, lastUp: EnvUpReport?, lease: EnvLeaseInfo?) {
 		self.summary = summary
 		self.services = services
 		self.detached = detached
@@ -6175,6 +6349,7 @@ public struct EnvironmentDetail: Codable, Sendable, Equatable {
 		self.lock = lock
 		self.local = local
 		self.lastUp = lastUp
+		self.lease = lease
 	}
 }
 
@@ -7533,25 +7708,6 @@ public struct InstanceDetail: Codable, Sendable, Equatable {
 		self.dependents = dependents
 		self.connections = connections
 		self.openActions = openActions
-	}
-}
-
-/// One environment an instance belongs to.
-public struct InstanceEnvironment: Codable, Sendable, Equatable {
-	/// The environment.
-	public let environmentId: UUID
-	/// Its name.
-	public let name: String
-	/// The alias of the instance in it.
-	public let alias: String
-	/// Whether it owns the instance.
-	public let ownership: EnvOwnership
-
-	public init(environmentId: UUID, name: String, alias: String, ownership: EnvOwnership) {
-		self.environmentId = environmentId
-		self.name = name
-		self.alias = alias
-		self.ownership = ownership
 	}
 }
 
@@ -9685,6 +9841,13 @@ public enum Call: Codable, Sendable, Equatable {
 	/// coordinator that installs, creates, and starts through child
 	/// operations in dependency order.
 	case envUp(EnvUpParams)
+	/// What Down would stop and keep (spec 0047): a read, not an
+	/// operation.
+	case envPreviewDown(EnvPreviewDownParams)
+	/// Brings an environment down (spec 0047): an `environment_down`
+	/// coordinator that releases its leases and stops, through child
+	/// operations, only the instances no one else needs.
+	case envDown(EnvDownParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -9762,7 +9925,9 @@ public enum Call: Codable, Sendable, Equatable {
 			envRemove = "env.remove",
 			envLock = "env.lock",
 			envExport = "env.export",
-			envUp = "env.up"
+			envUp = "env.up",
+			envPreviewDown = "env.preview_down",
+			envDown = "env.down"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -10129,6 +10294,16 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .envUp(content)
 					return
 				}
+			case .envPreviewDown:
+				if let content = try? container.decode(EnvPreviewDownParams.self, forKey: .content) {
+					self = .envPreviewDown(content)
+					return
+				}
+			case .envDown:
+				if let content = try? container.decode(EnvDownParams.self, forKey: .content) {
+					self = .envDown(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -10353,6 +10528,12 @@ public enum Call: Codable, Sendable, Equatable {
 		case .envUp(let content):
 			try container.encode(CodingKeys.envUp, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .envPreviewDown(let content):
+			try container.encode(CodingKeys.envPreviewDown, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envDown(let content):
+			try container.encode(CodingKeys.envDown, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -10533,6 +10714,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case envExport(EnvExport)
 	/// The accepted Up.
 	case envUp(EnvUpReply)
+	/// What Down would do now.
+	case envPreviewDown(EnvDownPreview)
+	/// The accepted Down.
+	case envDown(EnvDownReply)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -10610,7 +10795,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			envRemove = "env.remove",
 			envLock = "env.lock",
 			envExport = "env.export",
-			envUp = "env.up"
+			envUp = "env.up",
+			envPreviewDown = "env.preview_down",
+			envDown = "env.down"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -10997,6 +11184,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .envUp(content)
 					return
 				}
+			case .envPreviewDown:
+				if let content = try? container.decode(EnvDownPreview.self, forKey: .content) {
+					self = .envPreviewDown(content)
+					return
+				}
+			case .envDown:
+				if let content = try? container.decode(EnvDownReply.self, forKey: .content) {
+					self = .envDown(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -11230,6 +11427,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .envUp(let content):
 			try container.encode(CodingKeys.envUp, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envPreviewDown(let content):
+			try container.encode(CodingKeys.envPreviewDown, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envDown(let content):
+			try container.encode(CodingKeys.envDown, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}
@@ -11826,18 +12029,6 @@ public struct StartInstanceParams: Codable, Sendable, Equatable {
 		self.instanceId = instanceId
 		self.expectedRevision = expectedRevision
 	}
-}
-
-/// Why an instance is wanted running, from its active lease. Open.
-public enum DemandSourceKind: String, Codable, Sendable, Equatable {
-	/// A person started it.
-	case manual
-	/// It starts at login and this session holds the lease.
-	case startup
-	/// An environment holds it.
-	case environment
-	/// A source this build does not know. The daemon never sends it.
-	case unrecognized
 }
 
 /// One instance Stop All would stop.

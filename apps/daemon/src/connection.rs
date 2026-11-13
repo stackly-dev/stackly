@@ -1074,6 +1074,22 @@ async fn dispatch(
             .map(Reply::EnvExport),
             None,
         ),
+        Call::EnvPreviewDown(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.preview_down_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvPreviewDown),
+            None,
+        ),
+        Call::EnvDown(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.down_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvDown),
+            None,
+        ),
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
                 &protocol::HANDSHAKE_REPEATED,

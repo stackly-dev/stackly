@@ -740,6 +740,37 @@
       "summary": "the code of a skipped service in an Up report: a dependency failed, timed out, or was not ready (spec 0046)"
     },
     {
+      "code": "env.down_changed",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "what Down would stop differs from the instances the client confirmed, or an instance the final sweep left running (spec 0047)"
+    },
+    {
+      "code": "env.down_incomplete",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "stopped",
+        "total",
+        "count",
+        "omitted"
+      ],
+      "items": {
+        "kind": "instance",
+        "fields": [
+          "instanceId",
+          "name",
+          "outcome",
+          "code",
+          "operationId"
+        ],
+        "max": 32
+      },
+      "summary": "a Down ended with instances that did not stop; items lists each one and nothing was deleted (spec 0047)"
+    },
+    {
       "code": "env.instance_blocked",
       "category": "conflict",
       "retryable": false,
@@ -750,6 +781,14 @@
       ],
       "items": null,
       "summary": "a plan blocker: an existing instance can't be started; reason is its lifecycle, not_initialized, or its blocker"
+    },
+    {
+      "code": "env.instance_in_use",
+      "category": "conflict",
+      "retryable": false,
+      "details": [],
+      "items": null,
+      "summary": "the code of a partial item: another lease holds the instance, so Down left it running (spec 0047)"
     },
     {
       "code": "env.instance_ref_mismatch",
@@ -2942,7 +2981,10 @@
       "items": {
         "kind": "environment",
         "fields": [
-          "environmentId"
+          "environmentId",
+          "name",
+          "alias",
+          "ownership"
         ],
         "max": 100
       },

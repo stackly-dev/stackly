@@ -126,6 +126,10 @@ pub const CONTRACT_LIMITS: &[(&str, u64)] = &[
     ),
     ("doctorSummaryMax", crate::doctor::DOCTOR_SUMMARY_MAX as u64),
     ("doctorTitleMax", crate::doctor::DOCTOR_TITLE_MAX as u64),
+    (
+        "downExpectedIdsMax",
+        crate::env::DOWN_EXPECTED_IDS_MAX as u64,
+    ),
     ("envFindingsMax", crate::env::ENV_FINDINGS_MAX as u64),
     ("envListMax", crate::env::ENV_LIST_MAX as u64),
     ("envServicesMax", crate::env::ENV_SERVICES_MAX as u64),

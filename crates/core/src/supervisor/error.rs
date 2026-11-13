@@ -696,9 +696,16 @@ impl OperationError for SupervisorError {
                 .iter()
                 .take(STOP_OVERRIDE_ITEMS_MAX)
                 .filter_map(|holder| {
-                    // provisional: F47 step 4 adds name, alias, and
-                    // ownership to the catalog entry's item fields.
-                    let fields = vec![(key("environmentId"), holder.environment.to_string())];
+                    let mut fields = vec![
+                        (key("environmentId"), holder.environment.to_string()),
+                        (key("name"), holder.name.to_string()),
+                    ];
+                    if let Some(alias) = &holder.alias {
+                        fields.push((key("alias"), alias.to_string()));
+                    }
+                    if let Some(ownership) = holder.ownership {
+                        fields.push((key("ownership"), ownership.as_code().to_owned()));
+                    }
                     FailureItem::new(ReasonCode::from_static("environment"), fields).ok()
                 })
                 .collect(),

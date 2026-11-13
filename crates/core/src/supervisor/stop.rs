@@ -49,7 +49,6 @@ pub const ENVIRONMENT_DOWN_INPUT: &str = r#"{"trigger":"environment_down"}"#;
 /// The `code` of the partial item a stop for an environment that goes down
 /// returns when another lease still holds the instance, so it kept running
 /// (spec 0047, *Operasi `environment_down`*).
-// provisional: F47 step 4 adds `env.instance_in_use` to the catalog.
 pub const INSTANCE_IN_USE: ErrorCodeName = ErrorCodeName::from_static("env.instance_in_use");
 
 /// Which leases a stop reads before it writes desired `stopped` (spec

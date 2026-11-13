@@ -74,7 +74,11 @@
         "problems": 0,
         "lock": null,
         "local": null,
-        "lastUp": null
+        "lastUp": null,
+        "lease": {
+          "activeCount": 0,
+          "heldSince": null
+        }
       }
     }
   }

@@ -10,6 +10,7 @@
 use std::sync::{Arc, Weak};
 
 use stackly_core::environment::children::{ChildOrigin, ChildStart};
+use stackly_core::environment::down::{DownChild, DownChildren};
 use stackly_core::environment::up::{
     BlockedItem, InstanceNow, PlanRequest, PlannedUp, UpChildren, UpError, UpReads,
 };
@@ -18,14 +19,15 @@ use stackly_core::instance::create::{CreateDraft, EnvironmentBinding};
 use stackly_core::operation::BoxFuture;
 use stackly_core::supervisor::StartRequest;
 use stackly_domain::{
-    DetailKey, ErrorCodeName, FailureError, FailureItem, InstanceBlocker, InstanceId,
-    InstanceLifecycle, MemberAlias, NeedsSecretItem, NeedsSecretReason, OperationId, ProviderName,
-    ReadinessState, ReasonCode, Registry, RuntimeId, SecretRef, SecretUser, Sha256Digest,
+    DetailKey, EnvironmentId, ErrorCodeName, FailureError, FailureItem, InstanceBlocker,
+    InstanceId, InstanceLifecycle, MemberAlias, NeedsSecretItem, NeedsSecretReason, OperationId,
+    ProviderName, ReadinessState, ReasonCode, Registry, RuntimeId, SecretRef, Sha256Digest,
 };
 use stackly_protocol::ErrorBody;
 use stackly_protocol::runtime::InstallRuntimeParams;
 
 use super::{PlanFailure, plan_with};
+use crate::ipc::instance::DownStopCheck;
 use crate::ipc::operation::{StartOutcome, start_child};
 use crate::state::DaemonCore;
 
@@ -238,6 +240,60 @@ impl UpChildren for EnvPorts {
     }
 }
 
+impl DownChildren for EnvPorts {
+    fn stop(
+        &self,
+        parent: &ChildOrigin,
+        instance: InstanceId,
+        environment: EnvironmentId,
+    ) -> BoxFuture<'_, Result<DownChild, FailureError>> {
+        let parent = parent.clone();
+        Box::pin(async move {
+            let core = self.core()?;
+            let registry = super::registry_of(&core).map_err(|body| failure_of(&body))?;
+            let check = |registry: stackly_storage::SqliteRegistry| async move {
+                tokio::task::spawn_blocking(move || {
+                    crate::ipc::instance::down_stop_check(&registry, instance, environment)
+                })
+                .await
+                .map_err(|_| {
+                    failure(
+                        stackly_core::operation::codes::INTERNAL_UNEXPECTED,
+                        "a child stop check did not run",
+                    )
+                })
+            };
+            match check(registry.clone()).await? {
+                DownStopCheck::Kept => return Ok(DownChild::Kept),
+                DownStopCheck::AlreadyStopped => return Ok(DownChild::AlreadyStopped),
+                DownStopCheck::Refused(_) | DownStopCheck::Proceed => {}
+            }
+            let request = crate::ipc::instance::down_stop_request(&core, instance, environment)
+                .map_err(|body| failure_of(&body))?;
+            let outcome = start_child(&core, parent.operation.clone(), "instance.stop", request)
+                .await
+                .map_err(|body| failure_of(&body))?;
+            crate::ipc::instance::announce(&core, instance, &outcome).await;
+            match outcome {
+                StartOutcome::Accepted(accepted) => OperationId::from_uuid(accepted.operation.id)
+                    .map(|operation| DownChild::Started { operation })
+                    .map_err(|_| {
+                        failure(
+                            stackly_core::operation::codes::INTERNAL_UNEXPECTED,
+                            "a child stop has no operation id",
+                        )
+                    }),
+                // The precheck in the begin gate answered with no
+                // operation: tell which, as it is now.
+                StartOutcome::NothingToDo => Ok(match check(registry).await? {
+                    DownStopCheck::Kept => DownChild::Kept,
+                    _ => DownChild::AlreadyStopped,
+                }),
+            }
+        })
+    }
+}
+
 impl UpReads for EnvPorts {
     fn plan(&self, request: &PlanRequest) -> BoxFuture<'_, Result<PlannedUp, UpError>> {
         let request = request.clone();
@@ -352,12 +408,14 @@ pub(crate) async fn planned_up(
     let create_needs = if missing.is_empty() {
         Vec::new()
     } else {
-        let registry = super::registry_of(core)?;
+        let secrets = core.secrets().service()?;
         tokio::task::spawn_blocking(move || {
             missing
                 .into_iter()
                 .map(|reference| {
-                    let allowed = generate_allowed(&registry, &reference);
+                    // The rule of a refused create; a read that fails errs
+                    // towards false.
+                    let allowed = secrets.generate_allowed(&reference).unwrap_or(false);
                     NeedsSecretItem::new(reference, NeedsSecretReason::Missing, allowed)
                 })
                 .collect()
@@ -372,28 +430,5 @@ pub(crate) async fn planned_up(
         blocked,
         instance_needs,
         create_needs,
-    })
-}
-
-/// Whether a generated value could work for `reference` (AC-2): always
-/// for a reference no instance uses yet; otherwise not once the data of an
-/// instance that uses it is initialized, because such a field may not
-/// change any more. The secret service keeps its exact field rules
-/// private, so this reads the uses from the registry and errs towards
-/// false.
-fn generate_allowed(registry: &dyn Registry, reference: &SecretRef) -> bool {
-    let Ok(view) = registry.secret_reference(reference) else {
-        return false;
-    };
-    let Some(view) = view.value else {
-        return true;
-    };
-    view.used_by.iter().all(|used| match used.user {
-        SecretUser::Instance(id) => registry
-            .instance(id)
-            .ok()
-            .and_then(|row| row.value)
-            .is_none_or(|instance| instance.data_initialized_at().is_none()),
-        _ => true,
     })
 }

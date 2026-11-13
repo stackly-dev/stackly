@@ -337,6 +337,10 @@ async fn a_failed_create_skips_its_dependents_and_ends_the_up_incomplete() {
         .map(|failure| &failure.error)
         .expect("the Up stored its error");
     assert_eq!(failure.code(), "env.up_incomplete");
+    assert!(
+        failure.hint().is_some(),
+        "operation.get carries the env hint (AC-10): {failure:?}"
+    );
     assert_eq!(failure.detail("ready"), Some("1"));
     assert_eq!(failure.detail("total"), Some("3"));
     assert_eq!(done.operation.stage.as_deref(), Some("create"));
@@ -544,6 +548,70 @@ async fn a_daemon_restart_in_the_middle_of_an_up_shows_it_interrupted_and_keeps_
         Some(UpState::Interrupted)
     );
     assert_eq!(active_leases(&daemon, instance, reply.environment_id), 1);
+    stop(daemon).await;
+    ev.pass();
+}
+
+// covers: AC-2, AC-10 (spec 0046)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_service_that_meets_a_locked_store_reports_its_real_reason_in_last_up() {
+    use stackly_protocol::secret::{
+        NeedsSecretReason, SecretInput, SecretMode, SecretText, SetSecretParams,
+    };
+    let ev = evidence!(
+        covers = ["REQ-021"],
+        kind = Kind::Fixture,
+        expected = "an Up whose create meets a locked store ends that service needs_secret, and env.get shows lastUp with the reference, reason store_locked, and generateAllowed as the child reported them, not missing",
+    );
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let reply = api
+        .client
+        .call(Call::SecretSet(SetSecretParams {
+            reference: "local:locked/token".to_owned(),
+            input: SecretInput::Value(SecretText::new("stackly-test-locked-token".to_owned())),
+            mode: SecretMode::Upsert,
+            expected_revision: None,
+            confirm_stored_only: false,
+        }))
+        .await;
+    assert!(reply.is_ok(), "{reply:?}");
+    let path = write(
+        &site,
+        "stackly.yaml",
+        "apiVersion: stackly/v1alpha1\nkind: Environment\nmetadata:\n  name: locked\nservices:\n  db:\n    provider: testing/fake\n    version: \"0.1\"\n    secretRefs:\n      authToken: \"local:locked/token\"\n",
+    );
+    site.secrets.lock();
+
+    let reply = up(&api, &path).await;
+    let done = api.wait_final(reply.operation.operation.id).await;
+    assert_eq!(done.operation.state, OperationState::Failed, "{done:?}");
+    let detail = get(&api, reply.environment_id).await;
+    let last = detail.last_up.expect("lastUp is written");
+    let db = &last.services[0];
+    assert_eq!(db.phase, UpPhase::NeedsSecret, "{db:?}");
+    assert_eq!(db.references.len(), 1);
+    assert_eq!(db.references[0].reference, "local:locked/token");
+    assert_eq!(db.references[0].reason, NeedsSecretReason::StoreLocked);
+    let child = api.operation(db.operation_id.expect("the child")).await;
+    let item = &child
+        .operation
+        .failure
+        .as_ref()
+        .expect("the child failed")
+        .error
+        .items()[0];
+    assert_eq!(
+        Some(if db.references[0].generate_allowed {
+            "true"
+        } else {
+            "false"
+        }),
+        item.field("generateAllowed"),
+        "the child's own answer"
+    );
+    site.secrets.unlock();
     stop(daemon).await;
     ev.pass();
 }

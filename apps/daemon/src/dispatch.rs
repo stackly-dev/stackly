@@ -28,8 +28,9 @@ use stackly_protocol::daemon::{
 use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::env::{
-    EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
-    EnvUpParams, EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
+    EnvDownParams, EnvDownPreview, EnvDownReply, EnvExport, EnvExportParams, EnvGetParams,
+    EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams, EnvPreviewDownParams, EnvUpParams,
+    EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
     ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
 };
 use stackly_protocol::handshake::ClientInfo;
@@ -456,6 +457,27 @@ pub trait Handlers: Send + Sync + 'static {
         params: EnvUpParams,
     ) -> HandlerFuture<'a, Box<EnvUpReply>> {
         env::up(core, context, params)
+    }
+
+    /// `env.preview_down` (spec 0047): what Down would stop and keep.
+    fn preview_down_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvPreviewDownParams,
+    ) -> HandlerFuture<'a, Box<EnvDownPreview>> {
+        let _ = context;
+        env::preview_down(core, params)
+    }
+
+    /// `env.down` (spec 0047): the `environment_down` coordinator.
+    fn down_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvDownParams,
+    ) -> HandlerFuture<'a, Box<EnvDownReply>> {
+        env::down(core, context, params)
     }
 
     /// `env.lock` (spec 0045).

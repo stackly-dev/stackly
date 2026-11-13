@@ -349,6 +349,19 @@ impl LocalOverrides {
     pub fn has_errors(&self) -> bool {
         self.findings.count_of(Severity::Error) > 0
     }
+
+    /// What a plan does with `found`, one of [`Self::overrides`], by
+    /// whether its service has a member: a file with an error finding
+    /// applies no override at all, so each one is
+    /// [`OverrideState::Ignored`] (spec 0045 AC-9, K22).
+    #[must_use]
+    pub fn state_of(&self, found: &Override, has_member: bool) -> OverrideState {
+        if self.has_errors() {
+            OverrideState::Ignored
+        } else {
+            found.state(has_member)
+        }
+    }
 }
 
 /// Whether `path` is an absolute path of at most 1024 bytes without NUL

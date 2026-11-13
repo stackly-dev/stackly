@@ -3,6 +3,7 @@
 use stackly_core::environment::{
     BlockerKind, Plan, PlanAction, PlanSecretStatus, PlanStep, Registration,
 };
+use stackly_core::instance::create::CreateError;
 use stackly_domain::{InstanceLifecycle, Ownership, Registry, SecretRef, WriteBatch, WriteOp};
 use stackly_platform::Clock;
 use stackly_testkit::EnvironmentBuilder;
@@ -177,6 +178,33 @@ fn a_fixed_port_of_another_instance_and_a_taken_name_block_the_plan() {
         plan.blockers[0].service.as_ref().map(|a| a.as_str()),
         Some("api")
     );
+}
+
+// covers: AC-7 (spec 0044, Provider satu instance)
+#[test]
+fn one_dedicated_service_of_a_single_instance_provider_that_already_has_one_is_blocked() {
+    let mut site = Site::new();
+    let existing = site.single_instance("lone", 18095);
+    let text = SHOP.replace("testing/fake", "testing/single");
+    let plan = site.plan(text.as_bytes());
+
+    let blocker = plan
+        .blockers
+        .iter()
+        .find(|b| b.kind.code() == "instance.capability_unsupported")
+        .unwrap_or_else(|| panic!("a capability blocker in {:?}", codes(&plan)));
+    match &blocker.kind {
+        BlockerKind::Create(CreateError::CapabilityUnsupported {
+            existing: found, ..
+        }) => assert_eq!(
+            *found,
+            existing.id(),
+            "the detail names the existing instance"
+        ),
+        other => panic!("not the create blocker: {other:?}"),
+    }
+    assert_eq!(blocker.service.as_ref().map(|a| a.as_str()), Some("api"));
+    assert!(!plan.applicable);
 }
 
 // covers: AC-7 (spec 0044)
