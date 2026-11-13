@@ -225,7 +225,8 @@
                 ])
             return EnvironmentDetail(
                 summary: bringingUpSummary, services: rows, detached: [],
-                manifestState: .inSync, problems: nil, lock: nil, local: nil, lastUp: report)
+                manifestState: .inSync, problems: nil, lock: nil, local: nil, lastUp: report,
+                lease: nil)
         }
 
         /// The reference the search service of the incomplete Up needs.
@@ -259,7 +260,7 @@
             return EnvironmentDetail(
                 summary: summary(ready: 2, status: .partiallyReady, active: false),
                 services: rows, detached: [], manifestState: .inSync, problems: nil, lock: nil,
-                local: nil, lastUp: report)
+                local: nil, lastUp: report, lease: nil)
         }
 
         /// erp-development after an Up that ended with no service ready, in `state` `failed`
@@ -289,7 +290,7 @@
             return EnvironmentDetail(
                 summary: summary(ready: 0, status: .down, active: false), services: rows,
                 detached: [], manifestState: .inSync, problems: nil, lock: nil, local: nil,
-                lastUp: report)
+                lastUp: report, lease: nil)
         }
 
         /// The replies of a scenario: `env.list` with `summaries`, and `env.get` with `detail`
