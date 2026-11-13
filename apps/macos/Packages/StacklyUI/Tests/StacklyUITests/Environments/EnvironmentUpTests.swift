@@ -252,15 +252,44 @@ struct EnvironmentUpProgressTests {
 
         let skipped = ServiceRowModel.notReadyItems(
             of: FixtureEnvironmentUp.notReadyDetail(),
-            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+            actions: ServiceRowModel.BannerActions(
+                open: { opened.append($0) }, openOperation: { operations.append($0) }))
         #expect(
             skipped.map(\.reason) == [
-                "Start failed: the port is used by another process",
-                "Waiting for postgres, which failed", "Waiting for postgres timed out",
-                "Waiting for postgres, which is not ready",
+                "Create failed: its data folder could not be initialized",
+                "Waiting for postgres, which failed", "Waiting for postgres, which failed",
+                "Waiting for postgres, which failed",
             ])
-        #expect(skipped[1].action?.title == "Show postgres")
-        skipped[1].action?.perform()
+        #expect(skipped[0].action?.title == "Show Operation")
+        #expect(skipped[1].action == nil, "a dependency without an instance has nothing to open")
+
+        let interrupted = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.notReadyDetail(.interrupted),
+            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+        #expect(interrupted.map(\.reason) == Array(repeating: "not created", count: 4))
+
+        let incomplete = FixtureEnvironmentUp.incompleteDetail()
+        let waiting = ServiceNotReady(
+            reason: .dependencyNotReady, detail: nil, phase: nil, waitingOn: [], references: [],
+            dependency: "postgres", dependencyReason: .timeout, stage: nil, code: nil,
+            operationId: nil)
+        let services = (incomplete.services ?? []).map { service in
+            service.alias == "cache"
+                ? EnvironmentService(
+                    alias: service.alias, provider: service.provider,
+                    ownership: service.ownership, selector: service.selector,
+                    instanceRef: nil, instance: service.instance, notReady: waiting)
+                : service
+        }
+        let dependency = ServiceRowModel.notReadyItems(
+            of: EnvironmentDetail(
+                summary: incomplete.summary, services: services, detached: [],
+                manifestState: .inSync, problems: nil, lock: nil, local: nil,
+                lastUp: incomplete.lastUp),
+            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+        let cache = try #require(dependency.first { $0.reason == "Waiting for postgres timed out" })
+        #expect(cache.action?.title == "Show postgres")
+        cache.action?.perform()
         #expect(opened == [FixtureEnvironments.instances[0].id])
         #expect(skipped.allSatisfy { $0.name.isEmpty == false })
     }

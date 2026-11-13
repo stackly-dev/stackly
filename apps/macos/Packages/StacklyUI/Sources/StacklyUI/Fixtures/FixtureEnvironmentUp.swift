@@ -262,34 +262,59 @@
                 local: nil, lastUp: report)
         }
 
-        /// erp-development after an Up that ended with no service ready, in `state` `failed`
-        /// or `interrupted`: postgres failed to start and the others waited for it.
-        public static func notReadyDetail(_ state: UpState = .failed) -> EnvironmentDetail {
-            let services = FixtureEnvironments.erpServices
-            let skipped = { (base: EnvironmentService, reason: DependencyFailure) in
-                service(
-                    base,
-                    notReady: notReady(
-                        .dependencyNotReady, dependency: "postgres", dependencyReason: reason))
+        /// erp-development after its first Up ended with no service ready, so no instance
+        /// exists yet and the Services table shows each one "Not created". `failed`: the create
+        /// of postgres failed and the others waited for it, each with the reason of the Up
+        /// report (rules 5 and 6 of *Alasan belum ready*). `interrupted`: the daemon stopped
+        /// during the Up, whose report then holds no service, so each reason is the spec 0044
+        /// one (rule 7).
+        public static func notReadyDetail(_ upState: UpState = .failed) -> EnvironmentDetail {
+            let services = FixtureEnvironments.erpServices.map { service in
+                EnvironmentService(
+                    alias: service.alias, provider: service.provider,
+                    ownership: .dedicated, selector: service.selector ?? "stable",
+                    instanceRef: nil, instance: nil, notReady: notReady(.notCreated))
             }
-            let rows = [
-                service(
-                    services[0],
-                    notReady: notReady(
-                        .upFailed, stage: .start, code: "supervisor.endpoint_in_use",
-                        operationId: childID(1))),
-                skipped(services[1], .failed),
-                skipped(services[2], .timeout),
-                skipped(services[3], .notReady),
-            ]
-            let report = EnvUpReport(
-                operationId: upID, state: state, startedAt: FixtureClock.minutesAgo(3),
-                finishedAt: state == .interrupted ? nil : FixtureClock.minutesAgo(2),
-                services: [])
+            let rows: [EnvironmentService]
+            let report: [ServiceUpState]
+            if upState == .interrupted {
+                rows = services
+                report = []
+            } else {
+                let skipped = { (base: EnvironmentService, reason: DependencyFailure) in
+                    service(
+                        base,
+                        notReady: notReady(
+                            .dependencyNotReady, dependency: "postgres",
+                            dependencyReason: reason))
+                }
+                rows = [
+                    service(
+                        services[0],
+                        notReady: notReady(
+                            .upFailed, stage: .create, code: "supervisor.init_failed",
+                            operationId: childID(1))),
+                    skipped(services[1], .failed),
+                    skipped(services[2], .failed),
+                    skipped(services[3], .failed),
+                ]
+                report = [
+                    state(
+                        "postgres", .failed, stage: .create, code: "supervisor.init_failed",
+                        operationId: childID(1)),
+                    state("cache", .skipped, dependency: "postgres", dependencyReason: .failed),
+                    state("queue", .skipped, dependency: "postgres", dependencyReason: .failed),
+                    state("search", .skipped, dependency: "postgres", dependencyReason: .failed),
+                ]
+            }
+            let upReport = EnvUpReport(
+                operationId: upID, state: upState, startedAt: FixtureClock.minutesAgo(3),
+                finishedAt: upState == .interrupted ? nil : FixtureClock.minutesAgo(2),
+                services: report)
             return EnvironmentDetail(
                 summary: summary(ready: 0, status: .down, active: false), services: rows,
                 detached: [], manifestState: .inSync, problems: nil, lock: nil, local: nil,
-                lastUp: report)
+                lastUp: upReport)
         }
 
         /// The replies of a scenario: `env.list` with `summaries`, and `env.get` with `detail`
