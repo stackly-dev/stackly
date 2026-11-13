@@ -6,14 +6,16 @@ import SwiftUI
 /// instance in view, Open for the selected row, Back while a detail page is open, and Copy
 /// Connection String (spec 0021, spec 0069 AC-11 and AC-12), and Duplicate… (spec 0024).
 enum InstancesCommandActions {
-    /// The sort command of a column.
-    static func command(for key: InstanceSortKey) -> CommandID {
+    /// The sort command of a column, or `nil` for Environment, which sorts from its column
+    /// header only and has no row in the View menu (spec 0044).
+    static func command(for key: InstanceSortKey) -> CommandID? {
         switch key {
         case .name: .sortInstancesByName
         case .provider: .sortInstancesByProvider
         case .version: .sortInstancesByVersion
         case .endpoints: .sortInstancesByEndpoints
         case .status: .sortInstancesByStatus
+        case .environment: nil
         }
     }
 
@@ -64,7 +66,7 @@ enum InstancesCommandActions {
             title: showsInspector ? "Hide Inspector" : "Show Inspector", mutates: false,
             perform: toggleInspector)
         for key in InstanceSortKey.allCases {
-            let command = command(for: key)
+            guard let command = command(for: key) else { continue }
             actions[command] = StacklyAction(
                 id: command.rawValue, title: CommandMap.entry(for: command).title, mutates: false,
                 perform: { setSort(InstanceSortComparator(key, order: sort.order)) })
@@ -130,10 +132,10 @@ enum InstancesCommandActions {
             action.id = CommandID.editPorts.rawValue
             actions[.editPorts] = action
         }
-        let checked: Set<CommandID> = [
-            command(for: sort.key),
-            sort.order == .forward ? .sortInstancesAscending : .sortInstancesDescending,
+        var checked: Set<CommandID> = [
+            sort.order == .forward ? .sortInstancesAscending : .sortInstancesDescending
         ]
+        if let byKey = command(for: sort.key) { checked.insert(byKey) }
         return (actions, checked)
     }
 }

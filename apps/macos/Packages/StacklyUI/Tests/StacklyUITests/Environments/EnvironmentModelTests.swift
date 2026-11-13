@@ -9,7 +9,7 @@ import Testing
 /// AC-21, AC-22).
 @MainActor
 struct EnvironmentDetailModelTests {
-    let rig = PageRig()
+    let rig = PageRig(environments: FixtureEnvironments.summaries)
 
     private func model(_ id: UUID = FixtureEnvironments.erpID) -> EnvironmentDetailModel {
         EnvironmentDetailModel(id: id, store: rig.environments, newKey: { "key-1" })
@@ -36,7 +36,7 @@ struct EnvironmentDetailModelTests {
 
     @Test(
         .evidence(
-            covers: ["AC-021"],
+            covers: ["REQ-020", "VAL-013"],
             expected: "Validate shows success feedback for a valid manifest and Problems otherwise"
         ))
     func validateShowsFeedbackOrProblems() async {
@@ -96,7 +96,7 @@ struct EnvironmentDetailModelTests {
 
     @Test(
         .evidence(
-            covers: ["AC-021"],
+            covers: ["REQ-020"],
             expected:
                 "Remove sends env.remove with the revision shown; an active lease says Bring it down first."
         ))
@@ -151,7 +151,7 @@ struct EnvironmentPlanPresenterTests {
 
     @Test(
         .evidence(
-            covers: ["AC-020", "AC-080"],
+            covers: ["REQ-020", "AC-020", "AC-080"],
             expected:
                 "Import… reads env.plan for the chosen file and sends nothing until Import, then env.import with the plan's manifestSha256"
         ))

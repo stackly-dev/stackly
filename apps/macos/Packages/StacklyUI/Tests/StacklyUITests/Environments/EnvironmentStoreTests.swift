@@ -68,7 +68,7 @@ struct EnvironmentStoreTests {
 
     @Test(
         .evidence(
-            covers: ["AC-018"],
+            covers: ["REQ-020"],
             expected:
                 "an environment operation that ended loads env.list again; one that runs or another resource does not"
         ))

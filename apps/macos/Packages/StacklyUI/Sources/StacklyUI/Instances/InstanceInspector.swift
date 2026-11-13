@@ -53,6 +53,7 @@ struct InstanceInspector: View {
             provider
             LabeledContent("Version") { Text(row.version ?? "—") }
             endpoints
+            environmentRow
             LabeledContent("Ownership") { Text(Self.ownershipText(summary.ownership)) }
             LabeledContent("Readiness") { Text(ReadinessText.text(for: summary)) }
             LabeledContent("Health") { Text(Self.healthText(summary.health)) }
@@ -100,6 +101,20 @@ struct InstanceInspector: View {
     }
 
     // MARK: - Rows
+
+    /// Environment: the first environment as a link to it, or "—" (spec 0044, AC-23). The
+    /// word "lease" of this row belongs to spec 0047.
+    private var environmentRow: some View {
+        LabeledContent("Environment") {
+            if let first = row.summary.environments?.first {
+                Button(row.environmentText) { navigator?.openEnvironment(first.environmentId) }
+                    .buttonStyle(.link)
+                    .help("Show \(first.name)")
+            } else {
+                Text("—")
+            }
+        }
+    }
 
     private var provider: some View {
         LabeledContent("Provider") {

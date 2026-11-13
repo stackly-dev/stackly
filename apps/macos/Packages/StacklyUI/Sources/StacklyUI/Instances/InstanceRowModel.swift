@@ -101,6 +101,19 @@ nonisolated public struct InstanceRowModel: Identifiable, Equatable, Sendable {
         "\(providerTitle) \(version ?? "—")"
     }
 
+    /// The name of the first environment the instance belongs to, or `nil` (spec 0044).
+    public var environmentName: String? {
+        summary.environments?.first?.name
+    }
+
+    /// The Environment column: the first environment, "+{n}" for more, or "—" (spec 0044,
+    /// AC-23).
+    public var environmentText: String {
+        let all = summary.environments ?? []
+        guard let first = all.first else { return "—" }
+        return all.count > 1 ? "\(first.name) +\(all.count - 1)" : first.name
+    }
+
     /// The meta line of an Overview row: "{provider} {version} · {ports}".
     public var meta: String {
         "\(providerAndVersion) · \(ports)"

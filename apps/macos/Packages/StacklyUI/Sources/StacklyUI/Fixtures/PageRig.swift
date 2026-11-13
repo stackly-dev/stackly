@@ -41,7 +41,7 @@
             /// What `audit.list { instanceId }` of the Activity tab answers (spec 0035).
             var activity = FixtureActivity.Case.rows
             /// What `env.list` answers (spec 0044).
-            var environments: [EnvironmentSummary] = FixtureEnvironments.summaries
+            var environments: [EnvironmentSummary] = []
             /// The failure `env.list` answers, or `nil`.
             var environmentFailure: ClientError?
             /// The manifest state `env.get` with `checkManifest` answers.
@@ -214,6 +214,7 @@
             operations ops: [OperationSummary] = FixtureScenario.operationCases,
             providers: [ProviderSummary] = PageRig.providers,
             capacity report: CapacityReport? = nil,
+            environments summaries: [EnvironmentSummary] = [],
             runtimes runtimePage: RuntimeListPage? = nil,
             openIn: FixtureOpenIn = FixtureOpenIn()
         ) {
@@ -221,6 +222,7 @@
             let script = Script(
                 instances: items, operations: ops, providers: providers,
                 runtimePage: runtimePage ?? RuntimeListPage(items: [], next: nil, installing: []))
+            script.environments = summaries
             self.script = script
             let now: () -> Date = { FixtureClock.now }
             instances = InstanceStore(
@@ -396,10 +398,11 @@
             derivation: OverviewDerivation? = nil
         ) -> some View {
             let page = OverviewPage(
-                instances: instances, catalog: catalog, runtimes: runtimes, operations: operations,
-                capacity: capacity, actions: actions, isConnected: isConnected,
+                instances: instances, catalog: catalog, runtimes: runtimes,
+                environments: environments, operations: operations, capacity: capacity,
+                actions: actions, isConnected: isConnected,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {},
-                openDiagnostics: {}
+                openDiagnostics: {}, home: FixtureDetail.home
             )
             return (derivation.map { page.derivation($0) } ?? page).actionHost()
         }

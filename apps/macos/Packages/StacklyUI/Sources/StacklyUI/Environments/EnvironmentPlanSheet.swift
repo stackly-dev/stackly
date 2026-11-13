@@ -25,7 +25,8 @@ struct EnvironmentPlanSheet: View {
                     id: "environment.plan.cancel", title: "Cancel", mutates: false,
                     perform: { presenter.close() })
                 : nil,
-            minWidth: 560
+            minWidth: 560,
+            showsCancel: presenter.isImport
         ) {
             EnvironmentPlanContent(
                 phase: presenter.phase, displayName: displayName,
@@ -132,7 +133,7 @@ struct EnvironmentPlanContent: View {
                     title: blockers.count == 1
                         ? "1 problem blocks this plan."
                         : "\(blockers.count) problems block this plan.",
-                    items: blockers.map(Self.item))
+                    items: Self.items(blockers))
             }
             VStack(alignment: .leading, spacing: Spacing.s12) {
                 ForEach(Self.ordered(plan), id: \.alias) { item in
@@ -156,11 +157,21 @@ struct EnvironmentPlanContent: View {
         return named + items.filter { order.contains($0.alias) == false }
     }
 
-    /// One blocker as a banner item: the service, the message, and the hint.
-    static func item(_ blocker: PlanBlocker) -> PartialItem {
-        let message = DaemonText.sentence(blocker.error.message)
-        let reason = blocker.error.hint.map { "\(message) \(DaemonText.sentence($0))" } ?? message
-        return PartialItem(name: blocker.service ?? "Environment", reason: reason)
+    /// The blockers as banner items, one per service (an item is known by its name): the
+    /// message and the hint of each blocker of that service, in order.
+    static func items(_ blockers: [PlanBlocker]) -> [PartialItem] {
+        var order: [String] = []
+        var reasons: [String: [String]] = [:]
+        for blocker in blockers {
+            let name = blocker.service ?? "Environment"
+            if reasons[name] == nil { order.append(name) }
+            let message = DaemonText.sentence(blocker.error.message)
+            reasons[name, default: []].append(
+                blocker.error.hint.map { "\(message) \(DaemonText.sentence($0))" } ?? message)
+        }
+        return order.map {
+            PartialItem(name: $0, reason: (reasons[$0] ?? []).joined(separator: " "))
+        }
     }
 
     private func problems(_ validation: EnvValidation) -> some View {

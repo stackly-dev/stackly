@@ -324,6 +324,7 @@ public struct AppShell: View {
                     instances: instances,
                     catalog: catalog,
                     runtimes: runtimes,
+                    environments: environments,
                     operations: operations,
                     capacity: capacity,
                     actions: instanceActions,
