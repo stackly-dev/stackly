@@ -201,6 +201,28 @@ Lead membalas `accept` 2026-11-13 untuk keduanya: opsi B (bertanda `berat`), dan
 
 Dijalankan 2026-11-13 oleh model lain (Opus) sebagai pembaca saja, untuk keputusan ini saja. Temuan yang diterapkan: lubang anggaran node di atas (diverifikasi ulang dengan percobaan sebelum ditulis); bom bersarang berakhir `yaml_syntax`, bukan `yaml_alias`; klaim `%TAG` dipersempit; lokasi key bertag ditulis; isi fixture bentuk checker dimasukkan ke *Untuk developer* karena `verify.md` hanya memuat deskripsinya; tiga test yang dihapus disebut namanya; kalimat `location` di *Aturan validasi* mendapat kasus `.`; hitungan pass parse dan argumen `v1alpha1` dikoreksi; catatan bahwa tidak ada yang menulis balik manifest. Ia juga memastikan tidak ada spec lain selain 0045 yang mengutip aturan lama. Tidak diambil: mengganti kata "size limit" di pesan dengan "node limit", karena anggaran kini menghitung byte juga dan pesan itu untuk pengguna.
 
+## Perubahan 2026-11-13 (K27: provider satu instance)
+
+Update `/architect` (mode Update, sesi `arc-update-44c`), mode keputusan `auto`, tanpa cross check atas permintaan lead. ID AC tidak berubah; AC-2 dan AC-7 masing masing mendapat satu kalimat.
+
+**Masalah.** Tester menemukan bahwa manifest dengan dua service `dedicated` ber provider yang paketnya tidak `multiInstance`, di Mac tanpa instance provider itu, memberi plan `applicable` tanpa blocker. Evaluasi create tiap item hanya melihat registry, jadi keduanya lolos, padahal create kedua pasti ditolak `instance.capability_unsupported`. Checker tidak bisa mem probe nya karena semua paket di `providers/` `multiInstance`. Keputusan lead: plan tidak boleh menjanjikan yang pasti gagal (K9).
+
+### K27: di mana aturannya (`biasa`)
+
+- **Diambil: aturan validate lintas service, kode finding baru `provider_single_instance`, pada service kedua dan seterusnya.** `multiInstance` adalah fakta paket di catalog, dan K8 menaruh "file ditambah catalog" di validate: manifest seperti ini salah di Mac mana pun dengan catalog yang sama, persis seperti `instance_name_duplicate` dan `endpoint_conflict`. Akibatnya `stackly env validate` di CI menangkapnya, import menolaknya, dan plan tidak pernah `applicable` (AC-2). Kode finding adalah string bebas di `EnvFinding.code` dan tidak ada di katalog error, jadi wire tidak berubah dan tidak ada kenaikan protokol. Kontra: kode finding ke 35 dengan fixture nya, dan test butuh satu paket fixture tanpa `multiInstance`.
+- Runner up: blocker plan dengan kode yang ada, `instance.capability_unsupported`, pada item `create` kedua dan seterusnya. Pro: tidak ada kode finding baru, dan pesannya sama dengan yang ditampilkan create. Kontra: `env.validate` tetap menyebut manifest itu valid dan import menerimanya; detail `existing` kode itu berisi ID instance yang sudah ada, sedangkan di kasus ini tidak ada instance, jadi katalog (`details` dan ringkasan "an instance of it already exists") harus diubah, dan itu kenaikan minor protokol; dan plan mendapat aturan lintas item pertama yang tidak berasal dari `evaluate`. Kalau lead memilih runner up: AC-7 yang mendapat aturannya, bukan AC-2, dan langkah protokol berikutnya menaikkan minor.
+- Opsi ketiga: keduanya. Ditolak: plan untuk manifest tidak valid tidak pernah menghitung item, jadi blocker nya tidak akan pernah terlihat.
+
+### Keputusan kecil (`biasa`)
+
+| Keputusan | Diambil | Runner up |
+| --- | --- | --- |
+| Service mana yang mendapat finding | kedua dan seterusnya menurut urutan manifest (pola `instance_name_duplicate`) | semua service provider itu (pola `endpoint_conflict`); lebih ramai tanpa menambah informasi |
+| `instanceRef` ke provider yang sama | tidak dihitung; bentroknya dengan instance yang ada tetap blocker plan dari `evaluate` | dihitung di validate; salah, karena validate tidak tahu instance mana yang ada |
+| Instance provider itu sudah ada di registry | tetap `instance.capability_unsupported` di plan, tidak berubah | pindahkan ke validate; melanggar K8 (validate tidak membaca registry) |
+
+Yang sengaja tidak berubah: `plan.rs`, protokol, daemon, CLI, dan app.
+
 ## Bahan yang dibaca
 
 - `prd.md`: REQ-020, REQ-028, VAL-013, VAL-014, PAGE-10, AC-020, AC-080, NFR-012, JOURNEY-04, bagian 13.1 sampai 13.3 (hanya sebagai input spec).
