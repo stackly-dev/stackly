@@ -166,3 +166,141 @@ struct EnvironmentUpPresenterTests {
                 == "The manifest file can’t be read.")
     }
 }
+
+/// The progress and the reasons of an Up (spec 0046, AC-20, AC-22).
+@MainActor
+struct EnvironmentUpProgressTests {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "Each Up phase has its label, tone, and symbol; waiting names the first dependency and how many more"
+        ))
+    func eachPhaseReadsAsTheCopyTableSays() {
+        let table: [(UpPhase, String, Tone, String)] = [
+            (.pending, "Queued", .neutral, "clock"),
+            (.installing, "Installing…", .informative, "arrow.down.circle"),
+            (.creating, "Creating…", .informative, "plus.circle"),
+            (.starting, "Starting…", .informative, "play.circle"),
+            (.unrecognized, "Working…", .neutral, "ellipsis.circle"),
+        ]
+        for (phase, label, tone, symbol) in table {
+            let appearance = StatusAppearance.upPhase(phase: phase)
+            #expect(appearance.label == label)
+            #expect(appearance.tone == tone)
+            #expect(appearance.symbol == symbol)
+        }
+        #expect(
+            StatusAppearance.upPhase(phase: .waiting, waitingOn: ["postgres"]).label
+                == "Waiting for postgres")
+        #expect(
+            StatusAppearance.upPhase(phase: .waiting, waitingOn: ["postgres", "cache"]).label
+                == "Waiting for postgres +1")
+        #expect(StatusAppearance.upPhase(phase: .waiting).symbol == "hourglass")
+    }
+
+    @Test func anEnvironmentWithAnActiveOperationReadsBringingUpOrDown() {
+        #expect(
+            StatusAppearance.environment(FixtureEnvironmentUp.bringingUpSummary).label
+                == "Bringing up…")
+        #expect(
+            StatusAppearance.environment(FixtureEnvironments.summaries[0]).label == "Down")
+    }
+
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "A service the Up works on shows its phase in the Status column; a service whose phase ended shows its instance status"
+        ))
+    func theStatusColumnShowsThePhaseOfAServiceStillWorkedOn() {
+        let rows = ServiceRowModel.rows(
+            of: FixtureEnvironmentUp.bringingUpDetail(), instances: [:])
+        #expect(
+            rows.map(\.appearance.label) == [
+                StatusAppearance.instance(
+                    lifecycle: .running, readiness: .ready, health: .healthy
+                ).label, "Starting…", "Waiting for postgres +1", "Installing…",
+            ])
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-021", "NFR-012"],
+            expected:
+                "The partially ready banner names each service with its reason and offers Set Secret…, the dependency, or Show Operation"
+        ))
+    func theBannerNamesEachServiceWithItsReasonAndAction() throws {
+        var opened: [UUID] = []
+        var operations: [UUID] = []
+        var needs: [[SecretNeed]] = []
+        let items = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.incompleteDetail(),
+            actions: ServiceRowModel.BannerActions(
+                open: { opened.append($0) }, openOperation: { operations.append($0) },
+                setSecret: { needs.append($0) }))
+        #expect(
+            items.map(\.reason) == [
+                "Start failed: readiness timed out",
+                "Needs secret local:erp/search/adminPassword",
+            ])
+        #expect(items.map { $0.action?.title } == ["Show Operation", "Set Secret…"])
+        items[0].action?.perform()
+        items[1].action?.perform()
+        #expect(operations == [FixtureEnvironmentUp.childID(3)])
+        #expect(needs.first?.map(\.reference) == ["local:erp/search/adminPassword"])
+
+        let skipped = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.notReadyDetail(),
+            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+        #expect(
+            skipped.map(\.reason) == [
+                "Start failed: the port is used by another process",
+                "Waiting for postgres, which failed", "Waiting for postgres timed out",
+                "Waiting for postgres, which is not ready",
+            ])
+        #expect(skipped[1].action?.title == "Show postgres")
+        skipped[1].action?.perform()
+        #expect(opened == [FixtureEnvironments.instances[0].id])
+        #expect(skipped.allSatisfy { $0.name.isEmpty == false })
+    }
+
+    @Test func aReasonWithMoreThanOneReferenceOrAnUnknownCodeStillReads() {
+        let item = FixtureEnvironmentUp.searchSecret
+        #expect(
+            EnvironmentCopy.needsSecretText([item, item])
+                == "Needs secret local:erp/search/adminPassword +1")
+        #expect(
+            EnvironmentCopy.upFailedText(stage: .install, code: "runtime.other", detail: nil)
+                == "Install failed: runtime.other")
+        #expect(
+            EnvironmentCopy.upFailedText(stage: .create, code: nil, detail: "disk full")
+                == "Create failed: disk full")
+    }
+
+    @Test func theProgressCountsFromTheOperationOrElseTheReport() {
+        let running = FixtureEnvironmentUp.upOperation(done: 2, total: 4)
+        let fromOperation = EnvironmentDetailPage.progress(operation: running, lastUp: nil)
+        #expect(fromOperation.done == 2)
+        #expect(fromOperation.total == 4)
+        let fromReport = EnvironmentDetailPage.progress(
+            operation: nil, lastUp: FixtureEnvironmentUp.bringingUpDetail().lastUp)
+        #expect(fromReport.done == 1)
+        #expect(fromReport.total == 4)
+        #expect(
+            EnvironmentCopy.bringingUp(done: 1, total: 4) == "Bringing up… 1 of 4")
+        #expect(EnvironmentCopy.bringingUp(done: nil, total: nil) == "Bringing up…")
+    }
+
+    @Test func theUpScenariosAnswerTheirOwnDetail() async throws {
+        for id in [FixtureScenario.ID.environmentBringingUp, .environmentUpIncomplete] {
+            let scenario = FixtureScenario(id)
+            guard case .reply(.envGet(let detail)) = scenario.replies["env.get"] else {
+                Issue.record("expected env.get in \(id)")
+                continue
+            }
+            #expect(detail.summary.id == FixtureEnvironments.erpID)
+            #expect(scenario.operations.contains { $0.kind == .environmentUp })
+        }
+    }
+}

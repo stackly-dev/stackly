@@ -408,7 +408,7 @@
                 reveal: { [weak self] in self?.openedFiles.append($0) })
             return EnvironmentsPage(
                 environments: environments, instances: instances, catalog: catalog,
-                actions: actions, selected: selected, waiting: waiting,
+                actions: actions, operations: operations, selected: selected, waiting: waiting,
                 hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
                 detail: detail, openIn: openIn.ports, files: files, picker: picker,
                 home: FixtureDetail.home, presenter: presenter, detailModel: detailModel

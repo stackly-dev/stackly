@@ -292,6 +292,18 @@
                 lastUp: report)
         }
 
+        /// The replies of a scenario: `env.list` with `summaries`, and `env.get` with `detail`
+        /// for its environment; the fixture link answers the others from
+        /// ``FixtureEnvironments/detail(_:manifest:problems:files:)``.
+        static func replies(_ summaries: [EnvironmentSummary], detail: EnvironmentDetail)
+            -> [String: FixtureReply]
+        {
+            [
+                "env.list": .reply(.envList(EnvironmentList(items: summaries))),
+                "env.get": .reply(.envGet(detail)),
+            ]
+        }
+
         /// The summaries of `env.list` after the incomplete Up.
         public static var incompleteSummaries: [EnvironmentSummary] {
             FixtureEnvironments.summaries.map {

@@ -25,8 +25,13 @@ struct ServiceRowModel: Identifiable, Equatable {
     /// Ownership: "Dedicated" or "Shared ref".
     var ownership: String { EnvironmentCopy.ownershipText(service.ownership) }
 
-    /// Status: the instance status of the instance table, or "Not created".
+    /// Status: the phase while an Up works on the service (spec 0046, *Copy phase*), else the
+    /// instance status of the instance table, or "Not created".
     var appearance: StatusAppearance {
+        if let notReady = service.notReady, notReady.reason == .bringingUp {
+            return .upPhase(
+                phase: notReady.phase ?? .unrecognized, waitingOn: notReady.waitingOn ?? [])
+        }
         if let summary {
             return StatusAdapter.appearance(of: summary)
         }
@@ -47,19 +52,73 @@ struct ServiceRowModel: Identifiable, Equatable {
         }
     }
 
+    /// What the items of the partially ready banner can do (spec 0046, *Banner partially
+    /// ready*).
+    struct BannerActions {
+        /// Opens the detail page of an instance.
+        var open: @MainActor (UUID) -> Void
+        /// Opens an operation in Activity.
+        var openOperation: (@MainActor (UUID) -> Void)?
+        /// Opens the secret entry sheet for these references.
+        var setSecret: (@MainActor ([SecretNeed]) -> Void)?
+    }
+
     /// The services that are not ready, as the items of the partially ready banner:
-    /// "{instance} ({alias})" with the reason.
+    /// "{instance} ({alias})" with the reason, and the action of the reason: Set Secret… for a
+    /// missing secret, the dependency's instance for a dependency that was not ready, Show
+    /// Operation for a failed stage, and Show Instance otherwise.
     static func notReadyItems(
         of detail: EnvironmentDetail, open: @escaping @MainActor (UUID) -> Void
     ) -> [PartialItem] {
-        (detail.services ?? []).compactMap { service in
+        notReadyItems(of: detail, actions: BannerActions(open: open))
+    }
+
+    /// The items of the partially ready banner with every action of `actions`.
+    static func notReadyItems(of detail: EnvironmentDetail, actions: BannerActions)
+        -> [PartialItem]
+    {
+        let services = detail.services ?? []
+        return services.compactMap { service in
             guard let notReady = service.notReady else { return nil }
             let name = service.instance.map { "\($0.name) (\(service.alias))" } ?? service.alias
-            let action = service.instance.map { instance in
-                StateAction(title: "Show Instance", mutates: false, perform: { open(instance.id) })
-            }
             return PartialItem(
-                name: name, reason: EnvironmentCopy.notReadyText(notReady), action: action)
+                name: name, reason: EnvironmentCopy.notReadyText(notReady),
+                action: action(for: service, notReady: notReady, in: services, actions: actions))
+        }
+    }
+
+    private static func action(
+        for service: EnvironmentService, notReady: ServiceNotReady,
+        in services: [EnvironmentService], actions: BannerActions
+    ) -> StateAction? {
+        let open = actions.open
+        let showInstance = service.instance.map { instance in
+            StateAction(title: "Show Instance", mutates: false, perform: { open(instance.id) })
+        }
+        switch notReady.reason {
+        case .needsSecret:
+            let needs = (notReady.references ?? []).map { SecretNeed(item: $0) }
+            guard let setSecret = actions.setSecret, needs.isEmpty == false else {
+                return showInstance
+            }
+            return StateAction(
+                title: EnvironmentCopy.setSecretAction, mutates: true,
+                perform: { setSecret(needs) })
+        case .dependencyNotReady:
+            let dependency = services.first { $0.alias == notReady.dependency }?.instance
+            guard let dependency else { return showInstance }
+            return StateAction(
+                title: "Show \(notReady.dependency ?? dependency.name)", mutates: false,
+                perform: { open(dependency.id) })
+        case .upFailed:
+            guard let id = notReady.operationId, let openOperation = actions.openOperation
+            else { return showInstance }
+            return StateAction(
+                title: EnvironmentCopy.showOperation, mutates: false,
+                perform: { openOperation(id) })
+        case .notCreated, .stopped, .starting, .stopping, .failed, .notReady, .unavailable,
+            .bringingUp, .unrecognized:
+            return showInstance
         }
     }
 }

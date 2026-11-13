@@ -103,6 +103,13 @@
             /// The mixed cases with three environments: erp-development partially ready,
             /// billing down, and reporting ready (spec 0044, spec 0068).
             case environmentPartiallyReady = "environment-partially-ready"
+            /// erp-development while its Up runs: 1 of 4 services ended, one starting, one
+            /// waiting, and one installing (spec 0046 AC-23, spec 0068).
+            case environmentBringingUp = "environment-bringing-up"
+            /// erp-development after an Up that ended with 2 of 4 ready: a failed start and a
+            /// missing secret, and the coordinator with its children in Operations (spec 0046
+            /// AC-23, spec 0068).
+            case environmentUpIncomplete = "environment-up-incomplete"
         }
 
         /// The scenario's name.

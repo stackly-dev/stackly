@@ -290,6 +290,26 @@ An install that has not ended shows as an Installing row on the Runtimes page an
 | `EnvironmentStatus.unrecognized` | Unknown | `neutral` | `questionmark.circle` |
 | Service not created (`StatusAppearance.serviceNotCreated`) | Not created | `neutral` | `circle.dashed` |
 
+While an Up or a Down of the environment runs (`EnvironmentSummary.activeOperation`), `StatusAppearance.environment(_ summary:)` replaces the status in the sidebar, the list, and the Overview; the "{ready}/{total}" count stays (spec 0046).
+
+| `activeOperation.kind` | Label | Tone | Status symbol |
+| --- | --- | --- | --- |
+| `environment_up` | Bringing up… | `informative` | `arrow.triangle.2.circlepath` |
+| `environment_down` | Bringing down… | `informative` | `arrow.triangle.2.circlepath` |
+
+### Up phase
+
+`StatusAppearance.upPhase(phase: UpPhase, waitingOn:)` (spec 0046, *Copy phase*, AC-20). While an Up runs, the Status column of the Services table shows it for a service whose `notReady.reason` is `bringing_up`; a service whose phase ended shows its instance status as usual.
+
+| `UpPhase` | Label | Tone | Status symbol |
+| --- | --- | --- | --- |
+| `pending` | Queued | `neutral` | `clock` |
+| `installing` | Installing… | `informative` | `arrow.down.circle` |
+| `creating` | Creating… | `informative` | `plus.circle` |
+| `waiting` | Waiting for {alias} (the first of `waitingOn`, "+{n}" for more) | `neutral` | `hourglass` |
+| `starting` | Starting… | `informative` | `play.circle` |
+| `unrecognized` (and an ended phase) | Working… | `neutral` | `ellipsis.circle` |
+
 ### StatusLabel
 
 `StatusLabel(_ appearance: StatusAppearance, context: StatusContext = .standard)` draws a dot, the label, and the optional detail (mockup: a 7 px dot, a 6 px gap, the label, then " · " and the readiness text).

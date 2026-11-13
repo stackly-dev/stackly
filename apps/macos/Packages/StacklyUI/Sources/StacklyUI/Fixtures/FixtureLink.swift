@@ -162,7 +162,13 @@
             case .runtimeList:
                 return runtimeList()
             case .envGet(let params) where scenario.replies["env.list"] != nil:
-                // The detail of a fixture environment; its manifest is in sync (spec 0044).
+                // The detail of a fixture environment; its manifest is in sync (spec 0044). A
+                // scenario of spec 0046 answers its own detail of one environment.
+                if case .reply(.envGet(let detail)) = scenario.replies[call.methodName],
+                    detail.summary.id == params.id
+                {
+                    return .envGet(detail)
+                }
                 guard
                     let detail = FixtureEnvironments.detail(
                         params.id, manifest: params.checkManifest == true ? .inSync : nil)

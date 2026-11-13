@@ -71,9 +71,65 @@ nonisolated enum EnvironmentCopy {
         case .failed: return notReady.detail.map { "failed: \($0)" } ?? "failed"
         case .notReady: return notReady.detail ?? "not ready"
         case .unavailable: return "unavailable"
-        // provisional: F46, the reasons of an Up get their copy in milestone 4 (spec 0046 AC-20).
-        case .bringingUp, .needsSecret, .dependencyNotReady, .upFailed, .unrecognized:
-            return notReady.detail ?? "not ready"
+        case .bringingUp:
+            return StatusAppearance.upPhase(
+                phase: notReady.phase ?? .unrecognized, waitingOn: notReady.waitingOn ?? []
+            ).label
+        case .needsSecret: return needsSecretText(notReady.references ?? [])
+        case .dependencyNotReady:
+            return dependencyText(notReady.dependency, reason: notReady.dependencyReason)
+        case .upFailed:
+            return upFailedText(stage: notReady.stage, code: notReady.code, detail: notReady.detail)
+        case .unrecognized: return notReady.detail ?? "not ready"
+        }
+    }
+
+    /// "Needs secret {reference}", with "+{n}" for more than one (spec 0046, *Layar*).
+    static func needsSecretText(_ references: [NeedsSecretItem]) -> String {
+        guard let first = references.first else { return "Needs secret" }
+        let more = references.count > 1 ? " +\(references.count - 1)" : ""
+        return "Needs secret \(first.reference)\(more)"
+    }
+
+    /// "Waiting for {dependency}, which failed", "Waiting for {dependency} timed out", or
+    /// "Waiting for {dependency}, which is not ready".
+    static func dependencyText(_ dependency: String?, reason: DependencyFailure?) -> String {
+        let name = dependency ?? "a dependency"
+        switch reason {
+        case .failed: return "Waiting for \(name), which failed"
+        case .timeout: return "Waiting for \(name) timed out"
+        case .notReady, .unrecognized, nil: return "Waiting for \(name), which is not ready"
+        }
+    }
+
+    /// "{Stage} failed: {message}": the stage as `Install`, `Create`, or `Start`, and the
+    /// daemon's detail, else the sentence of a known code, else the code.
+    static func upFailedText(stage: UpStage?, code: String?, detail: String?) -> String {
+        let head: String
+        switch stage {
+        case .install: head = "Install failed"
+        case .create: head = "Create failed"
+        case .start: head = "Start failed"
+        case .wait, .unrecognized, nil: head = "Up failed"
+        }
+        guard let message = detail ?? code.map(codeMessage) else { return head }
+        return "\(head): \(message)"
+    }
+
+    /// A short sentence for an error code an Up reports, or the code itself.
+    static func codeMessage(_ code: String) -> String {
+        switch code {
+        case "supervisor.readiness_timeout": "readiness timed out"
+        case "supervisor.endpoint_in_use": "the port is used by another process"
+        case "supervisor.endpoint_conflict": "the port is used by another instance"
+        case "supervisor.endpoint_unavailable": "the port can’t be used on this Mac"
+        case "supervisor.retry_budget_exhausted": "it kept crashing"
+        case "supervisor.data_in_use": "its data is in use"
+        case "runtime.download_failed": "the download failed"
+        case "runtime.checksum_mismatch": "the download did not match its checksum"
+        case "provider.approval_required": "the provider needs approval"
+        case "resource.busy": "it waited too long for its turn"
+        default: code
         }
     }
 
@@ -169,6 +225,18 @@ nonisolated enum EnvironmentCopy {
     static let alreadyBringingUp = "Already bringing up"
     static let bringingDown = "Bringing down"
     static let noManifest = "This environment has no manifest file."
+    static let showInActivity = "Show in Activity"
+    static let showOperation = "Show Operation"
+    static let setSecretAction = "Set Secret…"
+    static let showService = "Show Service"
+    static let notReadyTitle = "Not ready"
+    static let interrupted = "The last Up was interrupted. Bring it up again to continue."
+
+    /// "Bringing up… {done} of {total}", or "Bringing up…" without a count.
+    static func bringingUp(done: UInt64?, total: UInt64?) -> String {
+        guard let done, let total, total > 0 else { return "Bringing up…" }
+        return "Bringing up… \(done) of \(total)"
+    }
     static let needsApproval = "Needs approval"
     static let reviewInCatalog = "Review in Catalog"
 

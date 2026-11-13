@@ -15,6 +15,8 @@ struct EnvironmentDetailPage: View {
     let instances: InstanceStore?
     let catalog: CatalogStore?
     let actions: InstanceActionModel?
+    /// The operation center, for the progress and Cancel of an Up (spec 0046), or `nil`.
+    let operations: OperationCenter?
     let waiting: FailureContent?
     let hasConnection: Bool
     let reconnect: @MainActor () -> Void
@@ -28,10 +30,12 @@ struct EnvironmentDetailPage: View {
     @State private var columns = ServiceColumnSet.full
     @State private var tableSelection: String?
     @State private var openInNeeds: [SecretNeed]?
+    @State private var operationActions: OperationActions
 
     init(
         id: UUID, environments: EnvironmentStore, instances: InstanceStore?,
-        catalog: CatalogStore?, actions: InstanceActionModel?, waiting: FailureContent?,
+        catalog: CatalogStore?, actions: InstanceActionModel?, operations: OperationCenter? = nil,
+        waiting: FailureContent?,
         hasConnection: Bool, reconnect: @escaping @MainActor () -> Void,
         openDiagnostics: @escaping @MainActor () -> Void, detail: InstanceDetailService?,
         openIn: OpenInPorts, files: ManifestFilePorts, home: String,
@@ -41,6 +45,7 @@ struct EnvironmentDetailPage: View {
         self.instances = instances
         self.catalog = catalog
         self.actions = actions
+        self.operations = operations
         self.waiting = waiting
         self.hasConnection = hasConnection
         self.reconnect = reconnect
@@ -52,6 +57,10 @@ struct EnvironmentDetailPage: View {
             initialValue: model ?? EnvironmentDetailModel(id: id, store: environments))
         _models = State(
             initialValue: InstanceDetailModels(service: detail ?? .disconnected, openIn: openIn))
+        _operationActions = State(
+            initialValue: OperationActions(
+                send: { [environments] call, key in await environments.send(call, key) },
+                apply: { _ in }, reread: { _ in }))
     }
 
     private var context: InstanceActionContext {
@@ -84,7 +93,8 @@ struct EnvironmentDetailPage: View {
             Task { await model.load(checkManifest: true) }
         }
         .openInSecretSheet(
-            needs: $openInNeeds, secrets: models.detailService.secrets, reload: {})
+            needs: $openInNeeds, secrets: models.detailService.secrets,
+            reload: { Task { await model.load(checkManifest: false) } })
     }
 
     // MARK: - Toolbar
@@ -207,13 +217,8 @@ struct EnvironmentDetailPage: View {
                                 perform: { model.closeLockBlockers() })
                         ])
                 }
-                if detail.summary.readyCount > 0,
-                    detail.summary.readyCount < detail.summary.serviceCount
-                {
-                    StateBanner(
-                        tone: .caution, title: EnvironmentCopy.readyText(detail.summary),
-                        items: ServiceRowModel.notReadyItems(
-                            of: detail, open: { navigator?.openInstance($0) }))
+                if let banner = upBanner(detail) {
+                    banner
                 }
                 servicesSection(rows)
                 if let detached = detail.detached, detached.isEmpty == false {
@@ -294,6 +299,89 @@ struct EnvironmentDetailPage: View {
                 tone: .caution, title: EnvironmentCopy.nameChangedTitle(model.declaredName),
                 actions: actions)
         }
+    }
+
+    // MARK: - Up (spec 0046)
+
+    /// The banner of the environment's state after spec 0046: "Bringing up… {done} of {total}"
+    /// while an Up runs; the partially ready banner with the reason and action of each service
+    /// that is not ready; or "Not ready" when no service is ready after an Up that failed or
+    /// was interrupted. A Down of spec 0047 shows its own banner.
+    private func upBanner(_ detail: EnvironmentDetail) -> StateBanner? {
+        let summary = detail.summary
+        if let active = summary.activeOperation {
+            guard active.kind == .environmentUp else { return nil }
+            return progressBanner(active.id, lastUp: detail.lastUp)
+        }
+        let interrupted = detail.lastUp?.state == .interrupted
+        let message = interrupted ? EnvironmentCopy.interrupted : nil
+        let navigator = navigator
+        let items = ServiceRowModel.notReadyItems(
+            of: detail,
+            actions: ServiceRowModel.BannerActions(
+                open: { navigator?.openInstance($0) },
+                openOperation: { navigator?.openOperation($0) },
+                setSecret: { openInNeeds = $0 }))
+        if summary.readyCount > 0, summary.readyCount < summary.serviceCount {
+            return StateBanner(
+                tone: .caution, title: EnvironmentCopy.readyText(summary), message: message,
+                items: items)
+        }
+        if summary.readyCount == 0, summary.serviceCount > 0,
+            detail.lastUp?.state == .failed || interrupted
+        {
+            return StateBanner(
+                tone: .caution, title: EnvironmentCopy.notReadyTitle, message: message,
+                items: items)
+        }
+        return nil
+    }
+
+    /// "Bringing up… {done} of {total}" with Cancel, only while the operation allows it, and
+    /// Show in Activity.
+    private func progressBanner(_ id: UUID, lastUp: EnvUpReport?) -> StateBanner {
+        let operation = operations?.store.items[id]
+        let (done, total) = Self.progress(operation: operation, lastUp: lastUp)
+        var actions: [StateAction] = []
+        if let operation, OperationCancel.availability(of: operation) == .available {
+            let operationActions = operationActions
+            let title = EnvironmentCopy.bringingUp(done: nil, total: nil)
+            let report: @MainActor (Feedback) -> Void = { feedbackCenter?.show($0) }
+            actions.append(
+                StateAction(
+                    title: "Cancel", mutates: true,
+                    perform: {
+                        Task {
+                            await operationActions.cancel(operation, title: title, report: report)
+                        }
+                    }))
+        }
+        let navigator = navigator
+        actions.append(
+            StateAction(
+                title: EnvironmentCopy.showInActivity, mutates: false,
+                perform: { navigator?.openOperation(id) }))
+        return StateBanner(
+            tone: .informative, title: EnvironmentCopy.bringingUp(done: done, total: total),
+            actions: actions)
+    }
+
+    /// "{done} of {total}" from `OperationSummary.progress`, or from the services of the Up
+    /// report that ended when the operation center does not hold the operation.
+    static func progress(operation: OperationSummary?, lastUp: EnvUpReport?)
+        -> (done: UInt64?, total: UInt64?)
+    {
+        if case .counted(let counted) = operation?.progress {
+            return (counted.done, counted.total)
+        }
+        guard let services = lastUp?.services, services.isEmpty == false else { return (nil, nil) }
+        let ended = services.filter { service in
+            switch service.phase {
+            case .ready, .failed, .needsSecret, .skipped, .cancelled: true
+            case .pending, .installing, .creating, .waiting, .starting, .unrecognized: false
+            }
+        }
+        return (UInt64(ended.count), UInt64(services.count))
     }
 
     // MARK: - Services

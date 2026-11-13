@@ -11,6 +11,7 @@ public struct EnvironmentsPage: View {
     private let instances: InstanceStore?
     private let catalog: CatalogStore?
     private let actions: InstanceActionModel?
+    private let operations: OperationCenter?
     private let selected: UUID?
     private let waiting: FailureContent?
     private let hasConnection: Bool
@@ -32,6 +33,7 @@ public struct EnvironmentsPage: View {
     ///     instance, or `nil`.
     ///   - catalog: The catalog, for the names of providers, or `nil`.
     ///   - actions: Start, Stop, and Retry of instances, or `nil` for none.
+    ///   - operations: The operation center, for the progress and Cancel of an Up, or `nil`.
     ///   - selected: The environment whose detail page shows, or `nil` for the list.
     ///   - waiting: What a page without data shows while the daemon cannot be reached, or
     ///     `nil`.
@@ -47,6 +49,7 @@ public struct EnvironmentsPage: View {
         instances: InstanceStore? = nil,
         catalog: CatalogStore? = nil,
         actions: InstanceActionModel? = nil,
+        operations: OperationCenter? = nil,
         selected: UUID?,
         waiting: FailureContent?,
         hasConnection: Bool,
@@ -58,7 +61,7 @@ public struct EnvironmentsPage: View {
     ) {
         self.init(
             environments: environments, instances: instances, catalog: catalog,
-            actions: actions, selected: selected, waiting: waiting,
+            actions: actions, operations: operations, selected: selected, waiting: waiting,
             hasConnection: hasConnection, reconnect: reconnect,
             openDiagnostics: openDiagnostics, detail: detail, openIn: openIn, files: .system,
             picker: OpenPanelFilePicker(), home: home)
@@ -69,6 +72,7 @@ public struct EnvironmentsPage: View {
         instances: InstanceStore?,
         catalog: CatalogStore?,
         actions: InstanceActionModel?,
+        operations: OperationCenter? = nil,
         selected: UUID?,
         waiting: FailureContent?,
         hasConnection: Bool,
@@ -91,6 +95,7 @@ public struct EnvironmentsPage: View {
         self.instances = instances
         self.catalog = catalog
         self.actions = actions
+        self.operations = operations
         self.selected = selected
         self.waiting = waiting
         self.hasConnection = hasConnection
@@ -139,7 +144,7 @@ public struct EnvironmentsPage: View {
         if let selected {
             EnvironmentDetailPage(
                 id: selected, environments: environments, instances: instances,
-                catalog: catalog, actions: actions, waiting: waiting,
+                catalog: catalog, actions: actions, operations: operations, waiting: waiting,
                 hasConnection: hasConnection, reconnect: reconnect,
                 openDiagnostics: openDiagnostics, detail: detail, openIn: openIn, files: files,
                 home: home, model: detailModel?.id == selected ? detailModel : nil
@@ -268,7 +273,7 @@ struct EnvironmentRow: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: Spacing.s8)
-            StatusLabel(StatusAppearance.environment(status: environment.status), context: .row)
+            StatusLabel(StatusAppearance.environment(environment), context: .row)
         }
         .padding(.vertical, Spacing.s4)
         .contentShape(Rectangle())
