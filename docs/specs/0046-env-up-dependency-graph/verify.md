@@ -56,3 +56,44 @@ Temuan, semuanya rendah atau catatan:
 - AC-24 · kelas slot, `Origin::Child` dan quiesce, `parent` di journal, `wait_final`, aturan `recover`, `EngineStats.coordinators` dan `max_coordinators`; `OperationSummary.parent` dan `operation.get_stats` di wire di langkah 5
 - AC-10 · hanya kolom `last_up` dan bentuk `UpReport`; isi laporannya di langkah 4
 - AC-1, AC-2, AC-5, AC-6, AC-8, AC-9, AC-11, AC-14, AC-16 sampai AC-23, AC-25 · belum, milik Milestone 2 sampai 4
+
+## Milestone 2: Up di daemon
+
+Langkah Build plan 4 sampai 6: core `environment::up` (precheck, guard `accept`, graph murni, driver dengan commit penutup, `UpBoard`), protokol 4.4 dengan `env.up`, lalu handler `stacklyd` dengan port `EnvPorts` dan tambahan `env.get` serta `env.list`. Tidak ada migrasi di milestone ini (migrasi terakhir tetap `0015`) dan `EventKind` tidak bertambah.
+
+### UI / manual
+
+- [ ] Buka `crates/core/src/environment/up/graph.rs` → `next` fungsi murni tanpa IO dan tanpa jam: dependency yang berakhir bukan `ready` membuat dependent `skipped` `failed` dan merambat dalam satu panggilan, timer edge hanya berjalan sejak dependency `starting`, paling banyak `UP_START_CONCURRENCY` start dipilih menurut `order` → AC-8
+- [ ] Buka `crates/core/src/environment/up/accept.rs` → guard membaca environment dan instance di dalam transaksi, menolak `env.plan_changed` bila instance milik service hilang, `retained`, atau provider nya lain, dan menulis satu `UpdateEnvironment` per mutasi (revision tepat naik satu), member `shared` untuk `instanceRef`, `dependency_conditions`, lease `active` untuk setiap member yang alias nya ada di manifest (member `detached` tidak), dan `begin_up` → AC-4, AC-5, AC-13
+- [ ] Buka `crates/core/src/environment/up/driver.rs` → driver hanya memulai anak lewat `UpChildren` dan menunggu lewat `wait_final`, tidak pernah memanggil `ProcessSupervision`, downloader, atau menulis file; cancel meneruskan `OperationEngine::cancel` ke anak dengan pemicu induk; anak start yang `queued` lebih dari `CHILD_QUEUE_TIMEOUT_SECONDS` dibatalkan dengan `resource.busy`; penolakan `daemon.restart_pending` menghentikan anak baru dan menandai sisanya `cancelled`; `ShuttingDown` dari `wait_final` berarti abandon tanpa commit penutup → AC-3, AC-8, AC-11, AC-12, AC-15
+- [ ] Buka `apps/daemon/src/ipc/env/children.rs` dan `apps/daemon/src/ipc/{runtime.rs,instance/create.rs,instance/mod.rs}` → install, create, dan start anak dibangun oleh `install_request`, `create_request`, dan `start_request` yang sama dengan handler `runtime.install`, `instance.create`, dan `instance.start`, dan dimulai lewat `start_child` dengan `Origin::Child`; tidak ada jalur install, create, atau start kedua (BR-023); `instance.create` dari klien tetap tanpa ikatan (`create_request(..., None)`) → AC-6, AC-7
+- [ ] Buka `apps/daemon/src/ipc/env/status.rs` → `lastUp` diambil dari `UpBoard` selama operasi `environment_up` itu aktif, dari kolom `last_up` sesudahnya, dan `running` tanpa operasi aktif tampil `interrupted`; urutan aturan *Alasan belum ready* 1 sampai 7 sama dengan spec → AC-15, AC-16
+
+### Commands
+
+- [ ] `cargo test -p stackly-core --lib environment::up` → 11 test lulus: graph rantai, berlian, gagal merambat, `needs_secret`/`skipped`/`cancelled` dihitung gagal, timer edge, dependency yang menunggu tanpa timer, batas start, `UpBoard`, dan laporan `env.up_incomplete` → AC-8, AC-10
+- [ ] `cargo test -p stackly-core --test environment up` → 13 test lulus dengan engine nyata dan port palsu: Up mendaftarkan, membuat, memberi lease, dan menyalakan sesuai dependency; dependency gagal membuat dependent `skipped` dan Up `env.up_incomplete` dengan tahap `start`; Up kedua hanya mengerjakan sisanya tanpa lease kedua; timeout edge; cancel; `instanceRef` yang sudah jalan `ready` tanpa anak dengan satu lease dan baris instance tak berubah; `accept` gagal `env.plan_changed` tanpa tulisan; dua service satu artefak satu install dan install gagal menutup keduanya di tahap `install`; create `needs_secret` dengan reference nya; penolakan quiesce; precheck menolak manifest tidak valid, digest lain, dan reference kosong urut teks → AC-1, AC-2, AC-4, AC-5, AC-6, AC-8, AC-9, AC-10, AC-11
+- [ ] `cargo test -p stacklyd --test env_up` → 6 test lulus dengan provider `fake`: penolakan tanpa mutasi (`env.manifest_invalid`, `env.plan_changed`, `secret.needs_secret`), rantai db, api, web naik berurutan dengan lease, laporan, endpoint ber port, dan `parent` di anak; create gagal di init membuat dependent `skipped`, Up `env.up_incomplete` (`ready` 1 dari 3, `stage` `create`), dan `env.get` memberi `up_failed` dan `dependency_not_ready`; Up kedua `resource.busy` dan cancel menulis `cancelled`; instance pinjaman satu lease `shared` tanpa restart; restart daemon di tengah Up memberi `lastUp` `interrupted` dan lease tetap → AC-1 sampai AC-5, AC-7, AC-8, AC-10, AC-11, AC-13, AC-15, AC-16
+- [ ] `cargo test -p stackly-protocol --no-fail-fast` → lulus, termasuk fixture `env/detail-bringing-up.json`, `env/detail-up-incomplete.json`, `ipc/request-env-up.json`, `ipc/frame-response-env-up.json`, `ipc/frame-error-env-up-incomplete.json`, `ipc/frame-error-env-plan-blocked.json`, penolakan `ipc/reject-env-up-digest-format.json`, enum terbuka baru dibaca `unrecognized`, dan katalog kode lima kode `env` baru dengan hint → AC-16, AC-23
+- [ ] `cargo xtask codegen --check` → lulus; `protocols/contract-versions.json` mencatat 4.4; `cargo xtask fuzz seed` tidak mengubah apa pun lagi → AC-23
+- [ ] `cargo test -p stacklyd --no-fail-fast` dan `cargo test -p stackly-core --no-fail-fast` → lulus, golden `instance.*` dan `runtime.*` yang ada tidak berubah oleh pemecahan handler → AC-7, BR-023
+- [ ] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden yang berubah hanya menambah `parent`, `activeOperation`, dan field baru lain, isi lain identik → AC-23
+- [ ] `swift test --package-path clients/swift` dan `swift build --package-path apps/macos/Packages/StacklyUI --build-tests` → lulus dengan tipe hasil codegen 4.4 → AC-23
+- [ ] `cargo xtask check-deps`, `cargo xtask evidence check`, dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus → AC-23
+
+### Acceptance-criteria coverage
+
+- AC-1, AC-2 · precheck core (`up::check`) dan handler `env.up`; test penolakan di core dan `env_up.rs`
+- AC-3 · `BusyPolicy::Reject`, `LockKey::EnvironmentName`, `expected_revision` dari plan, kelas pengatur dari Milestone 1; Up kedua `resource.busy`
+- AC-4, AC-5 · guard `accept`; core dan `env_up.rs`
+- AC-6 · install satu kali per artefak, gagal menutup tahap `install` (core); install anak lewat `install_request`. Test daemon untuk install nyata menunggu artefak yang belum terpasang (native, Milestone 4 langkah 11)
+- AC-7, AC-12 · create anak lewat `create_request` dengan `EnvironmentBinding`; kompensasi milik create (Milestone 1) dan create gagal di init di `env_up.rs`
+- AC-8, AC-9, AC-10, AC-11 · graph, driver, commit penutup; core dan `env_up.rs`
+- AC-13, AC-15 · lease bertahan sesudah gagal, batal, dan restart daemon; `lastUp` `interrupted`. Rotasi sesi `new` dan klien putus di tengah Up belum punya test sendiri di milestone ini (aturan rotasi tidak berubah, spec 0031)
+- AC-14 · serentak: dua Up satu environment `resource.busy`; dua environment yang meminjam satu instance dan dua manifest dengan nama instance sama belum punya test daemon sendiri
+- AC-16 · `env.get` dan `env.list`: `activeOperation`, `lastUp`, `endpoints`, *Alasan belum ready*
+- AC-23 · protokol 4.4, `env.up` `recovery refused`, DTO, kode, fixture; skenario fixture GUI `environment-bringing-up` dan `environment-up-incomplete` spec 0068 milik Milestone 4
+- AC-24 · `OperationSummary.parent`, `OperationStats.coordinators` dan `maxCoordinators` di wire
+- AC-17, AC-18 · belum, Milestone 3 (CLI)
+- AC-19 sampai AC-22 · belum, Milestone 4 (app)
+- AC-25 · belum, Milestone 4 langkah 11 (native)
