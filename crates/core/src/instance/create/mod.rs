@@ -2,6 +2,7 @@
 //! the pure [`evaluate`] that preflight and the create precheck share, the
 //! form model, and the `create_instance` operation.
 
+mod binding;
 mod check;
 mod command;
 mod compensator;
@@ -14,6 +15,7 @@ mod ids;
 mod port;
 mod work;
 
+pub use binding::{BindingFault, EnvironmentBinding};
 pub use check::{Check, CheckKind, CheckStatus, CreateError, FieldCode, FieldIssue};
 pub use command::CommandSpec;
 pub use compensator::{
@@ -45,5 +47,5 @@ pub use port::PortFacts;
 pub(crate) use port::{PortProblem, fixed_port_owner, judge_change, suggest_for_start};
 pub use work::{
     CreateHooks, CreateInstanceWork, CreateWorkDeps, CreateWorkFactory, Hook, SourceRecorder,
-    encode_input,
+    encode_bound_input, encode_input,
 };

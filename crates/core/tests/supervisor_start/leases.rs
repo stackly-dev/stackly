@@ -153,3 +153,61 @@ async fn a_stop_of_an_instance_that_is_wanted_but_does_not_run_is_a_registry_cha
             .any(|lease| matches!(lease.state(), LeaseState::Suppressed { .. }))
     );
 }
+
+/// Begins a start of `id` as an environment Up starts it (spec 0046).
+async fn environment_start(rig: &Rig, id: InstanceId) -> stackly_domain::OperationId {
+    let work = rig
+        .sup
+        .start_work(stackly_core::supervisor::StartRequest::environment(
+            id,
+            Rig::user(),
+        ));
+    rig.begin(OperationKind::StartInstance, id, work).await
+}
+
+// covers: AC-13 (spec 0046)
+#[tokio::test]
+async fn an_environment_start_writes_desired_running_and_no_manual_lease() {
+    let rig = Rig::new().await;
+    rig.sup.set_session(Some(session()));
+    let id = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+
+    let op = environment_start(&rig, id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    assert_eq!(rig.instance_row(id).desired(), DesiredState::Running);
+    assert!(leases(&rig, id, LeaseFilter::All).is_empty());
+}
+
+// covers: AC-13 (spec 0046)
+#[tokio::test]
+async fn an_environment_start_of_a_running_instance_wanted_stopped_writes_only_desired() {
+    let rig = Rig::new().await;
+    rig.sup.set_session(Some(session()));
+    let id = rig.instance(&spec(InstanceLifecycle::Stopped, DesiredState::Stopped));
+    let op = environment_start(&rig, id).await;
+    let spawn = rig.main_spawn(1).await;
+    rig.serve(&spawn);
+    rig.wait_state(op, OperationState::Succeeded).await;
+    let running = rig.instance_row(id);
+    let mut changes = stackly_core::supervisor::InstanceChanges::new(running.clone());
+    changes
+        .apply(|instance| {
+            instance.set_desired(DesiredState::Stopped);
+            Ok::<_, stackly_core::supervisor::SupervisorError>(())
+        })
+        .expect("desired can change");
+    rig.registry
+        .commit(WriteBatch::new(changes.into_ops()))
+        .expect("desired stopped is stored");
+
+    let again = environment_start(&rig, id).await;
+    rig.wait_state(again, OperationState::Succeeded).await;
+
+    let row = rig.instance_row(id);
+    assert_eq!(row.lifecycle(), InstanceLifecycle::Running);
+    assert_eq!(row.desired(), DesiredState::Running);
+    assert!(leases(&rig, id, LeaseFilter::All).is_empty());
+}

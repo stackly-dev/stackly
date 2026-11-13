@@ -17,6 +17,7 @@ use stackly_domain::{
 };
 use stackly_platform::{InstancePaths, Platform, SecretValue, WriteMode, check_private_dir};
 
+use super::binding::{BindingFault, EnvironmentBinding};
 use super::check::CreateError;
 use super::compensator::registration_key;
 use super::draft::{CreateDraft, ProviderChoice, SecretSourceKind};
@@ -100,6 +101,7 @@ pub struct CreateInstanceWork {
     draft: CreateDraft,
     values: Vec<(String, SecretValue)>,
     caller: SecretCaller,
+    binding: Option<EnvironmentBinding>,
     deps: Arc<CreateWorkDeps>,
 }
 
@@ -124,8 +126,18 @@ impl CreateInstanceWork {
             draft,
             values,
             caller,
+            binding: None,
             deps,
         }
+    }
+
+    /// Returns the work with the environment its `register` batch binds
+    /// the new instance to (spec 0046 AC-7). Only an Up starts such a
+    /// create; a client's `instance.create` never does.
+    #[must_use]
+    pub fn with_binding(mut self, binding: EnvironmentBinding) -> Self {
+        self.binding = Some(binding);
+        self
     }
 }
 
@@ -169,6 +181,7 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
         draft,
         values,
         caller,
+        binding,
         deps,
     } = work;
     let caller = caller.in_operation(ctx.id());
@@ -195,7 +208,13 @@ async fn run_create(work: CreateInstanceWork, mut ctx: OperationContext) -> Work
 
     // register: re-check and write in one registry transaction.
     enter(&mut ctx, StageName::REGISTER, false).await?;
-    let instance = register(&mut ctx, &deps, id, &resolved, pinned, bound, now).await?;
+    let registration = Registration {
+        pinned,
+        bound,
+        binding,
+        now,
+    };
+    let instance = register(&mut ctx, &deps, id, &resolved, registration).await?;
     deps.events.instance_changed(&instance);
     ctx.set_audit_note(AuditNote {
         config_revision: Some(ConfigRevisionNumber::FIRST),
@@ -633,15 +652,31 @@ fn check_data(
 /// transaction (spec 0020, "Commit terjaga di langkah `register`", AC-10):
 /// no other commit lands between the check and the write, so the step never
 /// meets a generation conflict and never retries.
+/// What the `register` step writes besides the resolved create.
+struct Registration {
+    /// The provider revision a `pin` copied, if any.
+    pinned: Option<stackly_domain::ProviderRevisionRecord>,
+    /// The bound references with the revision `secrets` checked.
+    bound: Vec<(SecretRef, ResourceRevision)>,
+    /// The environment Up binds the instance to, if any.
+    binding: Option<EnvironmentBinding>,
+    /// The commit time of the layout.
+    now: jiff::Timestamp,
+}
+
 async fn register(
     ctx: &mut OperationContext,
     deps: &Arc<CreateWorkDeps>,
     id: InstanceId,
     resolved: &ResolvedCreate,
-    pinned: Option<stackly_domain::ProviderRevisionRecord>,
-    bound: Vec<(SecretRef, ResourceRevision)>,
-    now: jiff::Timestamp,
+    registration: Registration,
 ) -> Result<Instance, WorkError> {
+    let Registration {
+        pinned,
+        bound,
+        binding,
+        now,
+    } = registration;
     let handle = ctx
         .record_custom_intent(INSTANCE_REGISTRATION, registration_key(id), None)
         .await?;
@@ -697,6 +732,13 @@ async fn register(
             if let Some(error) = recheck_bound(view, &bound)? {
                 return Ok(GuardDecision::Refuse(Box::new(error)));
             }
+            let bind_ops = match &binding {
+                Some(binding) => match binding.guard_ops(view, id, now)? {
+                    Ok(ops) => ops,
+                    Err(fault) => return Ok(GuardDecision::Refuse(Box::new(fault))),
+                },
+                None => Vec::new(),
+            };
             Ok(match recheck(view, &resolved, id, pinned) {
                 Err(error) => GuardDecision::Refuse(Box::new(error)),
                 Ok(record) => {
@@ -726,6 +768,9 @@ async fn register(
                         user: SecretUser::Instance(id),
                         uses,
                     });
+                    // The member and its lease follow the instance they
+                    // refer to, in the same transaction (spec 0046 AC-7).
+                    ops.extend(bind_ops);
                     GuardDecision::Write(ops)
                 }
             })
@@ -736,6 +781,10 @@ async fn register(
         Ok(Guarded::Refused(reason)) => {
             let reason = match reason.downcast::<CreateError>() {
                 Ok(error) => return Err(failed(*error)),
+                Err(reason) => reason,
+            };
+            let reason = match reason.downcast::<BindingFault>() {
+                Ok(fault) => return Err(failed(*fault)),
                 Err(reason) => reason,
             };
             return Err(match reason.downcast::<SecretError>() {
@@ -974,6 +1023,23 @@ pub fn encode_input(
     id: InstanceId,
     draft: &CreateDraft,
 ) -> Result<JournalPayload, stackly_domain::ValueError> {
+    encode_bound_input(id, draft, None)
+}
+
+/// [`encode_input`] for a create that Up binds to an environment (spec
+/// 0046 AC-7): the same JSON with a `binding` object, which
+/// [`CreateWorkFactory`] reads back, so a create rebuilt after a restart
+/// keeps its binding. Without a binding the JSON is exactly that of
+/// [`encode_input`].
+///
+/// # Errors
+///
+/// Returns the payload error when even the shortened input is too large.
+pub fn encode_bound_input(
+    id: InstanceId,
+    draft: &CreateDraft,
+    binding: Option<&EnvironmentBinding>,
+) -> Result<JournalPayload, stackly_domain::ValueError> {
     let endpoints: Vec<serde_json::Value> = draft
         .endpoints
         .iter()
@@ -1005,7 +1071,7 @@ pub fn encode_input(
         })
         .collect();
     let build = |settings: serde_json::Value| {
-        serde_json::json!({
+        let mut value = serde_json::json!({
             "instanceId": id.to_string(),
             "name": draft.name,
             "displayName": draft.display_name,
@@ -1016,8 +1082,11 @@ pub fn encode_input(
             "secrets": secrets,
             "start": draft.start,
             "startup": draft.startup.map(StartupPolicy::as_code),
-        })
-        .to_string()
+        });
+        if let (Some(binding), Some(object)) = (binding, value.as_object_mut()) {
+            object.insert("binding".to_owned(), binding.to_json());
+        }
+        value.to_string()
     };
     let full = build(draft.settings.clone());
     JournalPayload::new(full, stackly_domain::OperationJournal::INPUT_MAX).or_else(|_| {
@@ -1055,18 +1124,24 @@ impl WorkFactory for CreateWorkFactory {
         let OperationResource::Instance(id) = operation.resource() else {
             return Err(RebuildError::InvalidInput);
         };
-        let draft = decode_input(journal.journal.input().as_str())?;
-        Ok(Box::new(CreateInstanceWork::new(
+        let (draft, binding) = decode_input(journal.journal.input().as_str())?;
+        let work = CreateInstanceWork::new(
             id,
             draft,
             Vec::new(),
             SecretCaller::background(),
             Arc::clone(&self.deps),
-        )))
+        );
+        Ok(Box::new(match binding {
+            Some(binding) => work.with_binding(binding),
+            None => work,
+        }))
     }
 }
 
-fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
+/// The draft of a create journal's input and the environment it binds to,
+/// if any.
+fn decode_input(text: &str) -> Result<(CreateDraft, Option<EnvironmentBinding>), RebuildError> {
     let invalid = || RebuildError::InvalidInput;
     let not_rebuildable = |reason: &'static str| RebuildError::NotRebuildable {
         reason: ReasonCode::from_static(reason),
@@ -1118,7 +1193,11 @@ fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     let provider = value.get("provider").ok_or_else(invalid)?;
-    Ok(CreateDraft {
+    let binding = match value.get("binding") {
+        Some(binding) => Some(EnvironmentBinding::from_json(binding).ok_or_else(invalid)?),
+        None => None,
+    };
+    let draft = CreateDraft {
         name: value.get("name").and_then(text_of).ok_or_else(invalid)?,
         display_name: value.get("displayName").and_then(text_of),
         provider: ProviderChoice {
@@ -1144,5 +1223,6 @@ fn decode_input(text: &str) -> Result<CreateDraft, RebuildError> {
             .and_then(serde_json::Value::as_str)
             .and_then(|code| code.parse().ok()),
         duplicate_of: None,
-    })
+    };
+    Ok((draft, binding))
 }

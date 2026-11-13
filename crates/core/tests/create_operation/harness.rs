@@ -8,9 +8,9 @@ use stackly_core::catalog::{
     TileHint, ensure_source,
 };
 use stackly_core::instance::create::{
-    CreateDraft, CreateHooks, CreateInstanceWork, CreateWorkDeps, INSTANCE_REGISTRATION,
-    InstanceRegistrationCompensator, InstanceRemoved, PortRequestDraft, ProviderChoice,
-    SourceRecorder, encode_input,
+    CreateDraft, CreateHooks, CreateInstanceWork, CreateWorkDeps, EnvironmentBinding,
+    INSTANCE_REGISTRATION, InstanceRegistrationCompensator, InstanceRemoved, PortRequestDraft,
+    ProviderChoice, SourceRecorder, encode_bound_input, encode_input,
 };
 use stackly_core::operation::{BeginError, BeginOutcome, BeginRequest, BusyPolicy, Origin};
 use stackly_core::provider::{NameCheck, PackageFiles, ValidatedPackage};
@@ -202,8 +202,8 @@ impl CreateRig {
         values: Vec<(String, SecretValue)>,
         hooks: CreateHooks,
     ) -> Result<OperationId, BeginError> {
-        let name = draft.name.parse().expect("a valid instance name");
         let input = encode_input(id, &draft).expect("the input fits the journal");
+        let name = draft.name.parse().expect("a valid instance name");
         let work = CreateInstanceWork::new(
             id,
             draft,
@@ -211,6 +211,39 @@ impl CreateRig {
             SecretCaller::client("cli".parse().expect("a client code"), 501, true),
             self.deps(hooks),
         );
+        self.begin_boxed(id, name, input, Box::new(work)).await
+    }
+
+    /// Begins a create an environment Up would start, bound to `binding`
+    /// (spec 0046 AC-7), with the binding in its journal input.
+    pub async fn begin_bound(
+        &self,
+        id: InstanceId,
+        draft: CreateDraft,
+        binding: EnvironmentBinding,
+    ) -> Result<OperationId, BeginError> {
+        let input =
+            encode_bound_input(id, &draft, Some(&binding)).expect("the input fits the journal");
+        let name = draft.name.parse().expect("a valid instance name");
+        let work = CreateInstanceWork::new(
+            id,
+            draft,
+            Vec::new(),
+            SecretCaller::client("cli".parse().expect("a client code"), 501, true),
+            self.deps(CreateHooks::default()),
+        )
+        .with_binding(binding);
+        self.begin_boxed(id, name, input, Box::new(work)).await
+    }
+
+    /// Begins `work`, the create of `id` named `name`, with `input`.
+    pub async fn begin_boxed(
+        &self,
+        id: InstanceId,
+        name: stackly_domain::InstanceName,
+        input: stackly_domain::JournalPayload,
+        work: Box<dyn stackly_core::operation::OperationWork>,
+    ) -> Result<OperationId, BeginError> {
         let outcome = self
             .rig
             .engine
@@ -223,7 +256,7 @@ impl CreateRig {
                 expected_revision: None,
                 origin: Origin::Background,
                 input,
-                work: Box::new(work),
+                work,
                 precheck: None,
             })
             .await?;

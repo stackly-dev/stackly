@@ -30,8 +30,8 @@ use stackly_core::operation::{
 use stackly_core::session::{manual_start_ops, manual_stop_ops, startup_lease_state};
 use stackly_core::supervisor::SupervisorError;
 use stackly_core::supervisor::{
-    ForceStopRequest, InstanceChanges, ReloadRequest, RestartRequest, StartRequest, StopRequest,
-    Supervisor,
+    ForceStopRequest, InstanceChanges, ReloadRequest, RestartRequest, StartRequest, StartTrigger,
+    StopRequest, Supervisor,
 };
 use stackly_domain::{
     Capability, DesiredState, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
@@ -142,13 +142,16 @@ pub fn start<'a>(
         let id = instance_id(params.instance_id)?;
         let expected = expected_revision(params.expected_revision)?;
         let fingerprint = request_fingerprint(&Call::InstanceStart(params));
-        let work = supervisor.start_work(StartRequest::user(id, caller(&context)));
+        let start = StartRequest::user(id, caller(&context));
+        let trigger = start.trigger.clone();
+        let work = supervisor.start_work(start);
         let drift = config::drifted_files(&supervisor, id);
         let session = core.session().login().map(|login| login.id.clone());
         let now = core.platform().clock().now();
         let precheck: Box<dyn Precheck> = Box::new(move || {
-            drift_refusal(drift.as_deref())
-                .unwrap_or_else(|| start_precheck(&registry, id, expected, session.as_ref(), now))
+            drift_refusal(drift.as_deref()).unwrap_or_else(|| {
+                start_precheck(&registry, id, expected, &trigger, session.as_ref(), now)
+            })
         });
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::StartInstance,
@@ -486,11 +489,15 @@ fn force_stop_precheck(
 }
 
 /// Refuses a start the state decides, answers one that has nothing to do,
-/// and lets the rest go on (spec 0010, *Startup transaction*, AC-23).
+/// and lets the rest go on (spec 0010, *Startup transaction*, AC-23). The
+/// answer of an instance that already runs writes desired `running` with
+/// the `manual` lease only when `trigger` writes one: a start of an
+/// environment Up does not (spec 0046 AC-13).
 fn start_precheck(
     registry: &SqliteRegistry,
     id: InstanceId,
     expected: Option<ResourceRevision>,
+    trigger: &StartTrigger,
     session: Option<&SessionId>,
     now: jiff::Timestamp,
 ) -> PrecheckOutcome {
@@ -510,7 +517,11 @@ fn start_precheck(
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
         | InstanceLifecycle::Recovering => {
-            no_op_with_desired(registry, instance, DesiredState::Running, session, now)
+            let leases = Leases {
+                session,
+                manual: trigger.writes_manual_lease(),
+            };
+            no_op_with_desired(registry, instance, DesiredState::Running, leases, now)
         }
         // A `failed` instance whose init failed has no initialized data
         // yet (BR-008).
@@ -549,7 +560,11 @@ fn stop_precheck(
         }
         InstanceLifecycle::Uninitialized => return PrecheckOutcome::NoOp(NoOpReply::nothing()),
         InstanceLifecycle::Stopped | InstanceLifecycle::Failed => {
-            return no_op_with_desired(registry, instance, DesiredState::Stopped, session, now);
+            let leases = Leases {
+                session,
+                manual: true,
+            };
+            return no_op_with_desired(registry, instance, DesiredState::Stopped, leases, now);
         }
         InstanceLifecycle::Starting
         | InstanceLifecycle::Running
@@ -602,6 +617,16 @@ fn reject(error: SupervisorError) -> PrecheckOutcome {
     PrecheckOutcome::Reject(Box::new(error))
 }
 
+/// Which leases the `alreadyInState` answer moves with the desired state.
+#[derive(Clone, Copy)]
+struct Leases<'a> {
+    /// The login session of the startup lease.
+    session: Option<&'a SessionId>,
+    /// Whether the manual and startup leases follow the desired state; a
+    /// start of an environment Up moves none (spec 0046 AC-13).
+    manual: bool,
+}
+
 /// The `alreadyInState` answer of an instance that is in the state asked
 /// for: it writes nothing, unless the stored desired state differs, which
 /// one commit then sets.
@@ -609,12 +634,13 @@ fn no_op_with_desired(
     registry: &SqliteRegistry,
     instance: Instance,
     desired: DesiredState,
-    session: Option<&SessionId>,
+    leases: Leases<'_>,
     now: jiff::Timestamp,
 ) -> PrecheckOutcome {
     if instance.desired() == desired {
         return PrecheckOutcome::NoOp(NoOpReply::nothing());
     }
+    let Leases { session, manual } = leases;
     // The leases follow the desired state in the same commit (spec 0031,
     // AC-8, AC-9): a stop ends the manual leases and suppresses the startup
     // lease of this session, a start writes a manual lease.
@@ -624,6 +650,7 @@ fn no_op_with_desired(
         Err(error) => return reject(SupervisorError::Registry(error)),
     };
     let lease_ops = match desired {
+        _ if !manual => Vec::new(),
         DesiredState::Running => manual_start_ops(
             id,
             &leases,
