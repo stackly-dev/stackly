@@ -111,3 +111,45 @@ Temuan, rendah:
 - AC-1, AC-2, AC-3, AC-6 sampai AC-9, AC-12 · langkah 3 sampai 5 (lihat dua bagian di atas); `leaseActive` dimuat ulang saat Up atau Down berakhir, belum pada commit `accept` atau `release` itu sendiri
 - AC-25 · kontrak Down di protokol 4.5 (langkah 4); tambahan `stop_all`, `daemon`, dan `change_endpoints` menunggu langkah 6
 - AC-15, AC-16 (pilihan override), AC-17 sampai AC-24, AC-26 · belum, milik langkah 6 sampai 10
+
+## Milestone 4: Down, lease, dan override di app
+
+Langkah Build plan 8 dan bagian langkah 9 yang hanya butuh protokol 4.5 sudah dibangun; langkah 10 punya test native `apps/daemon/tests/env_down_native.rs`. Bagian langkah 9 yang butuh protokol 4.6 (`overrideLeases` dan `leases` di `instance.change_endpoints`, `overrideLeases`, `environments`, dan `affectedEnvironments` di `instance.preview_stop_all` dan `instance.stop_all`, `overrideLeases` di `agent_off`) belum dibangun: banner dan "Change Anyway" di sheet port, dampak environment di popover Stop All, dan konfirmasi Turn Off menunggu 4.6 di `main`.
+
+### UI / manual
+
+Langkah GUI nyata ini hanya dijalankan kamu. Prasyarat: `main` dengan protokol 4.6 (untuk langkah Stop All dan ganti port), `cargo build -p stacklyd`, `cargo xtask build-app`, daemon jalan dari build itu, dan dua manifest contoh di folder sendiri: `shop/stackly.yaml` yang membuat instance `shop-db` (provider apa saja dari catalog, misalnya `official/valkey`) dan `blog/stackly.yaml` yang meminjamnya lewat `instanceRef: shop-db`.
+
+- [ ] Import kedua manifest lewat Environments, lalu Up… dan Bring Up pada shop, lalu pada blog → keduanya Ready; baris Lease di Details keduanya "Lease held on 1 instance since {jam}. Down stops only instances with no other lease or manual start."; inspector `shop-db` di Instances menulis "Dedicated · lease" → AC-22
+- [ ] Di halaman shop tekan Down (di kiri Up…) → konfirmasi "Bring down “shop”?" dengan baris "Releases the lease and stops only instances nothing else needs. Shared and manually started instances keep running. Data is kept.", "Nothing needs to stop.", dan "Keeps running: shop-db (used by blog)."; tombol Cancel dan Bring Down → AC-20
+- [ ] Tekan Bring Down → banner "Bringing down…" sebentar, sidebar dan daftar menulis "Bringing down…", lalu kartu "shop is down. 0 stopped, 1 kept running."; `shop-db` tetap Running dengan PID yang sama; baris Lease shop "No lease. Up takes one on each service’s instance."; Operations menulis "Bring down environment shop" → AC-20, AC-21, AC-22
+- [ ] Up shop lagi, lalu Down blog → konfirmasi blog menyebut `shop-db` di "Keeps running: shop-db (used by shop)."; Bring Down; lalu Down shop → konfirmasi "Stops: shop-db."; Bring Down → kartu "shop is down. 1 instance stopped. Data is kept."; `shop-db` Stopped → AC-20, AC-21
+- [ ] Up shop, tekan Down, Bring Down, lalu tutup app (Quit) tepat saat banner "Bringing down… 0 of 1" terlihat, buka lagi → halaman shop menampilkan banner "Bringing down…" bila Down masih berjalan, atau status Down tanpa banner bila sudah selesai; Operations menunjukkan Down dengan anak `Stop shop-db` bersarang; tidak ada kartu hasil (kartu hanya untuk Down yang dikirim jendela itu) → AC-12, AC-21
+- [ ] Down saat tidak ada yang perlu berhenti dan tidak ada lease (Down shop sekali lagi) → tidak ada konfirmasi, kartu "Nothing to bring down." → AC-20
+- [ ] Remove Environment… shop saat lease masih aktif → kartu "Bring it down first." dengan tombol Bring Down…, yang membuka konfirmasi Down → AC-20
+- [ ] Up shop, lalu Stop `shop-db` dari halaman instance, dari baris daftar Instances, dari menu baris service di halaman shop, dan dari baris menu bar → setiap kali dialog destructive "Stop “shop-db”?" dengan "It’s leased by shop. Stopping it leaves the environment partially ready. Data is kept." dan tombol Cancel (default) dan Stop; Cancel tidak mengirim apa pun; Stop menghentikannya, shop menjadi Partially Ready atau Down, dan lease tetap (baris Lease tetap "held on 1 instance") → AC-23
+- [ ] (butuh 4.6) Stop All Services dari menu bar dengan shop ber lease → baris `shop-db` "Used by shop" dan kaki "shop will no longer be complete. Its lease stays."; konfirmasi menghentikannya → AC-24
+- [ ] (butuh 4.6) Ganti port `shop-db` (Configuration → Ports) saat shop ber lease → banner caution "shop uses this instance. Changing its ports can break that environment until you update what connects to it." dan tombol "Change Anyway" → AC-23
+- [ ] Offline (hentikan `stacklyd`) → Down nonaktif dengan alasan gerbang di banner jendela; saat Down berjalan, Down nonaktif dengan tooltip "Already bringing down" dan Up… dengan "Bringing down" → AC-20
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentDown` → `EnvironmentDownModelTests` (preview membuka konfirmasi *Copy Down*, preview kosong memberi "Nothing to bring down." tanpa `env.down`, Bring Down mengirim ID `stop` dari preview, `env.down_changed` membuka konfirmasi lagi dengan "What Down will stop changed. Review it again.", penolakan lain jadi umpan balik, hasil Down yang diawasi muncul saat berakhir, setiap kalimat umpan balik termasuk `env.down_incomplete` dengan Show Operation dan `left_running` dengan Bring Down…) dan `EnvironmentDownPageTests` (Down nonaktif "Already bringing down", tetap aktif saat Up berjalan, Up… "Bringing down", banner "Bringing down… 1 of 2", judul dan label Partial di Activity) lulus → AC-20, AC-21
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentLeaseTests` → baris Lease (satu, banyak, tanpa lease, daemon lama), "· lease" di inspector, salinan konfirmasi override, dan Stop yang ditolak `supervisor.stop_requires_override` membuka konfirmasi lalu hanya Stop di konfirmasi itu mengirim `overrideLeases` true dengan key baru → AC-22, AC-23
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "EnvironmentDownSnapshotTests|EnvironmentLeaseSnapshotTests|EnvironmentUpToolbarSnapshotTests"` → snapshot terang, gelap, dan sempit cocok: halaman saat Down berjalan, daftar "Bringing down…", Operations dengan Down Partial dan anak bersarang, baris Lease, inspector "Shared · lease", dan toolbar Validate, Down, Up… (alasan hanya tooltip, seperti toolbar asli) → AC-20, AC-21, AC-22
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → skenario `environment-bringing-down` ada dan tenang di presence-nya → AC-25
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [ ] `cargo xtask build-app` → BUILD SUCCEEDED
+- [ ] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test env_down_native -- --ignored --test-threads=1` dari `HEAD` yang bersih → `PASS` dari cache runtime xtask (Up ERP enam instance, preview menghentikan enam dan menjaga nol, Down `succeeded`, enam `stopped` dengan folder data dan jumlah file data yang sama, lease 6 menjadi 0, Up kedua membawa enam instance yang sama ke `ready`), atau `BLOCKED` `owner: user` tanpa artefak; run developer `evidence/environment/01a1d6b2-8137-7226-821a-0bcd1d86b5ba` PASS (data ClickHouse `status`, `*.pid`, `*.lock`, `*.sock`, dan tablespace sementara MySQL dianggap file proses yang dihapus stop normal) → AC-26
+- [ ] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test env_down` → record fixture `PASS` untuk AC-5, AC-7, AC-11; run developer `evidence/environment/01a1d6b4-6089-722c-8443-30f3142c6828` 7 PASS → AC-26
+- [ ] `cargo xtask evidence check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-20 · tombol Down, `EnvironmentDownModel`, konfirmasi *Copy Down*, `env.down_changed`, "Nothing to bring down.", alasan nonaktif, Bring Down… di penolakan remove (langkah 8)
+- AC-21 · banner "Bringing down… {done} of {total}" dengan Cancel dan Show in Activity, "Bringing down…" di sidebar, daftar, dan Overview, kartu hasil *Copy Down*, judul dan label Partial di Activity (langkah 8)
+- AC-22 · baris Lease dan "· lease" di inspector (langkah 9); bagian CLI milik milestone 3
+- AC-23 · konfirmasi override untuk semua permukaan Stop (halaman instance, daftar, menu baris service, menu bar) lewat satu fungsi di `InstanceActionModel` (langkah 9); banner dan "Change Anyway" di sheet port menunggu protokol 4.6
+- AC-24 · menunggu protokol 4.6 (`overrideLeases`, `environments`, `affectedEnvironments`, `agent_off`)
+- AC-25 · skenario fixture `environment-bringing-down` (langkah 8)
+- AC-26 · test native `env_down_native.rs` dan record fixture `env_down` (langkah 10)
