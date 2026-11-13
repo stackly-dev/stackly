@@ -157,20 +157,19 @@ struct EnvironmentPlanContent: View {
         return named + items.filter { order.contains($0.alias) == false }
     }
 
-    /// The blockers as banner items, one per service (an item is known by its name): the
-    /// message and the hint of each blocker of that service, in order.
+    /// The blockers as banner items, one per blocker (spec 0044, *Layar*): the service, then
+    /// the message and the hint. An item is known by its name, so a service with more than
+    /// one blocker names the later ones with their error code.
     static func items(_ blockers: [PlanBlocker]) -> [PartialItem] {
-        var order: [String] = []
-        var reasons: [String: [String]] = [:]
-        for blocker in blockers {
-            let name = blocker.service ?? "Environment"
-            if reasons[name] == nil { order.append(name) }
+        var seen: Set<String> = []
+        return blockers.map { blocker in
+            let service = blocker.service ?? "Environment"
+            let name =
+                seen.insert(service).inserted ? service : "\(service) (\(blocker.error.code))"
             let message = DaemonText.sentence(blocker.error.message)
-            reasons[name, default: []].append(
-                blocker.error.hint.map { "\(message) \(DaemonText.sentence($0))" } ?? message)
-        }
-        return order.map {
-            PartialItem(name: $0, reason: (reasons[$0] ?? []).joined(separator: " "))
+            let reason =
+                blocker.error.hint.map { "\(message) \(DaemonText.sentence($0))" } ?? message
+            return PartialItem(name: name, reason: reason)
         }
     }
 
