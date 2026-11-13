@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6a2-7b76-7291-af5f-a19d3d2a2950",
+  "covers": [
+    "BR-018",
+    "AC-080"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment_lock",
+    "name": "export_after_up_prints_the_real_ports_and_never_a_sentinel_a_home_path_or_a_pid",
+    "file": "apps/daemon/tests/environment_lock.rs",
+    "line": 730
+  },
+  "status": "PASS",
+  "expected": "spec 0045 AC-15: after env.up brings up two fake members, each with its own secret sentinel, env.export answers HOST, PORT, and ADDRESS of each member's bound port in dotenv and shell, from the file and by name, the text of stackly env export on stdout is the same text, and no reply, stdout, or daemon log line written during the export holds a sentinel, a reference, a path under the home, or the PID of an instance process",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T20:38:55.094298Z",
+  "finishedAt": "2026-11-13T20:39:09.772643Z",
+  "evidencePath": "output.log"
+}

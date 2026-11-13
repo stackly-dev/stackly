@@ -13,6 +13,7 @@ mod data;
 mod edges;
 mod export;
 mod lock;
+mod lock_edges;
 mod manage;
 mod plan;
 mod stacklyd;
