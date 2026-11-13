@@ -72,6 +72,37 @@ fn the_status_counts_ready_services_from_the_snapshot_and_instances() {
     );
 }
 
+// covers: AC-9, AC-14 (spec 0044)
+#[test]
+fn a_retained_member_is_unavailable_and_a_retained_name_is_not_created() {
+    let mut site = Site::new();
+    let api = site.instance("shop-api", 18080, InstanceLifecycle::Stopped);
+    site.instance("shared-fake", 18081, InstanceLifecycle::Stopped);
+    site.views[0].lifecycle = InstanceLifecycle::Retained;
+    site.views[1].lifecycle = InstanceLifecycle::Retained;
+    let env = EnvironmentBuilder::new()
+        .name("shop")
+        .declared(declared("api", None))
+        .declared(declared("cache", Some("shared-fake")))
+        .member("api", api.id(), Ownership::Dedicated)
+        .build();
+
+    let view = environment_view(&env, &site.views);
+    let reasons: Vec<Option<NotReadyReason>> = view
+        .services
+        .iter()
+        .map(|s| s.not_ready.as_ref().map(|r| r.0))
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            Some(NotReadyReason::Unavailable),
+            Some(NotReadyReason::NotCreated)
+        ]
+    );
+    assert!(view.services[1].instance.is_none());
+}
+
 // covers: AC-14 (spec 0044)
 #[test]
 fn the_manifest_state_takes_the_first_rule_that_matches() {

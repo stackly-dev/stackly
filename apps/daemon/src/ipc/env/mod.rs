@@ -116,8 +116,10 @@ async fn read_file(core: &DaemonCore, path: &Path) -> Result<Read, Box<ErrorBody
     .map_err(unreadable)
 }
 
-/// Every instance that is not retained, as the plan and the status see it,
-/// with the summary `instance.get` would send for it.
+/// Every instance, retained ones included, as the plan and the status see
+/// it, with the summary `instance.get` would send for it. A retained
+/// member is a blocker in the plan and `unavailable` in the status (AC-9),
+/// so it is never left out.
 struct Instances {
     views: Vec<InstanceView>,
     summaries: Vec<InstanceSummary>,
@@ -145,22 +147,25 @@ fn view_of(
     instance: &Instance,
     status: &InstanceStatus,
     runtimes: &[Runtime],
-) -> Option<InstanceView> {
-    let runtime = runtimes
+) -> InstanceView {
+    // A missing runtime row leaves the line unknown; the instance still
+    // gets its view, so a plan never drops its service.
+    let runtime_line = runtimes
         .iter()
-        .find(|runtime| runtime.id() == instance.runtime_id())?;
+        .find(|runtime| runtime.id() == instance.runtime_id())
+        .map(|runtime| runtime.line().clone());
     let detail = status
         .readiness
         .detail()
         .map(|detail| detail.as_str().to_owned())
         .or_else(|| instance.last_failure().map(|code| code.as_str().to_owned()))
         .map(|detail| core.redactor().redact(&detail).into_owned());
-    Some(InstanceView {
+    InstanceView {
         id: instance.id(),
         name: instance.name().clone(),
         provider: instance.provider_revision().provider().clone(),
         runtime_version: instance.data_version().clone(),
-        runtime_line: runtime.line().clone(),
+        runtime_line,
         lifecycle: shown_lifecycle(instance.lifecycle(), status),
         initialized: instance.data_initialized_at().is_some(),
         readiness: status.readiness.state(),
@@ -180,7 +185,7 @@ fn view_of(
                 _ => None,
             })
             .collect(),
-    })
+    }
 }
 
 async fn instances(
@@ -190,7 +195,11 @@ async fn instances(
 ) -> Result<Instances, Box<ErrorBody>> {
     let read = registry.clone();
     let (instances, runtimes) = blocking(move || {
-        let instances = read.instances(InstanceFilter::default())?.value;
+        let instances = read
+            .instances(InstanceFilter {
+                include_retained: true,
+            })?
+            .value;
         let runtimes = read.runtimes()?.value;
         Ok::<_, stackly_domain::RegistryError>((instances, runtimes))
     })
@@ -200,9 +209,7 @@ async fn instances(
     let mut summaries = Vec::with_capacity(instances.len());
     for instance in &instances {
         let status = supervisor.status(instance.id());
-        if let Some(view) = view_of(core, instance, &status, &runtimes) {
-            views.push(view);
-        }
+        views.push(view_of(core, instance, &status, &runtimes));
         summaries.push(crate::ipc::instance::summary_of(core, supervisor, instance));
     }
     Ok(Instances { views, summaries })

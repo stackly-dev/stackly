@@ -268,6 +268,58 @@ fn an_instance_ref_is_kept_or_started_and_never_created() {
     assert!(codes(&site.plan(other.as_bytes())).contains(&"env.instance_ref_mismatch"));
 }
 
+// covers: AC-8, AC-9 (spec 0044)
+#[test]
+fn an_instance_ref_never_names_a_retained_instance() {
+    let mut site = Site::new();
+    site.instance("shared-fake", 18085, InstanceLifecycle::Stopped);
+    site.views[0].lifecycle = InstanceLifecycle::Retained;
+    assert_eq!(
+        codes(&site.plan(BORROW.as_bytes())),
+        ["env.instance_ref_not_found"],
+        "a retained instance gave its name up"
+    );
+
+    // A new instance took the name the retained one gave up.
+    let mut live = site.views[0].clone();
+    live.id = stackly_domain::InstanceId::generate();
+    live.lifecycle = InstanceLifecycle::Running;
+    site.views.push(live.clone());
+    let plan = site.plan(BORROW.as_bytes());
+    assert!(plan.applicable, "{:#?}", plan.blockers);
+    assert_eq!(plan.items[0].instance_id, Some(live.id));
+    assert_eq!(plan.items[0].action, PlanAction::Keep);
+}
+
+// covers: AC-9 (spec 0044)
+#[test]
+fn a_retained_member_keeps_its_item_and_blocks_the_plan() {
+    let mut site = Site::new();
+    registered(&mut site, InstanceLifecycle::Stopped);
+    site.views[0].lifecycle = InstanceLifecycle::Retained;
+    let plan = site.plan(MEMBERS.as_bytes());
+    assert!(!plan.applicable);
+    assert!(plan.digest.is_none());
+    let api = plan
+        .items
+        .iter()
+        .find(|item| item.alias.as_str() == "api")
+        .expect("the retained member keeps its item");
+    assert_eq!(api.action, PlanAction::Keep);
+    assert!(api.steps.is_empty());
+    let blocked: Vec<(&str, &str)> = plan
+        .blockers
+        .iter()
+        .filter_map(|b| match &b.kind {
+            BlockerKind::InstanceBlocked { instance, reason } => {
+                Some((instance.as_str(), reason.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(blocked, [("shop-api", "retained")]);
+}
+
 const MEMBERS: &str = "\
 apiVersion: stackly/v1alpha1
 kind: Environment
@@ -334,6 +386,11 @@ fn a_member_follows_the_lifecycle_table_reports_differences_and_detached() {
             InstanceLifecycle::Unknown,
             PlanAction::Keep,
             Some("unknown"),
+        ),
+        (
+            InstanceLifecycle::Retained,
+            PlanAction::Keep,
+            Some("retained"),
         ),
         (
             InstanceLifecycle::Uninitialized,

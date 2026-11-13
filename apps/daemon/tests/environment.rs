@@ -23,7 +23,8 @@ use stackly_core::catalog::{
 use stackly_core::provider::{NameCheck, ValidatedPackage, read_package};
 use stackly_domain::{
     AuditQuery, Environment, EnvironmentMember, InstanceId, Lease, LeaseHolder, LeaseId,
-    OperationQuery, Ownership, Registry as _, StoredEnvironment, WriteBatch, WriteOp,
+    LifecycleEvent, OperationQuery, Ownership, Registry as _, StoredEnvironment, WriteBatch,
+    WriteOp,
 };
 use stackly_ipc::CallOptions;
 use stackly_platform::{Clock as _, SystemClock};
@@ -866,6 +867,79 @@ fn release(daemon: &DaemonHandle, instance: Uuid, lease: LeaseId) {
     registry
         .commit(WriteBatch::new(vec![WriteOp::UpdateLease(found)]))
         .expect("the release commits");
+}
+
+/// Retains the stopped instance `instance` straight in the registry, as a
+/// remove that keeps data would.
+fn retain(daemon: &DaemonHandle, instance: Uuid) {
+    let registry = daemon.core().registry().expect("open");
+    let id = InstanceId::from_uuid(instance).expect("a v7 id");
+    let current = registry
+        .instance(id)
+        .expect("reads")
+        .value
+        .expect("the instance exists");
+    let expected = current.revision();
+    let mut retained = current;
+    let by = retained.created_by();
+    retained
+        .apply_lifecycle(LifecycleEvent::Retain { by }, SystemClock.now())
+        .expect("a stopped instance can be retained");
+    registry
+        .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+            instance: retained,
+            expected,
+        }]))
+        .expect("the retain commits");
+}
+
+// covers: AC-9, AC-14 (spec 0044)
+#[tokio::test(flavor = "multi_thread")]
+async fn a_retained_member_blocks_the_plan_and_shows_unavailable() {
+    let site = Site::new();
+    let mut empty = fast();
+    empty.catalog = Some(stacklyd::catalog::CatalogOverride::Preloaded(
+        Catalog::for_tests(&[]),
+    ));
+    let first = site.start_with(empty).await;
+    let instance = site
+        .api()
+        .await
+        .create_ready("shop-db", serde_json::Value::Null)
+        .await;
+    stop(first).await;
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let path = write(
+        &project(&site).join("stackly.yaml"),
+        &fake_manifest("shop", &["db"]),
+    );
+    let imported = import(&api, &path).await.expect("imports");
+    join(&daemon, imported.summary.id, "db", instance);
+    retain(&daemon, instance);
+
+    let planned = plan(&api, &path).await.expect("plans");
+    assert!(!planned.applicable, "{:#?}", planned.blockers);
+    assert!(planned.plan_digest.is_none());
+    assert_eq!(planned.items.len(), 1, "the retained member keeps its item");
+    assert_eq!(planned.items[0].alias, "db");
+    assert_eq!(planned.items[0].action, PlanAction::Keep);
+    assert_eq!(planned.blockers.len(), 1, "{:#?}", planned.blockers);
+    let blocker = &planned.blockers[0];
+    assert_eq!(blocker.service.as_deref(), Some("db"));
+    assert_eq!(blocker.error.code(), "env.instance_blocked");
+    assert_eq!(
+        detail(&blocker.error, "reason").as_deref(),
+        Some("retained")
+    );
+
+    let shown = get(&api, imported.summary.id, false).await.expect("gets");
+    assert_eq!(
+        shown.services[0].not_ready.as_ref().map(|n| n.reason),
+        Some(stackly_protocol::env::NotReadyReason::Unavailable)
+    );
+    drop(api);
+    stop(daemon).await;
 }
 
 // covers: AC-13, AC-14, AC-15 (spec 0044)

@@ -94,8 +94,8 @@ pub struct InstanceView {
     pub provider: ProviderName,
     /// The exact runtime version.
     pub runtime_version: ExactVersion,
-    /// The runtime line.
-    pub runtime_line: RuntimeLine,
+    /// The runtime line, or `None` when its runtime row could not be read.
+    pub runtime_line: Option<RuntimeLine>,
     /// The lifecycle.
     pub lifecycle: InstanceLifecycle,
     /// Whether its data was initialized (`data_initialized_at` is set).
@@ -121,7 +121,8 @@ pub struct PlanDeps<'a> {
     pub catalog: &'a Catalog,
     /// This Mac, for `runtime::resolve`.
     pub host: &'a HostFacts,
-    /// Every instance that is not retained.
+    /// Every instance, retained ones included: a member that is retained
+    /// still gets its item and its `env.instance_blocked` blocker (AC-9).
     pub instances: &'a [InstanceView],
 }
 
@@ -654,6 +655,9 @@ fn waits_for(service: &ServiceSpec) -> Vec<MemberAlias> {
 }
 
 /// An item for an instance that exists: a member, or a borrowed one.
+/// The registry never deletes a member's instance (`ON DELETE RESTRICT`)
+/// and `instances` holds every instance, retained ones included, so the
+/// view is always there for a member.
 fn existing_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
@@ -700,10 +704,11 @@ fn borrowed_item(
     instance_ref: &InstanceName,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
+    // A retained instance gives its name up, so a name never finds one.
     let Some(view) = deps
         .instances
         .iter()
-        .find(|view| &view.name == instance_ref)
+        .find(|view| &view.name == instance_ref && view.lifecycle != InstanceLifecycle::Retained)
     else {
         plan.blockers.push(PlanBlocker {
             service: Some(service.alias.clone()),
@@ -755,7 +760,7 @@ fn differences(
     {
         let differs = match (version, line) {
             (Some(version), _) => version != &view.runtime_version,
-            (None, Some(line)) => line != &view.runtime_line,
+            (None, Some(line)) => view.runtime_line.as_ref().is_some_and(|own| own != line),
             (None, None) => false,
         };
         if differs {
