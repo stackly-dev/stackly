@@ -20,13 +20,13 @@ use tokio::task::JoinSet;
 use super::Supervisor;
 use super::error::SupervisorError;
 use super::persist::blocking;
+use super::stop::LeaseCheck;
 use crate::instance::stop_all::{read_view, select};
 use crate::operation::codes::CANCELLED;
 use crate::operation::{
     BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork, PartialItem,
     PartialOutcome, StepSpec, WorkError, WorkOutcome, WorkResult,
 };
-use crate::session::manual_stop_ops;
 
 /// What [`Supervisor::stop_all_work`] needs.
 #[derive(Debug, Clone)]
@@ -119,13 +119,22 @@ impl Supervisor {
         if leases.is_none() || self.is_retained(id).await {
             return StepEnd::Dropped;
         }
-        let now = self.deps().platform.clock().now();
-        let ops = manual_stop_ops(id, &leases.unwrap_or_default(), session.as_ref(), true, now)
-            .unwrap_or_default();
-        match self.stop_direct(id, StopIntent::User, ops).await {
+        // The guard reads the leases again in the commit that writes
+        // desired `stopped` (spec 0047): a lease an Up recorded after the
+        // selection makes the step skipped, never a stop.
+        // provisional: F47 step 6 takes `override_leases` from the
+        // operation's `StopAllOptions`; until then Stop All never overrides.
+        let check = LeaseCheck::Manual {
+            session,
+            override_leases: false,
+        };
+        match self.stop_direct(id, StopIntent::User, check).await {
             Ok(()) => StepEnd::Stopped,
             Err(SupervisorError::InstanceRetained | SupervisorError::NotFound(_)) => {
                 StepEnd::Dropped
+            }
+            Err(error @ SupervisorError::StopRequiresOverride { .. }) => {
+                StepEnd::Skipped(error.code())
             }
             Err(error) => StepEnd::Failed(error.code()),
         }

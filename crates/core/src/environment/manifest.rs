@@ -2,9 +2,13 @@
 //! raw serde types, which also generate the editor JSON Schema, and the
 //! strict loader that turns bytes into them.
 //!
-//! The loader refuses what YAML allows but the manifest does not: unknown
-//! fields, repeated keys, anchors, aliases, tags, merge keys, and another
-//! `apiVersion` or `kind`. Every finding it makes carries a fixed message
+//! The manifest is the value `serde_yaml_ng` builds once aliases expand,
+//! within the expand budget of [`yaml_value`], the same loader as
+//! `provider.yaml` (spec 0044, *YAML yang diterima*). The loader refuses
+//! what that value shows but the manifest does not allow: unknown fields,
+//! repeated keys, tagged values, merge keys, and another `apiVersion` or
+//! `kind`. Anchors and aliases are not findings, and no rule reads the
+//! text itself. Every finding it makes carries a fixed message
 //! (AC-3): the text of a `serde_yaml_ng` error only chooses the code and
 //! the location, and a key from the file reaches a location only when it
 //! looks like a name.
@@ -200,10 +204,9 @@ pub fn declared_name(bytes: &[u8]) -> Result<Option<stackly_domain::EnvironmentN
     load(bytes).map(|raw| raw.metadata.name.parse().ok())
 }
 
-/// Decodes manifest bytes, or returns the findings that stopped it. The
-/// shape of the document is checked first and the first problem stops it
-/// (spec 0044, *Aturan validasi*), except anchors and aliases, which are
-/// all reported.
+/// Decodes manifest bytes, or returns the finding that stopped it. The
+/// shape of the document is checked first, and the first problem stops it
+/// (spec 0044, *YAML yang diterima*).
 pub(crate) fn load(bytes: &[u8]) -> Result<RawEnvironment, Findings> {
     load_document(bytes, KIND, FindingCode::UnsupportedKind.template())
 }
@@ -243,8 +246,6 @@ pub(crate) fn load_document<T: serde::de::DeserializeOwned>(
                     let message = err.to_string();
                     let code = if message.contains("duplicate entry") {
                         FindingCode::DuplicateKey
-                    } else if message.contains("unknown anchor") {
-                        FindingCode::YamlAlias
                     } else {
                         FindingCode::YamlSyntax
                     };
@@ -255,19 +256,11 @@ pub(crate) fn load_document<T: serde::de::DeserializeOwned>(
             return Err(findings);
         }
     };
-    for (line, column) in anchors_and_aliases(text) {
-        findings.push(Finding::error(
-            FindingCode::YamlAlias,
-            FindingLocation::Position { line, column },
-        ));
-    }
     if let Some(path) = tag_or_merge_key(&value, "") {
-        findings.push(Finding::error(
-            FindingCode::YamlAlias,
-            FindingLocation::Field(path),
-        ));
-    }
-    if findings.count() > 0 {
+        stop(
+            &mut findings,
+            Finding::error(FindingCode::YamlAlias, FindingLocation::Field(path)),
+        );
         return Err(findings);
     }
     let Some(mapping) = value.as_mapping() else {
@@ -408,7 +401,9 @@ pub(crate) fn safe_segment(segment: &str) -> String {
     }
 }
 
-/// The path of the first tag or merge key in `value`, if any.
+/// The path of the first tag or merge key in `value`, if any: a tagged
+/// value's own path, a tagged key's mapping, and a merge key's mapping
+/// followed by `<<`.
 fn tag_or_merge_key(value: &serde_yaml_ng::Value, path: &str) -> Option<String> {
     use serde_yaml_ng::Value;
     let here = || {
@@ -425,209 +420,20 @@ fn tag_or_merge_key(value: &serde_yaml_ng::Value, path: &str) -> Option<String> 
             .enumerate()
             .find_map(|(index, item)| tag_or_merge_key(item, &format!("{path}[{index}]"))),
         Value::Mapping(map) => map.iter().find_map(|(key, item)| {
+            if key.as_str() == Some("<<") {
+                // A fixed text, not a value from the file.
+                return Some(join(path, "<<"));
+            }
             let name = match key {
                 Value::Tagged(_) => return Some(here()),
                 Value::String(name) => safe_segment(name),
                 _ => "?".to_owned(),
             };
             let child = join(path, &name);
-            if key.as_str() == Some("<<") {
-                return Some(child);
-            }
             tag_or_merge_key(item, &child)
         }),
         _ => None,
     }
-}
-
-/// The line and column (from 1) of every anchor (`&name`) and alias
-/// (`*name`) in YAML `text`, which already parsed, and of every quote the
-/// scan can't follow.
-///
-/// `serde_yaml_ng` expands aliases without saying so, so this scans the
-/// text: outside quoted scalars, block scalars, and comments, an `&` or
-/// `*` that starts a node is an anchor or an alias, because a plain scalar
-/// can't start with either. The scan is conservative (K2): a quote may
-/// span lines only when it clearly opens a value (`key: "` or `- "` on a
-/// line that can't continue a plain scalar). Any other quote that does
-/// not close on its own line is reported too, so a file the scan might
-/// misread is refused rather than letting an anchor or alias through.
-pub(crate) fn anchors_and_aliases(text: &str) -> Vec<(usize, usize)> {
-    /// Where a block scalar is.
-    #[derive(Clone, Copy)]
-    enum Block {
-        /// Opened under a node at this column; no content line yet.
-        Opened { node: usize },
-        /// Its content lines are indented at least this far.
-        Content { indent: usize },
-    }
-    /// An open quoted scalar.
-    #[derive(Clone, Copy)]
-    struct Quote {
-        /// `"` or `'`.
-        mark: char,
-        /// Where it opened, from 1.
-        at: (usize, usize),
-        /// Whether it may span lines.
-        multi_line: bool,
-    }
-    let mut found = Vec::new();
-    let mut quote: Option<Quote> = None;
-    let mut block: Option<Block> = None;
-    // When the last content line ended in a scalar, the column a line
-    // must be indented past to continue it.
-    let mut plain_tail: Option<usize> = None;
-    for (line_index, line) in text.lines().enumerate() {
-        let chars: Vec<char> = line.chars().collect();
-        let indent = chars.iter().take_while(|c| **c == ' ').count();
-        let blank = chars.iter().all(|c| c.is_whitespace());
-        match block {
-            _ if blank && block.is_some() => continue,
-            // The first line that is not blank sets the content indent; a
-            // line no deeper than the node leaves the scalar empty.
-            Some(Block::Opened { node }) if indent > node => {
-                block = Some(Block::Content { indent });
-                continue;
-            }
-            Some(Block::Content { indent: content }) if indent >= content => continue,
-            _ => block = None,
-        }
-        let continues = quote.is_none() && !blank && plain_tail.is_some_and(|tail| indent > tail);
-        // The column of the node this line starts: past the indent and any
-        // `- ` sequence markers.
-        let mut node = indent;
-        while chars.get(node) == Some(&'-') && chars.get(node + 1).is_none_or(|c| *c == ' ') {
-            node += 1;
-            while chars.get(node) == Some(&' ') {
-                node += 1;
-            }
-        }
-        let mut has_key = false;
-        // Whether the last significant character ended a scalar rather
-        // than being an indicator, and that character.
-        let mut last_significant: Option<char> = None;
-        let mut structural = true;
-        let mut significant = false;
-        let mut index = 0;
-        while index < chars.len() {
-            let c = chars[index];
-            if let Some(open) = quote {
-                if open.mark == '"' && c == '\\' {
-                    index += 2;
-                    continue;
-                }
-                if c == open.mark {
-                    if open.mark == '\'' && chars.get(index + 1) == Some(&'\'') {
-                        index += 2;
-                        continue;
-                    }
-                    quote = None;
-                    last_significant = Some(c);
-                    structural = false;
-                    significant = true;
-                }
-                index += 1;
-                continue;
-            }
-            let previous = index.checked_sub(1).map(|at| chars[at]);
-            if c == '#' && previous.is_none_or(char::is_whitespace) {
-                break;
-            }
-            if c.is_whitespace() {
-                index += 1;
-                continue;
-            }
-            significant = true;
-            let followed_by_space = chars.get(index + 1).is_none_or(|next| next.is_whitespace());
-            let starts_node = match previous {
-                None => true,
-                Some('[' | '{' | ',') => true,
-                Some(p) if p.is_whitespace() => {
-                    matches!(
-                        last_significant,
-                        None | Some('-' | '?' | ':' | ',' | '[' | '{')
-                    )
-                }
-                Some(_) => false,
-            };
-            structural = match c {
-                ':' => followed_by_space,
-                '-' | '?' => starts_node && followed_by_space,
-                '[' | '{' | ',' => true,
-                _ => false,
-            };
-            if c == ':' && followed_by_space {
-                has_key = true;
-            }
-            if starts_node {
-                match c {
-                    '&' | '*' => {
-                        let named = chars.get(index + 1).is_some_and(|next| {
-                            !next.is_whitespace() && !matches!(next, ',' | '[' | ']' | '{' | '}')
-                        });
-                        if named {
-                            found.push((line_index + 1, index + 1));
-                        }
-                    }
-                    '"' | '\'' => {
-                        let clear = previous.is_some_and(char::is_whitespace)
-                            && matches!(last_significant, Some(':' | '-'))
-                            && !continues;
-                        quote = Some(Quote {
-                            mark: c,
-                            at: (line_index + 1, index + 1),
-                            multi_line: clear,
-                        });
-                    }
-                    '|' | '>' => {
-                        let rest: String = chars[index + 1..].iter().collect();
-                        let header = rest.split('#').next().unwrap_or_default().trim();
-                        if header
-                            .chars()
-                            .all(|h| h.is_ascii_digit() || h == '+' || h == '-')
-                        {
-                            // A mapping value's block sits under its key;
-                            // a sequence entry's under the line.
-                            let parent = if has_key { node } else { indent };
-                            let explicit = header
-                                .chars()
-                                .find(char::is_ascii_digit)
-                                .and_then(|digit| digit.to_digit(10));
-                            block = Some(match explicit {
-                                Some(step) => Block::Content {
-                                    indent: parent + step as usize,
-                                },
-                                None => Block::Opened { node: parent },
-                            });
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            last_significant = Some(c);
-            index += 1;
-        }
-        if let Some(open) = quote
-            && !open.multi_line
-        {
-            // A quote the scan can't follow across lines.
-            found.push(open.at);
-            quote = None;
-        }
-        if block.is_some() {
-            plain_tail = None;
-        } else if significant && quote.is_none() {
-            // A mapping value continues only past its key's column; a
-            // sequence entry past the line's indent.
-            plain_tail = (!structural).then_some(if has_key { node } else { indent });
-        }
-    }
-    if let Some(open) = quote {
-        found.push(open.at);
-    }
-    found.sort_unstable();
-    found
 }
 
 #[cfg(test)]
@@ -635,99 +441,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn anchors_and_aliases_are_found_outside_quotes_comments_and_block_scalars() {
-        let text = "\
-a: &base {x: 1}
-b: *base
-c: \"&not *an alias\"
-d: 'it''s &fine'
-# &comment *too
-e: |
-  &inside *block
-f: [*base, &other 2]
-g: a&b*c
-h:
-  - *base
-";
+    fn a_merge_key_is_reported_under_its_mapping() {
+        let value: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str("services:\n  web:\n    <<: {a: 1}\n").unwrap();
         assert_eq!(
-            anchors_and_aliases(text),
-            [(1, 4), (2, 4), (8, 5), (8, 12), (11, 5)]
+            tag_or_merge_key(&value, "").as_deref(),
+            Some("services.web.<<")
         );
-    }
-
-    #[test]
-    fn a_key_after_a_block_scalar_in_a_sequence_item_is_scanned_again() {
-        let text = "\
-services:
-  api:
-    dependsOn:
-    - service: |-
-        db
-      condition: &c ready
-  web:
-    dependsOn:
-    - service: api
-      condition: *c
-";
-        assert_eq!(anchors_and_aliases(text), [(6, 18), (10, 18)]);
-    }
-
-    #[test]
-    fn a_block_scalar_ends_at_the_first_line_less_indented_than_its_content() {
-        let text = "\
-a: >
-    &deep
-    *deep
-
-    still *inside
-  b: *out
-c: |
-d: *empty
-";
-        assert_eq!(anchors_and_aliases(text), [(6, 6), (8, 4)]);
-    }
-
-    #[test]
-    fn a_quote_the_scan_cant_follow_across_lines_is_reported() {
-        // Line start, a plain scalar continuation, and an unclosed quote at
-        // the end of the text.
-        let text = "\
-a: one
-  \"two
-b: &x 1
-c: x
-  'y
-d: \"open
-  still open
-";
-        assert_eq!(anchors_and_aliases(text), [(2, 3), (3, 4), (5, 3), (6, 4)]);
-    }
-
-    #[test]
-    fn a_value_quote_may_span_lines_and_a_quote_inside_plain_text_is_text() {
-        let text = "\
-a: \"one &x
-  two *y\"
-b: 'it''s
-  &fine'
-c: don't \"stop
-d:
-  - \"three
-    four\"
-";
-        assert!(anchors_and_aliases(text).is_empty());
-    }
-
-    #[test]
-    fn an_indentation_indicator_sets_the_block_content_under_its_key() {
-        let text = "\
-a:
-  - b: |2-
-        deep
-      \"shallow but inside
-    c: &x 1
-";
-        assert_eq!(anchors_and_aliases(text), [(5, 8)]);
     }
 
     #[test]

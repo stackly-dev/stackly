@@ -11,6 +11,7 @@ mod config;
 mod data_compat;
 mod doctor;
 mod force_restart;
+mod guarded_stop;
 mod init;
 mod integrity;
 mod launch;

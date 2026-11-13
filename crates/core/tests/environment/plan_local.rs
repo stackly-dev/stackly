@@ -98,7 +98,7 @@ fn every_override_rule_has_its_finding_and_an_error_blocks_once() {
             "invalid_value",
         ),
         ("  api: {}\n  api: {}\n", "duplicate_key"),
-        ("  api: &a {}\n  db: *a\n", "yaml_alias"),
+        ("  api: !custom {}\n", "yaml_alias"),
         (
             "  borrowed:\n    endpoints:\n      http: {port: 18100}\n",
             "override_not_allowed",

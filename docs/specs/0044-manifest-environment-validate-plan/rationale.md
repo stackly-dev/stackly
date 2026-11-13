@@ -29,10 +29,11 @@ Mode keputusan sesi ini `auto`: opsi yang direkomendasikan diambil, runner up di
 - **Diambil: `apiVersion: stackly/v1alpha1`, `kind: Environment`.** Sama dengan manifest provider (spec 0009) dan contoh PRD; satu loader, satu aturan versi. Kontra: `v1alpha1` menjanjikan bisa berubah, jadi tim perlu tahu file bisa butuh migrasi.
 - Runner up: namespace sendiri (`stackly.env/v1`). Pro: versi environment lepas dari provider. Kontra: dua skema versi untuk satu produk, dan contoh PRD jadi tidak valid.
 
-### K2: seberapa ketat loader (`biasa`)
+### K2: seberapa ketat loader (`biasa`; bagian anchor dan alias `berat`, diubah 2026-11-13)
 
-- **Diambil: ketat.** Field tak dikenal, key ganda, anchor dan alias, dan versi tanpa kutip ditolak. Salah ketik (`endpoint:`) ketahuan, bukan diabaikan diam diam. Kontra: file yang ditulis untuk versi Stackly lebih baru ditolak versi lama.
+- **Diambil: ketat.** Field tak dikenal, key ganda, nilai bertag, merge key, dan versi tanpa kutip ditolak. Salah ketik (`endpoint:`) ketahuan, bukan diabaikan diam diam. Kontra: file yang ditulis untuk versi Stackly lebih baru ditolak versi lama.
 - Runner up: longgar dengan warning. Pro: maju mundur lebih mudah. Kontra: salah ketik pada `secretRefs` berarti secret dibangkitkan diam diam.
+- **Anchor dan alias: diterima dengan aturan `provider.yaml`** (anggaran node spec 0009), bukan ditolak seperti teks awal K2. Alasan, opsi, dan runner up nya ada di *Perubahan 2026-11-13 (AC-1 dan K2: anchor dan alias)* di bawah.
 
 ### K3: ownership dan `instanceRef` (`berat`)
 
@@ -152,6 +153,53 @@ Mode Update, tanpa cross check, atas permintaan lead. ID AC tidak berubah.
 ## Perubahan 2026-11-13 (sesudah spec 0047 diterima)
 
 Update `/architect` (mode Update, sesi `arc-update-all`). *Titik sambung* untuk spec 0047 diselaraskan dengan nama field dan aturan final [spec 0047](../0047-env-down-shared-instance-lease/index.md): `InstanceEnvironment.leaseActive`, `EnvironmentDetail.lease`, baris Lease, kata "· lease", aksi Bring Down… di pesan `env.lease_active`, dan `activeOperation.kind` `environment_down`. Tidak ada keputusan baru dan tidak ada AC yang berubah; field itu dibangun spec 0047 dengan minor protokolnya sendiri. Satu Follow-up baru dicatat dari spec 0047: rename instance yang dipinjam lewat `instanceRef` belum punya aturan, dan keputusannya milik spec ini.
+
+## Perubahan 2026-11-13 (AC-1 dan K2: anchor dan alias)
+
+Update `/architect` (mode Update, sesi `arc-update-44b`, mode keputusan `auto`), sesudah tiga ronde `/check verify` Milestone 1 gagal di AC-1. ID AC tidak berubah. Keputusan ini bertanda **`berat`**: ia mengubah makna AC-1, dan sesudah rilis melarang alias lagi berarti menolak file yang sudah beredar di tim.
+
+### Masalahnya
+
+Teks awal K2 menolak anchor dan alias, tanpa alasan selain "ketat". `serde_yaml_ng` meng expand alias tanpa memberi tahu, dan modul `libyaml` serta `loader` nya privat, jadi tidak ada API event. Developer karena itu memindai teks (`anchors_and_aliases`, sekitar 190 baris). Checker melewatinya tiga kali dengan tiga bentuk berbeda (key sesudah block scalar di item sequence; sambungan plain scalar berawalan kutip; baris berakhir `,` atau `[` lalu sambungan `- "`), dan pindaian konservatif terakhir menolak string berkutip multi baris yang sah dengan pesan tentang alias. Pindaian teks berarti menulis ulang scanner YAML, dan setiap beda dengan scanner libyaml adalah celah.
+
+Apa yang sebenarnya dilindungi larangan itu, diperiksa satu per satu:
+
+- **Bom expand**: tugas `yaml_value` (anggaran node spec 0009), dengan atau tanpa larangan, karena pindaian teks berjalan sesudah nilainya dibangun. Cross check menemukan anggaran itu berlubang: string dihitung satu node berapa pun panjangnya. Diuji 2026-11-13: file 45 KiB (scalar 20 KiB di balik 5.000 alias, 5.005 node dari anggaran 92.004) dibangun menjadi 102 MB string; pada 256 KiB itu beberapa GiB. Lubang ini sudah ada sebelum update ini dan berlaku juga untuk `provider.yaml`. Ditutup di update ini dengan menghitung byte string (*Anggaran expand* di `index.md`), bukan dengan melarang alias, karena larangan di manifest environment tidak melindungi `provider.yaml`.
+- **Nilai yang lolos validasi**: tidak ada. Setiap aturan berjalan atas nilai hasil expand; checker menegaskannya di ketiga ronde.
+- **Determinisme `manifestSha256`**: digest dihitung dari byte file, tidak terpengaruh.
+- **Keterbacaan manifest dari orang lain**: plan menampilkan hasil expand, dan plan adalah tempat kamu meninjau manifest sebelum ada yang berjalan.
+
+Jadi yang tersisa hanya soal gaya penulisan file, bukan keamanan atau kebenaran.
+
+### Opsi
+
+- **B, diambil: anchor dan alias diterima, pindaian teks dihapus.** Manifest didefinisikan sebagai nilai hasil parse; yang ditolak hanya yang tampak di nilai itu (nilai bertag, key `<<`) dan alias yang melewati anggaran node. Pro: tidak ada lagi janji di tingkat teks, jadi tidak ada yang bisa dilewati; satu aturan YAML untuk `provider.yaml` dan `stackly.yaml` (spec 0009 sudah memutuskan hal yang sama untuk manifest provider, dan mencatat bahwa menolak anchor butuh parser event yang aman yang belum ada di stack); tidak ada dependency baru; sekitar 190 baris kode rapuh dan enam test nya hilang; string berkutip multi baris sah lagi. Kontra: mahal dibalik sesudah rilis; satu nilai bisa berasal dari baris lain di file; tag yang diselesaikan parser (`!!str`) juga tidak ditolak.
+- **A, runner up: pass event dengan `libyaml-safer` 0.3.0** (MIT lewat `license-file`, tanpa dependency turunan, Rust aman kecuali satu blok `unsafe` di pembaca UTF-8 nya, port dari libyaml yang sama dengan `unsafe-libyaml` 0.2.11 di bawah `serde_yaml_ng`). Loader menjalankan parser itu atas teks dan menolak setiap event `Alias`, setiap anchor, dan setiap tag, dengan `line:column` yang tepat. Pro: larangan K2 tetap utuh dan menjadi struktural, termasuk untuk tag `!!str`; paling murah dibalik (melonggarkan nanti selalu kompatibel); manifest beralias tidak pernah sampai ke `serde_yaml_ng`, jadi ia tidak bergantung pada anggaran expand. Kontra: crate baru versi 0.x dari satu pemelihara di `stackly-core`, dijalankan atas file tak tepercaya di dalam daemon (butuh target fuzz sendiri dan `fuzz/Cargo.lock` baru); `deny.toml` butuh entri `clarify` karena crate itu tidak mengisi field `license`; satu pass parse tambahan di atas dua pass `yaml_value`; dan tetap ada dua implementasi scanner yang harus sepakat, walau berasal dari kode yang sama. Diuji 2026-11-13: ia melihat anchor dan alias di semua bentuk checker dan di bentuk U+2028 di bawah. Kalau lead memilih A: AC-1 kembali ke "anchor, alias, dan tag ditolak dengan `line:column`", `yaml_alias` kembali berlokasi posisi, langkah 2 mendapat dependency `libyaml-safer = "0.3"` di `[workspace.dependencies]` dan satu pass event sebelum `yaml_value`, dan daftar test *Untuk developer* dibalik (bentuk checker harus ditolak).
+- **A dengan parser lain (`saphyr-parser` 0.3.4 atau `yaml-rust2` 0.13.0, keduanya MIT OR Apache-2.0): ditolak.** Parser YAML 1.2 tidak sepakat dengan libyaml (YAML 1.1) soal baris: libyaml memperlakukan U+0085, U+2028, dan U+2029 sebagai ganti baris, parser 1.2 tidak. Diuji 2026-11-13 dengan `# c<U+2028>    version: &v "1"` dan `# c<U+2028>    version: *v`: `saphyr-parser` melihat dua komentar dan nol anchor, `serde_yaml_ng` membaca dua key dan meng expand alias nya. Itu celah ronde keempat dengan kelas yang sama.
+- **`unsafe-libyaml` langsung: ditolak.** Sudah ada di `Cargo.lock`, tetapi API nya `unsafe`, dan `unsafe` hanya boleh di `stackly-platform-macos`.
+- **C, larangan "sejauh pindaian melihatnya": ditolak.** Spec yang menjanjikan sesuatu yang diketahui bisa dilewati membuat AC-1 tidak bisa diverifikasi, dan pindaian tetap salah menolak file sah.
+- **Membandingkan parse dengan dan tanpa expand: tidak ada API nya.** `serde_yaml_ng` tidak punya mode tanpa expand; visitor serde tidak menerima posisi atau tanda alias (`Path::Alias` ditampilkan sama dengan induknya).
+
+### Mengapa B dan bukan A
+
+Role architect meminta opsi yang paling murah dibalik bila dua opsi setara, dan itu A. Keduanya dinilai tidak setara: A menambah parser kedua atas masukan tak tepercaya di daemon untuk menjaga aturan yang, sesudah diperiksa, tidak melindungi apa pun selain gaya penulisan; B menghapus kelas temuannya sama sekali dan menyamakan `stackly.yaml` dengan `provider.yaml`, file yang lebih peka (ia menentukan apa yang dijalankan) dan sudah menerima alias sejak spec 0009. Tidak ada yang menulis balik `stackly.yaml` (K16: file di disk adalah sumbernya; `env lock` dan `env export` spec 0045 menulis file lain), jadi anchor milikmu tidak pernah hilang lewat round trip. Membalik B tetap mungkin, tetapi hanya bersama `apiVersion` baru, dan itu yang dimaksud mahal. Karena B mahal dibalik, keputusan ini dikirim ke lead sebagai `needs-decision` dengan A sebagai runner up yang siap dibangun.
+
+### Yang ikut dirapikan
+
+- AC-1 menulis "menunjuk baris dan kolom" untuk semua penolakan, padahal *Aturan validasi* dan kode memberi path field untuk field tak dikenal, `apiVersion`, dan `kind`. AC-1 kini merujuk aturan `location` di *Aturan validasi*.
+- Tag: teks lama tidak menyebut tag di AC-1, sedangkan kode dan pesan menolaknya. Diuji 2026-11-13: `serde_yaml_ng` hanya menyerahkan tag lokal (`!nama`) dan `!` sebagai `Value::Tagged`; `!!str`, `!!int`, `!!map`, `!<tag:yaml.org,2002:str>`, dan handle `%TAG` hilang dari nilai hasil parse. AC-1 karena itu hanya menjanjikan penolakan nilai bertag yang tampak, supaya tidak ada janji kedua yang bisa dilewati.
+- Pesan `yaml_alias` yang menyesatkan untuk kutip multi baris hilang bersama pindaiannya; kutip multi baris sah di posisi mana pun.
+- Alias ke anchor yang tidak ada menjadi `yaml_syntax` (dokumen memang tidak bisa diparse), dan merge key dilaporkan di path yang berakhir `<<`.
+- Tag `%TAG` dan `!<…>` yang hasilnya berawalan `!` tetap muncul sebagai `Value::Tagged` dan ditolak; hanya yang menunjuk URI `tag:` yang hilang.
+- Spec 0045 mengutip "loader ketat spec 0044 (… anchor, alias … ditolak)" untuk lock dan file override; penyelarasannya dicatat sebagai Follow-up untuk lead, karena spec itu bukan milik sesi ini.
+
+### Keputusan lead
+
+Lead membalas `accept` 2026-11-13 untuk keduanya: opsi B (bertanda `berat`), dan anggaran expand yang menghitung byte string di `yaml_value`, termasuk untuk `provider.yaml`. Dua Follow-up teks diterapkan sesi ini atas izin lead: kalimat *Loader* dan baris `yaml_alias` di spec 0045, dan kalimat anggaran di `index.md` serta `rationale.md` spec 0009.
+
+### Cross check
+
+Dijalankan 2026-11-13 oleh model lain (Opus) sebagai pembaca saja, untuk keputusan ini saja. Temuan yang diterapkan: lubang anggaran node di atas (diverifikasi ulang dengan percobaan sebelum ditulis); bom bersarang berakhir `yaml_syntax`, bukan `yaml_alias`; klaim `%TAG` dipersempit; lokasi key bertag ditulis; isi fixture bentuk checker dimasukkan ke *Untuk developer* karena `verify.md` hanya memuat deskripsinya; tiga test yang dihapus disebut namanya; kalimat `location` di *Aturan validasi* mendapat kasus `.`; hitungan pass parse dan argumen `v1alpha1` dikoreksi; catatan bahwa tidak ada yang menulis balik manifest. Ia juga memastikan tidak ada spec lain selain 0045 yang mengutip aturan lama. Tidak diambil: mengganti kata "size limit" di pesan dengan "node limit", karena anggaran kini menghitung byte juga dan pesan itu untuk pengguna.
 
 ## Bahan yang dibaca
 

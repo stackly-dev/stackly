@@ -1,0 +1,18 @@
+# Ronde kedua verify: a plain scalar continuation that starts with a quote (spec 0044).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  proxy:
+    provider: official/traefik
+    version: "3.7"
+    settings:
+      routes:
+        - name: web
+          rule: Host(`a.localhost`) || Header(`X-A`,
+            "v)
+          backendUrl: "http://127.0.0.1:3000"
+  cache: &c
+    provider: official/valkey
+  other: *c

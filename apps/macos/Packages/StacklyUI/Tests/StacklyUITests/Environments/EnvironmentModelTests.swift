@@ -292,6 +292,16 @@ struct EnvironmentCopyTests {
         #expect(PlanItemRow.badge(.keep).label == "= Keep")
     }
 
+    @Test func eachBlockerIsItsOwnBannerItem() {
+        let items = EnvironmentPlanContent.items(
+            FixtureEnvironments.registeredPlan().blockers ?? [])
+        #expect(items.map(\.name) == ["search", "search (provider.approval_required)"])
+        #expect(
+            items.first?.reason
+                == "Port 5432 is already used by instance pg17-dev. Choose another port in the manifest."
+        )
+    }
+
     @Test func theSheetFollowsTheStartOrder() {
         var plan = FixtureEnvironments.registeredPlan()
         plan = EnvPlan(

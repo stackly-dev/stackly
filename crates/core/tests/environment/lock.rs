@@ -416,7 +416,7 @@ fn a_foreign_lock_is_never_replaced_and_a_damaged_one_only_with_refresh_all() {
 
 // covers: AC-1
 #[test]
-fn the_loader_refuses_unknown_fields_repeated_targets_and_aliases() {
+fn the_loader_refuses_unknown_fields_repeated_targets_and_tags() {
     let site = Site::new();
     let catalog = catalog();
     let lock = lock_of(
@@ -435,7 +435,7 @@ fn the_loader_refuses_unknown_fields_repeated_targets_and_aliases() {
         with("    port: 1\n", "    line: \"9.1\"\n"),
         with("    selector: \"stable\"\n", "    line: \"9.1\"\n"),
         text.replace("\"stable\"", "*x"),
-        text.replace("services:\n", "services: &x\n"),
+        text.replace("selector: \"stable\"", "selector: !custom stable"),
         {
             let artifact = text
                 .split_once("      - target")

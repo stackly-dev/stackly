@@ -524,6 +524,16 @@ impl Environment {
         self.revision = self.revision.next();
     }
 
+    /// Records that the Down `operation` released this environment's
+    /// leases (spec 0047 AC-4): it is the last operation and the last Up
+    /// report is cleared, because nothing it reported holds anymore.
+    /// Raises the revision by 1.
+    pub fn begin_down(&mut self, operation: OperationId) {
+        self.last_operation = Some(operation);
+        self.last_up = None;
+        self.revision = self.revision.next();
+    }
+
     /// Records the manifest this environment was accepted from: where it
     /// lives, its digest, the services it declares, and the digest of the
     /// lock the plan used, if any (spec 0045 AC-12). Raises the revision
@@ -916,6 +926,23 @@ mod tests {
         env.finish_up(report.clone());
         assert_eq!(env.revision().get(), 3);
         assert_eq!(env.last_up(), Some(&report));
+    }
+
+    // covers: AC-4 (spec 0047)
+    #[test]
+    fn begin_down_clears_the_last_up_and_records_the_down() {
+        let mut env = environment(Vec::new()).unwrap();
+        let up = OperationId::generate();
+        env.begin_up(up, Timestamp::UNIX_EPOCH);
+        let members = env.members().to_vec();
+        let down = OperationId::generate();
+
+        env.begin_down(down);
+
+        assert_eq!(env.revision().get(), 3);
+        assert_eq!(env.last_operation(), Some(down));
+        assert_eq!(env.last_up(), None);
+        assert_eq!(env.members(), members.as_slice());
     }
 
     #[test]

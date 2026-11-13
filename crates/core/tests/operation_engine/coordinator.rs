@@ -503,3 +503,110 @@ async fn a_queued_coordinator_closes_as_interrupted_with_its_queued_child() {
         );
     }
 }
+
+// covers: AC-10, AC-25 (spec 0047); AC-10 (spec 0007)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_interrupted_environment_down_closes_with_its_queued_child_stop_and_no_rebuild() {
+    let harness = Harness::with_limits(fast().with_slots(1, 64)).await;
+    let down_hold = HoldHandle::new();
+    let down = harness
+        .begin(request(
+            OperationKind::EnvironmentDown,
+            OperationResource::Environment(environment(&harness)),
+            ScriptedWork::new()
+                .step("release")
+                .irreversible()
+                .step("stop")
+                .irreversible()
+                .hold(&down_hold)
+                .boxed(),
+        ))
+        .await;
+    down_hold.started().await;
+    let slot_hold = HoldHandle::new();
+    let blocker = harness
+        .begin(request(
+            OperationKind::StopInstance,
+            OperationResource::Instance(instance(&harness)),
+            ScriptedWork::new().step("stop").hold(&slot_hold).boxed(),
+        ))
+        .await;
+    slot_hold.started().await;
+    let stop = harness
+        .begin(child(
+            OperationKind::StopInstance,
+            OperationResource::Instance(instance(&harness)),
+            down,
+            OperationTrigger::background(),
+            ScriptedWork::new().step("stop").boxed(),
+        ))
+        .await;
+    assert_eq!(
+        harness
+            .engine
+            .get(stop)
+            .await
+            .unwrap()
+            .unwrap()
+            .view
+            .operation
+            .state(),
+        OperationState::Queued
+    );
+
+    let (engine, _) = harness.restarted(fast());
+    let report = engine.recover().await.unwrap();
+    // `stop_instance` has no work factory, so the existing rule closes the
+    // queued child as a rebuild that failed; no branch is new for Down.
+    assert_eq!((report.queued, report.rebuild_failed), (0, 1));
+    for closed in [down, blocker, stop] {
+        let detail = engine.get(closed).await.unwrap().unwrap();
+        assert_eq!(
+            detail
+                .view
+                .operation
+                .failure()
+                .map(|f| (detail.view.operation.state(), f.code().as_str())),
+            Some((OperationState::Failed, "interrupted")),
+            "{closed}"
+        );
+        assert_eq!(detail.view.operation.recovery_hint(), None, "{closed}");
+    }
+    assert_eq!(
+        engine
+            .get(stop)
+            .await
+            .unwrap()
+            .unwrap()
+            .view
+            .journal
+            .parent(),
+        Some(down)
+    );
+}
+
+// covers: AC-3, AC-25 (spec 0047)
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_environment_down_runs_in_the_coordinator_slot_class_beside_a_busy_running_slot() {
+    let harness = Harness::with_limits(fast().with_slots(1, 64)).await;
+    let slot_hold = HoldHandle::new();
+    harness
+        .begin(request(
+            OperationKind::StopInstance,
+            OperationResource::Instance(instance(&harness)),
+            ScriptedWork::new().step("stop").hold(&slot_hold).boxed(),
+        ))
+        .await;
+    slot_hold.started().await;
+
+    let down = harness
+        .begin(request(
+            OperationKind::EnvironmentDown,
+            OperationResource::Environment(environment(&harness)),
+            ScriptedWork::new().step("release").irreversible().boxed(),
+        ))
+        .await;
+
+    wait_state(&harness.engine, down, OperationState::Succeeded).await;
+    slot_hold.release();
+}

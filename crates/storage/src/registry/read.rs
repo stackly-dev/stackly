@@ -629,6 +629,32 @@ pub(super) fn leases(
     instance: InstanceId,
     filter: LeaseFilter,
 ) -> Result<Vec<Lease>, RegistryError> {
+    select_leases(conn, "instance_id = ?1", &instance.to_string(), filter)
+}
+
+/// The leases an environment holds that `filter` selects, on any
+/// instance, ordered by `acquired_at` and then ID (spec 0047).
+pub(super) fn leases_of_environment(
+    conn: &Connection,
+    environment: EnvironmentId,
+    filter: LeaseFilter,
+) -> Result<Vec<Lease>, RegistryError> {
+    select_leases(
+        conn,
+        "source_kind = 'environment' AND source_id = ?1",
+        &environment.to_string(),
+        filter,
+    )
+}
+
+/// The leases `matches` (a condition on the one parameter `key`) and
+/// `filter` select, ordered by `acquired_at` and then ID.
+fn select_leases(
+    conn: &Connection,
+    matches: &str,
+    key: &str,
+    filter: LeaseFilter,
+) -> Result<Vec<Lease>, RegistryError> {
     let states = match filter {
         LeaseFilter::All => "",
         LeaseFilter::Unreleased => "AND state IN ('active', 'suppressed')",
@@ -637,10 +663,10 @@ pub(super) fn leases(
         conn,
         &format!(
             "SELECT id, instance_id, source_kind, source_id, session_id, state, \
-             state_changed_at, acquired_at FROM instance_demands WHERE instance_id = ?1 \
+             state_changed_at, acquired_at FROM instance_demands WHERE {matches} \
              {states} ORDER BY acquired_at, id"
         ),
-        [instance.to_string()],
+        [key],
         "instance_demands",
         |cells| {
             let holder = match cells.text("source_kind")?.as_str() {
