@@ -413,6 +413,7 @@ impl DaemonProbe for LiveProbe {
                 mode: ShutdownMode::Restart,
                 expected_plan_digest: request.expected_plan_digest,
                 force: request.force,
+                override_leases: false,
             };
             let spec = CallSpec {
                 timeout: RequestTimeout::Interactive,
@@ -458,7 +459,7 @@ impl DaemonProbe for LiveProbe {
             let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
             let preview = match session
                 .call(
-                    &Call::InstancePreviewStopAll,
+                    &Call::InstancePreviewStopAll(Default::default()),
                     &CallSpec::control(),
                     &mut sink,
                     false,

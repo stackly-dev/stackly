@@ -10,11 +10,13 @@ struct StopAllCopyTests {
         StopAllItem(
             instanceId: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, number)),
             name: name, lifecycle: .running, demand: [.manual],
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
     }
 
     private func preview(_ items: [StopAllItem], atLogin: UInt64 = 0) -> StopAllPreview {
-        StopAllPreview(items: items, alreadyStopping: [], skipped: [], atLoginCount: atLogin)
+        StopAllPreview(
+            items: items, alreadyStopping: [], skipped: [], atLoginCount: atLogin,
+            affectedEnvironments: nil)
     }
 
     @Test func demandSourcesAreJoinedInOrder() {

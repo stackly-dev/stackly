@@ -186,6 +186,7 @@ impl Api {
                     base_revision: number(base),
                     endpoints,
                     dry_run,
+                    override_leases: false,
                 }),
                 CallOptions::default().with_idempotency_key(key()),
             )

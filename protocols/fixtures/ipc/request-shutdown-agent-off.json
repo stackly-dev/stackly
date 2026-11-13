@@ -6,7 +6,8 @@
     "content": {
       "mode": "agent_off",
       "expectedPlanDigest": null,
-      "force": false
+      "force": false,
+      "overrideLeases": false
     }
   }
 }

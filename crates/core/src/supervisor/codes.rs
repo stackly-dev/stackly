@@ -15,6 +15,12 @@ macro_rules! codes {
     };
 }
 
+/// An environment lease needs an override to change the ports (spec 0047
+/// AC-15). An `instance.*` code, so it is not in [`ALL`], which lists the
+/// `supervisor` and `process` areas.
+pub const ENDPOINTS_REQUIRE_OVERRIDE: ErrorCodeName =
+    ErrorCodeName::from_static("instance.endpoints_require_override");
+
 codes! {
     /// A start before `init_succeeded` (BR-008).
     NOT_INITIALIZED = "supervisor.not_initialized";

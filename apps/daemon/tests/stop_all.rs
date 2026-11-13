@@ -21,7 +21,10 @@ use crate::support::{Api, Site, key};
 async fn preview(api: &Api) -> StopAllPreview {
     match api
         .client
-        .call_detailed(Call::InstancePreviewStopAll, CallOptions::default())
+        .call_detailed(
+            Call::InstancePreviewStopAll(Default::default()),
+            CallOptions::default(),
+        )
         .await
         .expect("the preview answers")
     {
@@ -41,6 +44,7 @@ async fn confirm(
 ) -> Result<StopAllResult, Box<ErrorBody>> {
     let params = StopAllParams {
         expected_instance_ids: Some(expected),
+        override_leases: false,
     };
     match api
         .client
@@ -218,6 +222,7 @@ async fn the_idempotency_record_covers_the_expected_set() {
 
     let params = StopAllParams {
         expected_instance_ids: None,
+        override_leases: false,
     };
     let error = api
         .client

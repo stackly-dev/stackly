@@ -6,7 +6,8 @@
     "content": {
       "mode": "restart",
       "expectedPlanDigest": null,
-      "force": false
+      "force": false,
+      "overrideLeases": false
     }
   }
 }

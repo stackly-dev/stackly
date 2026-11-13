@@ -216,7 +216,7 @@ pub fn with_env_hint(body: ErrorBody) -> ErrorBody {
 /// The error body of one plan blocker: the code create, resolve, or the
 /// registry refuses with, so GUI and CLI show the same message and hint.
 #[must_use]
-pub fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask) -> ErrorBody {
+pub fn blocker_error(blocker: &CoreBlocker, home: &HomeMask) -> ErrorBody {
     use stackly_protocol::codes::env;
     let service = blocker.service.as_ref().map(ToString::to_string);
     let with_service = |body: ErrorBody| match &service {
@@ -227,14 +227,11 @@ pub fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask)
         BlockerKind::Create(error) => {
             map::create::with_create_hint(map::create::create_error(error, &[]))
         }
-        BlockerKind::Resolve { error, selector } => {
-            let provider = items
-                .iter()
-                .find(|item| Some(&item.alias) == blocker.service.as_ref())
-                .map(|item| item.provider.to_string())
-                .unwrap_or_default();
-            map::runtime::resolve_error(error, &provider, selector)
-        }
+        BlockerKind::Resolve {
+            provider,
+            error,
+            selector,
+        } => map::runtime::resolve_error(error, provider.as_str(), selector),
         BlockerKind::NameTaken { name, location } => {
             let body = ErrorBody::new(
                 &env::NAME_TAKEN,
@@ -277,6 +274,15 @@ pub fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask)
         other => lock_blocker_error(other, with_service, home),
     };
     with_env_hint(body)
+}
+
+/// The hint of `env.lock_no_artifact` and `env.lock_artifact_unknown`
+/// (spec 0045, *Kode error*): it names this Mac's target, which the static
+/// hint of the catalog cannot.
+fn lock_target_hint(target: stackly_domain::Target) -> String {
+    format!(
+        "the lock has no artifact this Mac ({target}) can use; update Stackly, or lock again on this Mac"
+    )
 }
 
 /// The error body of a blocker of spec 0045: the lock, the overrides, and
@@ -345,8 +351,10 @@ fn lock_blocker_error(
             "the lock has no artifact for this mac",
         ))
         .with_detail("target", target.to_string())
-        .with_detail("lockedTargets", locked_targets.join(",")),
+        .with_detail("lockedTargets", locked_targets.join(","))
+        .with_hint(lock_target_hint(*target)),
         BlockerKind::LockArtifactUnknown {
+            target,
             artifact_id,
             sha256,
             reason,
@@ -356,7 +364,8 @@ fn lock_blocker_error(
         ))
         .with_detail("artifactId", artifact_id.as_str())
         .with_detail("sha256", sha256.to_string())
-        .with_detail("reason", reason.as_code()),
+        .with_detail("reason", reason.as_code())
+        .with_hint(lock_target_hint(*target)),
         BlockerKind::LocalUnreadable { reason } => ErrorBody::new(
             &env::LOCAL_UNREADABLE,
             "the local override file can't be read",
@@ -419,7 +428,7 @@ pub fn plan(validation: EnvValidation, plan: &Plan, home: &HomeMask) -> EnvPlan 
             .iter()
             .map(|blocker| PlanBlocker {
                 service: blocker.service.as_ref().map(ToString::to_string),
-                error: blocker_error(blocker, &plan.items, home),
+                error: blocker_error(blocker, home),
             })
             .collect(),
         detached: plan.detached.iter().map(detached).collect(),
@@ -487,4 +496,66 @@ pub fn service(status: &ServiceStatus, summaries: &[InstanceSummary]) -> Environ
 #[must_use]
 pub fn detached_members(view: &EnvironmentView) -> Vec<DetachedMember> {
     view.detached.iter().map(detached).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use stackly_core::environment::lock::ArtifactUnknownReason;
+    use stackly_core::runtime::resolve::{ResolveError, UnresolvedReason};
+    use stackly_domain::{Sha256Digest, Target};
+
+    use super::*;
+
+    fn blocker(kind: BlockerKind) -> ErrorBody {
+        let found = CoreBlocker {
+            service: Some("cache".parse().expect("an alias")),
+            kind,
+        };
+        blocker_error(&found, &HomeMask::none())
+    }
+
+    fn mac() -> Target {
+        "macos-aarch64".parse().expect("a target")
+    }
+
+    // covers: AC-2 (spec 0045), the verify finding of the F45 CLI
+    #[test]
+    fn an_unresolved_selector_names_its_provider_without_a_plan_item() {
+        let body = blocker(BlockerKind::Resolve {
+            provider: "official/valkey".parse().expect("a provider"),
+            error: ResolveError::Unresolved {
+                reason: UnresolvedReason::NoMatch,
+                known_lines: Vec::new(),
+            },
+            selector: "8".to_owned(),
+        });
+
+        assert_eq!(body.code(), "runtime.selector_unresolved");
+        assert_eq!(body.message(), "official/valkey has no version matching 8");
+        assert_eq!(body.detail("provider"), Some("official/valkey"));
+    }
+
+    // covers: AC-7 (spec 0045): both lock artifact hints name this Mac's
+    // target
+    #[test]
+    fn the_lock_artifact_hints_name_the_target_of_this_mac() {
+        let none = blocker(BlockerKind::LockNoArtifact {
+            target: mac(),
+            locked_targets: vec!["linux-aarch64".to_owned()],
+        });
+        let unknown = blocker(BlockerKind::LockArtifactUnknown {
+            target: mac(),
+            artifact_id: "valkey-8.0.1-macos-aarch64".to_owned(),
+            sha256: Sha256Digest::from_bytes([7; 32]),
+            reason: ArtifactUnknownReason::NotInCatalog,
+        });
+
+        for body in [&none, &unknown] {
+            let hint = body.hint().expect("a hint");
+            assert!(hint.contains("macos-aarch64"), "{hint}");
+            assert!(hint.contains("lock again on this Mac"), "{hint}");
+        }
+        assert_eq!(none.code(), "env.lock_no_artifact");
+        assert_eq!(unknown.code(), "env.lock_artifact_unknown");
+    }
 }

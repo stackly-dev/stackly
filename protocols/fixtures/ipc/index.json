@@ -1821,7 +1821,10 @@
     {
       "file": "request-instance-preview-stop-all.json",
       "type": "Request",
-      "expect": "roundtrip"
+      "expect": "decode",
+      "langs": [
+        "rust"
+      ]
     },
     {
       "file": "request-instance-stop-all.json",
@@ -2481,6 +2484,54 @@
       "langs": [
         "rust"
       ]
+    },
+    {
+      "file": "request-instance-preview-stop-all-override.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-preview-stop-all-null.json",
+      "type": "Request",
+      "expect": "decode",
+      "langs": [
+        "rust"
+      ]
+    },
+    {
+      "file": "request-instance-preview-stop-all-empty.json",
+      "type": "Request",
+      "expect": "decode"
+    },
+    {
+      "file": "request-instance-stop-all-override.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-shutdown-agent-off-override.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "request-instance-change-endpoints-override.json",
+      "type": "Request",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "frame-response-instance-preview-stop-all-before-4-6.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-response-instance-change-endpoints-dry-run-before-4-6.json",
+      "type": "ServerFrame",
+      "expect": "decode"
+    },
+    {
+      "file": "frame-error-instance-endpoints-require-override.json",
+      "type": "ServerFrame",
+      "expect": "roundtrip"
     }
   ]
 }

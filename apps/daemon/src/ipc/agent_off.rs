@@ -12,6 +12,7 @@
 //! The daemon exits only when that last selection is empty, otherwise it
 //! stays up and lifts the gate.
 
+use stackly_core::instance::stop_all::StopAllOptions;
 use stackly_core::operation::{BeginRequest, BusyPolicy, Origin};
 use stackly_core::supervisor::StopAllRequest;
 use stackly_domain::{InstanceId, JournalPayload, LockKey, OperationKind, OperationResource};
@@ -82,8 +83,10 @@ pub fn shutdown<'a>(
 ) -> HandlerFuture<'a, ShutdownAccepted> {
     let context = context.clone();
     Box::pin(async move {
+        let options = StopAllOptions::new(params.override_leases);
         let fingerprint = request_fingerprint(&Call::DaemonShutdown(params));
-        let outcome = agent_off(core, &context, "daemon.shutdown", fingerprint).await?;
+        let outcome =
+            agent_off_with(core, &context, "daemon.shutdown", fingerprint, options).await?;
         Ok(ShutdownAccepted {
             server_instance_id: core.start_info().server_instance_id,
             mode: ShutdownMode::AgentOff,
@@ -95,7 +98,31 @@ pub fn shutdown<'a>(
 }
 
 /// Runs `agent_off` for the request `context` with the idempotency
-/// fingerprint `fingerprint` of the whole `daemon.shutdown` call.
+/// fingerprint `fingerprint` of the whole `daemon.shutdown` call, without
+/// overriding environment leases.
+///
+/// # Errors
+///
+/// As [`agent_off_with`].
+pub async fn agent_off(
+    core: &DaemonCore,
+    context: &RequestContext,
+    method: &'static str,
+    fingerprint: [u8; 32],
+) -> Result<AgentOffOutcome, Box<ErrorBody>> {
+    agent_off_with(
+        core,
+        context,
+        method,
+        fingerprint,
+        StopAllOptions::default(),
+    )
+    .await
+}
+
+/// Runs `agent_off` for the request `context` with the idempotency
+/// fingerprint `fingerprint` of the whole `daemon.shutdown` call. `options`
+/// go to both selections and to the stop of each step (spec 0047 AC-17).
 ///
 /// # Errors
 ///
@@ -103,11 +130,12 @@ pub fn shutdown<'a>(
 /// `daemon.restart_pending` while a planned restart quiesces or stops,
 /// `daemon.shutting_down` when a stop was accepted or another `agent_off`
 /// runs, and the error of the operation when it failed.
-pub async fn agent_off(
+pub async fn agent_off_with(
     core: &DaemonCore,
     context: &RequestContext,
     method: &'static str,
     fingerprint: [u8; 32],
+    options: StopAllOptions,
 ) -> Result<AgentOffOutcome, Box<ErrorBody>> {
     let start = || OperationStart::new(method, context.idempotency_key.as_deref(), fingerprint);
     // A key that came again waits for the operation it started, and gets its
@@ -138,7 +166,7 @@ pub async fn agent_off(
     }
     let mut gate = Gate::close(core, engine);
 
-    let selection = current_selection(core).await?;
+    let selection = current_selection(core, options).await?;
     let mut steps: Vec<_> = selection
         .stop
         .iter()
@@ -160,6 +188,7 @@ pub async fn agent_off(
             .iter()
             .map(|entry| (entry.id.as_uuid(), entry.code.to_string()))
             .collect(),
+        override_leases: options.override_leases,
     };
     let input = JournalPayload::new(input.to_json(), stackly_core::operation::limits::INPUT_MAX)
         .map_err(|_| {
@@ -168,7 +197,9 @@ pub async fn agent_off(
                 stackly_core::operation::limits::INPUT_MAX,
             ))
         })?;
-    let work = supervisor.stop_all_work(StopAllRequest::new(steps.clone()));
+    let work = supervisor.stop_all_work(
+        StopAllRequest::new(steps.clone()).overriding_leases(options.override_leases),
+    );
     let locks: Vec<LockKey> = steps
         .iter()
         .map(|id| LockKey::for_resource(OperationResource::Instance(*id)))
@@ -198,7 +229,7 @@ pub async fn agent_off(
     // nothing to stop, nothing still stopping, and nothing it had to skip.
     let mut exiting = false;
     if stop_all.failed.is_empty() && stop_all.skipped.is_empty() {
-        let last = current_selection(core).await?;
+        let last = current_selection(core, options).await?;
         exiting =
             last.stop.is_empty() && last.already_stopping.is_empty() && last.skipped.is_empty();
     }

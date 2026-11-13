@@ -211,6 +211,7 @@ fn a_refused_change_gets_the_same_error_through_the_client_and_through_the_cli()
                     port: PortRequest::Fixed(5599),
                 }],
                 dry_run: false,
+                override_leases: false,
             }),
             vec![
                 "endpoint".to_owned(),

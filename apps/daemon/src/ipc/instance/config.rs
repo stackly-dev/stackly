@@ -23,12 +23,15 @@ use stackly_core::operation::{
     BeginRequest, BusyPolicy, NoOpReply, Origin, Precheck, PrecheckOutcome,
 };
 use stackly_core::supervisor::drift::{self, ResolveDriftRequest};
-use stackly_core::supervisor::{ChangeRequest, RenameRequest, SupervisorError};
+use stackly_core::supervisor::{
+    ChangeRequest, EnvironmentHolder, RenameRequest, SupervisorError, environment_holders,
+};
 use stackly_domain::{
     ConfigRevisionNumber as DomainNumber, EndpointName, InstanceFilter, InstanceId,
     InstanceLifecycle, InstanceName, JournalPayload, LockKey, OperationJournal, OperationKind,
     OperationResource, Port, PortRequest as DomainPort, rename_allowed,
 };
+use stackly_protocol::env::InstanceEnvironment;
 use stackly_protocol::fingerprint::request_fingerprint;
 use stackly_protocol::instance::InstanceActionAccepted;
 use stackly_protocol::instance::PortRequest;
@@ -650,10 +653,15 @@ pub fn change_endpoints<'a>(
         let base = params.base_revision;
         let requests = endpoint_requests(&params)?;
         let change = ConfigChange::Endpoints(requests);
+        let override_leases = params.override_leases;
         if params.dry_run {
+            let holders = lease_holders(core, id).await?;
             return dry_run(&supervisor, id, base_number, &change)
                 .await
-                .map(|verdict| Box::new(ChangeEndpointsReply::DryRun(verdict)));
+                .map(|mut verdict| {
+                    verdict.leases = lease_entries(&holders);
+                    Box::new(ChangeEndpointsReply::DryRun(verdict))
+                });
         }
         let fingerprint = request_fingerprint(&Call::InstanceChangeEndpoints(params));
         let start = OperationStart::new(
@@ -679,13 +687,21 @@ pub fn change_endpoints<'a>(
             Planned::Change(plan) => plan,
             _ => return Err(unexpected("a config plan this daemon cannot read")),
         };
+        // A change that moves a port of an instance environments hold needs
+        // the override (spec 0047 AC-15); the commit's guard checks again.
+        if !override_leases && !plan.endpoint_changes.is_empty() {
+            let holders = lease_holders(core, id).await?;
+            if !holders.is_empty() {
+                return Err(Box::new(operation_error_body(
+                    &SupervisorError::EndpointsRequireOverride { holders },
+                )));
+            }
+        }
         let input = change_input(&plan);
-        let work = supervisor.change_work(ChangeRequest::new(
-            id,
-            base_number,
-            change,
-            caller(&context),
-        ));
+        let work = supervisor.change_work(
+            ChangeRequest::new(id, base_number, change, caller(&context))
+                .overriding_leases(override_leases),
+        );
         let request = move |origin: Origin| BeginRequest {
             kind: OperationKind::ChangeEndpoints,
             resource: OperationResource::Instance(id),
@@ -705,6 +721,43 @@ pub fn change_endpoints<'a>(
     })
 }
 
+/// The environments whose active lease holds `id` now, ordered by name and
+/// then ID (spec 0047 AC-15).
+async fn lease_holders(
+    core: &DaemonCore,
+    id: InstanceId,
+) -> Result<Vec<EnvironmentHolder>, Box<ErrorBody>> {
+    let registry = registry_of(core)?;
+    tokio::task::spawn_blocking(move || {
+        use stackly_domain::Registry as _;
+        let leases = registry
+            .leases(id, stackly_domain::LeaseFilter::Unreleased)?
+            .value;
+        let environments = registry.environments()?.value;
+        Ok::<_, stackly_domain::RegistryError>(environment_holders(id, &leases, &environments))
+    })
+    .await
+    .map_err(|_| unexpected("the lease read task failed"))?
+    .map_err(|error| Box::new(map::registry_error(&error)))
+}
+
+/// `holders` as the instance's environment entries, `leaseActive` true; a
+/// holder with no member row for the instance has no alias and is left out.
+fn lease_entries(holders: &[EnvironmentHolder]) -> Vec<InstanceEnvironment> {
+    holders
+        .iter()
+        .filter_map(|holder| {
+            Some(InstanceEnvironment {
+                environment_id: holder.environment.as_uuid(),
+                name: holder.name.to_string(),
+                alias: holder.alias.as_ref()?.to_string(),
+                ownership: crate::membership::env_ownership(holder.ownership?),
+                lease_active: true,
+            })
+        })
+        .collect()
+}
+
 /// The verdict of a dry run: every request that cannot be applied, or the
 /// ports that would change.
 async fn dry_run(
@@ -719,12 +772,14 @@ async fn dry_run(
             problems: Vec::new(),
             changes: map::config::endpoint_changes(&plan.endpoint_changes),
             impact: map::config::impact(plan.impact),
+            leases: Vec::new(),
         }),
         Ok(_) => Ok(EndpointValidation {
             valid: true,
             problems: Vec::new(),
             changes: Vec::new(),
             impact: ConfigImpact::None,
+            leases: Vec::new(),
         }),
         Err(Rejected::Endpoints(issues)) => Ok(EndpointValidation {
             valid: false,
@@ -739,6 +794,7 @@ async fn dry_run(
                 .collect(),
             changes: Vec::new(),
             impact: ConfigImpact::None,
+            leases: Vec::new(),
         }),
         Err(other) => Err(rejection(other)),
     }

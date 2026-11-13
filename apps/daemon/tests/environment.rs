@@ -1391,6 +1391,46 @@ async fn env_lock_blocks_and_writes_nothing_for_an_unresolved_selector_or_a_fold
     stop(daemon).await;
 }
 
+// covers: AC-2 (spec 0045): the blocker of `env.lock` names the provider
+// as `env.plan` does
+#[tokio::test(flavor = "multi_thread")]
+async fn env_lock_names_the_provider_of_a_selector_that_does_not_resolve() {
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let dir = project(&site);
+    let path = write(
+        &dir.join("stackly.yaml"),
+        &erp().replace("version: \"18\"", "version: \"99\""),
+    );
+
+    let blocked = lock_call(&api, &path, stackly_protocol::env::LockRefresh::None)
+        .await
+        .expect("answers");
+    let planned = plan(&api, &path).await.expect("plans");
+
+    let unresolved = |blockers: &[stackly_protocol::env::PlanBlocker]| {
+        blockers
+            .iter()
+            .find(|b| b.error.code() == "runtime.selector_unresolved")
+            .map(|b| b.error.clone())
+            .expect("an unresolved selector")
+    };
+    let locked = unresolved(&blocked.blockers);
+    let provider = detail(&locked, "provider").expect("a provider detail");
+    assert!(!provider.is_empty());
+    assert!(
+        locked
+            .message()
+            .starts_with(&format!("{provider} has no version")),
+        "{}",
+        locked.message()
+    );
+    assert_eq!(locked.message(), unresolved(&planned.blockers).message());
+    drop(api);
+    stop(daemon).await;
+}
+
 // covers: AC-5, AC-6, AC-13 (spec 0045)
 #[tokio::test(flavor = "multi_thread")]
 async fn plan_and_get_read_the_lock_and_the_overrides_next_to_the_manifest() {

@@ -536,3 +536,175 @@ async fn a_stop_all_step_skips_an_instance_an_environment_took_after_the_selecti
     assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Running);
     assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
 }
+
+/// Begins a `stop_all_instances` of `id` with `request` and waits until it
+/// succeeded.
+async fn stop_all_of(
+    rig: &Rig,
+    id: InstanceId,
+    request: stackly_core::supervisor::StopAllRequest,
+) -> stackly_core::operation::OperationDetailView {
+    use stackly_core::operation::{BeginOutcome, BeginRequest, BusyPolicy, Origin};
+    use stackly_domain::{JournalPayload, LockKey, OperationResource};
+
+    let begun = rig
+        .engine
+        .begin(BeginRequest {
+            kind: OperationKind::StopAllInstances,
+            resource: OperationResource::Manager,
+            creates_resource: false,
+            extra_locks: vec![LockKey::for_resource(OperationResource::Instance(id))],
+            busy: BusyPolicy::Queue,
+            expected_revision: None,
+            origin: Origin::Background,
+            input: JournalPayload::empty(),
+            work: rig.sup.stop_all_work(request),
+            precheck: None,
+        })
+        .await
+        .expect("the engine accepts the operation");
+    let BeginOutcome::Created(view) = begun else {
+        panic!("expected a created operation, got {begun:?}");
+    };
+    rig.wait_state(view.operation.id(), OperationState::Succeeded)
+        .await
+}
+
+// covers: AC-16, AC-17 (spec 0047): with the override the check before the
+// step and the guard of its stop both let the instance an environment holds
+// stop, and its lease stays active
+#[tokio::test]
+async fn a_stop_all_step_with_the_override_stops_an_instance_an_environment_holds() {
+    use stackly_core::supervisor::StopAllRequest;
+
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec());
+    let spawn = running(&rig, id, 1).await;
+    let (_, lease) = environment_lease(&rig, id, "shop");
+
+    let stopping = stop_all_of(
+        &rig,
+        id,
+        StopAllRequest::new(vec![id]).overriding_leases(true),
+    );
+    let (detail, ()) = tokio::join!(stopping, end_on_term(&rig, &spawn));
+
+    let result = outcome(&detail);
+    assert_eq!(result.resources, vec![ResourceRef::Instance(id)]);
+    assert!(result.partial.is_empty());
+    let row = rig.instance_row(id);
+    assert_eq!(row.lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(row.desired(), DesiredState::Stopped);
+    assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
+}
+
+// covers: AC-16 (spec 0047): with the override a lease an Up records after
+// the selection does not turn the step into a skip
+#[tokio::test]
+async fn a_stop_all_step_with_the_override_stops_an_instance_an_environment_took_late() {
+    use stackly_core::supervisor::StopAllRequest;
+
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec());
+    let spawn = running(&rig, id, 1).await;
+    let environment = EnvironmentBuilder::new().name("late").shared(id).build();
+    rig.registry
+        .commit(WriteBatch::new(vec![WriteOp::InsertEnvironment(
+            environment.clone(),
+        )]))
+        .expect("the environment is stored");
+    let lease = LeaseBuilder::new(id).environment(environment.id()).build();
+    rig.registry
+        .before_guarded_commit(WriteBatch::new(vec![WriteOp::InsertLease(lease.clone())]));
+
+    let stopping = stop_all_of(
+        &rig,
+        id,
+        StopAllRequest::new(vec![id]).overriding_leases(true),
+    );
+    let (detail, ()) = tokio::join!(stopping, end_on_term(&rig, &spawn));
+
+    assert_eq!(outcome(&detail).resources, vec![ResourceRef::Instance(id)]);
+    assert_eq!(rig.instance_row(id).lifecycle(), InstanceLifecycle::Stopped);
+    assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
+}
+
+fn port_change(port: u16) -> stackly_core::instance::config::ConfigChange {
+    stackly_core::instance::config::ConfigChange::Endpoints(vec![(
+        "http".parse().expect("an endpoint name"),
+        stackly_domain::PortRequest::Fixed(stackly_domain::Port::new(port).expect("not 0")),
+    )])
+}
+
+async fn change_ports(rig: &Rig, id: InstanceId, port: u16, override_leases: bool) -> OperationId {
+    let work = rig.sup.change_work(
+        stackly_core::supervisor::ChangeRequest::new(
+            id,
+            stackly_domain::ConfigRevisionNumber::new(1).expect("a revision number"),
+            port_change(port),
+            Rig::user(),
+        )
+        .overriding_leases(override_leases),
+    );
+    rig.begin(OperationKind::ChangeEndpoints, id, work).await
+}
+
+// covers: AC-15 (spec 0047): a lease an Up records after the handler's
+// precheck still refuses the change in the guard of its commit
+#[tokio::test]
+async fn a_port_change_meets_a_late_environment_lease_in_its_guard_and_writes_nothing() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec());
+    let environment = EnvironmentBuilder::new().name("late").shared(id).build();
+    rig.registry
+        .commit(WriteBatch::new(vec![WriteOp::InsertEnvironment(
+            environment.clone(),
+        )]))
+        .expect("the environment is stored");
+    let lease = LeaseBuilder::new(id).environment(environment.id()).build();
+    rig.registry
+        .before_guarded_commit(WriteBatch::new(vec![WriteOp::InsertLease(lease.clone())]));
+
+    let op = change_ports(&rig, id, Rig::free_port(), false).await;
+    let detail = rig.wait_state(op, OperationState::Failed).await;
+
+    assert_eq!(
+        Rig::failure_code(&detail),
+        "instance.endpoints_require_override"
+    );
+    assert_eq!(holder_items(&detail), [environment.id().to_string()]);
+    assert_eq!(rig.active(id).number.get(), 1, "no revision was written");
+    assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
+}
+
+// covers: AC-15 (spec 0047)
+#[tokio::test]
+async fn a_port_change_with_the_override_goes_on_keeps_the_lease_and_notes_the_environment() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec());
+    let (_, lease) = environment_lease(&rig, id, "shop");
+
+    let op = change_ports(&rig, id, Rig::free_port(), true).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    assert_eq!(rig.active(id).number.get(), 2);
+    assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
+    assert_eq!(
+        finished_details(&rig, op).get("overriddenEnvironments"),
+        Some("shop")
+    );
+}
+
+// covers: AC-14 (spec 0047): a settings change reads no lease
+#[tokio::test]
+async fn a_settings_change_of_an_instance_an_environment_holds_needs_no_override() {
+    let rig = Rig::new().await;
+    let id = rig.instance(&spec());
+    let (_, lease) = environment_lease(&rig, id, "shop");
+
+    let op = rig.apply(id, serde_json::json!({"label": "held"})).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    assert_eq!(rig.active(id).number.get(), 2);
+    assert_eq!(lease_state(&rig, id, &lease), LeaseState::Active);
+}

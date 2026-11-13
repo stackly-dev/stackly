@@ -110,14 +110,14 @@
                         EndpointProblem(
                             endpoint: "postgres", code: "supervisor.endpoint_conflict",
                             suggestedPort: 5_435)
-                    ], changes: [], impact: .restart)
+                    ], changes: [], impact: .restart, leases: nil)
                 : EndpointValidation(
                     valid: true, problems: [],
                     changes: [
                         EndpointChange(
                             name: "postgres", old: .fixed(5_432),
                             new: .fixed(UInt16(port ?? "") ?? 5_433))
-                    ], impact: .restart)
+                    ], impact: .restart, leases: nil)
             let model = EndpointsModel(
                 source: InstanceEditSource(id: instance, name: "pg17-dev"),
                 service: service(.postgresql, endpoints: verdict),
@@ -138,7 +138,7 @@
         public static func service(
             _ fixture: Case,
             endpoints: EndpointValidation = EndpointValidation(
-                valid: true, problems: [], changes: [], impact: .restart)
+                valid: true, problems: [], changes: [], impact: .restart, leases: nil)
         ) -> InstanceConfigService {
             let view = view(fixture)
             return InstanceConfigService(

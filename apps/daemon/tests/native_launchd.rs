@@ -701,6 +701,7 @@ fn planned_restart(
                     mode: ShutdownMode::Restart,
                     expected_plan_digest: Some(preview.digest),
                     force: false,
+                    override_leases: false,
                 }),
                 stackly_ipc::CallOptions::default().with_idempotency_key(&key),
             )

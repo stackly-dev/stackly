@@ -14,11 +14,14 @@ struct TurnOffPlanTests {
             items: (0..<running).map { number in
                 StopAllItem(
                     instanceId: UUID(), name: "pg\(number)", lifecycle: .running, demand: [],
-                    autostart: InstanceAutostart(policy: .manual, session: .none))
+                    autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil
+                )
             },
             alreadyStopping: (0..<stopping).map { _ in InstanceRef(instanceId: UUID(), name: "x") },
-            skipped: skipped.map { StopAllSkip(instanceId: UUID(), name: $0.0, code: $0.1) },
-            atLoginCount: 0)
+            skipped: skipped.map {
+                StopAllSkip(instanceId: UUID(), name: $0.0, code: $0.1, environments: nil)
+            },
+            atLoginCount: 0, affectedEnvironments: nil)
     }
 
     @Test func theBodyCountsRunningAndStoppingInstancesAndTheOnesSetToStartAtLogin() {

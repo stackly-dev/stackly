@@ -225,6 +225,7 @@ impl Api {
             mode: ShutdownMode::Restart,
             expected_plan_digest,
             force,
+            override_leases: false,
         };
         match self
             .client

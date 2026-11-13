@@ -429,6 +429,19 @@ pub(crate) fn decode_unit(content: Option<&RawValue>) -> Result<(), Vec<FieldErr
     }
 }
 
+/// Params of type `P` that a client may leave out: an absent or `null`
+/// `content` reads as `P::default()`, anything else as [`decode_params`].
+/// It lets a method without params gain optional ones as a minor change.
+pub(crate) fn decode_optional_params<P: DeserializeOwned + Validate + Default>(
+    content: Option<&RawValue>,
+) -> Result<P, Vec<FieldError>> {
+    match content {
+        None => Ok(P::default()),
+        Some(raw) if raw.get().trim() == "null" => Ok(P::default()),
+        Some(_) => decode_params(content),
+    }
+}
+
 /// Params of type `P` from the raw `content`, which must be a JSON object,
 /// then [`Validate`].
 pub(crate) fn decode_params<P: DeserializeOwned + Validate>(

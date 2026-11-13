@@ -52,7 +52,8 @@ public struct DaemonRestartClient: Sendable {
         expectedPlanDigest: String, force: Bool = false, idempotencyKey: String
     ) async throws(ClientError) -> ShutdownAccepted {
         let params = ShutdownParams(
-            mode: .restart, expectedPlanDigest: expectedPlanDigest, force: force)
+            mode: .restart, expectedPlanDigest: expectedPlanDigest, force: force,
+            overrideLeases: nil)
         let reply = try await send(
             .daemonShutdown(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
         guard case .daemonShutdown(let accepted) = reply else { throw Self.unexpectedReply() }
@@ -64,7 +65,8 @@ public struct DaemonRestartClient: Sendable {
     ///
     /// - Throws: ``ClientError``, such as `daemon.shutting_down`.
     public func previewTurnOff() async throws(ClientError) -> StopAllPreview {
-        let reply = try await send(.instancePreviewStopAll, nil, .standard)
+        let reply = try await send(
+            .instancePreviewStopAll(StopAllPreviewParams(overrideLeases: nil)), nil, .standard)
         guard case .instancePreviewStopAll(let preview) = reply else {
             throw Self.unexpectedReply()
         }
@@ -79,7 +81,8 @@ public struct DaemonRestartClient: Sendable {
     /// - Throws: ``ClientError``, such as `daemon.restart_pending`, `daemon.shutting_down`, or
     ///   `registry.recovery_mode`.
     public func agentOff(idempotencyKey: String) async throws(ClientError) -> ShutdownAccepted {
-        let params = ShutdownParams(mode: .agentOff, expectedPlanDigest: nil, force: false)
+        let params = ShutdownParams(
+            mode: .agentOff, expectedPlanDigest: nil, force: false, overrideLeases: nil)
         let reply = try await send(
             .daemonShutdown(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
         guard case .daemonShutdown(let accepted) = reply else { throw Self.unexpectedReply() }
@@ -108,7 +111,7 @@ public struct DaemonRestartClient: Sendable {
     public func stopAll(
         expectedInstanceIds: [UUID], idempotencyKey: String
     ) async throws(ClientError) -> StopAllResult {
-        let params = StopAllParams(expectedInstanceIds: expectedInstanceIds)
+        let params = StopAllParams(expectedInstanceIds: expectedInstanceIds, overrideLeases: nil)
         let reply = try await send(
             .instanceStopAll(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
         guard case .instanceStopAll(let result) = reply else { throw Self.unexpectedReply() }

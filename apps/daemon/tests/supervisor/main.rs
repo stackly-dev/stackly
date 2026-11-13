@@ -22,6 +22,7 @@ mod data_compat;
 mod data_usage;
 mod detail;
 mod durable_logs;
+mod lease_override;
 mod lifecycle;
 mod list_performance;
 mod login;

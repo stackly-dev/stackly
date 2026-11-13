@@ -160,16 +160,23 @@ pub struct ShutdownParams {
     /// the quiesce wait. Only read for `restart`.
     #[serde(default)]
     pub force: bool,
+    /// Stop the instances an environment lease holds too, so the daemon
+    /// can exit; their leases stay active (spec 0047 AC-17). Only read for
+    /// `agent_off`.
+    #[serde(default)]
+    pub override_leases: bool,
 }
 
 impl ShutdownParams {
-    /// Params for `mode` with no expected digest and no force.
+    /// Params for `mode` with no expected digest, no force, and no lease
+    /// override.
     #[must_use]
     pub const fn new(mode: ShutdownMode) -> Self {
         Self {
             mode,
             expected_plan_digest: None,
             force: false,
+            override_leases: false,
         }
     }
 }

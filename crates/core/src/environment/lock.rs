@@ -692,6 +692,8 @@ pub enum LockedArtifactError {
     },
     /// `env.lock_artifact_unknown`.
     Unknown {
+        /// This Mac's target.
+        target: Target,
         /// The locked artifact ID.
         artifact_id: String,
         /// The locked digest.
@@ -704,9 +706,10 @@ pub enum LockedArtifactError {
 }
 
 impl LockedArtifactError {
-    /// The blocker of the error.
+    /// The blocker of the error for a service of `provider` whose
+    /// manifest selector is `selector`.
     #[must_use]
-    pub fn blocker(self, selector: String) -> BlockerKind {
+    pub fn blocker(self, provider: ProviderName, selector: String) -> BlockerKind {
         match self {
             Self::NoArtifact {
                 target,
@@ -716,15 +719,21 @@ impl LockedArtifactError {
                 locked_targets,
             },
             Self::Unknown {
+                target,
                 artifact_id,
                 sha256,
                 reason,
             } => BlockerKind::LockArtifactUnknown {
+                target,
                 artifact_id,
                 sha256,
                 reason,
             },
-            Self::Resolve(error) => BlockerKind::Resolve { error, selector },
+            Self::Resolve(error) => BlockerKind::Resolve {
+                provider,
+                error,
+                selector,
+            },
         }
     }
 }
@@ -758,6 +767,7 @@ pub fn locked_artifact<'e>(
     };
     // 4. The digest in the catalog, with the same version, target, and ID.
     let unknown = |reason| LockedArtifactError::Unknown {
+        target: host.target,
         artifact_id: wanted.id.clone(),
         sha256: wanted.sha256,
         reason,
@@ -922,12 +932,14 @@ fn pick(
         .unwrap_or_else(|| "stable".to_owned());
     let artifact = resolve(entry, &selector, host, verdict)
         .map_err(|error| BlockerKind::Resolve {
+            provider: service.provider.clone(),
             error,
             selector: written.clone(),
         })?
         .artifact;
     let Some(own) = locked_of(artifact) else {
         return Err(BlockerKind::Resolve {
+            provider: service.provider.clone(),
             error: ResolveError::Unresolved {
                 reason: UnresolvedReason::NoMatch,
                 known_lines: Vec::new(),

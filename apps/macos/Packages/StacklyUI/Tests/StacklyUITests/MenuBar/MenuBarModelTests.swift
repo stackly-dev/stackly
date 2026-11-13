@@ -16,13 +16,13 @@ struct MenuBarModelTests {
     private func item(_ id: UUID, _ name: String) -> StopAllItem {
         StopAllItem(
             instanceId: id, name: name, lifecycle: .running, demand: [.manual],
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
     }
 
     private func preview(_ ids: [(UUID, String)]) -> StopAllPreview {
         StopAllPreview(
             items: ids.map { item($0.0, $0.1) }, alreadyStopping: [], skipped: [],
-            atLoginCount: 0)
+            atLoginCount: 0, affectedEnvironments: nil)
     }
 
     /// The previews the daemon answers with, one per read; an empty one when they run out.

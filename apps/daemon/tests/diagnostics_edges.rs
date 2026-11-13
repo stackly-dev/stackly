@@ -536,6 +536,7 @@ async fn change_http_port(
                 base_revision: ConfigRevisionNumber::new(1).expect("a revision number"),
                 endpoints: vec![Api::http_port(port)],
                 dry_run,
+                override_leases: false,
             }),
             CallOptions::default().with_idempotency_key(support::key()),
         )
