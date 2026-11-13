@@ -24,6 +24,7 @@ use stackly_protocol::env::{
     EnvGetParams, EnvPlan, EnvPlanParams, EnvSource, EnvUpParams, EnvUpReply, EnvironmentDetail,
     PlanAction, UpPhase, UpState,
 };
+use stackly_protocol::instance::EndpointTransport;
 use stackly_protocol::operation::{OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretMode, SecretText, SetSecretParams};
 use stackly_protocol::{Call, Reply};
@@ -315,13 +316,14 @@ async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_n
     for service in &detail.services {
         assert!(service.not_ready.is_none(), "{service:?}");
         let instance = service.instance.as_ref().expect("each service has one");
+        let tcp: Vec<_> = instance
+            .endpoints
+            .iter()
+            .filter(|endpoint| endpoint.transport == EndpointTransport::Tcp)
+            .collect();
         assert!(
-            !instance.endpoints.is_empty()
-                && instance
-                    .endpoints
-                    .iter()
-                    .all(|endpoint| endpoint.port.is_some()),
-            "{instance:?}"
+            !tcp.is_empty() && tcp.iter().all(|endpoint| endpoint.port.is_some()),
+            "each TCP endpoint names its bound port: {instance:?}"
         );
     }
 
