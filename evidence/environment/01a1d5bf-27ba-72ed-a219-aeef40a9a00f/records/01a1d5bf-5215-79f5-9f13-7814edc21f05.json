@@ -1,0 +1,31 @@
+{
+  "finishedAt" : "2026-11-13T16:30:48.836Z",
+  "subjects" : [
+
+  ],
+  "id" : "01a1d5bf-5215-79f5-9f13-7814edc21f05",
+  "status" : "PASS",
+  "covers" : [
+    "REQ-020",
+    "AC-020"
+  ],
+  "reason" : null,
+  "method" : "automated",
+  "steps" : null,
+  "evidencePath" : "output.log",
+  "expected" : "The import plan of the ERP manifest shows six creates with their installs and secrets, then Cancel and Import",
+  "actual" : "all expectations passed",
+  "owner" : null,
+  "kind" : "fixture",
+  "test" : {
+    "package" : null,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/freshPlan()",
+    "target" : "StacklyUITests",
+    "line" : 145,
+    "language" : "swift"
+  },
+  "startedAt" : "2026-11-13T16:30:47.829Z",
+  "schema" : "stackly.evidence/v1",
+  "reviewer" : null
+}

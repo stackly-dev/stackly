@@ -1,0 +1,57 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 14.99s
+     Running tests/environment.rs (target/debug/deps/environment-a1303bb5cf066120)
+
+running 17 tests
+   Compiling libc v0.2.190
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling errno v0.3.14
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling signal-hook v0.4.5
+   Compiling stackly-fake-server v0.1.0 ($REPO/crates/fake-server)
+    Finished `dev` profile [unoptimized] target(s) in 2.12s
+test an_unresolved_selector_names_the_selector_the_manifest_wrote ... ok
+test a_secret_sentinel_in_the_manifest_never_leaves_the_file ... ok
+test env_lock_blocks_and_writes_nothing_for_an_unresolved_selector_or_a_folder ... ok
+test a_plan_reads_this_mac_and_starts_no_operation ... ok
+test env_lock_writes_only_the_lock_file_and_a_second_run_writes_nothing ... ok
+test an_import_registers_the_file_once_and_a_repeated_key_runs_no_second_operation ... ok
+test a_name_at_another_location_is_taken_until_a_relink_moves_it ... ok
+test a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first ... ok
+test a_retained_member_blocks_the_plan_and_shows_unavailable ... ok
+test get_reads_the_manifest_only_when_asked ... ok
+test export_prints_the_ports_of_the_members_and_never_a_redacted_value ... ok
+test the_reply_of_a_plan_of_32_services_stays_under_900_kib ... ok
+test validate_reads_the_file_answers_every_finding_and_writes_nothing ... ok
+test plan_and_get_read_the_lock_and_the_overrides_next_to_the_manifest ... ok
+test updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it ... ok
+test membership_shows_on_every_summary_and_remove_waits_for_the_lease ... ok
+test the_65th_environment_is_refused ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.43s
+
+     Running tests/environment_edges.rs (target/debug/deps/environment_edges-fd51033c7aa30bbc)
+
+running 8 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.03s
+test a_file_over_256_kib_is_too_large_one_at_256_kib_reads_and_a_closed_file_is_denied ... ok
+test a_sentinel_in_a_registered_manifest_reaches_no_reply_audit_or_log ... ok
+test a_file_name_in_another_case_is_the_registered_location ... ok
+test a_pending_or_revoked_local_provider_blocks_the_plan_and_the_plan_never_decides ... ok
+test relinks_at_the_same_time_keep_one_environment_and_a_plain_import_is_name_taken ... ok
+test a_lease_the_guard_did_not_see_still_refuses_the_remove ... ok
+test the_digest_ignores_a_borrowed_instance_starting_and_stopping ... ok
+test membership_loads_again_when_the_daemon_restarts ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.22s
+

@@ -1,0 +1,68 @@
+Building for debugging...
+[Using on-disk description]
+[1 / 4]
+Build complete! (0,59 secs)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite EnvironmentLockTests started.
+◇ Suite SnapshotTests started.
+◇ Suite EnvironmentsSnapshotTests started.
+◇ Test anIgnoredOverrideIsNeverShownAsApplied() started.
+◇ Test aFailedLockSaysWhy() started.
+◇ Test theLockItemsAreGatedAndUpdateLockConfirms() started.
+◇ Test aLockedPlanWithABrokenLocalFileShowsBlockersAndNoOverride() started.
+◇ Test theMoreMenuPutsTheLockItemsAfterReloadManifest() started.
+◇ Test aLockIsNeverShownAgainstAManifestThatIsNotValid() started.
+◇ Test aBlockedLockListsItsBlockersAndWritesNothing() started.
+◇ Test aLockOfAManifestThatIsNotValidOpensProblems() started.
+✔ Test aFailedLockSaysWhy() passed after 0.001 seconds.
+✔ Test aLockIsNeverShownAgainstAManifestThatIsNotValid() passed after 0.001 seconds.
+✔ Test aBlockedLockListsItsBlockersAndWritesNothing() passed after 0.001 seconds.
+✔ Test aLockOfAManifestThatIsNotValidOpensProblems() passed after 0.001 seconds.
+◇ Test theLockRowFollowsTheSpecText() started.
+◇ Test copyEnvironmentVariablesWritesTheExportText() started.
+◇ Test lockVersionsAndUpdateLockSendTheirRefresh() started.
+◇ Test thePlanSheetShowsTheLockAndTheOverrides() started.
+◇ Test theLocalOverrideRowFollowsTheSpecText() started.
+◇ Test list() started.
+✔ Test copyEnvironmentVariablesWritesTheExportText() passed after 0.001 seconds.
+✔ Test lockVersionsAndUpdateLockSendTheirRefresh() passed after 0.001 seconds.
+✔ Test anIgnoredOverrideIsNeverShownAsApplied() passed after 0.002 seconds.
+✔ Test aLockedPlanWithABrokenLocalFileShowsBlockersAndNoOverride() passed after 0.126 seconds.
+✔ Test theMoreMenuPutsTheLockItemsAfterReloadManifest() passed after 0.126 seconds.
+✔ Test theLockItemsAreGatedAndUpdateLockConfirms() passed after 0.126 seconds.
+✔ Test theLockRowFollowsTheSpecText() passed after 0.127 seconds.
+✔ Test thePlanSheetShowsTheLockAndTheOverrides() passed after 0.127 seconds.
+✔ Test theLocalOverrideRowFollowsTheSpecText() passed after 0.127 seconds.
+✔ Suite EnvironmentLockTests passed after 0.129 seconds.
+✔ Test list() passed after 3.425 seconds.
+◇ Test detail() started.
+✔ Test detail() passed after 1.818 seconds.
+◇ Test manifestBanners() started.
+✔ Test manifestBanners() passed after 1.599 seconds.
+◇ Test problems() started.
+✔ Test problems() passed after 0.830 seconds.
+◇ Test freshPlan() started.
+✔ Test freshPlan() passed after 1.006 seconds.
+◇ Test registeredPlan() started.
+✔ Test registeredPlan() passed after 0.947 seconds.
+◇ Test invalidAndTakenPlans() started.
+✔ Test invalidAndTakenPlans() passed after 0.689 seconds.
+◇ Test lockRows() started.
+✔ Test lockRows() passed after 2.023 seconds.
+◇ Test lockBlocked() started.
+✔ Test lockBlocked() passed after 0.830 seconds.
+◇ Test lockedPlan() started.
+✔ Test lockedPlan() passed after 1.944 seconds.
+◇ Test detailOffline() started.
+✔ Test detailOffline() passed after 1.053 seconds.
+◇ Test overviewShowAll() started.
+✔ Test overviewShowAll() passed after 0.846 seconds.
+◇ Test sidebarRows() started.
+✔ Test sidebarRows() passed after 1.985 seconds.
+◇ Test otherSurfaces() started.
+✔ Test otherSurfaces() passed after 3.252 seconds.
+✔ Suite EnvironmentsSnapshotTests passed after 22.273 seconds.
+✔ Suite SnapshotTests passed after 22.273 seconds.
+✔ Test run with 27 tests in 3 suites passed after 22.273 seconds.

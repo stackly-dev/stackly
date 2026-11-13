@@ -1,0 +1,31 @@
+{
+  "finishedAt" : "2026-11-13T16:30:52.500Z",
+  "subjects" : [
+
+  ],
+  "id" : "01a1d5bf-5c6c-7de2-b229-651a4afed506",
+  "status" : "PASS",
+  "covers" : [
+    "NFR-012",
+    "REQ-023"
+  ],
+  "reason" : null,
+  "method" : "automated",
+  "steps" : null,
+  "evidencePath" : "output.log",
+  "expected" : "Details shows the Lock row in sync, out of date, not locked, and unreadable, and the Local override row with overrides, problems, or None",
+  "actual" : "all expectations passed",
+  "owner" : null,
+  "kind" : "fixture",
+  "test" : {
+    "line" : 189,
+    "package" : null,
+    "language" : "swift",
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "target" : "StacklyUITests",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/lockRows()"
+  },
+  "startedAt" : "2026-11-13T16:30:50.476Z",
+  "schema" : "stackly.evidence/v1",
+  "reviewer" : null
+}

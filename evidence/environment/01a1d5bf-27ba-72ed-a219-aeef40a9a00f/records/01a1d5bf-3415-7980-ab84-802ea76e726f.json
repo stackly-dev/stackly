@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "finishedAt" : "2026-11-13T16:30:40.152Z",
+  "startedAt" : "2026-11-13T16:30:40.149Z",
+  "expected" : "Lock Versions sends env.lock with refresh none, Update Lock… with all, and the feedback says Locked 3 services. or The lock is up to date.",
+  "actual" : "all expectations passed",
+  "subjects" : [
+
+  ],
+  "evidencePath" : "output.log",
+  "test" : {
+    "package" : null,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+    "language" : "swift",
+    "name" : "EnvironmentLockTests/lockVersionsAndUpdateLockSendTheirRefresh()",
+    "target" : "StacklyUITests",
+    "line" : 101
+  },
+  "method" : "automated",
+  "covers" : [
+    "REQ-023"
+  ],
+  "status" : "PASS",
+  "reviewer" : null,
+  "schema" : "stackly.evidence/v1",
+  "owner" : null,
+  "kind" : "fixture",
+  "id" : "01a1d5bf-3415-7980-ab84-802ea76e726f",
+  "reason" : null
+}
