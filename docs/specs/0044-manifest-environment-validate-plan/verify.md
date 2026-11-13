@@ -249,6 +249,10 @@ Kesiapan Milestone 3: bagian otomatis siap dicentang; 19 langkah manual tetap `N
 - AC-25 · bagian fixture lewat `EnvironmentPlanPresenterTests` dan snapshot `environment-plan-import`; bukti lewat daemon nyata menunggu langkah 5 dan langkah manual di atas (record manual `NOT_RUN`)
 - AC-1 sampai AC-17 · milik Milestone 1 dan 2
 
+### Ulang sesudah K27, 2026-11-14 (kode `31b25de2`)
+
+K27 (`provider_single_instance`, AC-2 dan AC-7) sudah dibangun dan sesuai teks *Provider satu instance*: service `dedicated` kedua dan seterusnya dari provider yang paketnya tidak `multiInstance` mendapat satu finding `error` di `services.<alias>.provider`, urut manifest, dengan pesan tetap; service `instanceRef` tidak dihitung; satu service `dedicated` dengan instance provider itu yang sudah ada tetap blocker plan `instance.capability_unsupported`. `cargo test -p stackly-core --test environment` 109 lulus, termasuk `validate::the_second_and_third_dedicated_service_of_a_single_instance_provider_are_refused`, `validate::a_service_that_borrows_an_instance_of_a_single_instance_provider_is_not_counted`, dan `plan::one_dedicated_service_of_a_single_instance_provider_that_already_has_one_is_blocked`. Tidak di probe terhadap binary daemon: keenam provider resmi `multiInstance`, jadi bukti hanya dari test dengan paket `testing/single`. Temuan rendah nomor 5 di Verify penuh (`instance.capability_unsupported` belum teruji) dengan ini tertutup.
+
 ## Verify penuh 2026-11-13
 
 _Sesi `chk-f44-verify`, kode `4c18ff05`. Menutup `Build it` dan `Verify it` fitur 44. Langkah yang sudah `[x]` tidak diulang; yang diperiksa adalah apakah masih berlaku sesudah merge terakhir (F46 milestone 1, F47 langkah 1 dan 2, loader YAML)._
