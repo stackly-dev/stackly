@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-31ed-73a4-88ca-e968d9e133c9",
+  "covers": [
+    "REQ-021",
+    "AC-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "up_brings_a_chain_up_in_order_with_leases_and_a_report",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 247
+  },
+  "status": "PASS",
+  "expected": "env.up of db, api waiting for db, and web waiting for api registers the environment, creates three dedicated members each with one active environment lease, starts db before api and api before web, succeeds, and env.get shows lastUp succeeded with every service ready and each endpoint's bound port, and no active operation; each child names the Up as its parent",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:20.877692Z",
+  "finishedAt": "2026-11-13T18:25:26.345052Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,446 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+    "sourceDirty": false,
+    "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "env_up"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T18:25:03.310233Z",
+  "finishedAt": "2026-11-13T18:25:26.359488Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 6,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 6,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 6,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e96332019238",
+      "covers": [
+        "REQ-021"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "a_second_up_is_busy_and_a_cancel_records_the_rest_cancelled",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 380
+      },
+      "status": "PASS",
+      "expected": "while an Up whose db is slow to become ready runs, a second env.up of the same environment is refused resource.busy naming the first, env.get shows the Up as the active operation with lastUp running, and operation.cancel ends it cancelled with lastUp cancelled and the members and leases kept",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877295Z",
+      "finishedAt": "2026-11-13T18:25:24.616115Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e9641db0c59b",
+      "covers": [
+        "VAL-014",
+        "AC-073"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "a_borrowed_instance_gets_one_shared_lease_and_is_left_as_it_was",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 453
+      },
+      "status": "PASS",
+      "expected": "two env.up runs of a manifest whose cache borrows a running instance through instanceRef add one shared member and exactly one active lease, start no child for it, and leave its provider pin, runtime, endpoints, desired state, restart count, and process as they were",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877296Z",
+      "finishedAt": "2026-11-13T18:25:25.75649Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e965c9f4b7f9",
+      "covers": [
+        "REQ-021",
+        "AC-021",
+        "BR-023"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "a_failed_create_skips_its_dependents_and_ends_the_up_incomplete",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 316
+      },
+      "status": "PASS",
+      "expected": "env.up where the create of api fails at init leaves db ready, ends api failed at create and web skipped waiting for api, fails with env.up_incomplete (ready 1 of 3), leaves no instance or member of api behind, and env.get explains api with up_failed and web with dependency_not_ready",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877326Z",
+      "finishedAt": "2026-11-13T18:25:25.703992Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e96697b818d0",
+      "covers": [
+        "REQ-021"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "a_refused_up_starts_no_operation_and_writes_nothing",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 196
+      },
+      "status": "PASS",
+      "expected": "env.up refuses an invalid manifest with env.manifest_invalid, a digest the client did not review with env.plan_changed, and a secretRefs reference without a value with secret.needs_secret naming it, and none of them moves the registry generation, adds an operation, or creates an instance",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877574Z",
+      "finishedAt": "2026-11-13T18:25:22.38137Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e96768ba4252",
+      "covers": [
+        "REQ-021",
+        "AC-073"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "a_daemon_restart_in_the_middle_of_an_up_shows_it_interrupted_and_keeps_the_leases",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 503
+      },
+      "status": "PASS",
+      "expected": "a daemon that stops while an Up waits for a slow start comes back with the Up closed failed, env.get showing lastUp interrupted with no active operation, and every member's environment lease still active",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877624Z",
+      "finishedAt": "2026-11-13T18:25:23.901621Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-31ed-73a4-88ca-e968d9e133c9",
+      "covers": [
+        "REQ-021",
+        "AC-021"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up",
+        "name": "up_brings_a_chain_up_in_order_with_leases_and_a_report",
+        "file": "apps/daemon/tests/env_up.rs",
+        "line": 247
+      },
+      "status": "PASS",
+      "expected": "env.up of db, api waiting for db, and web waiting for api registers the environment, creates three dedicated members each with one active environment lease, starts db before api and api before web, succeeds, and env.get shows lastUp succeeded with every service ready and each endpoint's bound port, and no active operation; each child names the Up as its parent",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:20.877692Z",
+      "finishedAt": "2026-11-13T18:25:26.345052Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d627-ed4e-7465-a36c-ff15589b422e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

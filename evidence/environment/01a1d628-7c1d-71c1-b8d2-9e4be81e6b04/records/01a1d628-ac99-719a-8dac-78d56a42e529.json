@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-ac99-719a-8dac-78d56a42e529",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentUpProgressTests/theStatusColumnShowsThePhaseOfAServiceStillWorkedOn()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+    "line": 210
+  },
+  "status": "PASS",
+  "expected": "A service the Up works on shows its phase in the Status column; a service whose phase ended shows its instance status",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:52.282Z",
+  "finishedAt": "2026-11-13T18:25:52.47Z",
+  "evidencePath": "output.log"
+}

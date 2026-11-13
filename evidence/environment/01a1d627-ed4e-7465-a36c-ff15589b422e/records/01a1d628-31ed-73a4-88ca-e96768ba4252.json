@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-31ed-73a4-88ca-e96768ba4252",
+  "covers": [
+    "REQ-021",
+    "AC-073"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_daemon_restart_in_the_middle_of_an_up_shows_it_interrupted_and_keeps_the_leases",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 503
+  },
+  "status": "PASS",
+  "expected": "a daemon that stops while an Up waits for a slow start comes back with the Up closed failed, env.get showing lastUp interrupted with no active operation, and every member's environment lease still active",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:20.877624Z",
+  "finishedAt": "2026-11-13T18:25:23.901621Z",
+  "evidencePath": "output.log"
+}

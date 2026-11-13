@@ -1,0 +1,21 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 15.49s
+     Running tests/env_up.rs (target/debug/deps/env_up-3d8028f29eafd4af)
+
+running 6 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.06s
+test a_refused_up_starts_no_operation_and_writes_nothing ... ok
+test a_daemon_restart_in_the_middle_of_an_up_shows_it_interrupted_and_keeps_the_leases ... ok
+test a_second_up_is_busy_and_a_cancel_records_the_rest_cancelled ... ok
+test a_failed_create_skips_its_dependents_and_ends_the_up_incomplete ... ok
+test a_borrowed_instance_gets_one_shared_lease_and_is_left_as_it_was ... ok
+test up_brings_a_chain_up_in_order_with_leases_and_a_report ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.48s
+

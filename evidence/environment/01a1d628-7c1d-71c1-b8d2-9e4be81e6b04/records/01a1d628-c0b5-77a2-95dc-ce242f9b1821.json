@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-c0b5-77a2-95dc-ce242f9b1821",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/listWhileBringingUp()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 149
+  },
+  "status": "PASS",
+  "expected": "The Environments list shows Bringing up… for the environment whose Up runs, with its ready count",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:57.43Z",
+  "finishedAt": "2026-11-13T18:25:58.144Z",
+  "evidencePath": "output.log"
+}

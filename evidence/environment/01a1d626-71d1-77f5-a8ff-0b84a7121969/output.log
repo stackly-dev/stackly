@@ -1,0 +1,16 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 12.38s
+     Running tests/env_up_native.rs (target/debug/deps/env_up_native-706924d714fca004)
+
+running 1 test
+test the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_nothing ...     Finished `dev` profile [unoptimized] target(s) in 0.03s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 66.41s
+

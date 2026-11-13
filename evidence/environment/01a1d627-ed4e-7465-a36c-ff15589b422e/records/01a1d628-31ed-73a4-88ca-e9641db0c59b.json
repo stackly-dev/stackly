@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-31ed-73a4-88ca-e9641db0c59b",
+  "covers": [
+    "VAL-014",
+    "AC-073"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_borrowed_instance_gets_one_shared_lease_and_is_left_as_it_was",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 453
+  },
+  "status": "PASS",
+  "expected": "two env.up runs of a manifest whose cache borrows a running instance through instanceRef add one shared member and exactly one active lease, start no child for it, and leave its provider pin, runtime, endpoints, desired state, restart count, and process as they were",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:20.877296Z",
+  "finishedAt": "2026-11-13T18:25:25.75649Z",
+  "evidencePath": "output.log"
+}

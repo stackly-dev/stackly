@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-ac99-7123-839e-75d0eee26374",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentUpPresenterTests/aMissingSecretOpensTheSecretSheetThenReadsThePlanAgain()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+    "line": 80
+  },
+  "status": "PASS",
+  "expected": "secret.needs_secret from env.up opens the secret entry sheet with its references; Continue reads the plan again",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:52.282Z",
+  "finishedAt": "2026-11-13T18:25:52.47Z",
+  "evidencePath": "output.log"
+}

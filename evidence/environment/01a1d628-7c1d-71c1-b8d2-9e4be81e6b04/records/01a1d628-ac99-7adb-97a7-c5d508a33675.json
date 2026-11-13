@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-ac99-7adb-97a7-c5d508a33675",
+  "covers": [
+    "REQ-021",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentUpProgressTests/theBannerNamesEachServiceWithItsReasonAndAction()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+    "line": 227
+  },
+  "status": "PASS",
+  "expected": "The partially ready banner names each service with its reason and offers Set Secret…, the dependency, or Show Operation",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:52.282Z",
+  "finishedAt": "2026-11-13T18:25:52.47Z",
+  "evidencePath": "output.log"
+}
