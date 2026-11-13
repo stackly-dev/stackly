@@ -952,3 +952,12 @@ Langkah 2 dan 6 *Stop* di `index.md` diganti persis dengan kalimat final di bagi
 ## Baris value sourcing `init` (2026-10-22)
 
 Dari *Usulan update spec lain (2026-10-22)* butir 3 spec 0023, dibawa lead scope 02 lewat brief `arc-f15-update-4`. *Value sourcing* mendapat satu baris: saat `execute_init`, endpoint `Auto` tidak punya port (`Prepared::context` dengan peta port kosong, `crates/core/src/supervisor/init.rs`). Ini hanya mencatat perilaku yang sudah dibangun, supaya penulis paket dan spec 0020 melihatnya; penjaga nya ada di spec 0009 (AC-21, `init_port_issues`) dan spec 0020 (AC-9, dry run init). Tidak ada keputusan, AC, atau kode spec ini yang berubah. Setelah cross check, baris `instance.endpoint_invalid` di *Kode error* mendapat satu klausa sebab (endpoint `Auto` yang dibutuhkan initialize, dry run init spec 0020 langkah 17), karena ringkasan katalog dan hint kode itu ikut diperbarui langkah 17; penanda `supervisor.data_incompatible` dan paragraf hint fitur 25 di bagian itu tidak disentuh.
+
+## Perubahan 2026-11-13 (fitur 44, 46, dan 47)
+
+Dibawa lead scope 08 lewat brief `arc-update-all`, dari *Update spec lain* spec 0044, 0046, dan 0047. AC spec ini tidak berubah.
+
+- Pemeriksaan lease stop pindah dari "baca lease, lalu commit" dalam dua langkah menjadi satu guard di dalam commit yang menulis desired `stopped` (spec 0047 K4). Alasannya: Up bisa mencatat lease di antara precheck dan commit, dan hanya keputusan di dalam transaksi yang menutup celah itu.
+- Pemeriksaan itu mengikuti permintaan (`LeaseCheck`), bukan `StopIntent`, karena `StopIntent::User` juga dipakai separuh stop restart, stop sesudah start yang dibatalkan, dan langkah Stop All, yang perilakunya tidak boleh berubah (spec 0047 AC-14).
+- `StartTrigger::Environment` menjadi pemicu sendiri, bukan `User`, supaya instance yang hanya dinyalakan Up tidak mendapat lease `manual` dan Down boleh menghentikannya (spec 0046 AC-13).
+- `InstanceOwnership` mendapat `dedicated` dan `shared`, seperti yang sudah disiapkan K4 spec ini untuk fitur 44 (enum terbuka dengan default `manual`).

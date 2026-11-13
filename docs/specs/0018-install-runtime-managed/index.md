@@ -660,6 +660,15 @@ Memverifikasi **AC-17**.
 - Pekerjaan `install_runtime` membaca ulang baris import sebelum langkah `validate_binary` dan sebelum `commit`, dan batch akhirnya bergantung pada generation baris itu; `InstallError` mendapat `ApprovalRequired` dan `Revoked` dengan kode `provider.*`.
 - `catalog_match` dan `DisplayNames` memilih entri catalog lebih dulu untuk status dan nama tampil runtime per `software`; entri lokal hanya dipakai kalau tidak ada entri catalog.
 
+### Tambahan fitur 46
+
+*Ditambah fitur 46 ([spec 0046](../0046-env-up-dependency-graph/index.md), 2026-11-13).* AC spec ini tidak berubah, dan perilaku `runtime.install` untuk klien tidak berubah.
+
+- Handler `runtime.install` di `apps/daemon/src/ipc/runtime.rs` dipecah menjadi dua bagian: "params ke permintaan internal" dan "permintaan internal ke `begin`". Bagian kedua juga dipanggil port `UpChildren::install` (spec 0046, *Operasi anak*, langkah build 6), jadi gate trust spec 0037 dan `install_precheck` berjalan persis seperti untuk permintaan klien.
+- Operasi anak `install_runtime` yang dimulai Up memakai selector `sha256:<artifactSha256>` dari item plan, `Origin::Child` (tanpa idempotency key, pemicu salinan pemicu induk), dan `BusyPolicy::Queue` seperti handler nya. Runtime yang sudah terpasang dijawab `ChildStart::AlreadyDone` tanpa operasi (spec 0046 AC-6).
+- Paling banyak `UP_INSTALL_CONCURRENCY` 2 install anak berjalan sekaligus, dan dua service dengan artefak yang sama menghasilkan satu install. Install yang gagal hanya menggagalkan service yang butuh artefak itu.
+- Anak `install_runtime` yang masih `queued` saat daemon berhenti tetap dibangun ulang lewat `WorkFactory` nya seperti install lain (spec 0007 AC-10), walau induknya sudah ditutup: runtime yang terpasang tetap berguna untuk Up berikutnya.
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey: jalur "pilih versi, pasang dengan aman, lihat hasilnya" dibangun lengkap termasuk semua jalur gagal sebelum layar lain menumpuk. Data catalog dan extractor duluan karena semua langkah lain membacanya; pipeline core lalu daemon dan CLI menutup jalur dari terminal; GUI dan bukti native menutup jalur dari aplikasi.

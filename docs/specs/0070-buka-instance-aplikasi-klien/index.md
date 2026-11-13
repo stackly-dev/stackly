@@ -272,12 +272,12 @@ Approach Journey: satu jalur pengguna (buka instance di aplikasi lain) dibangun 
 
 - `InstanceDetail` bertambah satu field; kontrak direncanakan 1.19 dan masuk `main` sebagai bagian 2.1.
 - Folder `temp` instance mulai berisi skrip `open-*.command`.
-- Halaman Environments (fitur 44) memakai `OpenInMenu` yang sama nanti; mockup menaruh menu di sana.
+- Halaman Environments (fitur 44) memakai `OpenInMenu` yang sama nanti; mockup menaruh menu di sana. *(Ditambah fitur 44, [spec 0044](../0044-manifest-environment-validate-plan/index.md), 2026-11-13: menu baris service di tabel Services memakai `OpenInMenu` untuk instance nya, lalu Copy Connection URL, Show Instance, Show Logs, dan Start, Stop, atau Retry dari aksi instance yang sudah ada, AC-19. `OpenInMenu` dan aturan `openWith` spec ini tidak berubah.)*
 
 ## Follow-up
 
 - [ ] `/scope`: ubah Done when fitur 70 dari "alurnya meminta aksi eksplisit dengan peringatan" menjadi "aplikasi yang hanya menerima secret lewat URL, argumen, atau daftar proses tidak bisa dideklarasikan (loader menolak token secret)", dan catat bahwa menu juga ada di detail, inspector, dan menu Instance.
-- [ ] `/scope`: catat di fitur 44 bahwa menu aksi per service di halaman Environments memakai `OpenInMenu` spec 0070, ditambah item Copy Connection URL, Show Instance, Show Logs, dan Start atau Stop dari mockup.
+- [x] `/scope`: catat di fitur 44 bahwa menu aksi per service di halaman Environments memakai `OpenInMenu` spec 0070, ditambah item Copy Connection URL, Show Instance, Show Logs, dan Start atau Stop dari mockup. Sudah tercatat di Done when fitur 44 (`docs/scope/08-environment-proyek.md`). Dijawab spec 0044 (AC-19), diterapkan di spec 0070 (2026-11-13).
 - [x] Fitur 41: dashboard Traefik (endpoint `dashboard` di loopback, `api.dashboard`) dan entri `browser` nya diputuskan di spec provider Traefik. Sejak 2026-11-05 API Traefik read only sudah ada di entry point loopback `traefik` (endpoint `ping`) untuk probe `traefik-routes` spec 0009 AC-22, dengan `api.dashboard: false`; fitur 41 tinggal memutuskan dashboard dan entri `browser` nya. *Dijawab [spec 0041](../0041-provider-traefik-routing-lokal/index.md) (2026-11-12):* dashboard tidak ditawarkan; entri `browser` `routers` membuka daftar router read only.
 - [x] Fitur 40, 42, 43: entri `openWith` untuk Valkey (Redis Insight, `valkey-cli`), MySQL (TablePlus, Sequel Ace, `mysql`), dan ClickHouse (Play UI, `clickhouse-client`) ditulis di spec provider masing masing. *Dijawab spec 0040, 0042, dan 0043 (2026-11-12):* `valkey-cli` dan TablePlus (Redis Insight ditunda), TablePlus, Sequel Ace, dan `mysql`, Play UI dan `clickhouse client`.
 - [ ] `docs/scope/ui-macos.md` bagian selisih: Open In ada di detail, inspector, dan menu Instance sebelum Environments ada; NATS tidak punya "Subscribe in Terminal" karena runtime nats-server tidak membawa CLI `nats`.
