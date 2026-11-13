@@ -112,12 +112,20 @@ struct EnvironmentDetailPage: View {
     }
 
     private var validateAction: StacklyAction {
+        let model = model
+        return Self.validateAction(
+            location: model.manifestLocation, isValidating: model.isValidating,
+            perform: { run { await model.validate() } })
+    }
+
+    /// Validate of the toolbar, off without a manifest file.
+    static func validateAction(
+        location: String?, isValidating: Bool, perform: @escaping @MainActor () -> Void
+    ) -> StacklyAction {
         StacklyAction(
             id: "environment.validate", title: "Validate", mutates: false,
-            disabledReason: model.manifestLocation == nil
-                ? EnvironmentCopy.noManifest : nil,
-            isBusy: model.isValidating,
-            perform: { run { await model.validate() } })
+            disabledReason: location == nil ? EnvironmentCopy.noManifest : nil,
+            isBusy: isValidating, perform: perform)
     }
 
     /// Up…: the plan sheet for the registered manifest with Cancel and Bring Up (spec 0046,
@@ -125,12 +133,23 @@ struct EnvironmentDetailPage: View {
     /// used.
     private var upAction: StacklyAction? {
         guard let planPresenter, let summary = model.summary else { return nil }
-        return StacklyAction(
-            id: "environment.up", title: EnvironmentCopy.up, mutates: true,
-            disabledReason: Self.upDisabledReason(
-                summary: summary, manifestState: model.manifestState,
-                problemCount: model.problemCount, declaredName: model.declaredName),
+        return Self.upAction(
+            summary: summary, manifestState: model.manifestState,
+            problemCount: model.problemCount, declaredName: model.declaredName,
             perform: { planPresenter.review(environment: summary.id, name: summary.name) })
+    }
+
+    /// Up… of the toolbar, off with the reason of ``upDisabledReason(summary:manifestState:problemCount:declaredName:)``.
+    static func upAction(
+        summary: EnvironmentSummary, manifestState: ManifestState?, problemCount: UInt64,
+        declaredName: String?, perform: @escaping @MainActor () -> Void
+    ) -> StacklyAction {
+        StacklyAction(
+            id: "environment.up", title: EnvironmentCopy.up, mutates: true,
+            disabledReason: upDisabledReason(
+                summary: summary, manifestState: manifestState, problemCount: problemCount,
+                declaredName: declaredName),
+            perform: perform)
     }
 
     /// Why Up… is off, or `nil` (spec 0046, *Layar*): an operation of this environment that has
