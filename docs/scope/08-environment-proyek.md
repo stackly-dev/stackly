@@ -4,7 +4,7 @@
 
 Journey PRD JOURNEY-04 (contoh environment ERP): import `stackly.yaml`, review trust provider, plan, lock versi exact, up dengan progress dan readiness, lalu down tanpa menghapus data. Fase ini datang setelah stack enam service karena environment ERP memakai keenamnya. Fase ini selesai kalau tim bisa berbagi satu file environment tanpa ikut membagikan data, path pribadi, atau password, dan seluruh jalur itu bekerja dari GUI dan CLI.
 
-### 44. Manifest environment: validate & plan · needs a decision
+### 44. Manifest environment: validate & plan · in-progress
 
 Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, secret reference, dependency, ownership) dan plan yang menampilkan diff serta dampak tanpa efek samping. Termasuk halaman Environments untuk import, edit, validasi, dan preview plan.
 
@@ -12,7 +12,15 @@ Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, s
 
 **Trace:** REQ-020, REQ-028, VAL-013, VAL-014, PAGE-10, AC-020, AC-080 (bagian plan), NFR-012, JOURNEY-04
 
-- [ ] Design it (spec): `/architect manifest environment: validate & plan`
+**Pointer:** spec [0044](../specs/0044-manifest-environment-validate-plan/index.md)
+
+- [x] Design it (spec): `/architect manifest environment: validate & plan`
+- [ ] Build it: `/develop manifest environment: validate & plan`
+  - [ ] Manifest, validate, dan plan di daemon: migrasi `environments.services` dan unique index nama serta lokasi, `DeclaredService` dan dua `OperationKind`, loader dan aturan validasi `stackly.yaml` dengan JSON Schema hasil codegen, plan di atas `gather` dan `evaluate` create (`planned_runtime`), kenaikan minor protokol dengan modul `env`, enam method, area kode `env`, `InstanceOwnership` baru, lalu handler `env.validate`, `env.plan`, `env.list`, `env.get`, operasi `import_environment` dan `remove_environment`, cache keanggotaan, dan test tanpa efek samping (spec 0044 AC-1 sampai AC-15, AC-24; build steps 1 to 5; needs scope 01 sampai 07 di `main`)
+  - [ ] `stackly env validate`, `plan`, `import`, `list`, `remove`: grup `env`, resolve target, kode `cli.env_invalid`, `cli.env_plan_blocked`, `cli.environment_not_found`, kolom `ENVIRONMENT` di `instance list`, golden dan binary test (spec 0044 AC-16, AC-17, AC-15; build step 6; after build step 4 untuk golden; binary test needs build step 5; bisa paralel dengan milestone berikutnya)
+  - [ ] Environments di app: `EnvironmentStore`, baris anak sidebar, halaman daftar dan detail dengan tabel Services dan menu baris (`OpenInMenu`), banner manifest dan partially ready, sheet plan, Import…, Validate, Reload, Remove, seksi Environments di Overview, kolom dan baris Environment di Instances, baris onboarding, fixture `environment-partially-ready`, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0044 AC-18 sampai AC-25; build steps 7 to 11; after build step 4; evidence manual needs build step 5)
+- [ ] Verify it: `/check verify manifest environment: validate & plan`
+- [ ] Test it: `/test manifest environment: validate & plan`
 
 ### 45. Lockfile & override lokal · needs a decision
 
