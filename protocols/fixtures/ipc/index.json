@@ -2430,7 +2430,7 @@
       "expect": "roundtrip"
     },
     {
-      "file": "frame-error-env-up-incomplete.json",
+      "file": "frame-response-operation-get-env-up-incomplete.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
     },
@@ -2469,7 +2469,7 @@
       "expect": "roundtrip"
     },
     {
-      "file": "frame-error-env-down-incomplete.json",
+      "file": "frame-response-operation-get-env-down-incomplete.json",
       "type": "ServerFrame",
       "expect": "roundtrip"
     },

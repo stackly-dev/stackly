@@ -614,6 +614,10 @@ async fn a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finish
         Some("supervisor.stop_timeout")
     );
     assert!(error.items()[0].field("operationId").is_some());
+    assert_eq!(
+        error.hint(),
+        Some("bring the environment down again, or stop the instances listed; nothing was deleted")
+    );
     assert_eq!(active_leases(&daemon, db, shop.environment_id), 0);
     assert_eq!(data_files(&site, db), data_before);
 

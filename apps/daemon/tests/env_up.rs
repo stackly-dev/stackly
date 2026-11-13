@@ -337,6 +337,10 @@ async fn a_failed_create_skips_its_dependents_and_ends_the_up_incomplete() {
         .map(|failure| &failure.error)
         .expect("the Up stored its error");
     assert_eq!(failure.code(), "env.up_incomplete");
+    assert!(
+        failure.hint().is_some(),
+        "operation.get carries the env hint (AC-10): {failure:?}"
+    );
     assert_eq!(failure.detail("ready"), Some("1"));
     assert_eq!(failure.detail("total"), Some("3"));
     assert_eq!(done.operation.stage.as_deref(), Some("create"));
