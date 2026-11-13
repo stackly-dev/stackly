@@ -90,6 +90,20 @@ Dijalankan: `cargo test -p stackly-core --lib environment` (7), `cargo test -p s
 
 Kesiapan Milestone 1: semua temuan lain tertutup; yang tersisa hanya AC-1 di atas (butuh keputusan) dan langkah suite penuh yang tidak diulang checker.
 
+### Ulang ketiga `/check verify` Milestone 1, 2026-11-13 (sesi `chk-f44-m1`, kode `98ae4914`, AC-1 dan K2 baru)
+
+Dijalankan: `cargo test -p stackly-core --lib environment` (2), `cargo test -p stackly-core --test environment` (44), `cargo test -p stacklyd --test environment` (12), `cargo xtask provider check` (delapan paket `ok`), `cargo test -p stackly-core --test provider_packages` (92), lalu probe terhadap `stacklyd` asli.
+
+**AC-1 terhadap teks baru: PASS.**
+
+- Tujuh pasangan di `fixtures/environments/aliases/` dan dua file checker (`by1`, `hidden`, dengan kembaran yang ditulis langsung) memberi `valid`, `name`, `services`, dan `findings` yang sama persis lewat `env.validate` daemon asli; tidak ada `yaml_alias`. `manifestSha256` sama dengan SHA-256 byte file dan berbeda dari kembarannya.
+- Alias tidak membawa nilai melewati aturan: secret literal lewat alias `secret_literal` di kedua service, secret di `settings` `secret_in_settings`, endpoint fixed yang sama lewat alias `endpoint_conflict` di keduanya, `dependsOn` lewat alias tetap membentuk `dependency_cycle: b -> c -> b`. Nilai sentinel tidak ada di log daemon.
+- Ditolak sesuai tabel: `!nama` pada nilai `yaml_alias` di `services.db.provider`; pada key di `services.db`; `!` tanpa nama sama; `<<` dan `"<<"` di `services.web.<<`; `*tidak-ada` `yaml_syntax` di `6:8`; dua dokumen `yaml_syntax` di `.`. `!!str` diterima; anchor yang tidak dipakai bukan finding; kutip multi baris di barisnya sendiri valid.
+- Bom di bawah 256 KiB ditolak cepat: bersarang klasik 3 ms, scalar 20 KiB di balik 5.000 alias 8 ms, scalar 120 KiB di balik sekitar 39.000 alias 32 ms, map lebar di balik 20.000 alias 46 ms, bom di dalam `settings` 34 ms (semuanya `yaml_alias` di `.`; key 60 KiB ditolak parser sebagai `yaml_syntax`).
+- Memori `stacklyd`: 40,9 MiB sebelum; naik bertahap sampai 281 MiB sesudah sekitar 250 validasi bom, lalu tetap 281,2 MiB sepanjang 400 validasi berikutnya. `vmmap` menunjukkan 235 MiB itu "Malloc Large (empty)", yaitu blok besar yang sudah dibebaskan dan disimpan allocator macOS, bukan kebocoran dan bukan hasil expand (heap terpakai 11,7 MiB). Catatan rendah: setiap validasi file besar memakai beberapa MiB sementara, dan allocator menahannya.
+
+Kesiapan Milestone 1: semua AC di lingkup lulus dan semua temuan tertutup. Satu satunya kotak kosong adalah suite penuh `stacklyd` dan `stackly-core`, yang tidak diulang checker (batas disk di brief) dan dijalankan lead di `main` (1763 dan 737 lulus).
+
 ### Acceptance-criteria coverage
 
 - AC-1, AC-2, AC-3 · core `environment::manifest` dan `validate` dengan fixture per kode; lewat socket: test `validate_reads_the_file...` dan sentinel `a_secret_sentinel_in_the_manifest...`
