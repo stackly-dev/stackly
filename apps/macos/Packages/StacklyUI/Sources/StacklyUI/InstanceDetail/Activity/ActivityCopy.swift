@@ -257,6 +257,8 @@ nonisolated public enum ActivityCopy {
         case .approveProvider: "Approve provider"
         case .revokeProvider: "Revoke provider approval"
         case .removeProviderImport: "Remove imported provider"
+        case .importEnvironment: "Import environment"
+        case .removeEnvironment: "Remove environment"
         case .unrecognized:
             "Operation"
         }

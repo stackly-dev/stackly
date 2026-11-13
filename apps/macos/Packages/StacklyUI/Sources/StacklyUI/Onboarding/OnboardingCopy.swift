@@ -57,6 +57,11 @@ nonisolated public enum OnboardingCopy {
     static let verifiedRuntimes = Feature(
         title: "Verified runtimes",
         detail: "Downloaded, checked against a pinned digest, then committed.")
+    /// The Environments as files row (spec 0044, AC-23). The sentence about bringing an
+    /// environment up comes with spec 0046.
+    static let environmentsAsFiles = Feature(
+        title: "Environments as files",
+        detail: "A stackly.yaml per project. Review the plan before anything runs.")
     /// The No account needed row.
     static let noAccount = Feature(
         title: "No account needed",
@@ -67,7 +72,8 @@ nonisolated public enum OnboardingCopy {
         -> [Feature]
     {
         [isolatedInstances]
-            + (runtimeInstallAvailable ? [verifiedRuntimes] : []) + [noAccount]
+            + (runtimeInstallAvailable ? [verifiedRuntimes] : [])
+            + [environmentsAsFiles, noAccount]
     }
 
     // MARK: - Background Agent, Catalog Trust, Command Line (titles until their steps)

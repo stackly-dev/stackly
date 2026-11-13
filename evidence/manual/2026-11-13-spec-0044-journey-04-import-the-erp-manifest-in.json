@@ -1,0 +1,59 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d4e8-5fdb-75e4-a12b-176447111612",
+  "covers": [
+    "REQ-020",
+    "AC-020",
+    "AC-080",
+    "NFR-012"
+  ],
+  "kind": "native",
+  "method": "manual",
+  "test": {
+    "language": "manual",
+    "package": null,
+    "target": null,
+    "name": "spec 0044 JOURNEY-04 import the ERP manifest in the app and review its plan",
+    "file": null,
+    "line": null
+  },
+  "status": "NOT_RUN",
+  "expected": "Import… of the ERP manifest from an empty root shows the trust of six providers and a plan with six installs, six creates, and six starts, imports it without a process, runtime, or data file, and the Environments page, sidebar, Overview, and Instances show it with pointer only",
+  "actual": null,
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T12:36:01.115577Z",
+  "finishedAt": null,
+  "evidencePath": "evidence/manual/2026-11-13-spec-0044-journey-04-import-the-erp-manifest-in.json",
+  "context": {
+    "sourceCommit": "d7ae856fa56928d150f6b228c0078af0e11a639a",
+    "sourceDirty": true,
+    "runId": null,
+    "runKind": null,
+    "command": null,
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  }
+}

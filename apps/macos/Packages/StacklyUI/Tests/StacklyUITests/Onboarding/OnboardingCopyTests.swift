@@ -46,16 +46,21 @@ struct OnboardingCopyTests {
     @Test func verifiedRuntimesShowsOnlyWhenTheBuildInstallsRuntimes() {
         #expect(
             OnboardingCopy.features(runtimeInstallAvailable: false).map(\.title)
-                == ["Isolated instances", "No account needed"])
+                == ["Isolated instances", "Environments as files", "No account needed"])
         #expect(
             OnboardingCopy.features(runtimeInstallAvailable: true).map(\.title)
-                == ["Isolated instances", "Verified runtimes", "No account needed"])
+                == [
+                    "Isolated instances", "Verified runtimes", "Environments as files",
+                    "No account needed",
+                ])
         #expect(OnboardingCopy.runtimeInstallAvailable == false)
     }
 
-    @Test func noEnvironmentsRowExistsYet() {
-        let all = OnboardingCopy.features(runtimeInstallAvailable: true)
-        #expect(all.contains { $0.title.contains("Environments") } == false)
+    @Test func theEnvironmentsRowPromisesNoUpYet() {
+        #expect(OnboardingCopy.environmentsAsFiles.title == "Environments as files")
+        #expect(
+            OnboardingCopy.environmentsAsFiles.detail
+                == "A stackly.yaml per project. Review the plan before anything runs.")
     }
 
     @Test func theStorageAndStepTitlesAreTheTable() {

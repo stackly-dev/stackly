@@ -17,6 +17,7 @@ use crate::commands::completion::CompletionArgs;
 use crate::commands::daemon::DaemonCommand;
 use crate::commands::diagnostics::DiagnosticsCommand;
 use crate::commands::doctor::DoctorArgs;
+use crate::commands::env::EnvCommand;
 use crate::commands::execute;
 use crate::commands::instance::InstanceCommand;
 use crate::commands::manpage::ManpageArgs;
@@ -132,6 +133,9 @@ pub enum Command {
     /// List or inspect the providers in the catalog
     #[command(subcommand, arg_required_else_help = true)]
     Provider(ProviderCommand),
+    /// Check, plan, import, list, or remove project environments (stackly.yaml)
+    #[command(subcommand, arg_required_else_help = true)]
+    Env(EnvCommand),
     /// Install, list, or inspect managed runtimes
     #[command(subcommand, arg_required_else_help = true)]
     Runtime(RuntimeCommand),
@@ -172,6 +176,7 @@ impl Command {
             Self::Operation(command) => command.run(cx).await,
             Self::Audit(command) => command.run(cx).await,
             Self::Provider(command) => command.run(cx).await,
+            Self::Env(command) => command.run(cx).await,
             Self::Runtime(command) => command.run(cx).await,
             Self::Secret(command) => command.run(cx).await,
             Self::Settings(command) => command.run(cx).await,

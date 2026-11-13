@@ -362,7 +362,7 @@ extension InstanceSummary {
             restartTotal: 0,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
-            capabilities: nil, lastExit: nil, autostart: autostart)
+            capabilities: nil, lastExit: nil, autostart: autostart, environments: environments)
     }
 
     /// A copy that starts at login, with `session` as its lease; every other field stays.
@@ -375,7 +375,8 @@ extension InstanceSummary {
             restartTotal: restartTotal, blocker: blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
             ownership: ownership, initialized: initialized, capabilities: capabilities,
-            lastExit: lastExit, autostart: InstanceAutostart(policy: .atLogin, session: session))
+            lastExit: lastExit, autostart: InstanceAutostart(policy: .atLogin, session: session),
+            environments: environments)
     }
 }
 

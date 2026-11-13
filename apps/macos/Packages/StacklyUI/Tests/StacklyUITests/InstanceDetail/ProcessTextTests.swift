@@ -24,7 +24,7 @@ struct ProcessTextTests {
             endpoints: running.endpoints, leftoverProcesses: running.leftoverProcesses,
             logsUnavailable: false, ownership: running.ownership, initialized: true,
             capabilities: nil, lastExit: nil,
-            autostart: InstanceAutostart(policy: .manual, session: .none))
+            autostart: InstanceAutostart(policy: .manual, session: .none), environments: nil)
         #expect(ProcessText.text(for: found) == "Running (PID 4001, adopted)")
     }
 

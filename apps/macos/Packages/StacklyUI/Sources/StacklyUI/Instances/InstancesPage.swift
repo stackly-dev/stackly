@@ -8,6 +8,8 @@ import SwiftUI
 /// summaries. A failed refetch of one instance shows as a note and a detail on its row, and
 /// never as an error of the page.
 public struct InstancesPage: View {
+    /// The table width below which Environment is not drawn: it goes first (spec 0044).
+    nonisolated static let environmentMinWidth: CGFloat = 900
     /// The table width below which Version and Endpoints are not drawn.
     nonisolated static let versionAndEndpointsMinWidth: CGFloat = 760
     /// The table width below which Provider is not drawn either, so the page column next
@@ -17,8 +19,10 @@ public struct InstancesPage: View {
     /// The columns the table draws for the width of the page column. It changes only where a
     /// column joins or leaves, so a change of width inside one set never rebuilds the table.
     nonisolated enum ColumnSet: Hashable, Sendable {
-        /// Name, Provider, Version, Endpoints, Status, and the action.
+        /// Name, Provider, Version, Endpoints, Environment, Status, and the action.
         case full
+        /// Name, Provider, Version, Endpoints, Status, and the action.
+        case withoutEnvironment
         /// Name, Provider, Status, and the action.
         case withProvider
         /// Name, Status, and the action.
@@ -26,8 +30,10 @@ public struct InstancesPage: View {
 
         /// The set for a width.
         init(width: CGFloat) {
-            if width >= InstancesPage.versionAndEndpointsMinWidth {
+            if width >= InstancesPage.environmentMinWidth {
                 self = .full
+            } else if width >= InstancesPage.versionAndEndpointsMinWidth {
+                self = .withoutEnvironment
             } else if width >= InstancesPage.providerMinWidth {
                 self = .withProvider
             } else {
@@ -36,7 +42,8 @@ public struct InstancesPage: View {
         }
 
         var showsProvider: Bool { self != .compact }
-        var showsVersionAndEndpoints: Bool { self == .full }
+        var showsVersionAndEndpoints: Bool { self == .full || self == .withoutEnvironment }
+        var showsEnvironment: Bool { self == .full }
     }
 
     /// What makes a new table: the columns it draws and whether the inspector narrows it.
@@ -375,6 +382,13 @@ public struct InstancesPage: View {
                     Text(row.ports).lineLimit(1).help(row.ports)
                 }
                 .width(min: 80, ideal: 110, max: 160)
+            }
+            if columns.showsEnvironment {
+                TableColumn("Environment", sortUsing: InstanceSortComparator(.environment)) {
+                    row in
+                    Text(row.environmentText).lineLimit(1).help(row.environmentText)
+                }
+                .width(min: 80, ideal: 120, max: 180)
             }
             TableColumn("Status", sortUsing: InstanceSortComparator(.status)) { row in
                 StatusLabel(row.appearance, context: .row)

@@ -334,7 +334,8 @@
                 lastFailure: lastFailure, restart: restart, restartTotal: restartTotal,
                 blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
                 logsUnavailable: logsUnavailable, ownership: ownership, initialized: false,
-                capabilities: capabilities, lastExit: lastExit, autostart: autostart)
+                capabilities: capabilities, lastExit: lastExit, autostart: autostart,
+                environments: environments)
         }
     }
 #endif

@@ -161,6 +161,23 @@
                         catalog: .fixture, items: scenario.providers, revocations: []))
             case .runtimeList:
                 return runtimeList()
+            case .envGet(let params) where scenario.replies["env.list"] != nil:
+                // The detail of a fixture environment; its manifest is in sync (spec 0044).
+                guard
+                    let detail = FixtureEnvironments.detail(
+                        params.id, manifest: params.checkManifest == true ? .inSync : nil)
+                else {
+                    throw .rejected(
+                        .fixtureNotFound(.environment, id: params.id.uuidString.lowercased()))
+                }
+                return .envGet(detail)
+            case .envList:
+                // A scenario without environments answers an empty list (spec 0044).
+                switch scenario.replies[call.methodName] {
+                case .reply(let reply): return reply
+                case .error(let error): throw error
+                case nil: return .envList(EnvironmentList(items: []))
+                }
             case .runtimeGet(let params):
                 return try runtimeGet(params.runtimeId)
             case .daemonGetInfo:

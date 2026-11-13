@@ -91,6 +91,49 @@ nonisolated public enum SidebarSection: String, CaseIterable, Hashable, Identifi
     }
 }
 
+/// The row the sidebar selects: a section, or the child row of one environment under
+/// Environments (spec 0044, *Sidebar*). The raw value is what scene restoration stores: the
+/// section's raw value, unchanged, or `environment:<uuid>`.
+nonisolated public enum SidebarSelection: Hashable, Sendable, RawRepresentable {
+    /// A top level section.
+    case section(SidebarSection)
+    /// The detail page of one environment.
+    case environment(UUID)
+
+    /// The prefix of an environment's raw value.
+    static let environmentPrefix = "environment:"
+
+    /// Reads a stored value; an unknown text gives `nil`, so restoration falls back to the
+    /// default.
+    public init?(rawValue: String) {
+        if rawValue.hasPrefix(Self.environmentPrefix) {
+            let text = String(rawValue.dropFirst(Self.environmentPrefix.count))
+            guard let id = UUID(uuidString: text) else { return nil }
+            self = .environment(id)
+        } else if let section = SidebarSection(rawValue: rawValue) {
+            self = .section(section)
+        } else {
+            return nil
+        }
+    }
+
+    /// The stored value.
+    public var rawValue: String {
+        switch self {
+        case .section(let section): section.rawValue
+        case .environment(let id): Self.environmentPrefix + id.uuidString.lowercased()
+        }
+    }
+
+    /// The section the row belongs to.
+    public var section: SidebarSection {
+        switch self {
+        case .section(let section): section
+        case .environment: .environments
+        }
+    }
+}
+
 /// A group of sidebar sections: the main sections without a title, then Library and
 /// System.
 nonisolated public enum SidebarGroup: CaseIterable, Hashable, Identifiable, Sendable {
