@@ -1,0 +1,3 @@
+  orders-db · won’t stop: used by erp
+  orders-cache · won’t stop: used by erp
+hint: to stop the instances environments hold too, run: stackly instance stop --all --override-leases

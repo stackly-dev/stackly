@@ -291,7 +291,19 @@ pub async fn uninstall(
             .preview
             .skipped
             .iter()
-            .map(|skip| format!("{} · {}", skip.name, reason(&skip.code)))
+            .map(|skip| {
+                if skip.code == "supervisor.stop_requires_override" && !skip.environments.is_empty()
+                {
+                    let names: Vec<&str> = skip
+                        .environments
+                        .iter()
+                        .map(|environment| environment.name.as_str())
+                        .collect();
+                    format!("{} · used by {}", skip.name, names.join(", "))
+                } else {
+                    format!("{} · {}", skip.name, reason(&skip.code))
+                }
+            })
             .collect();
         let codes = preview.preview.skipped.iter().map(|skip| skip.code.clone());
         return CommandOutput::partial(
@@ -622,6 +634,35 @@ mod tests {
             failure.hints
         );
         assert_eq!(probe.agent_off_overrides(), [false]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_skip_for_a_lease_names_the_environment_that_holds_it() {
+        let rig = Rig::plain();
+        rig.fake.set_registration(AgentRegistration::Enabled);
+        let skip = StopAllSkip {
+            instance_id: Uuid::from_u128(3),
+            name: "held".to_owned(),
+            code: "supervisor.stop_requires_override".to_owned(),
+            environments: vec![stackly_protocol::env::InstanceEnvironment {
+                environment_id: Uuid::from_u128(9),
+                name: "erp".to_owned(),
+                alias: "db".to_owned(),
+                ownership: stackly_protocol::env::EnvOwnership::Shared,
+                lease_active: true,
+            }],
+        };
+        let probe = ScriptedProbe::running(run(1)).on_agent_off_preview(Ok(preview(vec![skip])));
+
+        let output = uninstall_with(&rig, &probe, &mut Prompt::yes()).await;
+
+        let failure = output.failure.expect("blocked");
+        assert!(
+            failure.body.message().contains("held · used by erp"),
+            "{}",
+            failure.body.message()
+        );
+        assert!(failure.hints.contains(&LEASED_HINT.to_owned()));
     }
 
     #[tokio::test(start_paused = true)]
