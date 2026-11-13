@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d71a-ddd3-734c-ba4f-baedfde883aa",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "env",
+    "name": "down_edges::a_cancelled_down_exits_9_without_the_down_summary",
+    "file": "apps/cli/tests/env/down_edges.rs",
+    "line": 110
+  },
+  "status": "PASS",
+  "expected": "env down --wait over a Down that ends cancelled at stage stop exits 9, prints no Down. summary, and with --json writes one envelope with the cancelled operation",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:50:24.595525Z",
+  "finishedAt": "2026-11-13T22:50:25.952576Z",
+  "evidencePath": "output.log"
+}

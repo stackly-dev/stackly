@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d71a-ddd3-734c-ba4f-baeee5e3e35a",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "env",
+    "name": "down_edges::the_lease_line_reads_many_instances_none_and_nothing_from_an_older_daemon",
+    "file": "apps/cli/tests/env/down_edges.rs",
+    "line": 335
+  },
+  "status": "PASS",
+  "expected": "env status prints lease: held on 3 instances since <time> as its second line for three active leases, lease: none for none, and no lease line at all when the detail has no lease field, as from a daemon before 4.5",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:50:24.595527Z",
+  "finishedAt": "2026-11-13T22:50:25.457156Z",
+  "evidencePath": "output.log"
+}

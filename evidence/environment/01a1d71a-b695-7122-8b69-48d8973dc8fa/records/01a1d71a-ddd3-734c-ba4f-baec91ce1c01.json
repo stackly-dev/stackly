@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d71a-ddd3-734c-ba4f-baec91ce1c01",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "env",
+    "name": "down_edges::a_down_that_fails_writes_one_json_envelope_with_its_error_and_exit_code",
+    "file": "apps/cli/tests/env/down_edges.rs",
+    "line": 266
+  },
+  "status": "PASS",
+  "expected": "env down --wait --json over env.down_incomplete with erp-development-nats left_running exits 7 with one envelope whose error code is env.down_incomplete and whose items name the instance; env down --json whose env.down answers env.down_changed twice exits 3 with one envelope whose error code is env.down_changed",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:50:24.595463Z",
+  "finishedAt": "2026-11-13T22:50:25.444224Z",
+  "evidencePath": "output.log"
+}

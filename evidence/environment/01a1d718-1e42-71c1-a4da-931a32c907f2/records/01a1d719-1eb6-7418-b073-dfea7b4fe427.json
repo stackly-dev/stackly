@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb6-7418-b073-dfea7b4fe427",
+  "covers": [
+    "AC-073",
+    "BR-014",
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "two_downs_at_once_on_a_shared_instance_never_both_succeed_while_it_runs_unwanted",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 545
+  },
+  "status": "PASS",
+  "expected": "10 times, Down of shop and Down of blog at once, each previewing while the other still held shop-db, stop it at most once (never here, since neither confirmed it), at least one ends env.down_incomplete with shop-db left_running env.down_changed, both leases end released, rows stay, and the next Down stops it",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.134083Z",
+  "finishedAt": "2026-11-13T22:48:52.053491Z",
+  "evidencePath": "output.log"
+}

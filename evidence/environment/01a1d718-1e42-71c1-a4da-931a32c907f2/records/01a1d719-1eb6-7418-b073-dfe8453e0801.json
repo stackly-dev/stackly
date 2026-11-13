@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb6-7418-b073-dfe8453e0801",
+  "covers": [
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "restart_reload_a_settings_apply_and_a_rename_of_a_leased_instance_need_no_override",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 1327
+  },
+  "status": "PASS",
+  "expected": "on shop-db, which shop holds, instance.restart, instance.reload, instance.config.apply of a reload setting, and instance.rename each succeed with no override field, the endpoint keeps its port, and shop's lease stays active",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.134041Z",
+  "finishedAt": "2026-11-13T22:48:39.289398Z",
+  "evidencePath": "output.log"
+}

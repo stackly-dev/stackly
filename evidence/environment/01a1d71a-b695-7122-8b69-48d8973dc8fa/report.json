@@ -1,0 +1,750 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+    "sourceDirty": false,
+    "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stackly-cli",
+      "--test",
+      "env",
+      "--test",
+      "instance",
+      "--",
+      "down_edges",
+      "override"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T22:50:14.549585Z",
+  "finishedAt": "2026-11-13T22:50:51.275354Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 10,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 10,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 10,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71a-ddd3-734c-ba4f-baeb4f995783",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "down_edges::a_wait_that_runs_out_of_its_timeout_exits_8_and_never_cancels_the_down",
+        "file": "apps/cli/tests/env/down_edges.rs",
+        "line": 153
+      },
+      "status": "PASS",
+      "expected": "env down --wait --timeout 1s against a Down that keeps running exits 8 with cli.wait_timeout and never sends operation.cancel",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:24.595463Z",
+      "finishedAt": "2026-11-13T22:50:26.432738Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71a-ddd3-734c-ba4f-baec91ce1c01",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "down_edges::a_down_that_fails_writes_one_json_envelope_with_its_error_and_exit_code",
+        "file": "apps/cli/tests/env/down_edges.rs",
+        "line": 266
+      },
+      "status": "PASS",
+      "expected": "env down --wait --json over env.down_incomplete with erp-development-nats left_running exits 7 with one envelope whose error code is env.down_incomplete and whose items name the instance; env down --json whose env.down answers env.down_changed twice exits 3 with one envelope whose error code is env.down_changed",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:24.595463Z",
+      "finishedAt": "2026-11-13T22:50:25.444224Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71a-ddd3-734c-ba4f-baedfde883aa",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "down_edges::a_cancelled_down_exits_9_without_the_down_summary",
+        "file": "apps/cli/tests/env/down_edges.rs",
+        "line": 110
+      },
+      "status": "PASS",
+      "expected": "env down --wait over a Down that ends cancelled at stage stop exits 9, prints no Down. summary, and with --json writes one envelope with the cancelled operation",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:24.595525Z",
+      "finishedAt": "2026-11-13T22:50:25.952576Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71a-ddd3-734c-ba4f-baeee5e3e35a",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "env",
+        "name": "down_edges::the_lease_line_reads_many_instances_none_and_nothing_from_an_older_daemon",
+        "file": "apps/cli/tests/env/down_edges.rs",
+        "line": 335
+      },
+      "status": "PASS",
+      "expected": "env status prints lease: held on 3 instances since <time> as its second line for three active leases, lease: none for none, and no lease line at all when the detail has no lease field, as from a daemon before 4.5",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:24.595527Z",
+      "finishedAt": "2026-11-13T22:50:25.457156Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-702365aa7d22",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "override_leases::a_refused_stop_exits_3_naming_the_environment_and_the_way_around_it",
+        "file": "apps/cli/tests/instance/override_leases.rs",
+        "line": 67
+      },
+      "status": "PASS",
+      "expected": "instance stop <id> refused with supervisor.stop_requires_override writes <id> is used by erp (db), then the error block with a hint naming stackly instance stop <id> --override-leases and stackly env down erp, exits 3, and sent overrideLeases false",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.92147Z",
+      "finishedAt": "2026-11-13T22:50:50.963274Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-70243f3434a0",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "override_leases::a_stop_with_the_override_sends_it_and_names_the_environment_left_incomplete",
+        "file": "apps/cli/tests/instance/override_leases.rs",
+        "line": 120
+      },
+      "status": "PASS",
+      "expected": "instance stop <id> --override-leases --wait sends instance.stop with overrideLeases true, follows it to succeeded, and writes orders-db stopped, readiness unknown then orders-db stopped. erp is no longer complete.",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.921471Z",
+      "finishedAt": "2026-11-13T22:50:51.206787Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-7025cdb98162",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "override_leases::endpoint_set_sends_the_override_and_a_refusal_names_the_flag",
+        "file": "apps/cli/tests/instance/override_leases.rs",
+        "line": 266
+      },
+      "status": "PASS",
+      "expected": "endpoint set <id> --port main=5556 refused with instance.endpoints_require_override writes <id> is used by erp (db), exits 3 with a hint naming stackly instance endpoint set <id> --port main=5556 --override-leases and stackly env down erp, and sent overrideLeases false; with --override-leases it sends overrideLeases true",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.921478Z",
+      "finishedAt": "2026-11-13T22:50:50.975509Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-70266e30c777",
+      "covers": [
+        "REQ-027",
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "override_leases::stop_all_with_the_override_sends_it_to_the_preview_and_the_stop_and_names_the_environment",
+        "file": "apps/cli/tests/instance/override_leases.rs",
+        "line": 171
+      },
+      "status": "PASS",
+      "expected": "stop --all --override-leases --yes sends instance.preview_stop_all and instance.stop_all with overrideLeases true, writes orders-db · Used by erp and affects erp (1 instance) to stderr; without the flag both carry overrideLeases false and a skipped leased instance adds a hint naming stop --all --override-leases",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.92148Z",
+      "finishedAt": "2026-11-13T22:50:50.963359Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-7027ba87f06a",
+      "covers": [
+        "REQ-028"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "action::start_and_stop_send_the_instance_id_in_lower_case_and_never_override_leases",
+        "file": "apps/cli/tests/instance/action.rs",
+        "line": 66
+      },
+      "status": "PASS",
+      "expected": "start sends instance.start { instanceId } and stop sends instance.stop { instanceId, overrideLeases: false } with an upper case id written in lower case, each with the key given",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.921507Z",
+      "finishedAt": "2026-11-13T22:50:50.963324Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d71b-44a9-7778-8c8c-70288c874bc1",
+      "covers": [
+        "REQ-028",
+        "BR-015"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stackly-cli",
+        "target": "instance",
+        "name": "override_edges::a_refused_stop_names_each_environment_on_its_own_line_and_json_carries_the_items",
+        "file": "apps/cli/tests/instance/override_edges.rs",
+        "line": 64
+      },
+      "status": "PASS",
+      "expected": "instance stop <id> refused with supervisor.stop_requires_override naming erp and shop writes <id> is used by erp (db) and <id> is used by shop (cache), exits 3, and hints the override flag; with --json it exits 3 with one envelope whose error items carry name, alias, and ownership of both and writes no is used by line",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T22:50:50.92153Z",
+      "finishedAt": "2026-11-13T22:50:50.963411Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "160b35c438073d9cab81719dcb2ad297ba0ff22c",
+        "sourceDirty": false,
+        "runId": "01a1d71a-b695-7122-8b69-48d8973dc8fa",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stackly-cli",
+          "--test",
+          "env",
+          "--test",
+          "instance",
+          "--",
+          "down_edges",
+          "override"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-3703-70f1-84aa-bb27fd952a42",
+  "covers": [
+    "AC-073",
+    "BR-014"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "up_of_one_environment_with_downs_of_two_others_on_a_shared_instance_agree",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 645
+  },
+  "status": "PASS",
+  "expected": "15 times, Up of alpha with Down of beta and Down of gamma at once, all three on shop-db, end with exactly one active lease of alpha, none of beta or gamma, one instance, rows that stay, and shop-db running and ready whenever the Up succeeds",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:36.355029Z",
+  "finishedAt": "2026-11-13T22:48:51.705455Z",
+  "evidencePath": "output.log"
+}
