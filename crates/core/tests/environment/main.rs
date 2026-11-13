@@ -2,6 +2,8 @@
 //! catalog of the six official packages and the fake one, then the plan.
 
 mod common;
+mod edges;
+mod limits;
 mod plan;
 mod register;
 mod site;
