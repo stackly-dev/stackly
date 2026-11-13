@@ -22,7 +22,7 @@ Schema `stackly.yaml` (versi, namespace, selector runtime, endpoint, settings, s
 - [x] Verify it: `/check verify manifest environment: validate & plan`
 - [x] Test it: `/test manifest environment: validate & plan`
 
-### 45. Lockfile & override lokal · in-progress
+### 45. Lockfile & override lokal · done
 
 Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, runtime, dan digest per platform, dan `.stackly.local.yaml` untuk override lokal. `stackly env up --locked` tidak pernah melakukan resolusi ulang.
 
@@ -38,7 +38,7 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
   - [x] `stackly env lock`, `plan --locked`, `export`: flag `--update` dan `--service`, kolom `SOURCE` dan baris `lock:` serta `local:`, kode `cli.env_lock_blocked` dan `cli.env_locked_unsupported`, golden dan binary test (spec 0045 AC-6, AC-16, AC-17; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
   - [x] Lock dan override di app: baris Lock dan Local override, Lock Versions, Update Lock…, Copy Environment Variables, tambahan sheet plan, snapshot, lalu evidence dan langkah manual yang butuh mata dan tangan kamu (spec 0045 AC-18, AC-19, AC-21; build steps 8 to 9; after build step 5 dan milestone app spec 0044; evidence manual needs build step 6; override storage sampai instance needs Up spec 0046)
 - [x] Verify it: `/check verify lockfile & override lokal`
-- [ ] Test it: `/test lockfile & override lokal`
+- [x] Test it: `/test lockfile & override lokal`
 
 ### 46. Env up & dependency graph · in-progress
 
