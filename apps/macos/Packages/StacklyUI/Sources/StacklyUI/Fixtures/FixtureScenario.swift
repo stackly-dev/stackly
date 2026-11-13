@@ -110,6 +110,9 @@
             /// missing secret, and the coordinator with its children in Operations (spec 0046
             /// AC-23, spec 0068).
             case environmentUpIncomplete = "environment-up-incomplete"
+            /// erp-development while its Down runs: 1 of 2 stops ended, with its lease
+            /// released, and the Down preview (spec 0047 AC-25, spec 0068).
+            case environmentBringingDown = "environment-bringing-down"
         }
 
         /// The scenario's name.

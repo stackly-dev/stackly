@@ -39,6 +39,9 @@ nonisolated public enum OperationNote {
             if let (ready, total) = StatusAdapter.upIncomplete(operation) {
                 return plain("\(ready) of \(total) services ready")
             }
+            if let (stopped, total) = StatusAdapter.downIncomplete(operation) {
+                return plain("\(stopped) of \(total) instances stopped")
+            }
             guard let error = operation.failure?.error else {
                 return Line(text: "Failed", isCritical: true)
             }

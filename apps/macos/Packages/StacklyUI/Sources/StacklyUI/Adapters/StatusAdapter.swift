@@ -91,14 +91,39 @@ nonisolated public enum StatusAdapter {
         return (ready, total)
     }
 
-    /// The "Partial" badge of an Up that left some services ready (spec 0046).
+    /// The instances a Down stopped, for an `environment_down` that failed with
+    /// `env.down_incomplete` after it stopped at least one instance (spec 0047, *Activity dan
+    /// Overview*), or `nil`.
+    public static func downIncomplete(_ operation: OperationSummary)
+        -> (stopped: Int, total: Int)?
+    {
+        guard operation.state == .failed, let error = operation.failure?.error,
+            error.code == "env.down_incomplete"
+        else { return nil }
+        let details = Dictionary(
+            (error.details ?? []).map { ($0.key, $0.value) },
+            uniquingKeysWith: { first, _ in first })
+        guard let stopped = details["stopped"].flatMap(Int.init), stopped > 0,
+            let total = details["total"].flatMap(Int.init)
+        else { return nil }
+        return (stopped, total)
+    }
+
+    /// Whether `operation` is an Up or a Down that ended in part: the "Partial" badge.
+    public static func isIncomplete(_ operation: OperationSummary) -> Bool {
+        upIncomplete(operation) != nil || downIncomplete(operation) != nil
+    }
+
+    /// The "Partial" badge of an Up that left some services ready (spec 0046) or a Down that
+    /// stopped some instances (spec 0047).
     public static let upPartial = StatusAppearance(
         label: "Partial", tone: .caution, symbol: Tone.caution.symbol)
 
     /// How an operation's status looks, from the operation status table of spec 0012, with
-    /// "Partial" for an Up that left some services ready (spec 0046).
+    /// "Partial" for an Up that left some services ready (spec 0046) and a Down that stopped
+    /// some instances (spec 0047).
     public static func appearance(of operation: OperationSummary) -> StatusAppearance {
-        if upIncomplete(operation) != nil { return upPartial }
+        if isIncomplete(operation) { return upPartial }
         return .operation(state: self.operation(operation.state), partial: isPartial(operation))
     }
 }

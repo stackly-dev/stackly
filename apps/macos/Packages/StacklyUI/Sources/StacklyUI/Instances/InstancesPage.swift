@@ -69,6 +69,7 @@ public struct InstancesPage: View {
     @State private var edit: InstanceEdit?
     @State private var requestedTab: InstanceTab?
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.actionHost) private var actionHost
     @Environment(DaemonModel.self) private var daemon: DaemonModel?
 
     private let instances: InstanceStore
@@ -162,7 +163,8 @@ public struct InstancesPage: View {
     private var sort: InstanceSortComparator { sortOrder.first ?? .default }
 
     private var context: InstanceActionContext {
-        InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
+        InstanceActionContext.make(
+            feedbackCenter: feedbackCenter, navigator: navigator, host: actionHost)
     }
 
     /// The page.

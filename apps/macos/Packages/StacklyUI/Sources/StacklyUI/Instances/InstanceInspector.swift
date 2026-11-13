@@ -54,7 +54,7 @@ struct InstanceInspector: View {
             LabeledContent("Version") { Text(row.version ?? "—") }
             endpoints
             environmentRow
-            LabeledContent("Ownership") { Text(Self.ownershipText(summary.ownership)) }
+            LabeledContent("Ownership") { Text(Self.ownershipText(of: summary)) }
             LabeledContent("Readiness") { Text(ReadinessText.text(for: summary)) }
             LabeledContent("Health") { Text(Self.healthText(summary.health)) }
             process
@@ -235,6 +235,14 @@ struct InstanceInspector: View {
     static func processText(_ process: InstanceProcess, now: Date) -> String {
         let up = UptimeText.text(since: process.startedAt, now: now)
         return "PID \(process.pid) · up \(up)" + (process.adopted ? " · adopted" : "")
+    }
+
+    /// The Ownership row: ``ownershipText(_:)`` with " · lease" while an environment's lease
+    /// on the instance is active, such as "Shared · lease" (spec 0047, AC-22).
+    static func ownershipText(of summary: InstanceSummary) -> String {
+        let text = ownershipText(summary.ownership)
+        let leased = (summary.environments ?? []).contains { $0.leaseActive == true }
+        return leased ? "\(text) · lease" : text
     }
 
     /// "Dedicated", "Shared", or "Manual" (spec 0044, AC-23), or "Unknown" for a value this

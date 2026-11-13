@@ -67,6 +67,35 @@ nonisolated public enum StopAllCopy {
         .joined(separator: ", ")
     }
 
+    /// The secondary text of an item: ``demand(_:)``, with "Used by {environment}" (names
+    /// joined by ", ") for the environment source when the preview names the environments
+    /// (spec 0047, *Copy Stop All*).
+    /// - Parameter item: The item of the preview.
+    public static func demand(of item: StopAllItem) -> String {
+        let environments = (item.environments ?? []).map(\.name)
+        guard environments.isEmpty == false else { return demand(item.demand) }
+        return item.demand.map { source in
+            source == .environment
+                ? "Used by \(environments.joined(separator: ", "))" : demand([source])
+        }
+        .joined(separator: ", ")
+    }
+
+    /// The line about the environments Stop All leaves incomplete, or `nil` when it disturbs
+    /// none (spec 0047, *Copy Stop All*): "{environment} will no longer be complete. Its
+    /// lease stays." or "{n} environments will no longer be complete: {names}. Their leases
+    /// stay."
+    public static func affected(_ preview: StopAllPreview) -> String? {
+        let names = (preview.affectedEnvironments ?? []).map(\.name)
+        switch names.count {
+        case 0: return nil
+        case 1: return "\(names[0]) will no longer be complete. Its lease stays."
+        default:
+            return
+                "\(names.count) environments will no longer be complete: \(names.joined(separator: ", ")). Their leases stay."
+        }
+    }
+
     /// The row of an instance that is stopping on its own.
     public static func alreadyStopping(_ name: String) -> String {
         "\(name) · already stopping"

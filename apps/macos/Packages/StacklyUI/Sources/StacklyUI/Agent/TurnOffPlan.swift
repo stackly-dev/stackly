@@ -22,6 +22,15 @@ nonisolated public struct TurnOffPlan: Sendable, Equatable {
             "\(Self.count(stopping, "running instance", "running instances")) will stop. "
             + "\(Self.count(atLoginCount, "instance", "instances")) set to start at login "
             + "won’t start until you turn it on again."
+        let leased = preview.items.filter { ($0.environments ?? []).isEmpty == false }
+        if leased.isEmpty == false {
+            let names =
+                leased
+                .map { "\($0.name) · \(StopAllCopy.demand(of: $0))" }
+                .joined(separator: ", ")
+            text +=
+                " These stop too: \(names). Environments keep their leases. Bring them up again after you turn Stackly back on."
+        }
         if preview.skipped.isEmpty == false {
             let names = preview.skipped
                 .map { "\($0.name) · \(Self.reason(of: $0.code))" }

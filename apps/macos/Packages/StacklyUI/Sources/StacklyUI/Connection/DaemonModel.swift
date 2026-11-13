@@ -277,7 +277,11 @@ public final class DaemonModel {
             })
         let turnOffAgent = agent
         turnOff = TurnOffModel(
-            preview: { () throws(ClientError) in try await restartClient.previewTurnOff() },
+            // The confirmation names the environments it disturbs, so it stops them too
+            // (spec 0047, AC-24); their leases stay.
+            preview: { () throws(ClientError) in
+                try await restartClient.previewTurnOff(overrideLeases: true)
+            },
             atLoginCount: { [instances] in
                 instances.instances.filter { $0.autostart?.policy == .atLogin }.count
             },
@@ -288,7 +292,8 @@ public final class DaemonModel {
             },
             agentOff: { key in
                 do throws(ClientError) {
-                    return .accepted(try await restartClient.agentOff(idempotencyKey: key))
+                    return .accepted(
+                        try await restartClient.agentOff(idempotencyKey: key, overrideLeases: true))
                 } catch {
                     switch error {
                     case .rejected(let body): return .rejected(body)

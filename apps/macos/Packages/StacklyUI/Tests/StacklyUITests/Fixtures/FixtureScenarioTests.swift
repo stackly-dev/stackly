@@ -26,6 +26,8 @@ struct FixtureScenarioTests {
         "environment-partially-ready",
         // Spec 0046, AC-23.
         "environment-bringing-up", "environment-up-incomplete",
+        // Spec 0047, AC-25.
+        "environment-bringing-down",
     ]
 
     @Test func theCatalogHasEveryScenarioOfTheSpecWithItsFixedName() {

@@ -1,0 +1,22 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 14.57s
+     Running tests/env_down.rs (target/debug/deps/env_down-b198a8abc9278922)
+
+running 7 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.12s
+test a_down_while_up_runs_cancels_the_up_and_a_new_up_is_busy ... ok
+test a_down_whose_client_goes_away_still_runs_to_the_end ... ok
+test a_changed_stop_set_or_an_unknown_environment_is_refused_without_an_operation ... ok
+test a_down_keeps_an_instance_another_environment_holds_and_the_last_down_stops_it ... ok
+test a_daemon_restart_in_the_middle_of_a_down_closes_it_interrupted_with_the_leases_released ... ok
+test a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes ... ok
+test up_of_one_environment_and_down_of_another_on_a_shared_instance_agree_fifty_times ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.83s
+

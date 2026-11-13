@@ -17,6 +17,7 @@ struct InstanceDetailPage: View {
     }
 
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.actionHost) private var actionHost
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.duplicateInstanceAction) private var duplicateInstance
     @Environment(\.instanceEditAction) private var editInstance
@@ -87,8 +88,9 @@ struct InstanceDetailPage: View {
     private var context: InstanceActionContext {
         InstanceActionContext.make(
             feedbackCenter: feedbackCenter, navigator: navigator,
-            leftoverProcesses: { [instances] in instances.store.items[$0]?.leftoverProcesses ?? [] }
-        )
+            leftoverProcesses: { [instances] in instances.store.items[$0]?.leftoverProcesses ?? []
+            },
+            host: actionHost)
     }
 
     var body: some View {
