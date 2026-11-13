@@ -291,17 +291,14 @@ impl OperationKind {
 
     /// Returns whether an operation of this kind may resume after the
     /// daemon stopped while it ran (spec 0007, "Tabel resume per jenis
-    /// operasi"): installs, environment up and down, and backups. Every
+    /// operasi"): installs, environment down, and backups. Every
     /// other kind never resumes; what happens to it instead follows its
     /// [`interrupt_policy`](Self::interrupt_policy).
     #[must_use]
     pub const fn resumable(self) -> bool {
         matches!(
             self,
-            Self::InstallRuntime
-                | Self::EnvironmentUp
-                | Self::EnvironmentDown
-                | Self::BackupInstance
+            Self::InstallRuntime | Self::EnvironmentDown | Self::BackupInstance
         )
     }
 
@@ -311,8 +308,10 @@ impl OperationKind {
     /// instance close as interrupted, because their process outlives the
     /// daemon and the supervisor adopts it, and so do apply config and
     /// change endpoints, whose commit cannot be undone (spec 0029), and a
-    /// daemon restart, whose plan the next daemon carries on (spec 0030);
-    /// every other kind is compensated before its point of no return.
+    /// daemon restart, whose plan the next daemon carries on (spec 0030),
+    /// and environment up, whose effects its own registry commits and its
+    /// child operations already recorded (spec 0046); every other kind is
+    /// compensated before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
         match self {
@@ -324,9 +323,20 @@ impl OperationKind {
             | Self::ApplyConfig
             | Self::ChangeEndpoints
             | Self::DaemonRestart
-            | Self::StopAllInstances => InterruptPolicy::CloseInterrupted,
+            | Self::StopAllInstances
+            | Self::EnvironmentUp => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
+    }
+
+    /// Returns whether an operation of this kind is a coordinator (spec
+    /// 0046, spec 0007 *Operasi pengatur dan operasi anak*): it only reads,
+    /// writes the registry, starts child operations, and waits for them.
+    /// The engine runs coordinators in their own slot class, so a waiting
+    /// coordinator never holds one of the running slots its children need.
+    #[must_use]
+    pub const fn is_coordinator(self) -> bool {
+        matches!(self, Self::EnvironmentUp)
     }
 }
 
@@ -996,6 +1006,17 @@ mod tests {
     }
 
     #[test]
+    fn only_environment_up_is_a_coordinator() {
+        let coordinators: Vec<&str> = OperationKind::ALL
+            .iter()
+            .filter(|kind| kind.is_coordinator())
+            .map(|kind| kind.as_code())
+            .collect();
+
+        assert_eq!(coordinators, ["environment_up"]);
+    }
+
+    #[test]
     fn only_the_kinds_in_the_resume_table_are_resumable() {
         let resumable: Vec<&str> = OperationKind::ALL
             .iter()
@@ -1005,12 +1026,7 @@ mod tests {
 
         assert_eq!(
             resumable,
-            [
-                "install_runtime",
-                "backup_instance",
-                "environment_up",
-                "environment_down",
-            ]
+            ["install_runtime", "backup_instance", "environment_down",]
         );
     }
 
@@ -1032,6 +1048,7 @@ mod tests {
                 "reload_instance",
                 "force_stop_instance",
                 "stop_all_instances",
+                "environment_up",
                 "apply_config",
                 "change_endpoints",
                 "daemon_restart",

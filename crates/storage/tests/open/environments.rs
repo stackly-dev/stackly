@@ -43,7 +43,7 @@ fn the_version_14_fixture_reads_its_services_snapshot() {
     let harness = Harness::new();
     harness.load_fixture(&fixture(14));
     let (registry, summary) = ready(harness.open());
-    assert_eq!(summary.migrated_from, None);
+    assert_eq!(summary.migrated_from, Some(14));
 
     let environments = registry.environments().unwrap().value;
     let declared = environments[0].declared();

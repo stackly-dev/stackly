@@ -43,13 +43,19 @@ pub(crate) struct QueueEntry {
     pub(crate) job: Job,
     /// Do not start before this time, after a failed start commit.
     pub(crate) not_before: Option<Instant>,
+    /// It runs in the coordinator slot class (spec 0046), from
+    /// [`OperationKind::is_coordinator`].
+    pub(crate) coordinator: bool,
 }
 
 /// The queue and the running slots.
 #[derive(Default)]
 pub(crate) struct Scheduler {
     pub(crate) queue: Vec<QueueEntry>,
+    /// Running operations that are not coordinators.
     pub(crate) running: u32,
+    /// Running coordinators.
+    pub(crate) coordinators: u32,
     pub(crate) open: bool,
 }
 
@@ -192,13 +198,15 @@ fn new_rows(
     id: OperationId,
     now: jiff::Timestamp,
 ) -> Result<(Operation, OperationJournal), BeginError> {
-    let (trigger, idempotency_key, request_id) = match &request.origin {
+    let (trigger, idempotency_key, request_id, parent) = match &request.origin {
         Origin::Request(origin) => (
             OperationTrigger::user(Some(origin.client.clone()), origin.interactive),
             Some(origin.key.clone()),
             Some((origin.method.clone(), origin.fingerprint)),
+            None,
         ),
-        Origin::Background => (OperationTrigger::background(), None, None),
+        Origin::Background => (OperationTrigger::background(), None, None, None),
+        Origin::Child(child) => (child.trigger.clone(), None, None, Some(child.parent)),
     };
     let operation = Operation::new(NewOperation {
         id,
@@ -214,6 +222,7 @@ fn new_rows(
         resumable: request.kind.resumable(),
         input: request.input.clone(),
         expected_revision: request.expected_revision,
+        parent,
     })
     .map_err(|_| BeginError::PayloadTooLarge {
         field: "input",
@@ -331,7 +340,7 @@ pub(crate) async fn begin(
     check_phase(inner)?;
     if !bypass_quiesce
         && inner.quiesce.load(Ordering::SeqCst)
-        && matches!(request.origin, Origin::Request(_))
+        && matches!(request.origin, Origin::Request(_) | Origin::Child(_))
         && request.kind != OperationKind::DaemonRestart
     {
         return Err(BeginError::RestartPending);
@@ -416,6 +425,7 @@ pub(crate) async fn begin(
             pending: true,
             job: Job::Work(request.work),
             not_before: None,
+            coordinator: request.kind.is_coordinator(),
         });
     }
 
@@ -559,11 +569,15 @@ impl Inner {
         self.idle.notify_waiters();
     }
 
-    /// Gives a running slot back and wakes the dispatcher.
-    pub(crate) fn finish_slot(&self) {
+    /// Gives a slot of its class back and wakes the dispatcher.
+    pub(crate) fn finish_slot(&self, coordinator: bool) {
         {
             let mut sched = self.sched();
-            sched.running = sched.running.saturating_sub(1);
+            if coordinator {
+                sched.coordinators = sched.coordinators.saturating_sub(1);
+            } else {
+                sched.running = sched.running.saturating_sub(1);
+            }
         }
         self.wake.notify_one();
         self.idle.notify_waiters();
@@ -681,7 +695,11 @@ fn plan(inner: &Inner) -> Pass {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
-        let slot = sched.running < inner.limits.max_running;
+        let slot = if entry.coordinator {
+            sched.coordinators < inner.limits.max_coordinators
+        } else {
+            sched.running < inner.limits.max_running
+        };
         if blocker.is_none() && !internal && slot {
             let taken = compensating
                 || inner
@@ -696,7 +714,11 @@ fn plan(inner: &Inner) -> Pass {
                     .is_ok();
             if taken {
                 let entry = sched.queue.remove(index);
-                sched.running += 1;
+                if entry.coordinator {
+                    sched.coordinators += 1;
+                } else {
+                    sched.running += 1;
+                }
                 pass.starts.push(entry);
                 continue;
             }

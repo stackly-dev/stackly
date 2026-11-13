@@ -442,6 +442,7 @@ impl Inner {
                     "operation state changed"
                 );
                 self.deps.events.state_changed(&view());
+                self.changed();
             }
             Visible::Progress => self.deps.events.progress(&view()),
             Visible::Nothing => {}
@@ -652,9 +653,9 @@ pub(crate) async fn list(
 }
 
 pub(crate) fn stats(inner: &Inner) -> EngineStats {
-    let (running, queued) = {
+    let (running, coordinators, queued) = {
         let sched = inner.sched();
-        (sched.running, sched.queued_work())
+        (sched.running, sched.coordinators, sched.queued_work())
     };
     let needs_recovery = inner
         .ops()
@@ -668,6 +669,8 @@ pub(crate) fn stats(inner: &Inner) -> EngineStats {
         needs_recovery: u32::try_from(needs_recovery).unwrap_or(u32::MAX),
         max_running: inner.limits.max_running,
         max_queued: inner.limits.max_queued,
+        coordinators,
+        max_coordinators: inner.limits.max_coordinators,
         interrupted_at_start: counters.interrupted_at_start,
         resumed_at_start: counters.resumed_at_start,
         auto_compensated_at_start: counters.auto_compensated_at_start,

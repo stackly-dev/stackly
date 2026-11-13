@@ -6,8 +6,9 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use stackly_domain::{
-    FailureCode, JournalView, OperationEvent, OperationFailure, OperationId, OperationState,
-    OperationTrigger, Outcome, RecoveryCause, RecoveryHint, ResourceRevision, StepState, WriteOp,
+    FailureCode, JournalView, OperationEvent, OperationFailure, OperationId, OperationKind,
+    OperationState, OperationTrigger, Outcome, RecoveryCause, RecoveryHint, ResourceRevision,
+    StepState, WriteOp,
 };
 use tokio::time::Instant;
 
@@ -62,6 +63,7 @@ fn enqueue(inner: &Inner, handle: &OpHandle, keys: Vec<stackly_domain::LockKey>,
         pending: false,
         job,
         not_before: None,
+        coordinator: handle.kind.is_coordinator(),
     });
 }
 
@@ -417,18 +419,49 @@ async fn recover_cancel_requested(
     }
 }
 
+/// Whether a queued operation is a child `create_instance` or
+/// `start_instance` whose coordinator is no longer active (spec 0046 AC-15,
+/// spec 0007 AC-10): it closes as interrupted without a rebuild, so no
+/// child runs with no coordinator to record its result. Coordinators are
+/// older than their children, so `recover` has already settled the parent.
+fn orphaned_child(inner: &Inner, record: &OpRecord) -> bool {
+    let Some(parent) = record.journal.parent() else {
+        return false;
+    };
+    if !matches!(
+        record.operation.kind(),
+        OperationKind::CreateInstance | OperationKind::StartInstance
+    ) {
+        return false;
+    }
+    !inner.handle(parent).is_some_and(|handle| {
+        matches!(
+            handle.state(),
+            OperationState::Queued
+                | OperationState::Running
+                | OperationState::CancelRequested
+                | OperationState::NeedsRecovery
+        )
+    })
+}
+
 async fn recover_queued(
     inner: &Inner,
     handle: &OpHandle,
     record: &mut OpRecord,
     report: &mut RecoveryReport,
 ) {
-    if let Some(work) = rebuild(inner, record) {
+    let orphan = orphaned_child(inner, record);
+    if !orphan && let Some(work) = rebuild(inner, record) {
         enqueue(inner, handle, record.locks.clone(), Job::Work(work));
         report.queued += 1;
         return;
     }
-    report.rebuild_failed += 1;
+    if orphan {
+        report.closed_interrupted += 1;
+    } else {
+        report.rebuild_failed += 1;
+    }
     let id = handle.id;
     let error = interrupted_error(inner);
     if record.operation.started_at().is_none() {
@@ -763,20 +796,27 @@ pub(crate) fn signal_shutdown(handle: &OpHandle) -> Option<ShutdownStop> {
 }
 
 /// The running slots shutdown waits for: every one but those of runners
-/// working on a kind that closes as interrupted. The slot count is read
-/// first, so a runner that ends meanwhile is counted, never missed.
+/// working on a kind that closes as interrupted. Coordinators have their
+/// own slot class and all close as interrupted, so none is waited for. The
+/// slot count is read first, so a runner that ends meanwhile is counted,
+/// never missed.
 fn awaited_slots(inner: &Inner) -> u32 {
     let running = inner.sched().running;
     let abandoned = inner
         .ops()
         .values()
-        .filter(|handle| handle.close_interrupted && handle.in_runner.load(Ordering::SeqCst))
+        .filter(|handle| {
+            handle.close_interrupted
+                && !handle.kind.is_coordinator()
+                && handle.in_runner.load(Ordering::SeqCst)
+        })
         .count();
     running.saturating_sub(u32::try_from(abandoned).unwrap_or(u32::MAX))
 }
 
 pub(crate) async fn shutdown(inner: &Arc<Inner>, grace: Duration) -> ShutdownReport {
     inner.set_phase(Phase::ShuttingDown);
+    inner.changed();
     inner.sched().open = false;
     inner.wake.notify_one();
     let mut report = ShutdownReport::default();
