@@ -1072,3 +1072,51 @@ async fn get_reads_the_manifest_only_when_asked() {
     drop(api);
     stop(daemon).await;
 }
+
+// covers: AC-14 (spec 0044)
+#[tokio::test(flavor = "multi_thread")]
+async fn updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it() {
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let dir = project(&site);
+    let path = write(&dir.join("stackly.yaml"), &fake_manifest("shop", &["db"]));
+    let imported = import(&api, &path).await.expect("imports");
+    let first = imported.summary.updated_at;
+    let stored = daemon
+        .core()
+        .registry()
+        .expect("open")
+        .environment(
+            stackly_domain::EnvironmentId::from_uuid(imported.summary.id).expect("a v7 ID"),
+        )
+        .expect("reads")
+        .value
+        .expect("the row")
+        .updated_at()
+        .expect("a stored row has a stamp");
+    assert_eq!(
+        first,
+        stackly_protocol::wire::Timestamp::from_jiff(stored),
+        "the summary carries the row's own stamp"
+    );
+
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    let same = import(&api, &path).await.expect("imports again");
+    assert_eq!(same.summary.updated_at, first, "an unchanged import");
+    assert_eq!(list(&api).await.items[0].updated_at, first);
+    assert_eq!(
+        get(&api, imported.summary.id, false)
+            .await
+            .expect("reads")
+            .summary
+            .updated_at,
+        first
+    );
+
+    write(&path, &fake_manifest("shop", &["db", "cache"]));
+    let changed = import(&api, &path).await.expect("imports the change");
+    assert_ne!(changed.summary.updated_at, first, "a changed row moves it");
+    drop(api);
+    stop(daemon).await;
+}

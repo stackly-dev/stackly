@@ -28,8 +28,8 @@ use stackly_core::operation::{BeginRequest, BusyPolicy, Origin};
 use stackly_core::supervisor::{InstanceStatus, Supervisor};
 use stackly_domain::{
     Environment, EnvironmentId, Instance, InstanceFilter, InstanceLifecycle, JournalPayload,
-    LockKey, OperationJournal, OperationKind, OperationQuery, OperationResource, Registry,
-    ResourceRevision, Runtime,
+    LockKey, OperationJournal, OperationKind, OperationResource, Registry, ResourceRevision,
+    Runtime,
 };
 use stackly_protocol::codes::{env as env_codes, internal};
 use stackly_protocol::env::{
@@ -315,41 +315,15 @@ pub fn plan(core: &DaemonCore, params: EnvPlanParams) -> HandlerFuture<'_, Box<E
     })
 }
 
-/// When the row of `id` last changed, from the newest operation on it.
-// provisional: F44 `updated_at` of the `environments` row is not read by
-// the domain type; the newest operation on the environment stands in.
-fn updated_at(registry: &SqliteRegistry, id: EnvironmentId, fallback: Timestamp) -> Timestamp {
-    let query = OperationQuery {
-        active_only: false,
-        resource: Some(OperationResource::Environment(id)),
-        limit: 1,
-        before: None,
-    };
-    registry
-        .operations(query)
-        .ok()
-        .and_then(|page| {
-            page.value
-                .items
-                .first()
-                .map(|operation| Timestamp::from_jiff(operation.updated_at()))
-        })
-        .unwrap_or(fallback)
-}
-
-async fn updated_times(
-    core: &DaemonCore,
-    registry: &SqliteRegistry,
-    ids: Vec<EnvironmentId>,
-) -> Result<Vec<Timestamp>, Box<ErrorBody>> {
-    let read = registry.clone();
-    let now = Timestamp::from_jiff(core.platform().clock().now());
-    blocking(move || {
-        ids.into_iter()
-            .map(|id| updated_at(&read, id, now))
-            .collect()
-    })
-    .await
+/// When the row of `environment` last changed: the registry's
+/// `updated_at` (spec 0044 AC-14), so an import that changes nothing never
+/// moves it. An environment that was never written has no stamp; `now`
+/// stands in, which no read from the registry reaches.
+fn updated_at(core: &DaemonCore, environment: &Environment) -> Timestamp {
+    environment.updated_at().map_or_else(
+        || Timestamp::from_jiff(core.platform().clock().now()),
+        Timestamp::from_jiff,
+    )
 }
 
 /// `env.list` (AC-14): at most 64 summaries from the registry and the
@@ -362,17 +336,14 @@ pub fn list(core: &DaemonCore) -> HandlerFuture<'_, EnvironmentList> {
         environments.sort_by(|a, b| a.name().cmp(b.name()));
         environments.truncate(stackly_protocol::env::ENV_LIST_MAX);
         let Instances { views, .. } = instances(core, &registry, &supervisor).await?;
-        let times = updated_times(
-            core,
-            &registry,
-            environments.iter().map(Environment::id).collect(),
-        )
-        .await?;
         let items = environments
             .iter()
-            .zip(times)
-            .map(|(environment, updated)| {
-                dto::summary(environment, &environment_view(environment, &views), updated)
+            .map(|environment| {
+                dto::summary(
+                    environment,
+                    &environment_view(environment, &views),
+                    updated_at(core, environment),
+                )
             })
             .collect();
         Ok(EnvironmentList { items })
@@ -395,10 +366,7 @@ async fn detail_of(
         .ok_or_else(not_found)?;
     let Instances { views, summaries } = instances(core, &registry, &supervisor).await?;
     let view = environment_view(&environment, &views);
-    let updated = updated_times(core, &registry, vec![id])
-        .await?
-        .pop()
-        .unwrap_or_else(|| Timestamp::from_jiff(core.platform().clock().now()));
+    let updated = updated_at(core, &environment);
     let (manifest_state, problems) = if check_manifest {
         let (state, problems) = check_file(core, &environment).await?;
         (
