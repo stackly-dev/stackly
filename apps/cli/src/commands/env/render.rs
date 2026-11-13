@@ -1,9 +1,10 @@
 //! Text that `validate`, `plan`, and `import` share: the finding lines,
-//! the counts, the plan table, and the plan sections that go to stderr.
-//! Every value comes from the daemon and is escaped before it is written.
+//! the counts, the plan table, the blocker lines, and the plan sections
+//! that go to stderr. Every value comes from the daemon and is escaped
+//! before it is written.
 
 use stackly_protocol::env::{
-    EnvFinding, EnvPlan, EnvValidation, PlanAction, PlanEndpoint, PlanItem, PlanStep,
+    EnvFinding, EnvPlan, EnvValidation, PlanAction, PlanBlocker, PlanEndpoint, PlanItem, PlanStep,
 };
 use stackly_protocol::instance::PortRequest;
 use stackly_protocol::provider::FindingSeverity;
@@ -11,18 +12,25 @@ use stackly_protocol::provider::FindingSeverity;
 use crate::commands::path::home_masked;
 use crate::commands::provider::local::esc;
 use crate::output::human::{Cell, HumanWriter, wire_name};
+use crate::session::human_hints;
 
-/// Error and warning findings, counting the findings left out as errors
-/// (only a manifest that is not valid has that many).
+/// Error and warning findings of the whole reply: the findings sent,
+/// split by severity, plus the `omitted` ones, which count as errors
+/// because every manifest code is an error (spec 0044, *Aturan validasi*;
+/// the one warning of spec 0045 belongs to the local override file).
+/// `findingCount` only raises the errors when it says there were more than
+/// the reply accounts for.
 #[must_use]
 pub fn counts(validation: &EnvValidation) -> (u64, u64) {
+    let sent = validation.findings.len() as u64;
     let warnings = validation
         .findings
         .iter()
         .filter(|finding| finding.severity == FindingSeverity::Warning)
         .count() as u64;
+    let errors = (sent - warnings).saturating_add(u64::from(validation.omitted));
     let total = u64::from(validation.finding_count);
-    (total.saturating_sub(warnings), warnings)
+    (errors.max(total.saturating_sub(warnings)), warnings)
 }
 
 /// `<file>: <location>: <code>: <message>`, with `warning: ` in front of a
@@ -163,24 +171,38 @@ pub fn plan_table(out: &mut HumanWriter, plan: &EnvPlan) {
     ));
 }
 
-/// The sections for stderr: `blocked:`, `secrets:`, `differs:`, and
-/// `not in manifest:`, each left out when it is empty.
-pub fn plan_sections(out: &mut HumanWriter, plan: &EnvPlan) {
-    for blocker in &plan.blockers {
+/// One `blocked: [<service>: ]<code>: <message>` line per blocker, then
+/// its hints: the daemon's, then the CLI's own for the code (such as the
+/// location and `--relink` of `env.name_taken`), whose wording also
+/// replaces the message.
+pub fn blocker_lines(out: &mut HumanWriter, blockers: &[PlanBlocker]) {
+    for blocker in blockers {
         let service = blocker
             .service
             .as_deref()
             .map(|service| format!("{}: ", esc(service)))
             .unwrap_or_default();
+        let extra = human_hints(&blocker.error, None);
         out.line(&format!(
             "blocked: {service}{}: {}",
             esc(blocker.error.code()),
-            esc(blocker.error.message())
+            esc(extra.message.as_deref().unwrap_or(blocker.error.message()))
         ));
-        if let Some(hint) = blocker.error.hint() {
+        for hint in blocker
+            .error
+            .hint()
+            .into_iter()
+            .chain(extra.hints.iter().map(String::as_str))
+        {
             out.line(&format!("  hint: {}", esc(hint)));
         }
     }
+}
+
+/// The sections for stderr: `blocked:`, `secrets:`, `differs:`, and
+/// `not in manifest:`, each left out when it is empty.
+pub fn plan_sections(out: &mut HumanWriter, plan: &EnvPlan) {
+    blocker_lines(out, &plan.blockers);
     let secrets: Vec<String> = plan
         .items
         .iter()
@@ -265,6 +287,31 @@ mod tests {
         let [_, create, start, _] = plan_counts(&plan);
         assert_eq!(start, expected_starts);
         assert!(start >= create);
+    }
+
+    #[test]
+    fn counts_add_the_omitted_findings_to_the_errors_and_keep_the_warnings_sent() {
+        let finding = |severity| EnvFinding {
+            severity,
+            code: "x".to_owned(),
+            location: "services".to_owned(),
+            service: None,
+            message: "m".to_owned(),
+        };
+        let mut validation = plan("plan-applicable.json").validation;
+        validation.findings = vec![
+            finding(FindingSeverity::Error),
+            finding(FindingSeverity::Warning),
+            finding(FindingSeverity::Error),
+        ];
+        validation.omitted = stackly_protocol::Count::saturating(4);
+        validation.finding_count = stackly_protocol::Count::saturating(7);
+        assert_eq!(counts(&validation), (6, 1));
+        validation.finding_count = stackly_protocol::Count::saturating(3);
+        assert_eq!(counts(&validation), (6, 1));
+        validation.omitted = stackly_protocol::Count::saturating(0);
+        validation.finding_count = stackly_protocol::Count::saturating(9);
+        assert_eq!(counts(&validation), (8, 1));
     }
 
     #[test]

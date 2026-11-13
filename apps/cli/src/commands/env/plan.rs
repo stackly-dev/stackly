@@ -1,10 +1,11 @@
 //! `stackly env plan [--file <path> | <environment>]` (spec 0044, *CLI*,
 //! AC-16): asks the daemon's `env.plan` for a file or for the manifest of
 //! a registered environment, and prints one table row per step with the
-//! summary line. Blockers, secrets, differences, and members no longer in
-//! the manifest go to stderr. Exit 0 when the plan can be applied, 2 with
-//! `cli.env_invalid` for a manifest that is not valid, 3 with
-//! `cli.env_plan_blocked` otherwise; the plan is the result each time.
+//! summary line. The table goes to stdout first; then blockers, secrets,
+//! differences, and members no longer in the manifest go to stderr. Exit
+//! 0 when the plan can be applied, 2 with `cli.env_invalid` for a
+//! manifest that is not valid, 3 with `cli.env_plan_blocked` otherwise;
+//! the plan is the result each time.
 
 use std::path::PathBuf;
 
@@ -37,15 +38,31 @@ pub struct PlanArgs {
     pub environment: Option<EnvironmentTarget>,
 }
 
-/// The `env plan` result: the plan as the daemon sent it.
+/// The `env plan` result: the plan as the daemon sent it, as JSON, and
+/// its table in text unless the command already wrote it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(transparent)]
-pub struct Planned(pub EnvPlan);
+pub struct Planned {
+    plan: EnvPlan,
+    #[serde(skip)]
+    written: bool,
+}
+
+impl Planned {
+    /// The table of `plan`, not written yet.
+    #[must_use]
+    pub const fn new(plan: EnvPlan) -> Self {
+        Self {
+            plan,
+            written: false,
+        }
+    }
+}
 
 impl Render for Planned {
     fn render(&self, out: &mut HumanWriter) {
-        if self.0.validation.valid {
-            plan_table(out, &self.0);
+        if self.plan.validation.valid && !self.written {
+            plan_table(out, &self.plan);
         }
     }
 }
@@ -95,23 +112,25 @@ impl RunCommand for PlanArgs {
             Ok(plan) => plan,
             Err(failure) => return CommandOutput::failed(failure),
         };
+        let mut planned = Planned::new(plan);
         if shows_text(cx, false) {
+            cx.output.write_result_now(&planned);
+            planned.written = true;
+            let plan = &planned.plan;
             to_stderr(cx, |out| {
                 findings(out, &plan.validation);
-                plan_sections(out, &plan);
+                plan_sections(out, plan);
             });
         }
+        let plan = &planned.plan;
         if !plan.validation.valid {
             let (errors, warnings) = counts(&plan.validation);
-            return CommandOutput::partial(
-                Planned(plan),
-                CliFailure::env_invalid(errors, warnings),
-            );
+            return CommandOutput::partial(planned, CliFailure::env_invalid(errors, warnings));
         }
         if !plan.applicable {
             let blockers = plan.blockers.len() as u64;
-            return CommandOutput::partial(Planned(plan), CliFailure::env_plan_blocked(blockers));
+            return CommandOutput::partial(planned, CliFailure::env_plan_blocked(blockers));
         }
-        CommandOutput::ok(Planned(plan))
+        CommandOutput::ok(planned)
     }
 }
