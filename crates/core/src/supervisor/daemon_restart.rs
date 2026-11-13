@@ -27,7 +27,7 @@ use super::handover::{PlanEntry, plan_digest, plan_entries};
 use super::pending::{self, PendingKind, PendingRun, wait_final};
 use super::persist::{blocking, read_instance};
 use super::plan::{PlanRefusal, write_plan_guard};
-use super::stop::StopJournal;
+use super::stop::{LeaseCheck, StopJournal};
 use crate::operation::{
     BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork, StepSpec,
     WorkError, WorkOutcome, WorkResult,
@@ -204,19 +204,26 @@ impl Supervisor {
     /// strategy, with no change to the desired state and no lease check.
     /// An instance that no longer runs is done at once.
     pub(crate) async fn stop_for_plan(&self, id: InstanceId) -> Result<(), SupervisorError> {
-        self.stop_direct(id, StopIntent::PlannedRestart, Vec::new())
+        self.stop_direct(id, StopIntent::PlannedRestart, LeaseCheck::None)
             .await
     }
 
     /// Stops one instance under the lock the caller holds, without an
     /// operation of its own: the provider's stop strategy, and for a person's
-    /// stop the desired state `stopped` and `leases` in the same commit. An
-    /// instance that no longer runs only gets that registry change.
+    /// stop the desired state `stopped` and the lease ops `check` decides in
+    /// the same guarded commit (spec 0047). An instance that no longer runs
+    /// only gets that registry change.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SupervisorError::StopRequiresOverride`] when the guard
+    /// finds environments holding a live instance a person did not
+    /// override, besides the errors of the stop itself.
     pub(crate) async fn stop_direct(
         &self,
         id: InstanceId,
         intent: StopIntent,
-        leases: Vec<WriteOp>,
+        check: LeaseCheck,
     ) -> Result<(), SupervisorError> {
         let deps = self.deps();
         let instance = read_instance(deps, id).await?;
@@ -225,7 +232,7 @@ impl Supervisor {
             | InstanceLifecycle::Failed
             | InstanceLifecycle::Uninitialized => {
                 if intent.writes_desired() {
-                    return self.settle_gone_process(id, intent, leases).await;
+                    return self.settle_gone_process(id, intent, check).await.map(drop);
                 }
                 return Ok(());
             }
@@ -257,15 +264,26 @@ impl Supervisor {
                 InstanceLifecycle::Stopping
                 | InstanceLifecycle::Stopped
                 | InstanceLifecycle::Failed => {
-                    return self.settle_gone_process(id, intent, leases).await;
+                    return self.settle_gone_process(id, intent, check).await.map(drop);
                 }
                 InstanceLifecycle::Recovering => {}
                 _ => return Err(SupervisorError::IdentityUnproven { pid: None }),
             }
         }
-        actor.cancel_respawn(deps);
+        // With a lease check the pause before a respawn ends only once the
+        // guard committed (spec 0047, *Respawn*).
+        let checked = check != LeaseCheck::None;
+        if !checked {
+            actor.cancel_respawn(deps);
+        }
         let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
-        let journaled = self.journal_stop(id, no_process, intent, leases).await?;
+        let (journaled, _) = self.journal_stop(id, no_process, intent, check).await?;
+        if journaled == StopJournal::Kept {
+            return Ok(());
+        }
+        if checked {
+            actor.cancel_respawn(deps);
+        }
         if has_process && journaled == StopJournal::Begun {
             self.stop_process(id, std::future::pending()).await?;
         }

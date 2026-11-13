@@ -61,6 +61,7 @@ pub struct Recorded {
     pub statuses: Mutex<Vec<(InstanceId, InstanceStatus, ResourceRevision)>>,
     pub degraded: Mutex<Vec<bool>>,
     pub reconciling: Mutex<Vec<stackly_core::supervisor::ReconcilePhase>>,
+    pub startup_leases: Mutex<Vec<(InstanceId, stackly_core::session::StartupLeaseState)>>,
 }
 
 impl Recorded {
@@ -117,6 +118,17 @@ impl SupervisorEvents for Recorded {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(phase.clone());
+    }
+
+    fn startup_lease_changed(
+        &self,
+        instance: InstanceId,
+        state: stackly_core::session::StartupLeaseState,
+    ) {
+        self.startup_leases
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push((instance, state));
     }
 }
 

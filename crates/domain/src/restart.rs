@@ -104,11 +104,13 @@ code_enum! {
 }
 
 /// Who asks the supervisor to stop an instance, which decides what the
-/// stop writes besides the lifecycle (spec 0030).
+/// stop writes besides the lifecycle (spec 0030). Whether a stop reads the
+/// leases follows the request, not the intent (spec 0047, *Stop dengan
+/// guard lease*): the supervisor's `LeaseCheck` decides it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StopIntent {
-    /// A person: the stop writes desired `stopped` and checks the leases
-    /// of environments (BR-015).
+    /// A person, a restart's stop, a cancelled start, or an environment
+    /// that goes down: the stop writes desired `stopped`.
     User,
     /// The daemon after reconciliation, for an instance whose desired
     /// state is already `stopped`: no lease check, and the desired state
@@ -124,13 +126,6 @@ impl StopIntent {
     #[must_use]
     pub const fn writes_desired(self) -> bool {
         !matches!(self, Self::PlannedRestart)
-    }
-
-    /// Returns whether the stop asks whether environments hold the
-    /// instance.
-    #[must_use]
-    pub const fn checks_leases(self) -> bool {
-        matches!(self, Self::User)
     }
 }
 
@@ -869,10 +864,9 @@ mod tests {
     }
 
     #[test]
-    fn only_a_person_checks_leases_and_a_planned_restart_never_writes_desired() {
-        assert!(StopIntent::User.writes_desired() && StopIntent::User.checks_leases());
-        assert!(StopIntent::Reconcile.writes_desired() && !StopIntent::Reconcile.checks_leases());
-        let planned = StopIntent::PlannedRestart;
-        assert!(!planned.writes_desired() && !planned.checks_leases());
+    fn a_planned_restart_never_writes_desired() {
+        assert!(StopIntent::User.writes_desired());
+        assert!(StopIntent::Reconcile.writes_desired());
+        assert!(!StopIntent::PlannedRestart.writes_desired());
     }
 }

@@ -28,11 +28,11 @@ use stackly_core::operation::{
     BeginRequest, BusyPolicy, FinalBatch, NO_OP_STAGE, NoOpReply, Origin, Precheck, PrecheckOutcome,
 };
 use stackly_core::session::{manual_start_ops, manual_stop_ops, startup_lease_state};
-use stackly_core::supervisor::SupervisorError;
 use stackly_core::supervisor::{
     ForceStopRequest, InstanceChanges, ReloadRequest, RestartRequest, StartRequest, StartTrigger,
     StopRequest, Supervisor,
 };
+use stackly_core::supervisor::{SupervisorError, environment_holders};
 use stackly_domain::{
     Capability, DesiredState, Instance, InstanceFilter, InstanceId, InstanceLifecycle,
     JournalPayload, LeaseFilter, OperationKind, OperationResource, Registry, ResourceRevision,
@@ -584,7 +584,13 @@ fn stop_precheck(
         },
     );
     if matches!(decision, StopDecision::RequiresOverride { .. }) {
-        return reject(SupervisorError::StopRequiresOverride);
+        let environments = match registry.environments() {
+            Ok(environments) => environments.value,
+            Err(error) => return reject(SupervisorError::Registry(error)),
+        };
+        return reject(SupervisorError::StopRequiresOverride {
+            holders: environment_holders(id, &leases, &environments),
+        });
     }
     PrecheckOutcome::Proceed
 }

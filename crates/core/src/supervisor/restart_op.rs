@@ -22,7 +22,7 @@ use super::actor::restart_status;
 use super::error::SupervisorError;
 use super::persist::{active_revision_note, blocking, read_instance};
 use super::startup::{StartRequest, start_stopped};
-use super::stop::{StopEnd, StopJournal};
+use super::stop::{LeaseCheck, StopEnd, StopJournal};
 use crate::operation::{
     BoxFuture, OperationContext, OperationOutcome, OperationWork, StepSpec, WorkError, WorkOutcome,
     WorkResult,
@@ -154,8 +154,8 @@ pub(crate) async fn restart_steps(
         .await?;
     ctx.set_stage(StageName::JOURNAL).await?;
     let no_process = !has_process && lifecycle == InstanceLifecycle::Recovering;
-    let journaled = sup
-        .journal_stop(id, no_process, StopIntent::User, Vec::new())
+    let (journaled, _) = sup
+        .journal_stop(id, no_process, StopIntent::User, LeaseCheck::None)
         .await
         .map_err(failed)?;
     // The restart window starts from zero, whatever came before (AC-6).
