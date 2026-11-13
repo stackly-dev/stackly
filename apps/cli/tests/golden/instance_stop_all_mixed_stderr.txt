@@ -1,0 +1,3 @@
+  scratch · Started by you
+  orders-db · won’t stop: used by erp
+hint: to stop the instances environments hold too, run: stackly instance stop --all --override-leases
