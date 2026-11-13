@@ -202,6 +202,8 @@ Yang diterima dan yang ditolak, supaya batasnya tidak ditebak:
 
 `manifestSha256` dihitung dari byte file, jadi dua file yang hasil expand nya sama tetapi teksnya berbeda punya digest berbeda. Snapshot `services`, plan, dan `planDigest` dibangun dari nilai hasil expand.
 
+*(Diselaraskan dengan build (2026-11-14).)* Loader dibangun seperti bagian ini: `crates/core/src/environment/manifest.rs` memanggil `provider::raw::yaml_value`, memetakan `YamlError::TooLarge` ke `yaml_alias` di `.`, dan menolak nilai bertag dan key `<<` lewat `tag_or_merge_key`; fungsi `anchors_and_aliases` dan pindaian teksnya sudah tidak ada di kode. Pesan `yaml_alias` adalah "YAML tags and merge keys are not allowed, and aliases can't expand the file past its size limit".
+
 ### Provider satu instance
 
 *(Ditambah 2026-11-13, keputusan K27, dari probe tester: dua service `dedicated` ber provider tanpa `multiInstance` memberi plan `applicable`, padahal create kedua pasti ditolak.)*
@@ -216,6 +218,8 @@ Sebuah paket provider menyatakan `capabilities.multiInstance`. Tanpa itu, create
 - **Wire**: tidak berubah. `EnvFinding.code` adalah string bebas, kode finding tidak ada di `protocols/error-codes.json`, dan tidak ada DTO, method, atau kode error baru. Jumlah kode di *Aturan validasi* menjadi 35.
 
 **Untuk developer.** Tambahkan `FindingCode::ProviderSingleInstance` (`provider_single_instance`) dengan template pesan di atas di `crates/core/src/environment/finding.rs`, lalu satu blok di `Validator::cross_service` (`crates/core/src/environment/validate.rs`): simpan `multi_instance` paket di `Partial` saat aturan per service memuat paketnya, kumpulkan provider yang sudah dipakai service `dedicated` dalam satu `BTreeSet`, dan dorong finding untuk pemakaian kedua dan seterusnya. Tidak ada perubahan di `plan.rs`, protokol, daemon, CLI, atau app; finding baru tampil lewat jalur finding yang ada. Test: fixture `crates/core/tests/fixtures/environments/invalid/provider_single_instance.yaml` (file ke 35), yang butuh satu paket fixture tanpa `multiInstance` di catalog test (semua paket di `providers/` `multiInstance`); satu test bahwa service pertama lolos dan yang kedua serta ketiga masing masing mendapat finding; satu test bahwa `instanceRef` ke provider yang sama tidak dihitung; dan satu test plan bahwa satu service `dedicated` dengan instance provider itu yang sudah ada tetap `instance.capability_unsupported` ber detail `existing` (blocker ini belum punya test). Langkah `verify.md` yang menyebut "34 file" ikut diperbarui saat build.
+
+*(Diselaraskan dengan build (2026-11-14).)* K27 dibangun seperti tertulis: `FindingCode::ProviderSingleInstance` dengan pesan tetap di atas (`crates/core/src/environment/finding.rs`), blok lintas service di `crates/core/src/environment/validate.rs`, dan fixture `crates/core/tests/fixtures/environments/invalid/provider_single_instance.yaml` sebagai file ke 35. Keenam provider resmi `multiInstance`, jadi aturan ini dan blocker plan `instance.capability_unsupported` ber detail `existing` hanya terbukti lewat test dengan paket fixture `testing/single`, tidak lewat binary daemon.
 
 ### Aksi plan
 
@@ -380,6 +384,12 @@ Grup baru `stackly env` (`apps/cli/src/commands/env/`). Path dibuat absolut dari
 
 `<environment>` di resolve seperti `InstanceTarget`: 36 karakter yang terbaca sebagai UUID adalah id, selain itu nama persis dari `env.list`. `stackly instance list` mendapat kolom `ENVIRONMENT` (nama dipisah koma, atau `-`).
 
+*(Diselaraskan dengan build (2026-11-14).)* Tiga hal di mode teks seperti yang dibangun (`apps/cli/src/commands/env/`, golden `apps/cli/tests/golden/env_plan*.txt` dan `env_import_name_taken_stderr.txt`); `--json` tidak terpengaruh:
+
+- `env plan`: tabel dan ringkasan "Plan: …" ditulis ke stdout lebih dulu, baru bagian stderr `blocked:` (tiap blocker `<service>: <code>: <message>`, dengan baris `hint:` di bawahnya kalau ada), `secrets:`, `differs:`, dan `not in manifest:`. Jadi dengan stdout dan stderr di satu pipe, tabel dan baris `Plan:` muncul sebelum `blocked:`. Tabel membawa kolom `SOURCE` dan stderr membawa baris `lock:` dan `local:` dari spec 0045.
+- `env import` yang ditolak `env.name_taken` menulis `error: environment <name> is registered at <lokasi>` (home sebagai `~`) dan menambah hint `to use this file for it, run stackly env import --relink`. Baris `blocked: env.name_taken:` di `env plan` memakai pesan dan hint yang sama.
+- `env remove --yes` tidak menulis apa pun ke stderr; kalimat "Instances and data are kept." hanya ada di pertanyaan konfirmasi.
+
 ### Layar
 
 Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris dari mockup kecuali yang disebut berbeda di sini (spec menang atas mockup).
@@ -399,7 +409,7 @@ Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris dari
 - Seksi Details (`CardSection`): Manifest (path, `CopyButton`), Schema `stackly/v1alpha1`. Baris Lock dan Local override ditambahkan spec 0045 di bawahnya, baris Lease oleh spec 0047.
 - Seksi Problems (sesudah Validate gagal, atau dari Show Problems): `CheckList` dengan satu item per finding, judul `message`, detail `location`.
 
-**Menu baris service** (AC-19): seksi 1 isi `OpenInMenu` (lewat `OpenInModel.content(summary:detail:…)`; `InstanceDetail` dimuat saat menu dibuka, seperti inspector); seksi 2 Copy Connection URL (aksi salin connection string pertama dari kartu Connection spec 0021, termasuk aturan secret nya); seksi 3 Show Instance, Show Logs (membuka detail instance di tab Logs); seksi 4 aksi lifecycle instance yang sudah ada (Start, Stop, atau Retry). Service belum dibuat: hanya Show Plan….
+**Menu baris service** (AC-19): seksi 1 isi `OpenInMenu` (lewat `OpenInModel.content(summary:detail:…)`; `InstanceDetail` dimuat saat menu dibuka, seperti inspector); seksi 2 Copy Connection URL (aksi salin connection string pertama dari kartu Connection spec 0021, termasuk aturan secret nya); seksi 3 Show Instance, Show Logs (membuka detail instance di tab Logs); seksi 4 aksi lifecycle instance yang sudah ada (Start, Stop, atau Retry). Service belum dibuat: hanya Show Plan…. *(Diselaraskan dengan build (2026-11-14): judul item seksi 2 di app adalah "Copy Connection URL" (`EnvironmentCopy.copyConnectionURL`), dan sejak fitur 46 item untuk service yang belum dibuat adalah "Create with Up…", yang membuka sheet plan yang sama (spec 0046 *Layar*).)*
 
 **Sheet plan** (`StacklySheet`, judul "Plan for {name}", subjudul "Review what Up will do. Nothing runs until you confirm."): satu baris per item dalam `order`:
 

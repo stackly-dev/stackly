@@ -150,6 +150,12 @@ fn affected_rows(preview: &StopAllPreview) -> Vec<String> {
         .collect()
 }
 
+/// Whether no instance runs at all: nothing to stop, nothing stopping,
+/// and nothing left alone.
+fn nothing_running(preview: &StopAllPreview) -> bool {
+    preview.items.is_empty() && preview.already_stopping.is_empty() && preview.skipped.is_empty()
+}
+
 /// Whether the preview leaves an instance alone only because an
 /// environment holds a lease on it.
 fn skips_leased(preview: &StopAllPreview) -> bool {
@@ -213,7 +219,9 @@ impl Render for StopAllOutput {
     fn render(&self, out: &mut HumanWriter) {
         match &self.outcome {
             Some(outcome) => out.line(&outcome_text(&self.preview, outcome)),
-            None if self.preview.items.is_empty() => out.line("Nothing is running."),
+            None if nothing_running(&self.preview) => out.line("Nothing is running."),
+            // Running instances were left alone, each named on stderr.
+            None if self.preview.items.is_empty() => out.line("Nothing was stopped."),
             None => {}
         }
     }
@@ -300,6 +308,14 @@ impl RunCommand for StopAll {
             "to stop the instances environments hold too, run: stackly instance stop --all --override-leases",
         );
         if preview.items.is_empty() {
+            // Instances that run but are left alone, such as those an
+            // environment holds, are named; "Nothing is running." is only
+            // for a Mac where nothing runs (spec 0047 AC-19).
+            if cx.output.mode != OutputMode::Json && !cx.output.quiet {
+                for row in preview_rows(&preview) {
+                    cx.output.stderr.line(&format!("  {row}"));
+                }
+            }
             let output = CommandOutput::ok(nothing_sent(preview));
             return match leased_hint {
                 Some(hint) => output.with_hint(hint),
@@ -584,6 +600,14 @@ mod tests {
             outcome: None,
         };
         assert_eq!(render(&none), "Nothing is running.\n");
+        let mut held_only = preview();
+        held_only.items.clear();
+        held_only.already_stopping.clear();
+        let held = StopAllOutput {
+            preview: held_only,
+            outcome: None,
+        };
+        assert_eq!(render(&held), "Nothing was stopped.\n");
         let declined = StopAllOutput {
             preview: preview(),
             outcome: None,

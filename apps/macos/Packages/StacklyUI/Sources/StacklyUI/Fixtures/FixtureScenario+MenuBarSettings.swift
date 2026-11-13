@@ -42,25 +42,26 @@
 
         // MARK: - Stop All
 
-        private static func stopItem(_ instance: InstanceSummary, demand: [DemandSourceKind])
-            -> StopAllItem
-        {
+        private static func stopItem(
+            _ instance: InstanceSummary, demand: [DemandSourceKind],
+            environments: [InstanceEnvironment]? = nil
+        ) -> StopAllItem {
             StopAllItem(
                 instanceId: instance.id, name: instance.name, lifecycle: instance.lifecycle,
                 demand: demand,
                 autostart: InstanceAutostart(
                     policy: demand.contains(.startup) ? .atLogin : .manual, session: .none),
-                environments: nil)
+                environments: environments)
         }
 
         private static func stopPreview(
             _ items: [StopAllItem], alreadyStopping: [InstanceRef] = [],
-            skipped: [StopAllSkip] = []
+            skipped: [StopAllSkip] = [], affected: [AffectedEnvironment]? = nil
         ) -> StopAllPreview {
             StopAllPreview(
                 items: items, alreadyStopping: alreadyStopping, skipped: skipped,
                 atLoginCount: UInt64(items.filter { $0.autostart.policy == .atLogin }.count),
-                affectedEnvironments: nil)
+                affectedEnvironments: affected)
         }
 
         // MARK: - Settings
@@ -190,15 +191,27 @@
                         stopItem(running[0], demand: [.manual]),
                         stopItem(running[1], demand: [.manual, .startup]),
                         stopItem(running[2], demand: [.startup]),
+                        // The popover asks with the override (spec 0047, AC-24), so the
+                        // instance an environment's lease holds stops too and names it.
+                        stopItem(
+                            environment, demand: [.environment],
+                            environments: [
+                                InstanceEnvironment(
+                                    environmentId: FixtureEnvironments.erpID,
+                                    name: "erp-development", alias: "postgres",
+                                    ownership: .dedicated, leaseActive: true)
+                            ]),
                     ],
                     alreadyStopping: [InstanceRef(instanceId: stopping.id, name: stopping.name)],
                     skipped: [
                         StopAllSkip(
                             instanceId: held.id, name: held.name,
-                            code: "supervisor.identity_unproven", environments: nil),
-                        StopAllSkip(
-                            instanceId: environment.id, name: environment.name,
-                            code: "supervisor.stop_requires_override", environments: nil),
+                            code: "supervisor.identity_unproven", environments: nil)
+                    ],
+                    affected: [
+                        AffectedEnvironment(
+                            environmentId: FixtureEnvironments.erpID, name: "erp-development",
+                            instanceCount: 1)
                     ])
                 return connectedWith(
                     normalServices + [stopping, held, environment],

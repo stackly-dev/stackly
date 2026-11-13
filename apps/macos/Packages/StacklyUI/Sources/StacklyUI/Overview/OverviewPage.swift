@@ -13,6 +13,7 @@ public struct OverviewPage: View {
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.newInstanceAction) private var newInstance
     @Environment(\.feedbackCenter) private var feedbackCenter
+    @Environment(\.actionHost) private var actionHost
     @Environment(\.fixtureNow) private var fixtureNow
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -96,7 +97,8 @@ public struct OverviewPage: View {
     }
 
     private var context: InstanceActionContext {
-        InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
+        InstanceActionContext.make(
+            feedbackCenter: feedbackCenter, navigator: navigator, host: actionHost)
     }
 
     /// The page.

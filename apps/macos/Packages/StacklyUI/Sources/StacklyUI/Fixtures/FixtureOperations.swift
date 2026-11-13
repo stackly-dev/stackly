@@ -26,6 +26,9 @@
             /// An Up of erp-development that left 2 of 4 services ready ("Partial"), with its
             /// three child starts nested under it, above the list (spec 0046, AC-22).
             case environmentUp = "operations-environment-up"
+            /// A Down of erp-development that stopped 1 of 2 instances ("Partial"), with its two
+            /// child stops nested under it, above the list (spec 0047, AC-21).
+            case environmentDown = "operations-environment-down"
         }
 
         /// The rows `operation.list` answers for a case.
@@ -34,6 +37,7 @@
             case .loadFailed, .empty, .unsupported: []
             case .list, .inspector, .offline: rows
             case .environmentUp: FixtureEnvironmentUp.incompleteOperations + rows
+            case .environmentDown: FixtureEnvironmentDown.incompleteOperations + rows
             }
         }
 
@@ -153,7 +157,8 @@
                                 message: "the registry could not be read", retryable: false,
                                 resource: nil, fields: nil, hint: nil, details: nil,
                                 operationId: nil, rule: nil, items: nil))
-                    case .empty, .unsupported, .list, .inspector, .offline, .environmentUp:
+                    case .empty, .unsupported, .list, .inspector, .offline, .environmentUp,
+                        .environmentDown:
                         return OperationPage(items: rows(for: fixture), next: nil)
                     }
                 },
@@ -182,7 +187,7 @@
                                 rule: nil, items: nil))
                     case .empty, .loadFailed:
                         return Page(items: [], next: nil)
-                    case .list, .inspector, .offline, .environmentUp:
+                    case .list, .inspector, .offline, .environmentUp, .environmentDown:
                         return Page(items: active, next: nil)
                     }
                 },

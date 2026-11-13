@@ -275,6 +275,13 @@ fn down_with_wait_writes_a_line_per_instance_then_the_summary() {
 
     assert_eq!(text.code, Some(0), "{text:?}");
     golden::check("env_down_wait.txt", &text.stdout);
+    golden::check("env_down_wait_stderr.txt", &text.stderr);
+    assert!(
+        text.stderr
+            .contains("keep shared-valkey: started by you; used by reporting\n"),
+        "the instance that keeps running is named with its reasons: {}",
+        text.stderr
+    );
     assert_eq!(text.stdout, "Down. 2 stopped, 1 kept running.\n");
     let stopped = text
         .stderr

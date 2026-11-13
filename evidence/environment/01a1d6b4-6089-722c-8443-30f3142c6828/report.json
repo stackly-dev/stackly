@@ -1,0 +1,511 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+    "sourceDirty": false,
+    "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "env_down"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T20:58:27.849361Z",
+  "finishedAt": "2026-11-13T20:59:36.094377Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 7,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 7,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 7,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-864d98bf4fbd",
+      "covers": [
+        "REQ-022",
+        "BR-006"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 581
+      },
+      "status": "PASS",
+      "expected": "Down of an instance that ignores SIGTERM fails env.down_incomplete with one failed item supervisor.stop_timeout, the lease stays released and the data stays, and once the process exits a second Down stops it and succeeds",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.199517Z",
+      "finishedAt": "2026-11-13T20:59:00.90725Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-864e3f49053b",
+      "covers": [
+        "AC-073",
+        "BR-014"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "up_of_one_environment_and_down_of_another_on_a_shared_instance_agree_fifty_times",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 715
+      },
+      "status": "PASS",
+      "expected": "50 times, Up of alpha and Down of beta at once, both borrowing one instance, end with exactly one active lease of alpha, none of beta, one instance, no member or lease row twice, and when the Up succeeds the instance runs ready",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.199518Z",
+      "finishedAt": "2026-11-13T20:59:36.021842Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-864fae4b0253",
+      "covers": [
+        "AC-022",
+        "REQ-022",
+        "BR-014",
+        "BR-015",
+        "BR-006"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_down_keeps_an_instance_another_environment_holds_and_the_last_down_stops_it",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 309
+      },
+      "status": "PASS",
+      "expected": "with shop creating shop-db and blog borrowing it, a stop without override is refused supervisor.stop_requires_override naming both environments, the preview of shop keeps shop-db for blog, Down of shop succeeds with nothing stopped, releases only shop's lease, and leaves the same PID ready; Down of blog then stops it; data, members, and rows stay",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.199516Z",
+      "finishedAt": "2026-11-13T20:58:51.241663Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-865030b37bcf",
+      "covers": [
+        "REQ-022"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_daemon_restart_in_the_middle_of_a_down_closes_it_interrupted_with_the_leases_released",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 643
+      },
+      "status": "PASS",
+      "expected": "a daemon that stops while Down waits for a stop that hangs comes back with the Down failed interrupted, its child stop final, no environment lease active, and no active operation on the environment",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.19955Z",
+      "finishedAt": "2026-11-13T20:58:55.93922Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-86511e9b761c",
+      "covers": [
+        "REQ-022"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_changed_stop_set_or_an_unknown_environment_is_refused_without_an_operation",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 428
+      },
+      "status": "PASS",
+      "expected": "env.down whose expectedStopInstanceIds differ from the preview is refused env.down_changed with a hint and no operation or registry change, an unknown environment is env.not_found for both methods, a repeated key replays the first reply, and Down of an environment with nothing running succeeds and releases its lease",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.199533Z",
+      "finishedAt": "2026-11-13T20:58:51.184043Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-8652e872f0d9",
+      "covers": [
+        "REQ-022",
+        "AC-073"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_down_while_up_runs_cancels_the_up_and_a_new_up_is_busy",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 495
+      },
+      "status": "PASS",
+      "expected": "while an Up waits for a slow start, the preview says it cancels the Up; env.down cancels it, a new env.up is refused resource.busy, the Up ends cancelled, and the Down stops the instance and ends with last_up cleared and no active lease",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.19952Z",
+      "finishedAt": "2026-11-13T20:58:49.949692Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6b4-a067-70d9-9446-86533c215bb2",
+      "covers": [
+        "REQ-022"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_down",
+        "name": "a_down_whose_client_goes_away_still_runs_to_the_end",
+        "file": "apps/daemon/tests/env_down.rs",
+        "line": 688
+      },
+      "status": "PASS",
+      "expected": "a client that closes its connection right after env.down is accepted leaves the Down running: another client sees it succeed, the instance stopped, and the lease released",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:58:44.199547Z",
+      "finishedAt": "2026-11-13T20:58:51.067647Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "605dc763679e7b8fac8400b63d1735ba3e1da6e8",
+        "sourceDirty": false,
+        "runId": "01a1d6b4-6089-722c-8443-30f3142c6828",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_down"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

@@ -199,6 +199,17 @@ Kasus dan skenario yang ditambah fitur pemilik membangun handshake dan info daem
 
 *(Ditambah fitur 44, 46, dan 47, [spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13.)* Kasus "environment partially ready" menjadi skenario `environment-partially-ready`, ditambahkan fitur 44 di langkah GUI pertama yang memakai DTO environment (spec 0044 AC-24, build step 7). Fitur 46 menambah `environment-bringing-up` dan `environment-up-incomplete` (spec 0046 AC-23), dan fitur 47 menambah `environment-bringing-down` (spec 0047 AC-25). Keempatnya mengikuti aturan paragraf di atas dan *Key invariants*: fitur pemilik menambah skenario dan snapshot nya di commit yang sama dengan DTO nya. AC spec ini tidak berubah.
 
+*(Diselaraskan dengan build (2026-11-14), fitur 44 sampai 47.)* Yang ada di `FixtureScenario.ID` (`apps/macos/Packages/StacklyUI/Sources/StacklyUI/Fixtures/FixtureScenario.swift`, isinya di `FixtureScenario+Cases.swift`) tepat empat skenario environment, semuanya `connected` dengan health `ready` dan instance `FixtureEnvironments.instances` di atas kasus `connected-mixed`:
+
+| Skenario | Fitur | Isi |
+| --- | --- | --- |
+| `environment-partially-ready` | 44 | tiga environment: erp-development partially ready, billing down, reporting ready |
+| `environment-bringing-up` | 46 | erp-development selagi Up berjalan: 1 dari 4 service berakhir, satu starting, satu waiting, satu installing; operasi Up ada di daftar operasi |
+| `environment-up-incomplete` | 46 | erp-development sesudah Up yang berakhir 2 dari 4 ready: satu start gagal dan satu secret belum diisi; operasi pengatur dan anaknya ada di Operations |
+| `environment-bringing-down` | 47 | erp-development selagi Down berjalan: 1 dari 2 stop berakhir, lease sudah dilepas, dan balasan `env.preview_down` |
+
+Tidak ada skenario environment lain di katalog. Nama seperti `operations-environment-up`, `operations-environment-down`, `environment-up-failed`, `environment-up-interrupted`, `environment-plan-up`, `environment-plan-changed`, `environments-list-bringing-up`, `environments-list-bringing-down`, `environment-down-kept-feedback`, `environment-lease-held`, dan `ports-sheet-leased` adalah nama snapshot, bukan skenario: suite `EnvironmentsSnapshotTests`, `EnvironmentUpSnapshotTests`, `EnvironmentDownSnapshotTests`, `EnvironmentLeaseSnapshotTests`, dan `EnvironmentOverrideSnapshotTests` merender halaman itu dari DTO di `FixtureEnvironments.swift`, `FixtureEnvironmentUp.swift`, dan `FixtureEnvironmentDown.swift` yang juga mengisi keempat skenario di atas, jadi keadaan yang tidak punya skenario sendiri (Up gagal total, Up terputus, lock, override, lease) tetap punya referensi tanpa menambah nama katalog. `operations-environment-up` (suite Up) dan `operations-environment-down` (suite Down) adalah halaman Operations dengan operasi pengatur dan anak bersarangnya. Katalog kini 39 nama. AC spec ini tidak berubah.
+
 ### Kontrak fixture
 
 *(Seperti yang dibangun, 2026-10-22, `dc88025`.)* Fixture memaku versi kontrak, karena teks Protocol di Diagnostics dan referensi snapshot nya tidak boleh berubah setiap kali `ProtocolVersion::CURRENT` naik.

@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6b4-a067-70d9-9446-865030b37bcf",
+  "covers": [
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "a_daemon_restart_in_the_middle_of_a_down_closes_it_interrupted_with_the_leases_released",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 643
+  },
+  "status": "PASS",
+  "expected": "a daemon that stops while Down waits for a stop that hangs comes back with the Down failed interrupted, its child stop final, no environment lease active, and no active operation on the environment",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T20:58:44.19955Z",
+  "finishedAt": "2026-11-13T20:58:55.93922Z",
+  "evidencePath": "output.log"
+}

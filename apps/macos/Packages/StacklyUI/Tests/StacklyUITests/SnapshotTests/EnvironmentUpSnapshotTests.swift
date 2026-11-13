@@ -194,23 +194,24 @@ extension SnapshotTests {
 }
 
 extension SnapshotTests {
-    /// The toolbar controls of the environment detail page (spec 0046, AC-19): the off screen
-    /// snapshot window draws no toolbar, so the same actions the toolbar builds are drawn with
-    /// the same buttons in a row, Up… on and off with its reason.
+    /// The toolbar controls of the environment detail page (spec 0046, AC-19; spec 0047,
+    /// AC-20): the off screen snapshot window draws no toolbar, so the same actions the
+    /// toolbar builds are drawn with the same buttons in a row: Validate, Down, and Up…, on
+    /// and off. As in the real toolbar, a reason shows only as the button's tooltip.
     struct EnvironmentUpToolbarSnapshotTests {
         @MainActor
         private static func row(_ summary: EnvironmentSummary) -> some View {
             let validate = EnvironmentDetailPage.validateAction(
                 location: summary.manifestLocation, isValidating: false, perform: {})
+            let down = EnvironmentDetailPage.downAction(
+                summary: summary, isBusy: false, perform: {})
             let up = EnvironmentDetailPage.upAction(
                 summary: summary, manifestState: .inSync, problemCount: 0, declaredName: nil,
                 perform: {})
             return HStack(spacing: Spacing.s8) {
                 ActionButton(validate, prominence: .secondary, showsReason: false)
+                ActionButton(down, prominence: .secondary, showsReason: false)
                 ActionButton(up, prominence: .primary, showsReason: false)
-                if let reason = up.disabledReason {
-                    DisabledReasonText(reason)
-                }
             }
             .padding(Spacing.s12)
             .actionHost()
@@ -220,7 +221,7 @@ extension SnapshotTests {
             .evidence(
                 covers: ["NFR-012"],
                 expected:
-                    "The detail toolbar has Validate and the accent Up…; Up… is off with Already bringing up while an Up runs"
+                    "The detail toolbar has Validate, Down, and the accent Up…; Up… is off while an Up runs, and Down and Up… are off while a Down runs, each with its reason only as a tooltip"
             ))
         @MainActor
         func toolbarWithUp() async throws {
@@ -231,6 +232,9 @@ extension SnapshotTests {
             try await assertSnapshot(
                 Self.row(FixtureEnvironmentUp.bringingUpSummary),
                 named: "environment-toolbar-up-off", size: size, variants: [.light, .dark])
+            try await assertSnapshot(
+                Self.row(FixtureEnvironmentDown.bringingDownSummary),
+                named: "environment-toolbar-down-off", size: size, variants: [.light, .dark])
         }
     }
 }
