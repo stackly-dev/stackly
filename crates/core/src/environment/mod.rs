@@ -6,6 +6,7 @@
 //! `Filesystem` port and hands the bytes in.
 
 pub mod children;
+pub mod down;
 pub mod export;
 mod finding;
 pub mod local;

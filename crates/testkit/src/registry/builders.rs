@@ -10,16 +10,16 @@ use std::str::FromStr;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    Arch, ArtifactRecord, Capability, CapabilitySet, DeclaredService, DesiredState, DisplayName,
-    Endpoint, Environment, EnvironmentId, EnvironmentMember, EnvironmentName, ExactVersion,
-    FailureCode, IdempotencyKey, InstallMode, Instance, InstanceId, InstanceLifecycle, IpEndpoint,
-    Lease, LeaseHolder, LeaseId, LeaseState, LineCompatibility, Operation, OperationFailure,
-    OperationId, OperationKind, OperationResource, OperationState, Os, Ownership, Port,
-    PortRequest, Progress, ProviderName, ProviderRevision, ProviderRevisionKey,
-    ProviderRevisionRecord, RecoveryHint, ResourceRevision, RevisionLabel, Runtime, RuntimeId,
-    RuntimeLine, RuntimeState, Sha256Digest, SoftwareName, StageName, StartupPolicy,
-    StoredEnvironment, StoredInstance, StoredLease, StoredOperation, StoredRuntime, Target,
-    Transport, TrustDecision, UnixEndpoint,
+    Arch, ArtifactRecord, Capability, CapabilitySet, DeclaredService, DependencyCondition,
+    DesiredState, DisplayName, Endpoint, Environment, EnvironmentId, EnvironmentMember,
+    EnvironmentName, ExactVersion, FailureCode, IdempotencyKey, InstallMode, Instance, InstanceId,
+    InstanceLifecycle, IpEndpoint, Lease, LeaseHolder, LeaseId, LeaseState, LineCompatibility,
+    MemberDependency, Operation, OperationFailure, OperationId, OperationKind, OperationResource,
+    OperationState, Os, Ownership, Port, PortRequest, Progress, ProviderName, ProviderRevision,
+    ProviderRevisionKey, ProviderRevisionRecord, RecoveryHint, ResourceRevision, RevisionLabel,
+    Runtime, RuntimeId, RuntimeLine, RuntimeState, Sha256Digest, SoftwareName, StageName,
+    StartupPolicy, StoredEnvironment, StoredInstance, StoredLease, StoredOperation, StoredRuntime,
+    Target, Transport, TrustDecision, UnixEndpoint,
 };
 use uuid::Uuid;
 
@@ -691,6 +691,33 @@ impl EnvironmentBuilder {
             instance,
             ownership,
         ));
+        self
+    }
+
+    /// Adds a member under `alias` that depends on the members `on`, each
+    /// `ready` within 600 seconds, as Up records the edges (spec 0046).
+    #[must_use]
+    pub fn member_on(
+        mut self,
+        alias: &str,
+        instance: InstanceId,
+        ownership: Ownership,
+        on: &[&str],
+    ) -> Self {
+        let conditions = on
+            .iter()
+            .map(|dependency| {
+                MemberDependency::new(
+                    parse("member alias", dependency),
+                    DependencyCondition::Ready,
+                    600,
+                )
+            })
+            .collect();
+        self.stored.members.push(
+            EnvironmentMember::new(parse("member alias", alias), instance, ownership)
+                .with_conditions(conditions),
+        );
         self
     }
 
