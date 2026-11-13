@@ -1223,6 +1223,7 @@ fn decode_input(text: &str) -> Result<(CreateDraft, Option<EnvironmentBinding>),
             .and_then(serde_json::Value::as_str)
             .and_then(|code| code.parse().ok()),
         duplicate_of: None,
+        data_location: None,
     };
     Ok((draft, binding))
 }

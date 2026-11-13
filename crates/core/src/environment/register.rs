@@ -80,7 +80,7 @@ impl UnreadableReason {
         }
     }
 
-    fn of(error: &PlatformError) -> Self {
+    pub(crate) fn of(error: &PlatformError) -> Self {
         match error {
             PlatformError::NotFound { .. } | PlatformError::NotADirectory { .. } => Self::NotFound,
             PlatformError::NotARegularFile { .. } => Self::NotAFile,
@@ -403,7 +403,13 @@ pub fn register(
             }
             let mut updated = target.clone();
             if updated
-                .set_manifest(input.location.clone(), input.sha256, input.declared.clone())
+                .set_manifest(
+                    input.location.clone(),
+                    input.sha256,
+                    input.declared.clone(),
+                    // An import keeps the lock digest of the last Up.
+                    target.lock_sha256().copied(),
+                )
                 .is_err()
             {
                 return Ok(RegisterDecision::Refuse(EnvOpError::Internal(
@@ -424,6 +430,7 @@ pub fn register(
                 name: input.name.clone(),
                 manifest_location: Some(input.location.clone()),
                 manifest_sha256: Some(input.sha256),
+                lock_sha256: None,
                 declared: input.declared.clone(),
                 members: Vec::new(),
                 last_operation: None,

@@ -89,7 +89,11 @@ fn every_invalid_fixture_reports_its_own_code() {
         seen.push(code);
     }
     seen.sort();
-    let mut expected: Vec<&str> = FindingCode::ALL.iter().map(|c| c.as_code()).collect();
+    let mut expected: Vec<&str> = FindingCode::ALL
+        .iter()
+        .filter(|c| !FindingCode::LOCAL_ONLY.contains(c))
+        .map(|c| c.as_code())
+        .collect();
     expected.sort_unstable();
     assert_eq!(seen, expected, "one fixture per code");
 }

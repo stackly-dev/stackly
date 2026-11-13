@@ -1,0 +1,56 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e41",
+    "reply": {
+      "type": "env.export",
+      "content": {
+        "environment": {
+          "id": "0192f3a7-0000-7000-8000-0000000000e1",
+          "name": "erp-development",
+          "revision": 3
+        },
+        "format": "dotenv",
+        "text": "STACKLY_POSTGRES_CLIENT_HOST=127.0.0.1\nSTACKLY_POSTGRES_CLIENT_PORT=5432\nSTACKLY_POSTGRES_CLIENT_ADDRESS=127.0.0.1:5432\n",
+        "variables": [
+          {
+            "name": "STACKLY_POSTGRES_CLIENT_HOST",
+            "value": "127.0.0.1",
+            "service": "postgres",
+            "endpoint": "client",
+            "kind": "host",
+            "mayChange": false
+          },
+          {
+            "name": "STACKLY_POSTGRES_CLIENT_PORT",
+            "value": "5432",
+            "service": "postgres",
+            "endpoint": "client",
+            "kind": "port",
+            "mayChange": false
+          },
+          {
+            "name": "STACKLY_POSTGRES_CLIENT_ADDRESS",
+            "value": "127.0.0.1:5432",
+            "service": "postgres",
+            "endpoint": "client",
+            "kind": "address",
+            "mayChange": false
+          }
+        ],
+        "skipped": [
+          {
+            "service": "postgres",
+            "endpoint": "socket",
+            "reason": "unix_endpoint"
+          },
+          {
+            "service": "cache",
+            "endpoint": null,
+            "reason": "not_created"
+          }
+        ]
+      }
+    }
+  }
+}

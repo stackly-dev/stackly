@@ -1050,6 +1050,22 @@ async fn dispatch(
             .map(Reply::EnvRemove),
             None,
         ),
+        Call::EnvLock(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.lock_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvLock),
+            None,
+        ),
+        Call::EnvExport(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.export_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvExport),
+            None,
+        ),
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
                 &protocol::HANDSHAKE_REPEATED,

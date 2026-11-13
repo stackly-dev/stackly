@@ -1,6 +1,7 @@
 //! Environments (spec 0044): `stackly.yaml` checked (`env.validate`),
 //! planned (`env.plan`), listed (`env.list`, `env.get`), registered
-//! (`env.import`), and forgotten (`env.remove`).
+//! (`env.import`), and forgotten (`env.remove`); its lock written
+//! (`env.lock`) and its endpoints exported (`env.export`, spec 0045).
 //!
 //! Validate and plan are reads, not operations: they never write the
 //! registry, a file, or the Keychain. Import and remove are operations that
@@ -183,6 +184,11 @@ pub enum EnvSource {
 pub struct EnvPlanParams {
     /// The manifest.
     pub source: EnvSource,
+    /// Whether nothing may be resolved from a manifest selector (spec
+    /// 0045 AC-6). A daemon that does not know the field ignores it, so a
+    /// client that sends true checks `EnvPlan.lock.locked`.
+    #[serde(default)]
+    pub locked: bool,
 }
 
 impl Validate for EnvPlanParams {
@@ -306,6 +312,22 @@ pub struct PlanInstance {
     pub name: String,
 }
 
+/// Where the runtime of a `create` item comes from. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeSource {
+    /// The artifact the lock names for this Mac.
+    Lock,
+    /// The manifest selector, resolved against the catalog; what a daemon
+    /// without locks means.
+    #[default]
+    Catalog,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
 /// The runtime of a `create` item.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -327,6 +349,9 @@ pub struct PlanRuntime {
     /// The download size, when Up installs it.
     #[serde(default)]
     pub download_size: Option<Count>,
+    /// Where it comes from.
+    #[serde(default)]
+    pub source: RuntimeSource,
 }
 
 /// One endpoint of a plan item.
@@ -362,13 +387,35 @@ pub struct PlanSecret {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanDifference {
-    /// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or
-    /// `instanceRef`.
+    /// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`,
+    /// `instanceRef`, or `lock`.
     pub field: String,
     /// What the manifest says.
     pub manifest: String,
     /// What the instance has.
     pub instance: String,
+}
+
+/// The catalog entry a `create` item uses.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanProviderRevision {
+    /// The revision label.
+    pub revision: String,
+    /// The digest of its provider manifest.
+    pub manifest_sha256: String,
+}
+
+/// The data location a local override chose for a `create` item.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanStorage {
+    /// The registered data location.
+    pub location_id: Uuid,
+    /// Its path; clients show home as `~`.
+    pub path: String,
 }
 
 /// One service of a plan.
@@ -411,6 +458,12 @@ pub struct PlanItem {
     /// The preflight rows of a `create` item.
     #[serde(default)]
     pub checks: Vec<PreflightCheck>,
+    /// The catalog entry a `create` item uses.
+    #[serde(default)]
+    pub provider_revision: Option<PlanProviderRevision>,
+    /// The data location a local override chose, for a `create` item.
+    #[serde(default)]
+    pub storage: Option<PlanStorage>,
 }
 
 /// One problem that makes a plan not applicable.
@@ -473,6 +526,158 @@ pub struct EnvPlan {
     pub detached: Vec<DetachedMember>,
     /// How many secret fields need a value from the user.
     pub needs_secrets: Count,
+    /// The lock next to the manifest; always sent by a daemon that knows
+    /// locks.
+    #[serde(default)]
+    pub lock: PlanLock,
+    /// The local override file, when there is one.
+    #[serde(default)]
+    pub local: Option<PlanLocal>,
+}
+
+/// The state of a lock against its manifest. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LockState {
+    /// There is no lock file.
+    #[default]
+    Absent,
+    /// Every dedicated service matches its entry.
+    InSync,
+    /// An alias does not match.
+    Stale,
+    /// The lock is not a valid lock.
+    Invalid,
+    /// The file can't be read.
+    Unreadable,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Why an alias does not match its lock entry. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LockStaleReason {
+    /// A dedicated service without an entry.
+    NotLocked,
+    /// The entry names another provider.
+    ProviderChanged,
+    /// The entry names another selector.
+    SelectorChanged,
+    /// The locked version does not satisfy the selector.
+    SelectorUnsatisfied,
+    /// An entry whose alias is not a dedicated service of the manifest.
+    NotInManifest,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One alias that does not match the lock.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LockStaleItem {
+    /// The alias.
+    pub service: String,
+    /// Why.
+    pub reason: LockStaleReason,
+}
+
+/// The lock of a plan.
+#[typeshare]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanLock {
+    /// The lock file name, such as `stackly.lock`.
+    pub file: String,
+    /// Its state.
+    pub state: LockState,
+    /// The digest of a valid lock (`in_sync` or `stale`).
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Whether the daemon planned with `locked`; false from a daemon that
+    /// does not know the field.
+    #[serde(default)]
+    pub locked: bool,
+    /// Every target of every entry, by text.
+    #[serde(default)]
+    pub targets: Vec<String>,
+    /// The aliases that do not match.
+    #[serde(default)]
+    pub stale: Vec<LockStaleItem>,
+}
+
+/// The state of a local override file that is there. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalState {
+    /// It has no error finding.
+    Present,
+    /// It has an error finding.
+    Invalid,
+    /// It can't be read.
+    Unreadable,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// What became of one local override. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OverrideState {
+    /// A `create` draft uses it.
+    Applied,
+    /// A port of a service with a member: only compared.
+    Compared,
+    /// A data location of a service with a member: never applied.
+    NotAppliedExisting,
+    /// The manifest declares no such service.
+    Ignored,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One local override.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanOverride {
+    /// The alias as the file wrote it.
+    pub service: String,
+    /// `endpoints.<name>.port` or `storage.dataLocation`.
+    pub field: String,
+    /// The port, `auto`, or the path with home as `~`.
+    pub value: String,
+    /// What became of it.
+    pub state: OverrideState,
+}
+
+/// The local override file of a plan.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanLocal {
+    /// The file name, such as `.stackly.local.yaml`.
+    pub file: String,
+    /// Its state.
+    pub state: LocalState,
+    /// The digest of the bytes read.
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Every override, the ignored ones included.
+    #[serde(default)]
+    pub overrides: Vec<PlanOverride>,
+    /// Every finding; an `error` one is the `env.local_invalid` blocker.
+    #[serde(default)]
+    pub findings: Vec<EnvFinding>,
 }
 
 /// How many services of an environment are ready. Open: spec 0046 may add
@@ -509,6 +714,9 @@ pub struct EnvironmentSummary {
     /// The digest of the manifest last accepted.
     #[serde(default)]
     pub manifest_sha256: Option<String>,
+    /// The digest of the lock the last Up used, as the registry holds it.
+    #[serde(default)]
+    pub lock_sha256: Option<String>,
     /// The status.
     pub status: EnvironmentStatus,
     /// The services whose instance runs and is ready.
@@ -669,6 +877,46 @@ pub struct EnvironmentDetail {
     /// `checkManifest`.
     #[serde(default)]
     pub problems: Option<Count>,
+    /// The lock; only with `checkManifest` and a manifest `in_sync` or
+    /// `changed`.
+    #[serde(default)]
+    pub lock: Option<EnvLockInfo>,
+    /// The local override file; only when `lock` is sent.
+    #[serde(default)]
+    pub local: Option<EnvLocalInfo>,
+}
+
+/// The lock of a registered environment.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvLockInfo {
+    /// The file name.
+    pub file: String,
+    /// Its state.
+    pub state: LockState,
+    /// Every target of every entry, by text.
+    #[serde(default)]
+    pub targets: Vec<String>,
+    /// How many services it locks.
+    pub services: Count,
+}
+
+/// The local override file of a registered environment.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvLocalInfo {
+    /// The file name.
+    pub file: String,
+    /// Its state; absent when there is no file.
+    #[serde(default)]
+    pub state: Option<LocalState>,
+    /// Every override, by whether its service has a member.
+    #[serde(default)]
+    pub overrides: Vec<PlanOverride>,
+    /// The error findings.
+    pub problems: Count,
 }
 
 /// Params of `env.import`, an `import_environment` operation; the request
@@ -743,4 +991,258 @@ pub struct InstanceEnvironment {
     pub alias: String,
     /// Whether it owns the instance.
     pub ownership: EnvOwnership,
+}
+
+/// What `env.lock` picks again. Tagged `type` and `content`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", content = "content", rename_all = "snake_case")]
+pub enum LockRefresh {
+    /// Keep every entry that is still good.
+    None,
+    /// Pick every entry again.
+    All,
+    /// Pick these aliases again: 1 to 32.
+    Services(Vec<String>),
+}
+
+/// Params of `env.lock`: writes the lock next to the manifest. Not an
+/// operation: it writes that one file and never the registry.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvLockParams {
+    /// The manifest.
+    pub source: EnvSource,
+    /// What is picked again.
+    pub refresh: LockRefresh,
+}
+
+impl Validate for EnvLockParams {
+    fn validate(&self) -> Vec<FieldError> {
+        let mut fields: Vec<FieldError> = match &self.source {
+            EnvSource::File(path) => import_path_code(path)
+                .map(|code| FieldError::new("source.content", code))
+                .into_iter()
+                .collect(),
+            EnvSource::Registered(_) => Vec::new(),
+        };
+        if let LockRefresh::Services(aliases) = &self.refresh {
+            if aliases.is_empty() || aliases.len() > ENV_SERVICES_MAX {
+                fields.push(FieldError::new("refresh.content", FieldCode::OutOfRange));
+            }
+            if aliases
+                .iter()
+                .any(|alias| alias.is_empty() || alias.len() > 63)
+            {
+                fields.push(FieldError::new("refresh.content", FieldCode::InvalidFormat));
+            }
+        }
+        fields
+    }
+}
+
+/// How one service of `env.lock` changed. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LockChange {
+    /// A new alias.
+    Added,
+    /// The same version.
+    Kept,
+    /// Another version.
+    Updated,
+    /// The entry was dropped.
+    Removed,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One service of the reply of `env.lock`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LockedService {
+    /// The alias.
+    pub alias: String,
+    /// The provider.
+    pub provider: String,
+    /// The selector.
+    pub selector: String,
+    /// The version locked; absent for a removed or blocked entry.
+    #[serde(default)]
+    pub version: Option<String>,
+    /// The artifact for this Mac, when the entry has one.
+    #[serde(default)]
+    pub artifact_id: Option<String>,
+    /// How it changed.
+    pub change: LockChange,
+    /// The version before, when it changed.
+    #[serde(default)]
+    pub previous_version: Option<String>,
+}
+
+/// Reply of `env.lock`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvLockResult {
+    /// What `env.validate` says of the manifest.
+    pub validation: EnvValidation,
+    /// The lock file, as an absolute path; clients show home as `~`.
+    pub lock_file: String,
+    /// Whether the file was written.
+    pub written: bool,
+    /// Whether the new bytes differ from the file that was there.
+    pub changed: bool,
+    /// The digest of the lock, when it was written or is up to date.
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Every target of every entry, by text.
+    #[serde(default)]
+    pub targets: Vec<String>,
+    /// One per service, in manifest order, then removed entries.
+    #[serde(default)]
+    pub services: Vec<LockedService>,
+    /// What stops the write.
+    #[serde(default)]
+    pub blockers: Vec<PlanBlocker>,
+}
+
+/// How `env.export` writes its text. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportFormat {
+    /// `NAME=value` per line.
+    #[default]
+    Dotenv,
+    /// `export NAME='value'` per line.
+    Shell,
+    /// A value this build does not know; the daemon refuses it.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Params of `env.export`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvExportParams {
+    /// The environment: a registered one, or the file it was imported
+    /// from.
+    pub source: EnvSource,
+    /// How the text is written.
+    #[serde(default)]
+    pub format: ExportFormat,
+}
+
+impl Validate for EnvExportParams {
+    fn validate(&self) -> Vec<FieldError> {
+        let mut fields: Vec<FieldError> = match &self.source {
+            EnvSource::File(path) => import_path_code(path)
+                .map(|code| FieldError::new("source.content", code))
+                .into_iter()
+                .collect(),
+            EnvSource::Registered(_) => Vec::new(),
+        };
+        if self.format == ExportFormat::Unrecognized {
+            fields.push(FieldError::new("format", FieldCode::InvalidFormat));
+        }
+        fields
+    }
+}
+
+/// What an export variable holds. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportValueKind {
+    /// The host.
+    Host,
+    /// The port.
+    Port,
+    /// `host:port`, IPv6 in brackets.
+    Address,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One variable of an export.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportVariable {
+    /// The name, such as `STACKLY_POSTGRES_CLIENT_PORT`.
+    pub name: String,
+    /// The value: a host, a port, or an address.
+    pub value: String,
+    /// The service.
+    pub service: String,
+    /// The endpoint.
+    pub endpoint: String,
+    /// What it holds.
+    pub kind: ExportValueKind,
+    /// Whether the port may change at the next start.
+    pub may_change: bool,
+}
+
+/// Why a service or endpoint is not exported. Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportSkipReason {
+    /// The service has no instance yet.
+    NotCreated,
+    /// An `auto` endpoint that never had a port.
+    PortNotAssigned,
+    /// A Unix socket endpoint.
+    UnixEndpoint,
+    /// The pinned package can't be read.
+    PackageUnavailable,
+    /// The instance is retained.
+    Retained,
+    /// An earlier variable has the name.
+    NameCollision,
+    /// The redactor changed the value.
+    Redacted,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One service or endpoint left out of an export.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSkipped {
+    /// The service.
+    pub service: String,
+    /// The endpoint, when only one is left out.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Why.
+    pub reason: ExportSkipReason,
+}
+
+/// Reply of `env.export`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvExport {
+    /// The environment.
+    pub environment: EnvironmentRef,
+    /// How `text` is written.
+    pub format: ExportFormat,
+    /// The variables as text, one line each.
+    pub text: String,
+    /// The variables.
+    #[serde(default)]
+    pub variables: Vec<ExportVariable>,
+    /// What is left out.
+    #[serde(default)]
+    pub skipped: Vec<ExportSkipped>,
 }

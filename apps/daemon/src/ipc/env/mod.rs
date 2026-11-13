@@ -11,6 +11,12 @@
 //! resource `Environment(id)` with `LockKey::EnvironmentName`:
 //! `replay_operation`, then `start_operation`, then the wait for the end,
 //! and the membership cache loads again after each (AC-15).
+//!
+//! Spec 0045 adds the lock and the local overrides next to the manifest,
+//! which plan and get read through `read_file_limited`, `env.lock`, which
+//! writes only the lock file through `write_file_atomic` and is no
+//! operation, and `env.export`, which reads the registry and the pinned
+//! packages only.
 
 mod dto;
 
@@ -18,11 +24,17 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use stackly_core::catalog::{Catalog, CatalogState};
+use stackly_core::environment::local::{LocalFile, LocalInput, LocalState};
+use stackly_core::environment::lock::{
+    LockFile, LockInput, LockRefresh, LockState, emit, local_file_name, lock_file_name,
+    resolve_entries, state as lock_state,
+};
 use stackly_core::environment::{
     ImportRequest, InstanceView, ManifestRead, PlanDeps, PlanInputs, UnreadableReason,
     environment_view, import_work, manifest_location, manifest_state, plan as plan_of,
     read_manifest, remove_work, validate as validate_bytes,
 };
+use stackly_core::environment::{manifest_file_name, validate as validate_manifest};
 use stackly_core::instance::create::CreateDeps;
 use stackly_core::operation::{BeginRequest, BusyPolicy, Origin};
 use stackly_core::supervisor::{InstanceStatus, Supervisor};
@@ -33,9 +45,10 @@ use stackly_domain::{
 };
 use stackly_protocol::codes::{env as env_codes, internal};
 use stackly_protocol::env::{
-    EnvGetParams, EnvPlan, EnvPlanParams, EnvSource, EnvValidateParams, EnvValidation,
-    EnvironmentDetail, EnvironmentList, ImportEnvironmentParams, RemoveEnvironmentParams,
-    RemovedEnvironment,
+    EnvExport, EnvExportParams, EnvGetParams, EnvLocalInfo, EnvLockInfo, EnvLockParams,
+    EnvLockResult, EnvPlan, EnvPlanParams, EnvSource, EnvValidateParams, EnvValidation,
+    EnvironmentDetail, EnvironmentList, ImportEnvironmentParams, LockedService,
+    RemoveEnvironmentParams, RemovedEnvironment,
 };
 use stackly_protocol::fingerprint::request_fingerprint;
 use stackly_protocol::instance::InstanceSummary;
@@ -150,10 +163,14 @@ fn view_of(
 ) -> InstanceView {
     // A missing runtime row leaves the line unknown; the instance still
     // gets its view, so a plan never drops its service.
-    let runtime_line = runtimes
+    let runtime = runtimes
         .iter()
-        .find(|runtime| runtime.id() == instance.runtime_id())
-        .map(|runtime| runtime.line().clone());
+        .find(|runtime| runtime.id() == instance.runtime_id());
+    let runtime_line = runtime.map(|runtime| runtime.line().clone());
+    let runtime_artifact_sha256 = runtime.and_then(|runtime| match runtime.install() {
+        stackly_domain::InstallMode::Managed { artifact_sha256 } => Some(*artifact_sha256),
+        stackly_domain::InstallMode::External { .. } => None,
+    });
     let detail = status
         .readiness
         .detail()
@@ -185,6 +202,7 @@ fn view_of(
                 _ => None,
             })
             .collect(),
+        runtime_artifact_sha256,
     }
 }
 
@@ -280,8 +298,10 @@ pub fn plan(core: &DaemonCore, params: EnvPlanParams) -> HandlerFuture<'_, Box<E
         let source = core.catalog_source().id();
         let probe = crate::ipc::instance::serialized_probe();
         let home = core.home_mask().clone();
+        let locked = params.locked;
         let reply = blocking(move || {
             let validation = validate_bytes(&read.bytes, &catalog);
+            let (lock, local) = side_files(platform.fs(), &read.location);
             let host = platform.info().host_facts();
             let deps = PlanDeps {
                 create: CreateDeps {
@@ -302,9 +322,9 @@ pub fn plan(core: &DaemonCore, params: EnvPlanParams) -> HandlerFuture<'_, Box<E
                     manifest: &validation,
                     location: &read.location,
                     registered,
-                    lock: None,
-                    overrides: None,
-                    locked: false,
+                    lock: Some(&lock),
+                    overrides: Some(&local),
+                    locked,
                 },
             )?;
             Ok::<_, stackly_core::environment::PlanError>(dto::plan(
@@ -320,6 +340,31 @@ pub fn plan(core: &DaemonCore, params: EnvPlanParams) -> HandlerFuture<'_, Box<E
         })?;
         Ok(Box::new(reply))
     })
+}
+
+/// The lock and the local override file next to the manifest at
+/// `location`, read through the `Filesystem` port.
+fn side_files(
+    fs: &dyn stackly_platform::Filesystem,
+    location: &stackly_domain::ManifestLocation,
+) -> (LockInput, LocalInput) {
+    let file = manifest_file_name(location);
+    let folder = location
+        .as_path()
+        .parent()
+        .map_or_else(PathBuf::new, Path::to_path_buf);
+    let lock = lock_file_name(&file);
+    let local = local_file_name(&file);
+    (
+        LockInput {
+            content: LockFile::read(fs, &folder.join(&lock)),
+            file: lock,
+        },
+        LocalInput {
+            content: LocalFile::read(fs, &folder.join(&local)),
+            file: local,
+        },
+    )
 }
 
 /// When the row of `environment` last changed: the registry's
@@ -374,15 +419,24 @@ async fn detail_of(
     let Instances { views, summaries } = instances(core, &registry, &supervisor).await?;
     let view = environment_view(&environment, &views);
     let updated = updated_at(core, &environment);
-    let (manifest_state, problems) = if check_manifest {
+    let (manifest_state, problems, side) = if check_manifest {
         let (state, problems) = check_file(core, &environment).await?;
+        let side = match state {
+            stackly_core::environment::ManifestState::InSync
+            | stackly_core::environment::ManifestState::Changed => {
+                side_info(core, &environment).await?
+            }
+            _ => None,
+        };
         (
             Some(map::catalog::wire(state.as_code())),
             Some(Count::saturating(problems as u64)),
+            side,
         )
     } else {
-        (None, None)
+        (None, None, None)
     };
+    let (lock, local) = side.unzip();
     Ok(Box::new(EnvironmentDetail {
         summary: dto::summary(&environment, &view, updated),
         services: view
@@ -393,7 +447,115 @@ async fn detail_of(
         detached: dto::detached_members(&view),
         manifest_state,
         problems,
+        lock,
+        local,
     }))
+}
+
+/// The lock and the local override file of a registered environment
+/// whose manifest is `in_sync` or `changed` (spec 0045 AC-13): no
+/// evaluation of create, and an override's state only by whether its
+/// service has a member.
+async fn side_info(
+    core: &DaemonCore,
+    environment: &Environment,
+) -> Result<Option<(EnvLockInfo, EnvLocalInfo)>, Box<ErrorBody>> {
+    let Some(location) = environment.manifest_location().cloned() else {
+        return Ok(None);
+    };
+    let catalog: Option<Arc<Catalog>> = match core.catalog().as_deref() {
+        Some(CatalogState::Loaded(catalog)) => Some(Arc::clone(catalog)),
+        _ => None,
+    };
+    let platform = core.platform().clone();
+    let home = core.home_mask().clone();
+    let members: Vec<stackly_domain::MemberAlias> = environment
+        .members()
+        .iter()
+        .map(|member| member.alias().clone())
+        .collect();
+    blocking(move || {
+        let fs = platform.fs();
+        let manifest = read_manifest(fs, location.as_path())
+            .ok()
+            .zip(catalog.as_deref())
+            .and_then(|(bytes, catalog)| validate_manifest(&bytes, catalog).manifest);
+        let (lock, local) = side_files(fs, &location);
+        let state = match (&manifest, &lock.content) {
+            (Some(manifest), content) => lock_state(manifest, content).0,
+            (None, LockFile::Absent) => LockState::Absent,
+            (None, LockFile::Unreadable(_)) => LockState::Unreadable,
+            (None, LockFile::Invalid(_)) => LockState::Invalid,
+            (None, LockFile::Valid { .. }) => LockState::InSync,
+        };
+        let locked = lock.content.lock();
+        let lock_info = EnvLockInfo {
+            file: lock.file.clone(),
+            state: map::catalog::wire(state.as_code()),
+            targets: locked.map(|lock| lock.targets()).unwrap_or_default(),
+            services: Count::saturating(locked.map_or(0, |lock| lock.services().len()) as u64),
+        };
+        let mut local_info = EnvLocalInfo {
+            file: local.file.clone(),
+            state: None,
+            overrides: Vec::new(),
+            problems: Count::saturating(0),
+        };
+        match &local.content {
+            LocalFile::Absent => {}
+            LocalFile::Unreadable(_) => {
+                local_info.state = Some(map::catalog::wire(LocalState::Unreadable.as_code()));
+            }
+            LocalFile::Invalid { findings, .. } => {
+                local_info.state = Some(map::catalog::wire(LocalState::Invalid.as_code()));
+                local_info.problems = Count::saturating(
+                    findings.count_of(stackly_core::environment::Severity::Error) as u64,
+                );
+            }
+            LocalFile::Loaded { document, .. } => {
+                let checked = match (&manifest, catalog.as_deref()) {
+                    (Some(manifest), Some(catalog)) => stackly_core::environment::local::validate(
+                        document,
+                        manifest,
+                        catalog,
+                        &|alias| members.contains(alias),
+                    ),
+                    _ => stackly_core::environment::local::LocalOverrides::default(),
+                };
+                let errors = checked
+                    .findings
+                    .count_of(stackly_core::environment::Severity::Error);
+                let state = if errors > 0 {
+                    LocalState::Invalid
+                } else {
+                    LocalState::Present
+                };
+                local_info.state = Some(map::catalog::wire(state.as_code()));
+                local_info.problems = Count::saturating(errors as u64);
+                local_info.overrides = checked
+                    .overrides
+                    .iter()
+                    .map(|found| {
+                        let has_member = found
+                            .alias
+                            .as_ref()
+                            .is_some_and(|alias| members.contains(alias));
+                        dto::plan_override(
+                            &stackly_core::environment::PlanOverride {
+                                service: found.service.clone(),
+                                field: found.field(),
+                                value: found.value_text(),
+                                state: found.state(has_member),
+                            },
+                            &home,
+                        )
+                    })
+                    .collect();
+            }
+        }
+        Some((lock_info, local_info))
+    })
+    .await
 }
 
 /// *State manifest*: reads the file of `environment` and compares it.
@@ -663,4 +825,331 @@ async fn remove_inner(
         id: id.as_uuid(),
         name: name.to_string(),
     })
+}
+
+fn lock_error(
+    code: &stackly_protocol::codes::ErrorSpec,
+    message: &str,
+    detail: (&str, &str),
+) -> Box<ErrorBody> {
+    Box::new(with_env_hint(
+        ErrorBody::new(code, message).with_detail(detail.0, detail.1),
+    ))
+}
+
+/// `env.lock` (AC-2, AC-3): every dedicated service picked or kept from
+/// the catalog in memory, then the lock written next to the manifest when
+/// its bytes changed. No operation, no audit, no registry write, no
+/// download, no process, and no Keychain; the one file it writes is the
+/// lock, through `write_file_atomic`.
+pub fn lock(core: &DaemonCore, params: EnvLockParams) -> HandlerFuture<'_, Box<EnvLockResult>> {
+    Box::pin(async move {
+        let registry = registry_of(core)?;
+        let catalog = crate::catalog::loaded(core)?;
+        let (file, _) = plan_source(&registry, &params.source).await?;
+        let read = read_file(core, Path::new(&file)).await?;
+        let refresh = match &params.refresh {
+            stackly_protocol::env::LockRefresh::None => LockRefresh::None,
+            stackly_protocol::env::LockRefresh::All => LockRefresh::All,
+            stackly_protocol::env::LockRefresh::Services(aliases) => LockRefresh::Services(
+                aliases
+                    .iter()
+                    .map(|alias| {
+                        alias.parse().map_err(|_| {
+                            lock_error(
+                                &env_codes::SERVICE_NOT_FOUND,
+                                "the manifest has no dedicated service of that alias",
+                                ("service", "?"),
+                            )
+                        })
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+        };
+        let platform = core.platform().clone();
+        let home = core.home_mask().clone();
+        blocking(move || {
+            lock_blocking(
+                &platform, &registry, &catalog, &file, &read, &refresh, &home,
+            )
+        })
+        .await?
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn lock_blocking(
+    platform: &stackly_platform::Platform,
+    registry: &SqliteRegistry,
+    catalog: &Catalog,
+    file: &str,
+    read: &Read,
+    refresh: &LockRefresh,
+    home: &stackly_core::diagnostics::HomeMask,
+) -> Result<Box<EnvLockResult>, Box<ErrorBody>> {
+    let fs = platform.fs();
+    let validation = validate_bytes(&read.bytes, catalog);
+    let wire_validation = dto::validation(file, &validation);
+    let folder = read
+        .location
+        .as_path()
+        .parent()
+        .map_or_else(PathBuf::new, Path::to_path_buf);
+    let path = folder.join(lock_file_name(&manifest_file_name(&read.location)));
+    let lock_file = path.to_string_lossy().into_owned();
+    let mut reply = EnvLockResult {
+        validation: wire_validation,
+        lock_file,
+        written: false,
+        changed: false,
+        sha256: None,
+        targets: Vec::new(),
+        services: Vec::new(),
+        blockers: Vec::new(),
+    };
+    let Some(manifest) = &validation.manifest else {
+        return Ok(Box::new(reply));
+    };
+    let unwritable = |reason: &str| {
+        lock_error(
+            &env_codes::LOCK_UNWRITABLE,
+            "the lock file can't be written",
+            ("reason", reason),
+        )
+    };
+    match fs.symlink_metadata(&path) {
+        Ok(Some(info)) if info.kind != stackly_platform::FileKind::File => {
+            return Err(unwritable("not_a_file"));
+        }
+        _ => {}
+    }
+    let existing = LockFile::read(fs, &path);
+    let host = platform.info().host_facts();
+    let resolution = resolve_entries(manifest, &existing, refresh, catalog, registry, &host)
+        .map_err(|error| match error {
+            stackly_core::environment::lock::LockError::ServiceNotFound(alias) => lock_error(
+                &env_codes::SERVICE_NOT_FOUND,
+                "the manifest has no dedicated service of that alias",
+                ("service", alias.as_str()),
+            ),
+            other => {
+                tracing::error!(error = %other, "cannot read the trust of a provider for env.lock");
+                unexpected("the trust of a provider could not be read")
+            }
+        })?;
+    reply.services = resolution
+        .services
+        .iter()
+        .map(|service| LockedService {
+            alias: service.alias.to_string(),
+            provider: service.provider.to_string(),
+            selector: service.selector.clone(),
+            version: service.version.as_ref().map(ToString::to_string),
+            artifact_id: service.artifact_id.clone(),
+            change: map::catalog::wire(service.change.as_code()),
+            previous_version: service.previous_version.as_ref().map(ToString::to_string),
+        })
+        .collect();
+    let Some(lock) = resolution.lock else {
+        reply.blockers = resolution
+            .blockers
+            .iter()
+            .map(|blocker| stackly_protocol::env::PlanBlocker {
+                service: blocker.service.as_ref().map(ToString::to_string),
+                error: dto::blocker_error(blocker, &[], home),
+            })
+            .collect();
+        return Ok(Box::new(reply));
+    };
+    let bytes = emit(&lock);
+    let before = fs
+        .read_file_limited(&path, stackly_core::environment::lock::LOCK_MAX_LEN)
+        .ok();
+    reply.changed = before.as_deref() != Some(bytes.as_slice());
+    if reply.changed {
+        fs.write_file_atomic(&path, &bytes).map_err(|error| {
+            unwritable(match error {
+                stackly_platform::PlatformError::PermissionDenied { .. } => "permission_denied",
+                _ => "io",
+            })
+        })?;
+        reply.written = true;
+    }
+    reply.sha256 = Some(stackly_core::environment::manifest_digest(&bytes).to_string());
+    reply.targets = lock.targets();
+    Ok(Box::new(reply))
+}
+
+/// `env.export` (AC-14, AC-15): the host and port of every endpoint of
+/// every service with an instance, read from the registry and the pinned
+/// packages only. No operation, no audit, no file, no Keychain, and no
+/// process; every value goes through the `Redactor`.
+pub fn export(core: &DaemonCore, params: EnvExportParams) -> HandlerFuture<'_, Box<EnvExport>> {
+    Box::pin(async move {
+        let registry = registry_of(core)?;
+        let format = match params.format {
+            stackly_protocol::env::ExportFormat::Shell => {
+                stackly_core::environment::export::ExportFormat::Shell
+            }
+            _ => stackly_core::environment::export::ExportFormat::Dotenv,
+        };
+        let registered = environments(&registry).await?;
+        let environment = match &params.source {
+            EnvSource::Registered(id) => {
+                let id = EnvironmentId::from_uuid(*id).map_err(|_| not_found())?;
+                registered
+                    .into_iter()
+                    .find(|env| env.id() == id)
+                    .ok_or_else(not_found)?
+            }
+            EnvSource::File(path) => {
+                let read = read_file(core, Path::new(path)).await?;
+                let name = stackly_core::environment::declared_name(&read.bytes)
+                    .map_err(|findings| {
+                        Box::new(with_env_hint(
+                            ErrorBody::new(&env_codes::MANIFEST_INVALID, "the manifest has errors")
+                                .with_detail("errors", findings.count().to_string()),
+                        ))
+                    })?
+                    .ok_or_else(|| {
+                        Box::new(with_env_hint(
+                            ErrorBody::new(&env_codes::MANIFEST_INVALID, "the manifest has errors")
+                                .with_detail("errors", "1"),
+                        ))
+                    })?;
+                registered
+                    .into_iter()
+                    .find(|env| {
+                        env.name() == &name && env.manifest_location() == Some(&read.location)
+                    })
+                    .ok_or_else(|| {
+                        lock_error(
+                            &env_codes::NOT_REGISTERED,
+                            "the environment of this file is not registered at this location",
+                            ("name", name.as_str()),
+                        )
+                    })?
+            }
+        };
+        let platform = core.platform().clone();
+        let layout = core.prepared().layout().clone();
+        let packages = core.pinned_packages().clone();
+        let read = registry.clone();
+        let target = environment.clone();
+        let services = blocking(move || {
+            let instances = read
+                .instances(InstanceFilter {
+                    include_retained: true,
+                })?
+                .value;
+            Ok::<_, stackly_domain::RegistryError>(export_services(
+                &target, &instances, &platform, &layout, &packages,
+            ))
+        })
+        .await?
+        .map_err(|error| registry_error(&error))?;
+        let collected = stackly_core::environment::export::collect(&services, core.redactor())
+            .map_err(|error| {
+                tracing::error!(%error, "an export value was refused");
+                unexpected("an export value holds an unexpected character")
+            })?;
+        let text = stackly_core::environment::export::render(&collected.variables, format);
+        Ok(Box::new(EnvExport {
+            environment: stackly_protocol::env::EnvironmentRef {
+                id: environment.id().as_uuid(),
+                name: environment.name().to_string(),
+                revision: crate::ipc::operation::dto::revision(environment.revision()),
+            },
+            format: map::catalog::wire(format.as_code()),
+            text,
+            variables: collected
+                .variables
+                .iter()
+                .map(|variable| stackly_protocol::env::ExportVariable {
+                    name: variable.name.clone(),
+                    value: variable.value.clone(),
+                    service: variable.service.to_string(),
+                    endpoint: variable.endpoint.to_string(),
+                    kind: map::catalog::wire(variable.kind.as_code()),
+                    may_change: variable.may_change,
+                })
+                .collect(),
+            skipped: collected
+                .skipped
+                .iter()
+                .map(|skipped| stackly_protocol::env::ExportSkipped {
+                    service: skipped.service.to_string(),
+                    endpoint: skipped.endpoint.as_ref().map(ToString::to_string),
+                    reason: map::catalog::wire(skipped.reason.as_code()),
+                })
+                .collect(),
+        }))
+    })
+}
+
+/// The services of `environment` in snapshot order, each with its member
+/// or, for a shared service without one, the instance its `instanceRef`
+/// names, and its endpoints in the order of its pinned package.
+fn export_services(
+    environment: &Environment,
+    instances: &[Instance],
+    platform: &stackly_platform::Platform,
+    layout: &stackly_platform::DirectoryLayout,
+    packages: &crate::detail::PinnedPackages,
+) -> Vec<stackly_core::environment::export::ExportService> {
+    use stackly_core::environment::export::{ExportEndpoint, ExportService, ExportSource};
+    environment
+        .declared()
+        .iter()
+        .map(|service| {
+            let instance = environment
+                .member(service.alias())
+                .and_then(|member| instances.iter().find(|i| i.id() == member.instance_id()))
+                .or_else(|| {
+                    service.instance_ref().and_then(|name| {
+                        instances.iter().find(|i| {
+                            i.name() == name && i.lifecycle() != InstanceLifecycle::Retained
+                        })
+                    })
+                });
+            let source = match instance {
+                None => ExportSource::NotCreated,
+                Some(instance) if instance.lifecycle() == InstanceLifecycle::Retained => {
+                    ExportSource::Retained
+                }
+                Some(instance) => {
+                    match packages.get(platform, layout, instance.provider_revision()) {
+                        None => ExportSource::PackageUnavailable,
+                        Some(package) => ExportSource::Instance {
+                            running: instance.lifecycle() == InstanceLifecycle::Running,
+                            endpoints: package
+                                .endpoints()
+                                .filter_map(|spec| {
+                                    let own = instance
+                                        .endpoints()
+                                        .iter()
+                                        .find(|endpoint| endpoint.name() == spec.name())?;
+                                    Some(match own {
+                                        stackly_domain::Endpoint::Ip(ip) => ExportEndpoint::Ip {
+                                            name: ip.name().clone(),
+                                            host: ip.address(),
+                                            port: ip.effective_port(),
+                                            auto: ip.request() == stackly_domain::PortRequest::Auto,
+                                        },
+                                        _ => ExportEndpoint::Unix {
+                                            name: spec.name().clone(),
+                                        },
+                                    })
+                                })
+                                .collect(),
+                        },
+                    }
+                }
+            };
+            ExportService {
+                alias: service.alias().clone(),
+                source,
+            }
+        })
+        .collect()
 }

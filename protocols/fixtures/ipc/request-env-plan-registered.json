@@ -7,7 +7,8 @@
       "source": {
         "type": "registered",
         "content": "0192f3a7-0000-7000-8000-0000000000e1"
-      }
+      },
+      "locked": false
     }
   }
 }

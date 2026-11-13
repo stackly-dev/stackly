@@ -342,7 +342,7 @@ pub fn gather(deps: &CreateDeps<'_>, draft: &CreateDraft) -> Result<CreateFacts,
         Ok(found) => gather_ports(deps.probe, draft, &slots(&found.package), &instances),
         Err(_) => BTreeMap::new(),
     };
-    let locations = gather_locations(deps)?;
+    let locations = gather_locations(deps, draft)?;
     Ok(CreateFacts {
         provider,
         source_id: deps.source,
@@ -641,13 +641,19 @@ pub fn form_locations(
     })
 }
 
-/// The default locations from the settings, and whether their folders are
-/// fit. The book of the layout learns a location it does not know yet, so
-/// a registry opened elsewhere resolves the same way.
-fn gather_locations(deps: &CreateDeps<'_>) -> Result<CreateLocations, GatherError> {
+/// The locations of the new instance, and whether their folders are fit:
+/// the data location of the draft when it names one (spec 0045 AC-11),
+/// else the default of the settings, and always the default logs
+/// location. The book of the layout learns a location it does not know
+/// yet, so a registry opened elsewhere resolves the same way.
+fn gather_locations(
+    deps: &CreateDeps<'_>,
+    draft: &CreateDraft,
+) -> Result<CreateLocations, GatherError> {
     let settings = deps.registry.daemon_settings()?.value;
+    let data_location = draft.data_location.unwrap_or(settings.data_location);
     let book = deps.prepared.locations();
-    if book.base(settings.data_location).is_none() || book.base(settings.logs_location).is_none() {
+    if book.base(data_location).is_none() || book.base(settings.logs_location).is_none() {
         book.learn(&deps.registry.storage_locations()?.value);
     }
     let fact = |id: StorageLocationId, kind: LocationKind| {
@@ -671,7 +677,7 @@ fn gather_locations(deps: &CreateDeps<'_>) -> Result<CreateLocations, GatherErro
     };
     Ok(CreateLocations {
         startup_default: settings.default_startup,
-        data: fact(settings.data_location, LocationKind::Data),
+        data: fact(data_location, LocationKind::Data),
         logs: fact(settings.logs_location, LocationKind::Logs),
     })
 }

@@ -990,6 +990,7 @@ fn the_input_of_a_huge_settings_document_keeps_only_its_digest() {
         start: false,
         startup: Some(stackly_domain::StartupPolicy::Manual),
         duplicate_of: None,
+        data_location: None,
     };
 
     let payload = encode_input(InstanceId::generate(), &draft).expect("it fits once shortened");
@@ -1426,4 +1427,60 @@ async fn a_create_that_fails_at_init_keeps_revision_1_and_its_error_in_the_row()
         Some("supervisor.init_failed")
     );
     assert_eq!(row.safe_details.get("stage"), Some("init"));
+}
+
+// covers: AC-11 (spec 0045)
+#[tokio::test]
+async fn a_draft_data_location_puts_the_data_there_and_leaves_the_default_and_the_logs() {
+    use stackly_core::storage::prepare_location;
+    use stackly_domain::{LocationKind, StorageLocation, StorageLocationId, WriteBatch, WriteOp};
+
+    let cr = CreateRig::new().await;
+    let rig = &cr.rig;
+    let folder = rig.root.path().join("fast");
+    std::fs::create_dir_all(&folder).expect("the disk folder can be made");
+    let location = StorageLocationId::generate();
+    let made = prepare_location(&rig.platform, &folder, LocationKind::Data, location)
+        .expect("the location folders can be made");
+    let text = made.to_str().expect("the path is text").to_owned();
+    rig.registry
+        .commit(WriteBatch::new(vec![WriteOp::InsertStorageLocation(
+            StorageLocation::custom(location, LocationKind::Data, text, rig.fake_now())
+                .expect("a location"),
+        )]))
+        .expect("the location commits");
+    let default = rig.registry.daemon_settings().expect("it reads").value;
+
+    let id = InstanceId::generate();
+    let mut draft = cr.draft("orders");
+    draft.data_location = Some(location);
+    let op = cr
+        .begin(id, draft, Vec::new(), CreateHooks::default())
+        .await
+        .expect("accepted");
+    finish_init(rig, 0).await;
+    rig.wait_state(op, OperationState::Succeeded).await;
+
+    let paths = rig.paths(id);
+    assert!(paths.data.starts_with(made.join("instances")), "{paths:?}");
+    assert!(paths.logs.starts_with(rig.layout.layout().roots().logs()));
+    let stored = rig
+        .registry
+        .instance_paths(id)
+        .expect("it reads")
+        .value
+        .expect("the paths");
+    assert_eq!(
+        stored
+            .iter()
+            .filter(|entry| entry.location() == Some(location))
+            .count(),
+        5,
+        "the five data paths name the chosen location"
+    );
+    let after = rig.registry.daemon_settings().expect("it reads").value;
+    assert_eq!(
+        after.data_location, default.data_location,
+        "the default stays"
+    );
 }

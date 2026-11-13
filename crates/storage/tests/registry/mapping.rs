@@ -111,6 +111,7 @@ fn rewriting_an_instance_and_an_environment_keeps_the_new_list_order() {
         name: "store".parse().unwrap(),
         manifest_location: Some("/Users/example/store/stackly.yaml".parse().unwrap()),
         manifest_sha256: None,
+        lock_sha256: None,
         declared: vec![
             stackly_domain::DeclaredService::new(
                 "db".parse().unwrap(),
@@ -683,4 +684,59 @@ fn a_thousand_random_times_read_back_to_the_nanosecond() {
             ),
         );
     }
+}
+
+// covers: AC-12 (spec 0045)
+#[test]
+fn the_lock_digest_of_an_environment_round_trips_and_clears() {
+    let harness = Harness::new();
+    let mut environment = Environment::new(
+        EnvironmentId::generate(),
+        "shop".parse().unwrap(),
+        None,
+        vec![],
+    )
+    .unwrap();
+    harness.commit(vec![WriteOp::InsertEnvironment(environment.clone())]);
+    let registry = &harness.registry;
+    assert_eq!(
+        registry.environments().unwrap().value[0].lock_sha256(),
+        None
+    );
+
+    let lock = stackly_domain::Sha256Digest::from_bytes([7; 32]);
+    let before = environment.revision();
+    environment
+        .set_manifest(
+            stackly_domain::ManifestLocation::new("/tmp/shop/stackly.yaml").unwrap(),
+            stackly_domain::Sha256Digest::from_bytes([1; 32]),
+            Vec::new(),
+            Some(lock),
+        )
+        .unwrap();
+    harness.commit(vec![WriteOp::UpdateEnvironment {
+        environment: environment.clone(),
+        expected: before,
+    }]);
+    let read = registry.environments().unwrap().value.remove(0);
+    assert_eq!(read.lock_sha256(), Some(&lock));
+    assert_eq!(read, environment);
+
+    let before = environment.revision();
+    environment
+        .set_manifest(
+            stackly_domain::ManifestLocation::new("/tmp/shop/stackly.yaml").unwrap(),
+            stackly_domain::Sha256Digest::from_bytes([1; 32]),
+            Vec::new(),
+            None,
+        )
+        .unwrap();
+    harness.commit(vec![WriteOp::UpdateEnvironment {
+        environment,
+        expected: before,
+    }]);
+    assert_eq!(
+        registry.environments().unwrap().value[0].lock_sha256(),
+        None
+    );
 }

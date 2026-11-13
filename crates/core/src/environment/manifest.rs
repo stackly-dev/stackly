@@ -193,10 +193,33 @@ pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
     )]
 }
 
+/// The `metadata.name` of manifest bytes whose shape loads, without the
+/// catalog (spec 0045, `env.export` from a file): `Ok(None)` when the
+/// name is not a valid name.
+///
+/// # Errors
+///
+/// Returns the findings of the shape when the loader refuses it.
+pub fn declared_name(bytes: &[u8]) -> Result<Option<stackly_domain::EnvironmentName>, Findings> {
+    load(bytes).map(|raw| raw.metadata.name.parse().ok())
+}
+
 /// Decodes manifest bytes, or returns the finding that stopped it. The
 /// shape of the document is checked first, and the first problem stops it
 /// (spec 0044, *YAML yang diterima*).
 pub(crate) fn load(bytes: &[u8]) -> Result<RawEnvironment, Findings> {
+    load_document(bytes, KIND, FindingCode::UnsupportedKind.template())
+}
+
+/// The strict loader of every environment file (spec 0044, and the lock
+/// and the local overrides of spec 0045): bytes into `T`, or the findings
+/// that stopped it. `kind` is the one `kind` the document may have, and
+/// `kind_message` the message of `unsupported_kind`.
+pub(crate) fn load_document<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+    kind: &str,
+    kind_message: &'static str,
+) -> Result<T, Findings> {
     let mut findings = Findings::default();
     let stop = |findings: &mut Findings, finding: Finding| {
         findings.push(finding);
@@ -284,19 +307,20 @@ pub(crate) fn load(bytes: &[u8]) -> Result<RawEnvironment, Findings> {
             );
             return Err(findings);
         }
-        Some(found) if found.as_str() == Some(KIND) => {}
+        Some(found) if found.as_str() == Some(kind) => {}
         Some(_) => {
             stop(
                 &mut findings,
                 Finding::error(
                     FindingCode::UnsupportedKind,
                     FindingLocation::Field("kind".into()),
-                ),
+                )
+                .with_message(kind_message),
             );
             return Err(findings);
         }
     }
-    serde_path_to_error::deserialize::<_, RawEnvironment>(value).map_err(|err| {
+    serde_path_to_error::deserialize::<_, T>(value).map_err(|err| {
         let path = err.path().to_string();
         let inner = err.inner().to_string();
         findings.push(decode_finding(&path, &inner));

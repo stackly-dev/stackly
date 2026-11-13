@@ -25,8 +25,9 @@ use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, Sh
 use crate::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use crate::doctor::{DoctorParams, DoctorReport};
 use crate::env::{
-    EnvGetParams, EnvPlan, EnvPlanParams, EnvValidateParams, EnvValidation, EnvironmentDetail,
-    EnvironmentList, ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
+    EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
+    EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList, ImportEnvironmentParams,
+    RemoveEnvironmentParams, RemovedEnvironment,
 };
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
@@ -336,6 +337,15 @@ pub enum Call {
     /// `remove_environment` operation.
     #[serde(rename = "env.remove")]
     EnvRemove(RemoveEnvironmentParams),
+    /// Writes the lock next to a manifest from the catalog in memory
+    /// (spec 0045). Not an operation: it writes that one file, never the
+    /// registry, and downloads and spawns nothing.
+    #[serde(rename = "env.lock")]
+    EnvLock(EnvLockParams),
+    /// The host and port of every endpoint of an environment as variables
+    /// (spec 0045). It reads the registry and pinned packages only.
+    #[serde(rename = "env.export")]
+    EnvExport(EnvExportParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -565,6 +575,12 @@ pub enum Reply {
     /// The removed environment.
     #[serde(rename = "env.remove")]
     EnvRemove(RemovedEnvironment),
+    /// What was locked, or what blocks it.
+    #[serde(rename = "env.lock")]
+    EnvLock(Box<EnvLockResult>),
+    /// The variables.
+    #[serde(rename = "env.export")]
+    EnvExport(Box<EnvExport>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -708,6 +724,8 @@ methods! {
     "env.get" => EnvGet(EnvGetParams), recovery refused;
     "env.import" => EnvImport(ImportEnvironmentParams), recovery refused;
     "env.remove" => EnvRemove(RemoveEnvironmentParams), recovery refused;
+    "env.lock" => EnvLock(EnvLockParams), recovery refused;
+    "env.export" => EnvExport(EnvExportParams), recovery refused;
 }
 
 impl Reply {
@@ -917,8 +935,25 @@ mod tests {
             // `instance.get_metrics` (spec 0028), and the 6 config methods
             // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031), and
             // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032),
-            // and the 6 `env.*` methods (spec 0044).
-            allowed.len() + refused.len() + 1 + 5 + 5 + 3 + 5 + 3 + 3 + 1 + 1 + 6 + 1 + 2 + 4 + 6,
+            // and the 6 `env.*` methods (spec 0044), and `env.lock` and
+            // `env.export` (spec 0045).
+            allowed.len()
+                + refused.len()
+                + 1
+                + 5
+                + 5
+                + 3
+                + 5
+                + 3
+                + 3
+                + 1
+                + 1
+                + 6
+                + 1
+                + 2
+                + 4
+                + 6
+                + 2,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

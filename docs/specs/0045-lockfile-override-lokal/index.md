@@ -1,7 +1,7 @@
 # 0045. Lockfile dan override lokal
 
 **Date**: 2026-11-13
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

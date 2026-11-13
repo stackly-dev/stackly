@@ -1087,19 +1087,20 @@ fn write_environment(
             .last_up()
             .map(super::environment::last_up_json)
             .transpose()?,
+        environment.lock_sha256().map(ToString::to_string),
     ];
     match write {
         Write::Insert => conn.execute(
             "INSERT INTO environments (id, name, manifest_sha256, revision, created_at, \
-             updated_at, manifest_location, services, last_operation_id, last_up) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9)",
+             updated_at, manifest_location, services, last_operation_id, last_up, lock_sha256) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?10)",
             values,
         ),
         Write::Update => conn
             .execute(
                 "UPDATE environments SET name = ?2, manifest_sha256 = ?3, revision = ?4, \
                  updated_at = ?5, manifest_location = ?6, services = ?7, \
-                 last_operation_id = ?8, last_up = ?9 WHERE id = ?1",
+                 last_operation_id = ?8, last_up = ?9, lock_sha256 = ?10 WHERE id = ?1",
                 values,
             )
             .and_then(|_| {

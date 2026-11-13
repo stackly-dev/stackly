@@ -14,7 +14,8 @@
           "status": "partially_ready",
           "readyCount": 1,
           "serviceCount": 2,
-          "updatedAt": "2026-11-13T09:00:00.000Z"
+          "updatedAt": "2026-11-13T09:00:00.000Z",
+          "lockSha256": null
         },
         "services": [
           {
@@ -60,7 +61,9 @@
         ],
         "detached": [],
         "manifestState": "changed",
-        "problems": 0
+        "problems": 0,
+        "lock": null,
+        "local": null
       }
     }
   }

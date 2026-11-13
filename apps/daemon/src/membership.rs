@@ -127,6 +127,7 @@ mod tests {
             name: name.parse().unwrap(),
             manifest_location: Some(ManifestLocation::new(format!("/p/{name}.yaml")).unwrap()),
             manifest_sha256: None,
+            lock_sha256: None,
             declared: Vec::new(),
             members: members
                 .iter()

@@ -99,7 +99,9 @@ struct IpcFixtureTests {
         #expect(methods.contains { if case .providerRemove = $0 { true } else { false } })
         #expect(methods.contains { if case .envPlan = $0 { true } else { false } })
         #expect(methods.contains(.envList))
-        #expect(Set(methods.map(\.methodName)).count == 73)
+        #expect(methods.contains { if case .envLock = $0 { true } else { false } })
+        #expect(methods.contains { if case .envExport = $0 { true } else { false } })
+        #expect(Set(methods.map(\.methodName)).count == 75)
     }
 
     private func check<Value: Codable & Equatable>(

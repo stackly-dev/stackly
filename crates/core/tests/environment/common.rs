@@ -37,6 +37,19 @@ pub fn fixture(name: &str) -> Vec<u8> {
 
 /// The validated package of `providers/<name>`.
 pub fn package(name: &str) -> ValidatedPackage {
+    load_package(name, None)
+}
+
+/// The validated package of `providers/<name>` with its `versions.json`
+/// changed by `edit`, and `macos-x86_64` and `linux-aarch64` added to its
+/// platforms.
+pub fn package_with(name: &str, edit: impl FnOnce(&mut serde_json::Value)) -> ValidatedPackage {
+    load_package(name, Some(Box::new(edit)))
+}
+
+type Edit<'a> = Box<dyn FnOnce(&mut serde_json::Value) + 'a>;
+
+fn load_package(name: &str, edit: Option<Edit<'_>>) -> ValidatedPackage {
     let dir = repo().join("providers").join(name);
     let mut files = BTreeMap::new();
     for path in [
@@ -48,6 +61,9 @@ pub fn package(name: &str) -> ValidatedPackage {
             path.to_owned(),
             fs::read(dir.join(path)).expect("package file"),
         );
+    }
+    if let Some(edit) = edit {
+        edit_files(&mut files, edit);
     }
     for entry in fs::read_dir(dir.join("templates")).expect("templates folder") {
         let entry = entry.expect("template entry");
@@ -77,7 +93,20 @@ pub fn entry(package: ValidatedPackage) -> CatalogEntry {
 /// The test catalog: [`PACKAGES`], plus `testing/broken`, whose package
 /// does not load.
 pub fn catalog() -> Catalog {
-    let mut entries: Vec<CatalogEntry> = PACKAGES.iter().map(|name| entry(package(name))).collect();
+    catalog_with(Vec::new())
+}
+
+/// The test catalog with these packages in place of the official ones of
+/// the same name.
+pub fn catalog_with(replaced: Vec<(&str, ValidatedPackage)>) -> Catalog {
+    let mut replaced = replaced;
+    let mut entries: Vec<CatalogEntry> = PACKAGES
+        .iter()
+        .map(|name| {
+            let at = replaced.iter().position(|(own, _)| own == name);
+            entry(at.map_or_else(|| package(name), |at| replaced.remove(at).1))
+        })
+        .collect();
     entries.push(CatalogEntry::Invalid(InvalidEntry {
         id: "testing/broken".parse().expect("a provider name"),
         category: None,
@@ -89,4 +118,24 @@ pub fn catalog() -> Catalog {
         local: None,
     }));
     Catalog::for_tests(&entries)
+}
+
+fn edit_files(files: &mut BTreeMap<String, Vec<u8>>, edit: Edit<'_>) {
+    // Every platform an edit may add artifacts for.
+    let manifest = files
+        .get_mut("provider.yaml")
+        .expect("provider.yaml is read");
+    *manifest = String::from_utf8(manifest.clone())
+        .expect("UTF-8")
+        .replace(
+            "    - { os: macos, arch: aarch64 }\n",
+            "    - { os: macos, arch: aarch64 }\n    - { os: macos, arch: x86_64 }\n    - { os: linux, arch: aarch64 }\n",
+        )
+        .into_bytes();
+    let versions = files
+        .get_mut("versions.json")
+        .expect("versions.json is read");
+    let mut value: serde_json::Value = serde_json::from_slice(versions).expect("versions.json");
+    edit(&mut value);
+    *versions = serde_json::to_vec_pretty(&value).expect("versions.json encodes");
 }

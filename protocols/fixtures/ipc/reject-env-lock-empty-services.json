@@ -1,0 +1,17 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e34",
+  "idempotencyKey": null,
+  "call": {
+    "type": "env.lock",
+    "content": {
+      "source": {
+        "type": "file",
+        "content": "/Users/dev/erp/stackly.yaml"
+      },
+      "refresh": {
+        "type": "services",
+        "content": []
+      }
+    }
+  }
+}

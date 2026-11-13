@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnvironmentLocal",
+  "description": "`.stackly.local.yaml`, as it decodes.",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "description": "Always `stackly/v1alpha1`.",
+      "type": "string",
+      "pattern": "^stackly/v1alpha1$"
+    },
+    "kind": {
+      "description": "Always `EnvironmentLocal`.",
+      "type": "string",
+      "pattern": "^EnvironmentLocal$"
+    },
+    "services": {
+      "description": "The overrides, by service alias: 0 to 32.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LocalService"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "services"
+  ],
+  "$defs": {
+    "LocalEndpoint": {
+      "description": "The port of one endpoint; nothing else may be written.",
+      "type": "object",
+      "properties": {
+        "port": {
+          "description": "A port from 1 to 65535, or `auto`.",
+          "$ref": "#/$defs/Port"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "port"
+      ]
+    },
+    "LocalService": {
+      "description": "The overrides of one service.",
+      "type": "object",
+      "properties": {
+        "endpoints": {
+          "description": "Ports by endpoint name; only IP endpoints of the package.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/LocalEndpoint"
+          }
+        },
+        "storage": {
+          "description": "Where the data of a new instance goes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalStorage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalStorage": {
+      "description": "`storage`.",
+      "type": "object",
+      "properties": {
+        "dataLocation": {
+          "description": "The absolute path of a registered data location: the folder chosen\nin Settings, or its `Stackly` subfolder.",
+          "type": "string",
+          "maxLength": 1024,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "dataLocation"
+      ]
+    },
+    "Port": {
+      "description": "A port: a number, or the text `auto`.",
+      "anyOf": [
+        {
+          "description": "A fixed port.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        {
+          "description": "`auto`.",
+          "type": "string",
+          "pattern": "^auto$"
+        }
+      ]
+    }
+  }
+}

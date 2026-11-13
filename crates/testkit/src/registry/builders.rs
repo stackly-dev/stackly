@@ -624,6 +624,7 @@ impl EnvironmentBuilder {
                 name: parse::<EnvironmentName>("environment name", &format!("env-{}", suffix(id))),
                 manifest_location: None,
                 manifest_sha256: None,
+                lock_sha256: None,
                 declared: Vec::new(),
                 members: Vec::new(),
                 last_operation: None,
@@ -658,6 +659,13 @@ impl EnvironmentBuilder {
     #[must_use]
     pub const fn manifest_sha256(mut self, sha256: Sha256Digest) -> Self {
         self.stored.manifest_sha256 = Some(sha256);
+        self
+    }
+
+    /// Sets the digest of the lock the last Up used (spec 0045).
+    #[must_use]
+    pub const fn lock_sha256(mut self, sha256: Sha256Digest) -> Self {
+        self.stored.lock_sha256 = Some(sha256);
         self
     }
 
