@@ -76,7 +76,7 @@ Alasan dan opsi yang ditimbang: lihat [rationale.md](rationale.md).
 | Edit config dan dampak reload atau restart, Apply and Reload | fitur 29 |
 | Jumlah restart sejak dibuat | fitur 28 |
 | Backup yang membaca `last_exit` | fitur 49 |
-| Lease environment yang lebih ketat untuk restart | fitur 44 sampai 47 |
+| Lease environment yang lebih ketat untuk restart | fitur 44 sampai 47. *(Ditambah fitur 47, [spec 0047](../0047-env-down-shared-instance-lease/index.md) AC-14.)* Tidak diketatkan: restart tidak meminta override |
 | Restart daemon terencana | fitur 30 |
 
 ### Model data
@@ -353,6 +353,18 @@ Tidak ada env var, secret, atau credential baru.
 - Banner "Still stopping." dan Force Stop… tidak ada di mockup; asalnya PRD bagian 19.3.
 - Toast mockup "Reload signal sent" menjadi kartu umpan balik setelah reload terverifikasi, bukan setelah sinyal terkirim.
 
+### Tambahan fitur 47
+
+*Ditambah fitur 47 ([spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* AC spec ini tidak berubah. Kalimat AC-7 "restart tidak memeriksa lease environment" dikukuhkan; kalimat bertanda ditambahkan di *Batas dengan spec lain* dan *Consequences*.
+
+- **Yang tidak butuh override** (spec 0047 AC-14): `instance.restart`, `instance.reload`, dan `instance.force_stop` pada instance ber lease environment tidak ditolak dan tidak menerima field override. Restart dan reload mengembalikan instance dengan identitas dan port yang sama, jadi environment peminjam tidak terganggu. Lease tidak berubah oleh operasi itu.
+- **Force stop** (spec 0047 AC-14): tetap hanya berlaku pada instance yang sudah `stopping`, yaitu stop yang sudah dimulai pengguna, Down, atau daemon. Ia tidak membaca lease, dan perilaku desired nya tetap milik spec ini.
+- **Separuh stop restart dan start yang dibatalkan** (spec 0047 *Stop dengan guard lease*): separuh stop `restart_instance` (`restart_op.rs`) dan stop sesudah start atau restart yang dibatalkan memakai `LeaseCheck::None`. Keduanya tetap menghentikan proses yang dinyalakan sendiri tanpa membaca lease, dengan `StopIntent` yang sama seperti sebelumnya.
+- **Stop pengguna** (spec 0047 AC-13): `instance.stop` tanpa `overrideLeases` pada instance yang hidup dan punya lease environment `active` ditolak `supervisor.stop_requires_override` dengan satu `items` per environment pemegang; dengan `overrideLeases` true instance berhenti dan lease tetap `active`. Pemeriksaan itu diulang di guard commit yang menulis desired `stopped` (spec 0010 *Tambahan fitur 44, 46, dan 47*). Hasil stop yang dilaporkan AC-1 tidak berubah.
+- **Stop sebagai operasi anak Down** (spec 0047 AC-5): Down menghentikan tiap instance lewat operasi anak `stop_instance` dengan pemicu `environment_down`, memakai alur stop normal spec 0010 dan spec ini, tidak pernah `SIGKILL`. Stop yang guard nya menemukan demand lain selesai `succeeded` dengan item `partial` ber kode `env.instance_in_use` tanpa menghentikan apa pun, jadi `lastExit` tidak berubah.
+- **Niat force dan keputusan lease di satu guard** (spec 0047): di `settle_gone_process`, pembacaan niat force (*Handler exit: `last_exit`*) dan keputusan lease berjalan di satu guard. `GuardDecision::Refuse` membedakan keduanya: penolakan niat force tetap membangun ulang seperti sekarang, keputusan lease tidak.
+- **CLI** (spec 0047 AC-19): `stackly instance stop <target>` dan `stackly instance stop --all` mendapat `--override-leases`. `--force` tidak berubah.
+
 ## Build plan
 
 Pendekatan Journey: journey stop, restart, dan reload diselesaikan lengkap (state, error, CLI, GUI, bukti) sebelum fitur 27. Urutannya dari dalam ke luar supaya setiap milestone bisa dites sendiri.
@@ -404,7 +416,7 @@ Pendekatan Journey: journey stop, restart, dan reload diselesaikan lengkap (stat
 - Daemon yang mati setelah journal force tetapi sebelum langkah `kill` mulai membuat force tidak terjadi; rekonsiliasi mengirim stop normal. Itu benar (tidak ada `SIGKILL`), tetapi kamu perlu menekan Force Stop… lagi.
 - Handler exit membaca journal operasi di commit `exited`; biayanya satu query engine per exit.
 - Stop selama restart ditolak, jadi kamu butuh dua langkah (cancel, lalu stop) saat ingin membatalkan restart.
-- Restart dengan lease environment tidak meminta override; fitur 44 mungkin perlu mengetatkannya.
+- Restart dengan lease environment tidak meminta override; fitur 44 mungkin perlu mengetatkannya. *(Ditambah fitur 47, [spec 0047](../0047-env-down-shared-instance-lease/index.md) AC-14.)* Dikukuhkan dan tidak diketatkan: `instance.restart`, `instance.reload`, dan `instance.force_stop` pada instance ber lease environment tidak ditolak dan tidak menerima field override, dan lease tidak berubah oleh operasi itu.
 
 **Neutral**:
 
@@ -417,5 +429,5 @@ Pendekatan Journey: journey stop, restart, dan reload diselesaikan lengkap (stat
 - [ ] Terapkan *Usulan update untuk spec lain* ke spec 0010, 0005, 0069, dan 0021 saat milestone yang bersangkutan dibangun.
 - [ ] Fitur 49: backup cold menolak label clean saat `last_exit` bukan `clean`.
 - [ ] Fitur 29: Apply and Reload atau Apply and Restart memakai `instance.reload` dan `instance.restart` dari spec ini.
-- [ ] Fitur 44: tinjau apakah restart pada instance yang dipinjam environment butuh override.
+- [x] Fitur 44: tinjau apakah restart pada instance yang dipinjam environment butuh override. Tidak butuh (spec 0047 AC-14, K11 di rationale nya). Dijawab spec 0047, diterapkan di spec 0026 (2026-11-13).
 - [ ] `/sync` setelah build: catat `force_kill`, `FORCE_KILL_ALLOWED`, `last_exit`, dan tiga method baru di root `AGENTS.md`.
