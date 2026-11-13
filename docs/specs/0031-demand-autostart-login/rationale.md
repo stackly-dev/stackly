@@ -245,3 +245,11 @@ Spike audit session (langkah 1) berjalan sejak 2026-11-02. LaunchAgent `com.stac
 | dua login berturut turut | belum dilakukan |
 
 Sejauh ini asumsi "sama selama sesi" dan "sama dengan sesi Aqua" cocok. "Berbeda per login" belum terbukti. Setelah logout, catat baris baru, lalu `launchctl bootout gui/502/com.stackly.spike.asid` dan hapus plist nya.
+
+## Perubahan 2026-11-13 (fitur 46 dan 47)
+
+Dibawa lead scope 08 lewat brief `arc-update-all`, dari *Update spec lain* spec 0046 dan 0047. AC-10 ditambah satu kalimat; makna teks lamanya tidak berubah, karena AC itu sendiri menyerahkan aturan override ke fitur 47.
+
+- Rotasi sesi dikukuhkan apa adanya (spec 0046 K13): lease environment bertahan lintas sesi dan tidak pernah di suppress, jadi tidak ada cabang baru di `plan_session_rotation`.
+- Aturan 6 *Pilihan stop all* menjadi bersyarat lewat `StopAllOptions.override_leases` (spec 0047 K13), dan `agent_off` meneruskan nilai yang sama (spec 0047 K14). Default false menjaga perilaku lama untuk klien lama. Override tidak pernah melepas lease, supaya environment tetap tahu apa yang ia butuhkan dan Up mengembalikannya.
+- Langkah Stop All yang dulu membangun `manual_stop_ops` dengan override selalu true kini memakai nilai operasi. Tanpa itu, lease yang muncul di antara pilihan dan langkah akan diabaikan diam diam.

@@ -116,3 +116,10 @@ Dijalankan 2026-11-02 dengan model lain (read only). Temuan dan penyelesaian, se
 - macOS: item menu bar bisa dilarang pengguna sejak macOS 26 (AC-1 dirumuskan ulang dengan jalan kembali lewat Finder), menu app hilang di mode `accessory` (Settings dan Quit lewat popover), fallback jendela utama kalau peluncuran login item tidak dikenali, delegate notifikasi dipasang saat launch, dan `openSettings` dipanggil setelah policy `regular`.
 - Build plan: test aturan sumber spec 0012 untuk UserNotifications dan ServiceManagement, dan daftar pemakai path instance.
 - Telemetry menyimpan `telemetry_copy_version`, supaya persetujuan diminta lagi kalau teks berubah.
+
+## Perubahan 2026-11-13 (fitur 45 dan 47)
+
+Dibawa lead scope 08 lewat brief `arc-update-all`, dari *Update spec lain* spec 0045 dan 0047. AC-6 ditambah satu kalimat; makna teks lamanya tidak berubah, karena spec ini sendiri menaruh "dampak dan override lease environment di Stop All" di luar batasnya dan menyerahkannya ke fitur 47.
+
+- Stop All Services dari popover kini ikut menghentikan instance ber lease environment, sesudah preview menyebut environment yang terdampak (spec 0047 K13). Alasannya: mockup menulis Stop All menghentikan juga instance ber lease, dan orang menekan Stop All untuk menenangkan mesin. `expectedInstanceIds` tetap menjamin hanya yang tampil yang berhenti. Runner up nya, Stop All yang selalu melewati instance ber lease, ditolak di sana. CLI tetap default false.
+- Lokasi data per create (`CreateDraft.data_location`, spec 0045 K13) hanya menerima lokasi yang sudah terdaftar, supaya *Aturan lokasi* spec ini tetap satu satunya pintu masuk folder baru.

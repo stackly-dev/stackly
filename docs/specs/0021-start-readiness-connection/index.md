@@ -728,6 +728,15 @@ Untuk dicatat lead di `ui-macos.md`:
 - Banner gagal tidak menampilkan "Use Port …" atau Show Logs sampai fitur 29 dan 27; Retry saja. *(2026-11-10: sejak spec 0033, banner gagal menampilkan Use Port, Show Logs, Diagnose…, dan Show in Operations.)*
 - Autostart menulis "Off" atau "At login", bukan "With environment". *(Sejak spec 0031 baris ini toggle "Start at login" dengan teks sekunder; kalau mockup menggambar teks biasa, toggle adalah selisih yang disengaja, lihat Follow-up spec 0031.)*
 
+### Tambahan fitur 44 sampai 47
+
+*Ditambah fitur 44, 45, 46, dan 47 ([spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0045](../0045-lockfile-override-lokal/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* AC spec ini tidak berubah, dan perilaku `instance.start` untuk klien tidak berubah.
+
+- **Handler `instance.start` dipecah** menjadi "params ke permintaan internal" dan "permintaan internal ke `begin`" (spec 0046, *Operasi anak*, langkah build 6). Bagian kedua juga dipanggil port `UpChildren::start` dengan `Origin::Child` dan `BusyPolicy::Queue` seperti handler nya, jadi cek data spec 0025 dan precheck start berjalan persis seperti untuk permintaan klien.
+- **Start atas nama environment** memakai `StartRequest::environment(instance, caller)` dan `StartTrigger::Environment(SecretCaller)` (spec 0046, *Sumber interaksi secret*, langkah build 3). Di setiap cabang yang membedakan pemicu ia berperilaku seperti `User`, dengan satu beda: ia tidak menulis lease `manual`, juga di jalur tanpa operasi `start_precheck` (`no_op_with_desired`), yang kini menerima pemicu sebagai parameter. Readiness dan batas waktunya tidak berubah; Up membaca status instance sekali lagi sesudah anak start `succeeded`.
+- **Dependents.** `dependents[]` di `instance.get_detail` sudah dibaca dari registry (*Value sourcing*). Baris nyata muncul begitu Up menulis member dan lease (spec 0046 AC-4, AC-7), dan `lease_active` menjadi salah sesudah Down melepas lease (spec 0047 AC-4). Bentuk `DetailDependent` tidak berubah. Pemicu muat ulang detail untuk perubahan environment dan lease belum ditetapkan keempat spec itu (spec 0047 *Event* hanya menetapkan muat ulang `instance.list`), jadi baris Follow-up nya tetap terbuka.
+- **Endpoint efektif** yang dibaca `instance.get_detail` adalah data yang sama dengan `ServiceInstance.endpoints` di `env.get` (spec 0046 AC-16) dan dengan host dan port di `stackly env export` (spec 0045, *Value sourcing*).
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey proyek. Jalur yang dibuat lengkap adalah "pengguna menjalankan instance, melihat ready, lalu menyalin connection", lebih dulu di core (manifest, render, ukuran data), lalu lewat daemon dan CLI dengan bukti offline, lalu di GUI, lalu dibuktikan dengan PostgreSQL dan NATS nyata di Mac ini.
@@ -800,7 +809,7 @@ Sesi paralel: milestone 3 bisa berjalan bersamaan dengan langkah 7 dan 8 karena 
 - [ ] Fitur 24: item More "Duplicate…" sesudah Copy Connection String, tanpa tab, seperti dirancang spec 0024 (AC-13, *Titik masuk*) dan dibangun milestone 3 nya.
 - [ ] Fitur 28: jumlah restart sejak dibuat dan latensi probe di baris Readiness dan Restart attempts.
 - [x] Fitur 31: baris Autostart menjadi toggle dengan teks status, lewat `instance.set_startup` (spec 0031 AC-19). Dibangun fitur 31 milestone 1 dan diterapkan di spec ini 2026-11-03.
-- [ ] Fitur 29 dan 44 sampai 47: muat ulang detail saat config revision, environment, atau lease berubah (perubahan itu tidak menaikkan `revision` instance), dan isi Dependents dari environment nyata.
+- [ ] Fitur 29 dan 44 sampai 47: muat ulang detail saat config revision, environment, atau lease berubah (perubahan itu tidak menaikkan `revision` instance), dan isi Dependents dari environment nyata. *Catatan 2026-11-13: sejak spec 0046 dan 0047, member dan lease nyata ditulis Up dan dilepas Down, jadi Dependents terisi dari registry tanpa perubahan di spec ini. Pemicu muat ulang detail belum ditetapkan spec 0044 sampai 0047; baris ini tetap terbuka untuk bagian itu.*
 - [x] Fitur 33: banner crash loop yang lebih kaya di atas banner I1 spec ini. Diterapkan di spec 0033 (2026-11-10): `InstanceFailureBanner` untuk I1 dan I7 di tab Summary (AC-9 sampai AC-12); *Banner* di spec ini diselaraskan.
 - [x] Fitur 39: credential NATS di template `uri` NATS. *Dijawab [spec 0039](../0039-provider-nats-jetstream/index.md) (2026-11-12):* paket NATS `1.1.0`, Client URL memuat user `stackly` dan password dari secret `clientPassword`.
 - [ ] Fitur 59: instance yang di pin ke paket tanpa blok `connection` mendapat connection setelah update provider revision.

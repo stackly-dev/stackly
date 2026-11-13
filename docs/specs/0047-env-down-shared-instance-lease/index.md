@@ -278,7 +278,7 @@ Fungsi murni `down::order(members, stop_set, ended) -> Vec<InstanceId>`: sebuah 
 
 Tidak ada tabel atau kolom baru, dan tidak ada migrasi.
 
-- `instance_demands` (spec 0005, bentuk lease di spec 0046): Down menulis `state` `released` dan `released_at` lewat `WriteOp::UpdateLease` yang sudah ada. Baris `released` dipangkas aturan spec 0031 AC-14 dan dihapus `WriteOp::DeleteEnvironment` (spec 0044).
+- `instance_demands` (spec 0005, bentuk lease di spec 0046): Down menulis `state` `released` dan `state_changed_at` lewat `WriteOp::UpdateLease` yang sudah ada. Baris `released` dipangkas aturan spec 0031 AC-14 dan dihapus `WriteOp::DeleteEnvironment` (spec 0044).
 - `environments.last_up` dikosongkan dan `environments.last_operation_id` ditulis oleh commit `release`.
 - `environment_instances` tidak pernah ditulis Down. `dependency_conditions` hanya dibaca.
 
@@ -421,7 +421,7 @@ Satu fungsi di model aksi instance menangani ini untuk semua permukaan Stop, jad
 
 **Turn Off** (spec 0031): konfirmasi memakai preview dengan `overrideLeases` true; instance ber lease tampil di daftar yang akan berhenti dengan "Used by {environment}", ditambah kalimat "Environments keep their leases. Bring them up again after you turn Stackly back on." Turn Off tetap nonaktif untuk alasan `skipped` lain.
 
-**Activity dan Overview**: `OperationKind.environment_down` berjudul "Bring down environment {name}" ("Bring down environment" kalau tidak dikenal). Operasi anak bersarang lewat `parent` (spec 0046). Label "Partial" (nada caution) saat `failure.error.code` `env.down_incomplete` dan `details.stopped` di atas 0, dengan catatan "{stopped} of {total} instances stopped".
+**Activity dan Overview** ("Activity" di spec ini, juga di "Show in Activity", adalah halaman Operations [spec 0035](../0035-operations-activity-audit/index.md) yang dibuka lewat `openOperation`, bukan tab Activity per instance): `OperationKind.environment_down` berjudul "Bring down environment {name}" ("Bring down environment" kalau tidak dikenal). Operasi anak bersarang lewat `parent` (spec 0046). Label "Partial" (nada caution) saat `failure.error.code` `env.down_incomplete` dan `details.stopped` di atas 0, dengan catatan "{stopped} of {total} instances stopped".
 
 **Sidebar, daftar, Overview Environments**: saat `activeOperation.kind` `environment_down`, teks status "Bringing down…" (informative, `arrow.triangle.2.circlepath`).
 
@@ -442,7 +442,7 @@ Satu fungsi di model aksi instance menangani ini untuk semua permukaan Stop, jad
 | `env.down` | himpunan stop yang dijalankan | `select` di precheck, harus sama dengan `expectedStopInstanceIds`; disimpan di `input` journal |
 | `env.down` (replay) | `environmentId`, `name` di balasan | `input` journal operasi |
 | `release` | lease yang dilepas | `GuardView::leases_of_environment` di dalam guard |
-| `release` | `released_at` | clock platform saat commit |
+| `release` | `state_changed_at` | clock platform saat commit |
 | `stop` | keputusan akhir per instance | `evaluate_stop(EnvironmentDown(id))` atas lease yang dibaca guard commit stop |
 | `stop` | urutan | `dependency_conditions` tiap member, alias ke instance lewat `environment_instances` |
 | `stop` | hasil `stopped` atau `kept` | `DownChild`, atau `result.partial` operasi anak (kode `env.instance_in_use`) |
@@ -600,6 +600,7 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 
 - [ ] Lead: tetapkan nomor minor protokol saat build, dan terapkan *Update spec lain* lewat `architect (update)`.
 - [ ] Spec 0044: rename instance yang dipinjam lewat `instanceRef` membuat plan environment peminjam melaporkan `env.instance_ref_not_found` walau member nya masih terikat lewat ID. Putuskan di sana apakah plan mengikuti member, atau rename meminta override seperti ganti port.
+- [ ] Rollback config (spec 0029 AC-8) memulihkan settings dan endpoint last known good, jadi ia bisa memulihkan port lama pada instance ber lease environment `active`. AC-14 dan AC-15 belum menyebut rollback: belum diputuskan apakah ia meminta override seperti ganti port, atau berjalan tanpa override seperti apply config.
 - [ ] Fitur hapus instance: pesan dan alur untuk instance yang masih member environment (FK `restrict` spec 0005), termasuk tawaran Bring Down.
 - [ ] Peringatan dependency di konfirmasi Down ("{service} keeps running but depends on {dependency}, which stops") belum ada. Tambahkan kalau pengguna sering tersandung.
 - [ ] Down latar belakang saat `agent_off` (melepas lease, bukan meng override) bukan bagian fitur ini; pertimbangkan lewat `/scope` kalau dibutuhkan.

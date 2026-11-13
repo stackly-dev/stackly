@@ -129,3 +129,9 @@ Dua pemeriksaan read only dijalankan pada 2026-11-01: Sonnet (G1 sampai G25), la
 | H10 | crash sungguhan saat shutdown tercatat `clean` | child daemon dengan sinyal asing saat `stopping` dicatat `crashed` |
 
 Klaim offline (G24) diperiksa: tahap verify start spec 0010 AC-18 tidak memanggil `CodeSigning::assess`, jadi AC-12 tetap berlaku.
+
+## Perubahan 2026-11-13 (fitur 47)
+
+Dibawa lead scope 08 lewat brief `arc-update-all`, dari *Update spec lain* spec 0047. AC spec ini tidak berubah.
+
+Pertanyaan yang ditinggalkan di *Consequences* dan Follow-up ("apakah restart pada instance yang dipinjam environment butuh override") dijawab spec 0047 K11: tidak. Restart, reload, apply config, dan rename mengembalikan instance dengan identitas dan port yang sama, jadi tidak mengubah apa yang environment harapkan; yang dijaga override hanya stop, Stop All, Turn Off, dan ganti port. Force stop tidak membaca lease karena ia hanya menyelesaikan stop yang sudah dimulai.
