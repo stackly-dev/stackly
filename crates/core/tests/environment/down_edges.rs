@@ -60,6 +60,11 @@ struct CountingStops {
     registry: Arc<stackly_testkit::FakeRegistry>,
     names: HashMap<InstanceId, String>,
     keeps: Vec<String>,
+    /// While the stop of the first instance runs, the second one loses its
+    /// identity (lifecycle `unknown`).
+    loses: Option<(String, InstanceId)>,
+    /// The time of the rig's clock, for that lifecycle change.
+    now: jiff::Timestamp,
     delay: Duration,
     seen: Arc<Mutex<Seen>>,
 }
@@ -95,6 +100,12 @@ impl DownChildren for CountingStops {
             let seen = Arc::clone(&self.seen);
             let registry = Arc::clone(&self.registry);
             let delay = self.delay;
+            let loses = self
+                .loses
+                .as_ref()
+                .filter(|(during, _)| *during == name)
+                .map(|(_, lost)| *lost);
+            let now = self.now;
             let job: Job = Box::new(move |mut ctx: OperationContext| {
                 Box::pin(async move {
                     ctx.begin_step(StepSpec::new("stop".parse().expect("a stage")))
@@ -104,6 +115,23 @@ impl DownChildren for CountingStops {
                         seen.log.push(format!("begin {name}"));
                         seen.running += 1;
                         seen.most = seen.most.max(seen.running);
+                    }
+                    if let Some(lost) = loses {
+                        let mut instance = registry
+                            .instance(lost)
+                            .expect("the registry reads")
+                            .value
+                            .expect("the instance exists");
+                        let expected = instance.revision();
+                        instance
+                            .apply_lifecycle(stackly_domain::LifecycleEvent::IdentityLost, now)
+                            .expect("a running instance can lose its identity");
+                        registry
+                            .commit(WriteBatch::new(vec![WriteOp::UpdateInstance {
+                                instance,
+                                expected,
+                            }]))
+                            .expect("the instance commits");
                     }
                     tokio::time::sleep(delay).await;
                     {
@@ -244,6 +272,8 @@ impl Shop {
                 .map(|(name, instance)| (instance.id(), name.clone()))
                 .collect(),
             keeps: keeps.iter().map(|name| (*name).to_owned()).collect(),
+            loses: None,
+            now: self.rig.fake.clock().now(),
             delay,
             seen: Arc::new(Mutex::new(Seen::default())),
         })
@@ -444,5 +474,56 @@ async fn an_instance_the_preview_shows_blocked_is_never_stopped_and_never_fails_
     assert_eq!(
         outcome(&done).resources,
         [ResourceRef::Instance(shop.id("api"))]
+    );
+}
+
+// covers: AC-8 (spec 0047): an instance that becomes blocked by the time its
+// child would start is never stopped and ends `failed` with its code
+#[tokio::test]
+async fn an_instance_blocked_at_its_own_turn_ends_failed_with_its_code() {
+    let shop = Shop::new(
+        &[("db", RUNNING), ("web", RUNNING)],
+        &[("db", &[]), ("web", &["db"])],
+    )
+    .await;
+    let confirmed = shop.selection().stop_ids();
+    assert_eq!(confirmed.len(), 2, "both stop at the preview");
+    let mut stops = shop.stops(&[], Duration::from_millis(30));
+    Arc::get_mut(&mut stops)
+        .expect("the port is not shared yet")
+        .loses = Some(("web".to_owned(), shop.id("db")));
+
+    let operation = shop.down(&stops, confirmed).await;
+    let done = shop.finished(operation).await;
+
+    assert_eq!(done.view.operation.state(), OperationState::Failed);
+    let error = done
+        .view
+        .journal
+        .failure_error()
+        .expect("the down failed with an error");
+    assert_eq!(error.code().as_str(), "env.down_incomplete");
+    let items: Vec<(String, String)> = error
+        .items()
+        .iter()
+        .map(|item| {
+            let field = |key: &str| {
+                item.fields()
+                    .iter()
+                    .find(|(k, _)| k.as_str() == key)
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_default()
+            };
+            (field("name"), field("code"))
+        })
+        .collect();
+    assert_eq!(
+        items,
+        [("db".to_owned(), "supervisor.identity_unproven".to_owned())]
+    );
+    assert_eq!(
+        stops.log(),
+        ["begin web", "end web"],
+        "db never got a child"
     );
 }
