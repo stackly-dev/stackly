@@ -432,3 +432,24 @@ struct EnvironmentUpSecretTests {
         #expect(missing.generateAllowed == true)
     }
 }
+
+/// The running count of the sidebar and the Operations subtitle (spec 0046, *Activity*).
+@MainActor
+struct EnvironmentUpRunningCountTests {
+    @Test func theRunningCountLeavesTheChildrenOfAnUpOut() async {
+        let up = FixtureEnvironmentUp.upOperation()
+        let children = (1...3).map { number in
+            FixtureEnvironmentUp.child(
+                UInt8(number), kind: .startInstance,
+                instance: FixtureEnvironments.instances[number - 1], state: .running)
+        }
+        let center = OperationCenter(
+            fetchPage: { _ throws(ClientError) in Page(items: [up] + children, next: nil) },
+            fetchOne: { _ throws(ClientError) in nil },
+            now: { FixtureClock.now }, sleep: { _ in })
+        await center.store.refresh()
+        #expect(center.runningCount == 1)
+        #expect(center.subtitle == "1 running")
+        #expect(center.active.count == 4)
+    }
+}
