@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::fmt;
 
+use crate::environment::Environment;
 use crate::id::{InstanceId, RuntimeId};
 use crate::instance::Instance;
 use crate::lease::Lease;
@@ -33,6 +34,14 @@ pub trait GuardView {
     ///
     /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
     fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError>;
+
+    /// Returns every environment with its name, manifest location, and
+    /// revision, ordered by ID, read inside the guarded commit (spec 0044).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Corrupt`, `Busy`, `Unavailable`, or `Io`.
+    fn environments(&self) -> Result<Vec<Environment>, RegistryError>;
 
     /// Returns a runtime.
     ///

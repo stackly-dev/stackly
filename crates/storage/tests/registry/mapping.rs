@@ -109,7 +109,32 @@ fn rewriting_an_instance_and_an_environment_keeps_the_new_list_order() {
     let swapped = Environment::restore(stackly_domain::StoredEnvironment {
         id: environment.id(),
         name: "store".parse().unwrap(),
+        manifest_location: Some("/Users/example/store/stackly.yaml".parse().unwrap()),
         manifest_sha256: None,
+        declared: vec![
+            stackly_domain::DeclaredService::new(
+                "db".parse().unwrap(),
+                "official/postgresql".parse().unwrap(),
+                Ownership::Dedicated,
+                Some("18".parse().unwrap()),
+                None,
+                Some("store-db".parse().unwrap()),
+                vec![stackly_domain::DependencyEdge::new(
+                    "cache".parse().unwrap(),
+                    stackly_domain::DependencyCondition::Ready,
+                    Some(30),
+                )],
+            ),
+            stackly_domain::DeclaredService::new(
+                "cache".parse().unwrap(),
+                "official/valkey".parse().unwrap(),
+                Ownership::Shared,
+                None,
+                Some("shared-valkey".parse().unwrap()),
+                None,
+                Vec::new(),
+            ),
+        ],
         members: vec![
             member("cache", cache.id(), Ownership::Dedicated),
             member("db", instance.id(), Ownership::Shared),

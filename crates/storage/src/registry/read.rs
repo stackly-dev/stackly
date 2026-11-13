@@ -557,7 +557,8 @@ pub(super) fn environments(
     collect(
         conn,
         &format!(
-            "SELECT id, name, manifest_sha256, revision FROM environments {clause} ORDER BY id"
+            "SELECT id, name, manifest_location, manifest_sha256, services, revision \
+             FROM environments {clause} ORDER BY id"
         ),
         params,
         "environments",
@@ -566,7 +567,10 @@ pub(super) fn environments(
             let stored = StoredEnvironment {
                 id,
                 name: cells.parse("name")?,
+                manifest_location: cells.opt_parse("manifest_location")?,
                 manifest_sha256: cells.opt_parse("manifest_sha256")?,
+                declared: super::environment::parse_services(&cells.text("services")?)
+                    .map_err(|err| cells.corrupt("services", err))?,
                 members: members.remove(&id).unwrap_or_default(),
                 revision: cells.revision()?,
             };

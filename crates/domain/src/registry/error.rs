@@ -78,6 +78,8 @@ pub enum NotDeletableReason {
     /// It is running or may be: its lifecycle is `starting`, `running`,
     /// `stopping`, `recovering`, or `unknown`.
     Active,
+    /// It still holds an `active` lease (spec 0044, `DeleteEnvironment`).
+    ActiveLease,
 }
 
 impl NotDeletableReason {
@@ -88,6 +90,7 @@ impl NotDeletableReason {
         match self {
             Self::CreatedByOtherOperation => "created_by_other_operation",
             Self::Active => "active",
+            Self::ActiveLease => "active_lease",
         }
     }
 }

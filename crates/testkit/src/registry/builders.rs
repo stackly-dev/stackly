@@ -10,15 +10,16 @@ use std::str::FromStr;
 
 use jiff::Timestamp;
 use stackly_domain::{
-    Arch, ArtifactRecord, Capability, CapabilitySet, DesiredState, DisplayName, Endpoint,
-    Environment, EnvironmentId, EnvironmentMember, EnvironmentName, ExactVersion, FailureCode,
-    IdempotencyKey, InstallMode, Instance, InstanceId, InstanceLifecycle, IpEndpoint, Lease,
-    LeaseHolder, LeaseId, LeaseState, LineCompatibility, Operation, OperationFailure, OperationId,
-    OperationKind, OperationResource, OperationState, Os, Ownership, Port, PortRequest, Progress,
-    ProviderName, ProviderRevision, ProviderRevisionKey, ProviderRevisionRecord, RecoveryHint,
-    ResourceRevision, RevisionLabel, Runtime, RuntimeId, RuntimeLine, RuntimeState, Sha256Digest,
-    SoftwareName, StageName, StartupPolicy, StoredEnvironment, StoredInstance, StoredLease,
-    StoredOperation, StoredRuntime, Target, Transport, TrustDecision, UnixEndpoint,
+    Arch, ArtifactRecord, Capability, CapabilitySet, DeclaredService, DesiredState, DisplayName,
+    Endpoint, Environment, EnvironmentId, EnvironmentMember, EnvironmentName, ExactVersion,
+    FailureCode, IdempotencyKey, InstallMode, Instance, InstanceId, InstanceLifecycle, IpEndpoint,
+    Lease, LeaseHolder, LeaseId, LeaseState, LineCompatibility, Operation, OperationFailure,
+    OperationId, OperationKind, OperationResource, OperationState, Os, Ownership, Port,
+    PortRequest, Progress, ProviderName, ProviderRevision, ProviderRevisionKey,
+    ProviderRevisionRecord, RecoveryHint, ResourceRevision, RevisionLabel, Runtime, RuntimeId,
+    RuntimeLine, RuntimeState, Sha256Digest, SoftwareName, StageName, StartupPolicy,
+    StoredEnvironment, StoredInstance, StoredLease, StoredOperation, StoredRuntime, Target,
+    Transport, TrustDecision, UnixEndpoint,
 };
 use uuid::Uuid;
 
@@ -621,7 +622,9 @@ impl EnvironmentBuilder {
             stored: StoredEnvironment {
                 id,
                 name: parse::<EnvironmentName>("environment name", &format!("env-{}", suffix(id))),
+                manifest_location: None,
                 manifest_sha256: None,
+                declared: Vec::new(),
                 members: Vec::new(),
                 revision: ResourceRevision::INITIAL,
             },
@@ -652,6 +655,20 @@ impl EnvironmentBuilder {
     #[must_use]
     pub const fn manifest_sha256(mut self, sha256: Sha256Digest) -> Self {
         self.stored.manifest_sha256 = Some(sha256);
+        self
+    }
+
+    /// Sets where the manifest lives, an absolute path.
+    #[must_use]
+    pub fn manifest_location(mut self, location: &str) -> Self {
+        self.stored.manifest_location = Some(parse("manifest location", location));
+        self
+    }
+
+    /// Adds a declared service to the snapshot.
+    #[must_use]
+    pub fn declared(mut self, service: DeclaredService) -> Self {
+        self.stored.declared.push(service);
         self
     }
 

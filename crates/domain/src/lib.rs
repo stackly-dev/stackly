@@ -53,7 +53,10 @@ pub use catalog::SupportStatus;
 pub use endpoint::{
     Endpoint, IpEndpoint, PortRequest, Transport, UnixEndpoint, endpoints_conflict, resolve_port,
 };
-pub use environment::{Environment, EnvironmentMember, Ownership, StoredEnvironment};
+pub use environment::{
+    DeclaredService, DependencyCondition, DependencyEdge, Environment, EnvironmentMember,
+    ManifestLocation, Ownership, StoredEnvironment,
+};
 pub use error::{
     DomainError, InvariantDetail, InvariantError, JournalError, Machine, ProgressError,
     TransitionError, ValueError, ValueKind,

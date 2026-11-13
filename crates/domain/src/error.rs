@@ -122,6 +122,10 @@ pub enum ValueKind {
     OperationKind,
     /// An [`Ownership`](crate::Ownership).
     Ownership,
+    /// A [`DependencyCondition`](crate::DependencyCondition).
+    DependencyCondition,
+    /// A [`ManifestLocation`](crate::ManifestLocation).
+    ManifestLocation,
     /// A [`MethodName`](crate::MethodName).
     MethodName,
     /// An [`ErrorCodeName`](crate::ErrorCodeName).
@@ -299,6 +303,8 @@ impl ValueKind {
             Self::OperationState => "operation state",
             Self::OperationKind => "operation kind",
             Self::Ownership => "ownership",
+            Self::DependencyCondition => "dependency condition",
+            Self::ManifestLocation => "manifest location",
             Self::MethodName => "method name",
             Self::ErrorCodeName => "error code name",
             Self::CompensatorName => "compensator name",
@@ -631,6 +637,19 @@ pub enum InvariantDetail {
         /// The alias.
         alias: MemberAlias,
     },
+    /// Two declared services of an environment share an alias. Not a BR.
+    DuplicateDeclaredService {
+        /// The alias.
+        alias: MemberAlias,
+    },
+    /// A declared service depends on an alias the environment does not
+    /// declare. Not a BR.
+    UnknownDeclaredDependency {
+        /// The service that depends.
+        service: MemberAlias,
+        /// The alias it names.
+        dependency: MemberAlias,
+    },
     /// An instance joins an environment more than once. Not a BR.
     DuplicateMemberInstance {
         /// The instance.
@@ -717,6 +736,8 @@ impl InvariantDetail {
             | Self::RebindOtherSoftware { .. }
             | Self::DuplicateMemberAlias { .. }
             | Self::DuplicateMemberInstance { .. }
+            | Self::DuplicateDeclaredService { .. }
+            | Self::UnknownDeclaredDependency { .. }
             | Self::EnvironmentLeaseWithSession { .. }
             | Self::StartupLeaseWithoutSession { .. }
             | Self::LeaseAlreadyReleased { .. }
@@ -815,6 +836,16 @@ impl fmt::Display for InvariantDetail {
             Self::DuplicateMemberInstance { instance } => {
                 write!(f, "instance {instance} is a member more than once")
             }
+            Self::DuplicateDeclaredService { alias } => {
+                write!(f, "service {alias} is declared more than once")
+            }
+            Self::UnknownDeclaredDependency {
+                service,
+                dependency,
+            } => write!(
+                f,
+                "service {service} depends on undeclared service {dependency}"
+            ),
             Self::EnvironmentLeaseWithSession { lease } => {
                 write!(f, "environment lease {lease} cannot have a session")
             }

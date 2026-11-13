@@ -30,7 +30,7 @@ pub(super) fn secrets(suite: &Suite<'_>) {
 }
 
 /// A reference no other scenario or stored row uses.
-fn fresh_reference(label: &str) -> SecretRef {
+pub(super) fn fresh_reference(label: &str) -> SecretRef {
     let text = format!(
         "local:conformance/{}/{label}",
         suffix(OperationId::generate())
@@ -51,7 +51,7 @@ fn field(name: &str) -> SecretFieldName {
 
 /// A new row owned by the user, as `secret.set` registers one, with a
 /// stored value.
-fn user_record(suite: &Suite<'_>, reference: &SecretRef) -> SecretReferenceRecord {
+pub(super) fn user_record(suite: &Suite<'_>, reference: &SecretRef) -> SecretReferenceRecord {
     let mut record = SecretReferenceRecord::new(
         SecretReferenceId::generate(),
         reference.clone(),
@@ -68,7 +68,7 @@ fn user_record(suite: &Suite<'_>, reference: &SecretRef) -> SecretReferenceRecor
 }
 
 /// Reads one reference row, which must exist.
-fn view(suite: &Suite<'_>, check: &str, reference: &SecretRef) -> SecretReferenceView {
+pub(super) fn view(suite: &Suite<'_>, check: &str, reference: &SecretRef) -> SecretReferenceView {
     suite
         .value(check, suite.registry.secret_reference(reference))
         .unwrap_or_else(|| fail(check, "the reference row is missing"))

@@ -7,7 +7,7 @@ use std::fmt;
 use jiff::Timestamp;
 
 use crate::environment::Environment;
-use crate::id::{InstanceId, OperationId, StorageLocationId};
+use crate::id::{EnvironmentId, InstanceId, OperationId, StorageLocationId};
 use crate::instance::Instance;
 use crate::lease::Lease;
 use crate::location::{LocationKind, SettingsPatch, StorageLocation};
@@ -146,6 +146,18 @@ pub enum WriteOp {
     UpdateEnvironment {
         /// The environment after the change.
         environment: Environment,
+        /// The revision the caller read.
+        expected: ResourceRevision,
+    },
+    /// Deletes an environment and its members (spec 0044 AC-13). In the
+    /// same op it deletes the `released` demand rows the environment
+    /// holds, deletes the secret uses of the environment, and moves the
+    /// secret references it owns to the user. Fails with `NotFound` or
+    /// `RevisionConflict`, and with `NotDeletable` (`active_lease`) while a
+    /// demand row of the environment is still `active`.
+    DeleteEnvironment {
+        /// The environment.
+        id: EnvironmentId,
         /// The revision the caller read.
         expected: ResourceRevision,
     },
@@ -466,6 +478,7 @@ impl WriteOp {
             Self::InsertEnvironment(environment) | Self::UpdateEnvironment { environment, .. } => {
                 ResourceRef::Environment(environment.id())
             }
+            Self::DeleteEnvironment { id, .. } => ResourceRef::Environment(*id),
             Self::InsertLease(lease) | Self::UpdateLease(lease) => ResourceRef::Lease(lease.id()),
             Self::InsertOperation(operation) | Self::UpdateOperation { operation, .. } => {
                 ResourceRef::Operation(operation.id())
@@ -571,6 +584,7 @@ impl WriteOp {
             Self::PutProviderImport { record, .. } => Some(record.revision),
             Self::InsertProviderRevision(_)
             | Self::InsertArtifact(_)
+            | Self::DeleteEnvironment { .. }
             | Self::InsertLease(_)
             | Self::UpdateLease(_)
             | Self::InsertJournal(_)
@@ -612,6 +626,7 @@ impl WriteOp {
             | Self::UpdateInstance { expected, .. }
             | Self::ActivateConfigRevision { expected, .. }
             | Self::UpdateEnvironment { expected, .. }
+            | Self::DeleteEnvironment { expected, .. }
             | Self::UpdateOperation { expected, .. }
             | Self::UpdateSecretReference { expected, .. } => Some(*expected),
             Self::PutProviderImport { expected, .. } => *expected,

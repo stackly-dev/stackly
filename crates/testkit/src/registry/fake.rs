@@ -22,9 +22,9 @@ use stackly_domain::{
     ProviderRevisionRecord, ProviderSourceId, ProviderSourceKind, ProviderSourceRecord,
     PruneReport, Registry, RegistryError, ResourceRef, ResourceRevision, RestartPlan,
     RestartPlanId, RetentionPolicy, Runtime, RuntimeId, RuntimeReferences, SecretFieldName,
-    SecretRef, SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView, SecretStatus,
-    SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq, StorageLocation, StorageLocationId,
-    TrustDecision, Versioned, WriteBatch, WriteOp,
+    SecretOwner, SecretRef, SecretReferenceFilter, SecretReferenceRecord, SecretReferenceView,
+    SecretStatus, SecretUse, SecretUser, SessionId, Sha256Digest, StepSeq, StorageLocation,
+    StorageLocationId, TrustDecision, Versioned, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, instance_path_entries};
 
@@ -189,6 +189,10 @@ struct StateView<'a> {
 }
 
 impl GuardView for StateView<'_> {
+    fn environments(&self) -> Result<Vec<Environment>, RegistryError> {
+        Ok(self.state.environments.values().cloned().collect())
+    }
+
     fn instances(&self, filter: InstanceFilter) -> Result<Vec<Instance>, RegistryError> {
         let mut instances = self
             .state
@@ -954,6 +958,9 @@ impl State {
                 environment,
                 expected,
             } => self.write_environment(environment, Some(expected), now),
+            WriteOp::DeleteEnvironment { id, expected } => {
+                self.delete_environment(id, expected, now)
+            }
             WriteOp::InsertLease(lease) => self.write_lease(lease, false),
             WriteOp::UpdateLease(lease) => self.write_lease(lease, true),
             WriteOp::InsertSession(session) => self.insert_session(session),
@@ -1433,6 +1440,21 @@ impl State {
                 resource: ResourceRef::Instance(missing.instance_id()),
             });
         }
+        if self
+            .environments
+            .values()
+            .any(|other| other.id() != id && other.name() == environment.name())
+        {
+            return Err(unique_failed("environments.name"));
+        }
+        if let Some(location) = environment.manifest_location()
+            && self
+                .environments
+                .values()
+                .any(|other| other.id() != id && other.manifest_location() == Some(location))
+        {
+            return Err(unique_failed("environments.manifest_location"));
+        }
         for member in environment.members() {
             if member.ownership() != Ownership::Dedicated {
                 continue;
@@ -1452,6 +1474,53 @@ impl State {
         }
         self.stamp(resource, None, now);
         self.environments.insert(id, environment);
+        Ok(())
+    }
+
+    /// `WriteOp::DeleteEnvironment`: the environment, its members, its
+    /// `released` demand rows, and its secret uses go; the secret
+    /// references it owns move to the user.
+    fn delete_environment(
+        &mut self,
+        id: EnvironmentId,
+        expected: ResourceRevision,
+        now: Timestamp,
+    ) -> Result<(), RegistryError> {
+        let resource = ResourceRef::Environment(id);
+        check_existing(
+            self.environments.get(&id).map(Environment::revision),
+            Some(expected),
+            &resource,
+        )?;
+        let held = |lease: &Lease| lease.holder() == LeaseHolder::Environment(id);
+        if self
+            .leases
+            .values()
+            .any(|lease| held(lease) && !matches!(lease.state(), LeaseState::Released { .. }))
+        {
+            return Err(RegistryError::NotDeletable {
+                resource,
+                reason: NotDeletableReason::ActiveLease,
+            });
+        }
+        self.leases.retain(|_, lease| !held(lease));
+        self.secret_uses
+            .retain(|used| used.user != SecretUser::Environment(id));
+        let owned: Vec<SecretRef> = self
+            .secret_references
+            .values()
+            .filter(|record| record.owner == SecretOwner::Environment(id))
+            .map(|record| record.reference.clone())
+            .collect();
+        for reference in owned {
+            if let Some(record) = self.secret_references.get_mut(&reference) {
+                record.owner = SecretOwner::User;
+                record.revision = record.revision.next();
+                record.updated_at = now;
+            }
+        }
+        self.environments.remove(&id);
+        self.written.remove(&resource);
         Ok(())
     }
 
