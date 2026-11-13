@@ -399,3 +399,36 @@ struct EnvironmentUpCodeTests {
             EnvironmentCopy.codeMessage("runtime.checksum_mismatch") == "runtime.checksum_mismatch")
     }
 }
+
+/// Set Secret… of the banner passes on what the daemon sent (spec 0046, AC-21).
+@MainActor
+struct EnvironmentUpSecretTests {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "Set Secret… of the banner opens the secret sheet with the reference, reason, and generateAllowed the daemon sent, a locked Keychain and no generated value included"
+        ))
+    func setSecretPassesOnTheReasonAndGenerateAllowedOfTheDaemon() throws {
+        var needs: [[SecretNeed]] = []
+        let items = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.lockedSecretDetail(),
+            actions: ServiceRowModel.BannerActions(
+                open: { _ in }, setSecret: { needs.append($0) }))
+        let cache = try #require(items.first { $0.name.hasSuffix("(cache)") })
+        #expect(cache.reason == "Needs secret local:erp/cache/password")
+        #expect(cache.action?.title == "Set Secret…")
+        cache.action?.perform()
+        let locked = try #require(needs.first?.first)
+        #expect(locked.reference == "local:erp/cache/password")
+        #expect(locked.reason == .storeLocked)
+        #expect(locked.generateAllowed == false)
+        #expect(locked.reasonText == "The Keychain is locked.")
+
+        let search = try #require(items.first { $0.name == "search" })
+        search.action?.perform()
+        let missing = try #require(needs.last?.first)
+        #expect(missing.reason == .missing)
+        #expect(missing.generateAllowed == true)
+    }
+}

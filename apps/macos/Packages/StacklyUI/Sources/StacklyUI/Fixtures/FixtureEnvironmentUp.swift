@@ -232,6 +232,26 @@
         public static let searchSecret = NeedsSecretItem(
             reference: "local:erp/search/adminPassword", reason: .missing, generateAllowed: true)
 
+        /// A reference the daemon could not read because the Keychain is locked, and for which
+        /// a generated value would not work: Set Secret… must pass both on as they came.
+        public static let lockedSecret = NeedsSecretItem(
+            reference: "local:erp/cache/password", reason: .storeLocked, generateAllowed: false)
+
+        /// ``incompleteDetail()`` with the cache service stopped on ``lockedSecret`` and the
+        /// search one on ``searchSecret``.
+        public static func lockedSecretDetail() -> EnvironmentDetail {
+            let incomplete = incompleteDetail()
+            let services = (incomplete.services ?? []).map { row in
+                row.alias == "cache"
+                    ? service(row, notReady: notReady(.needsSecret, references: [lockedSecret]))
+                    : row
+            }
+            return EnvironmentDetail(
+                summary: incomplete.summary, services: services, detached: [],
+                manifestState: .inSync, problems: nil, lock: nil, local: nil,
+                lastUp: incomplete.lastUp)
+        }
+
         /// erp-development after an Up that ended with 2 of 4 ready: queue failed to start and
         /// search needs a secret.
         public static func incompleteDetail() -> EnvironmentDetail {
