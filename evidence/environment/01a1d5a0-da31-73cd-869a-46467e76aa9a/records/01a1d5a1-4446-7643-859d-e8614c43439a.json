@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d5a1-4446-7643-859d-e8614c43439a",
+  "covers": [
+    "VAL-013"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment_edges",
+    "name": "a_pending_or_revoked_local_provider_blocks_the_plan_and_the_plan_never_decides",
+    "file": "apps/daemon/tests/environment_edges.rs",
+    "line": 347
+  },
+  "status": "PASS",
+  "expected": "env.plan of a manifest that uses an imported local provider shows trust approval_required with the one blocker provider.approval_required while it waits, trust revoked with the one blocker provider.revoked after a revoke, and never changes the approval or starts an operation",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:57:58.214958Z",
+  "finishedAt": "2026-11-13T15:58:00.867924Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d5a1-1b23-7608-a3fa-3791f9fd7d9e",
+  "covers": [
+    "REQ-020"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "an_import_registers_the_file_once_and_a_repeated_key_runs_no_second_operation",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 608
+  },
+  "status": "PASS",
+  "expected": "env.import registers a valid stackly.yaml as one import_environment operation with an audit row, the same file again keeps the revision, the same key runs no second operation, a changed digest is env.manifest_changed, an invalid file is env.manifest_invalid, and a path through a symlinked folder is the same location",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:57:47.683741Z",
+  "finishedAt": "2026-11-13T15:57:50.163228Z",
+  "evidencePath": "output.log"
+}
