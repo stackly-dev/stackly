@@ -175,6 +175,7 @@ Folder `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Overview/`: `OverviewPag
 | `register_external_runtime` | "Register external runtime" |
 | `environment_up`, `environment_down` | "Bring up environment", "Bring down environment" (nama environment dari fitur 44) *(Ditambah fitur 46 dan 47, [spec 0046](../0046-env-up-dependency-graph/index.md) dan [spec 0047](../0047-env-down-shared-instance-lease/index.md), *Activity dan Overview*:)* "Bring up environment {name}" dan "Bring down environment {name}" dengan nama dari `EnvironmentStore` lewat resource operasi; tanpa nama kalau environment tidak dikenal |
 | `update_provider_revision`, `update_manager` | "Update provider", "Update Stackly" |
+| `import_environment`, `remove_environment` | "Import environment", "Remove environment", tanpa nama environment *(Diselaraskan dengan build (2026-11-14), fitur 44: seperti yang dibangun di `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Operations/OperationTitle.swift`.)* |
 | `unrecognized` | "Operation" |
 
 ### Kapasitas disk
@@ -517,7 +518,7 @@ Dicatat sebagai evidence manual spec 0002, di app Debug dengan `stacklyd` asli d
 - **Stop pada instance ber lease** (spec 0047 AC-13, AC-23): konfirmasi override seperti kalimat di AC-8, sama untuk halaman instance, daftar, menu baris service, dan menu bar.
 - **Navigasi** (spec 0044 *Layar*): `ShellDestination.environments` dan `environment(UUID)`; pilihan sidebar `SidebarSelection` dicatat di spec 0013.
 - **`stackly instance list`** (spec 0044 AC-15): kolom `ENVIRONMENT`; `--json` membawa `environments` di tiap `InstanceSummary` apa adanya.
-- Belum ditetapkan sumber: judul `OperationTitle` untuk `import_environment` dan `remove_environment` (spec 0044). Sampai ada, tabel judul di atas tidak punya baris untuk keduanya; dicatat di Follow-up.
+- Belum ditetapkan sumber: judul `OperationTitle` untuk `import_environment` dan `remove_environment` (spec 0044). Sampai ada, tabel judul di atas tidak punya baris untuk keduanya; dicatat di Follow-up. *(Diselaraskan dengan build (2026-11-14): keduanya sudah dibangun sebagai "Import environment" dan "Remove environment" dan kini punya baris di tabel judul. `environment_up` dan `environment_down` dibangun dengan nama environment dari resource operasi, seperti baris tabelnya.)*
 
 ## Build plan
 
@@ -615,7 +616,7 @@ Ditulis di sini karena spec ini tidak boleh mengubah spec lain; lead menjadikann
 - [ ] Spec 0012 dan 0067, dan `apps/macos/design.md` (2026-10-31): kalimat tambahan di *Usulan update spec lain* tentang detail `StatusLabel` yang terpotong di kolom halaman 384 pt (dan, sejak 2026-11-01, label tombol sibuk di kolom aksi tabel), untuk `architect (update)` spec 0012 dan 0067 dan untuk `/sync` atau pemilik `design.md`, kalau lead menyetujuinya.
 - [ ] `docs/manual.md` (pemiliknya lead, 2026-10-31): resep data in use di langkah 1 bagian manual spec 0022 masih menahan lock dengan `LOCK_EX` yang menunggu dan tanpa restart daemon; samakan dengan resep langkah 1 *Cek manual di /check verify* (instance `stopped`, `LOCK_NB`, restart `stacklyd`).
 - [ ] `/sync` setelah langkah 5a (2026-10-23): dua baris spec 0014 menjadi usang begitu start dan stop menerima nama, yaitu butir *Consequences* "Argumen `<instance-id>` hanya UUID sampai resolver nama spec 0022 ada" dan frasa "setiap kasus `cli.usage` tanpa koneksi" di *Critical test scenarios* (untuk argumen instance, yang kini keluar 10 lewat pencarian nama). Keduanya diselesaikan lewat `/sync`; AC-6 spec 0014 tidak berubah (AC-15 spec ini menambah perilaku nama).
-- [ ] Spec 0044 atau build fitur 44: tetapkan judul `OperationTitle` untuk `import_environment` dan `remove_environment`; spec 0044 belum menyebutnya (dicatat 2026-11-13).
+- [x] Spec 0044 atau build fitur 44: tetapkan judul `OperationTitle` untuk `import_environment` dan `remove_environment`; spec 0044 belum menyebutnya (dicatat 2026-11-13). Diterapkan oleh build fitur 44, 46, dan 47 (2026-11-14): `OperationTitle.title` di `apps/macos/Packages/StacklyUI/Sources/StacklyUI/Operations/OperationTitle.swift` menulis "Import environment" dan "Remove environment" (tanpa nama), dan "Bring up environment {name}" serta "Bring down environment {name}" untuk `environment_up` dan `environment_down`; baris tabel judul di spec ini ditambah pada tanggal yang sama.
 
 ## Rationale
 
