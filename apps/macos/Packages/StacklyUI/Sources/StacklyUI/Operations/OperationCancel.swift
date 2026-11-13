@@ -30,7 +30,7 @@ nonisolated public enum OperationCancel {
     /// came after a step that can’t be undone, else the operation status table.
     /// - Parameter operation: The summary.
     public static func appearance(of operation: OperationSummary) -> StatusAppearance {
-        if StatusAdapter.upIncomplete(operation) != nil { return StatusAdapter.upPartial }
+        if StatusAdapter.isIncomplete(operation) { return StatusAdapter.upPartial }
         return .operation(
             state: StatusAdapter.operation(operation.state),
             partial: StatusAdapter.isPartial(operation),

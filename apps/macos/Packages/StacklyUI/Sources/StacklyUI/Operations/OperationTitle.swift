@@ -88,7 +88,9 @@ nonisolated public enum OperationTitle {
         case .environmentUp:
             let name = resourceID(operation, kind: .environment).flatMap { environments[$0] }
             return name.map { "Bring up environment \($0)" } ?? "Bring up environment"
-        case .environmentDown: return "Bring down environment"
+        case .environmentDown:
+            let name = resourceID(operation, kind: .environment).flatMap { environments[$0] }
+            return name.map { "Bring down environment \($0)" } ?? "Bring down environment"
         case .updateProviderRevision: return "Update provider"
         case .updateManager: return "Update Stackly"
         case .daemonRestart: return "Restart stacklyd"

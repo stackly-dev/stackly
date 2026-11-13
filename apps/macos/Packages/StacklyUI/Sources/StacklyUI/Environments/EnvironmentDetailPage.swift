@@ -10,6 +10,7 @@ struct EnvironmentDetailPage: View {
     @Environment(\.shellNavigator) private var navigator
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.environmentPlan) private var planPresenter
+    @Environment(\.environmentDown) private var downModel
 
     let environments: EnvironmentStore
     let instances: InstanceStore?
@@ -102,7 +103,10 @@ struct EnvironmentDetailPage: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             ActionButton(validateAction, prominence: .secondary, showsReason: false)
-            // Down of spec 0047 goes here, left of Up….
+            if let down = downAction {
+                ActionButton(down, prominence: .secondary, showsReason: false)
+                    .mutationGated()
+            }
             if let up = upAction {
                 ActionButton(up, prominence: .primary, showsReason: false)
                     .mutationGated()
@@ -126,6 +130,28 @@ struct EnvironmentDetailPage: View {
             id: "environment.validate", title: "Validate", mutates: false,
             disabledReason: location == nil ? EnvironmentCopy.noManifest : nil,
             isBusy: isValidating, perform: perform)
+    }
+
+    /// Down: the preview and the confirmation of spec 0047 (AC-20), off with its reason while
+    /// a Down of this environment runs. It stays on while an Up runs, which Down cancels.
+    private var downAction: StacklyAction? {
+        guard let downModel, let summary = model.summary else { return nil }
+        let id = summary.id
+        return Self.downAction(
+            summary: summary, isBusy: downModel.isBusy(id),
+            perform: { Task { await downModel.begin(environment: id) } })
+    }
+
+    /// Down of the toolbar: off with "Already bringing down" while an `environment_down` of
+    /// the environment has not ended. Whether anything needs to stop is the preview's answer.
+    static func downAction(
+        summary: EnvironmentSummary, isBusy: Bool, perform: @escaping @MainActor () -> Void
+    ) -> StacklyAction {
+        StacklyAction(
+            id: "environment.down", title: EnvironmentCopy.down, mutates: true,
+            disabledReason: summary.activeOperation?.kind == .environmentDown
+                ? EnvironmentCopy.alreadyBringingDown : nil,
+            isBusy: isBusy, perform: perform)
     }
 
     /// Up…: the plan sheet for the registered manifest with Cancel and Bring Up (spec 0046,
@@ -203,7 +229,14 @@ struct EnvironmentDetailPage: View {
                     case .removed(let feedback):
                         feedbackCenter?.show(feedback)
                         navigator?.show(.environments)
-                    case .kept(let feedback):
+                    case .kept(var feedback):
+                        if feedback?.code == "env.lease_active", let downModel {
+                            let id = summary.id
+                            feedback?.action = StacklyAction(
+                                id: "environment.remove.down",
+                                title: EnvironmentCopy.bringDownAgain, mutates: true,
+                                perform: { Task { await downModel.begin(environment: id) } })
+                        }
                         if let feedback { feedbackCenter?.show(feedback) }
                     }
                 }
@@ -325,12 +358,18 @@ struct EnvironmentDetailPage: View {
     /// The banner of the environment's state after spec 0046: "Bringing up… {done} of {total}"
     /// while an Up runs; the partially ready banner with the reason and action of each service
     /// that is not ready; or "Not ready" when no service is ready after an Up that failed or
-    /// was interrupted. A Down of spec 0047 shows its own banner.
+    /// was interrupted. While a Down runs, "Bringing down… {done} of {total}" (spec 0047).
     private func upBanner(_ detail: EnvironmentDetail) -> StateBanner? {
         let summary = detail.summary
         if let active = summary.activeOperation {
-            guard active.kind == .environmentUp else { return nil }
-            return progressBanner(active.id, lastUp: detail.lastUp)
+            switch active.kind {
+            case .environmentUp:
+                return progressBanner(active.id, kind: .environmentUp, lastUp: detail.lastUp)
+            case .environmentDown:
+                return progressBanner(active.id, kind: .environmentDown, lastUp: nil)
+            default:
+                return nil
+            }
         }
         let interrupted = detail.lastUp?.state == .interrupted
         let message = interrupted ? EnvironmentCopy.interrupted : nil
@@ -356,15 +395,21 @@ struct EnvironmentDetailPage: View {
         return nil
     }
 
-    /// "Bringing up… {done} of {total}" with Cancel, only while the operation allows it, and
-    /// Show in Activity.
-    private func progressBanner(_ id: UUID, lastUp: EnvUpReport?) -> StateBanner {
+    /// "Bringing up… {done} of {total}" or "Bringing down… {done} of {total}" with Cancel,
+    /// only while the operation allows it, and Show in Activity.
+    private func progressBanner(_ id: UUID, kind: OperationKind, lastUp: EnvUpReport?)
+        -> StateBanner
+    {
         let operation = operations?.store.items[id]
         let (done, total) = Self.progress(operation: operation, lastUp: lastUp)
+        let titled: (UInt64?, UInt64?) -> String =
+            kind == .environmentDown
+            ? { EnvironmentCopy.bringingDown(done: $0, total: $1) }
+            : { EnvironmentCopy.bringingUp(done: $0, total: $1) }
         var actions: [StateAction] = []
         if let operation, OperationCancel.availability(of: operation) == .available {
             let operationActions = operationActions
-            let title = EnvironmentCopy.bringingUp(done: nil, total: nil)
+            let title = titled(nil, nil)
             let report: @MainActor (Feedback) -> Void = { feedbackCenter?.show($0) }
             actions.append(
                 StateAction(
@@ -380,9 +425,7 @@ struct EnvironmentDetailPage: View {
             StateAction(
                 title: EnvironmentCopy.showInActivity, mutates: false,
                 perform: { navigator?.openOperation(id) }))
-        return StateBanner(
-            tone: .informative, title: EnvironmentCopy.bringingUp(done: done, total: total),
-            actions: actions)
+        return StateBanner(tone: .informative, title: titled(done, total), actions: actions)
     }
 
     /// "{done} of {total}" from `OperationSummary.progress`, or from the services of the Up

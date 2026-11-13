@@ -22,6 +22,7 @@ public struct EnvironmentsPage: View {
     private let files: ManifestFilePorts
     private let home: String
     @State private var presenter: EnvironmentPlanPresenter
+    @State private var downModel: EnvironmentDownModel
     /// A detail model loaded before the page shows, for previews and snapshots.
     private let detailModel: EnvironmentDetailModel?
     @Environment(\.feedbackCenter) private var feedbackCenter
@@ -84,12 +85,14 @@ public struct EnvironmentsPage: View {
         picker: any FilePicking,
         home: String,
         presenter: EnvironmentPlanPresenter? = nil,
-        detailModel: EnvironmentDetailModel? = nil
+        detailModel: EnvironmentDetailModel? = nil,
+        downModel: EnvironmentDownModel? = nil
     ) {
         self.detailModel = detailModel
         _presenter = State(
             initialValue: presenter ?? EnvironmentPlanPresenter(store: environments, picker: picker)
         )
+        _downModel = State(initialValue: downModel ?? EnvironmentDownModel(store: environments))
         self.files = files
         self.environments = environments
         self.instances = instances
@@ -110,6 +113,11 @@ public struct EnvironmentsPage: View {
     public var body: some View {
         page
             .environment(\.environmentPlan, presenter)
+            .environment(\.environmentDown, downModel)
+            .stacklyConfirmation(item: $downModel.confirmation)
+            .onChange(of: environments.lastEnded) { _, ended in
+                Task { await downModel.ended(ended) }
+            }
             .sheet(isPresented: sheetShown) {
                 EnvironmentPlanSheet(
                     presenter: presenter, catalog: catalog, secrets: detail?.secrets,
@@ -119,7 +127,10 @@ public struct EnvironmentsPage: View {
                         navigator?.show(.provider(provider))
                     })
             }
-            .onAppear { connectImport() }
+            .onAppear {
+                connectImport()
+                connectDown()
+            }
     }
 
     private var sheetShown: Binding<Bool> {
@@ -138,6 +149,14 @@ public struct EnvironmentsPage: View {
             navigator?.openEnvironment(detail.summary.id)
             feedbackCenter?.show(.success(EnvironmentCopy.imported(detail.summary.name)))
         }
+    }
+
+    /// The result of a Down shows in the window, and Show Operation opens Activity.
+    private func connectDown() {
+        let navigator = navigator
+        let feedbackCenter = feedbackCenter
+        downModel.report = { feedbackCenter?.show($0) }
+        downModel.openOperation = { navigator?.openOperation($0) }
     }
 
     @ViewBuilder private var page: some View {
