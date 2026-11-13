@@ -11,4 +11,5 @@ mod common;
 mod data;
 mod manage;
 mod plan;
+mod stacklyd;
 mod validate;
