@@ -869,6 +869,32 @@ fn release(daemon: &DaemonHandle, instance: Uuid, lease: LeaseId) {
         .expect("the release commits");
 }
 
+// covers: AC-7 (spec 0044)
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unresolved_selector_names_the_selector_the_manifest_wrote() {
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let path = write(
+        &project(&site).join("stackly.yaml"),
+        &fake_manifest("shop", &["db"]).replace("\"0.1\"", "\"9.0\""),
+    );
+    let planned = plan(&api, &path).await.expect("plans");
+    let blocker = planned
+        .blockers
+        .iter()
+        .find(|b| b.error.code() == "runtime.selector_unresolved")
+        .unwrap_or_else(|| panic!("an unresolved selector: {:#?}", planned.blockers));
+    assert_eq!(detail(&blocker.error, "selector").as_deref(), Some("9.0"));
+    assert!(
+        blocker.error.message().contains("9.0") && !blocker.error.message().contains("stable"),
+        "{}",
+        blocker.error.message()
+    );
+    drop(api);
+    stop(daemon).await;
+}
+
 /// Retains the stopped instance `instance` straight in the registry, as a
 /// remove that keeps data would.
 fn retain(daemon: &DaemonHandle, instance: Uuid) {

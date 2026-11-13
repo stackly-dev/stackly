@@ -192,6 +192,55 @@ fn a_port_in_use_and_an_unresolved_selector_block_the_plan() {
     assert!(plan.items[0].runtime.is_none());
 }
 
+// covers: AC-7 (spec 0044)
+#[test]
+fn a_resolve_blocker_names_the_selector_the_manifest_wrote() {
+    let site = Site::new();
+    let text = SHOP.replace("0.1", "9.0");
+    let plan = site.plan(text.as_bytes());
+    let selectors: Vec<&str> = plan
+        .blockers
+        .iter()
+        .filter_map(|b| match &b.kind {
+            BlockerKind::Resolve { selector, .. } => Some(selector.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(selectors, ["9.0"]);
+}
+
+const VALKEY: &str = "\
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  cache:
+    provider: official/valkey
+";
+
+// covers: AC-7 (spec 0044)
+#[test]
+fn a_revoked_provider_has_one_blocker() {
+    let mut site = Site::new();
+    let valkey = crate::common::package("valkey");
+    let key = valkey.key();
+    let revoked =
+        (*site.catalog)
+            .clone()
+            .with_revocations(vec![stackly_core::catalog::Revocation::new(
+                key.provider().clone(),
+                key.revision().clone(),
+                None,
+                "a test revocation".to_owned(),
+                jiff::civil::date(2026, 11, 1),
+            )]);
+    site.catalog = std::sync::Arc::new(revoked);
+    site.state = stackly_core::catalog::CatalogState::Loaded(std::sync::Arc::clone(&site.catalog));
+    let plan = site.plan(VALKEY.as_bytes());
+    assert_eq!(codes(&plan), ["provider.revoked"], "{:#?}", plan.blockers);
+}
+
 // covers: AC-7, AC-11 (spec 0044)
 #[test]
 fn a_name_registered_at_another_location_is_name_taken() {

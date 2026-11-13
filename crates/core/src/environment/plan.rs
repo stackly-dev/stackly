@@ -23,7 +23,9 @@ use stackly_domain::{
 use stackly_platform::{HostFacts, StoreState};
 
 use super::validate::{ServiceSpec, Validation};
-use crate::catalog::{Catalog, CatalogEntry, TrustVerdict, require_entry_trust};
+use crate::catalog::{
+    Catalog, CatalogEntry, NotInstallableReason, TrustVerdict, require_entry_trust,
+};
 use crate::instance::create::{
     Check, CheckStatus, CreateDeps, CreateDraft, CreateError, GatherError, PlannedRuntime,
     PortRequestDraft, ProbeFact, ProviderChoice, SecretSourceKind, SourceFact, evaluate, gather,
@@ -349,7 +351,13 @@ pub enum BlockerKind {
     /// itself refuses with.
     Create(CreateError),
     /// The selector did not resolve to an installable artifact.
-    Resolve(ResolveError),
+    Resolve {
+        /// Why.
+        error: ResolveError,
+        /// The selector as the manifest wrote it, `stable` when it wrote
+        /// none.
+        selector: String,
+    },
     /// `env.name_taken`: the name is registered at another location.
     NameTaken {
         /// The name.
@@ -392,7 +400,7 @@ impl BlockerKind {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Create(error) => error.code(),
-            Self::Resolve(error) => resolve_code(error),
+            Self::Resolve { error, .. } => resolve_code(error),
             Self::NameTaken { .. } => "env.name_taken",
             Self::ManifestRenamed { .. } => "env.manifest_renamed",
             Self::InstanceRefNotFound { .. } => "env.instance_ref_not_found",
@@ -697,6 +705,14 @@ fn existing_item(
     })
 }
 
+/// The selector as the manifest wrote it, `stable` when it wrote none.
+fn written_selector(service: &ServiceSpec) -> String {
+    service
+        .selector_text
+        .clone()
+        .unwrap_or_else(|| "stable".to_owned())
+}
+
 /// An item for a shared service that is not a member yet.
 fn borrowed_item(
     deps: &PlanDeps<'_>,
@@ -852,7 +868,19 @@ fn create_item(
             Err(error) => installed_fixture(entry, &selector, deps.host, registry)?.ok_or(error),
         };
         match resolved {
-            Err(error) => block(plan, BlockerKind::Resolve(error)),
+            // A provider that is `pending` or `revoked` can't resolve
+            // either; create's own trust row is its one blocker (AC-7).
+            Err(ResolveError::NotInstallable {
+                reason: NotInstallableReason::ApprovalRequired | NotInstallableReason::TrustRevoked,
+                ..
+            }) if !matches!(verdict, TrustVerdict::Trusted) => {}
+            Err(error) => block(
+                plan,
+                BlockerKind::Resolve {
+                    error,
+                    selector: written_selector(service),
+                },
+            ),
             Ok(artifact) => {
                 let runtimes = registry.runtimes()?.value;
                 let managed = |row: &stackly_domain::Runtime| match row.install() {
@@ -891,10 +919,7 @@ fn create_item(
                         });
                     }
                     runtime = Some(PlanRuntime {
-                        selector: service
-                            .selector_text
-                            .clone()
-                            .unwrap_or_else(|| "stable".to_owned()),
+                        selector: written_selector(service),
                         version: artifact.version.clone(),
                         artifact_id: artifact.id.clone(),
                         artifact_sha256: sha256,
