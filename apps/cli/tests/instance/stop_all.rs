@@ -62,7 +62,7 @@ fn daemon(
     steps: impl Fn() -> Vec<Step> + Send + Sync + 'static,
 ) -> ScriptedDaemon {
     ScriptedDaemon::serve(root, move |call, _| match call {
-        Call::InstancePreviewStopAll => {
+        Call::InstancePreviewStopAll(_) => {
             vec![Step::Reply(Reply::InstancePreviewStopAll(Box::new(
                 shown.clone(),
             )))]

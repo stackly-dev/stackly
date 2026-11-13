@@ -112,6 +112,37 @@ Temuan, rendah:
 - AC-25 · kontrak Down di protokol 4.5 (langkah 4); tambahan `stop_all`, `daemon`, dan `change_endpoints` menunggu langkah 6
 - AC-15, AC-16 (pilihan override), AC-17 sampai AC-24, AC-26 · belum, milik langkah 6 sampai 10
 
+## Milestone 2: Override pada aksi lain
+
+Langkah Build plan 6: `StopAllOptions` di `stop_all::select`, `override_leases` di `StopAllRequest`, input journal, dan pemeriksaan ulang `stop_all_step`; `overrideLeases` di `instance.preview_stop_all`, `instance.stop_all`, dan `daemon.shutdown` `agent_off`; `environments` dan `affectedEnvironments` di preview; `overrideLeases` dan `EndpointValidation.leases` di `instance.change_endpoints` dengan cek ulang di guard commit. Protokol naik ke 4.6 (minor). Tidak ada migrasi, tidak ada `EventKind` baru.
+
+### UI / manual
+
+- [ ] Buka `crates/core/src/instance/stop_all.rs` → `select(view, StopAllOptions)`: aturan 6 hanya berlaku saat `override_leases` false; `StopAllEntry` dan `StopAllSkipped` membawa `environments` (environment dari lease `active`, tanpa ganda); aturan 1 sampai 5 tidak bergantung pada override → AC-16
+- [ ] Buka `crates/core/src/supervisor/stop_all.rs` → `StopAllRequest::overriding_leases`; `stop_all_step` meneruskan nilai yang sama sebagai `StopAllOptions` ke `select` nya dan sebagai `LeaseCheck::Manual { override_leases }` ke `stop_direct`; tanda `// provisional: F47` sudah tidak ada → AC-16, AC-17
+- [ ] Buka `apps/daemon/src/ipc/stop_all.rs` → preview membaca `StopAllPreviewParams.overrideLeases`; `environments` tiap item dan skip berasal dari lease `active` di view dan baris member environment (environment tanpa baris member tidak ditulis), `affectedEnvironments` menghitung instance di `items` per environment, urut nama; `instance.stop_all` memakai `overrideLeases` di `select`, di `StopAllRequest`, dan di input journal (`overrideLeases`), dan aturan `expectedInstanceIds` tetap → AC-16
+- [ ] Buka `apps/daemon/src/ipc/agent_off.rs` → `ShutdownParams.overrideLeases` menjadi `StopAllOptions` yang dipakai di pemanggilan `current_selection` awal dan akhir dan di `StopAllRequest`; `agent_off` tanpa options sama dengan `override_leases` false → AC-17
+- [ ] Buka `apps/daemon/src/ipc/instance/config.rs` dan `crates/core/src/supervisor/change.rs` → dry run `instance.change_endpoints` tidak pernah ditolak karena lease dan mengisi `leases`; permintaan yang memindahkan port (`plan.endpoint_changes` tidak kosong) tanpa override ditolak `instance.endpoints_require_override` sebelum operasi dibuat; guard commit `change_endpoints` membaca lease lagi di dalam transaksi, dan dengan override menulis catatan audit `overriddenEnvironments`; `apply_config` tidak membaca lease → AC-14, AC-15
+- [ ] Buka `crates/protocol/src/message.rs` dan `json.rs` → `instance.preview_stop_all` adalah varian ber params dengan `params optional`: params yang tidak ada, `null`, atau `{}` dibaca sebagai default, jadi klien sebelum 4.6 tetap sah → AC-16, AC-25
+
+### Commands
+
+- [ ] `cargo test -p stackly-protocol --no-fail-fast` → lulus, termasuk fixture baru di `protocols/fixtures/ipc/index.json`: `request-instance-preview-stop-all.json` (tanpa params, `decode`), `-null`, `-empty`, `-override`, `request-instance-stop-all-override.json`, `request-shutdown-agent-off-override.json`, `request-instance-change-endpoints-override.json`, `frame-error-instance-endpoints-require-override.json`, dan dua fixture `-before-4-6` (balasan daemon lama tanpa field baru, `decode`) → AC-15, AC-16, AC-17, AC-25
+- [ ] `cargo test -p stackly-core --test stop_all_select` → 18 lulus; `the_override_moves_an_instance_an_environment_holds_from_skipped_to_stop` memeriksa tabel aturan 6 dengan override true dan false, aturan 1 sampai 5 tetap, `demand` memuat `environment`, `environments` satu entri per environment; lease `released` tidak dihitung → AC-16
+- [ ] `cargo test -p stackly-core --test supervisor_start guarded_stop` → 18 lulus; langkah Stop All dengan override menghentikan instance ber lease (juga lease yang dicatat sesudah pilihan), lease tetap `active`; ganti port yang bertemu lease di guard gagal `instance.endpoints_require_override` dengan item `environment` tanpa revision baru; dengan override berjalan dan audit `overriddenEnvironments` = `shop`; apply config pada instance ber lease tidak meminta override → AC-14, AC-15, AC-16
+- [ ] `cargo test -p stacklyd --test supervisor lease_override` → 5 lulus: preview tanpa dan dengan override (skip, `environments`, `affectedEnvironments`), `expectedInstanceIds` dari preview override tanpa override ditolak `instance.stop_all_changed` tanpa operasi, Stop All dengan override menghentikan keduanya dan `leaseActive` tetap; Stop All tanpa override melewati instance ber lease; `agent_off` dengan override menghentikan semuanya dan daemon keluar; `daemon.shutdown` lewat socket membawa `overrideLeases` ke `agent_off`; ganti port tanpa override ditolak dengan `count`, hint, dan item, `dryRun` membalas `leases`, permintaan sama dengan sekarang `unchanged`, dengan override berjalan dan audit memuat nama environment → AC-15, AC-16, AC-17
+- [ ] `cargo test -p stackly-core --no-fail-fast` dan `cargo test -p stacklyd --no-fail-fast` → lulus; test stop, restart, dan Stop All lama tanpa perubahan assertion (perubahan test lama hanya argumen `StopAllOptions::default()` di `stop_all_select.rs`, field default baru di struct literal, dan `InstancePreviewStopAll(Default::default())`) → AC-14
+- [ ] `cargo test -p stackly-cli --no-fail-fast`, `-p stackly-domain`, `-p stackly-storage`, `-p stackly-testkit` → lulus
+- [ ] `swift test --package-path clients/swift` dan `swift build --package-path apps/macos/Packages/StacklyUI --build-tests` → lulus; perubahan Swift hanya nilai bawaan `nil` untuk field baru dan versi 4.6 di `ContractTests` → AC-25
+- [ ] `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo xtask codegen --check`, `cargo xtask fuzz seed` (tanpa diff), dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-14: guard `change_endpoints` hanya untuk ganti port; apply config, restart, reload, rename, dan force stop tidak menerima field override (restart dan force stop teruji di milestone 1 langkah 2)
+- AC-15: daemon dan core lengkap; banner dan "Change Anyway" di sheet port menunggu milestone 4 (AC-23)
+- AC-16, AC-17: daemon dan core lengkap; flag `--override-leases` CLI menunggu milestone 3 (AC-19), popover dan Turn Off menunggu milestone 4 (AC-24)
+- AC-25 (bagian kontrak langkah 6): protokol 4.6, fixture, Swift hasil generate
+
 ## Milestone 4: Down, lease, dan override di app
 
 Langkah Build plan 8 dan bagian langkah 9 yang hanya butuh protokol 4.5 sudah dibangun; langkah 10 punya test native `apps/daemon/tests/env_down_native.rs`. Bagian langkah 9 yang butuh protokol 4.6 (`overrideLeases` dan `leases` di `instance.change_endpoints`, `overrideLeases`, `environments`, dan `affectedEnvironments` di `instance.preview_stop_all` dan `instance.stop_all`, `overrideLeases` di `agent_off`) belum dibangun: banner dan "Change Anyway" di sheet port, dampak environment di popover Stop All, dan konfirmasi Turn Off menunggu 4.6 di `main`.

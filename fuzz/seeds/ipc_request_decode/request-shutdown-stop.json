@@ -6,7 +6,8 @@
     "content": {
       "mode": "stop",
       "expectedPlanDigest": null,
-      "force": false
+      "force": false,
+      "overrideLeases": false
     }
   }
 }

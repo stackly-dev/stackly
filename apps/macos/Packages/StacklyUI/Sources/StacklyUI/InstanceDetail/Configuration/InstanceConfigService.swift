@@ -94,7 +94,8 @@ extension InstanceConfigService {
             },
             validateEndpoints: { id, base, endpoints throws(ClientError) in
                 let params = ChangeEndpointsParams(
-                    instanceId: id, baseRevision: base, endpoints: endpoints, dryRun: true)
+                    instanceId: id, baseRevision: base, endpoints: endpoints, dryRun: true,
+                    overrideLeases: nil)
                 let reply = try await model.read(.instanceChangeEndpoints(params)).get()
                 guard case .instanceChangeEndpoints(.dryRun(let validation)) = reply else {
                     throw .rejected(ClientErrorCatalog.protocolViolation())

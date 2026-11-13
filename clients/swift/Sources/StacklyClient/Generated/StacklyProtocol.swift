@@ -635,6 +635,23 @@ public struct AbandonReply: Codable, Sendable, Equatable {
 	}
 }
 
+/// An environment Stop All leaves incomplete: it holds an active lease on
+/// at least one instance of `items` (spec 0047 AC-16).
+public struct AffectedEnvironment: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// How many instances of `items` it holds.
+	public let instanceCount: UInt64
+
+	public init(environmentId: UUID, name: String, instanceCount: UInt64) {
+		self.environmentId = environmentId
+		self.name = name
+		self.instanceCount = instanceCount
+	}
+}
+
 /// What a config change asks for. Tagged `type` and `content`.
 public enum ConfigChangeRequest: Codable, Sendable, Equatable {
 	/// The whole proposed settings document, secrets as their references.
@@ -1655,12 +1672,17 @@ public struct ChangeEndpointsParams: Codable, Sendable, Equatable {
 	public let endpoints: [EndpointRequest]
 	/// True to judge the ports and write nothing.
 	public let dryRun: Bool
+	/// True to change the ports of an instance an environment lease holds;
+	/// the leases stay active (spec 0047 AC-15). Without it such a change
+	/// is refused with `instance.endpoints_require_override`.
+	public let overrideLeases: Bool?
 
-	public init(instanceId: UUID, baseRevision: UInt64, endpoints: [EndpointRequest], dryRun: Bool) {
+	public init(instanceId: UUID, baseRevision: UInt64, endpoints: [EndpointRequest], dryRun: Bool, overrideLeases: Bool?) {
 		self.instanceId = instanceId
 		self.baseRevision = baseRevision
 		self.endpoints = endpoints
 		self.dryRun = dryRun
+		self.overrideLeases = overrideLeases
 	}
 }
 
@@ -4823,12 +4845,17 @@ public struct EndpointValidation: Codable, Sendable, Equatable {
 	public let changes: [EndpointChange]
 	/// What applying it now does.
 	public let impact: ConfigImpact
+	/// The environments whose lease on the instance is active, ordered by
+	/// name, so their part shows before Apply (spec 0047 AC-15). Empty from
+	/// an older daemon.
+	public let leases: [InstanceEnvironment]?
 
-	public init(valid: Bool, problems: [EndpointProblem], changes: [EndpointChange], impact: ConfigImpact) {
+	public init(valid: Bool, problems: [EndpointProblem], changes: [EndpointChange], impact: ConfigImpact, leases: [InstanceEnvironment]?) {
 		self.valid = valid
 		self.problems = problems
 		self.changes = changes
 		self.impact = impact
+		self.leases = leases
 	}
 }
 
@@ -9773,8 +9800,9 @@ public enum Call: Codable, Sendable, Equatable {
 	case instanceRename(RenameInstanceParams)
 	/// Sets when an instance starts on its own (spec 0031).
 	case instanceSetStartup(SetStartupParams)
-	/// Reads what Stop All would stop (spec 0031).
-	case instancePreviewStopAll
+	/// Reads what Stop All would stop (spec 0031); its params may be left
+	/// out (spec 0047 AC-16).
+	case instancePreviewStopAll(StopAllPreviewParams)
 	/// Stops every instance that is wanted or runs (spec 0031).
 	case instanceStopAll(StopAllParams)
 	/// Changes the ports of an instance's IP endpoints (spec 0029).
@@ -10176,8 +10204,10 @@ public enum Call: Codable, Sendable, Equatable {
 					return
 				}
 			case .instancePreviewStopAll:
-				self = .instancePreviewStopAll
-				return
+				if let content = try? container.decode(StopAllPreviewParams.self, forKey: .content) {
+					self = .instancePreviewStopAll(content)
+					return
+				}
 			case .instanceStopAll:
 				if let content = try? container.decode(StopAllParams.self, forKey: .content) {
 					self = .instanceStopAll(content)
@@ -10456,8 +10486,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .instanceSetStartup(let content):
 			try container.encode(CodingKeys.instanceSetStartup, forKey: .type)
 			try container.encode(content, forKey: .content)
-		case .instancePreviewStopAll:
+		case .instancePreviewStopAll(let content):
 			try container.encode(CodingKeys.instancePreviewStopAll, forKey: .type)
+			try container.encode(content, forKey: .content)
 		case .instanceStopAll(let content):
 			try container.encode(CodingKeys.instanceStopAll, forKey: .type)
 			try container.encode(content, forKey: .content)
@@ -11987,11 +12018,16 @@ public struct ShutdownParams: Codable, Sendable, Equatable {
 	/// Restart even when an operation that cannot resume still runs after
 	/// the quiesce wait. Only read for `restart`.
 	public let force: Bool?
+	/// Stop the instances an environment lease holds too, so the daemon
+	/// can exit; their leases stay active (spec 0047 AC-17). Only read for
+	/// `agent_off`.
+	public let overrideLeases: Bool?
 
-	public init(mode: ShutdownMode, expectedPlanDigest: String?, force: Bool?) {
+	public init(mode: ShutdownMode, expectedPlanDigest: String?, force: Bool?, overrideLeases: Bool?) {
 		self.mode = mode
 		self.expectedPlanDigest = expectedPlanDigest
 		self.force = force
+		self.overrideLeases = overrideLeases
 	}
 }
 
@@ -12043,13 +12079,17 @@ public struct StopAllItem: Codable, Sendable, Equatable {
 	public let demand: [DemandSourceKind]
 	/// Its startup policy and the lease of this session.
 	public let autostart: InstanceAutostart
+	/// The environments whose lease on it is active, ordered by name (spec
+	/// 0047 AC-16). Empty from an older daemon.
+	public let environments: [InstanceEnvironment]?
 
-	public init(instanceId: UUID, name: String, lifecycle: InstanceLifecycle, demand: [DemandSourceKind], autostart: InstanceAutostart) {
+	public init(instanceId: UUID, name: String, lifecycle: InstanceLifecycle, demand: [DemandSourceKind], autostart: InstanceAutostart, environments: [InstanceEnvironment]?) {
 		self.instanceId = instanceId
 		self.name = name
 		self.lifecycle = lifecycle
 		self.demand = demand
 		self.autostart = autostart
+		self.environments = environments
 	}
 }
 
@@ -12060,9 +12100,14 @@ public struct StopAllParams: Codable, Sendable, Equatable {
 	/// stop are exactly these, and it only ever stops that set (spec 0032).
 	/// Absent: stop what the rule chooses (`agent_off` does this).
 	public let expectedInstanceIds: [UUID]?
+	/// True to stop the instances an environment lease holds too; their
+	/// leases stay active (spec 0047 AC-16). Part of the idempotency
+	/// fingerprint.
+	public let overrideLeases: Bool?
 
-	public init(expectedInstanceIds: [UUID]?) {
+	public init(expectedInstanceIds: [UUID]?, overrideLeases: Bool?) {
 		self.expectedInstanceIds = expectedInstanceIds
+		self.overrideLeases = overrideLeases
 	}
 }
 
@@ -12074,11 +12119,15 @@ public struct StopAllSkip: Codable, Sendable, Equatable {
 	public let name: String
 	/// The error code that says why, such as `supervisor.identity_unproven`.
 	public let code: String
+	/// The environments whose lease on it is active, ordered by name (spec
+	/// 0047 AC-16). Empty from an older daemon.
+	public let environments: [InstanceEnvironment]?
 
-	public init(instanceId: UUID, name: String, code: String) {
+	public init(instanceId: UUID, name: String, code: String, environments: [InstanceEnvironment]?) {
 		self.instanceId = instanceId
 		self.name = name
 		self.code = code
+		self.environments = environments
 	}
 }
 
@@ -12093,12 +12142,30 @@ public struct StopAllPreview: Codable, Sendable, Equatable {
 	public let skipped: [StopAllSkip]
 	/// How many of `items` start at login.
 	public let atLoginCount: UInt64
+	/// The environments with an active lease on at least one instance of
+	/// `items`, ordered by name (spec 0047 AC-16). Empty from an older
+	/// daemon.
+	public let affectedEnvironments: [AffectedEnvironment]?
 
-	public init(items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: UInt64) {
+	public init(items: [StopAllItem], alreadyStopping: [InstanceRef], skipped: [StopAllSkip], atLoginCount: UInt64, affectedEnvironments: [AffectedEnvironment]?) {
 		self.items = items
 		self.alreadyStopping = alreadyStopping
 		self.skipped = skipped
 		self.atLoginCount = atLoginCount
+		self.affectedEnvironments = affectedEnvironments
+	}
+}
+
+/// Params of `instance.preview_stop_all` (spec 0047 AC-16). A request with
+/// no params, `null`, or an empty object reads as the default, so a client
+/// from before protocol 4.6 stays valid.
+public struct StopAllPreviewParams: Codable, Sendable, Equatable {
+	/// True to put the instances an environment lease holds in `items`
+	/// instead of `skipped`.
+	public let overrideLeases: Bool?
+
+	public init(overrideLeases: Bool?) {
+		self.overrideLeases = overrideLeases
 	}
 }
 

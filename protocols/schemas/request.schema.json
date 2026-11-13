@@ -921,16 +921,20 @@
           ]
         },
         {
-          "description": "Reads what Stop All would stop (spec 0031).",
+          "description": "Reads what Stop All would stop (spec 0031); its params may be left\nout (spec 0047 AC-16).",
           "type": "object",
           "properties": {
+            "content": {
+              "$ref": "#/$defs/StopAllPreviewParams"
+            },
             "type": {
               "type": "string",
               "const": "instance.preview_stop_all"
             }
           },
           "required": [
-            "type"
+            "type",
+            "content"
           ]
         },
         {
@@ -1409,6 +1413,11 @@
           "description": "The instance to change.",
           "type": "string",
           "format": "uuid"
+        },
+        "overrideLeases": {
+          "description": "True to change the ports of an instance an environment lease holds;\nthe leases stay active (spec 0047 AC-15). Without it such a change\nis refused with `instance.endpoints_require_override`.",
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [
@@ -3727,6 +3736,11 @@
         "mode": {
           "description": "Whether the daemon only stops or stops so launchd starts it again.",
           "$ref": "#/$defs/ShutdownMode"
+        },
+        "overrideLeases": {
+          "description": "Stop the instances an environment lease holds too, so the daemon\ncan exit; their leases stay active (spec 0047 AC-17). Only read for\n`agent_off`.",
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [
@@ -3793,6 +3807,22 @@
             "type": "string",
             "format": "uuid"
           }
+        },
+        "overrideLeases": {
+          "description": "True to stop the instances an environment lease holds too; their\nleases stay active (spec 0047 AC-16). Part of the idempotency\nfingerprint.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "StopAllPreviewParams": {
+      "description": "Params of `instance.preview_stop_all` (spec 0047 AC-16). A request with\nno params, `null`, or an empty object reads as the default, so a client\nfrom before protocol 4.6 stays valid.",
+      "type": "object",
+      "properties": {
+        "overrideLeases": {
+          "description": "True to put the instances an environment lease holds in `items`\ninstead of `skipped`.",
+          "type": "boolean",
+          "default": false
         }
       }
     },

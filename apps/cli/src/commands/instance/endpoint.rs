@@ -124,6 +124,7 @@ impl RunCommand for SetArgs {
             base_revision: view.revision.number,
             endpoints,
             dry_run: self.dry_run,
+            override_leases: false,
         };
         if self.dry_run {
             let reply = cx

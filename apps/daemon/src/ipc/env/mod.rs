@@ -1091,7 +1091,7 @@ fn lock_blocking(
             .iter()
             .map(|blocker| stackly_protocol::env::PlanBlocker {
                 service: blocker.service.as_ref().map(ToString::to_string),
-                error: dto::blocker_error(blocker, &[], home),
+                error: dto::blocker_error(blocker, home),
             })
             .collect();
         return Ok(Box::new(reply));

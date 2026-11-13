@@ -68,7 +68,9 @@ use stackly_protocol::secret::{
 use stackly_protocol::settings::{
     DaemonSettingsView, LocationList, SetLocationParams, StorageLocationView, UpdateSettingsParams,
 };
-use stackly_protocol::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
+use stackly_protocol::stop_all::{
+    StopAllParams, StopAllPreview, StopAllPreviewParams, StopAllResult,
+};
 use stackly_protocol::storage::CapacityReport;
 
 use crate::ipc::audit;
@@ -679,14 +681,15 @@ pub trait Handlers: Send + Sync + 'static {
         instance::rename(core, context, params)
     }
 
-    /// `instance.preview_stop_all` (spec 0031).
+    /// `instance.preview_stop_all` (spec 0031, spec 0047 AC-16).
     fn preview_stop_all<'a>(
         &'a self,
         core: &'a DaemonCore,
         context: &'a RequestContext,
+        params: StopAllPreviewParams,
     ) -> HandlerFuture<'a, Box<StopAllPreview>> {
         let _ = context;
-        stop_all::preview(core)
+        stop_all::preview(core, params)
     }
 
     /// `instance.stop_all` (spec 0031).

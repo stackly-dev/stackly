@@ -38,7 +38,9 @@ struct TurnOffModelTests {
     }
 
     private static func preview(skipped: [StopAllSkip] = []) -> StopAllPreview {
-        StopAllPreview(items: [], alreadyStopping: [], skipped: skipped, atLoginCount: 0)
+        StopAllPreview(
+            items: [], alreadyStopping: [], skipped: skipped, atLoginCount: 0,
+            affectedEnvironments: nil)
     }
 
     private static func accepted(
@@ -106,7 +108,8 @@ struct TurnOffModelTests {
 
     @Test func aSkippedInstanceBlocksTheConfirmationBeforeAnythingIsSent() async {
         let skip = StopAllSkip(
-            instanceId: held, name: "held", code: "supervisor.stop_requires_override")
+            instanceId: held, name: "held", code: "supervisor.stop_requires_override",
+            environments: nil)
         let script = Script(
             preview: Self.preview(skipped: [skip]), outcomes: [Self.accepted(exiting: true)])
         let model = script.model()

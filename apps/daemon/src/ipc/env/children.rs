@@ -363,7 +363,7 @@ pub(crate) async fn planned_up(
         .blockers
         .iter()
         .map(|blocker| {
-            let body = super::dto::blocker_error(blocker, &planned.plan.items, &home);
+            let body = super::dto::blocker_error(blocker, &home);
             BlockedItem {
                 service: blocker.service.clone(),
                 code: body.code().to_owned(),

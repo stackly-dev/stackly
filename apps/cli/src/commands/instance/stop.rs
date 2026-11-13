@@ -191,7 +191,10 @@ fn failure_of(preview: &StopAllPreview, outcome: &StopAllResult) -> Option<CliFa
 /// Reads the preview.
 async fn read_preview(cx: &mut Context) -> Result<StopAllPreview, CliFailure> {
     match cx
-        .call(Call::InstancePreviewStopAll, CallSpec::control())
+        .call(
+            Call::InstancePreviewStopAll(Default::default()),
+            CallSpec::control(),
+        )
         .await?
     {
         Reply::InstancePreviewStopAll(preview) => Ok(*preview),
@@ -210,6 +213,7 @@ async fn send(
     for _ in 0..SENDS {
         let call = Call::InstanceStopAll(StopAllParams {
             expected_instance_ids: Some(expected.clone()),
+            override_leases: false,
         });
         let spec = CallSpec {
             timeout: RequestTimeout::Interactive,
@@ -313,6 +317,7 @@ mod tests {
                 policy: StartupPolicyKind::Manual,
                 session: AutostartSession::None,
             },
+            environments: Vec::new(),
         }
     }
 
@@ -335,8 +340,10 @@ mod tests {
                 instance_id: Uuid::from_u128(5),
                 name: "held".to_owned(),
                 code: "supervisor.stop_requires_override".to_owned(),
+                environments: Vec::new(),
             }],
             at_login_count: Count::saturating(2),
+            affected_environments: Vec::new(),
         }
     }
 
@@ -473,6 +480,7 @@ mod tests {
             already_stopping: Vec::new(),
             skipped: Vec::new(),
             at_login_count: Count::saturating(0),
+            affected_environments: Vec::new(),
         };
         let none = StopAllOutput {
             preview: empty,

@@ -1450,10 +1450,12 @@ async fn dispatch(
             .map(|reply| Reply::InstanceRename(Box::new(reply))),
             None,
         ),
-        Call::InstancePreviewStopAll => (
-            guarded(core, handlers, context, |h, c, x| h.preview_stop_all(c, x))
-                .await
-                .map(Reply::InstancePreviewStopAll),
+        Call::InstancePreviewStopAll(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.preview_stop_all(c, x, p)
+            })
+            .await
+            .map(Reply::InstancePreviewStopAll),
             None,
         ),
         Call::InstanceStopAll(params) => (

@@ -1224,6 +1224,7 @@ async fn provider_operations_queue_with_a_settings_update_and_a_stop_all_and_all
                     &fourth.client,
                     Call::InstanceStopAll(StopAllParams {
                         expected_instance_ids: None,
+                        override_leases: false,
                     }),
                 ),
             )

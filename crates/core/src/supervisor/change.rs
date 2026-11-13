@@ -7,18 +7,19 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use stackly_domain::{
     CommitGuard, ConfigRevisionId, ConfigRevisionNumber, ConfigRevisionRecord, GuardDecision,
-    Guarded, Instance, InstanceFilter, InstanceId, InstanceName, RegistryError, ResourceRef,
-    StageName, WriteOp, rename_allowed,
+    GuardView, Guarded, Instance, InstanceFilter, InstanceId, InstanceName, LeaseFilter,
+    LeaseHolder, RegistryError, ResourceRef, StageName, WriteOp, rename_allowed,
 };
 use stackly_platform::Platform;
 
 use super::Supervisor;
 use super::change_guard::{GuardFailure, activate_ops};
 use super::drift;
-use super::error::SupervisorError;
+use super::error::{EnvironmentHolder, SupervisorError, environment_holders};
 use super::persist::{blocking, read_instance};
 use super::reload::ReloadRequest;
 use super::restart_op::{RestartRequest, restart_steps};
@@ -48,11 +49,15 @@ pub struct ChangeRequest {
     /// Who asks, which decides whether the secret store may show a dialog
     /// when the restart resolves secrets, as for a user start.
     pub caller: SecretCaller,
+    /// Whether a change of ports goes on although environment leases hold
+    /// the instance (spec 0047 AC-15). Only read for
+    /// [`ConfigChange::Endpoints`]; the leases stay active either way.
+    pub override_leases: bool,
 }
 
 impl ChangeRequest {
     /// Asks for `change` on `instance`, read at `base_revision`, for
-    /// `caller`.
+    /// `caller`, without overriding environment leases.
     #[must_use]
     pub const fn new(
         instance: InstanceId,
@@ -65,7 +70,20 @@ impl ChangeRequest {
             base_revision,
             change,
             caller,
+            override_leases: false,
         }
+    }
+
+    /// Sets whether a change of ports overrides environment leases.
+    #[must_use]
+    pub const fn overriding_leases(mut self, override_leases: bool) -> Self {
+        self.override_leases = override_leases;
+        self
+    }
+
+    /// Whether the commit reads the environment leases: a change of ports.
+    const fn checks_leases(&self) -> bool {
+        matches!(self.change, ConfigChange::Endpoints(_))
     }
 }
 
@@ -234,8 +252,10 @@ async fn run_change(
     ctx.begin_step(StepSpec::new(StageName::COMMIT).irreversible())
         .await?;
     ctx.set_stage(StageName::COMMIT).await?;
-    commit(sup, &mut ctx, id, &plan).await?;
+    let leases = request.checks_leases().then_some(request.override_leases);
+    let overridden = commit(sup, &mut ctx, id, &plan, leases).await?;
     ctx.set_audit_note(plan.audit_note());
+    note_overridden(&ctx, &overridden);
 
     ctx.begin_step(StepSpec::new(StageName::APPLY)).await?;
     ctx.set_stage(StageName::APPLY).await?;
@@ -265,15 +285,48 @@ async fn run_change(
     }
 }
 
+/// Notes the environments a change of ports went on against with the
+/// override (spec 0047 AC-15): their names, in the order the guard gave.
+fn note_overridden(ctx: &OperationContext, overridden: &[EnvironmentHolder]) {
+    if overridden.is_empty() {
+        return;
+    }
+    let names: Vec<&str> = overridden
+        .iter()
+        .map(|holder| holder.name.as_str())
+        .collect();
+    ctx.set_audit_note(AuditNote::new(None).with("overriddenEnvironments", names.join(", ")));
+}
+
+/// The environments whose active lease holds `id`, read inside the guard.
+fn holders_in(
+    view: &dyn GuardView,
+    id: InstanceId,
+) -> Result<Vec<EnvironmentHolder>, RegistryError> {
+    let leases = view.leases(id, LeaseFilter::Unreleased)?;
+    if !leases
+        .iter()
+        .any(|lease| lease.is_active() && matches!(lease.holder(), LeaseHolder::Environment(_)))
+    {
+        return Ok(Vec::new());
+    }
+    Ok(environment_holders(id, &leases, &view.environments()?))
+}
+
 /// Writes the new revision, the instance it follows, and the prune in one
 /// guarded transaction, then removes the history copies of the revisions
-/// the prune deleted (spec 0029, AC-12, AC-14).
+/// the prune deleted (spec 0029, AC-12, AC-14). With `leases` set, the plan
+/// changes ports and the guard reads the environment leases of the
+/// instance first (spec 0047 AC-15): `Some(false)` refuses with
+/// `instance.endpoints_require_override` while one is active, `Some(true)`
+/// goes on and returns the environments it overrode.
 async fn commit(
     sup: &Supervisor,
     ctx: &mut OperationContext,
     id: InstanceId,
     plan: &ChangePlan,
-) -> Result<(), WorkError> {
+    leases: Option<bool>,
+) -> Result<Vec<EnvironmentHolder>, WorkError> {
     let deps = sup.deps();
     let registry = deps.registry.clone();
     let (active, before) = blocking(move || -> Result<_, RegistryError> {
@@ -306,9 +359,21 @@ async fn commit(
         Some(ctx.id()),
         deps.platform.clock().now(),
     );
+    let overridden = Arc::new(Mutex::new(Vec::new()));
     let guard: CommitGuard = {
         let plan = plan.clone();
+        let overridden = Arc::clone(&overridden);
+        let moves_ports = !plan.endpoint_changes.is_empty();
         Box::new(move |view| {
+            if let Some(override_leases) = leases.filter(|_| moves_ports) {
+                let holders = holders_in(view, id)?;
+                if !holders.is_empty() && !override_leases {
+                    return Ok(GuardDecision::Refuse(Box::new(ConfigError::from(
+                        SupervisorError::EndpointsRequireOverride { holders },
+                    ))));
+                }
+                *overridden.lock().unwrap_or_else(PoisonError::into_inner) = holders;
+            }
             Ok(match activate_ops(view, id, &plan, record) {
                 Ok(ops) => GuardDecision::Write(ops),
                 Err(GuardFailure::Refused(error)) => GuardDecision::Refuse(Box::new(error)),
@@ -338,7 +403,9 @@ async fn commit(
         }
     }
     remove_pruned_copies(sup, id, before).await;
-    Ok(())
+    let overridden =
+        std::mem::take(&mut *overridden.lock().unwrap_or_else(PoisonError::into_inner));
+    Ok(overridden)
 }
 
 /// Removes the history folder of every revision the prune deleted. A folder

@@ -67,6 +67,7 @@ async fn a_restart_without_an_idempotency_key_is_refused_and_stops_nothing() {
         mode: ShutdownMode::Restart,
         expected_plan_digest: None,
         force: false,
+        override_leases: false,
     };
 
     let error = api

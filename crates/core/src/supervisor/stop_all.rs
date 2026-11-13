@@ -21,7 +21,7 @@ use super::Supervisor;
 use super::error::SupervisorError;
 use super::persist::blocking;
 use super::stop::LeaseCheck;
-use crate::instance::stop_all::{read_view, select};
+use crate::instance::stop_all::{StopAllOptions, read_view, select};
 use crate::operation::codes::CANCELLED;
 use crate::operation::{
     BoxFuture, OperationContext, OperationError, OperationOutcome, OperationWork, PartialItem,
@@ -34,13 +34,27 @@ use crate::operation::{
 pub struct StopAllRequest {
     /// The instances that get a step, in the order they start.
     pub steps: Vec<InstanceId>,
+    /// Whether each step stops an instance an environment lease holds:
+    /// the check before the step and the guard of its stop both take it
+    /// (spec 0047 AC-16, AC-17). The leases stay active either way.
+    pub override_leases: bool,
 }
 
 impl StopAllRequest {
-    /// Asks to stop `steps`.
+    /// Asks to stop `steps` without overriding environment leases.
     #[must_use]
     pub const fn new(steps: Vec<InstanceId>) -> Self {
-        Self { steps }
+        Self {
+            steps,
+            override_leases: false,
+        }
+    }
+
+    /// Sets whether the steps override environment leases.
+    #[must_use]
+    pub const fn overriding_leases(mut self, override_leases: bool) -> Self {
+        self.override_leases = override_leases;
+        self
     }
 }
 
@@ -94,8 +108,8 @@ impl Supervisor {
     }
 
     /// Stops `id` as a person's stop does, after the selection rule ran
-    /// again on a fresh read.
-    async fn stop_all_step(&self, id: InstanceId) -> StepEnd {
+    /// again on a fresh read with the same `options` as the operation.
+    async fn stop_all_step(&self, id: InstanceId, options: StopAllOptions) -> StepEnd {
         let registry = self.deps().registry.clone();
         let session = self.session();
         let view = match blocking({
@@ -111,7 +125,7 @@ impl Supervisor {
         let Some(one) = view.of_instance(id) else {
             return StepEnd::Dropped;
         };
-        let selection = select(&one);
+        let selection = select(&one, options);
         if let Some(skipped) = selection.skipped.into_iter().next() {
             return StepEnd::Skipped(skipped.code);
         }
@@ -120,13 +134,12 @@ impl Supervisor {
             return StepEnd::Dropped;
         }
         // The guard reads the leases again in the commit that writes
-        // desired `stopped` (spec 0047): a lease an Up recorded after the
-        // selection makes the step skipped, never a stop.
-        // provisional: F47 step 6 takes `override_leases` from the
-        // operation's `StopAllOptions`; until then Stop All never overrides.
+        // desired `stopped` (spec 0047): without the override, a lease an
+        // Up recorded after the selection makes the step skipped, never a
+        // stop.
         let check = LeaseCheck::Manual {
             session,
-            override_leases: false,
+            override_leases: options.override_leases,
         };
         match self.stop_direct(id, StopIntent::User, check).await {
             Ok(()) => StepEnd::Stopped,
@@ -185,7 +198,8 @@ async fn run(sup: &Supervisor, request: &StopAllRequest, mut ctx: OperationConte
             }
             let Some(id) = queue.pop_front() else { break };
             let sup = sup.clone();
-            running.spawn(async move { (id, sup.stop_all_step(id).await) });
+            let options = StopAllOptions::new(request.override_leases);
+            running.spawn(async move { (id, sup.stop_all_step(id, options).await) });
         }
         let Some(finished) = running.join_next().await else {
             break;

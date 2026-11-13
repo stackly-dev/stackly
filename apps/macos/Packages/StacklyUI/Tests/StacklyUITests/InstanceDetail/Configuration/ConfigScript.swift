@@ -20,7 +20,7 @@ nonisolated final class ConfigScript: Sendable {
             EndpointValidation(
                 valid: true, problems: [],
                 changes: [EndpointChange(name: "main", old: .fixed(5555), new: .fixed(5600))],
-                impact: .restart))
+                impact: .restart, leases: nil))
         var validatedEndpoints: [[EndpointRequest]] = []
     }
 

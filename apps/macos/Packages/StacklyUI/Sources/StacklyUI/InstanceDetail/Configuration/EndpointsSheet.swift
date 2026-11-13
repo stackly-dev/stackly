@@ -250,7 +250,7 @@ public final class EndpointsModel {
         let call = Call.instanceChangeEndpoints(
             ChangeEndpointsParams(
                 instanceId: source.id, baseRevision: baseRevision, endpoints: pendingRequests,
-                dryRun: false))
+                dryRun: false, overrideLeases: nil))
         let key = unknown ?? MutationPath.newKey()
         let end = await ConfigMutationRunner(service: service).run(call, key: key)
         unknown = nil

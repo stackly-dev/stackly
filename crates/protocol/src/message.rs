@@ -71,7 +71,7 @@ use crate::secret::{
 use crate::settings::{
     DaemonSettingsView, LocationList, SetLocationParams, StorageLocationView, UpdateSettingsParams,
 };
-use crate::stop_all::{StopAllParams, StopAllPreview, StopAllResult};
+use crate::stop_all::{StopAllParams, StopAllPreview, StopAllPreviewParams, StopAllResult};
 use crate::storage::CapacityReport;
 
 /// The only frame a client sends.
@@ -259,9 +259,10 @@ pub enum Call {
     /// Sets when an instance starts on its own (spec 0031).
     #[serde(rename = "instance.set_startup")]
     InstanceSetStartup(SetStartupParams),
-    /// Reads what Stop All would stop (spec 0031).
+    /// Reads what Stop All would stop (spec 0031); its params may be left
+    /// out (spec 0047 AC-16).
     #[serde(rename = "instance.preview_stop_all")]
-    InstancePreviewStopAll,
+    InstancePreviewStopAll(StopAllPreviewParams),
     /// Stops every instance that is wanted or runs (spec 0031).
     #[serde(rename = "instance.stop_all")]
     InstanceStopAll(StopAllParams),
@@ -608,7 +609,9 @@ pub enum Reply {
 }
 
 /// The method table: one line per method, `name => Variant` or
-/// `name => Variant(Params)`, then `recovery allowed` or `recovery refused`.
+/// `name => Variant(Params)` (with `, params optional` when absent or `null`
+/// params read as the default), then `recovery allowed` or `recovery
+/// refused`.
 /// It gives `Call::METHODS`, `Call::method`, `Call::allowed_in_recovery`,
 /// `Reply::method`, and the per method params decoder.
 macro_rules! methods {
@@ -624,7 +627,10 @@ macro_rules! methods {
     (@decode $content:ident, $variant:ident, $params:ty) => {
         json::decode_params::<$params>($content).map(Self::$variant)
     };
-    ($($name:literal => $variant:ident $(($params:ty))?, recovery $recovery:ident;)*) => {
+    (@decode $content:ident, $variant:ident, $params:ty, optional) => {
+        json::decode_optional_params::<$params>($content).map(Self::$variant)
+    };
+    ($($name:literal => $variant:ident $(($params:ty))? $(, params $mode:ident)?, recovery $recovery:ident;)*) => {
         impl Call {
             /// Every method this build knows, in table order.
             pub const METHODS: &[&str] = &[$($name),*];
@@ -656,7 +662,7 @@ macro_rules! methods {
                 content: Option<&RawValue>,
             ) -> Option<Result<Self, Vec<FieldError>>> {
                 match method {
-                    $($name => Some(methods!(@decode content, $variant $(, $params)?)),)*
+                    $($name => Some(methods!(@decode content, $variant $(, $params)? $(, $mode)?)),)*
                     _ => None,
                 }
             }
@@ -726,7 +732,7 @@ methods! {
     "instance.config.keep_revision" => InstanceConfigKeepRevision(KeepRevisionParams), recovery refused;
     "instance.rename" => InstanceRename(RenameInstanceParams), recovery refused;
     "instance.set_startup" => InstanceSetStartup(SetStartupParams), recovery refused;
-    "instance.preview_stop_all" => InstancePreviewStopAll, recovery refused;
+    "instance.preview_stop_all" => InstancePreviewStopAll(StopAllPreviewParams), params optional, recovery refused;
     "instance.stop_all" => InstanceStopAll(StopAllParams), recovery refused;
     "instance.change_endpoints" => InstanceChangeEndpoints(ChangeEndpointsParams), recovery refused;
     "instance.logs_read" => InstanceLogsRead(LogsReadParams), recovery refused;
