@@ -6,15 +6,16 @@
 use stackly_core::diagnostics::HomeMask;
 use stackly_core::environment::{
     BlockerKind, DetachedMember as CoreDetached, EnvironmentView, Finding, Plan,
-    PlanBlocker as CoreBlocker, PlanItem as CoreItem, SUPPORTED_API_VERSIONS, ServiceStatus,
-    Validation,
+    PlanBlocker as CoreBlocker, PlanItem as CoreItem, PlanLocal as CoreLocal, PlanLock as CoreLock,
+    PlanOverride as CoreOverride, SUPPORTED_API_VERSIONS, ServiceStatus, Validation,
 };
 use stackly_domain::{DeclaredService, Environment, PortRequest as DomainPortRequest};
 use stackly_protocol::env::{
     DeclaredServiceDto, DependencyConditionKind, DetachedMember, EnvFinding, EnvPlan,
-    EnvValidation, EnvironmentRef, EnvironmentService, EnvironmentSummary, PlanBlocker,
-    PlanDifference, PlanEndpoint, PlanInstance, PlanItem, PlanRuntime, PlanSecret,
-    ServiceDependency, ServiceInstance, ServiceNotReady,
+    EnvValidation, EnvironmentRef, EnvironmentService, EnvironmentSummary, LockStaleItem,
+    PlanBlocker, PlanDifference, PlanEndpoint, PlanInstance, PlanItem, PlanLocal, PlanLock,
+    PlanOverride, PlanProviderRevision, PlanRuntime, PlanSecret, PlanStorage, ServiceDependency,
+    ServiceInstance, ServiceNotReady,
 };
 use stackly_protocol::instance::{InstanceSummary, PortRequest};
 use stackly_protocol::stop_all::InstanceRef;
@@ -26,7 +27,7 @@ use crate::map::catalog::wire;
 use crate::membership::env_ownership;
 
 /// One finding on the wire.
-fn finding(finding: &Finding) -> EnvFinding {
+pub fn finding(finding: &Finding) -> EnvFinding {
     EnvFinding {
         severity: wire(finding.severity().as_code()),
         code: finding.code().to_string(),
@@ -106,6 +107,7 @@ fn item(item: &CoreItem) -> PlanItem {
             install: runtime.install,
             runtime_id: runtime.runtime_id.map(|id| id.as_uuid()),
             download_size: runtime.download_size.map(Count::saturating),
+            source: wire(runtime.source.as_code()),
         }),
         endpoints: item
             .endpoints
@@ -140,6 +142,62 @@ fn item(item: &CoreItem) -> PlanItem {
             .iter()
             .map(|check| map::create::check(check, &[]))
             .collect(),
+        provider_revision: item
+            .provider_revision
+            .as_ref()
+            .map(|key| PlanProviderRevision {
+                revision: key.revision().to_string(),
+                manifest_sha256: key.manifest_sha256().to_string(),
+            }),
+        storage: item.storage.as_ref().map(|storage| PlanStorage {
+            location_id: storage.location_id.as_uuid(),
+            path: storage.path.clone(),
+        }),
+    }
+}
+
+/// The lock of a plan on the wire.
+#[must_use]
+pub fn plan_lock(lock: &CoreLock) -> PlanLock {
+    PlanLock {
+        file: lock.file.clone(),
+        state: wire(lock.state.as_code()),
+        sha256: lock.sha256.map(|sha| sha.to_string()),
+        locked: lock.locked,
+        targets: lock.targets.clone(),
+        stale: lock
+            .stale
+            .iter()
+            .map(|item| LockStaleItem {
+                service: item.service.to_string(),
+                reason: wire(item.reason.as_code()),
+            })
+            .collect(),
+    }
+}
+
+/// One local override on the wire, a path with home as `~`.
+#[must_use]
+pub fn plan_override(found: &CoreOverride, home: &HomeMask) -> PlanOverride {
+    PlanOverride {
+        service: found.service.clone(),
+        field: found.field.clone(),
+        value: home.mask(&found.value).into_owned(),
+        state: wire(found.state.as_code()),
+    }
+}
+
+fn plan_local(local: &CoreLocal, home: &HomeMask) -> PlanLocal {
+    PlanLocal {
+        file: local.file.clone(),
+        state: wire(local.state.as_code()),
+        sha256: local.sha256.map(|sha| sha.to_string()),
+        overrides: local
+            .overrides
+            .iter()
+            .map(|found| plan_override(found, home))
+            .collect(),
+        findings: local.findings.list().iter().map(finding).collect(),
     }
 }
 
@@ -157,7 +215,8 @@ pub fn with_env_hint(body: ErrorBody) -> ErrorBody {
 
 /// The error body of one plan blocker: the code create, resolve, or the
 /// registry refuses with, so GUI and CLI show the same message and hint.
-fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask) -> ErrorBody {
+#[must_use]
+pub fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask) -> ErrorBody {
     use stackly_protocol::codes::env;
     let service = blocker.service.as_ref().map(ToString::to_string);
     let with_service = |body: ErrorBody| match &service {
@@ -215,12 +274,108 @@ fn blocker_error(blocker: &CoreBlocker, items: &[CoreItem], home: &HomeMask) -> 
         ))
         .with_detail("instance", instance.as_str())
         .with_detail("reason", reason.as_str()),
+        other => lock_blocker_error(other, with_service, home),
+    };
+    with_env_hint(body)
+}
+
+/// The error body of a blocker of spec 0045: the lock, the overrides, and
+/// the trust gate of `env.lock`.
+fn lock_blocker_error(
+    kind: &BlockerKind,
+    with_service: impl Fn(ErrorBody) -> ErrorBody,
+    home: &HomeMask,
+) -> ErrorBody {
+    use stackly_protocol::codes::{env, provider};
+    match kind {
+        BlockerKind::ProviderApprovalRequired { provider: name } => {
+            let body = ErrorBody::new(
+                &provider::APPROVAL_REQUIRED,
+                "the stored bytes of the local provider are not approved",
+            )
+            .with_detail("provider", name.as_str());
+            match provider::hint(body.code(), body.details()) {
+                Some(hint) => body.with_hint(hint),
+                None => body,
+            }
+        }
+        BlockerKind::ProviderRevoked { provider: name } => {
+            let body = ErrorBody::new(&provider::REVOKED, "the provider revision is revoked")
+                .with_detail("provider", name.as_str());
+            match provider::hint(body.code(), body.details()) {
+                Some(hint) => body.with_hint(hint),
+                None => body,
+            }
+        }
+        BlockerKind::LockMissing { file } => ErrorBody::new(
+            &env::LOCK_MISSING,
+            "the plan is locked but there is no lock file",
+        )
+        .with_detail("file", file.as_str()),
+        BlockerKind::LockUnreadable { reason } => {
+            ErrorBody::new(&env::LOCK_UNREADABLE, "the lock file can't be read")
+                .with_detail("reason", reason.as_code())
+        }
+        BlockerKind::LockInvalid { code, location } => {
+            ErrorBody::new(&env::LOCK_INVALID, "the lock file is not a valid lock")
+                .with_detail("code", code.as_code())
+                .with_detail("location", location.to_string())
+        }
+        BlockerKind::LockStale { reason } => with_service(ErrorBody::new(
+            &env::LOCK_STALE,
+            "the lock does not match this service",
+        ))
+        .with_detail("reason", reason.as_code()),
+        BlockerKind::LockProviderMismatch {
+            provider: name,
+            locked_revision,
+            available_revision,
+        } => with_service(ErrorBody::new(
+            &env::LOCK_PROVIDER_MISMATCH,
+            "the catalog holds another provider revision than the lock",
+        ))
+        .with_detail("provider", name.as_str())
+        .with_detail("lockedRevision", locked_revision.to_string())
+        .with_detail("availableRevision", available_revision.to_string()),
+        BlockerKind::LockNoArtifact {
+            target,
+            locked_targets,
+        } => with_service(ErrorBody::new(
+            &env::LOCK_NO_ARTIFACT,
+            "the lock has no artifact for this mac",
+        ))
+        .with_detail("target", target.to_string())
+        .with_detail("lockedTargets", locked_targets.join(",")),
+        BlockerKind::LockArtifactUnknown {
+            artifact_id,
+            sha256,
+            reason,
+        } => with_service(ErrorBody::new(
+            &env::LOCK_ARTIFACT_UNKNOWN,
+            "the catalog does not have the locked artifact",
+        ))
+        .with_detail("artifactId", artifact_id.as_str())
+        .with_detail("sha256", sha256.to_string())
+        .with_detail("reason", reason.as_code()),
+        BlockerKind::LocalUnreadable { reason } => ErrorBody::new(
+            &env::LOCAL_UNREADABLE,
+            "the local override file can't be read",
+        )
+        .with_detail("reason", reason.as_code()),
+        BlockerKind::LocalInvalid { errors } => {
+            ErrorBody::new(&env::LOCAL_INVALID, "the local override file has errors")
+                .with_detail("errors", errors.to_string())
+        }
+        BlockerKind::OverrideLocationUnknown { path } => with_service(ErrorBody::new(
+            &env::OVERRIDE_LOCATION_UNKNOWN,
+            "the data location of the override is not a registered data location",
+        ))
+        .with_detail("path", home.mask(path).as_ref()),
         _ => ErrorBody::new(
             &stackly_protocol::codes::internal::UNEXPECTED,
             "the plan found a blocker this build cannot name",
         ),
-    };
-    with_env_hint(body)
+    }
 }
 
 fn detached(member: &CoreDetached) -> DetachedMember {
@@ -269,6 +424,8 @@ pub fn plan(validation: EnvValidation, plan: &Plan, home: &HomeMask) -> EnvPlan 
             .collect(),
         detached: plan.detached.iter().map(detached).collect(),
         needs_secrets: Count::saturating(plan.needs_secrets as u64),
+        lock: plan_lock(&plan.lock),
+        local: plan.local.as_ref().map(|local| plan_local(local, home)),
     }
 }
 
@@ -287,6 +444,7 @@ pub fn summary(
             .manifest_location()
             .map(|location| location.as_str().to_owned()),
         manifest_sha256: environment.manifest_sha256().map(ToString::to_string),
+        lock_sha256: environment.lock_sha256().map(ToString::to_string),
         status: wire(view.status.as_code()),
         ready_count: Count::saturating(view.ready_count as u64),
         service_count: Count::saturating(view.service_count as u64),

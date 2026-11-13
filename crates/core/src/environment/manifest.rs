@@ -189,6 +189,17 @@ pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
     )]
 }
 
+/// The `metadata.name` of manifest bytes whose shape loads, without the
+/// catalog (spec 0045, `env.export` from a file): `Ok(None)` when the
+/// name is not a valid name.
+///
+/// # Errors
+///
+/// Returns the findings of the shape when the loader refuses it.
+pub fn declared_name(bytes: &[u8]) -> Result<Option<stackly_domain::EnvironmentName>, Findings> {
+    load(bytes).map(|raw| raw.metadata.name.parse().ok())
+}
+
 /// Decodes manifest bytes, or returns the findings that stopped it. The
 /// shape of the document is checked first and the first problem stops it
 /// (spec 0044, *Aturan validasi*), except anchors and aliases, which are

@@ -30,7 +30,7 @@ pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
     schemas.extend(local::json_schemas());
     schemas
 }
-pub use manifest::{API_VERSION, KIND, MANIFEST_MAX_LEN, SUPPORTED_API_VERSIONS};
+pub use manifest::{API_VERSION, KIND, MANIFEST_MAX_LEN, SUPPORTED_API_VERSIONS, declared_name};
 pub use plan::{
     BlockerKind, DetachedMember, EnvironmentRef, InstanceView, NOT_INITIALIZED, Plan, PlanAction,
     PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint, PlanError, PlanInputs, PlanItem,

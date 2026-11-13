@@ -28,8 +28,9 @@ use stackly_protocol::daemon::{
 use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::env::{
-    EnvGetParams, EnvPlan, EnvPlanParams, EnvValidateParams, EnvValidation, EnvironmentDetail,
-    EnvironmentList, ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
+    EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
+    EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList, ImportEnvironmentParams,
+    RemoveEnvironmentParams, RemovedEnvironment,
 };
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
@@ -445,6 +446,28 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Box<EnvPlan>> {
         let _ = context;
         env::plan(core, params)
+    }
+
+    /// `env.lock` (spec 0045).
+    fn lock_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvLockParams,
+    ) -> HandlerFuture<'a, Box<EnvLockResult>> {
+        let _ = context;
+        env::lock(core, params)
+    }
+
+    /// `env.export` (spec 0045).
+    fn export_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvExportParams,
+    ) -> HandlerFuture<'a, Box<EnvExport>> {
+        let _ = context;
+        env::export(core, params)
     }
 
     /// `env.list` (spec 0044).
