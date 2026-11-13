@@ -557,8 +557,8 @@ pub(super) fn environments(
     collect(
         conn,
         &format!(
-            "SELECT id, name, manifest_location, manifest_sha256, services, last_operation_id, \
-             last_up, updated_at, revision \
+            "SELECT id, name, manifest_location, manifest_sha256, lock_sha256, services, \
+             last_operation_id, last_up, updated_at, revision \
              FROM environments {clause} ORDER BY id"
         ),
         params,
@@ -570,6 +570,7 @@ pub(super) fn environments(
                 name: cells.parse("name")?,
                 manifest_location: cells.opt_parse("manifest_location")?,
                 manifest_sha256: cells.opt_parse("manifest_sha256")?,
+                lock_sha256: cells.opt_parse("lock_sha256")?,
                 declared: super::environment::parse_services(&cells.text("services")?)
                     .map_err(|err| cells.corrupt("services", err))?,
                 members: members.remove(&id).unwrap_or_default(),

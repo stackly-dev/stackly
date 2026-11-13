@@ -823,6 +823,7 @@ fn join(daemon: &DaemonHandle, environment: Uuid, alias: &str, instance: Uuid) -
         name: stored.name().clone(),
         manifest_location: stored.manifest_location().cloned(),
         manifest_sha256: stored.manifest_sha256().copied(),
+        lock_sha256: stored.lock_sha256().copied(),
         declared: stored.declared().to_vec(),
         members: vec![EnvironmentMember::new(
             alias.parse().expect("an alias"),

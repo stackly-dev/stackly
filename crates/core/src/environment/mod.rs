@@ -5,6 +5,7 @@
 //! Nothing here touches macOS: the daemon reads the file through the
 //! `Filesystem` port and hands the bytes in.
 
+pub mod export;
 mod finding;
 pub mod local;
 pub mod lock;

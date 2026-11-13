@@ -193,6 +193,7 @@ fn stored_environment(environment: &Environment) -> StoredEnvironment {
         name: environment.name().clone(),
         manifest_location: environment.manifest_location().cloned(),
         manifest_sha256: environment.manifest_sha256().copied(),
+        lock_sha256: environment.lock_sha256().copied(),
         declared: environment.declared().to_vec(),
         members: environment.members().to_vec(),
         last_operation: environment.last_operation(),
