@@ -105,6 +105,9 @@ finding_codes! {
     EndpointTransportMismatch => "endpoint_transport_mismatch",
     /// Two fixed endpoints use the same host and port.
     EndpointConflict => "endpoint_conflict",
+    /// A second dedicated service uses a provider whose package runs one
+    /// instance at a time (spec 0044, *Provider satu instance*).
+    ProviderSingleInstance => "provider_single_instance",
     /// The package's settings schema has no such field.
     UnknownSetting => "unknown_setting",
     /// A settings value the schema refuses.
@@ -182,6 +185,9 @@ impl FindingCode {
             Self::EndpointHostUnsupported => "host must be the endpoint's default host",
             Self::EndpointTransportMismatch => "transport must be the endpoint's transport",
             Self::EndpointConflict => "another fixed endpoint uses the same host and port",
+            Self::ProviderSingleInstance => {
+                "this provider runs one instance at a time, and another service already creates one"
+            }
             Self::UnknownSetting => "the provider's settings have no such field",
             Self::SettingsValue => "the provider's settings refuse this value",
             Self::UnsupportedValue => "stackly/v1alpha1 does not support this value",

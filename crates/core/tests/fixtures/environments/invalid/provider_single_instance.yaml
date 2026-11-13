@@ -1,0 +1,14 @@
+# Expects at least one provider_single_instance finding (spec 0044, Provider satu instance).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: testing/single
+    endpoints:
+      http: {port: auto}
+  web:
+    provider: testing/single
+    endpoints:
+      http: {port: auto}

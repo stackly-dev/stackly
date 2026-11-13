@@ -157,6 +157,60 @@ services:
     );
 }
 
+// covers: AC-2 (spec 0044, Provider satu instance)
+#[test]
+fn the_second_and_third_dedicated_service_of_a_single_instance_provider_are_refused() {
+    let text = manifest(
+        "  api:\n    provider: testing/single\n    endpoints:\n      http: {port: auto}\n\
+         \x20 web:\n    provider: testing/single\n    endpoints:\n      http: {port: auto}\n\
+         \x20 jobs:\n    provider: testing/single\n    endpoints:\n      http: {port: auto}\n\
+         \x20 other:\n    provider: testing/fake\n    endpoints:\n      http: {port: auto}\n\
+         \x20 more:\n    provider: testing/fake\n    endpoints:\n      http: {port: auto}\n",
+    );
+    let validation = validate(text.as_bytes(), &catalog());
+
+    let single: Vec<(Option<&str>, String)> = validation
+        .findings
+        .list()
+        .iter()
+        .filter(|f| f.code() == FindingCode::ProviderSingleInstance)
+        .map(|f| (f.service().map(|a| a.as_str()), f.location().to_string()))
+        .collect();
+    assert_eq!(
+        single,
+        [
+            (Some("web"), "services.web.provider".to_owned()),
+            (Some("jobs"), "services.jobs.provider".to_owned()),
+        ],
+        "the first one passes, every later one is named: {:#?}",
+        validation.findings
+    );
+    assert_eq!(
+        codes(&validation).len(),
+        2,
+        "a multiInstance provider is not counted"
+    );
+    assert!(validation.manifest.is_none());
+}
+
+// covers: AC-2 (spec 0044, Provider satu instance)
+#[test]
+fn a_service_that_borrows_an_instance_of_a_single_instance_provider_is_not_counted() {
+    let text = manifest(
+        "  api:\n    provider: testing/single\n    endpoints:\n      http: {port: auto}\n\
+         \x20 shared:\n    provider: testing/single\n    instanceRef: one-single\n",
+    );
+    let validation = validate(text.as_bytes(), &catalog());
+
+    assert_eq!(
+        codes(&validation),
+        Vec::<&str>::new(),
+        "{:#?}",
+        validation.findings
+    );
+    assert!(validation.manifest.is_some());
+}
+
 /// A manifest from its services block, under a fixed header.
 fn manifest(services: &str) -> String {
     format!(
