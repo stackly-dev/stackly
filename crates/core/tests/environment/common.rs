@@ -77,6 +77,35 @@ fn load_package(name: &str, edit: Option<Edit<'_>>) -> ValidatedPackage {
         .unwrap_or_else(|err| panic!("{name} validates: {:#?}", err.issues))
 }
 
+/// `testing/single`: the fake package under another name, without
+/// `multiInstance`, the one package of the test catalog that runs one
+/// instance at a time (spec 0044, *Provider satu instance*).
+pub fn single_instance_package() -> ValidatedPackage {
+    let dir = repo().join("providers/fake");
+    let mut files = BTreeMap::new();
+    for path in ["versions.json", "schemas/settings.schema.json"] {
+        files.insert(
+            path.to_owned(),
+            fs::read(dir.join(path)).expect("package file"),
+        );
+    }
+    let manifest = fs::read_to_string(dir.join("provider.yaml"))
+        .expect("provider.yaml")
+        .replace("id: testing/fake", "id: testing/single")
+        .replace("multiInstance: true", "multiInstance: false");
+    files.insert("provider.yaml".to_owned(), manifest.into_bytes());
+    for entry in fs::read_dir(dir.join("templates")).expect("templates folder") {
+        let entry = entry.expect("template entry");
+        let file = entry.file_name().into_string().expect("UTF-8 name");
+        files.insert(
+            format!("templates/{file}"),
+            fs::read(entry.path()).expect("template"),
+        );
+    }
+    ValidatedPackage::from_files(PackageFiles::new("single", files), NameCheck::FolderName)
+        .unwrap_or_else(|err| panic!("single validates: {:#?}", err.issues))
+}
+
 /// A catalog entry for a package.
 pub fn entry(package: ValidatedPackage) -> CatalogEntry {
     CatalogEntry::Provider(ProviderEntry {
@@ -90,8 +119,8 @@ pub fn entry(package: ValidatedPackage) -> CatalogEntry {
     })
 }
 
-/// The test catalog: [`PACKAGES`], plus `testing/broken`, whose package
-/// does not load.
+/// The test catalog: [`PACKAGES`], `testing/single` (no `multiInstance`),
+/// plus `testing/broken`, whose package does not load.
 pub fn catalog() -> Catalog {
     catalog_with(Vec::new())
 }
@@ -107,6 +136,7 @@ pub fn catalog_with(replaced: Vec<(&str, ValidatedPackage)>) -> Catalog {
             entry(at.map_or_else(|| package(name), |at| replaced.remove(at).1))
         })
         .collect();
+    entries.push(entry(single_instance_package()));
     entries.push(CatalogEntry::Invalid(InvalidEntry {
         id: "testing/broken".parse().expect("a provider name"),
         category: None,

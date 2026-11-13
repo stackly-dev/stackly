@@ -1457,6 +1457,43 @@ async fn plan_and_get_read_the_lock_and_the_overrides_next_to_the_manifest() {
     assert_eq!(shown.summary.lock_sha256, None, "only Up writes the column");
     let unchecked = get(&api, imported.summary.id, false).await.expect("gets");
     assert!(unchecked.lock.is_none() && unchecked.local.is_none());
+
+    // One error in the file: no override applies, the good one included
+    // (spec 0045 K22).
+    write(
+        &dir.join(".stackly.local.yaml"),
+        "apiVersion: stackly/v1alpha1\nkind: EnvironmentLocal\nservices:\n  postgres:\n    endpoints:\n      client: {port: 15433}\n  mysql:\n    storage:\n      dataLocation: relative/path\n",
+    );
+    let invalid = plan_locked(&api, &path).await;
+    let local = invalid.local.as_ref().expect("the override file");
+    assert_eq!(local.state, LocalState::Invalid);
+    assert!(!local.overrides.is_empty());
+    assert!(
+        local
+            .overrides
+            .iter()
+            .all(|o| o.state == OverrideState::Ignored),
+        "{:#?}",
+        local.overrides
+    );
+    assert!(
+        invalid.items[0]
+            .endpoints
+            .iter()
+            .all(|e| e.port != stackly_protocol::instance::PortRequest::Fixed(15433)),
+        "the manifest port"
+    );
+    let shown = get(&api, imported.summary.id, true).await.expect("gets");
+    let local = shown.local.as_ref().expect("the local file");
+    assert_eq!(local.state, Some(LocalState::Invalid));
+    assert!(
+        local
+            .overrides
+            .iter()
+            .all(|o| o.state == OverrideState::Ignored),
+        "{:#?}",
+        local.overrides
+    );
     drop(api);
     stop(daemon).await;
 }

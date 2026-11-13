@@ -1332,6 +1332,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "What Down would stop and keep (spec 0047): a read, not an\noperation.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvPreviewDownParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.preview_down"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Brings an environment down (spec 0047): an `environment_down`\ncoordinator that releases its leases and stops, through child\noperations, only the instances no one else needs.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvDownParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.down"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1744,6 +1778,29 @@
         "port"
       ]
     },
+    "EnvDownParams": {
+      "description": "Params of `env.down`, an `environment_down` operation (spec 0047\nAC-2); the request carries the `idempotencyKey`.",
+      "type": "object",
+      "properties": {
+        "expectedStopInstanceIds": {
+          "description": "The IDs of `EnvDownPreview.stop` the client showed; may be empty.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "id": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id",
+        "expectedStopInstanceIds"
+      ]
+    },
     "EnvExportParams": {
       "description": "Params of `env.export`.",
       "type": "object",
@@ -1815,6 +1872,20 @@
       },
       "required": [
         "source"
+      ]
+    },
+    "EnvPreviewDownParams": {
+      "description": "Params of `env.preview_down` (spec 0047 AC-1): a read, not an\noperation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The environment.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
       ]
     },
     "EnvSource": {

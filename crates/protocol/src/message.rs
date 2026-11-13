@@ -25,8 +25,9 @@ use crate::daemon::{Capabilities, DaemonHealth, DaemonInfo, ShutdownAccepted, Sh
 use crate::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use crate::doctor::{DoctorParams, DoctorReport};
 use crate::env::{
-    EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
-    EnvUpParams, EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
+    EnvDownParams, EnvDownPreview, EnvDownReply, EnvExport, EnvExportParams, EnvGetParams,
+    EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams, EnvPreviewDownParams, EnvUpParams,
+    EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
     ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
 };
 use crate::error::{ErrorBody, FieldError};
@@ -351,6 +352,15 @@ pub enum Call {
     /// operations in dependency order.
     #[serde(rename = "env.up")]
     EnvUp(EnvUpParams),
+    /// What Down would stop and keep (spec 0047): a read, not an
+    /// operation.
+    #[serde(rename = "env.preview_down")]
+    EnvPreviewDown(EnvPreviewDownParams),
+    /// Brings an environment down (spec 0047): an `environment_down`
+    /// coordinator that releases its leases and stops, through child
+    /// operations, only the instances no one else needs.
+    #[serde(rename = "env.down")]
+    EnvDown(EnvDownParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -589,6 +599,12 @@ pub enum Reply {
     /// The accepted Up.
     #[serde(rename = "env.up")]
     EnvUp(Box<EnvUpReply>),
+    /// What Down would do now.
+    #[serde(rename = "env.preview_down")]
+    EnvPreviewDown(Box<EnvDownPreview>),
+    /// The accepted Down.
+    #[serde(rename = "env.down")]
+    EnvDown(Box<EnvDownReply>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -735,6 +751,8 @@ methods! {
     "env.lock" => EnvLock(EnvLockParams), recovery refused;
     "env.export" => EnvExport(EnvExportParams), recovery refused;
     "env.up" => EnvUp(EnvUpParams), recovery refused;
+    "env.preview_down" => EnvPreviewDown(EnvPreviewDownParams), recovery refused;
+    "env.down" => EnvDown(EnvDownParams), recovery refused;
 }
 
 impl Reply {
@@ -945,7 +963,8 @@ mod tests {
             // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031), and
             // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032),
             // and the 6 `env.*` methods (spec 0044), and `env.lock` and
-            // `env.export` (spec 0045), and `env.up` (spec 0046).
+            // `env.export` (spec 0045), `env.up` (spec 0046), and
+            // `env.preview_down` and `env.down` (spec 0047).
             allowed.len()
                 + refused.len()
                 + 1
@@ -963,7 +982,8 @@ mod tests {
                 + 4
                 + 6
                 + 2
-                + 1,
+                + 1
+                + 2,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

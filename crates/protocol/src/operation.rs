@@ -35,6 +35,7 @@ pub const OPERATION_PAGE_BYTES_MAX: usize = 900 * 1024;
 /// needs an `idempotencyKey` (spec 0007, *Idempotency*). The feature that
 /// owns such a method adds it here when it adds the method.
 pub const STARTING_METHODS: &[&str] = &[
+    "env.down",
     "env.up",
     "instance.create",
     "instance.start",

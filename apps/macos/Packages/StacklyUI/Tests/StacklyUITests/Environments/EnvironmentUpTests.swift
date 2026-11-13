@@ -285,7 +285,7 @@ struct EnvironmentUpProgressTests {
             of: EnvironmentDetail(
                 summary: incomplete.summary, services: services, detached: [],
                 manifestState: .inSync, problems: nil, lock: nil, local: nil,
-                lastUp: incomplete.lastUp),
+                lastUp: incomplete.lastUp, lease: nil),
             actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
         let cache = try #require(dependency.first { $0.reason == "Waiting for postgres timed out" })
         #expect(cache.action?.title == "Show postgres")

@@ -71,6 +71,9 @@ fn every_env_fixture_is_listed_and_keeps_its_shape() {
             "EnvironmentDetail" => roundtrip::<EnvironmentDetail>(&entry.file, &value),
             "EnvLockResult" => roundtrip::<EnvLockResult>(&entry.file, &value),
             "EnvExport" => roundtrip::<EnvExport>(&entry.file, &value),
+            "EnvDownPreview" => {
+                roundtrip::<stackly_protocol::env::EnvDownPreview>(&entry.file, &value);
+            }
             other => panic!("{}: no decoder for `{other}`", entry.file),
         }
     }
@@ -196,6 +199,38 @@ fn a_plan_from_a_daemon_without_locks_reads_as_not_locked() {
         plan.items[0].runtime.as_ref().unwrap().source,
         RuntimeSource::Catalog
     );
+}
+
+// covers: AC-1, AC-12, AC-25 (spec 0047)
+#[test]
+fn a_down_preview_names_what_stops_and_why_the_rest_keeps_running() {
+    use stackly_protocol::env::EnvDownPreview;
+    use stackly_protocol::stop_all::DemandSourceKind;
+    let preview: EnvDownPreview = serde_json::from_value(read("down-preview.json")).unwrap();
+    assert_eq!(preview.stop.len(), 2);
+    assert_eq!(
+        preview.keep[0].demand,
+        [DemandSourceKind::Manual, DemandSourceKind::Environment]
+    );
+    assert!(preview.keep[0].environments[0].lease_active);
+    assert_eq!(preview.blocked[0].instance.alias, None);
+    assert_eq!(u64::from(preview.lease_count), 4);
+
+    // An older daemon's detail has no lease, and an older summary entry no
+    // leaseActive: both read as their defaults.
+    let mut detail = read("detail-partially-ready.json");
+    detail.as_object_mut().unwrap().remove("lease");
+    let detail: EnvironmentDetail = serde_json::from_value(detail).unwrap();
+    assert!(detail.lease.is_none());
+    let entry: stackly_protocol::env::InstanceEnvironment =
+        serde_json::from_value(serde_json::json!({
+            "environmentId": "0192f3a7-0000-7000-8000-0000000000e1",
+            "name": "erp-development",
+            "alias": "postgres",
+            "ownership": "dedicated"
+        }))
+        .unwrap();
+    assert!(!entry.lease_active);
 }
 
 // covers: AC-24 (spec 0044)

@@ -16,13 +16,13 @@ use stackly_core::supervisor::{BindOptions, BindOutcome, PortProbe};
 use stackly_core::{PreparedLayout, prepare_layout};
 use stackly_domain::{
     Endpoint, EnvironmentId, HealthState, InstallMode, Instance, InstanceLifecycle, IpEndpoint,
-    ManifestLocation, Port, PortRequest, ProviderRevisionRecord, ReadinessState, Registry, Runtime,
-    Transport, WriteBatch, WriteOp,
+    ManifestLocation, Port, PortRequest, ProviderRevisionKey, ProviderRevisionRecord,
+    ReadinessState, Registry, Runtime, Transport, WriteBatch, WriteOp,
 };
 use stackly_platform::{Clock, HostFacts, Platform};
 use stackly_testkit::{FakePlatform, FakeRegistry, InstanceBuilder, TestRoot};
 
-use crate::common::{catalog, package};
+use crate::common::{catalog, package, single_instance_package};
 
 /// Trial binds from a table; every other address is free.
 #[derive(Default)]
@@ -120,6 +120,29 @@ impl Site {
     /// Commits a fake instance named `name` with `http` on `port`, and
     /// records what the supervisor says of it.
     pub fn instance(&mut self, name: &str, port: u16, lifecycle: InstanceLifecycle) -> Instance {
+        let key = self.fake_key.clone();
+        self.instance_of(&key, name, port, lifecycle)
+    }
+
+    /// Commits a stopped instance of `testing/single`, the provider that
+    /// runs one instance at a time, on the fake runtime.
+    pub fn single_instance(&mut self, name: &str, port: u16) -> Instance {
+        let single = single_instance_package();
+        self.registry
+            .commit(WriteBatch::new(vec![WriteOp::InsertProviderRevision(
+                ProviderRevisionRecord::new(single.provider_revision().clone(), None, None, None),
+            )]))
+            .expect("the provider revision commits");
+        self.instance_of(single.key(), name, port, InstanceLifecycle::Stopped)
+    }
+
+    fn instance_of(
+        &mut self,
+        key: &ProviderRevisionKey,
+        name: &str,
+        port: u16,
+        lifecycle: InstanceLifecycle,
+    ) -> Instance {
         let http = IpEndpoint::new(
             "http".parse().expect("an endpoint name"),
             Transport::Tcp,
@@ -127,7 +150,7 @@ impl Site {
             PortRequest::Fixed(Port::new(port).expect("a port")),
             None,
         );
-        let instance = InstanceBuilder::new(&self.runtime, &self.fake_key)
+        let instance = InstanceBuilder::new(&self.runtime, key)
             .name(name)
             .endpoints(vec![Endpoint::Ip(http)])
             .lifecycle(lifecycle)
@@ -140,7 +163,7 @@ impl Site {
         self.views.push(InstanceView {
             id: instance.id(),
             name: instance.name().clone(),
-            provider: self.fake_key.provider().clone(),
+            provider: key.provider().clone(),
             runtime_version: self.runtime.version().clone(),
             runtime_line: Some(self.runtime.line().clone()),
             lifecycle,

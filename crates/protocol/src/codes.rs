@@ -377,6 +377,14 @@ area! {
             details ["service", "dependency", "reason", "timeoutSeconds"], "the code of a skipped service in an Up report: a dependency failed, timed out, or was not ready (spec 0046)";
         SERVICE_NOT_READY = "env.service_not_ready", Timeout, retryable false,
             details ["service", "instance", "timeoutSeconds"], "the code of a service whose running instance did not become ready in time (spec 0046)";
+        DOWN_CHANGED = "env.down_changed", Conflict, retryable false,
+            details [], "what Down would stop differs from the instances the client confirmed, or an instance the final sweep left running (spec 0047)";
+        DOWN_INCOMPLETE = "env.down_incomplete", Failed, retryable false,
+            details ["stopped", "total", "count", "omitted"],
+            items { kind "instance", fields ["instanceId", "name", "outcome", "code", "operationId"], max 32 },
+            "a Down ended with instances that did not stop; items lists each one and nothing was deleted (spec 0047)";
+        INSTANCE_IN_USE = "env.instance_in_use", Conflict, retryable false,
+            details [], "the code of a partial item: another lease holds the instance, so Down left it running (spec 0047)";
 
         @functions
 
@@ -457,6 +465,13 @@ area! {
                     "fix the dependency, then bring the environment up again"
                 }
                 c if c == SERVICE_NOT_READY.code => "open the instance to see why it is not ready",
+                c if c == DOWN_CHANGED.code => "review what will stop, then bring it down again",
+                c if c == INSTANCE_IN_USE.code => {
+                    "it keeps running because something else still needs it"
+                }
+                c if c == DOWN_INCOMPLETE.code => {
+                    "bring the environment down again, or stop the instances listed; nothing was deleted"
+                }
                 _ => return None,
             })
         }
@@ -891,7 +906,7 @@ area! {
             details ["timeoutSeconds", "after"], "the stop budget ran out; after a restart's stop, after is stays_stopped";
         STOP_REQUIRES_OVERRIDE = "supervisor.stop_requires_override", Conflict, retryable false,
             details ["omitted"],
-            items { kind "environment", fields ["environmentId"], max 100 },
+            items { kind "environment", fields ["environmentId", "name", "alias", "ownership"], max 100 },
             "an active environment lease needs an override to stop the instance";
         STOP_COMMAND_FAILED = "supervisor.stop_command_failed", Failed, retryable false,
             details ["exitCode", "after"], "the stop command exited with a code it does not accept";
@@ -928,6 +943,9 @@ area! {
                 c if c == DATA_IN_USE.code => Some(
                     "Stackly never removes the lock on its own. Stop that process, then start it again.",
                 ),
+                c if c == STOP_REQUIRES_OVERRIDE.code => {
+                    Some("stop it anyway with the override, or bring the environment down")
+                }
                 _ => None,
             };
             if fixed.is_some() {

@@ -316,7 +316,12 @@ async fn run(request: UpRequest, deps: DriverDeps, mut ctx: OperationContext) ->
         }))
         .await;
     board.remove(environment, operation);
-    let _ = closing?;
+    // A shutdown that closed the engine under the closing commit is an
+    // abandon, never a failed Up (AC-15).
+    let _ = closing.map_err(|error| match error {
+        WorkError::Engine(crate::operation::EngineError::ShuttingDown) => WorkError::Abandoned,
+        other => other,
+    })?;
 
     let ready = reports
         .iter()
