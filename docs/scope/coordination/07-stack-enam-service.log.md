@@ -3,7 +3,7 @@
 - **Scope:** `docs/scope/07-stack-enam-service.md`
 - **Hash awal:** `bb177775` · **Hash awal wave aktif:** `bb177775`
 - **Wave aktif:** `1`, mulai `2026-11-12`
-- **Diperbarui:** `2026-11-12 17:30`
+- **Diperbarui:** `2026-11-13 14:55`
 
 ## Sub sesi wave `1`
 
@@ -124,3 +124,13 @@
 - Wave `1` (`2026-11-12`, hash awal `bb177775`): lima spec 0039 sampai 0043 ditulis paralel dan diterima; update spec 0009. Wave `2` (`2026-11-12`, sampai `fdf53515`): kelima provider dibangun, diverifikasi, dan diuji; 39 dari 39 kotak scope dicentang; catalog revision 12 sampai 16; satu fix core supervisor; update teks spec 0039 sampai 0043; `/sync`. Terbuka: langkah manual user, status `done`, push. Tidak ada kotak di file scope lain yang berubah.
 
 ## Penutupan
+
+- **Semua branch hijau di-merge:** `2026-11-12`; `git branch --no-merged main` kosong. Tidak ada branch `failed`, `blocked`, atau debugger yang tertinggal (fix debugger `0de32eda` masuk lewat gerbang lead di `de5d0e14`).
+- **Merge:** lima branch dipakai ulang sepanjang koordinasi, masing masing di-merge beberapa kali: `claude/arc-f39-spec-781b0e` (spec 0039, F39 build `4d48cfe4`, ClickHouse build `abdb8711`, catalog `57d95508`, MySQL revision 16 `b1a7b704`); `claude/arc-f40-spec-d71756` (spec 0040, format core `7c589919`, Valkey build `d3ea479d`, verify `72bbb476`, fix lifecycle `de5d0e14`, update spec `c009232a` dan `555a7664`); `claude/arc-f41-spec-ec76d9` (spec 0041, Traefik build `0b87ca82` dan `ebc215ef`, test Traefik `7414fcf8`, verify ClickHouse `20cc8513`, test ClickHouse `85cf9e1f`); `claude/arc-f42-spec-bb6818` (spec 0042, update spec 0041 `e7e3e536`, MySQL build `b79107a7`); `claude/arc-f43-spec-0060e9` (spec 0043, update spec 0009 `9497c438`, verify dan test NATS `08b31cce`, verify Traefik dan ClickHouse `2213c0b6`, test Valkey `396c9486`, verify MySQL `7cf2916a`, test MySQL `70c7e65b`).
+- **Document:** tidak ada (kelima fitur bukan `· GA`, tanpa kotak `Document it`).
+- **/sync:** `2026-11-12`, rentang `bb177775..fdf53515`; `AGENTS.md`, Follow-up di spec 0003, 0011, 0021, 0023, 0030, 0036, 0070; tidak ada centang yang ditolak.
+- **Commit penutup:** commit ini, `docs(scope): close 07-stack-enam-service coordination`.
+- **Push:** `origin/main` = `1f4b517a` · `2026-11-13 14:47` (sebelum commit penutup; push kedua sesudahnya). Catatan: `origin/main` sudah berada di `93f669ee` sejak `2026-11-12 08:00` (`e8d0ee5f` log awal lead dan `93f669ee docs(coordinate): …`, dua push yang bukan dari lead), jadi push penutup membawa sisanya.
+- **Dibersihkan:** `claude/arc-f39-spec-781b0e`, `claude/arc-f40-spec-d71756`, `claude/arc-f41-spec-ec76d9`, `claude/arc-f42-spec-bb6818`, `claude/arc-f43-spec-0060e9` · kelima sesi diarsipkan · worktree dihapus · branch dihapus dengan `git branch -d` (semuanya leluhur `origin/main`, worktree bersih). Folder build gerbang `~/worktrees/Stackly/_gate_target` dihapus.
+- **Disimpan:** tidak ada.
+- **Blocker tersisa:** langkah manual user di `07-stack-enam-service.manual.md` (launchd dan baris `HANDOVER_PROVEN` untuk Traefik, Valkey, MySQL; run ulang launchd NATS; langkah GUI; spike native ClickHouse); komentar salah di template PostgreSQL dan ClickHouse (revision paket berikutnya); Follow-up di spec; Syncthing masih menyinkronkan folder repo.
