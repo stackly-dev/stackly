@@ -14,6 +14,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
+use sha2::Digest as _;
 use stackly_core::provider::{ArtifactStatus, NameCheck, ValidatedPackage, read_package};
 use stackly_core::runtime::fixture::install_cached_artifact;
 use stackly_core::{daemon_info, prepare_layout};
@@ -329,6 +330,15 @@ fn stackly_env_up_brings_two_nats_services_up_through_the_real_binaries() {
         export.stdout
     );
 
+    // `--locked` without a lock is refused before any Up.
+    let unlocked = stackly(&root, &project, &["env", "up", "--locked", "--wait"]);
+    assert_eq!(unlocked.code, Some(3), "{unlocked:?}");
+    assert!(
+        unlocked.stderr.contains("env.lock_missing"),
+        "{}",
+        unlocked.stderr
+    );
+
     let lock = stackly(&root, &project, &["env", "lock"]);
     assert_eq!(lock.code, Some(0), "{lock:?}");
     let lock_bytes = std::fs::read(project.join("stackly.lock")).expect("the lock reads");
@@ -345,13 +355,46 @@ fn stackly_env_up_brings_two_nats_services_up_through_the_real_binaries() {
         "Up never writes stackly.lock"
     );
 
+    // The Up recorded the lock it used.
+    let summary = json(&stackly(&root, &project, &["env", "status", "--json"]));
+    let digest: String = sha2::Sha256::digest(&lock_bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert_eq!(
+        summary["result"]["summary"]["lockSha256"].as_str(),
+        Some(digest.as_str()),
+        "{summary}"
+    );
+
+    // A service the lock does not hold makes it stale: refused, nothing made.
+    std::fs::write(
+        project.join("stackly.yaml"),
+        format!("{MANIFEST}  extra:\n    provider: official/nats\n    version: \"2.15\"\n"),
+    )
+    .expect("the manifest is edited");
+    let stale = stackly(&root, &project, &["env", "up", "--locked", "--wait"]);
+    assert_eq!(stale.code, Some(3), "{stale:?}");
+    assert!(stale.stderr.contains("env.lock_stale"), "{}", stale.stderr);
+    let after = stackly(&root, &project, &["instance", "list"]);
+    assert_eq!(
+        after
+            .stdout
+            .lines()
+            .filter(|line| line.starts_with("shop-"))
+            .count(),
+        2,
+        "{}",
+        after.stdout
+    );
+
     // The secrets went to the file keychain of this root.
     assert!(
         layout.keychain_dir().join("stackly.keychain-db").is_file(),
         "the file keychain of the root exists"
     );
     ev.pass_with(&format!(
-        "nats {version} from the cache; env up --wait exited 0 with 2 of 2 ready.; env status: {head}; bound ports {} each accepted a TCP connection; instance list showed {} instances of shop; export held every port and no reference or root path; env up --locked --wait exited 0 and stackly.lock kept its {} bytes; the file keychain of the root exists",
+        "nats {version} from the cache; env up --wait exited 0 with 2 of 2 ready.; env status: {head}; bound ports {} each accepted a TCP connection; instance list showed {} instances of shop; export held every port and no reference or root path; env up --locked --wait exited 3 with env.lock_missing before env lock, exited 0 after it with lockSha256 {digest} and stackly.lock kept its {} bytes, and exited 3 with env.lock_stale once the manifest gained a service, creating nothing; the file keychain of the root exists",
         ports.join(", "),
         members.len(),
         lock_bytes.len()

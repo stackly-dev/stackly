@@ -986,3 +986,48 @@ async fn a_cancel_in_the_create_stage_starts_nothing_and_keeps_the_members_it_ma
         .value;
     assert_eq!(leases.len(), 1);
 }
+
+// covers: AC-15 (spec 0046), a shutdown while a child runs
+#[tokio::test]
+async fn a_shutdown_while_a_child_runs_abandons_the_up_without_its_closing_commit() {
+    let rig = Rig::new().await;
+    let up = FullUp::new(&rig, GRAPH);
+    let names = up.names();
+    script_start(&rig, &names["db"], Outcome::Ok(Duration::from_secs(30)));
+    let operation = up.begin(&rig).await;
+    wait_for(&rig, &format!("start {}", names["db"])).await;
+
+    rig.engine.shutdown(Duration::from_millis(500)).await;
+
+    let environment = rig
+        .environment(up.environment)
+        .expect("accept registered it");
+    assert_eq!(
+        environment.last_up().expect("accept wrote last_up").state(),
+        UpState::Running,
+        "no closing commit ran, so env.get shows it interrupted"
+    );
+    assert!(
+        environment
+            .last_up()
+            .expect("accept wrote last_up")
+            .services()
+            .iter()
+            .all(|report| report.phase() != UpPhase::Skipped),
+        "no dependent was skipped for the shutdown"
+    );
+    let stored = rig
+        .registry
+        .operation(operation)
+        .expect("the registry reads")
+        .value
+        .expect("the Up is stored");
+    assert!(
+        !matches!(
+            stored.state(),
+            OperationState::Failed | OperationState::Succeeded | OperationState::Cancelled
+        ),
+        "the Up is left for recover to close: {:?}",
+        stored.state()
+    );
+}

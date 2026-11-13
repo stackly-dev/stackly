@@ -1043,3 +1043,80 @@ async fn a_cancel_in_the_create_stage_compensates_only_what_that_create_made() {
     stop(daemon).await;
     ev.pass();
 }
+
+// covers: AC-8, AC-9, AC-10 (spec 0046), a dependency whose start fails
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dependency_whose_start_fails_skips_its_dependent_unstarted_and_leaves_a_healthy_one_alone()
+ {
+    let ev = evidence!(
+        covers = ["REQ-021", "AC-021"],
+        kind = Kind::Fixture,
+        expected = "env.up where db crashes before it is ready ends db failed at start and api, which waits for db, skipped with reason failed and no start operation, stopped with desired stopped and its lease kept; a borrowed running instance in the same Up is ready with no child and keeps its process, restart count, and everything Up must not change",
+    );
+    let site = Site::new();
+    let daemon = start(&site).await;
+    let api = site.api().await;
+    let calm = api.create_ready("calm-cache", json!({})).await;
+    let before = api.start_ready(calm).await;
+    let calm_before = untouchable(&site, &daemon, calm);
+    let path = write(
+        &site,
+        "crash",
+        &manifest(
+            "crash",
+            "  cache:\n    provider: testing/fake\n    instanceRef: calm-cache\n  db:\n    provider: testing/fake\n    version: \"0.1\"\n    settings:\n      readyDelayMs: 3000\n      crashAfterMs: 100\n  api:\n    provider: testing/fake\n    version: \"0.1\"\n    dependsOn: [{service: db}]\n",
+        ),
+    );
+
+    let reply = up(&api, &path).await;
+    let done = api.wait_final(reply.operation.operation.id).await;
+
+    assert_eq!(done.operation.state, OperationState::Failed, "{done:?}");
+    assert_eq!(support::Api::failure_code(&done), "env.up_incomplete");
+    let detail = get(&api, reply.environment_id).await;
+    let last = detail.last_up.as_ref().expect("lastUp is written");
+    let report = |alias: &str| {
+        last.services
+            .iter()
+            .find(|service| service.alias == alias)
+            .unwrap_or_else(|| panic!("the report names {alias}"))
+            .clone()
+    };
+    let db = report("db");
+    assert_eq!(db.phase, UpPhase::Failed, "{db:?}");
+    assert_eq!(db.stage, Some(UpStage::Start));
+    let dependent = report("api");
+    assert_eq!(dependent.phase, UpPhase::Skipped, "{dependent:?}");
+    assert_eq!(dependent.dependency.as_deref(), Some("db"));
+    assert_eq!(dependent.operation_id, None, "never started");
+    let cache = report("cache");
+    assert_eq!(cache.phase, UpPhase::Ready);
+    assert_eq!(cache.operation_id, None, "no child for a running instance");
+
+    let api_instance = detail
+        .services
+        .iter()
+        .find(|service| service.alias == "api")
+        .and_then(|service| service.instance.as_ref())
+        .expect("api was created")
+        .id;
+    let summary = api.get(api_instance).await.expect("the instance reads");
+    assert_eq!(summary.lifecycle, InstanceLifecycle::Stopped);
+    assert_eq!(summary.desired, InstanceDesired::Stopped);
+    assert_eq!(
+        active_holders(&daemon, api_instance),
+        [LeaseHolder::Environment(environment_id(
+            reply.environment_id
+        ))]
+    );
+    let after = api.get(calm).await.expect("the instance reads");
+    assert_eq!(
+        after.process.as_ref().map(|process| process.pid),
+        before.process.as_ref().map(|process| process.pid)
+    );
+    assert_eq!(after.restart_total, before.restart_total);
+    assert_eq!(after.revision, before.revision);
+    assert_same(&untouchable(&site, &daemon, calm), &calm_before);
+    stop(daemon).await;
+    ev.pass();
+}
