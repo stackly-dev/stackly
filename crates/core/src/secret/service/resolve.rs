@@ -192,8 +192,17 @@ impl SecretService {
 
     /// Whether a generated value can work for every use of a reference:
     /// not when one use is a field fixed after the data is initialized, on
-    /// an instance whose data is.
-    fn generate_allowed(&self, reference: &SecretRef) -> Result<bool, SecretError> {
+    /// an instance whose data is. A reference no one uses yet allows it.
+    /// It is the rule of `NeedsSecretItem::generate_allowed` in a refused
+    /// start or create, for callers that report a reference before either
+    /// runs (spec 0046 AC-2). It reads the registry and the field rules,
+    /// never a secret value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SecretError::Registry`] when the reference or an instance
+    /// that uses it cannot be read.
+    pub fn generate_allowed(&self, reference: &SecretRef) -> Result<bool, SecretError> {
         let Some(view) = Self::read(self.registry().secret_reference(reference))? else {
             return Ok(true);
         };

@@ -222,6 +222,78 @@ fn generate_is_not_allowed_for_a_field_fixed_after_its_data_is_initialized() {
     assert!(open_needs[0].generate_allowed);
 }
 
+// covers: AC-2 (spec 0046)
+#[test]
+fn the_public_generate_rule_answers_what_a_refused_start_reports() {
+    let harness = Harness::new();
+    let initialized = harness.instance(true);
+    let fresh = harness.instance(false);
+    let fixed = reference("local:a/fixed");
+    let reload = reference("local:b/reload");
+    let open = reference("local:c/open");
+    let unused = reference("local:d/unused");
+    for (target, value) in [
+        (&fixed, "the-fixed-value-here"),
+        (&reload, "the-reload-value-here"),
+        (&open, "the-open-value-here"),
+    ] {
+        harness.set(target, value);
+        harness.store().remove(target);
+    }
+    harness.uses(
+        SecretUser::Instance(initialized),
+        &[("adminPassword", &fixed), ("monitorPassword", &reload)],
+    );
+    harness.uses(SecretUser::Instance(fresh), &[("adminPassword", &open)]);
+    harness.rule(
+        initialized,
+        "adminPassword",
+        8,
+        Some(64),
+        Some(ApplyClass::ImmutableAfterInit),
+    );
+    harness.rule(
+        initialized,
+        "monitorPassword",
+        8,
+        Some(64),
+        Some(ApplyClass::Reload),
+    );
+    harness.rule(
+        fresh,
+        "adminPassword",
+        8,
+        Some(64),
+        Some(ApplyClass::ImmutableAfterInit),
+    );
+
+    let mut reported = needs(
+        harness
+            .service
+            .resolve_for_start(initialized, &SecretCaller::background())
+            .unwrap_err(),
+    );
+    reported.extend(needs(
+        harness
+            .service
+            .resolve_for_start(fresh, &SecretCaller::background())
+            .unwrap_err(),
+    ));
+
+    assert_eq!(reported.len(), 3);
+    for item in &reported {
+        assert_eq!(
+            harness.service.generate_allowed(&item.reference).unwrap(),
+            item.generate_allowed,
+            "{}",
+            item.reference
+        );
+    }
+    assert!(!harness.service.generate_allowed(&fixed).unwrap());
+    assert!(harness.service.generate_allowed(&reload).unwrap());
+    assert!(harness.service.generate_allowed(&unused).unwrap());
+}
+
 #[test]
 fn a_needs_secret_blocker_keeps_the_lifecycle_and_revision_and_clears_once_every_reference_is_present()
  {

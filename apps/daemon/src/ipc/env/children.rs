@@ -20,7 +20,7 @@ use stackly_core::supervisor::StartRequest;
 use stackly_domain::{
     DetailKey, ErrorCodeName, FailureError, FailureItem, InstanceBlocker, InstanceId,
     InstanceLifecycle, MemberAlias, NeedsSecretItem, NeedsSecretReason, OperationId, ProviderName,
-    ReadinessState, ReasonCode, Registry, RuntimeId, SecretRef, SecretUser, Sha256Digest,
+    ReadinessState, ReasonCode, Registry, RuntimeId, SecretRef, Sha256Digest,
 };
 use stackly_protocol::ErrorBody;
 use stackly_protocol::runtime::InstallRuntimeParams;
@@ -352,12 +352,14 @@ pub(crate) async fn planned_up(
     let create_needs = if missing.is_empty() {
         Vec::new()
     } else {
-        let registry = super::registry_of(core)?;
+        let secrets = core.secrets().service()?;
         tokio::task::spawn_blocking(move || {
             missing
                 .into_iter()
                 .map(|reference| {
-                    let allowed = generate_allowed(&registry, &reference);
+                    // The rule of a refused create; a read that fails errs
+                    // towards false.
+                    let allowed = secrets.generate_allowed(&reference).unwrap_or(false);
                     NeedsSecretItem::new(reference, NeedsSecretReason::Missing, allowed)
                 })
                 .collect()
@@ -372,28 +374,5 @@ pub(crate) async fn planned_up(
         blocked,
         instance_needs,
         create_needs,
-    })
-}
-
-/// Whether a generated value could work for `reference` (AC-2): always
-/// for a reference no instance uses yet; otherwise not once the data of an
-/// instance that uses it is initialized, because such a field may not
-/// change any more. The secret service keeps its exact field rules
-/// private, so this reads the uses from the registry and errs towards
-/// false.
-fn generate_allowed(registry: &dyn Registry, reference: &SecretRef) -> bool {
-    let Ok(view) = registry.secret_reference(reference) else {
-        return false;
-    };
-    let Some(view) = view.value else {
-        return true;
-    };
-    view.used_by.iter().all(|used| match used.user {
-        SecretUser::Instance(id) => registry
-            .instance(id)
-            .ok()
-            .and_then(|row| row.value)
-            .is_none_or(|instance| instance.data_initialized_at().is_none()),
-        _ => true,
     })
 }
