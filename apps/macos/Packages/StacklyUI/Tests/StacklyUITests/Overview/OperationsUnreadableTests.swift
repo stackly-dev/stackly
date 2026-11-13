@@ -141,7 +141,8 @@ struct OperationsUnreadableTests {
             restartTotal: 0,
             blocker: nil, endpoints: adopted.endpoints, leftoverProcesses: nil,
             logsUnavailable: false, ownership: .manual, initialized: true, capabilities: nil,
-            lastExit: nil, autostart: InstanceAutostart(policy: .manual, session: .none))
+            lastExit: nil, autostart: InstanceAutostart(policy: .manual, session: .none),
+            environments: nil)
         let filling = CapacityState(
             report: CapacityReport(
                 checkedAt: FixtureClock.now, totalBytes: 1_000_000_000_000,

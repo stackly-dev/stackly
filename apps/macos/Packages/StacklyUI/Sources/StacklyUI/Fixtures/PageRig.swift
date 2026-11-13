@@ -40,6 +40,83 @@
             var instanceOperationsFailure: ClientError?
             /// What `audit.list { instanceId }` of the Activity tab answers (spec 0035).
             var activity = FixtureActivity.Case.rows
+            /// What `env.list` answers (spec 0044).
+            var environments: [EnvironmentSummary] = []
+            /// The failure `env.list` answers, or `nil`.
+            var environmentFailure: ClientError?
+            /// The manifest state `env.get` with `checkManifest` answers.
+            var manifestState: ManifestState = .inSync
+            /// What `env.get` answers instead of the fixture detail, by environment.
+            var environmentDetails: [UUID: EnvironmentDetail] = [:]
+            /// The failure `env.get` answers, or `nil`.
+            var environmentDetailFailure: ClientError?
+            /// What `env.validate` answers, or `nil` for a valid manifest.
+            var validation: EnvValidation?
+            /// What `env.plan` answers, or `nil` for the fixture plan of the source.
+            var plan: EnvPlan?
+            /// The failure `env.plan` answers, or `nil`.
+            var planFailure: ClientError?
+            /// What `env.import` and `env.remove` end with, or `nil` for a completed one.
+            var environmentOutcome: MutationOutcome?
+            /// The environment mutations sent, in order.
+            var environmentSent: [Call] = []
+
+            /// What the environment reads answer.
+            func environmentReply(_ call: Call) throws(ClientError) -> Reply {
+                switch call {
+                case .envList:
+                    if let environmentFailure { throw environmentFailure }
+                    return .envList(EnvironmentList(items: environments))
+                case .envGet(let params):
+                    if let environmentDetailFailure { throw environmentDetailFailure }
+                    if let override = environmentDetails[params.id] { return .envGet(override) }
+                    guard
+                        let detail = FixtureEnvironments.detail(
+                            params.id,
+                            manifest: params.checkManifest == true ? manifestState : nil)
+                    else {
+                        throw .rejected(
+                            .fixtureNotFound(.environment, id: params.id.uuidString.lowercased()))
+                    }
+                    return .envGet(detail)
+                case .envValidate(let params):
+                    return .envValidate(
+                        validation ?? FixtureEnvironments.validation(path: params.path))
+                case .envPlan(let params):
+                    if let planFailure { throw planFailure }
+                    if let plan { return .envPlan(plan) }
+                    switch params.source {
+                    case .file(let path): return .envPlan(FixtureEnvironments.freshPlan(path: path))
+                    case .registered: return .envPlan(FixtureEnvironments.registeredPlan())
+                    }
+                default:
+                    throw .rejected(PageRig.unknownMethod)
+                }
+            }
+
+            /// What an environment mutation ends with.
+            func environmentMutation(_ call: Call) -> MutationOutcome {
+                environmentSent.append(call)
+                if let environmentOutcome { return environmentOutcome }
+                switch call {
+                case .envImport(let params):
+                    let id =
+                        params.relinkEnvironmentId ?? FixtureEnvironments.id(9)
+                    let detail =
+                        FixtureEnvironments.detail(id)
+                        ?? EnvironmentDetail(
+                            summary: FixtureEnvironments.summary(
+                                id: id, name: "erp-development", folder: "erp", status: .down,
+                                ready: 0, total: 6, revision: 1),
+                            services: [], detached: [], manifestState: nil, problems: nil)
+                    return .completed(.envImport(detail))
+                case .envRemove(let params):
+                    let name = environments.first { $0.id == params.id }?.name ?? "environment"
+                    return .completed(.envRemove(RemovedEnvironment(id: params.id, name: name)))
+                default:
+                    return .rejected(PageRig.unknownMethod)
+                }
+            }
 
             /// What `audit.list { instanceId }` answers: the rows of ``activity``.
             func activityPage(of id: UUID, before: String?) async throws(ClientError) -> AuditPage {
@@ -119,6 +196,8 @@
         /// then draws no Runtimes card.
         let runtimes: RuntimeStore?
         let operations: OperationCenter
+        /// The environments (spec 0044).
+        let environments: EnvironmentStore
         let capacity: CapacityModel
         let actions: InstanceActionModel
         /// What the detail page and the inspector read: the fixture detail of each instance,
@@ -135,6 +214,7 @@
             operations ops: [OperationSummary] = FixtureScenario.operationCases,
             providers: [ProviderSummary] = PageRig.providers,
             capacity report: CapacityReport? = nil,
+            environments summaries: [EnvironmentSummary] = [],
             runtimes runtimePage: RuntimeListPage? = nil,
             openIn: FixtureOpenIn = FixtureOpenIn()
         ) {
@@ -142,6 +222,7 @@
             let script = Script(
                 instances: items, operations: ops, providers: providers,
                 runtimePage: runtimePage ?? RuntimeListPage(items: [], next: nil, installing: []))
+            script.environments = summaries
             self.script = script
             let now: () -> Date = { FixtureClock.now }
             instances = InstanceStore(
@@ -182,6 +263,10 @@
                     return Page(items: script.operations, next: nil)
                 },
                 fetchOne: { id throws(ClientError) in script.operations.first { $0.id == id } },
+                now: now, sleep: { _ in })
+            environments = EnvironmentStore(
+                call: { call throws(ClientError) in try script.environmentReply(call) },
+                send: { call, _ in script.environmentMutation(call) },
                 now: now, sleep: { _ in })
             capacity = CapacityModel(
                 read: { call throws(ClientError) in
@@ -237,6 +322,7 @@
             await catalog.store.resnapshot()
             await operations.store.resnapshot()
             await runtimes?.store.resnapshot()
+            await environments.store.resnapshot()
             await capacity.refresh()
         }
 
@@ -273,16 +359,50 @@
             .actionHost()
         }
 
+        /// What the More menu of an environment opened and revealed, in order.
+        private(set) var openedFiles: [URL] = []
+
+        /// The Environments section over these stores, inside the action host of a window:
+        /// the list, or the detail page of `selected` loaded with the script's manifest state.
+        /// A `plan` source opens the plan sheet, loaded, over the page.
+        func environmentsPage(
+            selected: UUID? = nil, waiting: FailureContent? = nil, hasConnection: Bool = true,
+            plan: EnvironmentPlanPresenter.Source? = nil, validate: Bool = false,
+            picker: any FilePicking = FixtureFilePicker(path: nil)
+        ) async -> some View {
+            var detailModel: EnvironmentDetailModel?
+            if let selected {
+                let model = EnvironmentDetailModel(id: selected, store: environments)
+                await model.load(checkManifest: true)
+                if validate { _ = await model.validate() }
+                detailModel = model
+            }
+            let presenter = EnvironmentPlanPresenter(store: environments, picker: picker)
+            if let plan { await presenter.read(plan) }
+            let files = ManifestFilePorts(
+                open: { [weak self] in self?.openedFiles.append($0) },
+                reveal: { [weak self] in self?.openedFiles.append($0) })
+            return EnvironmentsPage(
+                environments: environments, instances: instances, catalog: catalog,
+                actions: actions, selected: selected, waiting: waiting,
+                hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
+                detail: detail, openIn: openIn.ports, files: files, picker: picker,
+                home: FixtureDetail.home, presenter: presenter, detailModel: detailModel
+            )
+            .actionHost()
+        }
+
         /// The Overview over these stores, inside the action host of a window.
         func overviewPage(
             isConnected: Bool = true, waiting: FailureContent? = nil, hasConnection: Bool = true,
             derivation: OverviewDerivation? = nil
         ) -> some View {
             let page = OverviewPage(
-                instances: instances, catalog: catalog, runtimes: runtimes, operations: operations,
-                capacity: capacity, actions: actions, isConnected: isConnected,
+                instances: instances, catalog: catalog, runtimes: runtimes,
+                environments: environments, operations: operations, capacity: capacity,
+                actions: actions, isConnected: isConnected,
                 waiting: waiting, hasConnection: hasConnection, reconnect: {},
-                openDiagnostics: {}
+                openDiagnostics: {}, home: FixtureDetail.home
             )
             return (derivation.map { page.derivation($0) } ?? page).actionHost()
         }

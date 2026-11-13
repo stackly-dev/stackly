@@ -22,6 +22,8 @@ struct FixtureScenarioTests {
         "settings-instances-denied", "settings-sources", "settings-sources-imported",
         "settings-storage-custom",
         "settings-updates", "settings-offline", "settings-conflict",
+        // Spec 0044, AC-24.
+        "environment-partially-ready",
     ]
 
     @Test func theCatalogHasEveryScenarioOfTheSpecWithItsFixedName() {

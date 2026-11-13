@@ -12,6 +12,8 @@
         public static let runtime: UInt8 = 3
         /// The kind byte of a daemon.
         public static let daemon: UInt8 = 4
+        /// The kind byte of an environment (spec 0044).
+        public static let environment: UInt8 = 5
 
         /// The ID of item `number` of `kind`: bytes 0 to 5 zero, byte 6 `0x70`, byte 8
         /// `0x80`, byte 14 the kind, byte 15 the number.

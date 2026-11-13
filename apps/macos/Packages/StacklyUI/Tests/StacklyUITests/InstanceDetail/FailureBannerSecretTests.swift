@@ -130,7 +130,7 @@ extension InstanceSummary {
             lastFailure: failure, restart: restart, restartTotal: restartTotal,
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
-            capabilities: capabilities, lastExit: lastExit, autostart: autostart)
+            capabilities: capabilities, lastExit: lastExit, autostart: autostart, environments: nil)
     }
 }
 

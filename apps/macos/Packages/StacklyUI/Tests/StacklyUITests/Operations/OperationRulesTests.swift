@@ -260,6 +260,6 @@ extension InstanceSummary {
             blocker: blocker, endpoints: endpoints, leftoverProcesses: leftoverProcesses,
             logsUnavailable: logsUnavailable, ownership: ownership, initialized: initialized,
             capabilities: InstanceCapabilities(reload: reload), lastExit: lastExit,
-            autostart: autostart)
+            autostart: autostart, environments: nil)
     }
 }

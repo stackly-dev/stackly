@@ -92,6 +92,8 @@ nonisolated public enum OperationTitle {
         case .approveProvider: return "Approve provider"
         case .revokeProvider: return "Revoke provider approval"
         case .removeProviderImport: return "Remove imported provider"
+        case .importEnvironment: return "Import environment"
+        case .removeEnvironment: return "Remove environment"
         case .unrecognized:
             return "Operation"
         }

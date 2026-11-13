@@ -84,6 +84,7 @@ public struct MainWindowRoot: View {
             instances: model.instances,
             catalog: model.catalog,
             runtimes: model.runtimes,
+            environments: model.environments,
             operations: model.operations,
             capacity: model.capacity,
             instanceActions: model.instanceActions,

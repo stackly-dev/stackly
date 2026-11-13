@@ -13,6 +13,8 @@ nonisolated public enum InstanceSortKey: String, CaseIterable, Hashable, Sendabl
     case endpoints
     /// By the group: failed, unknown, not ready, ready, stopped.
     case status
+    /// By the name of the first environment (spec 0044).
+    case environment
 }
 
 /// The comparator of one table column. The direction only reverses the column's own
@@ -59,6 +61,10 @@ nonisolated public struct InstanceSortComparator: SortComparator, Hashable, Send
                 InstanceText.firstPort(lhs.summary.endpoints),
                 InstanceText.firstPort(rhs.summary.endpoints)
             ) { $0 == $1 ? .orderedSame : ($0 < $1 ? .orderedAscending : .orderedDescending) }
+        case .environment:
+            return optional(lhs.environmentName, rhs.environmentName) {
+                $0.localizedStandardCompare($1)
+            }
         case .status:
             let left = lhs.group?.statusRank ?? Int.max
             let right = rhs.group?.statusRank ?? Int.max

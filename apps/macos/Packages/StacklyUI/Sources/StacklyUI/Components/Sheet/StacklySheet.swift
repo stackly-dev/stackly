@@ -26,6 +26,7 @@ public struct StacklySheet<Content: View>: View {
     private let cancel: StacklyAction?
     private let minWidth: CGFloat
     private let cancelIsDefault: Bool
+    private let showsCancel: Bool
     private let content: Content
 
     /// Creates a sheet.
@@ -37,6 +38,9 @@ public struct StacklySheet<Content: View>: View {
     ///   - cancel: The Cancel action, or `nil` for a "Cancel" that closes the sheet. Give
     ///     one when Cancel means something else, such as cancelling an operation.
     ///   - minWidth: The minimum width of the sheet.
+    ///   - showsCancel: Whether the footer has Cancel. A sheet that only reads, such as the
+    ///     plan sheet of spec 0044 opened from a detail page, has its primary action (Done)
+    ///     alone.
     ///   - cancelIsDefault: Whether Cancel is the default button instead of the primary
     ///     action.
     ///   - content: The body.
@@ -47,6 +51,7 @@ public struct StacklySheet<Content: View>: View {
         primary: StacklyAction,
         cancel: StacklyAction? = nil,
         minWidth: CGFloat = 480,
+        showsCancel: Bool = true,
         cancelIsDefault: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
@@ -57,6 +62,7 @@ public struct StacklySheet<Content: View>: View {
         self.cancel = cancel
         self.minWidth = minWidth
         self.cancelIsDefault = cancelIsDefault
+        self.showsCancel = showsCancel
         self.content = content()
     }
 
@@ -64,7 +70,7 @@ public struct StacklySheet<Content: View>: View {
     public var body: some View {
         SheetLayout(
             title: title, subtitle: subtitle, tile: tile, primary: primary, cancel: cancel,
-            cancelIsDefault: cancelIsDefault, content: content
+            showsCancel: showsCancel, cancelIsDefault: cancelIsDefault, content: content
         )
         .frame(minWidth: minWidth)
         .background(StacklyColor.surfaceWindow)
@@ -114,6 +120,7 @@ private struct SheetLayout<Content: View>: View {
     let tile: TileSpec?
     let primary: StacklyAction
     let cancel: StacklyAction?
+    let showsCancel: Bool
     let cancelIsDefault: Bool
     let content: Content
 
@@ -182,9 +189,11 @@ private struct SheetLayout<Content: View>: View {
                 DisabledReasonText(reason)
             }
             Spacer(minLength: Spacing.s12)
-            SheetFooterButton(
-                action: cancelAction, availability: cancelAction.availability(gate: gate),
-                role: .cancel, host: host, gate: gate, isDefault: cancelIsDefault)
+            if showsCancel {
+                SheetFooterButton(
+                    action: cancelAction, availability: cancelAction.availability(gate: gate),
+                    role: .cancel, host: host, gate: gate, isDefault: cancelIsDefault)
+            }
             SheetFooterButton(
                 action: primary, availability: availability, role: .primary, host: host,
                 gate: gate, isDefault: cancelIsDefault == false)

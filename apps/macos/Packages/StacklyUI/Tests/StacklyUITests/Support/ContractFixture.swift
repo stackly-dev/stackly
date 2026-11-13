@@ -144,7 +144,7 @@ extension InstanceSummary {
             restart: restart, restartTotal: 0, blocker: blocker, endpoints: endpoints,
             leftoverProcesses: leftoverProcesses, logsUnavailable: logsUnavailable,
             ownership: ownership, initialized: initialized, capabilities: capabilities,
-            lastExit: lastExit ?? self.lastExit, autostart: autostart)
+            lastExit: lastExit ?? self.lastExit, autostart: autostart, environments: nil)
     }
 
     /// The `instance.health_changed` content that carries this summary's status fields at

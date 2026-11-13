@@ -173,6 +173,11 @@
             case .connectedMixed:
                 return connectedScenario(
                     id, health: .fixture(), data: mixed, presence: .connected(health: .ready))
+            case .environmentPartiallyReady:
+                return connectedScenario(
+                    id, health: .fixture(),
+                    data: (FixtureEnvironments.instances, operationCases, providerCases),
+                    presence: .connected(health: .ready), replies: FixtureEnvironments.replies)
             case .daemonDegraded:
                 return connectedScenario(
                     id, health: .fixture(.degraded, degraded: "registry"),

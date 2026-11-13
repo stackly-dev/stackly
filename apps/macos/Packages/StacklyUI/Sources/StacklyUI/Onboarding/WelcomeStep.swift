@@ -28,6 +28,9 @@ struct WelcomeStep: View {
                         SectionIcon(.runtimes)
                     }
                 }
+                row(OnboardingCopy.environmentsAsFiles) {
+                    SectionIcon(.environments)
+                }
                 row(OnboardingCopy.noAccount) {
                     Image(systemName: "laptopcomputer")
                         .foregroundStyle(StacklyColor.textSecondary)
