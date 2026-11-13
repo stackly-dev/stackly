@@ -347,3 +347,26 @@ struct EnvironmentUpActivityTests {
         #expect(OperationNesting.rows([orphan]).map(\.isChild) == [false])
     }
 }
+
+/// The sentences of the error codes an Up reports (spec 0046, *Banner partially ready*).
+struct EnvironmentUpCodeTests {
+    private struct Catalog: Decodable {
+        struct Code: Decodable { let code: String }
+        let codes: [Code]
+    }
+
+    @Test func everyCodeWithASentenceIsInTheErrorCatalog() throws {
+        let data = try Data(
+            contentsOf: SourceTree.repositoryRoot.appending(path: "protocols/error-codes.json"))
+        let codes = Set(try JSONDecoder().decode(Catalog.self, from: data).codes.map(\.code))
+        for code in EnvironmentCopy.codeMessages.keys {
+            #expect(codes.contains(code), "\(code) is not in protocols/error-codes.json")
+        }
+        #expect(
+            EnvironmentCopy.upFailedText(
+                stage: .create, code: "supervisor.init_failed", detail: nil)
+                == "Create failed: its data folder could not be initialized")
+        #expect(
+            EnvironmentCopy.codeMessage("runtime.checksum_mismatch") == "runtime.checksum_mismatch")
+    }
+}
