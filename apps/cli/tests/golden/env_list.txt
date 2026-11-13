@@ -1,0 +1,2 @@
+NAME             STATUS           READY  FILE
+erp-development  partially_ready  1/2    /Users/dev/erp/stackly.yaml

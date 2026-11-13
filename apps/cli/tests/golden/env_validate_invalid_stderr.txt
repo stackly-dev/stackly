@@ -1,0 +1,6 @@
+/Users/dev/erp/stackly.yaml: services.api.dependsOn: dependency_cycle: dependency cycle: api -> db -> api
+/Users/dev/erp/stackly.yaml: services.db.secretRefs.authToken: secret_literal: write a secret reference such as local:project/name, never the secret itself
+2 error(s), 0 warning(s)
+error: the environment manifest is not valid
+  code: cli.env_invalid
+  hint: Fix each finding above, then validate again.

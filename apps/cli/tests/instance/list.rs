@@ -252,3 +252,55 @@ fn names_and_reasons_from_the_daemon_are_escaped_in_the_table() {
         text.stdout
     );
 }
+
+/// Spec 0044 AC-15: the `ENVIRONMENT` column names every environment of
+/// an instance, comma separated in the daemon's order, and `-` for none.
+#[test]
+fn the_environment_column_lists_the_environments_in_the_daemons_order() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "instance list writes erp-development, billing in the ENVIRONMENT column of an instance with a dedicated and a shared environment, in the daemon's order, and - for an instance without one",
+    );
+    let shared = data::edited(|value| {
+        value["name"] = "shared-db".into();
+        value["ownership"] = "dedicated".into();
+        value["environments"] = serde_json::json!([
+            {
+                "environmentId": "0192f3a7-0000-7000-8000-0000000000e1",
+                "name": "erp-development",
+                "alias": "postgres",
+                "ownership": "dedicated"
+            },
+            {
+                "environmentId": "0192f3a7-0000-7000-8000-0000000000e2",
+                "name": "billing",
+                "alias": "db",
+                "ownership": "shared"
+            }
+        ]);
+    });
+    let plain = data::edited(|value| {
+        value["name"] = "plain-db".into();
+        value["id"] = "0192f3a5-0000-7000-8000-0000000000ff".into();
+    });
+    let (root, _daemon) = listing(vec![shared, plain], 200);
+
+    let text = run(root.path(), &["instance", "list"]);
+
+    assert_eq!(text.code, Some(0), "{text:?}");
+    let lines: Vec<&str> = text.stdout.lines().collect();
+    assert!(lines[0].ends_with("OWNERSHIP  ENVIRONMENT"), "{}", lines[0]);
+    assert!(
+        lines[1].starts_with("shared-db ")
+            && lines[1].ends_with("dedicated  erp-development, billing"),
+        "{}",
+        lines[1]
+    );
+    assert!(
+        lines[2].starts_with("plain-db ") && lines[2].ends_with(" -"),
+        "{}",
+        lines[2]
+    );
+    ev.pass();
+}
