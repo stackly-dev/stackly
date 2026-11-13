@@ -546,7 +546,10 @@ async fn detail_of(
         Some(stackly_domain::OperationResource::Environment(id)),
     )
     .await;
-    let up = status::up_now(core, &environment, &active);
+    let mut up = status::up_now(core, &environment, &active);
+    if let Some(report) = up.last_up.as_mut() {
+        status::refine_references(core, &environment, report).await;
+    }
     let mut summary = dto::summary(&environment, &view, updated);
     summary.active_operation = up.active.clone();
     let services = view
