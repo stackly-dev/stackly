@@ -10,7 +10,7 @@ Keputusan yang diambil atas namamu ada di `08-environment-proyek.log.md` bagian 
 | --- | --- | --- | --- | --- | --- |
 | `F44-1` | Import manifest contoh ERP di app, baca sheet plan, banner manifest, Validate, Reload, Locate, Remove, Overview, Instances, mode gelap (18 langkah) | `spec 0044 AC-18 sampai AC-23, AC-25` (dan AC-6 lewat GUI) | F44 milestone 3 "Environments di app", `Build it`, `Verify it` | F44 milestone 1 sampai 3 di `main` (`dfd1f3c6`) | `NOT_RUN` |
 | `F44-2` | Menu baris service yang sudah punya instance lewat `instanceRef` (Open In, Copy Connection URL, Show Instance, Show Logs, Stop atau Start, klik ganda); mengunduh runtime Valkey | `spec 0044 AC-19` | F44 milestone 3 "Environments di app", `Build it`, `Verify it` | F44 milestone 3 dan fix app di `main` (`be9ff7a3`) | `NOT_RUN` |
-| `F45-1` | Lock Versions, Update Lock…, `.stackly.local.yaml`, sheet plan dengan lock dan override, Copy Environment Variables (13 langkah; langkah 10 mengunduh Valkey) | `spec 0045 AC-18, AC-19, AC-21` (dan AC-1, AC-3, AC-9, AC-10, AC-15 lewat GUI) | belum ada (milestone 3 F45 menunggu verify) | F45 milestone 1 dan 3 di `main`; langkah 10 butuh `stackly env export` (milestone 2) untuk perbandingan | `NOT_RUN` |
+| `F45-1` | Lock Versions, Update Lock…, `.stackly.local.yaml`, sheet plan dengan lock dan override, Copy Environment Variables (13 langkah; langkah 10 mengunduh Valkey) | `spec 0045 AC-18, AC-19, AC-21` (dan AC-1, AC-3, AC-9, AC-10, AC-15 lewat GUI) | F45 milestone 3 "Lock dan override di app" | F45 milestone 1 dan 3 di `main`; langkah 10 butuh `stackly env export` (milestone 2) untuk perbandingan | `NOT_RUN` |
 
 ## Nilai dari user
 
