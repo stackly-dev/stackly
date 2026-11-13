@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-8e4d-73e2-8cda-9b470b763f22",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_second_up_is_busy_and_a_cancel_records_the_rest_cancelled",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 384
+  },
+  "status": "PASS",
+  "expected": "while an Up whose db is slow to become ready runs, a second env.up of the same environment is refused resource.busy naming the first, env.get shows the Up as the active operation with lastUp running, and operation.cancel ends it cancelled with lastUp cancelled and the members and leases kept",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:20.109952Z",
+  "finishedAt": "2026-11-13T21:30:27.282198Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,17 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 13.45s
+     Running tests/env_up_cli_native.rs (target/debug/deps/env_up_cli_native-f41c491b76bbcbea)
+
+running 1 test
+    Finished `dev` profile [unoptimized] target(s) in 0.08s
+    Finished `dev` profile [unoptimized] target(s) in 0.07s
+test stackly_env_up_brings_two_nats_services_up_through_the_real_binaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.52s
+

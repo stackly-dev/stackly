@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-c01d-71fe-bc56-405299a4d09a",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_manifest_edited_after_its_review_is_refused_with_plan_changed_and_writes_nothing",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 454
+  },
+  "status": "PASS",
+  "expected": "env.up with the digest of a plan the client reviewed before the manifest was edited answers env.plan_changed and writes nothing; the digest of the new plan brings it up",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:32.861364Z",
+  "finishedAt": "2026-11-13T21:30:46.593733Z",
+  "evidencePath": "output.log"
+}

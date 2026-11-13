@@ -40,7 +40,7 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 - [x] Verify it: `/check verify lockfile & override lokal`
 - [x] Test it: `/test lockfile & override lokal`
 
-### 46. Env up & dependency graph · in-progress
+### 46. Env up & dependency graph · done
 
 Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance yang ada lewat `instanceRef` (tanpa mengubah config, auth, port, atau autostart miliknya), mengambil lease, lalu menjalankan dependency graph berdasarkan readiness dan timeout. Partial failure menghasilkan state yang jelas, dan kompensasi hanya menyentuh resource milik operasi itu.
 
@@ -57,7 +57,7 @@ Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance y
   - [x] `stackly env up` dan `status`: resolver target ber path, progress dan tabel akhir dengan port yang benar benar dipakai, `--locked`, golden dan binary test (spec 0046 AC-17, AC-18; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
   - [x] Up di app: tombol Up… dan Bring Up di sheet plan, `SecretEntrySheet` untuk needs secret, "Create with Up…", banner "Bringing up…" dan phase per service, alasan di banner partially ready, Activity dengan anak bersarang dan label Partial, onboarding, fixture `environment-bringing-up` dan `environment-up-incomplete`, snapshot, lalu test native ERP dari cache xtask, evidence, dan langkah manual yang butuh mata dan tangan kamu (spec 0046 AC-19 sampai AC-22, AC-25; build steps 8 to 11; after build step 5; needs fitur 44 milestone app; evidence manual needs build step 6)
 - [x] Verify it: `/check verify env up & dependency graph`
-- [ ] Test it: `/test env up & dependency graph`
+- [x] Test it: `/test env up & dependency graph`
 
 ### 47. Env down, shared instance & lease · in-progress
 
@@ -67,7 +67,7 @@ Down melepas lease environment dan hanya menghentikan instance yang tidak dibutu
 
 **Trace:** REQ-022, REQ-028, BR-006, BR-014, BR-015, VAL-014, AC-022, AC-073 (bersama fitur 46), PRD bagian 13.2
 
-**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`, `crates/core/src/environment/down/`, `apps/daemon/src/ipc/env/down.rs`
+**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`, `crates/core/src/environment/down/`, `apps/daemon/src/ipc/env/down.rs`, `crates/core/src/instance/stop_all.rs`, `crates/core/src/supervisor/stop_all.rs`, `crates/core/src/supervisor/change.rs`, `apps/daemon/src/ipc/stop_all.rs`, `apps/daemon/src/ipc/agent_off.rs`
 
 - [x] Design it (spec): `/architect env down, shared instance & lease`
 - [ ] Build it: `/develop env down, shared instance & lease`

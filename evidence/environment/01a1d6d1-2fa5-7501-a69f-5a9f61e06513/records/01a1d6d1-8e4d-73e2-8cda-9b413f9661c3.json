@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-8e4d-73e2-8cda-9b413f9661c3",
+  "covers": [
+    "REQ-021",
+    "AC-021",
+    "BR-023"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_failed_create_skips_its_dependents_and_ends_the_up_incomplete",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 316
+  },
+  "status": "PASS",
+  "expected": "env.up where the create of api fails at init leaves db ready, ends api failed at create and web skipped waiting for api, fails with env.up_incomplete (ready 1 of 3), leaves no instance or member of api behind, and env.get explains api with up_failed and web with dependency_not_ready",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:20.109949Z",
+  "finishedAt": "2026-11-13T21:30:29.868926Z",
+  "evidencePath": "output.log"
+}

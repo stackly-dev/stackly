@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-8e4d-73e2-8cda-9b42b08a61e3",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_service_that_meets_a_locked_store_reports_its_real_reason_in_last_up",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 561
+  },
+  "status": "PASS",
+  "expected": "an Up whose create meets a locked store ends that service needs_secret, and env.get shows lastUp with the reference, reason store_locked, and generateAllowed as the child reported them, not missing",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:20.109953Z",
+  "finishedAt": "2026-11-13T21:30:24.280179Z",
+  "evidencePath": "output.log"
+}
