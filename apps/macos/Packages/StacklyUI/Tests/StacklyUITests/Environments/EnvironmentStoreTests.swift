@@ -70,18 +70,98 @@ struct EnvironmentStoreTests {
         .evidence(
             covers: ["REQ-020"],
             expected:
-                "an environment operation that ended loads env.list again; one that runs or another resource does not"
+                "an environment operation that ended loads env.list again at once; an operation of another resource does not"
         ))
     func anEndedEnvironmentOperationLoadsTheListAgain() async throws {
-        let store = store()
+        let store = store(sleep: { _ in try await Task.sleep(for: .seconds(3_600)) })
         await store.store.resnapshot()
-        store.store.receive(event(operation(.environment, state: .running)))
         store.store.receive(event(operation(.instance, state: .succeeded), sequence: 2))
         for _ in 0..<10 { await Task.yield() }
         #expect(script.listCalls == 1)
         store.store.receive(event(operation(.environment, state: .succeeded), sequence: 3))
         try await waitUntil { script.listCalls == 2 }
         #expect(store.changes >= 2)
+        #expect(store.lastEnded?.environment == FixtureEnvironments.erpID)
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-021", "NFR-012"],
+            expected:
+                "a running environment operation, its progress, and a state change of its child load env.list again after 300 ms, coalesced into one load"
+        ))
+    func aRunningUpItsProgressAndItsChildrenLoadTheListAfterTheDelay() async throws {
+        var waits: [Duration] = []
+        script.items = FixtureEnvironmentUp.bringingUpSummaries
+        let store = store(sleep: { waits.append($0) })
+        await store.store.resnapshot()
+        #expect(store.activeOperations == [FixtureEnvironmentUp.upID])
+
+        store.store.receive(event(.operationStateChanged(FixtureEnvironmentUp.upOperation())))
+        try await waitUntil { script.listCalls == 2 }
+        store.store.receive(
+            event(.operationProgress(FixtureEnvironmentUp.upOperation(done: 2)), sequence: 2))
+        try await waitUntil { script.listCalls == 3 }
+        let child = FixtureEnvironmentUp.child(
+            1, kind: .startInstance, instance: FixtureEnvironments.instances[0],
+            state: .running)
+        store.store.receive(event(.operationStateChanged(child), sequence: 3))
+        try await waitUntil { script.listCalls == 4 }
+        #expect(waits.allSatisfy { $0 == .milliseconds(300) })
+        #expect(waits.count == 3)
+    }
+
+    @Test func aBurstOfProgressLoadsTheListOnce() async throws {
+        let store = store(sleep: { _ in try await Task.sleep(for: .milliseconds(40)) })
+        await store.store.resnapshot()
+        for sequence in 1...5 {
+            store.store.receive(
+                event(
+                    .operationProgress(
+                        FixtureEnvironmentUp.upOperation(done: UInt64(sequence % 4))),
+                    sequence: UInt64(sequence)))
+        }
+        try await waitUntil { script.listCalls == 2 }
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(script.listCalls == 2)
+    }
+
+    @Test func aChildOfAnotherOperationOrTheProgressOfAnInstanceLoadsNothing() async throws {
+        let store = store()
+        await store.store.resnapshot()
+        let child = FixtureEnvironmentUp.child(
+            1, kind: .startInstance, instance: FixtureEnvironments.instances[0],
+            state: .running)
+        store.store.receive(event(.operationStateChanged(child)))
+        store.store.receive(
+            event(
+                .operationProgress(
+                    .fixture(
+                        kind: .installRuntime,
+                        resource: ResourceRef(kind: .runtime, id: "r"), state: .running)),
+                sequence: 2))
+        for _ in 0..<20 { await Task.yield() }
+        #expect(script.listCalls == 1)
+    }
+
+    @Test(
+        .evidence(
+            covers: ["REQ-021", "NFR-012"],
+            expected:
+                "an Up another client started shows Bringing up… after its first operation event, without an instance event"
+        ))
+    func anUpStartedByAnotherClientShowsBringingUpWithoutAnInstanceEvent() async throws {
+        let store = store()
+        await store.store.resnapshot()
+        let erp = try #require(store.environment(FixtureEnvironments.erpID))
+        #expect(StatusAppearance.environment(erp).label == "Partially Ready")
+
+        script.items = FixtureEnvironmentUp.bringingUpSummaries
+        store.store.receive(
+            event(.operationStateChanged(FixtureEnvironmentUp.upOperation(done: 0))))
+        try await waitUntil { store.environment(FixtureEnvironments.erpID)?.activeOperation != nil }
+        let running = try #require(store.environment(FixtureEnvironments.erpID))
+        #expect(StatusAppearance.environment(running).label == "Bringing up…")
     }
 
     @Test func instanceEventsLoadTheListOnceAfterTheyStop() async throws {
