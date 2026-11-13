@@ -219,6 +219,20 @@ impl Output {
             .error(&failure.body, extra.message.as_deref(), &hints, request_id);
     }
 
+    /// Writes `result` to stdout as text now and flushes it, so a command
+    /// can put its result ahead of the sections it still writes to stderr
+    /// (spec 0044 *CLI*: the plan table before `blocked:`). The command
+    /// then renders nothing more for it. A broken pipe or a write error is
+    /// handled as in [`Output::emit`].
+    pub fn write_result_now<T: Render>(&mut self, result: &T) {
+        let mut writer = self.human_writer();
+        result.render(&mut writer);
+        let text = writer.into_string();
+        if !text.is_empty() {
+            self.write_stdout(text.as_bytes());
+        }
+    }
+
     fn write_stdout(&mut self, bytes: &[u8]) {
         match write_all(&mut *self.stdout, bytes) {
             Written::All | Written::BrokenPipe => {}

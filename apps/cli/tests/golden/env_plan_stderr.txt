@@ -1,3 +1,7 @@
+lock: stackly.lock (in_sync, macos-aarch64)
+local: .stackly.local.yaml
+  postgres.storage.dataLocation: /Volumes/Fast/Stackly (applied)
+  cache.endpoints.client.port: 6380 (compared)
 secrets:
   postgres superuserPassword local:erp/postgres/admin: unregistered
 differs:

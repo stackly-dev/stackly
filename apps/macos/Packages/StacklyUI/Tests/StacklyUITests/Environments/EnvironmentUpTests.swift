@@ -252,15 +252,44 @@ struct EnvironmentUpProgressTests {
 
         let skipped = ServiceRowModel.notReadyItems(
             of: FixtureEnvironmentUp.notReadyDetail(),
-            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+            actions: ServiceRowModel.BannerActions(
+                open: { opened.append($0) }, openOperation: { operations.append($0) }))
         #expect(
             skipped.map(\.reason) == [
-                "Start failed: the port is used by another process",
-                "Waiting for postgres, which failed", "Waiting for postgres timed out",
-                "Waiting for postgres, which is not ready",
+                "Create failed: its data folder could not be initialized",
+                "Waiting for postgres, which failed", "Waiting for postgres, which failed",
+                "Waiting for postgres, which failed",
             ])
-        #expect(skipped[1].action?.title == "Show postgres")
-        skipped[1].action?.perform()
+        #expect(skipped[0].action?.title == "Show Operation")
+        #expect(skipped[1].action == nil, "a dependency without an instance has nothing to open")
+
+        let interrupted = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.notReadyDetail(.interrupted),
+            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+        #expect(interrupted.map(\.reason) == Array(repeating: "not created", count: 4))
+
+        let incomplete = FixtureEnvironmentUp.incompleteDetail()
+        let waiting = ServiceNotReady(
+            reason: .dependencyNotReady, detail: nil, phase: nil, waitingOn: [], references: [],
+            dependency: "postgres", dependencyReason: .timeout, stage: nil, code: nil,
+            operationId: nil)
+        let services = (incomplete.services ?? []).map { service in
+            service.alias == "cache"
+                ? EnvironmentService(
+                    alias: service.alias, provider: service.provider,
+                    ownership: service.ownership, selector: service.selector,
+                    instanceRef: nil, instance: service.instance, notReady: waiting)
+                : service
+        }
+        let dependency = ServiceRowModel.notReadyItems(
+            of: EnvironmentDetail(
+                summary: incomplete.summary, services: services, detached: [],
+                manifestState: .inSync, problems: nil, lock: nil, local: nil,
+                lastUp: incomplete.lastUp, lease: nil),
+            actions: ServiceRowModel.BannerActions(open: { opened.append($0) }))
+        let cache = try #require(dependency.first { $0.reason == "Waiting for postgres timed out" })
+        #expect(cache.action?.title == "Show postgres")
+        cache.action?.perform()
         #expect(opened == [FixtureEnvironments.instances[0].id])
         #expect(skipped.allSatisfy { $0.name.isEmpty == false })
     }
@@ -345,5 +374,82 @@ struct EnvironmentUpActivityTests {
             1, kind: .startInstance, instance: FixtureEnvironments.instances[0],
             state: .succeeded)
         #expect(OperationNesting.rows([orphan]).map(\.isChild) == [false])
+    }
+}
+
+/// The sentences of the error codes an Up reports (spec 0046, *Banner partially ready*).
+struct EnvironmentUpCodeTests {
+    private struct Catalog: Decodable {
+        struct Code: Decodable { let code: String }
+        let codes: [Code]
+    }
+
+    @Test func everyCodeWithASentenceIsInTheErrorCatalog() throws {
+        let data = try Data(
+            contentsOf: SourceTree.repositoryRoot.appending(path: "protocols/error-codes.json"))
+        let codes = Set(try JSONDecoder().decode(Catalog.self, from: data).codes.map(\.code))
+        for code in EnvironmentCopy.codeMessages.keys {
+            #expect(codes.contains(code), "\(code) is not in protocols/error-codes.json")
+        }
+        #expect(
+            EnvironmentCopy.upFailedText(
+                stage: .create, code: "supervisor.init_failed", detail: nil)
+                == "Create failed: its data folder could not be initialized")
+        #expect(
+            EnvironmentCopy.codeMessage("runtime.checksum_mismatch") == "runtime.checksum_mismatch")
+    }
+}
+
+/// Set Secret… of the banner passes on what the daemon sent (spec 0046, AC-21).
+@MainActor
+struct EnvironmentUpSecretTests {
+    @Test(
+        .evidence(
+            covers: ["NFR-012"],
+            expected:
+                "Set Secret… of the banner opens the secret sheet with the reference, reason, and generateAllowed the daemon sent, a locked Keychain and no generated value included"
+        ))
+    func setSecretPassesOnTheReasonAndGenerateAllowedOfTheDaemon() throws {
+        var needs: [[SecretNeed]] = []
+        let items = ServiceRowModel.notReadyItems(
+            of: FixtureEnvironmentUp.lockedSecretDetail(),
+            actions: ServiceRowModel.BannerActions(
+                open: { _ in }, setSecret: { needs.append($0) }))
+        let cache = try #require(items.first { $0.name.hasSuffix("(cache)") })
+        #expect(cache.reason == "Needs secret local:erp/cache/password")
+        #expect(cache.action?.title == "Set Secret…")
+        cache.action?.perform()
+        let locked = try #require(needs.first?.first)
+        #expect(locked.reference == "local:erp/cache/password")
+        #expect(locked.reason == .storeLocked)
+        #expect(locked.generateAllowed == false)
+        #expect(locked.reasonText == "The Keychain is locked.")
+
+        let search = try #require(items.first { $0.name == "search" })
+        search.action?.perform()
+        let missing = try #require(needs.last?.first)
+        #expect(missing.reason == .missing)
+        #expect(missing.generateAllowed == true)
+    }
+}
+
+/// The running count of the sidebar and the Operations subtitle (spec 0046, *Activity*).
+@MainActor
+struct EnvironmentUpRunningCountTests {
+    @Test func theRunningCountLeavesTheChildrenOfAnUpOut() async {
+        let up = FixtureEnvironmentUp.upOperation()
+        let children = (1...3).map { number in
+            FixtureEnvironmentUp.child(
+                UInt8(number), kind: .startInstance,
+                instance: FixtureEnvironments.instances[number - 1], state: .running)
+        }
+        let center = OperationCenter(
+            fetchPage: { _ throws(ClientError) in Page(items: [up] + children, next: nil) },
+            fetchOne: { _ throws(ClientError) in nil },
+            now: { FixtureClock.now }, sleep: { _ in })
+        await center.store.refresh()
+        #expect(center.runningCount == 1)
+        #expect(center.subtitle == "1 running")
+        #expect(center.active.count == 4)
     }
 }

@@ -5,7 +5,8 @@
 use std::path::PathBuf;
 
 use stackly_protocol::env::{
-    EnvPlan, EnvSource, EnvValidation, EnvironmentDetail, EnvironmentList, RemovedEnvironment,
+    EnvExport, EnvLockResult, EnvPlan, EnvSource, EnvValidation, EnvironmentDetail,
+    EnvironmentList, RemovedEnvironment,
 };
 use stackly_protocol::{Call, Count, Reply, Revision};
 
@@ -37,6 +38,29 @@ pub fn blocked() -> EnvPlan {
 /// `detail-partially-ready.json`: `erp-development`, revision 3.
 pub fn detail() -> EnvironmentDetail {
     serde_json::from_str(&read("detail-partially-ready.json")).expect("the detail decodes")
+}
+
+/// `plan-locked-blocked.json`: a plan with `locked` true, a stale lock,
+/// a lock without an artifact for this Mac, and an invalid local file.
+pub fn locked_blocked() -> EnvPlan {
+    serde_json::from_str(&read("plan-locked-blocked.json")).expect("the plan decodes")
+}
+
+/// `lock-written.json`: postgres updated from 18.5 to 18.6 and `old`
+/// removed, written to `/Users/dev/erp/stackly.lock`.
+pub fn lock_written() -> EnvLockResult {
+    serde_json::from_str(&read("lock-written.json")).expect("the lock result decodes")
+}
+
+/// `lock-blocked.json`: one `env.lock_invalid` blocker, nothing written.
+pub fn lock_blocked() -> EnvLockResult {
+    serde_json::from_str(&read("lock-blocked.json")).expect("the lock result decodes")
+}
+
+/// `export-dotenv.json`: three postgres variables, the postgres socket
+/// and cache skipped.
+pub fn export_dotenv() -> EnvExport {
+    serde_json::from_str(&read("export-dotenv.json")).expect("the export decodes")
 }
 
 /// The validation of the applicable plan: valid, no findings.

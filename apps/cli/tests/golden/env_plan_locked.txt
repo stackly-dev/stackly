@@ -1,0 +1,6 @@
+ACTION  SERVICE   INSTANCE                  PROVIDER             VERSION  SOURCE  ENDPOINTS
+create  postgres  erp-development-postgres  official/postgresql  -        -       client=127.0.0.1:5432
+start   postgres  erp-development-postgres  official/postgresql  -        -       client=127.0.0.1:5432
+keep    cache     shared-valkey             official/valkey      -        -       client=127.0.0.1:6379
+
+Plan: 0 to install, 1 to create, 1 to start, 1 to keep.

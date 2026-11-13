@@ -1,0 +1,20 @@
+lock: stackly.lock (stale, macos-aarch64)
+  queue: not_locked
+local: .stackly.local.yaml
+  warning: .stackly.local.yaml: services.ghost: override_unknown_service: the manifest declares no service of this name; the override is ignored
+  .stackly.local.yaml: services.postgres.endpoints.admin: unknown_endpoint: the provider has no endpoint of this name
+blocked: queue: env.lock_stale: the lock does not match this service
+  hint: run stackly env lock, then commit stackly.lock
+blocked: postgres: env.lock_no_artifact: the lock has no artifact for this mac
+  hint: the lock has no artifact this Mac can use; update Stackly, or lock again on this Mac
+blocked: env.local_invalid: the local override file has errors
+  hint: fix each finding of .stackly.local.yaml
+secrets:
+  postgres superuserPassword local:erp/postgres/admin: unregistered
+differs:
+  cache endpoint.client.port: manifest 6380, instance 6379
+not in manifest:
+  old erp-old (dedicated)
+error: the plan has blockers
+  code: cli.env_plan_blocked
+  hint: Each blocker above says what stands in the way.

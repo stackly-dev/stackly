@@ -5,11 +5,13 @@ import StacklyClient
 /// The registered environments, for the sidebar, the Environments page, and the Overview
 /// (spec 0044, *Layar* and *Event*).
 /// Its store loads `env.list` in one page, since the daemon answers at most 64 environments
-/// by name. There is no environment event kind: the store loads `env.list` again when an
-/// `operation.state_changed` that ended carries a resource of kind `environment`, and, 300 ms
-/// after the last one, when `instance.state_changed`, `instance.health_changed`, or
-/// `instance.removed` arrives, since an instance changes the ready count. A reconnect loads it
-/// through the shell's resnapshot. Every reload also raises ``changes``, so an open detail page
+/// by name. There is no environment event kind: the store loads `env.list` again at once when
+/// an `operation.state_changed` that ended carries a resource of kind `environment`, and, 300 ms
+/// after the last one, on `operation.state_changed` and `operation.progress` of an environment
+/// operation that has not ended, on `operation.state_changed` of an operation whose `parent` is
+/// the `activeOperation` of an environment (spec 0046, *Event*), and on `instance.state_changed`,
+/// `instance.health_changed`, or `instance.removed`, since an instance changes the ready count.
+/// A reconnect loads it through the shell's resnapshot. Every reload also raises ``changes``, so an open detail page
 /// reads `env.get` again with `checkManifest` false and never reads the user's file on an
 /// instance event.
 @MainActor
@@ -31,7 +33,7 @@ public final class EnvironmentStore {
     @ObservationIgnored let send: (Call, String) async -> MutationOutcome
     @ObservationIgnored private let refresher: SnapshotCoalescer
     @ObservationIgnored private let sleep: (Duration) async throws -> Void
-    @ObservationIgnored private var pendingInstanceReload: Task<Void, Never>?
+    @ObservationIgnored private var pendingReload: Task<Void, Never>?
 
     /// Creates an empty store.
     /// - Parameters:
@@ -55,8 +57,8 @@ public final class EnvironmentStore {
         let box = EventBox()
         let store = ResourceStore<EnvironmentSummary>(
             kinds: [
-                "operation.state_changed", "instance.state_changed", "instance.health_changed",
-                "instance.removed",
+                "operation.state_changed", "operation.progress", "instance.state_changed",
+                "instance.health_changed", "instance.removed",
             ],
             fetchPage: { _ throws(ClientError) in
                 Page(items: try await Self.list(call: call), next: nil)
@@ -85,34 +87,59 @@ public final class EnvironmentStore {
         var run: (@MainActor (Event) -> Void)?
     }
 
-    /// What one event does: an ended environment operation reloads now, an instance event
-    /// reloads after ``instanceDelay``, and anything else changes nothing.
+    /// What one event does: an ended environment operation reloads now; a running one, its
+    /// progress, a change of one of its child operations, and an instance event reload after
+    /// ``instanceDelay``, coalesced; anything else changes nothing.
     func receive(_ event: Event) {
         switch event.kind {
         case .operationStateChanged(let operation):
-            guard operation.resource?.kind == .environment, Self.hasEnded(operation.state)
-            else { return }
-            pendingInstanceReload?.cancel()
-            pendingInstanceReload = nil
-            lastEnded = EndedOperation(
-                operation: operation.id,
-                environment: operation.resource.flatMap { UUID(uuidString: $0.id) })
-            refresher.request()
-        case .instanceStateChanged, .instanceHealthChanged, .instanceRemoved:
-            pendingInstanceReload?.cancel()
-            let sleep = sleep
-            pendingInstanceReload = Task { [weak self] in
-                do {
-                    try await sleep(Self.instanceDelay)
-                } catch {
-                    return
+            if operation.resource?.kind == .environment {
+                if Self.hasEnded(operation.state) {
+                    reloadNow(after: operation)
+                } else {
+                    scheduleReload()
                 }
-                guard Task.isCancelled == false else { return }
-                self?.pendingInstanceReload = nil
-                self?.refresher.request()
+            } else if let parent = operation.parent, activeOperations.contains(parent) {
+                scheduleReload()
             }
+        case .operationProgress(let operation):
+            guard operation.resource?.kind == .environment else { return }
+            scheduleReload()
+        case .instanceStateChanged, .instanceHealthChanged, .instanceRemoved:
+            scheduleReload()
         default:
             return
+        }
+    }
+
+    /// The `activeOperation` IDs of the environments of the last snapshot.
+    var activeOperations: Set<UUID> {
+        Set(store.items.values.compactMap { $0.activeOperation?.id })
+    }
+
+    /// Loads now for an environment operation that ended, so its page reads the manifest.
+    private func reloadNow(after operation: OperationSummary) {
+        pendingReload?.cancel()
+        pendingReload = nil
+        lastEnded = EndedOperation(
+            operation: operation.id,
+            environment: operation.resource.flatMap { UUID(uuidString: $0.id) })
+        refresher.request()
+    }
+
+    /// Loads ``instanceDelay`` after the last of a burst of events.
+    private func scheduleReload() {
+        pendingReload?.cancel()
+        let sleep = sleep
+        pendingReload = Task { [weak self] in
+            do {
+                try await sleep(Self.instanceDelay)
+            } catch {
+                return
+            }
+            guard Task.isCancelled == false else { return }
+            self?.pendingReload = nil
+            self?.refresher.request()
         }
     }
 

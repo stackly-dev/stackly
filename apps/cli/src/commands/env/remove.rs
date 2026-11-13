@@ -2,7 +2,9 @@
 //! resolves the name through `env.list`, asks with the `ConfirmArgs` rule
 //! of spec 0008, then sends `env.remove` with the revision it showed, so
 //! an environment that changed in between fails
-//! `resource.revision_mismatch`. Instances and data are kept.
+//! `resource.revision_mismatch`. Instances and data are kept. With
+//! `--yes` nothing goes to stderr: the result line on stdout already says
+//! what is kept.
 
 use clap::Args;
 use serde::Serialize;
@@ -11,8 +13,8 @@ use stackly_protocol::{Call, Reply};
 
 use super::target::EnvironmentTarget;
 use crate::commands::RunCommand;
-use crate::commands::provider::local::{confirm_action, esc, operation_call};
-use crate::confirm::ConfirmArgs;
+use crate::commands::provider::local::{confirm, esc, operation_call};
+use crate::confirm::{ConfirmArgs, ConfirmRequest, ConfirmRole};
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -61,7 +63,12 @@ impl RunCommand for RemoveArgs {
             Err(failure) => return CommandOutput::failed(failure),
         };
         let question = remove_question(&esc(&summary.name));
-        if let Err(failure) = confirm_action(cx, &question, REMOVE_CONSEQUENCE, self.confirm.yes) {
+        let request = ConfirmRequest {
+            role: ConfirmRole::Destructive,
+            question: &question,
+            consequence: REMOVE_CONSEQUENCE,
+        };
+        if let Err(failure) = confirm(cx, request, self.confirm.yes) {
             return CommandOutput::failed(failure);
         }
         let call = Call::EnvRemove(RemoveEnvironmentParams {

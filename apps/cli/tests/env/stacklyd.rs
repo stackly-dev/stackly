@@ -259,3 +259,121 @@ fn a_real_daemon_validates_plans_imports_lists_and_removes_a_manifest() {
     );
     ev.pass();
 }
+
+// covers: AC-6, AC-16, AC-17 (spec 0045)
+#[test]
+fn a_real_daemon_locks_plans_locked_and_exports_a_manifest() {
+    let ev = evidence!(
+        covers = ["REQ-023", "REQ-028", "AC-023"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd with the catalog of providers/, env plan --locked without a lock exits 3 with env.lock_missing; env lock writes only stackly.lock beside the manifest, prints added cache and added queue to stderr and Locked 2 services in <file>. to stdout; a second env lock prints <file> is up to date. with kept lines and leaves the bytes; env plan --locked then exits 0 with SOURCE lock on every runtime row and lock: stackly.lock (in_sync, ...) on stderr; --update --service ghost exits 10 with env.service_not_found; export of the file before import exits 10 with env.not_registered, and after import exits 0 with an empty stdout and one skipped: <service>: not_created line per service",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let dir = built_catalog(&root);
+    let _reap = ReapGuard::new(root.path(), &paths(&root).runtime);
+    let _daemon = start(&root, dir);
+    let project = root.path().join("work/shop");
+    std::fs::create_dir_all(&project).expect("the project folder can be made");
+    std::fs::write(project.join("stackly.yaml"), MANIFEST).expect("the manifest can be written");
+    let before = listing(&project);
+
+    let missing = run_in(&root, &project, &["env", "plan", "--locked"]);
+    assert_eq!(missing.code, Some(3), "{missing:?}");
+    assert!(
+        missing.stderr.contains("lock: stackly.lock (absent)\n")
+            && missing.stderr.contains("blocked: env.lock_missing: "),
+        "{}",
+        missing.stderr
+    );
+
+    let locked = run_in(&root, &project, &["env", "lock"]);
+    assert_eq!(locked.code, Some(0), "{locked:?}");
+    assert!(
+        locked.stdout.starts_with("Locked 2 services in ")
+            && locked.stdout.ends_with("stackly.lock.\n"),
+        "{}",
+        locked.stdout
+    );
+    let lines: Vec<&str> = locked.stderr.lines().collect();
+    assert_eq!(lines.len(), 2, "{}", locked.stderr);
+    assert!(
+        lines[0].starts_with("added cache official/valkey 9.1."),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1].starts_with("added queue official/nats 2.15."),
+        "{lines:?}"
+    );
+    let mut expected = before.clone();
+    expected.insert(PathBuf::from("stackly.lock"));
+    assert_eq!(listing(&project), expected, "lock writes only stackly.lock");
+    let bytes = std::fs::read(project.join("stackly.lock")).expect("the lock reads");
+
+    let again = run_in(&root, &project, &["env", "lock"]);
+    assert_eq!(again.code, Some(0), "{again:?}");
+    assert!(
+        again.stdout.ends_with("stackly.lock is up to date.\n"),
+        "{}",
+        again.stdout
+    );
+    assert!(
+        again.stderr.lines().all(|line| line.starts_with("kept ")),
+        "{}",
+        again.stderr
+    );
+    assert_eq!(
+        std::fs::read(project.join("stackly.lock")).expect("the lock reads"),
+        bytes
+    );
+
+    let planned = run_in(&root, &project, &["env", "plan", "--locked"]);
+    assert_eq!(planned.code, Some(0), "{planned:?}");
+    let sources: Vec<&str> = planned
+        .stdout
+        .lines()
+        .skip(1)
+        .take_while(|line| !line.is_empty())
+        .map(|line| line.split_whitespace().nth(5).unwrap_or_default())
+        .collect();
+    assert_eq!(sources.len(), 6, "{}", planned.stdout);
+    assert!(
+        sources.iter().all(|source| *source == "lock"),
+        "{sources:?}"
+    );
+    assert!(
+        planned.stderr.starts_with("lock: stackly.lock (in_sync, "),
+        "{}",
+        planned.stderr
+    );
+
+    let ghost = run_in(
+        &root,
+        &project,
+        &["env", "lock", "--update", "--service", "ghost", "--json"],
+    );
+    assert_eq!(ghost.code, Some(10), "{ghost:?}");
+    assert_eq!(envelope(&ghost)["error"]["code"], "env.service_not_found");
+
+    let unregistered = run_in(&root, &project, &["env", "export", "--json"]);
+    assert_eq!(unregistered.code, Some(10), "{unregistered:?}");
+    assert_eq!(
+        envelope(&unregistered)["error"]["code"],
+        "env.not_registered"
+    );
+    let imported = run_in(&root, &project, &["env", "import"]);
+    assert_eq!(imported.code, Some(0), "{imported:?}");
+    let exported = run_in(&root, &project, &["env", "export"]);
+    assert_eq!(exported.code, Some(0), "{exported:?}");
+    assert_eq!(exported.stdout, "");
+    assert_eq!(
+        exported.stderr,
+        "skipped: cache: not_created\nskipped: queue: not_created\n"
+    );
+    let by_name = run_in(
+        &root,
+        &project,
+        &["env", "export", "shop", "--format", "shell"],
+    );
+    assert_eq!(by_name.code, Some(0), "{by_name:?}");
+    ev.pass();
+}

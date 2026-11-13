@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use stackly_ipc::{CallOptions, Client, ConnectPolicy, EventStream};
-use stackly_protocol::codes::{daemon, ipc, request};
+use stackly_protocol::codes::{daemon, env, ipc, request};
 use stackly_protocol::events::{SubscribeParams, Subscribed};
 use stackly_protocol::handshake::{ClientInfo, ClientKind, HandshakeAccepted};
 use stackly_protocol::logs::{LogsFollowParams, LogsFollowing};
@@ -362,6 +362,9 @@ pub fn human_hints(body: &ErrorBody, socket: Option<&Path>) -> HumanHints {
             )],
         };
     }
+    if body.is(&env::NAME_TAKEN) {
+        return env_name_taken(body);
+    }
     if body.is(&ipc::CALL_TIMEOUT)
         && let Some(key) = body.detail("idempotencyKey")
     {
@@ -371,6 +374,21 @@ pub fn human_hints(body: &ErrorBody, socket: Option<&Path>) -> HumanHints {
         };
     }
     HumanHints::default()
+}
+
+/// `env.name_taken` (spec 0044 AC-11): the message names where the name
+/// is registered, which the daemon sends home masked in `location`, and
+/// the hint says how to point that environment at this file.
+fn env_name_taken(body: &ErrorBody) -> HumanHints {
+    let name = body.detail("name").unwrap_or("this name");
+    let message = body.detail("location").map_or_else(
+        || format!("environment {name} is registered at another manifest location"),
+        |location| format!("environment {name} is registered at {location}"),
+    );
+    HumanHints {
+        message: Some(message),
+        hints: vec!["to use this file for it, run stackly env import --relink".to_owned()],
+    }
 }
 
 /// The hint of an error about the background agent, from the table

@@ -10,7 +10,10 @@ mod common;
 
 mod data;
 mod edges;
+mod export;
+mod lock;
 mod manage;
 mod plan;
 mod stacklyd;
 mod validate;
+mod wording;

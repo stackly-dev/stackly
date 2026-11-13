@@ -1,0 +1,5 @@
+blocked: env.lock_invalid: the lock file is not a valid lock
+  hint: run stackly env lock --update to write it again, or update Stackly if a newer one wrote it
+error: the lock was not written
+  code: cli.env_lock_blocked
+  hint: Each blocker above says what stands in the way.
