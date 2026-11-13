@@ -484,7 +484,7 @@ struct FailureBannerContentTests {
             pointOfNoReturnAt: nil, failure: nil, recovery: nil, result: nil,
             trigger: OperationTriggerInfo(origin: .user, client: .gui),
             createdAt: endedAt.addingTimeInterval(-1), startedAt: endedAt, updatedAt: endedAt,
-            revision: 2, cancel: nil)
+            revision: 2, cancel: nil, parent: nil)
     }
 }
 
@@ -521,7 +521,7 @@ extension OperationSummary {
             cancelRequestedAt: cancelRequestedAt, pointOfNoReturnAt: pointOfNoReturnAt,
             failure: failure, recovery: recovery, result: result, trigger: trigger,
             createdAt: createdAt, startedAt: startedAt, updatedAt: updatedAt, revision: revision,
-            cancel: nil)
+            cancel: nil, parent: nil)
     }
 
     /// The same operation whose error carries no `operationId`.
@@ -541,6 +541,6 @@ extension OperationSummary {
             progress: progress, waitingOn: waitingOn, cancelRequestedAt: cancelRequestedAt,
             pointOfNoReturnAt: pointOfNoReturnAt, failure: error, recovery: recovery,
             result: result, trigger: trigger, createdAt: createdAt, startedAt: startedAt,
-            updatedAt: updatedAt, revision: revision, cancel: nil)
+            updatedAt: updatedAt, revision: revision, cancel: nil, parent: nil)
     }
 }

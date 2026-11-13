@@ -1058,6 +1058,14 @@ async fn dispatch(
             .map(Reply::EnvLock),
             None,
         ),
+        Call::EnvUp(params) => (
+            guarded_with(core, handlers, context, params, |h, c, x, p| {
+                h.up_environment(c, x, p)
+            })
+            .await
+            .map(Reply::EnvUp),
+            None,
+        ),
         Call::EnvExport(params) => (
             guarded_with(core, handlers, context, params, |h, c, x, p| {
                 h.export_environment(c, x, p)

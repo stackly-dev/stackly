@@ -1668,6 +1668,38 @@ pub fn draft_for(
     }
 }
 
+/// The draft Up (spec 0046 AC-7, *Kontrak `--locked`* item 7) creates the
+/// `create` item `item` of `service` with: [`draft_for`] with the item's
+/// effective ports (local overrides included), its storage location, and
+/// its provider revision, on the runtime `runtime_id`.
+#[must_use]
+pub fn create_draft(service: &ServiceSpec, item: &PlanItem, runtime_id: RuntimeId) -> CreateDraft {
+    let mut draft = draft_for(service, &item.instance_name, runtime_id);
+    for endpoint in &item.endpoints {
+        let request = match endpoint.port {
+            PortRequest::Auto => PortRequestDraft::Auto,
+            PortRequest::Fixed(port) => PortRequestDraft::Fixed(port.get()),
+        };
+        match draft
+            .endpoints
+            .iter_mut()
+            .find(|(name, _)| name == endpoint.name.as_str())
+        {
+            Some((_, own)) => *own = request,
+            None if !matches!(endpoint.port, PortRequest::Auto) => {
+                draft.endpoints.push((endpoint.name.to_string(), request));
+            }
+            None => {}
+        }
+    }
+    draft.data_location = item.storage.as_ref().map(|storage| storage.location_id);
+    draft.provider.revision = item
+        .provider_revision
+        .as_ref()
+        .map(|key| key.revision().to_string());
+    draft
+}
+
 /// The status of a bound reference from create's secret facts.
 fn secret_status(state: StoreState, fact: Option<&SourceFact>) -> PlanSecretStatus {
     if state == StoreState::Unsupported {

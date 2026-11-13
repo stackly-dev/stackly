@@ -13,7 +13,9 @@
         "interruptedAtStart": 3,
         "resumedAtStart": 1,
         "autoCompensatedAtStart": 1,
-        "rejectedQueueFull": 0
+        "rejectedQueueFull": 0,
+        "coordinators": 0,
+        "maxCoordinators": 4
       }
     }
   }

@@ -205,7 +205,7 @@
                 trigger: OperationTriggerInfo(origin: .user, client: client),
                 createdAt: created, startedAt: created,
                 updatedAt: ended ? created.addingTimeInterval(45) : created.addingTimeInterval(5),
-                revision: 3, cancel: cancel)
+                revision: 3, cancel: cancel, parent: nil)
         }
 
         private static func failure(_ code: String, _ message: String) -> OperationFailureInfo {

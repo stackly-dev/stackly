@@ -1315,6 +1315,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "Brings an environment up (spec 0046): an `environment_up`\ncoordinator that installs, creates, and starts through child\noperations in dependency order.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvUpParams"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.up"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -1838,6 +1855,29 @@
             "content"
           ]
         }
+      ]
+    },
+    "EnvUpParams": {
+      "description": "Params of `env.up`, an `environment_up` operation (spec 0046); the\nrequest carries the `idempotencyKey`.",
+      "type": "object",
+      "properties": {
+        "expectedPlanDigest": {
+          "description": "The `planDigest` of the plan the client reviewed.",
+          "type": "string"
+        },
+        "locked": {
+          "description": "Whether the plan is made with `locked` (spec 0045).",
+          "type": "boolean",
+          "default": false
+        },
+        "source": {
+          "description": "The manifest, as for [`EnvPlanParams`].",
+          "$ref": "#/$defs/EnvSource"
+        }
+      },
+      "required": [
+        "source",
+        "expectedPlanDigest"
       ]
     },
     "EnvValidateParams": {

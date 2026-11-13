@@ -26,8 +26,8 @@ use crate::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use crate::doctor::{DoctorParams, DoctorReport};
 use crate::env::{
     EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
-    EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList, ImportEnvironmentParams,
-    RemoveEnvironmentParams, RemovedEnvironment,
+    EnvUpParams, EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
+    ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
 };
 use crate::error::{ErrorBody, FieldError};
 use crate::events::{Event, SubscribeParams, Subscribed, UnsubscribeParams};
@@ -346,6 +346,11 @@ pub enum Call {
     /// (spec 0045). It reads the registry and pinned packages only.
     #[serde(rename = "env.export")]
     EnvExport(EnvExportParams),
+    /// Brings an environment up (spec 0046): an `environment_up`
+    /// coordinator that installs, creates, and starts through child
+    /// operations in dependency order.
+    #[serde(rename = "env.up")]
+    EnvUp(EnvUpParams),
 }
 
 /// One variant per method, with the same names and tags as [`Call`].
@@ -581,6 +586,9 @@ pub enum Reply {
     /// The variables.
     #[serde(rename = "env.export")]
     EnvExport(Box<EnvExport>),
+    /// The accepted Up.
+    #[serde(rename = "env.up")]
+    EnvUp(Box<EnvUpReply>),
 }
 
 /// The method table: one line per method, `name => Variant` or
@@ -726,6 +734,7 @@ methods! {
     "env.remove" => EnvRemove(RemoveEnvironmentParams), recovery refused;
     "env.lock" => EnvLock(EnvLockParams), recovery refused;
     "env.export" => EnvExport(EnvExportParams), recovery refused;
+    "env.up" => EnvUp(EnvUpParams), recovery refused;
 }
 
 impl Reply {
@@ -936,7 +945,7 @@ mod tests {
             // (spec 0029), `instance.set_startup`, `instance.preview_stop_all`, and `instance.stop_all` (spec 0031), and
             // `settings.get`, `settings.update`, `storage.list_locations`, and `storage.set_location` (spec 0032),
             // and the 6 `env.*` methods (spec 0044), and `env.lock` and
-            // `env.export` (spec 0045).
+            // `env.export` (spec 0045), and `env.up` (spec 0046).
             allowed.len()
                 + refused.len()
                 + 1
@@ -953,7 +962,8 @@ mod tests {
                 + 2
                 + 4
                 + 6
-                + 2,
+                + 2
+                + 1,
             Call::METHODS.len(),
             "a new method needs a line here"
         );

@@ -1,7 +1,8 @@
 //! Environments (spec 0044): `stackly.yaml` checked (`env.validate`),
 //! planned (`env.plan`), listed (`env.list`, `env.get`), registered
 //! (`env.import`), and forgotten (`env.remove`); its lock written
-//! (`env.lock`) and its endpoints exported (`env.export`, spec 0045).
+//! (`env.lock`) and its endpoints exported (`env.export`, spec 0045); and
+//! brought up (`env.up`, spec 0046), an `environment_up` coordinator.
 //!
 //! Validate and plan are reads, not operations: they never write the
 //! registry, a file, or the Keychain. Import and remove are operations that
@@ -15,10 +16,13 @@ use uuid::Uuid;
 
 use crate::error::{ErrorBody, FieldError};
 use crate::instance::{
-    InstanceHealth, InstanceLifecycle, InstanceReadiness, PortRequest, PreflightCheck,
+    EndpointStatus, InstanceHealth, InstanceLifecycle, InstanceReadiness, PortRequest,
+    PreflightCheck,
 };
 use crate::json::{FieldCode, Validate};
+use crate::operation::{OperationAccepted, OperationKind};
 use crate::provider::{FindingSeverity, import_path_code, is_sha256};
+use crate::secret::NeedsSecretItem;
 use crate::stop_all::InstanceRef;
 use crate::wire::{Count, Revision, Timestamp};
 
@@ -725,6 +729,21 @@ pub struct EnvironmentSummary {
     pub service_count: Count,
     /// When the row last changed.
     pub updated_at: Timestamp,
+    /// The `environment_up` or `environment_down` operation of this
+    /// environment that has not ended (spec 0046).
+    #[serde(default)]
+    pub active_operation: Option<EnvOperationRef>,
+}
+
+/// An operation of an environment that has not ended (spec 0046).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvOperationRef {
+    /// The operation.
+    pub id: Uuid,
+    /// What it does: `environment_up` or `environment_down`.
+    pub kind: OperationKind,
 }
 
 /// Reply of `env.list`: at most [`ENV_LIST_MAX`] environments, by name.
@@ -774,6 +793,15 @@ pub enum NotReadyReason {
     NotReady,
     /// Its state is unknown.
     Unavailable,
+    /// An Up runs and has not finished this service (spec 0046).
+    BringingUp,
+    /// A secret reference has no value (spec 0046).
+    NeedsSecret,
+    /// The last Up skipped it because a dependency was not ready (spec
+    /// 0046).
+    DependencyNotReady,
+    /// The last Up failed on it (spec 0046).
+    UpFailed,
     /// A value this build does not know.
     #[serde(other)]
     Unrecognized,
@@ -789,6 +817,30 @@ pub struct ServiceNotReady {
     /// The readiness detail or the last failure.
     #[serde(default)]
     pub detail: Option<String>,
+    /// Its phase in the running Up, for `bringing_up`.
+    #[serde(default)]
+    pub phase: Option<UpPhase>,
+    /// The dependencies it waits for, for `bringing_up`.
+    #[serde(default)]
+    pub waiting_on: Vec<String>,
+    /// The references that have no value, for `needs_secret`.
+    #[serde(default)]
+    pub references: Vec<NeedsSecretItem>,
+    /// The dependency that was not ready, for `dependency_not_ready`.
+    #[serde(default)]
+    pub dependency: Option<String>,
+    /// Why, for `dependency_not_ready`.
+    #[serde(default)]
+    pub dependency_reason: Option<DependencyFailure>,
+    /// The stage the last Up failed in, for `up_failed`.
+    #[serde(default)]
+    pub stage: Option<UpStage>,
+    /// The error code it failed with, for `up_failed`.
+    #[serde(default)]
+    pub code: Option<String>,
+    /// The child operation that failed, for `up_failed`.
+    #[serde(default)]
+    pub operation_id: Option<Uuid>,
 }
 
 /// The instance of an environment service.
@@ -808,6 +860,9 @@ pub struct ServiceInstance {
     pub readiness: InstanceReadiness,
     /// The health.
     pub health: InstanceHealth,
+    /// Its endpoints, with the port each one really binds (spec 0046).
+    #[serde(default)]
+    pub endpoints: Vec<EndpointStatus>,
 }
 
 /// One service of a registered environment.
@@ -884,6 +939,10 @@ pub struct EnvironmentDetail {
     /// The local override file; only when `lock` is sent.
     #[serde(default)]
     pub local: Option<EnvLocalInfo>,
+    /// The last Up: from the daemon's memory while it runs, from the
+    /// registry afterwards (spec 0046).
+    #[serde(default)]
+    pub last_up: Option<EnvUpReport>,
 }
 
 /// The lock of a registered environment.
@@ -1245,4 +1304,186 @@ pub struct EnvExport {
     /// What is left out.
     #[serde(default)]
     pub skipped: Vec<ExportSkipped>,
+}
+
+/// Where one Up stands (spec 0046). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum UpState {
+    /// It runs now.
+    Running,
+    /// Every service is ready.
+    Succeeded,
+    /// At least one service is not ready.
+    Failed,
+    /// It was cancelled.
+    Cancelled,
+    /// The daemon stopped while it ran.
+    Interrupted,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Where one service stands in one Up (spec 0046, *Phase service*). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum UpPhase {
+    /// Not worked on yet.
+    Pending,
+    /// Waiting for the install of its runtime.
+    Installing,
+    /// Its create runs.
+    Creating,
+    /// Waiting for a dependency.
+    Waiting,
+    /// Its start runs, or its running instance is not ready yet.
+    Starting,
+    /// Its instance runs and is ready.
+    Ready,
+    /// Its install, create, or start failed.
+    Failed,
+    /// It stopped for a secret that is not set.
+    NeedsSecret,
+    /// A dependency was not ready, so it never started.
+    Skipped,
+    /// The Up was cancelled before it ended.
+    Cancelled,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// The stage a service of an Up ended in (spec 0046). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum UpStage {
+    /// Installing its runtime.
+    Install,
+    /// Creating its instance.
+    Create,
+    /// Starting its instance.
+    Start,
+    /// Waiting for a dependency.
+    Wait,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// Why a dependency kept a service from starting (spec 0046). Open.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyFailure {
+    /// It failed, was skipped, or was cancelled.
+    Failed,
+    /// It was not ready within the edge's timeout.
+    Timeout,
+    /// Its instance was not running and ready right before the start.
+    NotReady,
+    /// A value this build does not know.
+    #[serde(other)]
+    Unrecognized,
+}
+
+/// One service of an Up report.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceUpState {
+    /// The alias.
+    pub alias: String,
+    /// Its phase.
+    pub phase: UpPhase,
+    /// The stage it ended in, when not ready.
+    #[serde(default)]
+    pub stage: Option<UpStage>,
+    /// The error code it ended with.
+    #[serde(default)]
+    pub code: Option<String>,
+    /// The dependency that was not ready, for a skipped service.
+    #[serde(default)]
+    pub dependency: Option<String>,
+    /// Why, for a skipped service.
+    #[serde(default)]
+    pub dependency_reason: Option<DependencyFailure>,
+    /// The dependencies it waits for while `waiting`.
+    #[serde(default)]
+    pub waiting_on: Vec<String>,
+    /// The child operation that worked on it last.
+    #[serde(default)]
+    pub operation_id: Option<Uuid>,
+    /// The references that have no value, for `needs_secret`.
+    #[serde(default)]
+    pub references: Vec<NeedsSecretItem>,
+}
+
+/// The report of one Up (spec 0046 AC-16): at most 32 services.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvUpReport {
+    /// The `environment_up` operation.
+    pub operation_id: Uuid,
+    /// Where it stands.
+    pub state: UpState,
+    /// When its `accept` step committed.
+    pub started_at: Timestamp,
+    /// When it ended.
+    #[serde(default)]
+    pub finished_at: Option<Timestamp>,
+    /// Every service, in manifest order.
+    #[serde(default)]
+    pub services: Vec<ServiceUpState>,
+}
+
+/// Params of `env.up`, an `environment_up` operation (spec 0046); the
+/// request carries the `idempotencyKey`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvUpParams {
+    /// The manifest, as for [`EnvPlanParams`].
+    pub source: EnvSource,
+    /// The `planDigest` of the plan the client reviewed.
+    pub expected_plan_digest: String,
+    /// Whether the plan is made with `locked` (spec 0045).
+    #[serde(default)]
+    pub locked: bool,
+}
+
+impl Validate for EnvUpParams {
+    fn validate(&self) -> Vec<FieldError> {
+        let mut fields: Vec<FieldError> = match &self.source {
+            EnvSource::File(path) => import_path_code(path)
+                .map(|code| FieldError::new("source.content", code))
+                .into_iter()
+                .collect(),
+            EnvSource::Registered(_) => Vec::new(),
+        };
+        if !is_sha256(&self.expected_plan_digest) {
+            fields.push(FieldError::new(
+                "expectedPlanDigest",
+                FieldCode::InvalidFormat,
+            ));
+        }
+        fields
+    }
+}
+
+/// Reply of `env.up`, as soon as the operation is accepted.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvUpReply {
+    /// The environment the Up works on: registered, or new.
+    pub environment_id: Uuid,
+    /// Its name.
+    pub name: String,
+    /// The operation.
+    pub operation: OperationAccepted,
 }

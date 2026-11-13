@@ -1,0 +1,14 @@
+{
+  "requestId": "0192f3a1-0000-7000-8000-000000000e42",
+  "idempotencyKey": "0192f3a1-0000-7000-8000-00000000ab42",
+  "call": {
+    "type": "env.up",
+    "content": {
+      "source": {
+        "type": "registered",
+        "content": "0192f3a7-0000-7000-8000-0000000000e1"
+      },
+      "expectedPlanDigest": "EEEE"
+    }
+  }
+}

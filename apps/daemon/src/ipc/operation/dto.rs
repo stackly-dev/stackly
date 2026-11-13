@@ -83,6 +83,7 @@ pub fn summary(view: &OperationView) -> OperationSummary {
                 .cancel_availability(journal.point_of_no_return_at().is_some())
                 .as_code(),
         )),
+        parent: journal.parent().map(|parent| parent.as_uuid()),
     }
 }
 
@@ -136,6 +137,8 @@ pub fn stats(stats: &EngineStats) -> OperationStats {
         resumed_at_start: stats.resumed_at_start,
         auto_compensated_at_start: stats.auto_compensated_at_start,
         rejected_queue_full: Count::saturating(stats.rejected_queue_full),
+        coordinators: stats.coordinators,
+        max_coordinators: stats.max_coordinators,
     }
 }
 

@@ -18,7 +18,12 @@
 //! operation, and `env.export`, which reads the registry and the pinned
 //! packages only.
 
+pub mod children;
 mod dto;
+mod status;
+mod up;
+
+pub use up::up;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -140,7 +145,10 @@ struct Instances {
 
 /// The lifecycle the summary shows: a live one whose exit went unrecorded
 /// is `unknown` (spec 0010).
-const fn shown_lifecycle(stored: InstanceLifecycle, status: &InstanceStatus) -> InstanceLifecycle {
+pub(crate) const fn shown_lifecycle(
+    stored: InstanceLifecycle,
+    status: &InstanceStatus,
+) -> InstanceLifecycle {
     let live = matches!(
         stored,
         InstanceLifecycle::Starting
@@ -261,7 +269,7 @@ pub fn validate(
 
 /// The file a plan reads: the path of a `file` source, or the location of
 /// a registered environment.
-async fn plan_source(
+pub(crate) async fn plan_source(
     registry: &SqliteRegistry,
     source: &EnvSource,
 ) -> Result<(String, Option<EnvironmentId>), Box<ErrorBody>> {
@@ -286,60 +294,124 @@ async fn plan_source(
 /// Mac. It starts no operation and writes nothing (AC-6).
 pub fn plan(core: &DaemonCore, params: EnvPlanParams) -> HandlerFuture<'_, Box<EnvPlan>> {
     Box::pin(async move {
-        let supervisor = core.supervision().supervisor()?;
         let registry = registry_of(core)?;
-        let state = crate::ipc::instance::catalog_state(core)?;
-        let catalog = crate::catalog::loaded(core)?;
         let (file, registered) = plan_source(&registry, &params.source).await?;
-        let read = read_file(core, Path::new(&file)).await?;
-        let Instances { views, .. } = instances(core, &registry, &supervisor).await?;
-        let platform = core.platform().clone();
-        let prepared = core.prepared().clone();
-        let source = core.catalog_source().id();
-        let probe = crate::ipc::instance::serialized_probe();
+        let planned = plan_with(core, &file, registered, params.locked)
+            .await
+            .map_err(PlanFailure::into_body)?;
         let home = core.home_mask().clone();
-        let locked = params.locked;
-        let reply = blocking(move || {
-            let validation = validate_bytes(&read.bytes, &catalog);
-            let (lock, local) = side_files(platform.fs(), &read.location);
-            let host = platform.info().host_facts();
-            let deps = PlanDeps {
-                create: CreateDeps {
-                    registry: &registry,
-                    catalog: &state,
-                    source,
-                    platform: &platform,
-                    prepared: &prepared,
-                    probe: &*probe,
-                },
-                catalog: &catalog,
-                host: &host,
-                instances: &views,
-            };
-            let planned = plan_of(
-                &deps,
-                &PlanInputs {
-                    manifest: &validation,
-                    location: &read.location,
-                    registered,
-                    lock: Some(&lock),
-                    overrides: Some(&local),
-                    locked,
-                },
-            )?;
-            Ok::<_, stackly_core::environment::PlanError>(dto::plan(
-                dto::validation(&file, &validation),
-                &planned,
-                &home,
-            ))
+        Ok(Box::new(dto::plan(
+            dto::validation(&file, &planned.validation),
+            &planned.plan,
+            &home,
+        )))
+    })
+}
+
+/// A manifest read and planned, with the instance views the plan saw.
+pub(crate) struct Planned {
+    /// Where the manifest lives.
+    pub location: stackly_domain::ManifestLocation,
+    /// Its validation.
+    pub validation: stackly_core::environment::Validation,
+    /// The plan.
+    pub plan: stackly_core::environment::Plan,
+}
+
+/// Why [`plan_with`] read no plan.
+pub(crate) enum PlanFailure {
+    /// The manifest can't be read.
+    Unreadable(UnreadableReason),
+    /// Anything else, as its error body.
+    Body(Box<ErrorBody>),
+}
+
+impl PlanFailure {
+    /// The error body a reply sends.
+    pub(crate) fn into_body(self) -> Box<ErrorBody> {
+        match self {
+            Self::Unreadable(reason) => unreadable(reason),
+            Self::Body(body) => body,
+        }
+    }
+}
+
+impl From<Box<ErrorBody>> for PlanFailure {
+    fn from(body: Box<ErrorBody>) -> Self {
+        Self::Body(body)
+    }
+}
+
+/// Reads the manifest at `file` and plans it as `env.plan` does, with the
+/// lock and the local overrides next to it (spec 0045) and `locked`: the
+/// one plan `env.plan`, the `env.up` precheck, and the `accept` step of
+/// Up all read (spec 0046 AC-1).
+pub(crate) async fn plan_with(
+    core: &DaemonCore,
+    file: &str,
+    registered: Option<EnvironmentId>,
+    locked: bool,
+) -> Result<Planned, PlanFailure> {
+    let supervisor = core.supervision().supervisor()?;
+    let registry = registry_of(core)?;
+    let state = crate::ipc::instance::catalog_state(core)?;
+    let catalog = crate::catalog::loaded(core)?;
+    let read = {
+        let platform = core.platform().clone();
+        let path = PathBuf::from(file);
+        blocking(move || {
+            let bytes = read_manifest(platform.fs(), &path)?;
+            let location = manifest_location(platform.fs(), &path)?;
+            Ok::<_, UnreadableReason>(Read { bytes, location })
         })
         .await?
-        .map_err(|error| {
-            tracing::error!(%error, "cannot read the facts of an environment plan");
-            unexpected("the facts of the plan could not be read")
-        })?;
-        Ok(Box::new(reply))
+        .map_err(PlanFailure::Unreadable)?
+    };
+    let Instances { views, .. } = instances(core, &registry, &supervisor).await?;
+    let platform = core.platform().clone();
+    let prepared = core.prepared().clone();
+    let source = core.catalog_source().id();
+    let probe = crate::ipc::instance::serialized_probe();
+    let planned = blocking(move || {
+        let validation = validate_bytes(&read.bytes, &catalog);
+        let (lock, local) = side_files(platform.fs(), &read.location);
+        let host = platform.info().host_facts();
+        let deps = PlanDeps {
+            create: CreateDeps {
+                registry: &registry,
+                catalog: &state,
+                source,
+                platform: &platform,
+                prepared: &prepared,
+                probe: &*probe,
+            },
+            catalog: &catalog,
+            host: &host,
+            instances: &views,
+        };
+        let planned = plan_of(
+            &deps,
+            &PlanInputs {
+                manifest: &validation,
+                location: &read.location,
+                registered,
+                lock: Some(&lock),
+                overrides: Some(&local),
+                locked,
+            },
+        )?;
+        Ok::<_, stackly_core::environment::PlanError>(Planned {
+            location: read.location,
+            validation,
+            plan: planned,
+        })
     })
+    .await?
+    .map_err(|error| {
+        tracing::error!(%error, "cannot read the facts of an environment plan");
+        unexpected("the facts of the plan could not be read")
+    })?;
+    Ok(planned)
 }
 
 /// The lock and the local override file next to the manifest at
@@ -388,14 +460,19 @@ pub fn list(core: &DaemonCore) -> HandlerFuture<'_, EnvironmentList> {
         environments.sort_by(|a, b| a.name().cmp(b.name()));
         environments.truncate(stackly_protocol::env::ENV_LIST_MAX);
         let Instances { views, .. } = instances(core, &registry, &supervisor).await?;
+        let engine = core.operations().writer().ok();
+        // One engine read for the whole list (spec 0046 AC-16).
+        let active = status::active_operations(engine.as_ref(), None).await;
         let items = environments
             .iter()
             .map(|environment| {
-                dto::summary(
+                let mut summary = dto::summary(
                     environment,
                     &environment_view(environment, &views),
                     updated_at(core, environment),
-                )
+                );
+                summary.active_operation = status::up_now(core, environment, &active).active;
+                summary
             })
             .collect();
         Ok(EnvironmentList { items })
@@ -437,18 +514,46 @@ async fn detail_of(
         (None, None, None)
     };
     let (lock, local) = side.unzip();
+    let engine = core.operations().writer().ok();
+    let active = status::active_operations(
+        engine.as_ref(),
+        Some(stackly_domain::OperationResource::Environment(id)),
+    )
+    .await;
+    let up = status::up_now(core, &environment, &active);
+    let mut summary = dto::summary(&environment, &view, updated);
+    summary.active_operation = up.active.clone();
+    let services = view
+        .services
+        .iter()
+        .map(|service| {
+            let mut wire = dto::service(service, &summaries);
+            if let Some(base) = wire.not_ready.take() {
+                let instance = service
+                    .instance
+                    .as_ref()
+                    .map(|instance| (instance.id, instance.lifecycle));
+                let blocker = instance.and_then(|(id, _)| supervisor.status(id).blocker);
+                wire.not_ready = Some(status::not_ready(
+                    base,
+                    service.alias.as_str(),
+                    instance,
+                    blocker.as_ref(),
+                    up.last_up.as_ref(),
+                ));
+            }
+            wire
+        })
+        .collect();
     Ok(Box::new(EnvironmentDetail {
-        summary: dto::summary(&environment, &view, updated),
-        services: view
-            .services
-            .iter()
-            .map(|service| dto::service(service, &summaries))
-            .collect(),
+        summary,
+        services,
         detached: dto::detached_members(&view),
         manifest_state,
         problems,
         lock,
         local,
+        last_up: up.last_up,
     }))
 }
 

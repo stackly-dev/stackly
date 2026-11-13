@@ -65,11 +65,18 @@
             ],
         ]
 
+        /// A reason a service is not ready, with no Up detail.
+        private static func notReady(_ reason: NotReadyReason, detail: String?) -> ServiceNotReady {
+            ServiceNotReady(
+                reason: reason, detail: detail, phase: nil, waitingOn: [], references: [],
+                dependency: nil, dependencyReason: nil, stage: nil, code: nil, operationId: nil)
+        }
+
         private static func serviceInstance(_ summary: InstanceSummary) -> ServiceInstance {
             ServiceInstance(
                 id: summary.id, name: summary.name, runtimeVersion: summary.runtimeVersion,
                 lifecycle: summary.lifecycle, readiness: summary.readiness,
-                health: summary.health)
+                health: summary.health, endpoints: summary.endpoints)
         }
 
         // MARK: - Summaries and details
@@ -82,7 +89,8 @@
             EnvironmentSummary(
                 id: id, name: name, revision: revision, manifestLocation: folder.map(manifest),
                 manifestSha256: String(repeating: "d", count: 64), lockSha256: nil, status: status,
-                readyCount: ready, serviceCount: total, updatedAt: FixtureClock.minutesAgo(20))
+                readyCount: ready, serviceCount: total, updatedAt: FixtureClock.minutesAgo(20),
+                activeOperation: nil)
         }
 
         /// The summaries `env.list` answers, by name.
@@ -108,15 +116,15 @@
             EnvironmentService(
                 alias: "cache", provider: "official/valkey", ownership: .dedicated,
                 selector: "stable", instanceRef: nil, instance: serviceInstance(instance(3)),
-                notReady: ServiceNotReady(reason: .stopping, detail: nil)),
+                notReady: notReady(.stopping, detail: nil)),
             EnvironmentService(
                 alias: "queue", provider: "official/nats", ownership: .shared, selector: nil,
                 instanceRef: "queue", instance: serviceInstance(instance(5)),
-                notReady: ServiceNotReady(reason: .failed, detail: "crash loop")),
+                notReady: notReady(.failed, detail: "crash loop")),
             EnvironmentService(
                 alias: "search", provider: "official/clickhouse", ownership: .dedicated,
                 selector: "stable", instanceRef: nil, instance: nil,
-                notReady: ServiceNotReady(reason: .notCreated, detail: nil)),
+                notReady: notReady(.notCreated, detail: nil)),
         ]
 
         // MARK: - Lock and local override (spec 0045)
@@ -188,7 +196,7 @@
                     EnvironmentService(
                         alias: "db", provider: "official/mysql", ownership: .dedicated,
                         selector: "8.4", instanceRef: nil, instance: serviceInstance(instance(4)),
-                        notReady: ServiceNotReady(reason: .stopped, detail: nil))
+                        notReady: notReady(.stopped, detail: nil))
                 ]
             default:
                 services = [
@@ -204,7 +212,7 @@
             return EnvironmentDetail(
                 summary: summary, services: services, detached: detached,
                 manifestState: state, problems: state == .invalid ? (problems ?? 2) : problems,
-                lock: lock, local: local)
+                lock: lock, local: local, lastUp: nil)
         }
 
         // MARK: - Validation

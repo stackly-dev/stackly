@@ -370,7 +370,7 @@ pub fn needs_secret_blocker(blocker: &InstanceBlocker) -> Option<NeedsSecretBloc
     }
 }
 
-fn needs_item(item: &DomainNeedsItem) -> NeedsSecretItem {
+pub(crate) fn needs_item(item: &DomainNeedsItem) -> NeedsSecretItem {
     NeedsSecretItem {
         reference: item.reference.to_string(),
         reason: needs_reason(item.reason),

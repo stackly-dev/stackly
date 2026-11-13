@@ -12,4 +12,6 @@ mod plan_lock;
 mod register;
 mod site;
 mod status;
+mod up;
+mod up_fake;
 mod validate;

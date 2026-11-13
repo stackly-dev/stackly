@@ -29,8 +29,8 @@ use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedB
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
 use stackly_protocol::env::{
     EnvExport, EnvExportParams, EnvGetParams, EnvLockParams, EnvLockResult, EnvPlan, EnvPlanParams,
-    EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList, ImportEnvironmentParams,
-    RemoveEnvironmentParams, RemovedEnvironment,
+    EnvUpParams, EnvUpReply, EnvValidateParams, EnvValidation, EnvironmentDetail, EnvironmentList,
+    ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
 };
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
@@ -446,6 +446,16 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, Box<EnvPlan>> {
         let _ = context;
         env::plan(core, params)
+    }
+
+    /// `env.up` (spec 0046): the `environment_up` coordinator.
+    fn up_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvUpParams,
+    ) -> HandlerFuture<'a, Box<EnvUpReply>> {
+        env::up(core, context, params)
     }
 
     /// `env.lock` (spec 0045).

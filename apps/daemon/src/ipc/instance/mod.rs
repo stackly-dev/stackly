@@ -55,6 +55,7 @@ pub use config::{
 };
 pub(crate) use create::{catalog_state, serialized_probe};
 pub use create::{create, work_deps};
+pub(crate) use create::{create_request, with_issues};
 pub use detail::{get_data_usage, get_instance_detail};
 pub use duplicate::get_duplicate_form;
 pub use form::{get_create_form, preflight};
@@ -129,6 +130,49 @@ pub fn list(core: &DaemonCore, params: ListInstancesParams) -> HandlerFuture<'_,
     })
 }
 
+/// The begin request of a `start_instance` on `id` for `start`: the work,
+/// the drift refusal, and `start_precheck` with the start's own trigger.
+/// `instance.start` and the start children of Up (spec 0046) both build
+/// their request here, so a start runs the same checks from either.
+///
+/// # Errors
+///
+/// Returns the error body when the supervisor or the registry is not
+/// available.
+pub(crate) fn start_request(
+    core: &DaemonCore,
+    id: InstanceId,
+    expected: Option<ResourceRevision>,
+    start: StartRequest,
+) -> Result<Box<dyn FnOnce(Origin) -> BeginRequest + Send>, Box<ErrorBody>> {
+    let supervisor = core.supervision().supervisor()?;
+    let registry = registry_of(core)?;
+    let trigger = start.trigger.clone();
+    let work = supervisor.start_work(start);
+    let drift = config::drifted_files(&supervisor, id);
+    let session = core.session().login().map(|login| login.id.clone());
+    let now = core.platform().clock().now();
+    let precheck: Box<dyn Precheck> = Box::new(move || {
+        drift_refusal(drift.as_deref()).unwrap_or_else(|| {
+            start_precheck(&registry, id, expected, &trigger, session.as_ref(), now)
+        })
+    });
+    Ok(Box::new(move |origin: Origin| BeginRequest {
+        kind: OperationKind::StartInstance,
+        resource: OperationResource::Instance(id),
+        creates_resource: false,
+        extra_locks: Vec::new(),
+        // A start waits behind the operation that holds the instance
+        // (spec 0007).
+        busy: BusyPolicy::Queue,
+        expected_revision: None,
+        origin,
+        input: JournalPayload::empty(),
+        work,
+        precheck: Some(precheck),
+    }))
+}
+
 /// The real `instance.start`.
 pub fn start<'a>(
     core: &'a DaemonCore,
@@ -137,36 +181,10 @@ pub fn start<'a>(
 ) -> HandlerFuture<'a, InstanceActionAccepted> {
     let context = context.clone();
     Box::pin(async move {
-        let supervisor = core.supervision().supervisor()?;
-        let registry = registry_of(core)?;
         let id = instance_id(params.instance_id)?;
         let expected = expected_revision(params.expected_revision)?;
         let fingerprint = request_fingerprint(&Call::InstanceStart(params));
-        let start = StartRequest::user(id, caller(&context));
-        let trigger = start.trigger.clone();
-        let work = supervisor.start_work(start);
-        let drift = config::drifted_files(&supervisor, id);
-        let session = core.session().login().map(|login| login.id.clone());
-        let now = core.platform().clock().now();
-        let precheck: Box<dyn Precheck> = Box::new(move || {
-            drift_refusal(drift.as_deref()).unwrap_or_else(|| {
-                start_precheck(&registry, id, expected, &trigger, session.as_ref(), now)
-            })
-        });
-        let request = move |origin: Origin| BeginRequest {
-            kind: OperationKind::StartInstance,
-            resource: OperationResource::Instance(id),
-            creates_resource: false,
-            extra_locks: Vec::new(),
-            // A start waits behind the operation that holds the instance
-            // (spec 0007).
-            busy: BusyPolicy::Queue,
-            expected_revision: None,
-            origin,
-            input: JournalPayload::empty(),
-            work,
-            precheck: Some(precheck),
-        };
+        let request = start_request(core, id, expected, StartRequest::user(id, caller(&context)))?;
         let outcome = start_operation(
             core,
             &context,
@@ -688,7 +706,7 @@ fn no_op_with_desired(
 
 /// Publishes `instance.state_changed` for an `alreadyInState` answer that
 /// committed a desired state itself: the supervisor did not write it.
-async fn announce(core: &DaemonCore, id: InstanceId, outcome: &StartOutcome) {
+pub(crate) async fn announce(core: &DaemonCore, id: InstanceId, outcome: &StartOutcome) {
     let StartOutcome::Accepted(accepted) = outcome else {
         return;
     };

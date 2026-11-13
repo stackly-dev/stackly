@@ -15,7 +15,8 @@
           "readyCount": 1,
           "serviceCount": 2,
           "updatedAt": "2026-11-13T09:00:00.000Z",
-          "lockSha256": null
+          "lockSha256": null,
+          "activeOperation": null
         },
         "services": [
           {
@@ -27,7 +28,15 @@
             "instance": null,
             "notReady": {
               "reason": "not_created",
-              "detail": null
+              "detail": null,
+              "phase": null,
+              "waitingOn": [],
+              "references": [],
+              "dependency": null,
+              "dependencyReason": null,
+              "stage": null,
+              "code": null,
+              "operationId": null
             }
           },
           {
@@ -54,7 +63,8 @@
                 "detail": null,
                 "observedAt": "2026-11-13T09:00:00.000Z",
                 "latencyMs": null
-              }
+              },
+              "endpoints": []
             },
             "notReady": null
           }
@@ -63,7 +73,8 @@
         "manifestState": "changed",
         "problems": 0,
         "lock": null,
-        "local": null
+        "local": null,
+        "lastUp": null
       }
     }
   }

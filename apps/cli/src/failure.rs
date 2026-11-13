@@ -644,6 +644,49 @@ impl CliFailure {
         )
     }
 
+    /// `cli.env_lock_blocked` (spec 0045 AC-16): the manifest is valid but
+    /// `blockers` blockers stop `env.lock`, so no file was written. Exits
+    /// 3; `stackly env lock` keeps the lock result as result.
+    // provisional: F45, its caller lands with dev-f45-m2 (spec 0045 milestone 2).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the env lock command calls it in spec 0045 milestone 2"
+        )
+    )]
+    #[must_use]
+    pub fn env_lock_blocked(blockers: u64) -> Self {
+        Self::local(
+            ErrorBody::new(&cli::ENV_LOCK_BLOCKED, "the lock was not written")
+                .with_detail("blockers", blockers.to_string())
+                .with_hint("Each blocker above says what stands in the way."),
+        )
+    }
+
+    /// `cli.env_locked_unsupported` (spec 0045 AC-6): `stackly env plan
+    /// --locked` got a plan whose `lock.locked` is not true, from a daemon
+    /// that does not know the locked mode and may have resolved again.
+    /// Exits 5.
+    // provisional: F45, its caller lands with dev-f45-m2 (spec 0045 milestone 2).
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the env lock command calls it in spec 0045 milestone 2"
+        )
+    )]
+    #[must_use]
+    pub fn env_locked_unsupported() -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::ENV_LOCKED_UNSUPPORTED,
+                "the daemon does not support planning with the lock",
+            )
+            .with_hint("update stacklyd to a version that supports env plan --locked"),
+        )
+    }
+
     /// `cli.environment_not_found` (spec 0044 AC-17): no environment has
     /// the name (or the whole ID) `name`. Exits 10.
     #[must_use]
@@ -790,6 +833,8 @@ mod tests {
             CliFailure::env_invalid(2, 0),
             CliFailure::env_plan_blocked(1),
             CliFailure::environment_not_found("erp-development"),
+            CliFailure::env_lock_blocked(1),
+            CliFailure::env_locked_unsupported(),
         ]
     }
 

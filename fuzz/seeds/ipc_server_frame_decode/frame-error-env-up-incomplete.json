@@ -1,0 +1,87 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e43",
+    "error": {
+      "code": "env.up_incomplete",
+      "category": "failed",
+      "message": "some services of the environment are not ready",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "fix the services listed, then bring the environment up again; services that are ready keep running",
+      "details": [
+        {
+          "key": "ready",
+          "value": "1"
+        },
+        {
+          "key": "total",
+          "value": "3"
+        },
+        {
+          "key": "count",
+          "value": "2"
+        },
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": "0192f3a4-0000-7000-8000-0000000000f1",
+      "rule": null,
+      "items": [
+        {
+          "kind": "service",
+          "fields": [
+            {
+              "key": "service",
+              "value": "postgres"
+            },
+            {
+              "key": "phase",
+              "value": "failed"
+            },
+            {
+              "key": "stage",
+              "value": "start"
+            },
+            {
+              "key": "code",
+              "value": "supervisor.readiness_timeout"
+            },
+            {
+              "key": "operationId",
+              "value": "0192f3a4-0000-7000-8000-0000000000f2"
+            }
+          ]
+        },
+        {
+          "kind": "service",
+          "fields": [
+            {
+              "key": "service",
+              "value": "api"
+            },
+            {
+              "key": "phase",
+              "value": "skipped"
+            },
+            {
+              "key": "stage",
+              "value": "wait"
+            },
+            {
+              "key": "code",
+              "value": "env.dependency_not_ready"
+            },
+            {
+              "key": "dependency",
+              "value": "postgres"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

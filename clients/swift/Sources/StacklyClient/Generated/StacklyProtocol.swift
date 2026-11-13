@@ -557,8 +557,10 @@ public struct OperationSummary: Codable, Sendable, Equatable {
 	/// `available`, `cancelRequestedAt` means `requested`, and anything
 	/// else `none`.
 	public let cancel: CancelAvailability?
+	/// The coordinator of a child operation (spec 0046).
+	public let parent: UUID?
 
-	public init(id: UUID, kind: OperationKind, resource: ResourceRef?, state: OperationState, stage: String?, progress: OperationProgress, waitingOn: UUID?, cancelRequestedAt: Date?, pointOfNoReturnAt: Date?, failure: OperationFailureInfo?, recovery: RecoveryInfo?, result: OperationResult?, trigger: OperationTriggerInfo, createdAt: Date, startedAt: Date?, updatedAt: Date, revision: UInt64, cancel: CancelAvailability?) {
+	public init(id: UUID, kind: OperationKind, resource: ResourceRef?, state: OperationState, stage: String?, progress: OperationProgress, waitingOn: UUID?, cancelRequestedAt: Date?, pointOfNoReturnAt: Date?, failure: OperationFailureInfo?, recovery: RecoveryInfo?, result: OperationResult?, trigger: OperationTriggerInfo, createdAt: Date, startedAt: Date?, updatedAt: Date, revision: UInt64, cancel: CancelAvailability?, parent: UUID?) {
 		self.id = id
 		self.kind = kind
 		self.resource = resource
@@ -577,6 +579,7 @@ public struct OperationSummary: Codable, Sendable, Equatable {
 		self.updatedAt = updatedAt
 		self.revision = revision
 		self.cancel = cancel
+		self.parent = parent
 	}
 }
 
@@ -5236,6 +5239,19 @@ public struct EnvLockResult: Codable, Sendable, Equatable {
 	}
 }
 
+/// An operation of an environment that has not ended (spec 0046).
+public struct EnvOperationRef: Codable, Sendable, Equatable {
+	/// The operation.
+	public let id: UUID
+	/// What it does: `environment_up` or `environment_down`.
+	public let kind: OperationKind
+
+	public init(id: UUID, kind: OperationKind) {
+		self.id = id
+		self.kind = kind
+	}
+}
+
 /// One env pair of a terminal command.
 public struct EnvPair: Codable, Sendable, Equatable {
 	/// The env name.
@@ -5636,6 +5652,195 @@ public struct EnvPlanParams: Codable, Sendable, Equatable {
 	}
 }
 
+/// Params of `env.up`, an `environment_up` operation (spec 0046); the
+/// request carries the `idempotencyKey`.
+public struct EnvUpParams: Codable, Sendable, Equatable {
+	/// The manifest, as for [`EnvPlanParams`].
+	public let source: EnvSource
+	/// The `planDigest` of the plan the client reviewed.
+	public let expectedPlanDigest: String
+	/// Whether the plan is made with `locked` (spec 0045).
+	public let locked: Bool?
+
+	public init(source: EnvSource, expectedPlanDigest: String, locked: Bool?) {
+		self.source = source
+		self.expectedPlanDigest = expectedPlanDigest
+		self.locked = locked
+	}
+}
+
+/// Reply of `env.up`, as soon as the operation is accepted.
+public struct EnvUpReply: Codable, Sendable, Equatable {
+	/// The environment the Up works on: registered, or new.
+	public let environmentId: UUID
+	/// Its name.
+	public let name: String
+	/// The operation.
+	public let operation: OperationAccepted
+
+	public init(environmentId: UUID, name: String, operation: OperationAccepted) {
+		self.environmentId = environmentId
+		self.name = name
+		self.operation = operation
+	}
+}
+
+/// Where one Up stands (spec 0046). Open.
+public enum UpState: String, Codable, Sendable, Equatable {
+	/// It runs now.
+	case running
+	/// Every service is ready.
+	case succeeded
+	/// At least one service is not ready.
+	case failed
+	/// It was cancelled.
+	case cancelled
+	/// The daemon stopped while it ran.
+	case interrupted
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// Where one service stands in one Up (spec 0046, *Phase service*). Open.
+public enum UpPhase: String, Codable, Sendable, Equatable {
+	/// Not worked on yet.
+	case pending
+	/// Waiting for the install of its runtime.
+	case installing
+	/// Its create runs.
+	case creating
+	/// Waiting for a dependency.
+	case waiting
+	/// Its start runs, or its running instance is not ready yet.
+	case starting
+	/// Its instance runs and is ready.
+	case ready
+	/// Its install, create, or start failed.
+	case failed
+	/// It stopped for a secret that is not set.
+	case needsSecret = "needs_secret"
+	/// A dependency was not ready, so it never started.
+	case skipped
+	/// The Up was cancelled before it ended.
+	case cancelled
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// The stage a service of an Up ended in (spec 0046). Open.
+public enum UpStage: String, Codable, Sendable, Equatable {
+	/// Installing its runtime.
+	case install
+	/// Creating its instance.
+	case create
+	/// Starting its instance.
+	case start
+	/// Waiting for a dependency.
+	case wait
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// Why a dependency kept a service from starting (spec 0046). Open.
+public enum DependencyFailure: String, Codable, Sendable, Equatable {
+	/// It failed, was skipped, or was cancelled.
+	case failed
+	/// It was not ready within the edge's timeout.
+	case timeout
+	/// Its instance was not running and ready right before the start.
+	case notReady = "not_ready"
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// Why a reference needs a value. Open.
+public enum NeedsSecretReason: String, Codable, Sendable, Equatable {
+	/// The store holds no value.
+	case missing
+	/// The keychain is locked.
+	case storeLocked = "store_locked"
+	/// The user or the access list refused the read.
+	case accessDenied = "access_denied"
+	/// The store call did not start in time.
+	case storeBusy = "store_busy"
+	/// The OS has no store.
+	case storeUnsupported = "store_unsupported"
+	/// A reason this build does not know. The daemon never sends it.
+	case unrecognized
+}
+
+/// One reference a resource needs and cannot read.
+public struct NeedsSecretItem: Codable, Sendable, Equatable {
+	/// The reference.
+	public let reference: String
+	/// Why it cannot be read.
+	public let reason: NeedsSecretReason
+	/// Whether a generated value would work for it.
+	public let generateAllowed: Bool
+
+	public init(reference: String, reason: NeedsSecretReason, generateAllowed: Bool) {
+		self.reference = reference
+		self.reason = reason
+		self.generateAllowed = generateAllowed
+	}
+}
+
+/// One service of an Up report.
+public struct ServiceUpState: Codable, Sendable, Equatable {
+	/// The alias.
+	public let alias: String
+	/// Its phase.
+	public let phase: UpPhase
+	/// The stage it ended in, when not ready.
+	public let stage: UpStage?
+	/// The error code it ended with.
+	public let code: String?
+	/// The dependency that was not ready, for a skipped service.
+	public let dependency: String?
+	/// Why, for a skipped service.
+	public let dependencyReason: DependencyFailure?
+	/// The dependencies it waits for while `waiting`.
+	public let waitingOn: [String]?
+	/// The child operation that worked on it last.
+	public let operationId: UUID?
+	/// The references that have no value, for `needs_secret`.
+	public let references: [NeedsSecretItem]?
+
+	public init(alias: String, phase: UpPhase, stage: UpStage?, code: String?, dependency: String?, dependencyReason: DependencyFailure?, waitingOn: [String]?, operationId: UUID?, references: [NeedsSecretItem]?) {
+		self.alias = alias
+		self.phase = phase
+		self.stage = stage
+		self.code = code
+		self.dependency = dependency
+		self.dependencyReason = dependencyReason
+		self.waitingOn = waitingOn
+		self.operationId = operationId
+		self.references = references
+	}
+}
+
+/// The report of one Up (spec 0046 AC-16): at most 32 services.
+public struct EnvUpReport: Codable, Sendable, Equatable {
+	/// The `environment_up` operation.
+	public let operationId: UUID
+	/// Where it stands.
+	public let state: UpState
+	/// When its `accept` step committed.
+	public let startedAt: Date
+	/// When it ended.
+	public let finishedAt: Date?
+	/// Every service, in manifest order.
+	public let services: [ServiceUpState]?
+
+	public init(operationId: UUID, state: UpState, startedAt: Date, finishedAt: Date?, services: [ServiceUpState]?) {
+		self.operationId = operationId
+		self.state = state
+		self.startedAt = startedAt
+		self.finishedAt = finishedAt
+		self.services = services
+	}
+}
+
 /// Params of `env.validate`.
 public struct EnvValidateParams: Codable, Sendable, Equatable {
 	/// The absolute path of the manifest file: at most 1024 bytes, no NUL,
@@ -5682,8 +5887,11 @@ public struct EnvironmentSummary: Codable, Sendable, Equatable {
 	public let serviceCount: UInt64
 	/// When the row last changed.
 	public let updatedAt: Date
+	/// The `environment_up` or `environment_down` operation of this
+	/// environment that has not ended (spec 0046).
+	public let activeOperation: EnvOperationRef?
 
-	public init(id: UUID, name: String, revision: UInt64, manifestLocation: String?, manifestSha256: String?, lockSha256: String?, status: EnvironmentStatus, readyCount: UInt64, serviceCount: UInt64, updatedAt: Date) {
+	public init(id: UUID, name: String, revision: UInt64, manifestLocation: String?, manifestSha256: String?, lockSha256: String?, status: EnvironmentStatus, readyCount: UInt64, serviceCount: UInt64, updatedAt: Date, activeOperation: EnvOperationRef?) {
 		self.id = id
 		self.name = name
 		self.revision = revision
@@ -5694,6 +5902,7 @@ public struct EnvironmentSummary: Codable, Sendable, Equatable {
 		self.readyCount = readyCount
 		self.serviceCount = serviceCount
 		self.updatedAt = updatedAt
+		self.activeOperation = activeOperation
 	}
 }
 
@@ -5809,14 +6018,17 @@ public struct ServiceInstance: Codable, Sendable, Equatable {
 	public let readiness: InstanceReadiness
 	/// The health.
 	public let health: InstanceHealth
+	/// Its endpoints, with the port each one really binds (spec 0046).
+	public let endpoints: [EndpointStatus]?
 
-	public init(id: UUID, name: String, runtimeVersion: String, lifecycle: InstanceLifecycle, readiness: InstanceReadiness, health: InstanceHealth) {
+	public init(id: UUID, name: String, runtimeVersion: String, lifecycle: InstanceLifecycle, readiness: InstanceReadiness, health: InstanceHealth, endpoints: [EndpointStatus]?) {
 		self.id = id
 		self.name = name
 		self.runtimeVersion = runtimeVersion
 		self.lifecycle = lifecycle
 		self.readiness = readiness
 		self.health = health
+		self.endpoints = endpoints
 	}
 }
 
@@ -5836,6 +6048,15 @@ public enum NotReadyReason: String, Codable, Sendable, Equatable {
 	case notReady = "not_ready"
 	/// Its state is unknown.
 	case unavailable
+	/// An Up runs and has not finished this service (spec 0046).
+	case bringingUp = "bringing_up"
+	/// A secret reference has no value (spec 0046).
+	case needsSecret = "needs_secret"
+	/// The last Up skipped it because a dependency was not ready (spec
+	/// 0046).
+	case dependencyNotReady = "dependency_not_ready"
+	/// The last Up failed on it (spec 0046).
+	case upFailed = "up_failed"
 	/// A value this build does not know.
 	case unrecognized
 }
@@ -5846,10 +6067,34 @@ public struct ServiceNotReady: Codable, Sendable, Equatable {
 	public let reason: NotReadyReason
 	/// The readiness detail or the last failure.
 	public let detail: String?
+	/// Its phase in the running Up, for `bringing_up`.
+	public let phase: UpPhase?
+	/// The dependencies it waits for, for `bringing_up`.
+	public let waitingOn: [String]?
+	/// The references that have no value, for `needs_secret`.
+	public let references: [NeedsSecretItem]?
+	/// The dependency that was not ready, for `dependency_not_ready`.
+	public let dependency: String?
+	/// Why, for `dependency_not_ready`.
+	public let dependencyReason: DependencyFailure?
+	/// The stage the last Up failed in, for `up_failed`.
+	public let stage: UpStage?
+	/// The error code it failed with, for `up_failed`.
+	public let code: String?
+	/// The child operation that failed, for `up_failed`.
+	public let operationId: UUID?
 
-	public init(reason: NotReadyReason, detail: String?) {
+	public init(reason: NotReadyReason, detail: String?, phase: UpPhase?, waitingOn: [String]?, references: [NeedsSecretItem]?, dependency: String?, dependencyReason: DependencyFailure?, stage: UpStage?, code: String?, operationId: UUID?) {
 		self.reason = reason
 		self.detail = detail
+		self.phase = phase
+		self.waitingOn = waitingOn
+		self.references = references
+		self.dependency = dependency
+		self.dependencyReason = dependencyReason
+		self.stage = stage
+		self.code = code
+		self.operationId = operationId
 	}
 }
 
@@ -5917,8 +6162,11 @@ public struct EnvironmentDetail: Codable, Sendable, Equatable {
 	public let lock: EnvLockInfo?
 	/// The local override file; only when `lock` is sent.
 	public let local: EnvLocalInfo?
+	/// The last Up: from the daemon's memory while it runs, from the
+	/// registry afterwards (spec 0046).
+	public let lastUp: EnvUpReport?
 
-	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?, lock: EnvLockInfo?, local: EnvLocalInfo?) {
+	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?, lock: EnvLockInfo?, local: EnvLocalInfo?, lastUp: EnvUpReport?) {
 		self.summary = summary
 		self.services = services
 		self.detached = detached
@@ -5926,6 +6174,7 @@ public struct EnvironmentDetail: Codable, Sendable, Equatable {
 		self.problems = problems
 		self.lock = lock
 		self.local = local
+		self.lastUp = lastUp
 	}
 }
 
@@ -8855,38 +9104,6 @@ public struct MetricsReply: Codable, Sendable, Equatable {
 	}
 }
 
-/// Why a reference needs a value. Open.
-public enum NeedsSecretReason: String, Codable, Sendable, Equatable {
-	/// The store holds no value.
-	case missing
-	/// The keychain is locked.
-	case storeLocked = "store_locked"
-	/// The user or the access list refused the read.
-	case accessDenied = "access_denied"
-	/// The store call did not start in time.
-	case storeBusy = "store_busy"
-	/// The OS has no store.
-	case storeUnsupported = "store_unsupported"
-	/// A reason this build does not know. The daemon never sends it.
-	case unrecognized
-}
-
-/// One reference a resource needs and cannot read.
-public struct NeedsSecretItem: Codable, Sendable, Equatable {
-	/// The reference.
-	public let reference: String
-	/// Why it cannot be read.
-	public let reason: NeedsSecretReason
-	/// Whether a generated value would work for it.
-	public let generateAllowed: Bool
-
-	public init(reference: String, reason: NeedsSecretReason, generateAllowed: Bool) {
-		self.reference = reference
-		self.reason = reason
-		self.generateAllowed = generateAllowed
-	}
-}
-
 /// The content of the `needsSecret` blocker of an instance (spec 0011,
 /// *Needs secret*): the instance DTO of feature 10 carries it in its
 /// `blocker` slot as `{type: needsSecret, content: ...}`.
@@ -9002,8 +9219,13 @@ public struct OperationStats: Codable, Sendable, Equatable {
 	/// Requests refused with `operation.queue_full` since the daemon
 	/// started.
 	public let rejectedQueueFull: UInt64
+	/// Coordinator operations running now; `running` never counts them
+	/// (spec 0046).
+	public let coordinators: UInt32?
+	/// The most coordinator operations that run at once.
+	public let maxCoordinators: UInt32?
 
-	public init(running: UInt32, queued: UInt32, needsRecovery: UInt32, maxRunning: UInt32, maxQueued: UInt32, interruptedAtStart: UInt32, resumedAtStart: UInt32, autoCompensatedAtStart: UInt32, rejectedQueueFull: UInt64) {
+	public init(running: UInt32, queued: UInt32, needsRecovery: UInt32, maxRunning: UInt32, maxQueued: UInt32, interruptedAtStart: UInt32, resumedAtStart: UInt32, autoCompensatedAtStart: UInt32, rejectedQueueFull: UInt64, coordinators: UInt32?, maxCoordinators: UInt32?) {
 		self.running = running
 		self.queued = queued
 		self.needsRecovery = needsRecovery
@@ -9013,6 +9235,8 @@ public struct OperationStats: Codable, Sendable, Equatable {
 		self.resumedAtStart = resumedAtStart
 		self.autoCompensatedAtStart = autoCompensatedAtStart
 		self.rejectedQueueFull = rejectedQueueFull
+		self.coordinators = coordinators
+		self.maxCoordinators = maxCoordinators
 	}
 }
 
@@ -9457,6 +9681,10 @@ public enum Call: Codable, Sendable, Equatable {
 	/// The host and port of every endpoint of an environment as variables
 	/// (spec 0045). It reads the registry and pinned packages only.
 	case envExport(EnvExportParams)
+	/// Brings an environment up (spec 0046): an `environment_up`
+	/// coordinator that installs, creates, and starts through child
+	/// operations in dependency order.
+	case envUp(EnvUpParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -9533,7 +9761,8 @@ public enum Call: Codable, Sendable, Equatable {
 			envImport = "env.import",
 			envRemove = "env.remove",
 			envLock = "env.lock",
-			envExport = "env.export"
+			envExport = "env.export",
+			envUp = "env.up"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -9895,6 +10124,11 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .envExport(content)
 					return
 				}
+			case .envUp:
+				if let content = try? container.decode(EnvUpParams.self, forKey: .content) {
+					self = .envUp(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -10116,6 +10350,9 @@ public enum Call: Codable, Sendable, Equatable {
 		case .envExport(let content):
 			try container.encode(CodingKeys.envExport, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .envUp(let content):
+			try container.encode(CodingKeys.envUp, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -10294,6 +10531,8 @@ public enum Reply: Codable, Sendable, Equatable {
 	case envLock(EnvLockResult)
 	/// The variables.
 	case envExport(EnvExport)
+	/// The accepted Up.
+	case envUp(EnvUpReply)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -10370,7 +10609,8 @@ public enum Reply: Codable, Sendable, Equatable {
 			envImport = "env.import",
 			envRemove = "env.remove",
 			envLock = "env.lock",
-			envExport = "env.export"
+			envExport = "env.export",
+			envUp = "env.up"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -10752,6 +10992,11 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .envExport(content)
 					return
 				}
+			case .envUp:
+				if let content = try? container.decode(EnvUpReply.self, forKey: .content) {
+					self = .envUp(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -10982,6 +11227,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .envExport(let content):
 			try container.encode(CodingKeys.envExport, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envUp(let content):
+			try container.encode(CodingKeys.envUp, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

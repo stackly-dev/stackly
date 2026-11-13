@@ -101,6 +101,7 @@ extension Call {
 		case .envRemove: "env.remove"
 		case .envLock: "env.lock"
 		case .envExport: "env.export"
+		case .envUp: "env.up"
 		}
 	}
 }
@@ -184,6 +185,7 @@ extension Reply {
 		case .envRemove: "env.remove"
 		case .envLock: "env.lock"
 		case .envExport: "env.export"
+		case .envUp: "env.up"
 		}
 	}
 }

@@ -388,6 +388,7 @@ pub async fn start(deps: DaemonDeps) -> Result<DaemonHandle, StartError> {
         secret_target,
     ));
     core.set_catalog_refresher(Arc::new(catalog::DaemonRefresher::new(&core)));
+    core.set_env_ports(Arc::new(crate::ipc::env::children::EnvPorts::new(&core)));
     core.storage()
         .set_read_timeout(config.capacity_read_timeout);
     if let Some(home) = config.home.clone() {
