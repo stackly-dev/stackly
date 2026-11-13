@@ -75,6 +75,10 @@ pub struct PlanInputs<'a> {
     pub lock: Option<&'a LockInputs>,
     /// The local overrides, from spec 0045.
     pub overrides: Option<&'a OverrideInputs>,
+    /// Whether the request asked for `--locked`, from spec 0045; always
+    /// false here.
+    // provisional: F45
+    pub locked: bool,
 }
 
 /// One instance as the plan and the status see it: the registry row with
@@ -899,43 +903,7 @@ fn create_item(
     }
 
     // Create's own evaluation.
-    let draft = CreateDraft {
-        name: instance_name.to_string(),
-        display_name: None,
-        provider: ProviderChoice {
-            name: service.provider.to_string(),
-            revision: None,
-        },
-        runtime_id,
-        endpoints: service
-            .endpoints
-            .iter()
-            .map(|endpoint| {
-                (
-                    endpoint.name.to_string(),
-                    match endpoint.port {
-                        PortRequest::Auto => PortRequestDraft::Auto,
-                        PortRequest::Fixed(port) => PortRequestDraft::Fixed(port.get()),
-                    },
-                )
-            })
-            .collect(),
-        settings: Value::Object(service.settings.clone()),
-        secrets: service
-            .secret_refs
-            .iter()
-            .map(|(field, reference)| {
-                (
-                    field.to_string(),
-                    SecretSourceKind::Bind(reference.to_string()),
-                )
-            })
-            .collect(),
-        secret_values: Vec::new(),
-        start: true,
-        startup: Some(StartupPolicy::Manual),
-        duplicate_of: None,
-    };
+    let draft = draft_for(service, &instance_name, runtime_id);
     let resolved = runtime.is_some();
     let facts = match planned {
         Some(planned) => gather_planned(&deps.create, &draft, planned)?,
@@ -1064,6 +1032,56 @@ fn installed_fixture<'e>(
                     && row.target() == artifact.target
             })
     }))
+}
+
+/// The create draft of a dedicated service: the one plan evaluates and Up
+/// (spec 0046) creates. `runtime_id` is the installed runtime, or
+/// [`planned_runtime_placeholder_id`] while it is not installed. Every
+/// `secretRefs` entry binds its reference; every other secret field is
+/// generated. The instance starts after create and has `startup` manual.
+#[must_use]
+pub fn draft_for(
+    service: &ServiceSpec,
+    instance_name: &InstanceName,
+    runtime_id: RuntimeId,
+) -> CreateDraft {
+    CreateDraft {
+        name: instance_name.to_string(),
+        display_name: None,
+        provider: ProviderChoice {
+            name: service.provider.to_string(),
+            revision: None,
+        },
+        runtime_id,
+        endpoints: service
+            .endpoints
+            .iter()
+            .map(|endpoint| {
+                (
+                    endpoint.name.to_string(),
+                    match endpoint.port {
+                        PortRequest::Auto => PortRequestDraft::Auto,
+                        PortRequest::Fixed(port) => PortRequestDraft::Fixed(port.get()),
+                    },
+                )
+            })
+            .collect(),
+        settings: Value::Object(service.settings.clone()),
+        secrets: service
+            .secret_refs
+            .iter()
+            .map(|(field, reference)| {
+                (
+                    field.to_string(),
+                    SecretSourceKind::Bind(reference.to_string()),
+                )
+            })
+            .collect(),
+        secret_values: Vec::new(),
+        start: true,
+        startup: Some(StartupPolicy::Manual),
+        duplicate_of: None,
+    }
 }
 
 /// The status of a bound reference from create's secret facts.

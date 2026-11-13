@@ -19,7 +19,7 @@ pub use plan::{
     BlockerKind, DetachedMember, EnvironmentRef, InstanceView, LockInputs, NOT_INITIALIZED,
     OverrideInputs, Plan, PlanAction, PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint,
     PlanError, PlanInputs, PlanItem, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep,
-    PlanTrust, Registration, plan, start_order,
+    PlanTrust, Registration, draft_for, plan, planned_runtime_placeholder_id, start_order,
 };
 pub use status::{
     EnvironmentStatus, EnvironmentView, ManifestRead, ManifestState, NotReadyReason, ServiceStatus,

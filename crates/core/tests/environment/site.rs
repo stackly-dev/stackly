@@ -204,6 +204,7 @@ impl Site {
                 registered,
                 lock: None,
                 overrides: None,
+                locked: false,
             },
         )
         .expect("the plan reads")
