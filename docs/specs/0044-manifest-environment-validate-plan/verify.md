@@ -316,3 +316,5 @@ Verdict: semua AC lulus untuk bagian yang bisa diotomasi. Yang tersisa hanya buk
 Daftar celah test lengkap sudah dikirim ke sesi `tst-f44-test`.
 
 Catatan 2026-11-14: celah AC-15 (kolom `ENVIRONMENT` di `stackly instance list` sesudah Up) tertutup lewat probe native verify spec 0046 Milestone 3: binary CLI menampilkan `shop` dan `dedicated` untuk dua instance NATS yang dinaikkan `stackly env up`.
+
+Catatan 2026-11-14: aturan `differences` runtime (AC-9) diperbaiki di `6a41187d`: selector yang terbaca sebagai versi exact dan line hanya berbeda bila keduanya tidak cocok, jadi `2.15` terhadap `2.15.1` tidak lagi dilaporkan; empat test `edges::` lulus.

@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d1-cce1-745d-8e4f-82eb26a110c4",
+  "covers": [
+    "AC-073",
+    "AC-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "two_manifests_that_create_one_instance_name_at_once_end_with_exactly_one_instance",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 719
+  },
+  "status": "PASS",
+  "expected": "two env.up runs of two manifests whose db both name the instance race-db, sent at once, leave exactly one instance race-db; the winner succeeds and the loser fails env.up_incomplete with db failed at create (instance.name_taken or resource.busy) and its dependent skipped without a start, unless its precheck already saw the winner's plan and refused env.plan_changed",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:30:36.12996Z",
+  "finishedAt": "2026-11-13T21:30:49.970595Z",
+  "evidencePath": "output.log"
+}

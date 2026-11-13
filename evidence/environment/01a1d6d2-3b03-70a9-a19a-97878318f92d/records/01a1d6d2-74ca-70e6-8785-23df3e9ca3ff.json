@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d2-74ca-70e6-8785-23df3e9ca3ff",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "env",
+    "name": "up_wait::ctrl_c_during_up_wait_exits_130_and_leaves_the_up_running",
+    "file": "apps/cli/tests/env/up_wait.rs",
+    "line": 181
+  },
+  "status": "PASS",
+  "expected": "SIGINT while env up --wait waits ends it at once with cli.interrupted and exit 130, says the Up's operation is still running, and never sends operation.cancel",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:31:19.114067Z",
+  "finishedAt": "2026-11-13T21:31:22.001851Z",
+  "evidencePath": "output.log"
+}

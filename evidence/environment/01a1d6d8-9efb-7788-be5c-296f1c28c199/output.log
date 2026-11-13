@@ -1,0 +1,16 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 16.36s
+     Running tests/env_up_edges.rs (target/debug/deps/env_up_edges-7e997ee20aefecfc)
+
+running 1 test
+    Finished `dev` profile [unoptimized] target(s) in 0.05s
+test a_dependency_whose_start_fails_skips_its_dependent_unstarted_and_leaves_a_healthy_one_alone ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 5.15s
+

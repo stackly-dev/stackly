@@ -21,5 +21,6 @@ mod plan;
 mod stacklyd;
 mod status;
 mod up;
+mod up_wait;
 mod validate;
 mod wording;

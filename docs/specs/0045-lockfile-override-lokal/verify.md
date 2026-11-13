@@ -233,3 +233,5 @@ Verdict fitur 45: **PASS untuk semua bagian otomatis** AC-1 sampai AC-21. GUI ny
 Tertutup sejak catatan milestone: `local.overrides` `applied` untuk file tidak valid (K22), `EnvLocalInfo.state` opsional (K24), dan lock `in_sync` untuk manifest tidak valid (K23, tidak ditampilkan CLI dan app).
 
 Catatan 2026-11-14: dua hal yang tadinya belum terbukti kini tertutup lewat probe native verify spec 0046 Milestone 3. `stackly env export` dengan nilai nyata lewat binary CLI sama persis dengan `text` daemon dan tanpa secret, path, atau reference (AC-15, AC-17). `stackly env up --locked` di CLI gagal jelas tanpa lock (`env.lock_missing`) dan dengan lock basi (`env.lock_stale`), exit 3, tanpa membuat instance (AC-6; temuan terbuka nomor 8).
+
+Catatan 2026-11-14: temuan terbuka nomor 1 dan 2 Verify penuh tertutup di `6a41187d`: blocker `env.lock` menyebut provider ("official/valkey has no version matching 8") dan hint kedua kode artefak lock menyebut target ("this Mac (macos-aarch64)"), dilihat lewat CLI terhadap binary daemon.

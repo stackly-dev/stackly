@@ -9,6 +9,7 @@ mod close_interrupted;
 mod common;
 mod compensation;
 mod coordinator;
+mod coordinator_slots;
 mod failures;
 mod flow;
 mod guarded;
