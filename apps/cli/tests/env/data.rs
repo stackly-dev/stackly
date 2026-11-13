@@ -63,6 +63,53 @@ pub fn export_dotenv() -> EnvExport {
     serde_json::from_str(&read("export-dotenv.json")).expect("the export decodes")
 }
 
+/// `detail-bringing-up.json`: `graph` while its Up runs; db ready, cache
+/// starting, api waiting.
+pub fn bringing_up() -> EnvironmentDetail {
+    serde_json::from_str(&read("detail-bringing-up.json")).expect("the detail decodes")
+}
+
+/// `detail-up-incomplete.json`: `graph` after an Up that ended with cache
+/// needing a secret and api skipped.
+pub fn up_incomplete() -> EnvironmentDetail {
+    serde_json::from_str(&read("detail-up-incomplete.json")).expect("the detail decodes")
+}
+
+/// `graph` after an Up that brought every service up: the running report
+/// of [`bringing_up`] with each service ready on its own `auto` port.
+pub fn brought_up() -> EnvironmentDetail {
+    use stackly_protocol::env::{EnvironmentStatus, UpPhase, UpState};
+    let mut detail = bringing_up();
+    let template = detail.services[0]
+        .instance
+        .clone()
+        .expect("db has an instance");
+    for (index, service) in detail.services.iter_mut().enumerate() {
+        if service.instance.is_none() {
+            let mut instance = template.clone();
+            instance.name = format!("graph-{}", service.alias);
+            instance.id =
+                uuid::Uuid::from_u128(0x0192_f3a4_0000_7000_8000_0000_0000_00a0 + index as u128);
+            for endpoint in &mut instance.endpoints {
+                endpoint.port = Some(49152 + index as u16);
+            }
+            service.instance = Some(instance);
+        }
+        service.not_ready = None;
+    }
+    let report = detail.last_up.as_mut().expect("a report");
+    report.state = UpState::Succeeded;
+    report.finished_at = Some("2026-11-13T09:01:00.000Z".parse().expect("a fixed time"));
+    for service in &mut report.services {
+        service.phase = UpPhase::Ready;
+        service.waiting_on.clear();
+    }
+    detail.summary.status = EnvironmentStatus::Ready;
+    detail.summary.ready_count = Count::saturating(3);
+    detail.summary.active_operation = None;
+    detail
+}
+
 /// The validation of the applicable plan: valid, no findings.
 pub fn valid() -> EnvValidation {
     applicable().validation
