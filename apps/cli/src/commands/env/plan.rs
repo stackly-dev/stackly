@@ -1,6 +1,7 @@
-//! `stackly env plan [--file <path> | <environment>] [--locked]` (spec
-//! 0044, *CLI*, AC-16; spec 0045 AC-6, AC-17): asks the daemon's
-//! `env.plan` for a file or for the manifest of a registered environment,
+//! `stackly env plan [--file <path> | <environment> | <path>] [--locked]`
+//! (spec 0044, *CLI*, AC-16; spec 0045 AC-6, AC-17; the path target of spec
+//! 0046 *Target*): asks the daemon's `env.plan` for a file or for the
+//! manifest of a registered environment,
 //! and prints one table row per step with the summary line. The table goes
 //! to stdout first; then the lock and local override lines, blockers,
 //! secrets, differences, and members no longer in the manifest go to
@@ -19,7 +20,7 @@ use stackly_protocol::{Call, Reply};
 
 use super::DEFAULT_FILE;
 use super::render::{counts, findings, plan_sections, plan_table};
-use super::target::EnvironmentTarget;
+use super::target::TargetArgs;
 use crate::commands::RunCommand;
 use crate::commands::path::absolute;
 use crate::commands::provider::local::{shows_text, to_stderr};
@@ -32,13 +33,9 @@ use crate::session::CallSpec;
 /// `stackly env plan`.
 #[derive(Debug, Args)]
 pub struct PlanArgs {
-    /// The manifest; a relative path starts at the current folder
-    /// [default: ./stackly.yaml]
-    #[arg(long, value_name = "PATH", conflicts_with = "environment")]
-    pub file: Option<PathBuf>,
-    /// A registered environment, by name or whole ID; its manifest is read
-    #[arg(value_name = "ENVIRONMENT")]
-    pub environment: Option<EnvironmentTarget>,
+    /// The manifest or the environment.
+    #[command(flatten)]
+    pub target: TargetArgs,
     /// Use only the versions in stackly.lock; a missing or stale lock
     /// blocks the plan
     #[arg(long)]
@@ -107,15 +104,9 @@ impl RunCommand for PlanArgs {
     type Output = Planned;
 
     async fn run(self, cx: &mut Context) -> CommandOutput<Planned> {
-        let source = match self.environment {
-            Some(target) => match target.resolve(cx).await {
-                Ok(summary) => EnvSource::Registered(summary.id),
-                Err(failure) => return CommandOutput::failed(failure),
-            },
-            None => match file_source(self.file) {
-                Ok(source) => source,
-                Err(failure) => return CommandOutput::failed(failure),
-            },
+        let source = match self.target.resolve(cx).await {
+            Ok(resolved) => resolved.source(),
+            Err(failure) => return CommandOutput::failed(failure),
         };
         let plan = match plan(cx, source, self.locked).await {
             Ok(plan) => plan,

@@ -6,7 +6,8 @@
 //! namespace in a catalog and `provider import` refuses its fixture
 //! artifact, so the manifest names two official providers. Nothing is
 //! downloaded, installed, created, or started: validate and plan are read
-//! only and import only registers the file.
+//! only, import only registers the file, and the one Up is refused before
+//! it starts (spec 0046 AC-17, AC-18).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -375,5 +376,150 @@ fn a_real_daemon_locks_plans_locked_and_exports_a_manifest() {
         &["env", "export", "shop", "--format", "shell"],
     );
     assert_eq!(by_name.code, Some(0), "{by_name:?}");
+    ev.pass();
+}
+
+/// [`MANIFEST`] with a reference for the Valkey password that has no value.
+const SECRET_MANIFEST: &str = "apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+
+services:
+  cache:
+    provider: official/valkey
+    version: \"9.1\"
+    secretRefs:
+      password: \"local:shop/valkey\"
+  queue:
+    provider: official/nats
+    version: \"2.15\"
+    dependsOn:
+      - {service: cache}
+";
+
+// covers: AC-17, AC-18 (spec 0046)
+#[test]
+fn a_real_daemon_refuses_an_up_that_needs_a_secret_and_shows_the_status() {
+    let ev = evidence!(
+        covers = ["REQ-028"],
+        kind = Kind::Fixture,
+        expected = "against a real stacklyd with the catalog of providers/, env status <folder> of a file no environment is registered at exits 10 with Run stackly env up or stackly env import.; env up <folder> for a Valkey password reference without a value exits 6 with secret.needs_secret, the reference, and stackly secret set local:shop/valkey, and creates no instance, environment, or operation; after env import, env status <folder> prints shop  Down  0 of 2 ready and both services not_created with exit 0, and its --json result, the env.get reply, equals the one of env status shop",
+    );
+    let root = TestRoot::new().expect("a test root");
+    let dir = built_catalog(&root);
+    let _reap = ReapGuard::new(root.path(), &paths(&root).runtime);
+    let _daemon = start(&root, dir);
+    let work = root.path().join("work");
+    let project = work.join("shop");
+    std::fs::create_dir_all(&project).expect("the project folder can be made");
+    std::fs::write(project.join("stackly.yaml"), SECRET_MANIFEST)
+        .expect("the manifest can be written");
+
+    let unknown = run_in(&root, &work, &["env", "status", "./shop"]);
+    assert_eq!(unknown.code, Some(10), "{unknown:?}");
+    assert!(
+        unknown
+            .stderr
+            .contains("  hint: Run stackly env up or stackly env import.\n"),
+        "{}",
+        unknown.stderr
+    );
+
+    let refused = run_in(&root, &work, &["env", "up", "./shop", "--wait"]);
+    assert_eq!(refused.code, Some(6), "{refused:?}");
+    assert_eq!(refused.stdout, "");
+    assert!(
+        refused.stderr.contains("  code: secret.needs_secret\n")
+            && refused
+                .stderr
+                .contains("  hint: stackly secret set local:shop/valkey\n")
+            && refused
+                .stderr
+                .contains("  reference: reference=local:shop/valkey "),
+        "{}",
+        refused.stderr
+    );
+    let json = run_in(&root, &work, &["env", "up", "./shop", "--json"]);
+    assert_eq!(json.code, Some(6), "{json:?}");
+    let value = envelope(&json);
+    assert_eq!(value["error"]["code"], "secret.needs_secret");
+    assert_eq!(
+        value["error"]["items"][0]["fields"][0]["value"], "local:shop/valkey",
+        "{value}"
+    );
+    let instances = run_in(&root, &work, &["instance", "list", "--json"]);
+    assert_eq!(
+        envelope(&instances)["result"]["items"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
+    );
+    let environments = run_in(&root, &work, &["env", "list", "--json"]);
+    assert_eq!(
+        envelope(&environments)["result"]["items"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
+    );
+    let audit = run_in(&root, &work, &["audit", "list", "--json"]);
+    assert_eq!(audit.code, Some(0), "{audit:?}");
+    assert!(
+        !envelope(&audit)["result"]["items"]
+            .as_array()
+            .expect("audit items")
+            .iter()
+            .any(|item| item["operationKind"]
+                .as_str()
+                .is_some_and(|kind| kind.contains("environment"))),
+        "{}",
+        audit.stdout
+    );
+
+    let imported = run_in(
+        &root,
+        &work,
+        &["env", "import", "--file", "shop/stackly.yaml"],
+    );
+    assert_eq!(imported.code, Some(0), "{imported:?}");
+    let status = run_in(&root, &work, &["env", "status", "./shop"]);
+    assert_eq!(status.code, Some(0), "{status:?}");
+    let mut lines = status.stdout.lines();
+    assert!(
+        lines
+            .next()
+            .is_some_and(|line| line.starts_with("shop  Down  0 of 2 ready  ")),
+        "{}",
+        status.stdout
+    );
+    assert!(
+        status
+            .stdout
+            .contains("\nnot ready:\n  cache: not_created\n  queue: not_created\n"),
+        "{}",
+        status.stdout
+    );
+    let by_path = envelope(&run_in(
+        &root,
+        &work,
+        &["env", "status", "shop/stackly.yaml", "--json"],
+    ));
+    let by_name = envelope(&run_in(&root, &work, &["env", "status", "shop", "--json"]));
+    assert_eq!(by_path["result"], by_name["result"]);
+    assert_eq!(by_name["result"]["summary"]["name"], "shop");
+    assert_eq!(
+        by_name["result"]["services"]
+            .as_array()
+            .map(|services| services
+                .iter()
+                .map(|service| service["notReady"]["reason"].clone())
+                .collect::<Vec<_>>()),
+        Some(vec![
+            serde_json::json!("not_created"),
+            serde_json::json!("not_created")
+        ])
+    );
+    let planned = run_in(&root, &work, &["env", "plan", "./shop", "--json"]);
+    assert_eq!(envelope(&planned)["result"]["registration"], "registered");
     ev.pass();
 }
