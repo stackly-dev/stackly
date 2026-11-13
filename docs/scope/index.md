@@ -28,7 +28,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | [05-saat-instance-gagal.md](05-saat-instance-gagal.md) | Saat instance gagal (JOURNEY-05) | 33 sampai 35 | 3 done |
 | [06-menambah-provider.md](06-menambah-provider.md) | Menambah provider (JOURNEY-07) | 36 sampai 38 | 3 done |
 | [07-stack-enam-service.md](07-stack-enam-service.md) | Stack enam service | 39 sampai 43 | 5 done |
-| [08-environment-proyek.md](08-environment-proyek.md) | Environment proyek (JOURNEY-04) | 44 sampai 47 | 3 in-progress, 1 planned |
+| [08-environment-proyek.md](08-environment-proyek.md) | Environment proyek (JOURNEY-04) | 44 sampai 47 | 4 in-progress |
 | [09-backup-dan-restore.md](09-backup-dan-restore.md) | Backup & restore (JOURNEY-06) | 48 sampai 53 | 6 planned |
 | [10-merawat-runtime-dan-data.md](10-merawat-runtime-dan-data.md) | Merawat runtime & data | 54 sampai 59 | 6 planned |
 | [11-distribusi-aplikasi.md](11-distribusi-aplikasi.md) | Distribusi aplikasi | 60 sampai 62 | 3 planned |
@@ -84,7 +84,7 @@ Bangun dari atas ke bawah. Nomor file adalah urutan development yang disarankan,
 | 44 | Manifest environment: validate & plan | Environment proyek | in-progress |
 | 45 | Lockfile & override lokal | Environment proyek | in-progress |
 | 46 | Env up & dependency graph | Environment proyek | in-progress |
-| 47 | Env down, shared instance & lease | Environment proyek | planned |
+| 47 | Env down, shared instance & lease | Environment proyek | in-progress |
 | 48 | Backup metadata registry | Backup & restore | planned |
 | 49 | Cold backup & kontrak backup | Backup & restore | planned |
 | 50 | Backup logical PostgreSQL | Backup & restore | planned |
