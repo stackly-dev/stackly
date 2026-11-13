@@ -1,7 +1,9 @@
 //! `cargo xtask evidence check`: the static evidence rules of spec 0002.
 //!
 //! It validates the manual records in `evidence/manual/` and the baseline
-//! in `evidence/baseline-host.json`, then scans the Rust and Swift sources
+//! in `evidence/baseline-host.json`, checks that no committed record of a
+//! run (`evidence/<area>/<run>/records/` and `report.json`) or manual record
+//! carries an absolute `test.file`, then scans the Rust and Swift sources
 //! for the native test markers. It never reads `evidence/runtime/`; that is
 //! `cargo xtask runtime check` (spec 0003).
 
@@ -25,6 +27,8 @@ const RUST_SKIP: [&str; 3] = ["target", ".build", "DerivedData"];
 /// Folders scanned for Swift sources, and the folder names skipped in them.
 const SWIFT_ROOTS: [&str; 2] = ["clients", "apps/macos"];
 const SWIFT_SKIP: [&str; 4] = [".build", ".swiftpm", "DerivedData", "Generated"];
+/// Folders of `evidence/` that hold no run folders of automated records.
+const NOT_RUN_AREAS: [&str; 2] = ["manual", "runtime"];
 /// A Swift test target for native tests has a name with this suffix.
 const NATIVE_TARGET_SUFFIX: &str = "NativeTests";
 
@@ -35,6 +39,7 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
     let mut violations = Vec::new();
     let manual = check_manual(root, &mut violations)?;
     let baseline = check_baseline(root, &mut violations)?;
+    let run_records = check_run_paths(root, &mut violations)?;
 
     let rust_files = source_files(root, &RUST_ROOTS, &RUST_SKIP, "rs")?;
     for file in &rust_files {
@@ -53,7 +58,7 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
 
     if violations.is_empty() {
         println!(
-            "evidence check: {manual} manual record(s), baseline {}, {} Rust and {} Swift file(s) follow the rules",
+            "evidence check: {manual} manual record(s), {run_records} run record(s), baseline {}, {} Rust and {} Swift file(s) follow the rules",
             if baseline {
                 "valid"
             } else {
@@ -72,6 +77,122 @@ pub fn run(root: &Path, args: &[&str]) -> Result<ExitCode> {
         violations.len()
     );
     Ok(ExitCode::FAILURE)
+}
+
+/// Checks that every committed record of a run, in `records/*.json` and in
+/// the `records` of `report.json` under `evidence/<area>/<run>/`, names its
+/// test file relative to the repository root, and returns how many records
+/// it read. `evidence/manual/` and `evidence/runtime/` hold no run folders.
+fn check_run_paths(root: &Path, violations: &mut Vec<String>) -> Result<usize> {
+    let evidence = root.join("evidence");
+    let mut count = 0;
+    for area in sorted_dirs(&evidence)? {
+        let area_name = area
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned());
+        if area_name
+            .as_deref()
+            .is_some_and(|name| NOT_RUN_AREAS.contains(&name))
+        {
+            continue;
+        }
+        for run in sorted_dirs(&area)? {
+            let records = run.join("records");
+            if records.is_dir() {
+                for file in sorted_files(&records, "json")? {
+                    let value = read_json(root, &file)?;
+                    count += 1;
+                    if let Some(problem) = absolute_file(&value) {
+                        violations.push(format!("{}: {problem}", relative_path(root, &file)));
+                    }
+                }
+            }
+            let report = run.join("report.json");
+            if report.is_file() {
+                let value = read_json(root, &report)?;
+                let entries = value.get("records").and_then(serde_json::Value::as_array);
+                for entry in entries.into_iter().flatten() {
+                    if let Some(problem) = absolute_file(entry) {
+                        violations.push(format!("{}: {problem}", relative_path(root, &report)));
+                    }
+                }
+            }
+        }
+    }
+    Ok(count)
+}
+
+/// The rule a record breaks when its `test.file` is an absolute path: a
+/// committed record names its file from the repository root, never with the
+/// checkout's own folder (spec 0002).
+fn absolute_file(record: &serde_json::Value) -> Option<String> {
+    let file = record.pointer("/test/file")?.as_str()?;
+    let absolute = Path::new(file).is_absolute()
+        || file.starts_with('/')
+        || file
+            .get(1..3)
+            .is_some_and(|drive| drive == ":\\" || drive == ":/");
+    absolute.then(|| {
+        format!(
+            "test.file `{file}` is absolute; a record names its file relative to the repository root"
+        )
+    })
+}
+
+/// The folders directly in `dir`, by name; none when `dir` is missing.
+fn sorted_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("cannot read {}", dir.display()))? {
+        let path = entry
+            .with_context(|| format!("cannot read {}", dir.display()))?
+            .path();
+        if path.is_dir() {
+            dirs.push(path);
+        }
+    }
+    dirs.sort();
+    Ok(dirs)
+}
+
+/// The files with `extension` directly in `dir`, by name.
+fn sorted_files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("cannot read {}", dir.display()))? {
+        let path = entry
+            .with_context(|| format!("cannot read {}", dir.display()))?
+            .path();
+        if path.is_file() && path.extension().is_some_and(|ext| ext == extension) {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// `file` as JSON; a file that is not JSON is an error, since a run folder
+/// only holds what `cargo xtask evidence run` wrote.
+fn read_json(root: &Path, file: &Path) -> Result<serde_json::Value> {
+    let bytes =
+        fs::read(file).with_context(|| format!("cannot read {}", relative_path(root, file)))?;
+    serde_json::from_slice(&bytes)
+        .with_context(|| format!("{} is not JSON", relative_path(root, file)))
+}
+
+/// `file` from the repository root, with `/` as the separator.
+fn relative_path(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root).map_or_else(
+        |_| file.display().to_string(),
+        |relative| {
+            relative
+                .components()
+                .map(|part| part.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        },
+    )
 }
 
 /// Validates every `evidence/manual/*.json` and returns how many there are.
@@ -123,6 +244,14 @@ fn manual_violations(root: &Path, relative: &str, record: &EvidenceRecord) -> Ve
         Ok(()) => Vec::new(),
         Err(err) => err.violations,
     };
+    if let Some(problem) = record
+        .test
+        .file
+        .as_deref()
+        .and_then(|file| absolute_file(&serde_json::json!({ "test": { "file": file } })))
+    {
+        problems.push(problem);
+    }
     if record.method != Method::Manual {
         problems.push("a record in evidence/manual has method manual".to_owned());
     }
@@ -248,6 +377,67 @@ mod tests {
         let mut violations = Vec::new();
         check_manual(root, &mut violations).unwrap();
         violations
+    }
+
+    /// A temporary repository root with one run folder holding `record` in
+    /// `records/` and in `report.json`.
+    fn root_with_run(file: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let run = dir
+            .path()
+            .join("evidence/environment/01a1d5bf-0000-7000-8000-000000000000");
+        fs::create_dir_all(run.join("records")).unwrap();
+        let record = serde_json::json!({ "test": { "language": "swift", "file": file } });
+        fs::write(
+            run.join("records/01a1d5bf-0000-7000-8000-000000000001.json"),
+            record.to_string(),
+        )
+        .unwrap();
+        fs::write(
+            run.join("report.json"),
+            serde_json::json!({ "records": [record] }).to_string(),
+        )
+        .unwrap();
+        // The runtime area is cargo xtask runtime check's, never read here.
+        let runtime = dir.path().join("evidence/runtime/x/records");
+        fs::create_dir_all(&runtime).unwrap();
+        fs::write(runtime.join("a.json"), b"not json").unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_run_record_with_an_absolute_test_file_fails() {
+        let relative = root_with_run("apps/macos/Tests/ListTests.swift");
+        let mut violations = Vec::new();
+        assert_eq!(
+            check_run_paths(relative.path(), &mut violations).unwrap(),
+            1
+        );
+        assert_eq!(violations, Vec::<String>::new());
+
+        let absolute = root_with_run("/Users/someone/Stackly/apps/macos/Tests/ListTests.swift");
+        let mut violations = Vec::new();
+        check_run_paths(absolute.path(), &mut violations).unwrap();
+        assert_eq!(violations.len(), 2, "{violations:?}");
+        assert!(
+            violations[0]
+                .starts_with("evidence/environment/01a1d5bf-0000-7000-8000-000000000000/records/")
+        );
+        assert!(
+            violations[1]
+                .ends_with("is absolute; a record names its file relative to the repository root")
+        );
+        assert!(
+            absolute_file(&serde_json::json!({ "test": { "file": "C:\\repo\\a.rs" } })).is_some()
+        );
+        assert!(absolute_file(&serde_json::json!({ "test": { "file": null } })).is_none());
+    }
+
+    #[test]
+    fn the_committed_run_records_are_relative() {
+        let mut violations = Vec::new();
+        assert!(check_run_paths(&repo_root(), &mut violations).unwrap() > 0);
+        assert_eq!(violations, Vec::<String>::new());
     }
 
     #[test]
