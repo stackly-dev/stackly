@@ -225,6 +225,28 @@ public final class EndpointsModel {
         }
     }
 
+    /// The environments whose active lease holds the instance, from the verdict (spec 0047,
+    /// AC-15, AC-23); empty before a verdict or when no lease holds it.
+    public var leases: [InstanceEnvironment] {
+        verdict?.leases ?? []
+    }
+
+    /// The caution above the button while an environment's lease holds the instance:
+    /// "{environment} uses this instance. Changing its ports can break that environment until
+    /// you update what connects to it.", or `nil`.
+    public var leaseWarning: String? {
+        let names = leases.map(\.name)
+        guard names.isEmpty == false else { return nil }
+        return
+            "\(names.joined(separator: " and ")) uses this instance. Changing its ports can break that environment until you update what connects to it."
+    }
+
+    /// The title of the main button: "Change Anyway" while a lease holds the instance.
+    public var primaryTitle: String {
+        if isBusy { return ConfigurationCopy.changingPorts }
+        return leases.isEmpty ? "Change Ports" : "Change Anyway"
+    }
+
     /// Why the main button is off, or `nil` when the ports can change.
     public var disabledReason: String? {
         if phase != .loaded { return "Reading the ports…" }
@@ -250,7 +272,7 @@ public final class EndpointsModel {
         let call = Call.instanceChangeEndpoints(
             ChangeEndpointsParams(
                 instanceId: source.id, baseRevision: baseRevision, endpoints: pendingRequests,
-                dryRun: false, overrideLeases: nil))
+                dryRun: false, overrideLeases: leases.isEmpty ? nil : true))
         let key = unknown ?? MutationPath.newKey()
         let end = await ConfigMutationRunner(service: service).run(call, key: key)
         unknown = nil
@@ -262,7 +284,12 @@ public final class EndpointsModel {
             context.report(.neutral("Nothing to change on \(source.name)."))
             return true
         case .refused(let body):
-            if body.code == "config.revision_conflict" {
+            if body.code == "instance.endpoints_require_override" {
+                // A lease came after the verdict: judge again, so the banner and
+                // Change Anyway show before anything is sent with the override.
+                context.report(.failure(body))
+                await validateNow()
+            } else if body.code == "config.revision_conflict" {
                 await load()
                 context.report(
                     .neutral(
@@ -362,6 +389,9 @@ struct EndpointsSheet: View {
                 .font(.callout)
                 .foregroundStyle(Tone.critical.text)
         }
+        if let warning = model.leaseWarning {
+            StateBanner(tone: .caution, title: warning)
+        }
         if let note = model.impactNote {
             Text(note)
                 .font(.callout)
@@ -372,7 +402,7 @@ struct EndpointsSheet: View {
     private var primary: StacklyAction {
         StacklyAction(
             id: "ports.confirm",
-            title: model.isBusy ? ConfigurationCopy.changingPorts : "Change Ports",
+            title: model.primaryTitle,
             mutates: true, disabledReason: model.isBusy ? nil : model.disabledReason,
             isBusy: model.isBusy,
             perform: {

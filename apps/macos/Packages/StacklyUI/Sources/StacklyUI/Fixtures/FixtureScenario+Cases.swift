@@ -200,6 +200,15 @@
                     replies: FixtureEnvironmentUp.replies(
                         FixtureEnvironmentUp.incompleteSummaries,
                         detail: FixtureEnvironmentUp.incompleteDetail()))
+            case .environmentBringingDown:
+                return connectedScenario(
+                    id, health: .fixture(),
+                    data: (
+                        FixtureEnvironments.instances,
+                        [FixtureEnvironmentDown.downOperation()] + operationCases, providerCases
+                    ),
+                    presence: .connected(health: .ready),
+                    replies: FixtureEnvironmentDown.replies)
             case .daemonDegraded:
                 return connectedScenario(
                     id, health: .fixture(.degraded, degraded: "registry"),

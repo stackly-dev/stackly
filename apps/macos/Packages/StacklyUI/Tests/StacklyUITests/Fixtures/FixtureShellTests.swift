@@ -16,6 +16,7 @@ struct FixtureShellTests {
         .environmentPartiallyReady: nil,
         .environmentBringingUp: nil,
         .environmentUpIncomplete: nil,
+        .environmentBringingDown: nil,
         .daemonDegraded: nil,
         .daemonHealthUnrecognized: nil,
         .daemonRefreshing: nil,

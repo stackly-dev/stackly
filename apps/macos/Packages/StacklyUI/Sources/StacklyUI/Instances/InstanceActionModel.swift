@@ -11,16 +11,22 @@ public struct InstanceActionContext {
     public var showOperations: (@MainActor () -> Void)?
     /// The PIDs a force stop left behind, read when it ended (spec 0026, AC-3).
     public var leftoverProcesses: (@MainActor (UUID) -> [UInt32])?
+    /// Shows a confirmation, for the override of a stop an environment's lease refused
+    /// (spec 0047, AC-23), or `nil` where nothing can show one: the refusal then shows as
+    /// feedback, and nothing is sent again.
+    public var confirm: (@MainActor (ConfirmationRequest) -> Void)?
 
     /// Creates a context.
     public init(
         report: @escaping @MainActor (Feedback) -> Void,
         showOperations: (@MainActor () -> Void)? = nil,
-        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil
+        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil,
+        confirm: (@MainActor (ConfirmationRequest) -> Void)? = nil
     ) {
         self.report = report
         self.showOperations = showOperations
         self.leftoverProcesses = leftoverProcesses
+        self.confirm = confirm
     }
 }
 
@@ -31,9 +37,12 @@ extension InstanceActionContext {
     ///   - feedbackCenter: The window's feedback center, or `nil`.
     ///   - navigator: The window's navigator, or `nil`.
     ///   - leftoverProcesses: The PIDs a stop left behind by instance, or `nil`.
+    ///   - host: The window's action host, which shows the override confirmation of a stop
+    ///     (spec 0047, AC-23), or `nil`.
     public static func make(
         feedbackCenter: FeedbackCenter?, navigator: ShellNavigator?,
-        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil
+        leftoverProcesses: (@MainActor (UUID) -> [UInt32])? = nil,
+        host: ActionHost? = nil
     ) -> InstanceActionContext {
         var showOperations: (@MainActor () -> Void)?
         if let navigator {
@@ -41,7 +50,7 @@ extension InstanceActionContext {
         }
         return InstanceActionContext(
             report: { feedbackCenter?.show($0) }, showOperations: showOperations,
-            leftoverProcesses: leftoverProcesses)
+            leftoverProcesses: leftoverProcesses, confirm: host?.present)
     }
 }
 
@@ -60,6 +69,9 @@ public final class InstanceActionModel {
     private struct KeyID: Hashable {
         let instance: UUID
         let verb: InstanceVerb
+        /// A stop with the override is another request, so it never reuses the key of one
+        /// without it.
+        var overrideLeases = false
     }
 
     /// A key kept after an unknown outcome.
@@ -169,18 +181,32 @@ public final class InstanceActionModel {
     public func perform(
         _ verb: InstanceVerb, for summary: InstanceSummary, context: InstanceActionContext
     ) -> Task<Void, Never>? {
+        perform(verb, for: summary, context: context, overrideLeases: false)
+    }
+
+    /// Sends a click; a stop with `overrideLeases` stops an instance an environment's lease
+    /// holds, and only the override confirmation sends one (spec 0047, AC-23).
+    @discardableResult
+    func perform(
+        _ verb: InstanceVerb, for summary: InstanceSummary, context: InstanceActionContext,
+        overrideLeases: Bool
+    ) -> Task<Void, Never>? {
         guard localStatus(for: summary.id) == .none else { return nil }
         statuses[summary.id] = .inFlight(verb)
-        let key = key(for: verb, summary: summary)
+        let key = key(for: verb, summary: summary, overrideLeases: overrideLeases)
         let task = Task { [self] in
-            await run(verb, summary: summary, key: key, context: context)
+            await run(
+                verb, summary: summary, key: key, context: context,
+                overrideLeases: overrideLeases)
         }
         watchers[summary.id] = task
         return task
     }
 
-    private func key(for verb: InstanceVerb, summary: InstanceSummary) -> String {
-        let id = KeyID(instance: summary.id, verb: verb)
+    private func key(for verb: InstanceVerb, summary: InstanceSummary, overrideLeases: Bool)
+        -> String
+    {
+        let id = KeyID(instance: summary.id, verb: verb, overrideLeases: overrideLeases)
         if let stored = keys[id] {
             if stored.revision == summary.revision,
                 now().timeIntervalSince(stored.at) <= Self.keyLifetime
@@ -192,12 +218,13 @@ public final class InstanceActionModel {
         return MutationPath.newKey()
     }
 
-    private func call(_ verb: InstanceVerb, for id: UUID) -> Call {
+    private func call(_ verb: InstanceVerb, for id: UUID, overrideLeases: Bool) -> Call {
         switch verb {
         case .start: .instanceStart(StartInstanceParams(instanceId: id, expectedRevision: nil))
         case .stop:
             .instanceStop(
-                StopInstanceParams(instanceId: id, expectedRevision: nil, overrideLeases: false))
+                StopInstanceParams(
+                    instanceId: id, expectedRevision: nil, overrideLeases: overrideLeases))
         case .restart:
             .instanceRestart(RestartInstanceParams(instanceId: id, expectedRevision: nil))
         case .reload:
@@ -208,12 +235,13 @@ public final class InstanceActionModel {
     }
 
     private func run(
-        _ verb: InstanceVerb, summary: InstanceSummary, key: String, context: InstanceActionContext
+        _ verb: InstanceVerb, summary: InstanceSummary, key: String,
+        context: InstanceActionContext, overrideLeases: Bool
     ) async {
         let id = summary.id
-        let outcome = await send(call(verb, for: id), key)
+        let outcome = await send(call(verb, for: id, overrideLeases: overrideLeases), key)
         guard Task.isCancelled == false else { return }
-        let keyID = KeyID(instance: id, verb: verb)
+        let keyID = KeyID(instance: id, verb: verb, overrideLeases: overrideLeases)
         switch outcome {
         case .completed(let reply):
             keys[keyID] = nil
@@ -229,7 +257,18 @@ public final class InstanceActionModel {
         case .rejected(let body):
             keys[keyID] = nil
             clear(id)
-            context.report(Self.failure(verb: verb, name: summary.name, body: body))
+            if verb == .stop, overrideLeases == false,
+                body.code == Self.requiresOverride, let confirm = context.confirm
+            {
+                confirm(
+                    Self.overrideRequest(
+                        name: summary.name, body: body,
+                        perform: { [self] in
+                            perform(.stop, for: summary, context: context, overrideLeases: true)
+                        }))
+            } else {
+                context.report(Self.failure(verb: verb, name: summary.name, body: body))
+            }
         case .notSent:
             clear(id)
             report(outcome, context: context)
@@ -310,6 +349,39 @@ public final class InstanceActionModel {
         case .queued, .running, .cancelRequested, .needsRecovery:
             break
         }
+    }
+
+    // MARK: - Override (spec 0047)
+
+    /// The code of a stop an environment's lease refused.
+    static let requiresOverride = "supervisor.stop_requires_override"
+
+    /// The names of the environments in the `items` of a `supervisor.stop_requires_override`.
+    static func leaseHolders(_ body: ErrorBody) -> [String] {
+        (body.items ?? []).compactMap { item in
+            guard item.kind == "environment" else { return nil }
+            return item.fields?.first { $0.key == "name" }?.value
+        }
+    }
+
+    /// The confirmation of a stop an environment's lease refused (spec 0047, *Copy override*):
+    /// destructive, "Stop “{name}”?" with the environments that hold it, and Stop, which runs
+    /// `perform` to send the stop again with the override.
+    static func overrideRequest(
+        name: String, body: ErrorBody, perform: @escaping @MainActor () -> Void
+    ) -> ConfirmationRequest {
+        let holders = leaseHolders(body)
+        let message: String
+        if holders.count > 1 {
+            message =
+                "It’s leased by \(holders.joined(separator: ", ")). Stopping it leaves those environments partially ready. Data is kept."
+        } else {
+            message =
+                "It’s leased by \(holders.first ?? "an environment"). Stopping it leaves the environment partially ready. Data is kept."
+        }
+        return ConfirmationRequest(
+            title: "Stop “\(name)”?", message: message, actionTitle: "Stop",
+            role: .destructive, perform: perform)
     }
 
     /// The card of a click the daemon refused or an operation that failed: it names the

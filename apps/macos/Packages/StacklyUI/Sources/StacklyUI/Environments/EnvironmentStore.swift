@@ -38,9 +38,10 @@ public final class EnvironmentStore {
     /// Creates an empty store.
     /// - Parameters:
     ///   - call: Sends one read to the daemon (`env.list`, `env.get`, `env.validate`,
-    ///     `env.plan`, `env.export`), and `env.lock`, which writes only the lock file.
-    ///   - send: Sends one mutation with its idempotency key (`env.import`, `env.remove`); by
-    ///     default nothing is sent.
+    ///     `env.plan`, `env.export`, `env.preview_down`, `operation.get`), and `env.lock`,
+    ///     which writes only the lock file.
+    ///   - send: Sends one mutation with its idempotency key (`env.import`, `env.remove`,
+    ///     `env.up`, `env.down`); by default nothing is sent.
     ///   - now: The wall clock.
     ///   - sleep: Waits; tests inject one that does not.
     public init(
@@ -237,6 +238,30 @@ public final class EnvironmentStore {
             throw .rejected(ClientErrorCatalog.protocolViolation())
         }
         return result
+    }
+
+    /// `env.preview_down` for `id` (spec 0047, AC-1): what Down would stop and keep now. It
+    /// only reads.
+    func previewDown(_ id: UUID) async throws(ClientError) -> EnvDownPreview {
+        guard
+            case .envPreviewDown(let preview) = try await call(
+                .envPreviewDown(EnvPreviewDownParams(id: id)))
+        else {
+            throw .rejected(ClientErrorCatalog.protocolViolation())
+        }
+        return preview
+    }
+
+    /// `operation.get` for `id`: the summary of an operation that ended, for the feedback of
+    /// a Down (spec 0047, AC-21).
+    func operation(_ id: UUID) async throws(ClientError) -> OperationSummary {
+        guard
+            case .operationGet(let detail) = try await call(
+                .operationGet(GetOperationParams(operationId: id)))
+        else {
+            throw .rejected(ClientErrorCatalog.protocolViolation())
+        }
+        return detail.operation
     }
 
     /// `env.export` for the registered environment `id` in `format` (spec 0045). It only

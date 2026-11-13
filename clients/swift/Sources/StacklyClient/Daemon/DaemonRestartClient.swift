@@ -63,10 +63,16 @@ public struct DaemonRestartClient: Sendable {
     /// `instance.preview_stop_all`: the instances a Turn Off of the background agent would stop,
     /// the ones already stopping, and the ones the daemon must leave alone (spec 0031).
     ///
+    /// - Parameter overrideLeases: Put the instances an environment lease holds among the ones
+    ///   to stop instead of the ones left alone (spec 0047, AC-16, AC-24).
     /// - Throws: ``ClientError``, such as `daemon.shutting_down`.
-    public func previewTurnOff() async throws(ClientError) -> StopAllPreview {
+    public func previewTurnOff(overrideLeases: Bool = false) async throws(ClientError)
+        -> StopAllPreview
+    {
         let reply = try await send(
-            .instancePreviewStopAll(StopAllPreviewParams(overrideLeases: nil)), nil, .standard)
+            .instancePreviewStopAll(
+                StopAllPreviewParams(overrideLeases: overrideLeases ? true : nil)),
+            nil, .standard)
         guard case .instancePreviewStopAll(let preview) = reply else {
             throw Self.unexpectedReply()
         }
@@ -77,12 +83,18 @@ public struct DaemonRestartClient: Sendable {
     /// when none is left. The answer comes after the stops, so it uses the long time limit; a
     /// retry after a lost answer reuses the key and gets the same answer.
     ///
-    /// - Parameter idempotencyKey: The key of the action.
+    /// - Parameters:
+    ///   - idempotencyKey: The key of the action.
+    ///   - overrideLeases: Stop the instances an environment lease holds too, so the daemon can
+    ///     exit; their leases stay active (spec 0047, AC-17).
     /// - Throws: ``ClientError``, such as `daemon.restart_pending`, `daemon.shutting_down`, or
     ///   `registry.recovery_mode`.
-    public func agentOff(idempotencyKey: String) async throws(ClientError) -> ShutdownAccepted {
+    public func agentOff(idempotencyKey: String, overrideLeases: Bool = false)
+        async throws(ClientError) -> ShutdownAccepted
+    {
         let params = ShutdownParams(
-            mode: .agentOff, expectedPlanDigest: nil, force: false, overrideLeases: nil)
+            mode: .agentOff, expectedPlanDigest: nil, force: false,
+            overrideLeases: overrideLeases ? true : nil)
         let reply = try await send(
             .daemonShutdown(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
         guard case .daemonShutdown(let accepted) = reply else { throw Self.unexpectedReply() }
@@ -93,9 +105,13 @@ public struct DaemonRestartClient: Sendable {
     /// stopping, and the ones the daemon leaves alone. The menu bar shows it before it asks
     /// to stop (spec 0032, AC-6); it is the same read as ``previewTurnOff()``.
     ///
+    /// - Parameter overrideLeases: Put the instances an environment lease holds among the ones
+    ///   to stop (spec 0047, AC-24).
     /// - Throws: ``ClientError``.
-    public func previewStopAll() async throws(ClientError) -> StopAllPreview {
-        try await previewTurnOff()
+    public func previewStopAll(overrideLeases: Bool = false) async throws(ClientError)
+        -> StopAllPreview
+    {
+        try await previewTurnOff(overrideLeases: overrideLeases)
     }
 
     /// `instance.stop_all { expectedInstanceIds }`: stops exactly the instances of the preview
@@ -107,11 +123,14 @@ public struct DaemonRestartClient: Sendable {
     /// - Parameters:
     ///   - expectedInstanceIds: The IDs of ``StopAllPreview/items``.
     ///   - idempotencyKey: The key of the action.
+    ///   - overrideLeases: Stop the instances an environment lease holds too; their leases
+    ///     stay active (spec 0047, AC-16). It must match the preview that was shown.
     /// - Throws: ``ClientError``, such as `instance.stop_all_changed`.
     public func stopAll(
-        expectedInstanceIds: [UUID], idempotencyKey: String
+        expectedInstanceIds: [UUID], idempotencyKey: String, overrideLeases: Bool = false
     ) async throws(ClientError) -> StopAllResult {
-        let params = StopAllParams(expectedInstanceIds: expectedInstanceIds, overrideLeases: nil)
+        let params = StopAllParams(
+            expectedInstanceIds: expectedInstanceIds, overrideLeases: overrideLeases ? true : nil)
         let reply = try await send(
             .instanceStopAll(params), idempotencyKey, CallOptions(timeout: Self.restartTimeout))
         guard case .instanceStopAll(let result) = reply else { throw Self.unexpectedReply() }

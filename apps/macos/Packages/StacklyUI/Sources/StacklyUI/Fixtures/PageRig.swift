@@ -60,6 +60,11 @@
             var environmentOutcome: MutationOutcome?
             /// The environment mutations sent, in order.
             var environmentSent: [Call] = []
+            /// What `env.preview_down` answers, in order; the last one stays (spec 0047).
+            var downPreviews: [EnvDownPreview] = [FixtureEnvironmentDown.preview()]
+            /// What `env.down` ends with, in order; the last one stays, and none sends a
+            /// completed Down.
+            var downOutcomes: [MutationOutcome] = []
             /// What `env.lock` answers, or `nil` for the fixture result (spec 0045).
             var lockResult: EnvLockResult?
             /// What `env.export` answers, or `nil` for the fixture export.
@@ -105,6 +110,21 @@
                     lockCalls.append(call)
                     if let lockFailure { throw lockFailure }
                     return .envExport(export ?? FixtureEnvironments.export())
+                case .envPreviewDown:
+                    guard let preview = downPreviews.first else {
+                        throw .rejected(PageRig.unknownMethod)
+                    }
+                    if downPreviews.count > 1 { downPreviews.removeFirst() }
+                    return .envPreviewDown(preview)
+                case .operationGet(let params):
+                    guard let found = operations.first(where: { $0.id == params.operationId })
+                    else {
+                        throw .rejected(
+                            .fixtureNotFound(
+                                .operation, id: params.operationId.uuidString.lowercased()))
+                    }
+                    return .operationGet(
+                        OperationDetail(operation: found, steps: nil, created: nil))
                 default:
                     throw .rejected(PageRig.unknownMethod)
                 }
@@ -132,6 +152,12 @@
                     return .completed(.envRemove(RemovedEnvironment(id: params.id, name: name)))
                 case .envUp:
                     return .completed(.envUp(FixtureEnvironmentUp.reply()))
+                case .envDown:
+                    guard let outcome = downOutcomes.first else {
+                        return .completed(.envDown(FixtureEnvironmentDown.reply()))
+                    }
+                    if downOutcomes.count > 1 { downOutcomes.removeFirst() }
+                    return outcome
                 default:
                     return .rejected(PageRig.unknownMethod)
                 }
@@ -389,7 +415,8 @@
         func environmentsPage(
             selected: UUID? = nil, waiting: FailureContent? = nil, hasConnection: Bool = true,
             plan: EnvironmentPlanPresenter.Source? = nil, validate: Bool = false,
-            lock: LockRefresh? = nil, picker: any FilePicking = FixtureFilePicker(path: nil)
+            lock: LockRefresh? = nil, picker: any FilePicking = FixtureFilePicker(path: nil),
+            down: EnvironmentDownModel? = nil
         ) async -> some View {
             var detailModel: EnvironmentDetailModel?
             if let selected {
@@ -411,7 +438,8 @@
                 actions: actions, operations: operations, selected: selected, waiting: waiting,
                 hasConnection: hasConnection, reconnect: {}, openDiagnostics: {},
                 detail: detail, openIn: openIn.ports, files: files, picker: picker,
-                home: FixtureDetail.home, presenter: presenter, detailModel: detailModel
+                home: FixtureDetail.home, presenter: presenter, detailModel: detailModel,
+                downModel: down
             )
             .actionHost()
         }
