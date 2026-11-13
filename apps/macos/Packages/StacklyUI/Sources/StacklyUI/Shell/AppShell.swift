@@ -1,4 +1,5 @@
 import AppKit
+import StacklyClient
 import SwiftUI
 
 /// The main window's content: the sidebar with its sections, badges, and daemon footer,
@@ -19,7 +20,9 @@ public struct AppShell: View {
     /// The content column width at the default window size of 1280 pt.
     static let contentIdealWidth: CGFloat = 1044
 
-    @SceneStorage("shell.section") private var section: SidebarSection = .overview
+    /// The sidebar row, restored per window: a section's raw value as before, or
+    /// `environment:<uuid>` (spec 0044, *Sidebar*).
+    @SceneStorage("shell.section") private var stored: SidebarSelection = .section(.overview)
     @State private var windowWidth: CGFloat?
     @State private var navigator = ShellNavigator()
     @Environment(\.feedbackCenter) private var feedbackCenter
@@ -34,6 +37,7 @@ public struct AppShell: View {
     private let instances: InstanceStore?
     private let catalog: CatalogStore?
     private let runtimes: RuntimeStore?
+    private let environments: EnvironmentStore?
     private let operations: OperationCenter?
     private let capacity: CapacityModel?
     private let instanceActions: InstanceActionModel?
@@ -56,6 +60,8 @@ public struct AppShell: View {
     ///     placeholder (previews).
     ///   - runtimes: The runtime store behind the Runtimes page and the Get column of the
     ///     Catalog, or `nil` to show the placeholder (previews).
+    ///   - environments: The environment store behind the sidebar's child rows, the
+    ///     Environments page, and the Overview section, or `nil` to show the placeholder.
     ///   - operations: The operation center behind the Overview and the Operations page, or
     ///     `nil` to show the placeholder (previews).
     ///   - capacity: The disk reading behind the Overview, or `nil` for the placeholder.
@@ -76,6 +82,7 @@ public struct AppShell: View {
         instances: InstanceStore? = nil,
         catalog: CatalogStore? = nil,
         runtimes: RuntimeStore? = nil,
+        environments: EnvironmentStore? = nil,
         operations: OperationCenter? = nil,
         capacity: CapacityModel? = nil,
         instanceActions: InstanceActionModel? = nil,
@@ -91,6 +98,7 @@ public struct AppShell: View {
         self.instances = instances
         self.catalog = catalog
         self.runtimes = runtimes
+        self.environments = environments
         self.operations = operations
         self.capacity = capacity
         self.instanceActions = instanceActions
@@ -108,6 +116,7 @@ public struct AppShell: View {
                 selection: selection,
                 counts: counts,
                 isConnected: presentation.isConnected,
+                environments: environments?.environments ?? [],
                 reselect: { select($0) }
             )
             .navigationSplitViewColumnWidth(
@@ -155,11 +164,15 @@ public struct AppShell: View {
         .environment(\.newInstancePresenter, newInstance)
         .modifier(NewInstanceSheetModifier(presenter: newInstance))
         // `@SceneStorage` only lives in a view, so the navigator mirrors it both ways.
-        .onChange(of: section, initial: true) { _, new in
-            if navigator.section != new { navigator.section = new }
+        .onChange(of: stored, initial: true) { _, new in
+            if navigator.selection != new { navigator.selection = new }
         }
-        .onChange(of: navigator.section) { _, new in
-            if section != new { section = new }
+        .onChange(of: navigator.selection) { _, new in
+            if stored != new { stored = new }
+        }
+        // An environment that is gone falls back to the Environments list (spec 0044).
+        .onChange(of: environmentGone, initial: true) { _, gone in
+            if gone { navigator.selection = .section(.environments) }
         }
         // The menu bar popover leaves a destination here, also while this window opens.
         .onChange(of: destinationQueue?.pending, initial: true) { _, pending in
@@ -205,13 +218,28 @@ public struct AppShell: View {
         }
     }
 
+    /// The section that shows.
+    private var section: SidebarSection {
+        stored.section
+    }
+
+    /// Whether the selected environment is not in the loaded list any more.
+    private var environmentGone: Bool {
+        guard case .environment(let id) = stored, let list = environments?.environments else {
+            return false
+        }
+        return list.contains { $0.id == id } == false
+    }
+
     /// The selection as the sidebar list needs it. The list can never clear it.
-    private var selection: Binding<SidebarSection?> {
+    private var selection: Binding<SidebarSelection?> {
         Binding {
-            section
+            stored
         } set: { newValue in
-            if let newValue {
-                select(newValue)
+            switch newValue {
+            case .section(let newSection): select(newSection)
+            case .environment(let id): stored = .environment(id)
+            case nil: break
             }
         }
     }
@@ -220,13 +248,14 @@ public struct AppShell: View {
     /// ⌘1 to ⌘7, and Open Diagnostics in the banner all come here. Choosing the section that
     /// already shows calls ``onReselect`` instead.
     func select(_ newSection: SidebarSection) {
-        if newSection == section {
+        if stored == .section(newSection) {
             // The detail page of an instance is a page of the Instances section; choosing
             // the section again goes back to its table (spec 0021).
             if newSection == .instances { navigator.showInstancesTable() }
             onReselect(newSection)
         } else {
-            section = newSection
+            // Environments from one of its environments goes back to the list (spec 0044).
+            stored = .section(newSection)
         }
     }
 
@@ -329,7 +358,7 @@ public struct AppShell: View {
                 UnbuiltScrollPage(section: .instances)
             }
         case .environments:
-            // provisional: F44
+            // provisional: F44 step 8 builds the page.
             UnbuiltScrollPage(section: .environments)
         case .catalog:
             if let catalog {
@@ -423,9 +452,12 @@ private struct UnbuiltScrollPage: View {
 /// The sidebar: the main sections, then Library and System, each row with its section
 /// icon and an optional native badge.
 private struct ShellSidebar: View {
-    @Binding var selection: SidebarSection?
+    @Binding var selection: SidebarSelection?
     let counts: SidebarCounts
     let isConnected: Bool
+    /// The environments, by name, as child rows under Environments (spec 0044).
+    let environments: [EnvironmentSummary]
+    @State private var environmentsExpanded = true
     /// Called when the row of the section that already shows is clicked again: a `List`
     /// does not set a selection that did not change.
     let reselect: (SidebarSection) -> Void
@@ -449,15 +481,54 @@ private struct ShellSidebar: View {
 
     private func rows(of group: SidebarGroup) -> some View {
         ForEach(group.sections) { section in
-            SidebarRow(
-                section: section,
-                badge: section.badge(counts: counts, isConnected: isConnected)
-            )
-            .tag(section)
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    if selection == section { reselect(section) }
-                })
+            if section == .environments, environments.isEmpty == false {
+                // Open from the start; the Environments row itself has no badge.
+                DisclosureGroup(isExpanded: $environmentsExpanded) {
+                    ForEach(environments) { environment in
+                        EnvironmentSidebarRow(environment: environment)
+                            .tag(SidebarSelection.environment(environment.id))
+                    }
+                } label: {
+                    row(of: section)
+                }
+            } else {
+                row(of: section)
+            }
+        }
+    }
+
+    private func row(of section: SidebarSection) -> some View {
+        SidebarRow(
+            section: section,
+            badge: section.badge(counts: counts, isConnected: isConnected)
+        )
+        .tag(SidebarSelection.section(section))
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                if selection == .section(section) { reselect(section) }
+            })
+    }
+}
+
+/// One environment under Environments: its status symbol, its name, and "{ready}/{total}"
+/// (spec 0044, *Sidebar*).
+private struct EnvironmentSidebarRow: View {
+    let environment: EnvironmentSummary
+
+    var body: some View {
+        let appearance = StatusAppearance.environment(status: environment.status)
+        Label {
+            HStack {
+                Text(environment.name)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.s4)
+                Text("\(environment.readyCount)/\(environment.serviceCount)")
+                    .monospacedDigit()
+                    .foregroundStyle(StacklyColor.textSecondary)
+            }
+        } icon: {
+            Image(systemName: appearance.symbol)
+                .foregroundStyle(appearance.tone.fill)
         }
     }
 }
