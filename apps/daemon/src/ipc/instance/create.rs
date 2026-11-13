@@ -39,7 +39,7 @@ use crate::state::DaemonCore;
 /// another process (spec 0020, *Pemeriksaan port*, the one false alarm of a
 /// probe is two probes at the same instant).
 #[must_use]
-pub(super) fn serialized_probe() -> Arc<dyn PortProbe> {
+pub(crate) fn serialized_probe() -> Arc<dyn PortProbe> {
     use std::net::{IpAddr, SocketAddr};
     use std::sync::{Mutex, PoisonError};
 
@@ -102,7 +102,7 @@ pub fn work_deps(
 }
 
 /// The catalog of this run, or `daemon.starting` while it loads.
-pub(super) fn catalog_state(
+pub(crate) fn catalog_state(
     core: &DaemonCore,
 ) -> Result<CatalogState, Box<stackly_protocol::ErrorBody>> {
     core.catalog().map(|state| (*state).clone()).ok_or_else(|| {

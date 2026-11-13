@@ -359,7 +359,10 @@ async fn detail_after(
 
 /// Waits until the operation is final; a failed one answers with its own
 /// error.
-async fn wait_final(core: &DaemonCore, operation: uuid::Uuid) -> Result<(), Box<ErrorBody>> {
+pub(crate) async fn wait_final(
+    core: &DaemonCore,
+    operation: uuid::Uuid,
+) -> Result<(), Box<ErrorBody>> {
     let engine = core.operations().writer()?;
     let id = OperationId::from_uuid(operation)
         .map_err(|_| unexpected("the operation ID is not a version 7 UUID"))?;

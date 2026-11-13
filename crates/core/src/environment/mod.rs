@@ -8,6 +8,7 @@
 mod finding;
 pub mod manifest;
 pub mod plan;
+pub mod register;
 pub mod status;
 mod validate;
 
@@ -20,6 +21,11 @@ pub use plan::{
     OverrideInputs, Plan, PlanAction, PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint,
     PlanError, PlanInputs, PlanItem, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep,
     PlanTrust, Registration, draft_for, plan, planned_runtime_placeholder_id, start_order,
+};
+pub use register::{
+    ENVIRONMENT_LIMIT, EnvOpError, ImportRequest, LEASE_ITEMS_MAX, RegisterDecision, RegisterInput,
+    UnreadableReason, import_work, manifest_location, read_manifest, register, remove_work,
+    unregister,
 };
 pub use status::{
     EnvironmentStatus, EnvironmentView, ManifestRead, ManifestState, NotReadyReason, ServiceStatus,

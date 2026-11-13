@@ -935,6 +935,9 @@ async fn start_slot(
                     // only the run again list of reconciliation (spec 0031).
                     let queues = session.login().is_some();
                     core.set_session(session);
+                    // Spec 0044 AC-15: the membership is in memory before
+                    // reconciliation publishes the first summary.
+                    crate::membership::reload(&core).await;
                     let report = core
                         .supervision()
                         .reconcile(&supervisor, session_changed)

@@ -34,6 +34,8 @@ pub mod log_sink;
 #[cfg(unix)]
 pub mod map;
 #[cfg(unix)]
+pub mod membership;
+#[cfg(unix)]
 pub mod operations;
 #[cfg(unix)]
 pub mod secrets;
