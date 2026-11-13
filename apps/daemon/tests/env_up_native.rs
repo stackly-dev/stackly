@@ -28,7 +28,7 @@ use stackly_protocol::instance::EndpointTransport;
 use stackly_protocol::operation::{OperationDetail, OperationState};
 use stackly_protocol::secret::{SecretInput, SecretMode, SecretText, SetSecretParams};
 use stackly_protocol::{Call, Reply};
-use stackly_testkit::evidence::{Kind, evidence};
+use stackly_testkit::evidence::{Kind, Source, evidence};
 use stackly_testkit::{RuntimeCache, allocate_port};
 use stacklyd::server::DaemonHandle;
 use uuid::Uuid;
@@ -256,7 +256,15 @@ async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_n
             .as_ref()
             .and_then(|cache| cache.entry(&runtime.artifact_sha256, size))
         {
-            Some(file) => installs.push((package, runtime.artifact_id.clone(), file)),
+            Some(file) => {
+                ev.subject(
+                    name,
+                    &runtime.version,
+                    Some(&runtime.artifact_sha256),
+                    Source::Managed,
+                );
+                installs.push((package, runtime.artifact_id.clone(), file));
+            }
             None => missing.push(runtime.artifact_id.clone()),
         }
     }
@@ -313,6 +321,7 @@ async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_n
     assert_eq!(last.state, UpState::Succeeded, "{last:?}");
     assert_eq!(detail.summary.ready_count.get(), 6, "{detail:?}");
     assert_eq!(detail.services.len(), 6);
+    let mut observed = Vec::new();
     for service in &detail.services {
         assert!(service.not_ready.is_none(), "{service:?}");
         let instance = service.instance.as_ref().expect("each service has one");
@@ -325,6 +334,20 @@ async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_n
             !tcp.is_empty() && tcp.iter().all(|endpoint| endpoint.port.is_some()),
             "each TCP endpoint names its bound port: {instance:?}"
         );
+        let ports: Vec<String> = tcp
+            .iter()
+            .filter_map(|endpoint| {
+                endpoint
+                    .port
+                    .map(|port| format!("{}:{port}", endpoint.name))
+            })
+            .collect();
+        observed.push(format!(
+            "{} {} ready ({})",
+            service.alias,
+            instance.runtime_version,
+            ports.join(", ")
+        ));
     }
 
     // A second Up keeps all six and starts no child.
@@ -348,5 +371,8 @@ async fn the_erp_manifest_comes_up_from_the_runtime_cache_and_a_second_up_does_n
         "{last:?}"
     );
     stop(daemon).await;
-    ev.pass();
+    ev.pass_with(&format!(
+        "first Up succeeded with 6 of 6 ready: {}; second Up kept all six with no child operation",
+        observed.join("; ")
+    ));
 }
