@@ -1,0 +1,53 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 14.56s
+     Running tests/environment.rs (target/debug/deps/environment-a1303bb5cf066120)
+
+running 17 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+test an_import_registers_the_file_once_and_a_repeated_key_runs_no_second_operation ... ok
+test an_unresolved_selector_names_the_selector_the_manifest_wrote ... ok
+test a_plan_reads_this_mac_and_starts_no_operation ... ok
+test a_secret_sentinel_in_the_manifest_never_leaves_the_file ... ok
+test env_lock_writes_only_the_lock_file_and_a_second_run_writes_nothing ... ok
+test env_lock_blocks_and_writes_nothing_for_an_unresolved_selector_or_a_folder ... ok
+test a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first ... ok
+test get_reads_the_manifest_only_when_asked ... ok
+test the_reply_of_a_plan_of_32_services_stays_under_900_kib ... ok
+test plan_and_get_read_the_lock_and_the_overrides_next_to_the_manifest ... ok
+test a_name_at_another_location_is_taken_until_a_relink_moves_it ... ok
+test validate_reads_the_file_answers_every_finding_and_writes_nothing ... ok
+test a_retained_member_blocks_the_plan_and_shows_unavailable ... ok
+test updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it ... ok
+test export_prints_the_ports_of_the_members_and_never_a_redacted_value ... ok
+test membership_shows_on_every_summary_and_remove_waits_for_the_lease ... ok
+test the_65th_environment_is_refused ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.15s
+
+     Running tests/environment_lock.rs (target/debug/deps/environment_lock-d8080af40749da33)
+
+running 6 tests
+    Finished `dev` profile [unoptimized] target(s) in 0.06s
+test a_lock_that_cannot_be_written_answers_lock_unwritable_and_leaves_what_was_there ... ok
+test a_locked_up_without_a_matching_lock_writes_no_row ... ok
+test a_lock_of_a_root_with_secret_sentinels_a_running_process_and_a_home_override_holds_none_of_them ... ok
+   Compiling ring v0.17.14
+test up_creates_the_member_in_the_data_location_the_override_names_and_keeps_its_logs ... ok
+test up_writes_the_lock_digest_of_its_plan_and_none_without_a_valid_lock ... ok
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stackly-cli v0.1.0 ($REPO/apps/cli)
+    Finished `dev` profile [unoptimized] target(s) in 9.72s
+test export_after_up_prints_the_real_ports_and_never_a_sentinel_a_home_path_or_a_pid ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.69s
+

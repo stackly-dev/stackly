@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6a2-7b76-7291-af5f-a19ffd4e55ee",
+  "covers": [
+    "AC-023",
+    "REQ-023"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment_lock",
+    "name": "a_locked_up_without_a_matching_lock_writes_no_row",
+    "file": "apps/daemon/tests/environment_lock.rs",
+    "line": 928
+  },
+  "status": "PASS",
+  "expected": "spec 0045 AC-6: env.up with locked true refuses with env.plan_blocked naming env.lock_missing when there is no lock and env.lock_stale for each alias of a lock that covers none of them, and the registry keeps zero instance, environment, and operation rows",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T20:38:55.094347Z",
+  "finishedAt": "2026-11-13T20:38:56.609349Z",
+  "evidencePath": "output.log"
+}

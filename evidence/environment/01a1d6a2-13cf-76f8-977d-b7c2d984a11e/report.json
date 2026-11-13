@@ -1,0 +1,725 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+    "sourceDirty": false,
+    "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "environment_lock",
+      "--test",
+      "environment"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T20:38:28.559799Z",
+  "finishedAt": "2026-11-13T20:39:09.788232Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 10,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 10,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 10,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-533e-72e5-bd22-04751a2efa59",
+      "covers": [
+        "AC-023",
+        "AC-080",
+        "REQ-023"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 1615
+      },
+      "status": "PASS",
+      "expected": "a second root that receives only stackly.yaml and stackly.lock plans with locked true the same artifacts as the first, holds no path, override, or reference status of the first, and a lock without an artifact for this Mac blocks with env.lock_no_artifact and no item uses another artifact",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:44.798369Z",
+      "finishedAt": "2026-11-13T20:38:47.972244Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-533e-72e5-bd22-047670d9e163",
+      "covers": [
+        "AC-020",
+        "REQ-020"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "a_plan_reads_this_mac_and_starts_no_operation",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 412
+      },
+      "status": "PASS",
+      "expected": "env.plan of the ERP manifest on a root without official runtimes answers six install, six create, and six start steps in manifest order, the graph manifest starts db, cache, api, web, and neither plan writes a file, a registry row, an operation, or an audit row, nor creates an instance",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:44.79837Z",
+      "finishedAt": "2026-11-13T20:38:47.194902Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-533e-72e5-bd22-0477a9d4e467",
+      "covers": [
+        "REQ-023",
+        "BR-018"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "env_lock_writes_only_the_lock_file_and_a_second_run_writes_nothing",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 1274
+      },
+      "status": "PASS",
+      "expected": "env.lock of the ERP manifest writes stackly.lock with six entries next to the manifest and nothing else, no registry row, operation, or audit row, the lock holds no reference, setting, port, path under the home, or PID, and a second run answers written false",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:44.798429Z",
+      "finishedAt": "2026-11-13T20:38:47.290582Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-533e-72e5-bd22-04780b29f907",
+      "covers": [
+        "BR-018",
+        "AC-080"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "export_prints_the_ports_of_the_members_and_never_a_redacted_value",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 1505
+      },
+      "status": "PASS",
+      "expected": "env.export answers HOST, PORT, and ADDRESS of the running member in dotenv and shell, skips a service without an instance, holds no path, and leaves out a value the redactor knows",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:44.79847Z",
+      "finishedAt": "2026-11-13T20:38:49.820061Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-533e-72e5-bd22-04797d62a3b7",
+      "covers": [
+        "REQ-020"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "an_import_registers_the_file_once_and_a_repeated_key_runs_no_second_operation",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 608
+      },
+      "status": "PASS",
+      "expected": "env.import registers a valid stackly.yaml as one import_environment operation with an audit row, the same file again keeps the revision, the same key runs no second operation, a changed digest is env.manifest_changed, an invalid file is env.manifest_invalid, and a path through a symlinked folder is the same location",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:44.798516Z",
+      "finishedAt": "2026-11-13T20:38:46.823746Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-5c05-7433-a505-b41ce6a9d1dc",
+      "covers": [
+        "REQ-020"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "membership_shows_on_every_summary_and_remove_waits_for_the_lease",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 981
+      },
+      "status": "PASS",
+      "expected": "a dedicated member shows ownership dedicated and its environment in instance.get, instance.list, and instance.state_changed alike; env.list and env.get count it; env.remove refuses an active lease with env.lease_active naming the instance, then removes the row and leaves the instance manual",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:47.04569Z",
+      "finishedAt": "2026-11-13T20:38:50.385567Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-5fc8-701d-a045-138880fa9990",
+      "covers": [
+        "REQ-020",
+        "VAL-013"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment",
+        "name": "validate_reads_the_file_answers_every_finding_and_writes_nothing",
+        "file": "apps/daemon/tests/environment.rs",
+        "line": 348
+      },
+      "status": "PASS",
+      "expected": "env.validate reads a stackly.yaml through the daemon, answers valid with its services and digest or every finding, refuses an unreadable path with env.manifest_unreadable, and writes no file, registry row, operation, or audit row",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:48.008026Z",
+      "finishedAt": "2026-11-13T20:38:48.974286Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-7b76-7291-af5f-a19d3d2a2950",
+      "covers": [
+        "BR-018",
+        "AC-080"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment_lock",
+        "name": "export_after_up_prints_the_real_ports_and_never_a_sentinel_a_home_path_or_a_pid",
+        "file": "apps/daemon/tests/environment_lock.rs",
+        "line": 730
+      },
+      "status": "PASS",
+      "expected": "spec 0045 AC-15: after env.up brings up two fake members, each with its own secret sentinel, env.export answers HOST, PORT, and ADDRESS of each member's bound port in dotenv and shell, from the file and by name, the text of stackly env export on stdout is the same text, and no reply, stdout, or daemon log line written during the export holds a sentinel, a reference, a path under the home, or the PID of an instance process",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:55.094298Z",
+      "finishedAt": "2026-11-13T20:39:09.772643Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-7b76-7291-af5f-a19e1d7bb605",
+      "covers": [
+        "REQ-023",
+        "BR-018",
+        "AC-080"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment_lock",
+        "name": "a_lock_of_a_root_with_secret_sentinels_a_running_process_and_a_home_override_holds_none_of_them",
+        "file": "apps/daemon/tests/environment_lock.rs",
+        "line": 280
+      },
+      "status": "PASS",
+      "expected": "spec 0045 AC-1: env.lock of the ERP manifest from a root that stores a sentinel value for each of its five secretRefs, runs a fake instance, and holds a local override with a path under the home writes a stackly.lock with mode 0600 that holds no sentinel, reference, path under the home, override, PID of the daemon or of the instance process, and the daemon logs no sentinel",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:55.094297Z",
+      "finishedAt": "2026-11-13T20:38:58.353199Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6a2-7b76-7291-af5f-a19ffd4e55ee",
+      "covers": [
+        "AC-023",
+        "REQ-023"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "environment_lock",
+        "name": "a_locked_up_without_a_matching_lock_writes_no_row",
+        "file": "apps/daemon/tests/environment_lock.rs",
+        "line": 928
+      },
+      "status": "PASS",
+      "expected": "spec 0045 AC-6: env.up with locked true refuses with env.plan_blocked naming env.lock_missing when there is no lock and env.lock_stale for each alias of a lock that covers none of them, and the registry keeps zero instance, environment, and operation rows",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T20:38:55.094347Z",
+      "finishedAt": "2026-11-13T20:38:56.609349Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "e3ad4df5d0230f11b5eab1f1042402bd0fd0bc01",
+        "sourceDirty": false,
+        "runId": "01a1d6a2-13cf-76f8-977d-b7c2d984a11e",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "environment_lock",
+          "--test",
+          "environment"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
