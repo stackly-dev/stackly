@@ -281,7 +281,7 @@ public struct MenuBarPopover: View {
         ForEach(preview.items, id: \.instanceId) { item in
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 Text(item.name)
-                let demand = StopAllCopy.demand(item.demand)
+                let demand = StopAllCopy.demand(of: item)
                 if demand.isEmpty == false {
                     Text(demand).font(.caption).foregroundStyle(StacklyColor.textSecondary)
                 }
@@ -294,6 +294,9 @@ public struct MenuBarPopover: View {
         ForEach(preview.skipped, id: \.instanceId) { skip in
             Text(StopAllCopy.skipped(skip.name, code: skip.code))
                 .font(.callout).foregroundStyle(StacklyColor.textSecondary)
+        }
+        if let affected = StopAllCopy.affected(preview) {
+            Text(affected).font(.callout).foregroundStyle(Tone.caution.text)
         }
         if preview.items.isEmpty == false {
             Text(StopAllCopy.footer(preview))

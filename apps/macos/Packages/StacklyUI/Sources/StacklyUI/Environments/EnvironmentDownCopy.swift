@@ -14,6 +14,9 @@ extension EnvironmentCopy {
         "Releases the lease and stops only instances nothing else needs. Shared and manually started instances keep running. Data is kept."
     static let downNothingToStop = "Nothing needs to stop."
     static let downCancelsUp = "This also cancels the Up in progress."
+    /// The detail of a Down that kept instances running, from the confirmation's first line,
+    /// so an environment that still reads partially ready is explained.
+    static let downKeptDetail = "Shared and manually started instances keep running."
     /// The most names a line of the confirmation lists before "and {n} more".
     static let downNameLimit = 6
 

@@ -98,10 +98,12 @@
         ///   - port: The port typed for the `postgres` endpoint, or `nil` for none.
         ///   - taken: Whether the daemon says another Stackly instance holds that port and
         ///     offers 5435.
+        ///   - leases: The environments whose lease holds the instance, in the verdict.
         @MainActor
-        public static func endpointsModel(typing port: String? = nil, taken: Bool = false)
-            async -> EndpointsModel
-        {
+        public static func endpointsModel(
+            typing port: String? = nil, taken: Bool = false,
+            leases: [InstanceEnvironment]? = nil
+        ) async -> EndpointsModel {
             let verdict =
                 taken
                 ? EndpointValidation(
@@ -117,7 +119,7 @@
                         EndpointChange(
                             name: "postgres", old: .fixed(5_432),
                             new: .fixed(UInt16(port ?? "") ?? 5_433))
-                    ], impact: .restart, leases: nil)
+                    ], impact: .restart, leases: leases)
             let model = EndpointsModel(
                 source: InstanceEditSource(id: instance, name: "pg17-dev"),
                 service: service(.postgresql, endpoints: verdict),

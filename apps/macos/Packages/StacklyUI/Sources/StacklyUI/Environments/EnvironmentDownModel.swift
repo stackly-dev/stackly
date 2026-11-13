@@ -184,8 +184,12 @@ final class EnvironmentDownModel {
             let inUse = (result?.partial ?? []).count { $0.code == "env.instance_in_use" }
             let keptCount = kept + inUse
             if keptCount > 0 {
+                // The environment can read partially ready afterwards: a shared or manually
+                // started instance it uses still runs. The detail says so with the sentence of
+                // the confirmation.
                 return .success(
-                    EnvironmentCopy.downKept(name, stopped: stopped, kept: keptCount))
+                    EnvironmentCopy.downKept(name, stopped: stopped, kept: keptCount),
+                    detail: EnvironmentCopy.downKeptDetail)
             }
             if stopped > 0 {
                 return .success(EnvironmentCopy.downStopped(name, stopped: stopped))

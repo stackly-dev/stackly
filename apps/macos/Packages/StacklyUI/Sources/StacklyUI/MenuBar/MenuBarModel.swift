@@ -57,11 +57,14 @@ public final class MenuBarModel {
         let client = daemon.stopAllClient
         self.previewStopAll =
             previewStopAll ?? { () throws(ClientError) in
-                try await client.previewStopAll()
+                // The popover names the environments it disturbs, so it stops them too
+                // (spec 0047, AC-24); their leases stay.
+                try await client.previewStopAll(overrideLeases: true)
             }
         self.stopAll =
             stopAll ?? { (ids, key) throws(ClientError) in
-                try await client.stopAll(expectedInstanceIds: ids, idempotencyKey: key)
+                try await client.stopAll(
+                    expectedInstanceIds: ids, idempotencyKey: key, overrideLeases: true)
             }
     }
 

@@ -173,6 +173,10 @@ struct EnvironmentDownModelTests {
                 down.downOperation(state: .succeeded, result: down.result(stopped: 1, inUse: 1)))?
                 .message == "erp-development is down. 1 stopped, 1 kept running.")
         #expect(
+            Self.feedback(
+                down.downOperation(state: .succeeded, result: down.result(stopped: 1, inUse: 1)))?
+                .detail == "Shared and manually started instances keep running.")
+        #expect(
             Self.feedback(down.downOperation(state: .succeeded, result: down.result(stopped: 0)))?
                 .message == "erp-development released its lease. Nothing needed to stop.")
         #expect(

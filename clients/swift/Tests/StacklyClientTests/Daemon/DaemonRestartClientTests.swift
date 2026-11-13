@@ -96,6 +96,33 @@ struct DaemonRestartClientTests {
         #expect(reply == preview)
     }
 
+    @Test func theOverrideOfALeaseReachesThePreviewAndTheStop() async throws {
+        let preview = StopAllPreview(
+            items: [], alreadyStopping: [], skipped: [], atLoginCount: 0,
+            affectedEnvironments: [])
+        let fake = Fake(.success(.instancePreviewStopAll(preview)))
+        _ = try await fake.client.previewStopAll(overrideLeases: true)
+        #expect(
+            fake.made.first?.call
+                == .instancePreviewStopAll(StopAllPreviewParams(overrideLeases: true)))
+
+        let stops = Fake(.failure(.rejected(ClientErrorCatalog.protocolViolation())))
+        _ = try? await stops.client.stopAll(
+            expectedInstanceIds: [], idempotencyKey: "k", overrideLeases: true)
+        #expect(
+            stops.made.first?.call
+                == .instanceStopAll(StopAllParams(expectedInstanceIds: [], overrideLeases: true)))
+
+        let off = Fake(.failure(.rejected(ClientErrorCatalog.protocolViolation())))
+        _ = try? await off.client.agentOff(idempotencyKey: "k", overrideLeases: true)
+        #expect(
+            off.made.first?.call
+                == .daemonShutdown(
+                    ShutdownParams(
+                        mode: .agentOff, expectedPlanDigest: nil, force: false,
+                        overrideLeases: true)))
+    }
+
     @Test func aStopAllThePreviewNoLongerMatchesPassesTheRefusalThrough() async throws {
         let refusal = ClientErrorCatalog.protocolViolation()
         let fake = Fake(.failure(.rejected(refusal)))
