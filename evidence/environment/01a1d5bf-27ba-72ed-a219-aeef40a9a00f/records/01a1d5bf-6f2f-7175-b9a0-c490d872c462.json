@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "test" : {
+    "line" : 275,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "target" : "StacklyUITests",
+    "language" : "swift",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/detailOffline()",
+    "package" : null
+  },
+  "evidencePath" : "output.log",
+  "subjects" : [
+
+  ],
+  "actual" : "all expectations passed",
+  "id" : "01a1d5bf-6f2f-7175-b9a0-c490d872c462",
+  "status" : "PASS",
+  "owner" : null,
+  "expected" : "An environment opened while stacklyd is unavailable shows Waiting for stacklyd",
+  "covers" : [
+    "NFR-012"
+  ],
+  "reviewer" : null,
+  "startedAt" : "2026-11-13T16:30:55.280Z",
+  "finishedAt" : "2026-11-13T16:30:56.334Z",
+  "method" : "automated",
+  "kind" : "fixture",
+  "schema" : "stackly.evidence/v1",
+  "reason" : null
+}

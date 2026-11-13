@@ -4,7 +4,9 @@ import SwiftUI
 /// The sheet "Plan for {name}" (spec 0044, *Layar*, AC-20): one row per service in start
 /// order with its verb (Create, Start, Keep), the Install line of a create that needs a new
 /// runtime, the providers that need approval, the differences, the secrets each create uses,
-/// the blockers above the list, and the Problems of a manifest that is not valid. It only
+/// the blockers above the list, and the Problems of a manifest that is not valid; from spec
+/// 0045 the creates whose version comes from the lock, the local overrides that apply, a lock
+/// that is out of date, and the warnings of the local override file. It only
 /// reads: from a detail page it has Done; from Import… it has Cancel and Import.
 struct EnvironmentPlanSheet: View {
     let presenter: EnvironmentPlanPresenter
@@ -135,11 +137,22 @@ struct EnvironmentPlanContent: View {
                         : "\(blockers.count) problems block this plan.",
                     items: Self.items(blockers))
             }
+            if let stale = Self.staleServices(plan) {
+                StateBanner(tone: .caution, title: EnvironmentCopy.staleLock(stale))
+            }
+            if let local = plan.local, let warnings = Self.localWarnings(local) {
+                StateBanner(
+                    tone: .caution,
+                    title: EnvironmentCopy.localWarnings(local.file, count: warnings.count),
+                    items: warnings)
+            }
+            let overrides = Self.appliedOverrides(plan)
             VStack(alignment: .leading, spacing: Spacing.s12) {
                 ForEach(Self.ordered(plan), id: \.alias) { item in
                     PlanItemRow(
                         item: item, displayName: displayName,
                         version: item.instance.id.flatMap(version),
+                        overrides: overrides.filter { $0.service == item.alias },
                         reviewProvider: reviewProvider)
                 }
             }
@@ -147,6 +160,38 @@ struct EnvironmentPlanContent: View {
                 .font(.footnote)
                 .foregroundStyle(StacklyColor.textSecondary)
         }
+    }
+
+    /// The services whose lock entry is out of date, for the caution of a plan that is not
+    /// `locked` (spec 0045 *Layar*), or `nil` when there is none. With `locked` each one is a
+    /// blocker instead.
+    static func staleServices(_ plan: EnvPlan) -> [String]? {
+        guard let lock = plan.lock, lock.state == .stale, lock.locked != true else { return nil }
+        let services = (lock.stale ?? []).map(\.service)
+        return services.isEmpty ? nil : services
+    }
+
+    /// The overrides the plan applies to a create. A file with an error finding is not applied
+    /// at all (its blocker `env.local_invalid` says so), so then there is none.
+    static func appliedOverrides(_ plan: EnvPlan) -> [PlanOverride] {
+        guard let local = plan.local, local.state == .present,
+            (plan.blockers ?? []).contains(where: {
+                $0.error.code == "env.local_invalid" || $0.error.code == "env.local_unreadable"
+            }) == false
+        else { return [] }
+        return (local.overrides ?? []).filter { $0.state == .applied }
+    }
+
+    /// The warnings of the local override file as caution items; an error is a blocker
+    /// already. `nil` when there is none.
+    static func localWarnings(_ local: PlanLocal) -> [PartialItem]? {
+        var seen: Set<String> = []
+        let items = (local.findings ?? []).filter { $0.severity == .warning }.map { finding in
+            let base = finding.service ?? finding.location
+            let name = seen.insert(base).inserted ? base : "\(base) (\(finding.code))"
+            return PartialItem(name: name, reason: DaemonText.sentence(finding.message))
+        }
+        return items.isEmpty ? nil : items
     }
 
     /// The items in start order; an item the order does not name follows in manifest order.
@@ -192,6 +237,8 @@ struct PlanItemRow: View {
     let displayName: (String) -> String
     /// The runtime version of the existing instance, for a kept one.
     let version: String?
+    /// The local overrides the plan applies to this item (spec 0045).
+    var overrides: [PlanOverride] = []
     let reviewProvider: @MainActor (String) -> Void
 
     var body: some View {
@@ -202,7 +249,9 @@ struct PlanItemRow: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(Self.notes(item, displayName: displayName), id: \.self) { note in
+            ForEach(
+                Self.notes(item, displayName: displayName, overrides: overrides), id: \.self
+            ) { note in
                 Text(note)
                     .font(.callout)
                     .foregroundStyle(StacklyColor.textSecondary)
@@ -235,7 +284,8 @@ struct PlanItemRow: View {
     }
 
     /// The text of the row: "{alias} → {instance} · {software} {version} · {host}:{port}" for
-    /// a create, "· wait for readiness" for a start, and "· {version}" for a keep.
+    /// a create, "· wait for readiness" for a start, and "· {version}" for a keep. A create
+    /// whose runtime comes from the lock ends with " · locked" (spec 0045).
     static func line(
         _ item: PlanItem, displayName: (String) -> String, version: String? = nil
     ) -> String {
@@ -249,7 +299,8 @@ struct PlanItemRow: View {
             if let endpoint = item.endpoints?.first {
                 parts.append("\(endpoint.host):\(EnvironmentCopy.portText(endpoint.port))")
             }
-            return parts.joined(separator: " · ")
+            let text = parts.joined(separator: " · ")
+            return item.runtime?.source == .lock ? text + EnvironmentCopy.lockedSuffix : text
         case .start:
             return "\(head) · wait for readiness"
         case .keep, .unrecognized:
@@ -258,14 +309,23 @@ struct PlanItemRow: View {
         }
     }
 
-    /// The lines under the row: Installs, the differences, and the secrets.
-    static func notes(_ item: PlanItem, displayName: (String) -> String) -> [String] {
+    /// The lines under the row: Installs, the local overrides that apply, the differences
+    /// (the lock one names the locked version), and the secrets.
+    static func notes(
+        _ item: PlanItem, displayName: (String) -> String, overrides: [PlanOverride] = []
+    ) -> [String] {
         var notes: [String] = []
         if item.action == .create, let runtime = item.runtime, runtime.install {
             notes.append("Installs \(displayName(item.provider)) \(runtime.version)")
         }
+        if item.action == .create {
+            notes.append(contentsOf: overrides.compactMap(EnvironmentCopy.overrideNote))
+        }
         for difference in item.differences ?? [] {
-            notes.append(EnvironmentCopy.differs(difference.field))
+            notes.append(
+                difference.field == "lock"
+                    ? EnvironmentCopy.differsFromLock(difference.manifest)
+                    : EnvironmentCopy.differs(difference.field))
         }
         for secret in item.secrets ?? [] {
             if let line = EnvironmentCopy.secretLine(secret) { notes.append(line) }

@@ -1,0 +1,30 @@
+{
+  "evidencePath" : "output.log",
+  "expected" : "The Lock row reads its file and targets, out of date, Not locked, can’t be read, or — without a lock",
+  "id" : "01a1d5bf-3415-7ca3-84ba-df9d19958bf9",
+  "reason" : null,
+  "subjects" : [
+
+  ],
+  "steps" : null,
+  "kind" : "fixture",
+  "finishedAt" : "2026-11-13T16:30:40.278Z",
+  "actual" : "all expectations passed",
+  "method" : "automated",
+  "startedAt" : "2026-11-13T16:30:40.150Z",
+  "reviewer" : null,
+  "covers" : [
+    "NFR-012"
+  ],
+  "test" : {
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+    "name" : "EnvironmentLockTests/theLockRowFollowsTheSpecText()",
+    "line" : 23,
+    "target" : "StacklyUITests",
+    "package" : null,
+    "language" : "swift"
+  },
+  "owner" : null,
+  "schema" : "stackly.evidence/v1",
+  "status" : "PASS"
+}

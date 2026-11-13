@@ -36,7 +36,7 @@ public final class EnvironmentStore {
     /// Creates an empty store.
     /// - Parameters:
     ///   - call: Sends one read to the daemon (`env.list`, `env.get`, `env.validate`,
-    ///     `env.plan`).
+    ///     `env.plan`, `env.export`), and `env.lock`, which writes only the lock file.
     ///   - send: Sends one mutation with its idempotency key (`env.import`, `env.remove`); by
     ///     default nothing is sent.
     ///   - now: The wall clock.
@@ -192,6 +192,31 @@ public final class EnvironmentStore {
             throw .rejected(ClientErrorCatalog.protocolViolation())
         }
         return plan
+    }
+
+    /// `env.lock` for the registered manifest of `id` (spec 0045). It writes only the lock file
+    /// next to the manifest and is no operation, so it carries no idempotency key; the page
+    /// gates it like a mutation.
+    func lock(_ id: UUID, refresh: LockRefresh) async throws(ClientError) -> EnvLockResult {
+        guard
+            case .envLock(let result) = try await call(
+                .envLock(EnvLockParams(source: .registered(id), refresh: refresh)))
+        else {
+            throw .rejected(ClientErrorCatalog.protocolViolation())
+        }
+        return result
+    }
+
+    /// `env.export` for the registered environment `id` in `format` (spec 0045). It only
+    /// reads the registry.
+    func export(_ id: UUID, format: ExportFormat) async throws(ClientError) -> EnvExport {
+        guard
+            case .envExport(let export) = try await call(
+                .envExport(EnvExportParams(source: .registered(id), format: format)))
+        else {
+            throw .rejected(ClientErrorCatalog.protocolViolation())
+        }
+        return export
     }
 }
 

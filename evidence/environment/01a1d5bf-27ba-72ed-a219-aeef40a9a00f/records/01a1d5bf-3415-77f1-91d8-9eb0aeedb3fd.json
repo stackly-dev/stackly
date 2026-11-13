@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "finishedAt" : "2026-11-13T16:30:40.278Z",
+  "startedAt" : "2026-11-13T16:30:40.150Z",
+  "expected" : "The Local override row reads None without a file, the first override and how many more, the problems, or can’t be read",
+  "actual" : "all expectations passed",
+  "subjects" : [
+
+  ],
+  "evidencePath" : "output.log",
+  "test" : {
+    "package" : null,
+    "target" : "StacklyUITests",
+    "name" : "EnvironmentLockTests/theLocalOverrideRowFollowsTheSpecText()",
+    "line" : 47,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+    "language" : "swift"
+  },
+  "method" : "automated",
+  "covers" : [
+    "NFR-012"
+  ],
+  "status" : "PASS",
+  "reviewer" : null,
+  "schema" : "stackly.evidence/v1",
+  "owner" : null,
+  "id" : "01a1d5bf-3415-77f1-91d8-9eb0aeedb3fd",
+  "kind" : "fixture",
+  "reason" : null
+}

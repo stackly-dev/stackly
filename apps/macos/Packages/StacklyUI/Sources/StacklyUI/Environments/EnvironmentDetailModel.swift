@@ -3,7 +3,9 @@ import Observation
 import StacklyClient
 
 /// The detail page of one environment (spec 0044, *Layar* and *Event*): the detail from
-/// `env.get`, the manifest state, Validate and its Problems, Reload, Locate…, and Remove.
+/// `env.get`, the manifest state, Validate and its Problems, Reload, Locate…, and Remove, and
+/// from spec 0045 the Lock and Local override rows, Lock Versions, Update Lock…, and Copy
+/// Environment Variables.
 /// `env.get` reads the manifest file only when the page opens, when the app becomes active,
 /// after Validate, Reload, or Locate…, and after an operation of this environment; an
 /// instance event reads the detail without the file, so the manifest state of the last check
@@ -35,9 +37,22 @@ final class EnvironmentDetailModel {
     private(set) var isImporting = false
     /// Whether Remove runs.
     private(set) var isRemoving = false
+    /// The lock file at the last check, or `nil` before one, or while the manifest is not
+    /// `in_sync` or `changed`: a lock is never shown against a manifest that can't be read or
+    /// is not valid (spec 0045 *Layar*).
+    private(set) var lock: EnvLockInfo?
+    /// The local override file at the last check, under the same rule as ``lock``.
+    private(set) var local: EnvLocalInfo?
+    /// Whether Lock Versions or Update Lock… runs.
+    private(set) var isLocking = false
+    /// The blockers of the last `env.lock`, or `nil` when it had none.
+    private(set) var lockBlockers: [PlanBlocker]?
+    /// Whether Copy Environment Variables runs.
+    private(set) var isExporting = false
 
     @ObservationIgnored private let store: EnvironmentStore
     @ObservationIgnored private let newKey: () -> String
+    @ObservationIgnored private let copyText: @MainActor (String) -> Void
     @ObservationIgnored private var importKey: String?
     @ObservationIgnored private var removeKey: String?
 
@@ -46,13 +61,16 @@ final class EnvironmentDetailModel {
     ///   - id: The environment.
     ///   - store: The environment store, for the reads and the mutations.
     ///   - newKey: Makes an idempotency key.
+    ///   - copyText: Writes the variables of Copy Environment Variables to the pasteboard.
     init(
         id: UUID, store: EnvironmentStore,
-        newKey: @escaping () -> String = { MutationPath.newKey() }
+        newKey: @escaping () -> String = { MutationPath.newKey() },
+        copyText: @escaping @MainActor (String) -> Void = PlainPasteboard.write
     ) {
         self.id = id
         self.store = store
         self.newKey = newKey
+        self.copyText = copyText
     }
 
     /// The summary of the last detail, or of the store's list before the first detail.
@@ -79,6 +97,9 @@ final class EnvironmentDetailModel {
             if checkManifest {
                 manifestState = loaded.manifestState
                 problemCount = loaded.problems ?? 0
+                let readable = loaded.manifestState == .inSync || loaded.manifestState == .changed
+                lock = readable ? loaded.lock : nil
+                local = readable ? loaded.local : nil
                 if loaded.manifestState == .nameChanged {
                     await readDeclaredName()
                 } else {
@@ -185,6 +206,69 @@ final class EnvironmentDetailModel {
         await store.reload()
         await load(checkManifest: true)
         return Feedback.outcome(outcome, success: success, showOperations: nil)
+    }
+
+    // MARK: - Lock and export (spec 0045)
+
+    /// The lock file name the page shows, for the confirmation of Update Lock….
+    var lockFile: String {
+        lock?.file ?? EnvironmentCopy.defaultLockFile
+    }
+
+    /// Lock Versions (`refresh` `none`) and Update Lock… (`refresh` `all`): `env.lock` for the
+    /// registered manifest. Success says how many services the lock holds, or that it is up to
+    /// date; blockers show in the page's banner and write nothing; a manifest that is not
+    /// valid opens Problems. Either way the detail is read again with the files.
+    func lockVersions(refresh: LockRefresh) async -> Feedback? {
+        guard manifestLocation != nil else { return nil }
+        isLocking = true
+        defer { isLocking = false }
+        let feedback: Feedback?
+        do throws(ClientError) {
+            let result = try await store.lock(id, refresh: refresh)
+            feedback = Self.lockFeedback(result)
+            let blockers = result.blockers ?? []
+            lockBlockers = blockers.isEmpty ? nil : blockers
+            if result.validation.valid == false {
+                findings = result.validation.findings ?? []
+                omittedFindings = result.validation.omitted
+            }
+        } catch {
+            feedback = .failure(error.body)
+        }
+        await load(checkManifest: true)
+        return feedback
+    }
+
+    /// The feedback of an `env.lock` result: "Locked {n} services." when the file was written,
+    /// "The lock is up to date." when it was not, and `nil` for blockers or a manifest that is
+    /// not valid, which the page shows itself.
+    static func lockFeedback(_ result: EnvLockResult) -> Feedback? {
+        guard result.validation.valid, (result.blockers ?? []).isEmpty else { return nil }
+        guard result.written else { return .success(EnvironmentCopy.lockUpToDate) }
+        let count = (result.services ?? []).filter { $0.change != .removed }.count
+        return .success(EnvironmentCopy.locked(count))
+    }
+
+    /// Closes the banner of the lock blockers.
+    func closeLockBlockers() {
+        lockBlockers = nil
+    }
+
+    /// Copy Environment Variables: `env.export` as dotenv to the plain pasteboard. Nothing is
+    /// copied when there is no variable yet.
+    func copyVariables() async -> Feedback {
+        isExporting = true
+        defer { isExporting = false }
+        do throws(ClientError) {
+            let export = try await store.export(id, format: .dotenv)
+            let count = export.variables?.count ?? 0
+            guard count > 0 else { return .neutral(EnvironmentCopy.nothingToCopy) }
+            copyText(export.text)
+            return .success(EnvironmentCopy.copiedVariables(count))
+        } catch {
+            return .failure(error.body)
+        }
     }
 
     // MARK: - Remove

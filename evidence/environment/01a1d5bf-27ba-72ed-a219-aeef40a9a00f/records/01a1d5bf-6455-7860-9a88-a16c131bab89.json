@@ -1,0 +1,30 @@
+{
+  "finishedAt" : "2026-11-13T16:30:53.332Z",
+  "subjects" : [
+
+  ],
+  "id" : "01a1d5bf-6455-7860-9a88-a16c131bab89",
+  "status" : "PASS",
+  "covers" : [
+    "NFR-012"
+  ],
+  "reason" : null,
+  "method" : "automated",
+  "steps" : null,
+  "evidencePath" : "output.log",
+  "expected" : "A lock that a provider blocks lists the blocker with its hint in a critical banner",
+  "actual" : "all expectations passed",
+  "test" : {
+    "package" : null,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "language" : "swift",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/lockBlocked()",
+    "target" : "StacklyUITests",
+    "line" : 223
+  },
+  "kind" : "fixture",
+  "owner" : null,
+  "startedAt" : "2026-11-13T16:30:52.502Z",
+  "schema" : "stackly.evidence/v1",
+  "reviewer" : null
+}

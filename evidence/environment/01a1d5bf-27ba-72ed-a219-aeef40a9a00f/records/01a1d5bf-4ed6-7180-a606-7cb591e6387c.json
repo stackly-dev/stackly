@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "test" : {
+    "package" : null,
+    "language" : "swift",
+    "target" : "StacklyUITests",
+    "line" : 114,
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/problems()"
+  },
+  "evidencePath" : "output.log",
+  "subjects" : [
+
+  ],
+  "actual" : "all expectations passed",
+  "id" : "01a1d5bf-4ed6-7180-a606-7cb591e6387c",
+  "status" : "PASS",
+  "owner" : null,
+  "expected" : "Validate of a manifest that is not valid opens Problems with each finding",
+  "covers" : [
+    "VAL-013"
+  ],
+  "reviewer" : null,
+  "startedAt" : "2026-11-13T16:30:46.998Z",
+  "finishedAt" : "2026-11-13T16:30:47.829Z",
+  "kind" : "fixture",
+  "schema" : "stackly.evidence/v1",
+  "method" : "automated",
+  "reason" : null
+}

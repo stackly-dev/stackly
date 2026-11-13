@@ -1,0 +1,1202 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+    "sourceDirty": false,
+    "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+    "runKind": "fixture",
+    "command": [
+      "swift",
+      "test",
+      "--package-path",
+      "apps/macos/Packages/StacklyUI",
+      "--filter",
+      "EnvironmentLockTests|EnvironmentsSnapshotTests"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T16:30:36.986937Z",
+  "finishedAt": "2026-11-13T16:31:02.436749Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 18,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 18,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 18,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-7642-8929-8639acaa89d7",
+      "covers": [
+        "REQ-023",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLockTests/thePlanSheetShowsTheLockAndTheOverrides()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+        "line": 254
+      },
+      "status": "PASS",
+      "expected": "The plan sheet marks a create from the lock with · locked, shows each applied override, the lock difference, and a caution for a stale lock",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.15Z",
+      "finishedAt": "2026-11-13T16:30:40.278Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-77f1-91d8-9eb0aeedb3fd",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLockTests/theLocalOverrideRowFollowsTheSpecText()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+        "line": 47
+      },
+      "status": "PASS",
+      "expected": "The Local override row reads None without a file, the first override and how many more, the problems, or can’t be read",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.15Z",
+      "finishedAt": "2026-11-13T16:30:40.278Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-7931-931e-befb084fa16c",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLockTests/copyEnvironmentVariablesWritesTheExportText()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+        "line": 221
+      },
+      "status": "PASS",
+      "expected": "Copy Environment Variables writes exactly the dotenv text of env.export and says Copied 3 variables.; with no variable it copies nothing",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.149Z",
+      "finishedAt": "2026-11-13T16:30:40.151Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-7980-ab84-802ea76e726f",
+      "covers": [
+        "REQ-023"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLockTests/lockVersionsAndUpdateLockSendTheirRefresh()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+        "line": 101
+      },
+      "status": "PASS",
+      "expected": "Lock Versions sends env.lock with refresh none, Update Lock… with all, and the feedback says Locked 3 services. or The lock is up to date.",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.149Z",
+      "finishedAt": "2026-11-13T16:30:40.152Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-7ca3-84ba-df9d19958bf9",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentLockTests/theLockRowFollowsTheSpecText()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentLockTests.swift",
+        "line": 23
+      },
+      "status": "PASS",
+      "expected": "The Lock row reads its file and targets, out of date, Not locked, can’t be read, or — without a lock",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.15Z",
+      "finishedAt": "2026-11-13T16:30:40.278Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-3415-7e15-82ff-bb22c68c5703",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/list()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 39
+      },
+      "status": "PASS",
+      "expected": "The Environments list shows each environment with its status and ready count, the empty state with Import…, and the offline state",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:40.15Z",
+      "finishedAt": "2026-11-13T16:30:43.576Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-4179-7029-8cdc-f853b8549d60",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/detail()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 67
+      },
+      "status": "PASS",
+      "expected": "The detail page shows the partially ready banner, the Services table, Not in Manifest, and Details; ready and down pages too",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:43.577Z",
+      "finishedAt": "2026-11-13T16:30:45.396Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-4894-7f90-bea7-a2af584cf305",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/manifestBanners()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 87
+      },
+      "status": "PASS",
+      "expected": "Each manifest state shows its banner: changed, can't be read, problems, and a new name",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:45.397Z",
+      "finishedAt": "2026-11-13T16:30:46.996Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-4ed6-7180-a606-7cb591e6387c",
+      "covers": [
+        "VAL-013"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/problems()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 114
+      },
+      "status": "PASS",
+      "expected": "Validate of a manifest that is not valid opens Problems with each finding",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:46.998Z",
+      "finishedAt": "2026-11-13T16:30:47.829Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-5215-79f5-9f13-7814edc21f05",
+      "covers": [
+        "REQ-020",
+        "AC-020"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/freshPlan()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 145
+      },
+      "status": "PASS",
+      "expected": "The import plan of the ERP manifest shows six creates with their installs and secrets, then Cancel and Import",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:47.829Z",
+      "finishedAt": "2026-11-13T16:30:48.836Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-5605-766f-8723-8168ea2f9bc0",
+      "covers": [
+        "AC-020",
+        "VAL-013"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/registeredPlan()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 159
+      },
+      "status": "PASS",
+      "expected": "The plan of a registered manifest shows Keep, Start, and Create, a difference, approval, and the blockers, with Done only",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:48.838Z",
+      "finishedAt": "2026-11-13T16:30:49.785Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-5c6c-7de2-b229-651a4afed506",
+      "covers": [
+        "NFR-012",
+        "REQ-023"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/lockRows()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 189
+      },
+      "status": "PASS",
+      "expected": "Details shows the Lock row in sync, out of date, not locked, and unreadable, and the Local override row with overrides, problems, or None",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:50.476Z",
+      "finishedAt": "2026-11-13T16:30:52.5Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-6455-7860-9a88-a16c131bab89",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/lockBlocked()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 223
+      },
+      "status": "PASS",
+      "expected": "A lock that a provider blocks lists the blocker with its hint in a critical banner",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:52.502Z",
+      "finishedAt": "2026-11-13T16:30:53.332Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-6795-7207-a026-6cfb0ce9d357",
+      "covers": [
+        "REQ-023",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/lockedPlan()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 239
+      },
+      "status": "PASS",
+      "expected": "The plan sheet marks creates from the lock, shows the local overrides and the lock difference, the stale lock caution, and the local file warning",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:53.334Z",
+      "finishedAt": "2026-11-13T16:30:55.279Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-6f2f-7175-b9a0-c490d872c462",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/detailOffline()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 275
+      },
+      "status": "PASS",
+      "expected": "An environment opened while stacklyd is unavailable shows Waiting for stacklyd",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:55.28Z",
+      "finishedAt": "2026-11-13T16:30:56.334Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-734e-7b68-8303-0340d6ed3842",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/overviewShowAll()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 298
+      },
+      "status": "PASS",
+      "expected": "The Overview lists five environments by name and Show All when there are more",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:56.335Z",
+      "finishedAt": "2026-11-13T16:30:57.181Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-769e-792a-88a9-b7a536d54d83",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/sidebarRows()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 314
+      },
+      "status": "PASS",
+      "expected": "The sidebar shows one child row per environment under Environments with its status symbol, name, and ready count",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:57.183Z",
+      "finishedAt": "2026-11-13T16:30:59.168Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d5bf-7e61-7c1a-920a-89c745a9856c",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentsSnapshotTests/otherSurfaces()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift",
+        "line": 345
+      },
+      "status": "PASS",
+      "expected": "The Overview shows an Environments section above Operations; Instances shows the Environment column",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T16:30:59.169Z",
+      "finishedAt": "2026-11-13T16:31:02.422Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "1c5e0814e28f05a4c7f07f1b38c1a61cb1f52bbc",
+        "sourceDirty": false,
+        "runId": "01a1d5bf-27ba-72ed-a219-aeef40a9a00f",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentLockTests|EnvironmentsSnapshotTests"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

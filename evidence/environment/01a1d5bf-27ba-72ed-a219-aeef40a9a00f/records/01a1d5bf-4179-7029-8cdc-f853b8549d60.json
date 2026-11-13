@@ -1,0 +1,30 @@
+{
+  "steps" : null,
+  "test" : {
+    "line" : 67,
+    "language" : "swift",
+    "package" : null,
+    "target" : "StacklyUITests",
+    "name" : "SnapshotTests/EnvironmentsSnapshotTests/detail()",
+    "file" : "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentsSnapshotTests.swift"
+  },
+  "evidencePath" : "output.log",
+  "subjects" : [
+
+  ],
+  "actual" : "all expectations passed",
+  "id" : "01a1d5bf-4179-7029-8cdc-f853b8549d60",
+  "status" : "PASS",
+  "covers" : [
+    "NFR-012"
+  ],
+  "owner" : null,
+  "expected" : "The detail page shows the partially ready banner, the Services table, Not in Manifest, and Details; ready and down pages too",
+  "reviewer" : null,
+  "startedAt" : "2026-11-13T16:30:43.577Z",
+  "finishedAt" : "2026-11-13T16:30:45.396Z",
+  "schema" : "stackly.evidence/v1",
+  "kind" : "fixture",
+  "method" : "automated",
+  "reason" : null
+}
