@@ -19,6 +19,21 @@
       "file": "detail-partially-ready.json",
       "type": "EnvironmentDetail",
       "expect": "roundtrip"
+    },
+    {
+      "file": "lock-written.json",
+      "type": "EnvLockResult",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "lock-blocked.json",
+      "type": "EnvLockResult",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "export-dotenv.json",
+      "type": "EnvExport",
+      "expect": "roundtrip"
     }
   ]
 }

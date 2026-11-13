@@ -99,6 +99,8 @@ extension Call {
 		case .envGet: "env.get"
 		case .envImport: "env.import"
 		case .envRemove: "env.remove"
+		case .envLock: "env.lock"
+		case .envExport: "env.export"
 		}
 	}
 }
@@ -180,6 +182,8 @@ extension Reply {
 		case .envGet: "env.get"
 		case .envImport: "env.import"
 		case .envRemove: "env.remove"
+		case .envLock: "env.lock"
+		case .envExport: "env.export"
 		}
 	}
 }

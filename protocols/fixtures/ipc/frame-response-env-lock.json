@@ -1,0 +1,72 @@
+{
+  "type": "response",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e40",
+    "reply": {
+      "type": "env.lock",
+      "content": {
+        "validation": {
+          "file": "/Users/dev/erp/stackly.yaml",
+          "valid": true,
+          "apiVersion": "stackly/v1alpha1",
+          "supportedApiVersions": [
+            "stackly/v1alpha1"
+          ],
+          "name": "erp-development",
+          "manifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "services": [
+            {
+              "alias": "postgres",
+              "provider": "official/postgresql",
+              "ownership": "dedicated",
+              "selector": "18",
+              "instanceRef": null,
+              "instanceName": null,
+              "dependsOn": []
+            },
+            {
+              "alias": "cache",
+              "provider": "official/valkey",
+              "ownership": "shared",
+              "selector": null,
+              "instanceRef": "shared-valkey",
+              "instanceName": null,
+              "dependsOn": []
+            }
+          ],
+          "findings": [],
+          "findingCount": 0,
+          "omitted": 0
+        },
+        "lockFile": "/Users/dev/erp/stackly.lock",
+        "written": true,
+        "changed": true,
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "targets": [
+          "macos-aarch64"
+        ],
+        "services": [
+          {
+            "alias": "postgres",
+            "provider": "official/postgresql",
+            "selector": "18",
+            "version": "18.6",
+            "artifactId": "postgresql-18.6-r2-macos-aarch64",
+            "change": "updated",
+            "previousVersion": "18.5"
+          },
+          {
+            "alias": "old",
+            "provider": "official/nats",
+            "selector": "stable",
+            "version": null,
+            "artifactId": null,
+            "change": "removed",
+            "previousVersion": "2.15.1"
+          }
+        ],
+        "blockers": []
+      }
+    }
+  }
+}

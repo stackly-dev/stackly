@@ -772,6 +772,116 @@
       "summary": "the registry already holds 64 environments"
     },
     {
+      "code": "env.local_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "errors"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the local override file has error findings"
+    },
+    {
+      "code": "env.local_unreadable",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the local override file can't be read"
+    },
+    {
+      "code": "env.lock_artifact_unknown",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "service",
+        "artifactId",
+        "sha256",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the locked digest is not in the catalog, or its version, target, or ID differ"
+    },
+    {
+      "code": "env.lock_invalid",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "code",
+        "location"
+      ],
+      "items": null,
+      "summary": "a blocker of spec 0045: the loader refused the lock"
+    },
+    {
+      "code": "env.lock_missing",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "file"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: locked without a lock file"
+    },
+    {
+      "code": "env.lock_no_artifact",
+      "category": "unsupported",
+      "retryable": false,
+      "details": [
+        "service",
+        "target",
+        "lockedTargets"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the lock has no artifact for this Mac"
+    },
+    {
+      "code": "env.lock_provider_mismatch",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "service",
+        "provider",
+        "lockedRevision",
+        "availableRevision"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the catalog holds another provider revision than the lock"
+    },
+    {
+      "code": "env.lock_stale",
+      "category": "conflict",
+      "retryable": false,
+      "details": [
+        "service",
+        "reason"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045 with locked: one alias does not match the lock"
+    },
+    {
+      "code": "env.lock_unreadable",
+      "category": "invalid_input",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: the lock file can't be read; reason as for env.manifest_unreadable"
+    },
+    {
+      "code": "env.lock_unwritable",
+      "category": "failed",
+      "retryable": false,
+      "details": [
+        "reason"
+      ],
+      "items": null,
+      "summary": "env.lock can't write the lock file: not_a_file, permission_denied, or io"
+    },
+    {
       "code": "env.manifest_changed",
       "category": "conflict",
       "retryable": false,
@@ -830,6 +940,27 @@
       "summary": "no environment has that ID"
     },
     {
+      "code": "env.not_registered",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "name"
+      ],
+      "items": null,
+      "summary": "env.export named a file whose environment is not registered at that location"
+    },
+    {
+      "code": "env.override_location_unknown",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "service",
+        "path"
+      ],
+      "items": null,
+      "summary": "a plan blocker of spec 0045: dataLocation is not a registered data location"
+    },
+    {
       "code": "env.relink_mismatch",
       "category": "conflict",
       "retryable": false,
@@ -839,6 +970,16 @@
       ],
       "items": null,
       "summary": "a relink named an environment whose name differs from the file"
+    },
+    {
+      "code": "env.service_not_found",
+      "category": "not_found",
+      "retryable": false,
+      "details": [
+        "service"
+      ],
+      "items": null,
+      "summary": "env.lock named an alias that is not a dedicated service of the manifest"
     },
     {
       "code": "events.too_many_subscriptions",

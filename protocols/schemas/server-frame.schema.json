@@ -4624,6 +4624,45 @@
         "impact"
       ]
     },
+    "EnvExport": {
+      "description": "Reply of `env.export`.",
+      "type": "object",
+      "properties": {
+        "environment": {
+          "description": "The environment.",
+          "$ref": "#/$defs/EnvironmentRef"
+        },
+        "format": {
+          "description": "How `text` is written.",
+          "$ref": "#/$defs/ExportFormat"
+        },
+        "skipped": {
+          "description": "What is left out.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExportSkipped"
+          }
+        },
+        "text": {
+          "description": "The variables as text, one line each.",
+          "type": "string"
+        },
+        "variables": {
+          "description": "The variables.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ExportVariable"
+          }
+        }
+      },
+      "required": [
+        "environment",
+        "format",
+        "text"
+      ]
+    },
     "EnvFinding": {
       "description": "One problem in a manifest. The message is a fixed template per code and\nnever holds a value from the file.",
       "type": "object",
@@ -4658,6 +4697,141 @@
         "code",
         "location",
         "message"
+      ]
+    },
+    "EnvLocalInfo": {
+      "description": "The local override file of a registered environment.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "The file name.",
+          "type": "string"
+        },
+        "overrides": {
+          "description": "Every override, by whether its service has a member.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanOverride"
+          }
+        },
+        "problems": {
+          "description": "The error findings.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "state": {
+          "description": "Its state; absent when there is no file.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "file",
+        "problems"
+      ]
+    },
+    "EnvLockInfo": {
+      "description": "The lock of a registered environment.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "The file name.",
+          "type": "string"
+        },
+        "services": {
+          "description": "How many services it locks.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "state": {
+          "description": "Its state.",
+          "$ref": "#/$defs/LockState"
+        },
+        "targets": {
+          "description": "Every target of every entry, by text.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "file",
+        "state",
+        "services"
+      ]
+    },
+    "EnvLockResult": {
+      "description": "Reply of `env.lock`.",
+      "type": "object",
+      "properties": {
+        "blockers": {
+          "description": "What stops the write.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanBlocker"
+          }
+        },
+        "changed": {
+          "description": "Whether the new bytes differ from the file that was there.",
+          "type": "boolean"
+        },
+        "lockFile": {
+          "description": "The lock file, as an absolute path; clients show home as `~`.",
+          "type": "string"
+        },
+        "services": {
+          "description": "One per service, in manifest order, then removed entries.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LockedService"
+          }
+        },
+        "sha256": {
+          "description": "The digest of the lock, when it was written or is up to date.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "targets": {
+          "description": "Every target of every entry, by text.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "validation": {
+          "description": "What `env.validate` says of the manifest.",
+          "$ref": "#/$defs/EnvValidation"
+        },
+        "written": {
+          "description": "Whether the file was written.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "validation",
+        "lockFile",
+        "written",
+        "changed"
       ]
     },
     "EnvOwnership": {
@@ -4740,6 +4914,30 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/PlanItem"
+          }
+        },
+        "local": {
+          "description": "The local override file, when there is one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanLocal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lock": {
+          "description": "The lock next to the manifest; always sent by a daemon that knows\nlocks.",
+          "$ref": "#/$defs/PlanLock",
+          "default": {
+            "file": "",
+            "locked": false,
+            "sha256": null,
+            "stale": [],
+            "state": "absent",
+            "targets": []
           }
         },
         "needsSecrets": {
@@ -4889,6 +5087,30 @@
           "items": {
             "$ref": "#/$defs/DetachedMember"
           }
+        },
+        "local": {
+          "description": "The local override file; only when `lock` is sent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvLocalInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lock": {
+          "description": "The lock; only with `checkManifest` and a manifest `in_sync` or\n`changed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvLockInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "manifestState": {
           "description": "The manifest state; only with `checkManifest`.",
@@ -5067,6 +5289,14 @@
           "description": "The ID.",
           "type": "string",
           "format": "uuid"
+        },
+        "lockSha256": {
+          "description": "The digest of the lock the last Up used, as the registry holds it.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "manifestLocation": {
           "description": "The absolute path of the manifest; clients show home as `~`.",
@@ -5736,6 +5966,160 @@
         "approval",
         "samePackage",
         "storedCopyValid"
+      ]
+    },
+    "ExportFormat": {
+      "description": "How `env.export` writes its text. Open.",
+      "oneOf": [
+        {
+          "description": "`NAME=value` per line.",
+          "type": "string",
+          "const": "dotenv"
+        },
+        {
+          "description": "`export NAME='value'` per line.",
+          "type": "string",
+          "const": "shell"
+        },
+        {
+          "description": "A value this build does not know; the daemon refuses it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ExportSkipReason": {
+      "description": "Why a service or endpoint is not exported. Open.",
+      "oneOf": [
+        {
+          "description": "The service has no instance yet.",
+          "type": "string",
+          "const": "not_created"
+        },
+        {
+          "description": "An `auto` endpoint that never had a port.",
+          "type": "string",
+          "const": "port_not_assigned"
+        },
+        {
+          "description": "A Unix socket endpoint.",
+          "type": "string",
+          "const": "unix_endpoint"
+        },
+        {
+          "description": "The pinned package can't be read.",
+          "type": "string",
+          "const": "package_unavailable"
+        },
+        {
+          "description": "The instance is retained.",
+          "type": "string",
+          "const": "retained"
+        },
+        {
+          "description": "An earlier variable has the name.",
+          "type": "string",
+          "const": "name_collision"
+        },
+        {
+          "description": "The redactor changed the value.",
+          "type": "string",
+          "const": "redacted"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ExportSkipped": {
+      "description": "One service or endpoint left out of an export.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "The endpoint, when only one is left out.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "reason": {
+          "description": "Why.",
+          "$ref": "#/$defs/ExportSkipReason"
+        },
+        "service": {
+          "description": "The service.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "reason"
+      ]
+    },
+    "ExportValueKind": {
+      "description": "What an export variable holds. Open.",
+      "oneOf": [
+        {
+          "description": "The host.",
+          "type": "string",
+          "const": "host"
+        },
+        {
+          "description": "The port.",
+          "type": "string",
+          "const": "port"
+        },
+        {
+          "description": "`host:port`, IPv6 in brackets.",
+          "type": "string",
+          "const": "address"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "ExportVariable": {
+      "description": "One variable of an export.",
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "The endpoint.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "What it holds.",
+          "$ref": "#/$defs/ExportValueKind"
+        },
+        "mayChange": {
+          "description": "Whether the port may change at the next start.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "The name, such as `STACKLY_POSTGRES_CLIENT_PORT`.",
+          "type": "string"
+        },
+        "service": {
+          "description": "The service.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value: a host, a port, or an address.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "service",
+        "endpoint",
+        "kind",
+        "mayChange"
       ]
     },
     "ExportedBundle": {
@@ -8102,6 +8486,31 @@
         "packageBytes"
       ]
     },
+    "LocalState": {
+      "description": "The state of a local override file that is there. Open.",
+      "oneOf": [
+        {
+          "description": "It has no error finding.",
+          "type": "string",
+          "const": "present"
+        },
+        {
+          "description": "It has an error finding.",
+          "type": "string",
+          "const": "invalid"
+        },
+        {
+          "description": "It can't be read.",
+          "type": "string",
+          "const": "unreadable"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "LocationKind": {
       "description": "What a storage location holds. Open.",
       "oneOf": [
@@ -8141,6 +8550,176 @@
       },
       "required": [
         "items"
+      ]
+    },
+    "LockChange": {
+      "description": "How one service of `env.lock` changed. Open.",
+      "oneOf": [
+        {
+          "description": "A new alias.",
+          "type": "string",
+          "const": "added"
+        },
+        {
+          "description": "The same version.",
+          "type": "string",
+          "const": "kept"
+        },
+        {
+          "description": "Another version.",
+          "type": "string",
+          "const": "updated"
+        },
+        {
+          "description": "The entry was dropped.",
+          "type": "string",
+          "const": "removed"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LockStaleItem": {
+      "description": "One alias that does not match the lock.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why.",
+          "$ref": "#/$defs/LockStaleReason"
+        },
+        "service": {
+          "description": "The alias.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "reason"
+      ]
+    },
+    "LockStaleReason": {
+      "description": "Why an alias does not match its lock entry. Open.",
+      "oneOf": [
+        {
+          "description": "A dedicated service without an entry.",
+          "type": "string",
+          "const": "not_locked"
+        },
+        {
+          "description": "The entry names another provider.",
+          "type": "string",
+          "const": "provider_changed"
+        },
+        {
+          "description": "The entry names another selector.",
+          "type": "string",
+          "const": "selector_changed"
+        },
+        {
+          "description": "The locked version does not satisfy the selector.",
+          "type": "string",
+          "const": "selector_unsatisfied"
+        },
+        {
+          "description": "An entry whose alias is not a dedicated service of the manifest.",
+          "type": "string",
+          "const": "not_in_manifest"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LockState": {
+      "description": "The state of a lock against its manifest. Open.",
+      "oneOf": [
+        {
+          "description": "There is no lock file.",
+          "type": "string",
+          "const": "absent"
+        },
+        {
+          "description": "Every dedicated service matches its entry.",
+          "type": "string",
+          "const": "in_sync"
+        },
+        {
+          "description": "An alias does not match.",
+          "type": "string",
+          "const": "stale"
+        },
+        {
+          "description": "The lock is not a valid lock.",
+          "type": "string",
+          "const": "invalid"
+        },
+        {
+          "description": "The file can't be read.",
+          "type": "string",
+          "const": "unreadable"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "LockedService": {
+      "description": "One service of the reply of `env.lock`.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias.",
+          "type": "string"
+        },
+        "artifactId": {
+          "description": "The artifact for this Mac, when the entry has one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "change": {
+          "description": "How it changed.",
+          "$ref": "#/$defs/LockChange"
+        },
+        "previousVersion": {
+          "description": "The version before, when it changed.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "provider": {
+          "description": "The provider.",
+          "type": "string"
+        },
+        "selector": {
+          "description": "The selector.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version locked; absent for a removed or blocked entry.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "alias",
+        "provider",
+        "selector",
+        "change"
       ]
     },
     "LogCursor": {
@@ -9983,6 +10562,36 @@
         "origin"
       ]
     },
+    "OverrideState": {
+      "description": "What became of one local override. Open.",
+      "oneOf": [
+        {
+          "description": "A `create` draft uses it.",
+          "type": "string",
+          "const": "applied"
+        },
+        {
+          "description": "A port of a service with a member: only compared.",
+          "type": "string",
+          "const": "compared"
+        },
+        {
+          "description": "A data location of a service with a member: never applied.",
+          "type": "string",
+          "const": "not_applied_existing"
+        },
+        {
+          "description": "The manifest declares no such service.",
+          "type": "string",
+          "const": "ignored"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "PackageIdentity": {
       "description": "Who a validated package is.",
       "type": "object",
@@ -10450,7 +11059,7 @@
       "type": "object",
       "properties": {
         "field": {
-          "description": "`provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or\n`instanceRef`.",
+          "description": "`provider`, `runtime`, `endpoint.<name>.port`, `ownership`,\n`instanceRef`, or `lock`.",
           "type": "string"
         },
         "instance": {
@@ -10561,6 +11170,18 @@
           "description": "The provider.",
           "type": "string"
         },
+        "providerRevision": {
+          "description": "The catalog entry a `create` item uses.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanProviderRevision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "runtime": {
           "description": "The runtime, for a `create` item whose selector resolved.",
           "anyOf": [
@@ -10588,6 +11209,18 @@
           "items": {
             "$ref": "#/$defs/PlanStep"
           }
+        },
+        "storage": {
+          "description": "The data location a local override chose, for a `create` item.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanStorage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "trust": {
           "description": "The trust of the provider, for a `create` item only.",
@@ -10618,6 +11251,95 @@
         "provider"
       ]
     },
+    "PlanLocal": {
+      "description": "The local override file of a plan.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "The file name, such as `.stackly.local.yaml`.",
+          "type": "string"
+        },
+        "findings": {
+          "description": "Every finding; an `error` one is the `env.local_invalid` blocker.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EnvFinding"
+          }
+        },
+        "overrides": {
+          "description": "Every override, the ignored ones included.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanOverride"
+          }
+        },
+        "sha256": {
+          "description": "The digest of the bytes read.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "state": {
+          "description": "Its state.",
+          "$ref": "#/$defs/LocalState"
+        }
+      },
+      "required": [
+        "file",
+        "state"
+      ]
+    },
+    "PlanLock": {
+      "description": "The lock of a plan.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "The lock file name, such as `stackly.lock`.",
+          "type": "string"
+        },
+        "locked": {
+          "description": "Whether the daemon planned with `locked`; false from a daemon that\ndoes not know the field.",
+          "type": "boolean",
+          "default": false
+        },
+        "sha256": {
+          "description": "The digest of a valid lock (`in_sync` or `stale`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "stale": {
+          "description": "The aliases that do not match.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LockStaleItem"
+          }
+        },
+        "state": {
+          "description": "Its state.",
+          "$ref": "#/$defs/LockState"
+        },
+        "targets": {
+          "description": "Every target of every entry, by text.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "file",
+        "state"
+      ]
+    },
     "PlanOutcome": {
       "description": "What became of one instance of a plan. Open: newer daemons may add\nvalues.",
       "oneOf": [
@@ -10646,6 +11368,52 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PlanOverride": {
+      "description": "One local override.",
+      "type": "object",
+      "properties": {
+        "field": {
+          "description": "`endpoints.<name>.port` or `storage.dataLocation`.",
+          "type": "string"
+        },
+        "service": {
+          "description": "The alias as the file wrote it.",
+          "type": "string"
+        },
+        "state": {
+          "description": "What became of it.",
+          "$ref": "#/$defs/OverrideState"
+        },
+        "value": {
+          "description": "The port, `auto`, or the path with home as `~`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "field",
+        "value",
+        "state"
+      ]
+    },
+    "PlanProviderRevision": {
+      "description": "The catalog entry a `create` item uses.",
+      "type": "object",
+      "properties": {
+        "manifestSha256": {
+          "description": "The digest of its provider manifest.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision label.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "manifestSha256"
       ]
     },
     "PlanReason": {
@@ -10747,6 +11515,11 @@
         "selector": {
           "description": "The selector as the manifest wrote it, `stable` when it wrote none.",
           "type": "string"
+        },
+        "source": {
+          "description": "Where it comes from.",
+          "$ref": "#/$defs/RuntimeSource",
+          "default": "catalog"
         },
         "version": {
           "description": "The exact version it resolved to.",
@@ -10885,6 +11658,25 @@
           "type": "string",
           "const": "unrecognized"
         }
+      ]
+    },
+    "PlanStorage": {
+      "description": "The data location a local override chose for a `create` item.",
+      "type": "object",
+      "properties": {
+        "locationId": {
+          "description": "The registered data location.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "path": {
+          "description": "Its path; clients show home as `~`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locationId",
+        "path"
       ]
     },
     "PlanTrust": {
@@ -13455,6 +14247,40 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "What was locked, or what blocks it.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvLockResult"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.lock"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The variables.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvExport"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.export"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -14073,6 +14899,26 @@
           "default": null
         }
       }
+    },
+    "RuntimeSource": {
+      "description": "Where the runtime of a `create` item comes from. Open.",
+      "oneOf": [
+        {
+          "description": "The artifact the lock names for this Mac.",
+          "type": "string",
+          "const": "lock"
+        },
+        {
+          "description": "The manifest selector, resolved against the catalog; what a daemon\nwithout locks means.",
+          "type": "string",
+          "const": "catalog"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
     },
     "RuntimeState": {
       "description": "The state of a runtime. Open.",

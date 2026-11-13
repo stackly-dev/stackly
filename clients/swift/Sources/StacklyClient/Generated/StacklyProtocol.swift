@@ -4717,6 +4717,189 @@ public struct EndpointValidation: Codable, Sendable, Equatable {
 	}
 }
 
+/// The environment a plan or detail is about.
+public struct EnvironmentRef: Codable, Sendable, Equatable {
+	/// The ID.
+	public let id: UUID
+	/// The name.
+	public let name: String
+	/// The revision.
+	public let revision: UInt64
+
+	public init(id: UUID, name: String, revision: UInt64) {
+		self.id = id
+		self.name = name
+		self.revision = revision
+	}
+}
+
+/// How `env.export` writes its text. Open.
+public enum ExportFormat: String, Codable, Sendable, Equatable {
+	/// `NAME=value` per line.
+	case dotenv
+	/// `export NAME='value'` per line.
+	case shell
+	/// A value this build does not know; the daemon refuses it.
+	case unrecognized
+}
+
+/// What an export variable holds. Open.
+public enum ExportValueKind: String, Codable, Sendable, Equatable {
+	/// The host.
+	case host
+	/// The port.
+	case port
+	/// `host:port`, IPv6 in brackets.
+	case address
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One variable of an export.
+public struct ExportVariable: Codable, Sendable, Equatable {
+	/// The name, such as `STACKLY_POSTGRES_CLIENT_PORT`.
+	public let name: String
+	/// The value: a host, a port, or an address.
+	public let value: String
+	/// The service.
+	public let service: String
+	/// The endpoint.
+	public let endpoint: String
+	/// What it holds.
+	public let kind: ExportValueKind
+	/// Whether the port may change at the next start.
+	public let mayChange: Bool
+
+	public init(name: String, value: String, service: String, endpoint: String, kind: ExportValueKind, mayChange: Bool) {
+		self.name = name
+		self.value = value
+		self.service = service
+		self.endpoint = endpoint
+		self.kind = kind
+		self.mayChange = mayChange
+	}
+}
+
+/// Why a service or endpoint is not exported. Open.
+public enum ExportSkipReason: String, Codable, Sendable, Equatable {
+	/// The service has no instance yet.
+	case notCreated = "not_created"
+	/// An `auto` endpoint that never had a port.
+	case portNotAssigned = "port_not_assigned"
+	/// A Unix socket endpoint.
+	case unixEndpoint = "unix_endpoint"
+	/// The pinned package can't be read.
+	case packageUnavailable = "package_unavailable"
+	/// The instance is retained.
+	case retained
+	/// An earlier variable has the name.
+	case nameCollision = "name_collision"
+	/// The redactor changed the value.
+	case redacted
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One service or endpoint left out of an export.
+public struct ExportSkipped: Codable, Sendable, Equatable {
+	/// The service.
+	public let service: String
+	/// The endpoint, when only one is left out.
+	public let endpoint: String?
+	/// Why.
+	public let reason: ExportSkipReason
+
+	public init(service: String, endpoint: String?, reason: ExportSkipReason) {
+		self.service = service
+		self.endpoint = endpoint
+		self.reason = reason
+	}
+}
+
+/// Reply of `env.export`.
+public struct EnvExport: Codable, Sendable, Equatable {
+	/// The environment.
+	public let environment: EnvironmentRef
+	/// How `text` is written.
+	public let format: ExportFormat
+	/// The variables as text, one line each.
+	public let text: String
+	/// The variables.
+	public let variables: [ExportVariable]?
+	/// What is left out.
+	public let skipped: [ExportSkipped]?
+
+	public init(environment: EnvironmentRef, format: ExportFormat, text: String, variables: [ExportVariable]?, skipped: [ExportSkipped]?) {
+		self.environment = environment
+		self.format = format
+		self.text = text
+		self.variables = variables
+		self.skipped = skipped
+	}
+}
+
+/// Which manifest a plan reads. Tagged `type` and `content`.
+public enum EnvSource: Codable, Sendable, Equatable {
+	/// The manifest at this absolute path.
+	case file(String)
+	/// The manifest location of this registered environment.
+	case registered(UUID)
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case file,
+			registered
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .file:
+				if let content = try? container.decode(String.self, forKey: .content) {
+					self = .file(content)
+					return
+				}
+			case .registered:
+				if let content = try? container.decode(UUID.self, forKey: .content) {
+					self = .registered(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(EnvSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EnvSource"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .file(let content):
+			try container.encode(CodingKeys.file, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .registered(let content):
+			try container.encode(CodingKeys.registered, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Params of `env.export`.
+public struct EnvExportParams: Codable, Sendable, Equatable {
+	/// The environment: a registered one, or the file it was imported
+	/// from.
+	public let source: EnvSource
+	/// How the text is written.
+	public let format: ExportFormat?
+
+	public init(source: EnvSource, format: ExportFormat?) {
+		self.source = source
+		self.format = format
+	}
+}
+
 /// How serious a [`ValidationFinding`] is.
 public enum FindingSeverity: String, Codable, Sendable, Equatable {
 	/// The package is not publishable.
@@ -4763,16 +4946,169 @@ public struct EnvGetParams: Codable, Sendable, Equatable {
 	}
 }
 
-/// One env pair of a terminal command.
-public struct EnvPair: Codable, Sendable, Equatable {
-	/// The env name.
-	public let name: String
-	/// The value.
-	public let value: String
+/// The state of a local override file that is there. Open.
+public enum LocalState: String, Codable, Sendable, Equatable {
+	/// It has no error finding.
+	case present
+	/// It has an error finding.
+	case invalid
+	/// It can't be read.
+	case unreadable
+	/// A value this build does not know.
+	case unrecognized
+}
 
-	public init(name: String, value: String) {
-		self.name = name
+/// What became of one local override. Open.
+public enum OverrideState: String, Codable, Sendable, Equatable {
+	/// A `create` draft uses it.
+	case applied
+	/// A port of a service with a member: only compared.
+	case compared
+	/// A data location of a service with a member: never applied.
+	case notAppliedExisting = "not_applied_existing"
+	/// The manifest declares no such service.
+	case ignored
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One local override.
+public struct PlanOverride: Codable, Sendable, Equatable {
+	/// The alias as the file wrote it.
+	public let service: String
+	/// `endpoints.<name>.port` or `storage.dataLocation`.
+	public let field: String
+	/// The port, `auto`, or the path with home as `~`.
+	public let value: String
+	/// What became of it.
+	public let state: OverrideState
+
+	public init(service: String, field: String, value: String, state: OverrideState) {
+		self.service = service
+		self.field = field
 		self.value = value
+		self.state = state
+	}
+}
+
+/// The local override file of a registered environment.
+public struct EnvLocalInfo: Codable, Sendable, Equatable {
+	/// The file name.
+	public let file: String
+	/// Its state; absent when there is no file.
+	public let state: LocalState?
+	/// Every override, by whether its service has a member.
+	public let overrides: [PlanOverride]?
+	/// The error findings.
+	public let problems: UInt64
+
+	public init(file: String, state: LocalState?, overrides: [PlanOverride]?, problems: UInt64) {
+		self.file = file
+		self.state = state
+		self.overrides = overrides
+		self.problems = problems
+	}
+}
+
+/// The state of a lock against its manifest. Open.
+public enum LockState: String, Codable, Sendable, Equatable {
+	/// There is no lock file.
+	case absent
+	/// Every dedicated service matches its entry.
+	case inSync = "in_sync"
+	/// An alias does not match.
+	case stale
+	/// The lock is not a valid lock.
+	case invalid
+	/// The file can't be read.
+	case unreadable
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// The lock of a registered environment.
+public struct EnvLockInfo: Codable, Sendable, Equatable {
+	/// The file name.
+	public let file: String
+	/// Its state.
+	public let state: LockState
+	/// Every target of every entry, by text.
+	public let targets: [String]?
+	/// How many services it locks.
+	public let services: UInt64
+
+	public init(file: String, state: LockState, targets: [String]?, services: UInt64) {
+		self.file = file
+		self.state = state
+		self.targets = targets
+		self.services = services
+	}
+}
+
+/// What `env.lock` picks again. Tagged `type` and `content`.
+public enum LockRefresh: Codable, Sendable, Equatable {
+	/// Keep every entry that is still good.
+	case none
+	/// Pick every entry again.
+	case all
+	/// Pick these aliases again: 1 to 32.
+	case services([String])
+
+	enum CodingKeys: String, CodingKey, Codable {
+		case none,
+			all,
+			services
+	}
+
+	private enum ContainerCodingKeys: String, CodingKey {
+		case type, content
+	}
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
+		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
+			switch type {
+			case .none:
+				self = .none
+				return
+			case .all:
+				self = .all
+				return
+			case .services:
+				if let content = try? container.decode([String].self, forKey: .content) {
+					self = .services(content)
+					return
+				}
+			}
+		}
+		throw DecodingError.typeMismatch(LockRefresh.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for LockRefresh"))
+	}
+
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
+		switch self {
+		case .none:
+			try container.encode(CodingKeys.none, forKey: .type)
+		case .all:
+			try container.encode(CodingKeys.all, forKey: .type)
+		case .services(let content):
+			try container.encode(CodingKeys.services, forKey: .type)
+			try container.encode(content, forKey: .content)
+		}
+	}
+}
+
+/// Params of `env.lock`: writes the lock next to the manifest. Not an
+/// operation: it writes that one file and never the registry.
+public struct EnvLockParams: Codable, Sendable, Equatable {
+	/// The manifest.
+	public let source: EnvSource
+	/// What is picked again.
+	public let refresh: LockRefresh
+
+	public init(source: EnvSource, refresh: LockRefresh) {
+		self.source = source
+		self.refresh = refresh
 	}
 }
 
@@ -4814,6 +5150,105 @@ public struct EnvValidation: Codable, Sendable, Equatable {
 	}
 }
 
+/// How one service of `env.lock` changed. Open.
+public enum LockChange: String, Codable, Sendable, Equatable {
+	/// A new alias.
+	case added
+	/// The same version.
+	case kept
+	/// Another version.
+	case updated
+	/// The entry was dropped.
+	case removed
+	/// A value this build does not know.
+	case unrecognized
+}
+
+/// One service of the reply of `env.lock`.
+public struct LockedService: Codable, Sendable, Equatable {
+	/// The alias.
+	public let alias: String
+	/// The provider.
+	public let provider: String
+	/// The selector.
+	public let selector: String
+	/// The version locked; absent for a removed or blocked entry.
+	public let version: String?
+	/// The artifact for this Mac, when the entry has one.
+	public let artifactId: String?
+	/// How it changed.
+	public let change: LockChange
+	/// The version before, when it changed.
+	public let previousVersion: String?
+
+	public init(alias: String, provider: String, selector: String, version: String?, artifactId: String?, change: LockChange, previousVersion: String?) {
+		self.alias = alias
+		self.provider = provider
+		self.selector = selector
+		self.version = version
+		self.artifactId = artifactId
+		self.change = change
+		self.previousVersion = previousVersion
+	}
+}
+
+/// One problem that makes a plan not applicable.
+public struct PlanBlocker: Codable, Sendable, Equatable {
+	/// The alias it is about, if any.
+	public let service: String?
+	/// The error, with the code create, resolve, or the `env` area uses.
+	public let error: ErrorBody
+
+	public init(service: String?, error: ErrorBody) {
+		self.service = service
+		self.error = error
+	}
+}
+
+/// Reply of `env.lock`.
+public struct EnvLockResult: Codable, Sendable, Equatable {
+	/// What `env.validate` says of the manifest.
+	public let validation: EnvValidation
+	/// The lock file, as an absolute path; clients show home as `~`.
+	public let lockFile: String
+	/// Whether the file was written.
+	public let written: Bool
+	/// Whether the new bytes differ from the file that was there.
+	public let changed: Bool
+	/// The digest of the lock, when it was written or is up to date.
+	public let sha256: String?
+	/// Every target of every entry, by text.
+	public let targets: [String]?
+	/// One per service, in manifest order, then removed entries.
+	public let services: [LockedService]?
+	/// What stops the write.
+	public let blockers: [PlanBlocker]?
+
+	public init(validation: EnvValidation, lockFile: String, written: Bool, changed: Bool, sha256: String?, targets: [String]?, services: [LockedService]?, blockers: [PlanBlocker]?) {
+		self.validation = validation
+		self.lockFile = lockFile
+		self.written = written
+		self.changed = changed
+		self.sha256 = sha256
+		self.targets = targets
+		self.services = services
+		self.blockers = blockers
+	}
+}
+
+/// One env pair of a terminal command.
+public struct EnvPair: Codable, Sendable, Equatable {
+	/// The env name.
+	public let name: String
+	/// The value.
+	public let value: String
+
+	public init(name: String, value: String) {
+		self.name = name
+		self.value = value
+	}
+}
+
 /// How the manifest's name matches the registry. Open.
 public enum PlanRegistration: String, Codable, Sendable, Equatable {
 	/// No environment has the name.
@@ -4824,22 +5259,6 @@ public enum PlanRegistration: String, Codable, Sendable, Equatable {
 	case nameTaken = "name_taken"
 	/// A value this build does not know.
 	case unrecognized
-}
-
-/// The environment a plan or detail is about.
-public struct EnvironmentRef: Codable, Sendable, Equatable {
-	/// The ID.
-	public let id: UUID
-	/// The name.
-	public let name: String
-	/// The revision.
-	public let revision: UInt64
-
-	public init(id: UUID, name: String, revision: UInt64) {
-		self.id = id
-		self.name = name
-		self.revision = revision
-	}
 }
 
 /// What Up does with a service. Open.
@@ -4891,6 +5310,17 @@ public enum PlanTrust: String, Codable, Sendable, Equatable {
 	case unrecognized
 }
 
+/// Where the runtime of a `create` item comes from. Open.
+public enum RuntimeSource: String, Codable, Sendable, Equatable {
+	/// The artifact the lock names for this Mac.
+	case lock
+	/// The manifest selector, resolved against the catalog; what a daemon
+	/// without locks means.
+	case catalog
+	/// A value this build does not know.
+	case unrecognized
+}
+
 /// The runtime of a `create` item.
 public struct PlanRuntime: Codable, Sendable, Equatable {
 	/// The selector as the manifest wrote it, `stable` when it wrote none.
@@ -4907,8 +5337,10 @@ public struct PlanRuntime: Codable, Sendable, Equatable {
 	public let runtimeId: UUID?
 	/// The download size, when Up installs it.
 	public let downloadSize: UInt64?
+	/// Where it comes from.
+	public let source: RuntimeSource?
 
-	public init(selector: String, version: String, artifactId: String, artifactSha256: String, install: Bool, runtimeId: UUID?, downloadSize: UInt64?) {
+	public init(selector: String, version: String, artifactId: String, artifactSha256: String, install: Bool, runtimeId: UUID?, downloadSize: UInt64?, source: RuntimeSource?) {
 		self.selector = selector
 		self.version = version
 		self.artifactId = artifactId
@@ -4916,6 +5348,7 @@ public struct PlanRuntime: Codable, Sendable, Equatable {
 		self.install = install
 		self.runtimeId = runtimeId
 		self.downloadSize = downloadSize
+		self.source = source
 	}
 }
 
@@ -4970,8 +5403,8 @@ public struct PlanSecret: Codable, Sendable, Equatable {
 
 /// How an existing member differs from its service. Never a blocker.
 public struct PlanDifference: Codable, Sendable, Equatable {
-	/// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`, or
-	/// `instanceRef`.
+	/// `provider`, `runtime`, `endpoint.<name>.port`, `ownership`,
+	/// `instanceRef`, or `lock`.
 	public let field: String
 	/// What the manifest says.
 	public let manifest: String
@@ -4982,6 +5415,32 @@ public struct PlanDifference: Codable, Sendable, Equatable {
 		self.field = field
 		self.manifest = manifest
 		self.instance = instance
+	}
+}
+
+/// The catalog entry a `create` item uses.
+public struct PlanProviderRevision: Codable, Sendable, Equatable {
+	/// The revision label.
+	public let revision: String
+	/// The digest of its provider manifest.
+	public let manifestSha256: String
+
+	public init(revision: String, manifestSha256: String) {
+		self.revision = revision
+		self.manifestSha256 = manifestSha256
+	}
+}
+
+/// The data location a local override chose for a `create` item.
+public struct PlanStorage: Codable, Sendable, Equatable {
+	/// The registered data location.
+	public let locationId: UUID
+	/// Its path; clients show home as `~`.
+	public let path: String
+
+	public init(locationId: UUID, path: String) {
+		self.locationId = locationId
+		self.path = path
 	}
 }
 
@@ -5014,8 +5473,12 @@ public struct PlanItem: Codable, Sendable, Equatable {
 	public let differences: [PlanDifference]?
 	/// The preflight rows of a `create` item.
 	public let checks: [PreflightCheck]?
+	/// The catalog entry a `create` item uses.
+	public let providerRevision: PlanProviderRevision?
+	/// The data location a local override chose, for a `create` item.
+	public let storage: PlanStorage?
 
-	public init(alias: String, ownership: EnvOwnership, action: PlanAction, steps: [PlanStep]?, instance: PlanInstance, provider: String, trust: PlanTrust?, runtime: PlanRuntime?, endpoints: [PlanEndpoint]?, secrets: [PlanSecret]?, waitsFor: [String]?, differences: [PlanDifference]?, checks: [PreflightCheck]?) {
+	public init(alias: String, ownership: EnvOwnership, action: PlanAction, steps: [PlanStep]?, instance: PlanInstance, provider: String, trust: PlanTrust?, runtime: PlanRuntime?, endpoints: [PlanEndpoint]?, secrets: [PlanSecret]?, waitsFor: [String]?, differences: [PlanDifference]?, checks: [PreflightCheck]?, providerRevision: PlanProviderRevision?, storage: PlanStorage?) {
 		self.alias = alias
 		self.ownership = ownership
 		self.action = action
@@ -5029,19 +5492,85 @@ public struct PlanItem: Codable, Sendable, Equatable {
 		self.waitsFor = waitsFor
 		self.differences = differences
 		self.checks = checks
+		self.providerRevision = providerRevision
+		self.storage = storage
 	}
 }
 
-/// One problem that makes a plan not applicable.
-public struct PlanBlocker: Codable, Sendable, Equatable {
-	/// The alias it is about, if any.
-	public let service: String?
-	/// The error, with the code create, resolve, or the `env` area uses.
-	public let error: ErrorBody
+/// Why an alias does not match its lock entry. Open.
+public enum LockStaleReason: String, Codable, Sendable, Equatable {
+	/// A dedicated service without an entry.
+	case notLocked = "not_locked"
+	/// The entry names another provider.
+	case providerChanged = "provider_changed"
+	/// The entry names another selector.
+	case selectorChanged = "selector_changed"
+	/// The locked version does not satisfy the selector.
+	case selectorUnsatisfied = "selector_unsatisfied"
+	/// An entry whose alias is not a dedicated service of the manifest.
+	case notInManifest = "not_in_manifest"
+	/// A value this build does not know.
+	case unrecognized
+}
 
-	public init(service: String?, error: ErrorBody) {
+/// One alias that does not match the lock.
+public struct LockStaleItem: Codable, Sendable, Equatable {
+	/// The alias.
+	public let service: String
+	/// Why.
+	public let reason: LockStaleReason
+
+	public init(service: String, reason: LockStaleReason) {
 		self.service = service
-		self.error = error
+		self.reason = reason
+	}
+}
+
+/// The lock of a plan.
+public struct PlanLock: Codable, Sendable, Equatable {
+	/// The lock file name, such as `stackly.lock`.
+	public let file: String
+	/// Its state.
+	public let state: LockState
+	/// The digest of a valid lock (`in_sync` or `stale`).
+	public let sha256: String?
+	/// Whether the daemon planned with `locked`; false from a daemon that
+	/// does not know the field.
+	public let locked: Bool?
+	/// Every target of every entry, by text.
+	public let targets: [String]?
+	/// The aliases that do not match.
+	public let stale: [LockStaleItem]?
+
+	public init(file: String, state: LockState, sha256: String?, locked: Bool?, targets: [String]?, stale: [LockStaleItem]?) {
+		self.file = file
+		self.state = state
+		self.sha256 = sha256
+		self.locked = locked
+		self.targets = targets
+		self.stale = stale
+	}
+}
+
+/// The local override file of a plan.
+public struct PlanLocal: Codable, Sendable, Equatable {
+	/// The file name, such as `.stackly.local.yaml`.
+	public let file: String
+	/// Its state.
+	public let state: LocalState
+	/// The digest of the bytes read.
+	public let sha256: String?
+	/// Every override, the ignored ones included.
+	public let overrides: [PlanOverride]?
+	/// Every finding; an `error` one is the `env.local_invalid` blocker.
+	public let findings: [EnvFinding]?
+
+	public init(file: String, state: LocalState, sha256: String?, overrides: [PlanOverride]?, findings: [EnvFinding]?) {
+		self.file = file
+		self.state = state
+		self.sha256 = sha256
+		self.overrides = overrides
+		self.findings = findings
 	}
 }
 
@@ -5069,8 +5598,13 @@ public struct EnvPlan: Codable, Sendable, Equatable {
 	public let detached: [DetachedMember]?
 	/// How many secret fields need a value from the user.
 	public let needsSecrets: UInt64
+	/// The lock next to the manifest; always sent by a daemon that knows
+	/// locks.
+	public let lock: PlanLock?
+	/// The local override file, when there is one.
+	public let local: PlanLocal?
 
-	public init(validation: EnvValidation, registration: PlanRegistration?, environment: EnvironmentRef?, registeredLocation: String?, applicable: Bool, planDigest: String?, items: [PlanItem]?, order: [String]?, blockers: [PlanBlocker]?, detached: [DetachedMember]?, needsSecrets: UInt64) {
+	public init(validation: EnvValidation, registration: PlanRegistration?, environment: EnvironmentRef?, registeredLocation: String?, applicable: Bool, planDigest: String?, items: [PlanItem]?, order: [String]?, blockers: [PlanBlocker]?, detached: [DetachedMember]?, needsSecrets: UInt64, lock: PlanLock?, local: PlanLocal?) {
 		self.validation = validation
 		self.registration = registration
 		self.environment = environment
@@ -5082,54 +5616,8 @@ public struct EnvPlan: Codable, Sendable, Equatable {
 		self.blockers = blockers
 		self.detached = detached
 		self.needsSecrets = needsSecrets
-	}
-}
-
-/// Which manifest a plan reads. Tagged `type` and `content`.
-public enum EnvSource: Codable, Sendable, Equatable {
-	/// The manifest at this absolute path.
-	case file(String)
-	/// The manifest location of this registered environment.
-	case registered(UUID)
-
-	enum CodingKeys: String, CodingKey, Codable {
-		case file,
-			registered
-	}
-
-	private enum ContainerCodingKeys: String, CodingKey {
-		case type, content
-	}
-
-	public init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: ContainerCodingKeys.self)
-		if let type = try? container.decode(CodingKeys.self, forKey: .type) {
-			switch type {
-			case .file:
-				if let content = try? container.decode(String.self, forKey: .content) {
-					self = .file(content)
-					return
-				}
-			case .registered:
-				if let content = try? container.decode(UUID.self, forKey: .content) {
-					self = .registered(content)
-					return
-				}
-			}
-		}
-		throw DecodingError.typeMismatch(EnvSource.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for EnvSource"))
-	}
-
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.container(keyedBy: ContainerCodingKeys.self)
-		switch self {
-		case .file(let content):
-			try container.encode(CodingKeys.file, forKey: .type)
-			try container.encode(content, forKey: .content)
-		case .registered(let content):
-			try container.encode(CodingKeys.registered, forKey: .type)
-			try container.encode(content, forKey: .content)
-		}
+		self.lock = lock
+		self.local = local
 	}
 }
 
@@ -5137,9 +5625,14 @@ public enum EnvSource: Codable, Sendable, Equatable {
 public struct EnvPlanParams: Codable, Sendable, Equatable {
 	/// The manifest.
 	public let source: EnvSource
+	/// Whether nothing may be resolved from a manifest selector (spec
+	/// 0045 AC-6). A daemon that does not know the field ignores it, so a
+	/// client that sends true checks `EnvPlan.lock.locked`.
+	public let locked: Bool?
 
-	public init(source: EnvSource) {
+	public init(source: EnvSource, locked: Bool?) {
 		self.source = source
+		self.locked = locked
 	}
 }
 
@@ -5179,6 +5672,8 @@ public struct EnvironmentSummary: Codable, Sendable, Equatable {
 	public let manifestLocation: String?
 	/// The digest of the manifest last accepted.
 	public let manifestSha256: String?
+	/// The digest of the lock the last Up used, as the registry holds it.
+	public let lockSha256: String?
 	/// The status.
 	public let status: EnvironmentStatus
 	/// The services whose instance runs and is ready.
@@ -5188,12 +5683,13 @@ public struct EnvironmentSummary: Codable, Sendable, Equatable {
 	/// When the row last changed.
 	public let updatedAt: Date
 
-	public init(id: UUID, name: String, revision: UInt64, manifestLocation: String?, manifestSha256: String?, status: EnvironmentStatus, readyCount: UInt64, serviceCount: UInt64, updatedAt: Date) {
+	public init(id: UUID, name: String, revision: UInt64, manifestLocation: String?, manifestSha256: String?, lockSha256: String?, status: EnvironmentStatus, readyCount: UInt64, serviceCount: UInt64, updatedAt: Date) {
 		self.id = id
 		self.name = name
 		self.revision = revision
 		self.manifestLocation = manifestLocation
 		self.manifestSha256 = manifestSha256
+		self.lockSha256 = lockSha256
 		self.status = status
 		self.readyCount = readyCount
 		self.serviceCount = serviceCount
@@ -5416,13 +5912,20 @@ public struct EnvironmentDetail: Codable, Sendable, Equatable {
 	/// The error findings of an `invalid` manifest; only with
 	/// `checkManifest`.
 	public let problems: UInt64?
+	/// The lock; only with `checkManifest` and a manifest `in_sync` or
+	/// `changed`.
+	public let lock: EnvLockInfo?
+	/// The local override file; only when `lock` is sent.
+	public let local: EnvLocalInfo?
 
-	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?) {
+	public init(summary: EnvironmentSummary, services: [EnvironmentService]?, detached: [DetachedMember]?, manifestState: ManifestState?, problems: UInt64?, lock: EnvLockInfo?, local: EnvLocalInfo?) {
 		self.summary = summary
 		self.services = services
 		self.detached = detached
 		self.manifestState = manifestState
 		self.problems = problems
+		self.lock = lock
+		self.local = local
 	}
 }
 
@@ -8947,6 +9450,13 @@ public enum Call: Codable, Sendable, Equatable {
 	/// Forgets an environment and keeps its instances and data: a
 	/// `remove_environment` operation.
 	case envRemove(RemoveEnvironmentParams)
+	/// Writes the lock next to a manifest from the catalog in memory
+	/// (spec 0045). Not an operation: it writes that one file, never the
+	/// registry, and downloads and spawns nothing.
+	case envLock(EnvLockParams)
+	/// The host and port of every endpoint of an environment as variables
+	/// (spec 0045). It reads the registry and pinned packages only.
+	case envExport(EnvExportParams)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -9021,7 +9531,9 @@ public enum Call: Codable, Sendable, Equatable {
 			envList = "env.list",
 			envGet = "env.get",
 			envImport = "env.import",
-			envRemove = "env.remove"
+			envRemove = "env.remove",
+			envLock = "env.lock",
+			envExport = "env.export"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -9373,6 +9885,16 @@ public enum Call: Codable, Sendable, Equatable {
 					self = .envRemove(content)
 					return
 				}
+			case .envLock:
+				if let content = try? container.decode(EnvLockParams.self, forKey: .content) {
+					self = .envLock(content)
+					return
+				}
+			case .envExport:
+				if let content = try? container.decode(EnvExportParams.self, forKey: .content) {
+					self = .envExport(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Call.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Call"))
@@ -9588,6 +10110,12 @@ public enum Call: Codable, Sendable, Equatable {
 		case .envRemove(let content):
 			try container.encode(CodingKeys.envRemove, forKey: .type)
 			try container.encode(content, forKey: .content)
+		case .envLock(let content):
+			try container.encode(CodingKeys.envLock, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envExport(let content):
+			try container.encode(CodingKeys.envExport, forKey: .type)
+			try container.encode(content, forKey: .content)
 		}
 	}
 }
@@ -9762,6 +10290,10 @@ public enum Reply: Codable, Sendable, Equatable {
 	case envImport(EnvironmentDetail)
 	/// The removed environment.
 	case envRemove(RemovedEnvironment)
+	/// What was locked, or what blocks it.
+	case envLock(EnvLockResult)
+	/// The variables.
+	case envExport(EnvExport)
 
 	enum CodingKeys: String, CodingKey, Codable {
 		case daemonHandshake = "daemon.handshake",
@@ -9836,7 +10368,9 @@ public enum Reply: Codable, Sendable, Equatable {
 			envList = "env.list",
 			envGet = "env.get",
 			envImport = "env.import",
-			envRemove = "env.remove"
+			envRemove = "env.remove",
+			envLock = "env.lock",
+			envExport = "env.export"
 	}
 
 	private enum ContainerCodingKeys: String, CodingKey {
@@ -10208,6 +10742,16 @@ public enum Reply: Codable, Sendable, Equatable {
 					self = .envRemove(content)
 					return
 				}
+			case .envLock:
+				if let content = try? container.decode(EnvLockResult.self, forKey: .content) {
+					self = .envLock(content)
+					return
+				}
+			case .envExport:
+				if let content = try? container.decode(EnvExport.self, forKey: .content) {
+					self = .envExport(content)
+					return
+				}
 			}
 		}
 		throw DecodingError.typeMismatch(Reply.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for Reply"))
@@ -10432,6 +10976,12 @@ public enum Reply: Codable, Sendable, Equatable {
 			try container.encode(content, forKey: .content)
 		case .envRemove(let content):
 			try container.encode(CodingKeys.envRemove, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envLock(let content):
+			try container.encode(CodingKeys.envLock, forKey: .type)
+			try container.encode(content, forKey: .content)
+		case .envExport(let content):
+			try container.encode(CodingKeys.envExport, forKey: .type)
 			try container.encode(content, forKey: .content)
 		}
 	}

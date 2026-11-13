@@ -81,7 +81,7 @@
         ) -> EnvironmentSummary {
             EnvironmentSummary(
                 id: id, name: name, revision: revision, manifestLocation: folder.map(manifest),
-                manifestSha256: String(repeating: "d", count: 64), status: status,
+                manifestSha256: String(repeating: "d", count: 64), lockSha256: nil, status: status,
                 readyCount: ready, serviceCount: total, updatedAt: FixtureClock.minutesAgo(20))
         }
 
@@ -153,7 +153,8 @@
             }
             return EnvironmentDetail(
                 summary: summary, services: services, detached: detached,
-                manifestState: state, problems: state == .invalid ? (problems ?? 2) : problems)
+                manifestState: state, problems: state == .invalid ? (problems ?? 2) : problems,
+                lock: nil, local: nil)
         }
 
         // MARK: - Validation
@@ -208,7 +209,7 @@
                     selector: "stable", version: version,
                     artifactId: "\(alias)-\(version)-macos-aarch64",
                     artifactSha256: String(repeating: "a", count: 64), install: install,
-                    runtimeId: nil, downloadSize: install ? 104_857_600 : nil),
+                    runtimeId: nil, downloadSize: install ? 104_857_600 : nil, source: nil),
                 endpoints: [
                     PlanEndpoint(
                         name: "client", host: "127.0.0.1", port: port.map { .fixed($0) } ?? .auto)
@@ -222,7 +223,7 @@
                             status: $0.status)
                     ]
                 } ?? [],
-                waitsFor: [], differences: [], checks: [])
+                waitsFor: [], differences: [], checks: [], providerRevision: nil, storage: nil)
         }
 
         /// The plan of the ERP manifest on a new Mac: six installs, six creates, six starts
@@ -250,7 +251,8 @@
                 validation: validation(path: path), registration: .new, environment: nil,
                 registeredLocation: nil, applicable: true,
                 planDigest: String(repeating: "e", count: 64), items: items,
-                order: items.map(\.alias), blockers: [], detached: [], needsSecrets: 1)
+                order: items.map(\.alias), blockers: [], detached: [], needsSecrets: 1,
+                lock: nil, local: nil)
         }
 
         /// The plan of erp-development on this Mac: keep, start, a create whose provider needs
@@ -263,12 +265,13 @@
                 endpoints: [PlanEndpoint(name: "client", host: "127.0.0.1", port: .fixed(5432))],
                 secrets: [], waitsFor: [],
                 differences: [PlanDifference(field: "runtime", manifest: "18", instance: "17.6")],
-                checks: [])
+                checks: [], providerRevision: nil, storage: nil)
             let start = PlanItem(
                 alias: "queue", ownership: .shared, action: .start, steps: [.startInstance],
                 instance: PlanInstance(id: instance(5).id, name: "queue"),
                 provider: "official/nats", trust: nil, runtime: nil, endpoints: [], secrets: [],
-                waitsFor: ["postgres"], differences: [], checks: [])
+                waitsFor: ["postgres"], differences: [], checks: [], providerRevision: nil,
+                storage: nil)
             let created = create(
                 "search", provider: "acme/search", version: "1.4.0", port: 5432,
                 secret: ("adminPassword", .missing), trust: .approvalRequired, install: true)
@@ -297,7 +300,7 @@
                         alias: "legacy",
                         instance: InstanceRef(instanceId: instance(7).id, name: instance(7).name),
                         ownership: .dedicated)
-                ], needsSecrets: 1)
+                ], needsSecrets: 1, lock: nil, local: nil)
         }
 
         /// The plan of a manifest that is not valid: no items, the findings.
@@ -306,7 +309,7 @@
                 validation: validation(path: path, name: "broken", valid: false),
                 registration: nil, environment: nil, registeredLocation: nil, applicable: false,
                 planDigest: nil, items: [], order: [], blockers: [], detached: [],
-                needsSecrets: 0)
+                needsSecrets: 0, lock: nil, local: nil)
         }
 
         /// The plan of a file whose name is registered at another location.
@@ -324,7 +327,7 @@
                             "env.name_taken", .conflict,
                             "environment erp-development is registered at ~/Projects/erp/stackly.yaml"
                         ))
-                ], detached: [], needsSecrets: fresh.needsSecrets)
+                ], detached: [], needsSecrets: fresh.needsSecrets, lock: nil, local: nil)
         }
 
         /// The replies of the `environment-partially-ready` scenario: `env.list`; the fixture

@@ -57,7 +57,10 @@ impl Render for Planned {
 /// The daemon's error, such as `env.manifest_unreadable` or
 /// `env.not_found`.
 pub async fn plan(cx: &mut Context, source: EnvSource) -> Result<EnvPlan, CliFailure> {
-    let call = Call::EnvPlan(EnvPlanParams { source });
+    let call = Call::EnvPlan(EnvPlanParams {
+        source,
+        locked: false,
+    });
     match cx.call(call, CallSpec::control()).await? {
         Reply::EnvPlan(plan) => Ok(*plan),
         _ => Err(CliFailure::unexpected_reply(None)),

@@ -108,7 +108,8 @@
                             summary: FixtureEnvironments.summary(
                                 id: id, name: "erp-development", folder: "erp", status: .down,
                                 ready: 0, total: 6, revision: 1),
-                            services: [], detached: [], manifestState: nil, problems: nil)
+                            services: [], detached: [], manifestState: nil, problems: nil,
+                            lock: nil, local: nil)
                     return .completed(.envImport(detail))
                 case .envRemove(let params):
                     let name = environments.first { $0.id == params.id }?.name ?? "environment"

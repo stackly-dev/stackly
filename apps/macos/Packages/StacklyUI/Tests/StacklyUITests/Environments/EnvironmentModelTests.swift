@@ -299,7 +299,7 @@ struct EnvironmentCopyTests {
             environment: plan.environment, registeredLocation: plan.registeredLocation,
             applicable: plan.applicable, planDigest: plan.planDigest, items: plan.items,
             order: ["search", "postgres", "queue"], blockers: plan.blockers,
-            detached: plan.detached, needsSecrets: plan.needsSecrets)
+            detached: plan.detached, needsSecrets: plan.needsSecrets, lock: nil, local: nil)
         #expect(
             EnvironmentPlanContent.ordered(plan).map(\.alias) == ["search", "postgres", "queue"])
     }

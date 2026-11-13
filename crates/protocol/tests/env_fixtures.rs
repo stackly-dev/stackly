@@ -9,8 +9,10 @@ use serde::Deserialize;
 use serde_json::Value;
 use stackly_protocol::codes;
 use stackly_protocol::env::{
-    EnvOwnership, EnvPlan, EnvValidation, EnvironmentDetail, EnvironmentStatus, ManifestState,
-    NotReadyReason, PlanAction, PlanRegistration, PlanSecretStatus, PlanStep, PlanTrust,
+    EnvExport, EnvLockResult, EnvOwnership, EnvPlan, EnvValidation, EnvironmentDetail,
+    EnvironmentStatus, ExportFormat, ExportSkipReason, ExportValueKind, LocalState, LockChange,
+    LockStaleReason, LockState, ManifestState, NotReadyReason, OverrideState, PlanAction,
+    PlanRegistration, PlanSecretStatus, PlanStep, PlanTrust, RuntimeSource,
 };
 use stackly_protocol::instance::InstanceOwnership;
 
@@ -67,6 +69,8 @@ fn every_env_fixture_is_listed_and_keeps_its_shape() {
             "EnvPlan" => roundtrip::<EnvPlan>(&entry.file, &value),
             "EnvValidation" => roundtrip::<EnvValidation>(&entry.file, &value),
             "EnvironmentDetail" => roundtrip::<EnvironmentDetail>(&entry.file, &value),
+            "EnvLockResult" => roundtrip::<EnvLockResult>(&entry.file, &value),
+            "EnvExport" => roundtrip::<EnvExport>(&entry.file, &value),
             other => panic!("{}: no decoder for `{other}`", entry.file),
         }
     }
@@ -132,6 +136,65 @@ fn open_enums_read_a_newer_value_as_unrecognized() {
     assert_eq!(
         read_as::<InstanceOwnership>("leased"),
         InstanceOwnership::Unrecognized
+    );
+}
+
+// covers: AC-20 (spec 0045)
+#[test]
+fn the_open_enums_of_locks_overrides_and_exports_read_a_newer_value_as_unrecognized() {
+    fn read_as<T: serde::de::DeserializeOwned>(text: &str) -> T {
+        serde_json::from_str(&format!("\"{text}\"")).unwrap()
+    }
+    assert_eq!(read_as::<LockState>("pinned"), LockState::Unrecognized);
+    assert_eq!(
+        read_as::<LockStaleReason>("expired"),
+        LockStaleReason::Unrecognized
+    );
+    assert_eq!(read_as::<LocalState>("shadowed"), LocalState::Unrecognized);
+    assert_eq!(
+        read_as::<OverrideState>("queued"),
+        OverrideState::Unrecognized
+    );
+    assert_eq!(
+        read_as::<RuntimeSource>("cache"),
+        RuntimeSource::Unrecognized
+    );
+    assert_eq!(read_as::<LockChange>("moved"), LockChange::Unrecognized);
+    assert_eq!(read_as::<ExportFormat>("json"), ExportFormat::Unrecognized);
+    assert_eq!(
+        read_as::<ExportValueKind>("url"),
+        ExportValueKind::Unrecognized
+    );
+    assert_eq!(
+        read_as::<ExportSkipReason>("hidden"),
+        ExportSkipReason::Unrecognized
+    );
+}
+
+// covers: AC-6, AC-20 (spec 0045)
+#[test]
+fn a_plan_from_a_daemon_without_locks_reads_as_not_locked() {
+    let mut value = read("plan-applicable.json");
+    let object = value.as_object_mut().unwrap();
+    object.remove("lock");
+    object.remove("local");
+    for item in object["items"].as_array_mut().unwrap() {
+        let item = item.as_object_mut().unwrap();
+        item.remove("providerRevision");
+        item.remove("storage");
+        if let Some(runtime) = item.get_mut("runtime").and_then(Value::as_object_mut) {
+            runtime.remove("source");
+        }
+    }
+    let plan: EnvPlan = serde_json::from_value(value).unwrap();
+    assert!(
+        !plan.lock.locked,
+        "a client refuses --locked from this reply"
+    );
+    assert_eq!(plan.lock.state, LockState::Absent);
+    assert_eq!(
+        plan.items[0].runtime.as_ref().unwrap().source,
+        RuntimeSource::Catalog
     );
 }
 
