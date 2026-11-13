@@ -231,14 +231,21 @@ public final class EndpointsModel {
         verdict?.leases ?? []
     }
 
-    /// The caution above the button while an environment's lease holds the instance:
-    /// "{environment} uses this instance. Changing its ports can break that environment until
-    /// you update what connects to it.", or `nil`.
+    /// The caution above the button while an environment's lease holds the instance, names
+    /// joined with " and ": "{environment} uses this instance. Changing its ports can break that
+    /// environment until you update what connects to it." for one, and "{environments} use this
+    /// instance. Changing its ports can break those environments until you update what connects
+    /// to them." for two or more; `nil` when no lease holds it.
     public var leaseWarning: String? {
         let names = leases.map(\.name)
         guard names.isEmpty == false else { return nil }
+        let joined = names.joined(separator: " and ")
+        if names.count == 1 {
+            return
+                "\(joined) uses this instance. Changing its ports can break that environment until you update what connects to it."
+        }
         return
-            "\(names.joined(separator: " and ")) uses this instance. Changing its ports can break that environment until you update what connects to it."
+            "\(joined) use this instance. Changing its ports can break those environments until you update what connects to them."
     }
 
     /// The title of the main button: "Change Anyway" while a lease holds the instance.

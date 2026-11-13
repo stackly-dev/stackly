@@ -55,7 +55,7 @@ struct EnvironmentOverrideTests {
         let model = await judged(script, leases: [Self.holder("shop"), Self.holder("blog")])
         #expect(
             model.leaseWarning
-                == "shop and blog uses this instance. Changing its ports can break that environment until you update what connects to it."
+                == "shop and blog use this instance. Changing its ports can break those environments until you update what connects to them."
         )
         #expect(model.primaryTitle == "Change Anyway")
         #expect(model.disabledReason == nil)
@@ -67,6 +67,29 @@ struct EnvironmentOverrideTests {
         }
         #expect(params.dryRun == false)
         #expect(params.overrideLeases == true)
+    }
+
+    @Test func theLeaseWarningAgreesWithHowManyEnvironmentsHoldTheInstance() async throws {
+        let one = await judged(
+            try ConfigScript(view: ConfigScript.fakeView()), leases: [Self.holder("shop")])
+        #expect(
+            one.leaseWarning
+                == "shop uses this instance. Changing its ports can break that environment until you update what connects to it."
+        )
+        let two = await judged(
+            try ConfigScript(view: ConfigScript.fakeView()),
+            leases: [Self.holder("shop"), Self.holder("blog")])
+        #expect(
+            two.leaseWarning
+                == "shop and blog use this instance. Changing its ports can break those environments until you update what connects to them."
+        )
+        let three = await judged(
+            try ConfigScript(view: ConfigScript.fakeView()),
+            leases: [Self.holder("shop"), Self.holder("blog"), Self.holder("docs")])
+        #expect(
+            three.leaseWarning
+                == "shop and blog and docs use this instance. Changing its ports can break those environments until you update what connects to them."
+        )
     }
 
     @Test func withoutALeaseTheSheetSendsNoOverride() async throws {
