@@ -40,6 +40,21 @@ const START: StageName = StageName::from_static("start");
 /// The code of a child refused by the quiesce of a planned restart.
 const RESTART_PENDING: &str = "daemon.restart_pending";
 
+/// The mark of a child whose wait ended because the daemon shuts down: the
+/// driver abandons, so no closing commit runs (AC-15).
+fn shutdown_end(operation: Option<OperationId>) -> End {
+    End {
+        code: Some(codes::DAEMON_STOPPING),
+        operation,
+        ..End::phase(UpPhase::Cancelled)
+    }
+}
+
+/// Whether `end` is the mark of [`shutdown_end`].
+fn is_shutdown(end: &End) -> bool {
+    end.code.as_ref() == Some(&codes::DAEMON_STOPPING)
+}
+
 /// What the driver runs on.
 #[derive(Clone)]
 pub struct DriverDeps {
@@ -397,6 +412,11 @@ impl<'a> Driver<'a> {
         if self.start().await.is_err() {
             return Ok(Ending::Abandoned);
         }
+        // A shutdown that landed while the last child ended still abandons:
+        // the closing commit never runs then (AC-15).
+        if self.on_stop().is_err() {
+            return Ok(Ending::Abandoned);
+        }
         Ok(if self.cancelling {
             Ending::Cancelled
         } else {
@@ -516,6 +536,9 @@ impl<'a> Driver<'a> {
             let Some(Ok((artifact, result))) = joined else {
                 continue;
             };
+            if matches!(&result, Err(end) if is_shutdown(end)) {
+                return Err(Stop::Abandon);
+            }
             if matches!(&result, Err(end) if end.phase == UpPhase::Cancelled && self.quiesced_end(end))
             {
                 self.quiesced = true;
@@ -578,6 +601,9 @@ impl<'a> Driver<'a> {
             let origin = self.origin.clone();
             let cancel = self.cancel.subscribe();
             let end = self.guarded(create_one(deps, origin, cancel, job)).await?;
+            if matches!(&end, Err(end) if is_shutdown(end)) {
+                return Err(Stop::Abandon);
+            }
             match end {
                 Ok((instance, operation)) => {
                     let service = &mut self.services[index];
@@ -658,6 +684,9 @@ impl<'a> Driver<'a> {
                 })
                 .await?;
             if let Some(Ok((at, end))) = joined {
+                if is_shutdown(&end) {
+                    return Err(Stop::Abandon);
+                }
                 if self.quiesced_end(&end) {
                     self.quiesced = true;
                     self.services[at].end(End::phase(UpPhase::Cancelled));
@@ -819,7 +848,8 @@ async fn install_one(
             &items,
             Some(operation),
         )),
-        ChildEnd::Cancelled | ChildEnd::QueueTimeout | ChildEnd::ShuttingDown => Err(End {
+        ChildEnd::ShuttingDown => Err(shutdown_end(Some(operation))),
+        ChildEnd::Cancelled | ChildEnd::QueueTimeout => Err(End {
             operation: Some(operation),
             ..End::phase(UpPhase::Cancelled)
         }),
@@ -870,7 +900,8 @@ async fn create_one(
             &items,
             Some(operation),
         )),
-        ChildEnd::Cancelled | ChildEnd::QueueTimeout | ChildEnd::ShuttingDown => Err(End {
+        ChildEnd::ShuttingDown => Err(shutdown_end(Some(operation))),
+        ChildEnd::Cancelled | ChildEnd::QueueTimeout => Err(End {
             operation: Some(operation),
             ..End::phase(UpPhase::Cancelled)
         }),
@@ -951,7 +982,8 @@ async fn start_one(
                     ChildEnd::QueueTimeout => {
                         return End::failed(UpStage::Start, RESOURCE_BUSY, started);
                     }
-                    ChildEnd::Cancelled | ChildEnd::ShuttingDown => {
+                    ChildEnd::ShuttingDown => return shutdown_end(started),
+                    ChildEnd::Cancelled => {
                         return End {
                             operation: started,
                             ..End::phase(UpPhase::Cancelled)

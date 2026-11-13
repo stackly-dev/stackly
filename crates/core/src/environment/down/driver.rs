@@ -144,6 +144,8 @@ enum TaskEnd {
     Busy(Option<OperationId>),
     Dropped,
     Quiesced,
+    /// The engine shuts down: the driver abandons.
+    ShuttingDown,
 }
 
 /// A stop of the operation that ends the driver.
@@ -267,6 +269,8 @@ impl<'a> Driver<'a> {
                 self.quiesced = true;
                 Slot::Ended(DownOutcome::Cancelled, None, None)
             }
+            // `run` abandons before it records this one.
+            TaskEnd::ShuttingDown => Slot::Ended(DownOutcome::Cancelled, None, None),
         };
         self.slots.insert(id, slot);
     }
@@ -315,6 +319,7 @@ impl<'a> Driver<'a> {
                 return Ok(DriverEnd::Abandoned);
             };
             match joined {
+                Some(Ok((_, TaskEnd::ShuttingDown))) => return Ok(DriverEnd::Abandoned),
                 Some(Ok((id, end))) => self.end(id, end),
                 Some(Err(error)) => {
                     if let Some(id) = spawned.get(&error.id()).copied() {
@@ -330,6 +335,11 @@ impl<'a> Driver<'a> {
                 }
                 None => {}
             }
+        }
+        // A shutdown that landed while the last stop ended still abandons:
+        // nothing more is recorded.
+        if self.on_stop().is_err() {
+            return Ok(DriverEnd::Abandoned);
         }
         // Whatever never began ends `cancelled`.
         for slot in self.slots.values_mut() {
@@ -537,7 +547,7 @@ async fn wait_child(
             detail = engine.wait_final(operation) => {
                 let ended = |outcome, code| TaskEnd::Ended(outcome, code, Some(operation));
                 return match detail {
-                    Err(EngineError::ShuttingDown) => ended(DownOutcome::Cancelled, None),
+                    Err(EngineError::ShuttingDown) => TaskEnd::ShuttingDown,
                     Err(_) | Ok(None) => {
                         ended(DownOutcome::Failed, Some(codes::INTERNAL_UNEXPECTED))
                     }

@@ -666,6 +666,11 @@ async fn a_daemon_restart_in_the_middle_of_a_down_closes_it_interrupted_with_the
     let api = site.api().await;
     let done = api.wait_final(reply.operation.operation.id).await;
     assert_eq!(done.operation.state, OperationState::Failed, "{done:?}");
+    assert_eq!(
+        Api::failure_code(&done),
+        "operation.interrupted",
+        "a shutdown never records the Down as incomplete"
+    );
     assert_eq!(active_leases(&daemon, db, shop.environment_id), 0);
     let detail = get(&api, shop.environment_id).await;
     assert_eq!(detail.summary.active_operation, None);
