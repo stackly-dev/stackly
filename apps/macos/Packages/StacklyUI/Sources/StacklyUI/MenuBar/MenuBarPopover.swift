@@ -81,10 +81,17 @@ public struct MenuBarPopover: View {
             commands
         }
         .frame(width: Self.width)
+        .stacklyConfirmation(item: overrideBinding)
         .onAppear {
             mainWindowIsOpen = actions.isMainWindowOpen()
             if clearsFinishedStopAll { model.clearFinishedStopAll() }
         }
+    }
+
+    /// The override confirmation of a row's Stop (spec 0047, AC-23).
+    private var overrideBinding: Binding<ConfirmationRequest?> {
+        let model = model
+        return Binding(get: { model.stopOverride }, set: { model.stopOverride = $0 })
     }
 
     // MARK: - Header

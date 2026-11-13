@@ -11,6 +11,11 @@ struct EnvironmentDetailPage: View {
     @Environment(\.feedbackCenter) private var feedbackCenter
     @Environment(\.environmentPlan) private var planPresenter
     @Environment(\.environmentDown) private var downModel
+    @Environment(\.actionHost) private var actionHost
+    @Environment(\.fixtureNow) private var fixtureNow
+    @Environment(\.calendar) private var calendar
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
 
     let environments: EnvironmentStore
     let instances: InstanceStore?
@@ -65,7 +70,8 @@ struct EnvironmentDetailPage: View {
     }
 
     private var context: InstanceActionContext {
-        InstanceActionContext.make(feedbackCenter: feedbackCenter, navigator: navigator)
+        InstanceActionContext.make(
+            feedbackCenter: feedbackCenter, navigator: navigator, host: actionHost)
     }
 
     var body: some View {
@@ -279,7 +285,7 @@ struct EnvironmentDetailPage: View {
                 if let findings = model.findings {
                     problemsSection(findings)
                 }
-                detailsSection(detail.summary)
+                detailsSection(detail)
             }
             .padding(.horizontal, Spacing.pageHorizontal)
             .padding(.vertical, Spacing.s16)
@@ -578,8 +584,12 @@ struct EnvironmentDetailPage: View {
 
     // MARK: - Details and Problems
 
-    private func detailsSection(_ summary: EnvironmentSummary) -> some View {
-        CardSection("Details") {
+    private func detailsSection(_ detail: EnvironmentDetail) -> some View {
+        let summary = detail.summary
+        let lease = EnvironmentCopy.leaseText(
+            detail.lease, now: fixtureNow ?? Date(), calendar: calendar, locale: locale,
+            timeZone: timeZone)
+        return CardSection("Details") {
             LabeledContent("Manifest") {
                 if let location = summary.manifestLocation {
                     HStack(spacing: Spacing.s6) {
@@ -598,7 +608,13 @@ struct EnvironmentDetailPage: View {
             LabeledContent("Local override") {
                 detailsValue(EnvironmentCopy.localText(model.local))
             }
-            // The Lease row of spec 0047 goes below.
+            if let lease {
+                LabeledContent("Lease") {
+                    Text(lease)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .labeledContentStyle(.stackly)
     }

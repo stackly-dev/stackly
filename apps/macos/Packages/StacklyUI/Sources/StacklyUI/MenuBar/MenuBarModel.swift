@@ -28,6 +28,9 @@ public final class MenuBarModel {
 
     /// Where the Stop All flow stands.
     public private(set) var phase: StopAllPhase = .idle
+    /// The override confirmation of a row's Stop that an environment's lease refused, or
+    /// `nil` (spec 0047, AC-23).
+    public var stopOverride: ConfirmationRequest?
 
     @ObservationIgnored private let daemon: DaemonModel
     @ObservationIgnored private let previewStopAll: () async throws(ClientError) -> StopAllPreview
@@ -123,13 +126,15 @@ public final class MenuBarModel {
     }
 
     /// Starts or stops the instance of a row, as the buttons of the instance page do: no
-    /// confirmation, and the stop is the manual one (spec 0031, AC-8).
+    /// confirmation, and the stop is the manual one (spec 0031, AC-8). A stop an
+    /// environment's lease refused opens the override confirmation (spec 0047, AC-23).
     /// - Parameter row: The row whose button was clicked.
     public func perform(_ row: MenuBarRow) {
         guard row.button.isEnabled else { return }
         daemon.instanceActions.perform(
             row.button.verb, for: row.summary,
-            context: InstanceActionContext(report: { _ in }))
+            context: InstanceActionContext(
+                report: { _ in }, confirm: { [weak self] in self?.stopOverride = $0 }))
     }
 
     // MARK: - Operations
