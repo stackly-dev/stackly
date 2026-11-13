@@ -367,11 +367,13 @@ struct EnvironmentDetailPage: View {
         if case .sections(let openInSections) = content {
             sections.append(contentsOf: openInSections)
         }
-        sections.append([
-            ConnectionCopier.action(
-                detail: detail, secrets: models.detailService.secrets,
-                report: { feedbackCenter?.show($0) })
-        ])
+        // The copy action of the Connection card, titled as AC-19 and the mockup name it in
+        // this menu; the menu bar and Instances keep their own title.
+        var copy = ConnectionCopier.action(
+            detail: detail, secrets: models.detailService.secrets,
+            report: { feedbackCenter?.show($0) })
+        copy.title = EnvironmentCopy.copyConnectionURL
+        sections.append([copy])
         sections.append([
             StacklyAction(
                 id: "environment.showInstance", title: "Show Instance", mutates: false,
