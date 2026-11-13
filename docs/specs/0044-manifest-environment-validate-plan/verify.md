@@ -80,6 +80,16 @@ Sesudah empat fix `dev-f44-fix`. Dijalankan: `cargo test -p stackly-core --test 
 
 Temuan baru, rendah, masih AC-1: pindaian alias masih bisa dilewati dengan bentuk lain. Plain scalar yang bersambung ke baris berikutnya, dengan baris sambungan diawali tanda kutip (`rule: Host(...) || Header(`X-A`,` lalu baris `"v)`), membuat pindaian menganggap sisa file sebagai isi string, sehingga `cache: &c` dan `other: *c` sesudahnya tidak terlihat. `env.validate` daemon asli membalas `valid` true dengan tiga service. Sama seperti sebelumnya, nilai hasil expand tetap melewati semua aturan; yang dilanggar hanya K2. Karena ini bentuk kedua, perlu keputusan: pindaian dibuat konservatif (tidak pernah masuk mode kutip dari baris sambungan, atau menolak file bila ragu), atau teks AC-1 dan K2 dilonggarkan menjadi usaha terbaik.
 
+### Ulang kedua `/check verify` Milestone 1, 2026-11-13 (sesi `chk-f44-m1`, kode `75784ccc` dan `11d5b0f8`)
+
+Dijalankan: `cargo test -p stackly-core --lib environment` (7), `cargo test -p stackly-core --test environment` (41), `cargo test -p stacklyd --test environment` (12), lalu probe terhadap `stacklyd` asli.
+
+- **AC-14 `updatedAt`: PASS.** Di daemon asli nilainya sama sesudah import yang tidak mengubah apa pun, sesudah import yang gagal (`env.name_taken`), dan sesudah remove yang gagal (`resource.revision_mismatch`); `env.list` dan `env.get` sama; bergeser hanya saat import mengubah baris (revision 2). Nilainya dibaca dari `environments.updated_at`, jadi tidak bergantung pada baris operasi (test `updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it`).
+- **AC-1 pindaian konservatif: contoh yang dilaporkan PASS, tetapi AC-1 masih FAIL.** `exotic3.yaml`, varian `|2-`, dan file lama kini ditolak; ERP, rule Traefik ber `&&` dan backtick, string berkutip multi baris sesudah `key: `, `'` di plain scalar, dan `&`, `*`, `"` di komentar tetap valid. Tiga bentuk baru masih lolos dengan `valid` true dan alias ter expand (empat service): plain scalar yang barisnya berakhir dengan `,` atau `[`, lalu baris sambungan diawali `- "` (atau `- '`). Pindaian menganggap `,` atau `[` di ujung baris sebagai tanda struktur, jadi baris berikutnya tidak dihitung sambungan, `- "` dianggap pembuka string multi baris yang sah, dan semua sampai tanda kutip berikutnya (termasuk `cache: &c` dan `other: *c`) tidak dipindai. Ini bentuk ketiga dari kelas yang sama, jadi pindaian teks tidak bisa dijamin lengkap; saran: deteksi lewat parser event YAML, atau longgarkan teks AC-1 dan K2.
+- **Rendah, pesan.** Kutip multi baris yang mulai di barisnya sendiri (`rule:` lalu `"Host(...) &&` di baris berikut) kini ditolak dengan `yaml_alias` "YAML anchors, aliases, tags, and merge keys are not allowed", padahal file itu tidak memakai satu pun; pengguna tidak diberi tahu bahwa kutipnya yang harus ditulis di baris `key: `.
+
+Kesiapan Milestone 1: semua temuan lain tertutup; yang tersisa hanya AC-1 di atas (butuh keputusan) dan langkah suite penuh yang tidak diulang checker.
+
 ### Acceptance-criteria coverage
 
 - AC-1, AC-2, AC-3 · core `environment::manifest` dan `validate` dengan fixture per kode; lewat socket: test `validate_reads_the_file...` dan sentinel `a_secret_sentinel_in_the_manifest...`
@@ -199,6 +209,19 @@ Temuan:
 7. Record manual ber `owner` kosong, sama seperti 16 record `NOT_RUN` lain; kalimat langkah "owner user" hanya soal teks.
 
 Yang benar hanya bisa dibuktikan manual: panel `NSOpenPanel`, Open Manifest dan Reveal in Finder lewat `NSWorkspace`, clipboard, banner yang muncul saat app aktif lagi, toolbar jendela, dan mode gelap sistem. Tempat Up, Down, Lock, dan Lease hanya berupa komentar di kode, tanpa kontrol. Tidak ada tambahan aksesibilitas, shortcut, atau identifier UI test di folder Environments. Sheet plan dan Problems hanya menampilkan reference `local:` dan pesan template, tidak ada nilai secret.
+
+### Ulang `/check verify` Milestone 3 sesudah fix app, 2026-11-13 (sesi `chk-f44-m3`, kode `be9ff7a3`)
+
+Dijalankan: `swift test --package-path apps/macos/Packages/StacklyUI --filter "EnvironmentsSnapshotTests|ShellSnapshotTests|ServiceMenu|EnvironmentFileActions|EnvironmentPlanPresenterTests|EnvironmentDetailModelTests|EnvironmentCopyTests"` (35 test dalam 7 suite lulus, `EnvironmentMenuTests` ikut), dan PNG yang berubah dibaca.
+
+- **Temuan 1: PASS.** `environment-partially-ready.narrow.png` kini menampilkan kolom aksi (menu ellipsis) di setiap baris.
+- **Temuan 2: PASS.** Judul item "Copy Connection URL" (`EnvironmentCopy.copyConnectionURL`), aksi yang sama dengan `ConnectionCopier`.
+- **Temuan 4: PASS.** `environment-plan-blocked` menampilkan dua item: `search` dan `search (provider.approval_required)`; test `eachBlockerIsItsOwnBannerItem`.
+- **Temuan 5: PASS.** `aServiceMenuFollowsItsInstance`, `theMoreMenuOpensRevealsAndReloadsTheManifest`, `withoutAFileTheFileActionsSayWhy`, dan snapshot `shell-environments-sidebar` (baris anak dengan simbol status dan `0/1`, `1/4`, `1/1`).
+- **Temuan 6:** langkah manual 19 sudah ditulis; tetap `NOT_RUN`.
+- **Catatan snapshot sidebar.** Baris Overview yang terpilih tampil sebagai sorotan hitam tanpa teks. Tidak ada snapshot shell lama yang menggambar sidebar (`ShellSnapshotTests` hanya matriks banner dan halaman kosong), jadi tidak ada pembanding; kode `SidebarRow` tidak berubah di fix ini, jadi ini bukan regresi kode, tetapi referensinya tidak mewakili tampilan asli baris terpilih. Tampilan asli dibuktikan langkah manual. Di snapshot itu path seksi Environments Overview juga tampil sebagai `/Users/…` (home fixture berbeda dari home mesin), bukan `~`.
+
+Kesiapan Milestone 3: bagian otomatis siap dicentang; 19 langkah manual tetap `NOT_RUN` (owner user).
 
 ### Acceptance-criteria coverage
 
