@@ -1,0 +1,12 @@
+blocked: postgres: supervisor.endpoint_conflict: port 5432 is already used by instance orders-db
+blocked: cache: env.instance_blocked: instance shared-valkey can't be started
+  hint: open the instance and start it once on its own
+secrets:
+  postgres superuserPassword local:erp/postgres/admin: unregistered
+differs:
+  cache endpoint.client.port: manifest 6380, instance 6379
+not in manifest:
+  old erp-old (dedicated)
+error: the plan has blockers
+  code: cli.env_plan_blocked
+  hint: Each blocker above says what stands in the way.
