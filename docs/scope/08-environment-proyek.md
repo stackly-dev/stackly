@@ -40,7 +40,7 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 - [x] Verify it: `/check verify lockfile & override lokal`
 - [x] Test it: `/test lockfile & override lokal`
 
-### 46. Env up & dependency graph · in-progress
+### 46. Env up & dependency graph · done
 
 Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance yang ada lewat `instanceRef` (tanpa mengubah config, auth, port, atau autostart miliknya), mengambil lease, lalu menjalankan dependency graph berdasarkan readiness dan timeout. Partial failure menghasilkan state yang jelas, dan kompensasi hanya menyentuh resource milik operasi itu.
 
@@ -57,7 +57,7 @@ Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance y
   - [x] `stackly env up` dan `status`: resolver target ber path, progress dan tabel akhir dengan port yang benar benar dipakai, `--locked`, golden dan binary test (spec 0046 AC-17, AC-18; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
   - [x] Up di app: tombol Up… dan Bring Up di sheet plan, `SecretEntrySheet` untuk needs secret, "Create with Up…", banner "Bringing up…" dan phase per service, alasan di banner partially ready, Activity dengan anak bersarang dan label Partial, onboarding, fixture `environment-bringing-up` dan `environment-up-incomplete`, snapshot, lalu test native ERP dari cache xtask, evidence, dan langkah manual yang butuh mata dan tangan kamu (spec 0046 AC-19 sampai AC-22, AC-25; build steps 8 to 11; after build step 5; needs fitur 44 milestone app; evidence manual needs build step 6)
 - [x] Verify it: `/check verify env up & dependency graph`
-- [ ] Test it: `/test env up & dependency graph`
+- [x] Test it: `/test env up & dependency graph`
 
 ### 47. Env down, shared instance & lease · in-progress
 
@@ -67,12 +67,12 @@ Down melepas lease environment dan hanya menghentikan instance yang tidak dibutu
 
 **Trace:** REQ-022, REQ-028, BR-006, BR-014, BR-015, VAL-014, AC-022, AC-073 (bersama fitur 46), PRD bagian 13.2
 
-**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`, `crates/core/src/environment/down/`, `apps/daemon/src/ipc/env/down.rs`
+**Pointer:** spec [0047](../specs/0047-env-down-shared-instance-lease/index.md) · code in `crates/core/src/supervisor/stop.rs`, `crates/core/src/supervisor/persist.rs`, `crates/core/src/environment/down/`, `apps/daemon/src/ipc/env/down.rs`, `crates/core/src/instance/stop_all.rs`, `crates/core/src/supervisor/stop_all.rs`, `crates/core/src/supervisor/change.rs`, `apps/daemon/src/ipc/stop_all.rs`, `apps/daemon/src/ipc/agent_off.rs`
 
 - [x] Design it (spec): `/architect env down, shared instance & lease`
 - [ ] Build it: `/develop env down, shared instance & lease`
   - [x] Down di daemon: kebijakan `EnvironmentDown` (pengatur, tidak resumable), `Environment::begin_down`, `leases_of_environment`, stop ber guard (`LeaseCheck`, `commit_stop_decision`, hasil `kept`, aturan respawn), core `environment::down` (`select`, `order`, driver dengan sapuan akhir, port `DownChildren`), kenaikan minor protokol dengan `env.preview_down`, `env.down`, `EnvLeaseInfo`, `leaseActive`, dan kode baru, lalu handler, cancel Up, dan test `env_down.rs` (PRD AC-022, serentak, tidak ada yang terhapus) (spec 0047 AC-1 sampai AC-12, AC-25; build steps 1 to 5; needs spec 0046 milestone 1 dan 2 dan spec 0044 milestone 1; langkah 2 after langkah 3 spec 0046)
-  - [ ] Override pada aksi lain: `StopAllOptions` dan `overrideLeases` di `instance.stop_all`, `instance.preview_stop_all`, dan `agent_off`, `environments` dan `affectedEnvironments` di preview, `overrideLeases` dan `leases` di `instance.change_endpoints` (spec 0047 AC-14 sampai AC-17; build step 6; after build steps 2 dan 4)
+  - [x] Override pada aksi lain: `StopAllOptions` dan `overrideLeases` di `instance.stop_all`, `instance.preview_stop_all`, dan `agent_off`, `environments` dan `affectedEnvironments` di preview, `overrideLeases` dan `leases` di `instance.change_endpoints` (spec 0047 AC-14 sampai AC-17; build step 6; after build steps 2 dan 4)
   - [ ] `stackly env down` dan flag override: `env down` dengan preview dan `--wait`, baris `lease:` di `env status`, `--override-leases` di `instance stop`, `stop --all`, `endpoint set`, dan `daemon uninstall`, golden dan binary test (spec 0047 AC-18, AC-19, AC-22 bagian CLI; build step 7; after build step 4 untuk golden; binary test needs build steps 5 dan 6; bisa paralel dengan milestone berikutnya)
   - [ ] Down, lease, dan override di app: tombol Down dan konfirmasi, banner dan umpan balik, Activity, baris Lease dan "· lease", konfirmasi override untuk semua permukaan Stop, sheet port, popover Stop All dan Turn Off, snapshot, lalu evidence native dan langkah manual yang butuh mata dan tangan kamu (spec 0047 AC-20 sampai AC-24, AC-26; build steps 8 to 10; after build step 4; needs milestone app spec 0044 dan spec 0046; evidence manual needs build steps 5 dan 6)
 - [ ] Verify it: `/check verify env down, shared instance & lease`

@@ -16,5 +16,6 @@ mod register;
 mod site;
 mod status;
 mod up;
+mod up_edges;
 mod up_fake;
 mod validate;

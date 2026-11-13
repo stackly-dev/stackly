@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d6d8-e5dd-72e8-88dd-dd2dd6b42abd",
+  "covers": [
+    "REQ-021",
+    "AC-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up_edges",
+    "name": "a_dependency_whose_start_fails_skips_its_dependent_unstarted_and_leaves_a_healthy_one_alone",
+    "file": "apps/daemon/tests/env_up_edges.rs",
+    "line": 1051
+  },
+  "status": "PASS",
+  "expected": "env.up where db crashes before it is ready ends db failed at start and api, which waits for db, skipped with reason failed and no start operation, stopped with desired stopped and its lease kept; a borrowed running instance in the same Up is ready with no child and keeps its process, restart count, and everything Up must not change",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T21:38:21.277787Z",
+  "finishedAt": "2026-11-13T21:38:26.41454Z",
+  "evidencePath": "output.log"
+}

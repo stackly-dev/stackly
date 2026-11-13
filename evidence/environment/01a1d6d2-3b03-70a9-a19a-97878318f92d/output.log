@@ -1,0 +1,16 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stackly-cli v0.1.0 ($REPO/apps/cli)
+    Finished `test` profile [unoptimized] target(s) in 13.69s
+     Running tests/env/main.rs (target/debug/deps/env-d3dc582818372948)
+
+running 2 tests
+test up_wait::ctrl_c_during_up_wait_exits_130_and_leaves_the_up_running ... ok
+test up_wait::up_wait_that_runs_out_of_its_timeout_exits_8_and_never_cancels_the_up ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 3.15s
+
