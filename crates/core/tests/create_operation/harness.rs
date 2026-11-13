@@ -191,6 +191,7 @@ impl CreateRig {
             start: false,
             startup: Some(stackly_domain::StartupPolicy::Manual),
             duplicate_of: None,
+            data_location: None,
         }
     }
 

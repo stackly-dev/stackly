@@ -19,17 +19,20 @@ use stackly_domain::{
     HealthState, InstallMode, InstanceId, InstanceLifecycle, InstanceName, ManifestLocation,
     MemberAlias, Ownership, Port, PortRequest, ProviderName, ProviderRevisionKey, ReadinessState,
     ResourceRevision, RevisionLabel, RuntimeId, RuntimeLine, RuntimeSelector, RuntimeState,
-    SecretRef, Sha256Digest, StartupPolicy, Target,
+    SecretRef, Sha256Digest, StartupPolicy, StorageLocationId, Target,
 };
 use stackly_platform::{HostFacts, StoreState};
 
 use super::finding::{FindingCode, FindingLocation};
+use super::local::{
+    LocalFile, LocalInput, LocalOverrides, LocalState, OverrideState, effective_port,
+};
 use super::lock::{
     ArtifactUnknownReason, LockFile, LockInput, LockStaleItem, LockStaleReason, LockState,
     LockedService, lock_file_name, locked_artifact, stale_reason,
 };
 use super::register::UnreadableReason;
-use super::validate::{ServiceSpec, Validation};
+use super::validate::{EnvironmentManifest, ServiceSpec, Validation};
 use crate::catalog::{
     Catalog, CatalogEntry, NotInstallableReason, TrustVerdict, require_entry_trust,
 };
@@ -58,12 +61,6 @@ pub fn planned_runtime_placeholder_id() -> RuntimeId {
         .expect("the planned runtime placeholder is a valid UUID version 7")
 }
 
-/// The local overrides of `.stackly.local.yaml`, for spec 0045.
-// provisional: F45
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct OverrideInputs {}
-
 /// The one place a plan takes its inputs (spec 0044, *Titik sambung*;
 /// spec 0045 for the lock, the overrides, and `locked`).
 #[derive(Debug, Clone, Copy)]
@@ -76,8 +73,9 @@ pub struct PlanInputs<'a> {
     pub registered: Option<EnvironmentId>,
     /// The lock next to the manifest; none reads as no file.
     pub lock: Option<&'a LockInput>,
-    /// The local overrides, from spec 0045.
-    pub overrides: Option<&'a OverrideInputs>,
+    /// The local override file next to the manifest; none reads as no
+    /// file.
+    pub overrides: Option<&'a LocalInput>,
     /// Whether the request asked for `--locked` (AC-6): nothing is
     /// resolved from a manifest selector.
     pub locked: bool,
@@ -367,6 +365,17 @@ pub struct PlanItem {
     pub differences: Vec<PlanDifference>,
     /// The preflight rows of a `create` item.
     pub checks: Vec<Check>,
+    /// The data location an override chose, for a `create` item.
+    pub storage: Option<PlanStorage>,
+}
+
+/// The data location of a `create` item that an override chose (AC-11).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanStorage {
+    /// The registered data location.
+    pub location_id: StorageLocationId,
+    /// Its stored path.
+    pub path: String,
 }
 
 /// Why a plan is not applicable.
@@ -589,6 +598,36 @@ pub struct Plan {
     pub needs_secrets: usize,
     /// The lock next to the manifest.
     pub lock: PlanLock,
+    /// The local override file, when there is one.
+    pub local: Option<PlanLocal>,
+}
+
+/// One override as a plan shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanOverride {
+    /// The alias as the file wrote it.
+    pub service: String,
+    /// `endpoints.<name>.port` or `storage.dataLocation`.
+    pub field: String,
+    /// The port, `auto`, or the path as written.
+    pub value: String,
+    /// What became of it.
+    pub state: OverrideState,
+}
+
+/// The local override file of a plan (AC-9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanLocal {
+    /// The file name.
+    pub file: String,
+    /// Its state.
+    pub state: LocalState,
+    /// The digest of the bytes read.
+    pub sha256: Option<Sha256Digest>,
+    /// Every override, the ignored ones included.
+    pub overrides: Vec<PlanOverride>,
+    /// Every finding.
+    pub findings: super::finding::Findings,
 }
 
 /// The lock of a plan (AC-5, AC-6).
@@ -658,6 +697,7 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
                 .unwrap_or_default(),
             stale: Vec::new(),
         },
+        local: None,
     };
     let Some(manifest) = &inputs.manifest.manifest else {
         // A manifest that is not valid: the lock state only as far as
@@ -668,6 +708,7 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
             LockFile::Invalid(_) => LockState::Invalid,
             LockFile::Valid { .. } => LockState::InSync,
         };
+        plan.local = inputs.overrides.and_then(shape_only);
         return Ok(plan);
     };
     let (lock_state, stale) = super::lock::state(manifest, &lock_input.content);
@@ -719,6 +760,17 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
         (Registration::Registered, Some(env)) => env.members().to_vec(),
         _ => Vec::new(),
     };
+    let member_aliases: BTreeSet<MemberAlias> = members
+        .iter()
+        .map(|member| member.alias().clone())
+        .collect();
+    let overrides = local_overrides(
+        &mut plan,
+        inputs.overrides,
+        manifest,
+        deps.catalog,
+        &member_aliases,
+    );
 
     // 2. One item per service.
     for service in &manifest.services {
@@ -731,13 +783,33 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
                 service,
                 member.instance_id(),
                 Some(member.ownership()),
-                &lock,
+                &Context {
+                    lock: &lock,
+                    overrides: &overrides,
+                },
                 &mut plan,
             )
         } else if let Some(instance_ref) = &service.instance_ref {
-            borrowed_item(deps, service, instance_ref, &lock, &mut plan)
+            borrowed_item(
+                deps,
+                service,
+                instance_ref,
+                &Context {
+                    lock: &lock,
+                    overrides: &overrides,
+                },
+                &mut plan,
+            )
         } else {
-            Some(create_item(deps, service, &lock, &mut plan)?)
+            Some(create_item(
+                deps,
+                service,
+                &Context {
+                    lock: &lock,
+                    overrides: &overrides,
+                },
+                &mut plan,
+            )?)
         };
         if let Some(item) = item {
             plan.items.push(item);
@@ -773,7 +845,7 @@ pub fn plan(deps: &PlanDeps<'_>, inputs: &PlanInputs<'_>) -> Result<Plan, PlanEr
             registration,
             &plan.items,
             &plan.lock,
-            None,
+            plan.local.as_ref().and_then(|local| local.sha256),
         ));
     }
     Ok(plan)
@@ -805,6 +877,137 @@ impl<'a> LockUse<'a> {
         }
         entry
     }
+}
+
+/// What every item reads past the service: the lock and the overrides.
+struct Context<'a> {
+    lock: &'a LockUse<'a>,
+    overrides: &'a LocalOverrides,
+}
+
+/// The local file of a plan whose manifest is not valid: only the
+/// findings of its shape.
+fn shape_only(input: &LocalInput) -> Option<PlanLocal> {
+    let (state, findings) = match &input.content {
+        LocalFile::Absent => return None,
+        LocalFile::Unreadable(_) => (LocalState::Unreadable, super::finding::Findings::default()),
+        LocalFile::Invalid { findings, .. } => (LocalState::Invalid, findings.clone()),
+        LocalFile::Loaded { .. } => (LocalState::Present, super::finding::Findings::default()),
+    };
+    Some(PlanLocal {
+        file: input.file.clone(),
+        state,
+        sha256: input.content.sha256(),
+        overrides: Vec::new(),
+        findings,
+    })
+}
+
+/// *Aturan override*: the file checked against the manifest, its
+/// `PlanLocal`, and the overrides the items apply, which are none when
+/// the file can't be read or has an error (AC-9).
+fn local_overrides(
+    plan: &mut Plan,
+    input: Option<&LocalInput>,
+    manifest: &EnvironmentManifest,
+    catalog: &Catalog,
+    members: &BTreeSet<MemberAlias>,
+) -> LocalOverrides {
+    let Some(input) = input else {
+        return LocalOverrides::default();
+    };
+    let mut local = PlanLocal {
+        file: input.file.clone(),
+        state: LocalState::Present,
+        sha256: input.content.sha256(),
+        overrides: Vec::new(),
+        findings: super::finding::Findings::default(),
+    };
+    let block = |plan: &mut Plan, kind: BlockerKind| {
+        plan.blockers.push(PlanBlocker {
+            service: None,
+            kind,
+        });
+    };
+    let checked = match &input.content {
+        LocalFile::Absent => return LocalOverrides::default(),
+        LocalFile::Unreadable(reason) => {
+            local.state = LocalState::Unreadable;
+            block(plan, BlockerKind::LocalUnreadable { reason: *reason });
+            None
+        }
+        LocalFile::Invalid { findings, .. } => {
+            local.state = LocalState::Invalid;
+            local.findings = findings.clone();
+            block(
+                plan,
+                BlockerKind::LocalInvalid {
+                    errors: findings.count_of(super::finding::Severity::Error).max(1),
+                },
+            );
+            None
+        }
+        LocalFile::Loaded { document, .. } => {
+            let checked = super::local::validate(document, manifest, catalog, &|alias| {
+                members.contains(alias)
+            });
+            local.findings = checked.findings.clone();
+            local.overrides = checked
+                .overrides
+                .iter()
+                .map(|found| PlanOverride {
+                    service: found.service.clone(),
+                    field: found.field(),
+                    value: found.value_text(),
+                    state: found.state(
+                        found
+                            .alias
+                            .as_ref()
+                            .is_some_and(|alias| members.contains(alias)),
+                    ),
+                })
+                .collect();
+            if checked.has_errors() {
+                local.state = LocalState::Invalid;
+                block(
+                    plan,
+                    BlockerKind::LocalInvalid {
+                        errors: checked.findings.count_of(super::finding::Severity::Error),
+                    },
+                );
+                None
+            } else {
+                Some(checked)
+            }
+        }
+    };
+    plan.local = Some(local);
+    checked.unwrap_or_default()
+}
+
+/// The registered data location `path` names (*Penerapan*): the canonical
+/// path is the stored path of a `data` location, or its `Stackly`
+/// subfolder is.
+fn data_location(deps: &PlanDeps<'_>, path: &str) -> Result<Option<PlanStorage>, PlanError> {
+    let Ok(canonical) = deps
+        .create
+        .platform
+        .fs()
+        .canonicalize(std::path::Path::new(path))
+    else {
+        return Ok(None);
+    };
+    let rows = deps.create.registry.storage_locations()?.value;
+    Ok(rows
+        .iter()
+        .filter(|row| row.kind() == stackly_domain::LocationKind::Data)
+        .find_map(|row| {
+            let stored = std::path::Path::new(row.path()?);
+            (stored == canonical || stored == canonical.join("Stackly")).then(|| PlanStorage {
+                location_id: row.id(),
+                path: row.path().unwrap_or_default().to_owned(),
+            })
+        }))
 }
 
 /// The blockers of the lock file itself (*Mode*): one that can't be read
@@ -906,7 +1109,7 @@ fn existing_item(
     service: &ServiceSpec,
     instance: InstanceId,
     member_ownership: Option<Ownership>,
-    lock: &LockUse<'_>,
+    context: &Context<'_>,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
     let view = deps.instances.iter().find(|view| view.id == instance)?;
@@ -922,8 +1125,12 @@ fn existing_item(
     }
     let differences = member_ownership
         .map(|ownership| {
-            let mut found = differences(service, view, ownership);
-            found.extend(lock_difference(lock.matching(service), deps.host, view));
+            let mut found = differences(service, view, ownership, context.overrides);
+            found.extend(lock_difference(
+                context.lock.matching(service),
+                deps.host,
+                view,
+            ));
             found
         })
         .unwrap_or_default();
@@ -943,6 +1150,7 @@ fn existing_item(
         waits_for: waits_for(service),
         differences,
         checks: Vec::new(),
+        storage: None,
     })
 }
 
@@ -959,7 +1167,7 @@ fn borrowed_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
     instance_ref: &InstanceName,
-    lock: &LockUse<'_>,
+    context: &Context<'_>,
     plan: &mut Plan,
 ) -> Option<PlanItem> {
     // A retained instance gives its name up, so a name never finds one.
@@ -985,7 +1193,7 @@ fn borrowed_item(
             },
         });
     }
-    existing_item(deps, service, view.id, None, lock, plan)
+    existing_item(deps, service, view.id, None, context, plan)
 }
 
 /// The `lock` difference of a member (AC-8): its managed runtime has
@@ -1011,6 +1219,7 @@ fn differences(
     service: &ServiceSpec,
     view: &InstanceView,
     member: Ownership,
+    overrides: &LocalOverrides,
 ) -> Vec<PlanDifference> {
     let mut found = Vec::new();
     let mut differ = |field: String, manifest: String, instance: String| {
@@ -1047,18 +1256,30 @@ fn differences(
             );
         }
     }
-    for endpoint in &service.endpoints {
-        let PortRequest::Fixed(port) = endpoint.port else {
+    // The port the service asks for wins over the manifest when a local
+    // override names it (AC-10).
+    let mut names: Vec<EndpointName> = service
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.name.clone())
+        .collect();
+    for (name, _) in overrides.ports(&service.alias) {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    for name in names {
+        let PortRequest::Fixed(port) = effective_port(overrides, service, &name) else {
             continue;
         };
         let effective = view
             .endpoints
             .iter()
-            .find(|(name, _, _)| name == &endpoint.name)
+            .find(|(own, _, _)| own == &name)
             .and_then(|(_, _, port)| *port);
         if effective != Some(port) {
             differ(
-                format!("endpoint.{}.port", endpoint.name),
+                format!("endpoint.{name}.port"),
                 port.to_string(),
                 effective.map_or_else(|| "auto".to_owned(), |port| port.to_string()),
             );
@@ -1089,9 +1310,11 @@ fn differences(
 fn create_item(
     deps: &PlanDeps<'_>,
     service: &ServiceSpec,
-    lock: &LockUse<'_>,
+    context: &Context<'_>,
     plan: &mut Plan,
 ) -> Result<PlanItem, PlanError> {
+    let lock = context.lock;
+    let overrides = context.overrides;
     let registry = deps.create.registry;
     let block = |plan: &mut Plan, kind: BlockerKind| {
         let blocker = PlanBlocker {
@@ -1235,8 +1458,37 @@ fn create_item(
         }
     }
 
-    // Create's own evaluation.
-    let draft = draft_for(service, &instance_name, runtime_id);
+    // The overrides, then create's own evaluation.
+    let mut draft = draft_for(service, &instance_name, runtime_id);
+    for (endpoint, port) in overrides.ports(&service.alias) {
+        let request = match port {
+            PortRequest::Auto => PortRequestDraft::Auto,
+            PortRequest::Fixed(port) => PortRequestDraft::Fixed(port.get()),
+        };
+        match draft
+            .endpoints
+            .iter_mut()
+            .find(|(name, _)| name == endpoint.as_str())
+        {
+            Some((_, own)) => *own = request,
+            None => draft.endpoints.push((endpoint.to_string(), request)),
+        }
+    }
+    let mut storage = None;
+    if let Some(path) = overrides.data_location(&service.alias) {
+        match data_location(deps, path)? {
+            Some(found) => {
+                draft.data_location = Some(found.location_id);
+                storage = Some(found);
+            }
+            None => block(
+                plan,
+                BlockerKind::OverrideLocationUnknown {
+                    path: path.to_owned(),
+                },
+            ),
+        }
+    }
     let resolved = runtime.is_some();
     let facts = match planned {
         Some(planned) => gather_planned(&deps.create, &draft, planned)?,
@@ -1307,11 +1559,7 @@ fn create_item(
                     host: spec
                         .default_host()
                         .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
-                    port: service
-                        .endpoints
-                        .iter()
-                        .find(|endpoint| &endpoint.name == spec.name())
-                        .map_or(PortRequest::Auto, |endpoint| endpoint.port),
+                    port: effective_port(overrides, service, spec.name()),
                 })
                 .collect()
         })
@@ -1338,6 +1586,7 @@ fn create_item(
         waits_for: waits_for(service),
         differences: Vec::new(),
         checks,
+        storage,
     })
 }
 
@@ -1415,6 +1664,7 @@ pub fn draft_for(
         start: true,
         startup: Some(StartupPolicy::Manual),
         duplicate_of: None,
+        data_location: None,
     }
 }
 
@@ -1504,6 +1754,7 @@ fn digest(
                     "install": runtime.install,
                     "source": runtime.source.as_code(),
                 })),
+                "storage": item.storage.as_ref().map(|storage| storage.location_id.to_string()),
                 "providerRevision": item.provider_revision.as_ref().map(|key| json!({
                     "revision": key.revision().to_string(),
                     "manifestSha256": key.manifest_sha256().to_string(),

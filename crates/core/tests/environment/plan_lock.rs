@@ -278,6 +278,7 @@ fn a_locked_entry_is_met_exactly_or_blocks_in_both_modes() {
                     catalog: Some(&two_targets),
                     host: host.clone(),
                     lock: Some(&lock_input),
+                    local: None,
                     locked,
                 },
             );

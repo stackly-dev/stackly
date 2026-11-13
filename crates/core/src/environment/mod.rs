@@ -6,6 +6,7 @@
 //! `Filesystem` port and hands the bytes in.
 
 mod finding;
+pub mod local;
 pub mod lock;
 pub mod manifest;
 pub mod plan;
@@ -25,14 +26,15 @@ pub use finding::{Finding, FindingCode, FindingLocation, Findings, MAX_FINDINGS,
 pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
     let mut schemas = manifest::json_schemas();
     schemas.extend(lock::json_schemas());
+    schemas.extend(local::json_schemas());
     schemas
 }
 pub use manifest::{API_VERSION, KIND, MANIFEST_MAX_LEN, SUPPORTED_API_VERSIONS};
 pub use plan::{
-    BlockerKind, DetachedMember, EnvironmentRef, InstanceView, NOT_INITIALIZED, OverrideInputs,
-    Plan, PlanAction, PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint, PlanError, PlanInputs,
-    PlanItem, PlanLock, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep, PlanTrust,
-    Registration, RuntimeSource, draft_for, manifest_file_name, plan,
+    BlockerKind, DetachedMember, EnvironmentRef, InstanceView, NOT_INITIALIZED, Plan, PlanAction,
+    PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint, PlanError, PlanInputs, PlanItem,
+    PlanLocal, PlanLock, PlanOverride, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep,
+    PlanStorage, PlanTrust, Registration, RuntimeSource, draft_for, manifest_file_name, plan,
     planned_runtime_placeholder_id, start_order,
 };
 pub use register::{

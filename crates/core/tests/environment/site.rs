@@ -7,6 +7,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use stackly_core::catalog::{Catalog, CatalogState};
+use stackly_core::environment::local::LocalInput;
 use stackly_core::environment::lock::LockInput;
 use stackly_core::environment::{InstanceView, Plan, PlanDeps, PlanInputs, plan, validate};
 use stackly_core::instance::create::CreateDeps;
@@ -216,7 +217,7 @@ impl Site {
                 location,
                 registered,
                 lock: extra.lock,
-                overrides: None,
+                overrides: extra.local,
                 locked: extra.locked,
             },
         )
@@ -234,5 +235,6 @@ pub struct Inputs<'a> {
     pub catalog: Option<&'a Catalog>,
     pub host: Option<HostFacts>,
     pub lock: Option<&'a LockInput>,
+    pub local: Option<&'a LocalInput>,
     pub locked: bool,
 }
