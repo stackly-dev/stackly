@@ -10,8 +10,8 @@ use stackly_domain::MemberAlias;
 /// [`Findings::omitted`].
 pub const MAX_FINDINGS: usize = 100;
 
-/// How serious a finding is. Every v1alpha1 code is an error; warnings are
-/// for spec 0045.
+/// How serious a finding is. Every manifest code is an error; the local
+/// overrides of spec 0045 have one warning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Severity {
@@ -126,9 +126,27 @@ finding_codes! {
     DuplicateDependency => "duplicate_dependency",
     /// The dependencies form a cycle.
     DependencyCycle => "dependency_cycle",
+    /// A local override names a service the manifest does not declare.
+    OverrideUnknownService => "override_unknown_service",
+    /// A local override names a service that borrows its instance.
+    OverrideNotAllowed => "override_not_allowed",
+    /// Two fixed endpoints use the same host and port after the local
+    /// overrides.
+    OverrideEndpointConflict => "override_endpoint_conflict",
+    /// `storage.dataLocation` is not an absolute path without `.` or `..`.
+    StorageLocationInvalid => "storage_location_invalid",
 }
 
 impl FindingCode {
+    /// The codes only the local override file has (spec 0045, *Aturan
+    /// override*); a manifest never gets them.
+    pub const LOCAL_ONLY: &'static [Self] = &[
+        Self::OverrideUnknownService,
+        Self::OverrideNotAllowed,
+        Self::OverrideEndpointConflict,
+        Self::StorageLocationInvalid,
+    ];
+
     /// Returns the fixed message of the code; [`Finding`] adds a field
     /// name or a path of aliases where the code needs one.
     #[must_use]
@@ -176,6 +194,18 @@ impl FindingCode {
             Self::SelfDependency => "a service can't depend on itself",
             Self::DuplicateDependency => "this dependency is listed twice",
             Self::DependencyCycle => "dependency cycle",
+            Self::OverrideUnknownService => {
+                "the manifest declares no service of this name; the override is ignored"
+            }
+            Self::OverrideNotAllowed => {
+                "a service with instanceRef borrows its instance and can't be overridden"
+            }
+            Self::OverrideEndpointConflict => {
+                "after the local overrides, another fixed endpoint uses the same host and port"
+            }
+            Self::StorageLocationInvalid => {
+                "dataLocation must be an absolute path of at most 1024 bytes without . or .."
+            }
         }
     }
 }
@@ -233,6 +263,23 @@ impl Finding {
             service: None,
             message: code.template().to_owned(),
         }
+    }
+
+    /// Creates a warning with the code's template as its message.
+    #[must_use]
+    pub fn warning(code: FindingCode, location: FindingLocation) -> Self {
+        Self {
+            severity: Severity::Warning,
+            ..Self::error(code, location)
+        }
+    }
+
+    /// Replaces the message with another fixed one, for a code whose
+    /// template names the manifest where another file is checked.
+    #[must_use]
+    pub(crate) fn with_message(mut self, message: &'static str) -> Self {
+        self.message = message.to_owned();
+        self
     }
 
     /// Appends a detail Stackly chose (a field name of the schema, or a

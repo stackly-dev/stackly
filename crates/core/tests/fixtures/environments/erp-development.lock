@@ -1,0 +1,70 @@
+# Written by `stackly env lock`. Commit this file. Do not edit it by hand.
+apiVersion: "stackly/v1alpha1"
+kind: "EnvironmentLock"
+services:
+  clickhouse:
+    provider: "official/clickhouse"
+    providerRevision: "1.0.0"
+    providerManifestSha256: "cce548ff278eb07133243345b0cae701b717db6f30f00f0be59a9c9231e0dc9f"
+    selector: "stable"
+    version: "26.8.30.8"
+    line: "26.8"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "clickhouse-26.8.30.8-macos-aarch64"
+        sha256: "097b41ad97111832cc5ddddd0b514e80307df24f50b5893e9d2035a0c4f47402"
+  mysql:
+    provider: "official/mysql"
+    providerRevision: "1.0.0"
+    providerManifestSha256: "77a41842621898d0e4ec378ae2cea628a5de122444b08862ab45e2d83f7a950c"
+    selector: "stable"
+    version: "9.7.2"
+    line: "9.7"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "mysql-9.7.2-macos-aarch64"
+        sha256: "78bd464c0ff6aacee0a19d12bceff45bd57c62813c3e606b72fab2703d3867a6"
+  nats:
+    provider: "official/nats"
+    providerRevision: "1.1.0"
+    providerManifestSha256: "1a9b16f60a26f19b9c3583e234d5cae65b13d8a1174ecbb4c520c0a171155621"
+    selector: "2.15"
+    version: "2.15.1"
+    line: "2.15"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "nats-2.15.1-macos-aarch64"
+        sha256: "ed0fe39222ec2e317c4d0e1a9cdc16c63ec523d94f9355d24a902a4db2655ffd"
+  postgres:
+    provider: "official/postgresql"
+    providerRevision: "1.0.2"
+    providerManifestSha256: "389b77ee34e052acff0917d792bc4e517cc4fb58204b0622a48283c80ddf4c87"
+    selector: "18"
+    version: "18.6"
+    line: "18"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "postgresql-18.6-r2-macos-aarch64"
+        sha256: "88bb7533e639e852e5258c293aa42f0abf40aed42d18f0f714cb47a9354b6590"
+  traefik:
+    provider: "official/traefik"
+    providerRevision: "1.0.0"
+    providerManifestSha256: "c57b6a8274d55f6c0b0f65fd93abcca1ee661b66e8a4793183728e5bfdd01bd7"
+    selector: "3.7"
+    version: "3.7.15"
+    line: "3.7"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "traefik-3.7.15-macos-aarch64"
+        sha256: "402f59cef47bbba629dda7ee34e99897648634fac8dc020fb992a7cdb034d323"
+  valkey:
+    provider: "official/valkey"
+    providerRevision: "1.0.0"
+    providerManifestSha256: "1f5abf171aa1c9a968fea846dda760cc905fe0ca90f005c82efd9bc9b409d8b6"
+    selector: "stable"
+    version: "9.1.2"
+    line: "9.1"
+    artifacts:
+      - target: "macos-aarch64"
+        id: "valkey-9.1.2-r2-macos-aarch64"
+        sha256: "fef1d702145d599856286b3a6dc6a7d6a102d15f094dc34ead868743f3956370"

@@ -6,6 +6,7 @@
 //! `Filesystem` port and hands the bytes in.
 
 mod finding;
+pub mod lock;
 pub mod manifest;
 pub mod plan;
 pub mod register;
@@ -13,8 +14,19 @@ pub mod status;
 mod validate;
 
 pub use finding::{Finding, FindingCode, FindingLocation, Findings, MAX_FINDINGS, Severity};
+
+/// Every editor JSON Schema of the environment files, with the file stem
+/// `cargo xtask codegen` writes each under in `schemas/environment/`: the
+/// manifest (spec 0044 AC-24), the lock, and the local overrides (spec
+/// 0045 AC-20). They describe structure and names; the loaders stay the
+/// authority.
 #[cfg(feature = "json-schema")]
-pub use manifest::json_schemas;
+#[must_use]
+pub fn json_schemas() -> Vec<(&'static str, schemars::Schema)> {
+    let mut schemas = manifest::json_schemas();
+    schemas.extend(lock::json_schemas());
+    schemas
+}
 pub use manifest::{API_VERSION, KIND, MANIFEST_MAX_LEN, SUPPORTED_API_VERSIONS};
 pub use plan::{
     BlockerKind, DetachedMember, EnvironmentRef, InstanceView, LockInputs, NOT_INITIALIZED,

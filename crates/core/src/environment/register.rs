@@ -80,7 +80,7 @@ impl UnreadableReason {
         }
     }
 
-    fn of(error: &PlatformError) -> Self {
+    pub(crate) fn of(error: &PlatformError) -> Self {
         match error {
             PlatformError::NotFound { .. } | PlatformError::NotADirectory { .. } => Self::NotFound,
             PlatformError::NotARegularFile { .. } => Self::NotAFile,

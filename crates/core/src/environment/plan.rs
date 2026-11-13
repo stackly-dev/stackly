@@ -18,10 +18,14 @@ use stackly_domain::{
     DependencyEdge, EndpointName, Environment, EnvironmentId, EnvironmentName, ExactVersion,
     HealthState, InstallMode, InstanceId, InstanceLifecycle, InstanceName, ManifestLocation,
     MemberAlias, Ownership, Port, PortRequest, ProviderName, ReadinessState, ResourceRevision,
-    RuntimeId, RuntimeLine, RuntimeSelector, RuntimeState, SecretRef, Sha256Digest, StartupPolicy,
+    RevisionLabel, RuntimeId, RuntimeLine, RuntimeSelector, RuntimeState, SecretRef, Sha256Digest,
+    StartupPolicy, Target,
 };
 use stackly_platform::{HostFacts, StoreState};
 
+use super::finding::{FindingCode, FindingLocation};
+use super::lock::{ArtifactUnknownReason, LockStaleReason};
+use super::register::UnreadableReason;
 use super::validate::{ServiceSpec, Validation};
 use crate::catalog::{
     Catalog, CatalogEntry, NotInstallableReason, TrustVerdict, require_entry_trust,
@@ -392,6 +396,80 @@ pub enum BlockerKind {
         /// The lifecycle or blocker code.
         reason: String,
     },
+    /// `provider.approval_required`, for `env.lock`: a local entry not
+    /// approved yet.
+    ProviderApprovalRequired {
+        /// The provider.
+        provider: ProviderName,
+    },
+    /// `provider.revoked`, for `env.lock`.
+    ProviderRevoked {
+        /// The provider.
+        provider: ProviderName,
+    },
+    /// `env.lock_missing`: `locked` without a lock file.
+    LockMissing {
+        /// The lock file name.
+        file: String,
+    },
+    /// `env.lock_unreadable`.
+    LockUnreadable {
+        /// Why.
+        reason: UnreadableReason,
+    },
+    /// `env.lock_invalid`: the loader refused the lock.
+    LockInvalid {
+        /// The finding code.
+        code: FindingCode,
+        /// Where.
+        location: FindingLocation,
+    },
+    /// `env.lock_stale`, with `locked`: one alias does not match.
+    LockStale {
+        /// Why.
+        reason: LockStaleReason,
+    },
+    /// `env.lock_provider_mismatch`: the catalog has another revision.
+    LockProviderMismatch {
+        /// The provider.
+        provider: ProviderName,
+        /// The revision the lock names.
+        locked_revision: RevisionLabel,
+        /// The revision the catalog holds.
+        available_revision: RevisionLabel,
+    },
+    /// `env.lock_no_artifact`: no locked artifact for this Mac.
+    LockNoArtifact {
+        /// This Mac's target.
+        target: Target,
+        /// The targets the entry has.
+        locked_targets: Vec<String>,
+    },
+    /// `env.lock_artifact_unknown`.
+    LockArtifactUnknown {
+        /// The locked artifact ID.
+        artifact_id: String,
+        /// The locked digest.
+        sha256: Sha256Digest,
+        /// Why.
+        reason: ArtifactUnknownReason,
+    },
+    /// `env.local_unreadable`.
+    LocalUnreadable {
+        /// Why.
+        reason: UnreadableReason,
+    },
+    /// `env.local_invalid`: the override file has error findings.
+    LocalInvalid {
+        /// How many.
+        errors: usize,
+    },
+    /// `env.override_location_unknown`: `dataLocation` is not a
+    /// registered data location.
+    OverrideLocationUnknown {
+        /// The path as the file wrote it.
+        path: String,
+    },
 }
 
 impl BlockerKind {
@@ -406,6 +484,18 @@ impl BlockerKind {
             Self::InstanceRefNotFound { .. } => "env.instance_ref_not_found",
             Self::InstanceRefMismatch { .. } => "env.instance_ref_mismatch",
             Self::InstanceBlocked { .. } => "env.instance_blocked",
+            Self::ProviderApprovalRequired { .. } => "provider.approval_required",
+            Self::ProviderRevoked { .. } => "provider.revoked",
+            Self::LockMissing { .. } => "env.lock_missing",
+            Self::LockUnreadable { .. } => "env.lock_unreadable",
+            Self::LockInvalid { .. } => "env.lock_invalid",
+            Self::LockStale { .. } => "env.lock_stale",
+            Self::LockProviderMismatch { .. } => "env.lock_provider_mismatch",
+            Self::LockNoArtifact { .. } => "env.lock_no_artifact",
+            Self::LockArtifactUnknown { .. } => "env.lock_artifact_unknown",
+            Self::LocalUnreadable { .. } => "env.local_unreadable",
+            Self::LocalInvalid { .. } => "env.local_invalid",
+            Self::OverrideLocationUnknown { .. } => "env.override_location_unknown",
         }
     }
 }
