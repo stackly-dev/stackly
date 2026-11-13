@@ -90,7 +90,8 @@ fn a_plan_with_blockers_exits_3_and_lists_each_blocker_on_stderr() {
     ev.pass();
 }
 
-/// AC-16.
+/// AC-16; spec 0045 K23: the plan of an invalid manifest prints no
+/// `lock:` or `local:` line, even with a valid lock and a local file.
 #[test]
 fn a_plan_of_an_invalid_manifest_exits_2_with_the_findings() {
     let (root, _daemon) = daemon(data::invalid(), data::invalid_plan());
@@ -107,6 +108,15 @@ fn a_plan_of_an_invalid_manifest_exits_2_with_the_findings() {
         text.stderr
     );
     assert!(text.stderr.contains("2 error(s), 0 warning(s)"));
+    golden::check("env_plan_invalid_stderr.txt", &text.stderr);
+    assert!(
+        !text
+            .stderr
+            .lines()
+            .any(|line| line.starts_with("lock: ") || line.starts_with("local: ")),
+        "{}",
+        text.stderr
+    );
     assert_eq!(json.code, Some(2));
     let value = envelope(&json);
     assert_eq!(value["error"]["code"], "cli.env_invalid");

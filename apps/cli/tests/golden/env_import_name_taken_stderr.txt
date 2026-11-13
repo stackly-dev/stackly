@@ -1,0 +1,4 @@
+error: environment erp-development is registered at ~/old/erp/stackly.yaml
+  code: env.name_taken
+  hint: rename metadata.name, or use this file for the registered environment
+  hint: to use this file for it, run stackly env import --relink

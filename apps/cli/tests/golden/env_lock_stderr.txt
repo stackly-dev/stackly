@@ -1,0 +1,2 @@
+updated postgres official/postgresql 18.5 -> 18.6
+removed old official/nats 2.15.1

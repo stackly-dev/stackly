@@ -647,14 +647,6 @@ impl CliFailure {
     /// `cli.env_lock_blocked` (spec 0045 AC-16): the manifest is valid but
     /// `blockers` blockers stop `env.lock`, so no file was written. Exits
     /// 3; `stackly env lock` keeps the lock result as result.
-    // provisional: F45, its caller lands with dev-f45-m2 (spec 0045 milestone 2).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the env lock command calls it in spec 0045 milestone 2"
-        )
-    )]
     #[must_use]
     pub fn env_lock_blocked(blockers: u64) -> Self {
         Self::local(
@@ -668,14 +660,6 @@ impl CliFailure {
     /// --locked` got a plan whose `lock.locked` is not true, from a daemon
     /// that does not know the locked mode and may have resolved again.
     /// Exits 5.
-    // provisional: F45, its caller lands with dev-f45-m2 (spec 0045 milestone 2).
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the env lock command calls it in spec 0045 milestone 2"
-        )
-    )]
     #[must_use]
     pub fn env_locked_unsupported() -> Self {
         Self::local(
