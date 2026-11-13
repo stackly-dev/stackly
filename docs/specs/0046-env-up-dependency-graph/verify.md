@@ -29,6 +29,22 @@ Langkah Build plan 1 sampai 3: engine operasi pengatur dan anak, domain dan stor
 - [x] `cargo xtask check-deps`, `cargo xtask evidence check`, dan `cargo xtask codegen --check` → lulus tanpa perubahan file hasil generate
 - [x] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → exit 0
 
+### Catatan `/check verify` 2026-11-13 (sesi `chk-f46-m1`, kode `75784ccc`)
+
+Verdict Milestone 1: **PASS** untuk bagian AC-3, AC-4, AC-7, AC-12, AC-13, AC-15, dan AC-24 yang menjadi lingkup milestone ini. Semua kotak di atas sudah `[x]` sebelum checker mulai (dicentang saat build); checker menjalankan ulang setiap langkah Commands kecuali suite penuh `cargo test -p stacklyd` (lead: 737 lulus di `main`), dan membaca lima file langkah manual.
+
+Hasil checker: `stackly-domain --lib operation::tests` 11; `stackly-core --test operation_engine` 96 (tujuh test `coordinator::` ikut); `stackly-storage --test open` 78; `--test registry conformance` 3; `stackly-testkit` 43; `stackly-core --test create_operation` 31 (empat `bound::`); `--test supervisor_start leases` 8; `stacklyd --test environment` 12; `check-deps`, `evidence check`, `codegen --check` (24 file mutakhir, kontrak tidak berubah), dan `cargo check` Windows lulus.
+
+Probe `stacklyd` asli (registry baru di skema 15): create, start, restart, dan stop oleh pengguna berjalan seperti sebelumnya; start pengguna tetap menulis satu lease `manual` `active`. `with_binding`, `StartRequest::environment`, dan `Origin::Child` belum dipakai kode non test di `apps/`, jadi klien tidak bisa mengirim ikatan.
+
+Yang dibaca di kode: dispatcher menelusuri seluruh antrean dan memeriksa slot per kelas, jadi kelas yang penuh tidak menahan kelas lain; `after_commit` membangunkan `wait_final` di setiap perubahan state yang terlihat dan `shutdown` membangunkannya sekali; `rebuild` create menolak input ber `binding` yang tidak terbaca (tidak pernah membuat instance tanpa ikatannya); test lama hanya berubah di tiga tempat kecil (`parent: None`, jenis tanpa factory diganti `import_environment`, pemecahan helper harness), golden tidak berubah.
+
+Temuan, semuanya rendah atau catatan:
+
+1. `env.plan_changed` sudah bisa dihasilkan core (`BindingFault::MemberTaken`) tetapi belum ada di katalog protokol; tidak terjangkau klien di milestone ini, harus masuk bersama langkah 5.
+2. `orphaned_child` menganggap induk `needs_recovery` masih aktif. Untuk `environment_up` itu tidak terjadi (`CloseInterrupted`), tetapi pengatur `environment_down` spec 0047 resumable; anak create dan start yang antre di bawah induk `needs_recovery` akan dibangun ulang dan berjalan. Perlu diputuskan saat spec 0047 dibangun.
+3. `wait_final` membalas `ShuttingDown` juga untuk operasi yang sudah final bila dipanggil sesudah shutdown mulai; cukup untuk Up, hanya perlu diingat pemanggil lain.
+
 ### Acceptance-criteria coverage
 
 - AC-3 · bagian engine: kelas slot pengatur, batas 4, tiga pengatur tanpa deadlock; `BusyPolicy::Reject`, `LockKey::EnvironmentName`, dan `expected_revision` operasi Up dipasang handler di Milestone 2 (langkah 4 dan 6)

@@ -19,7 +19,7 @@ Spec ini menetapkan `stackly.yaml`, file yang mendeskripsikan service sebuah pro
 
 **Acceptance criteria** (ID lokal spec ini; ID PRD selalu tiga digit, misalnya AC-020):
 
-- **AC-1** (schema, REQ-020): `stackly-core::environment::manifest` membaca `stackly.yaml` dengan `apiVersion: stackly/v1alpha1` dan `kind: Environment` sesuai *Schema `stackly.yaml`*: `metadata.name`, lalu 1 sampai 32 `services` yang masing masing membawa provider, selector runtime (`version`), ownership, `instanceRef`, `instanceName`, endpoint, settings, `secretRefs`, `storage`, dan `dependsOn`. File dibaca lewat port `Filesystem::read_file_limited` (paling besar 256 KiB, bukan symlink, file biasa). Field yang tidak dikenal, key ganda, anchor atau alias YAML, dan `apiVersion` atau `kind` lain ditolak dengan finding yang menunjuk baris dan kolom. Manifest contoh ERP `crates/core/tests/fixtures/environments/erp-development.yaml` (contoh PRD bagian 13.1 dengan nama endpoint, secret field, setting, dan line yang benar benar dipakai keenam paket resmi; lihat *Manifest contoh ERP*) lolos tanpa finding terhadap catalog bawaan.
+- **AC-1** (schema, REQ-020): `stackly-core::environment::manifest` membaca `stackly.yaml` dengan `apiVersion: stackly/v1alpha1` dan `kind: Environment` sesuai *Schema `stackly.yaml`*: `metadata.name`, lalu 1 sampai 32 `services` yang masing masing membawa provider, selector runtime (`version`), ownership, `instanceRef`, `instanceName`, endpoint, settings, `secretRefs`, `storage`, dan `dependsOn`. File dibaca lewat port `Filesystem::read_file_limited` (paling besar 256 KiB, bukan symlink, file biasa). Field yang tidak dikenal, key ganda, nilai bertag (tag lokal seperti `!nama`), merge key (`<<`), dan `apiVersion` atau `kind` lain ditolak dengan finding yang `location` nya mengikuti *Aturan validasi*: `line:column` untuk masalah sintaks, path field selain itu. Anchor dan alias YAML diterima dengan aturan `provider.yaml` (spec 0009): manifest adalah nilai yang dihasilkan `serde_yaml_ng` sesudah alias di expand, setiap aturan berjalan atas nilai itu, dan manifest yang memakai alias memberi `services` dan finding yang sama dengan manifest yang menulis nilainya langsung. Alias yang mengembangkan dokumen melewati anggaran expand di *YAML yang diterima* ditolak sebelum nilainya dibangun (`yaml_alias`, atau `yaml_syntax` kalau batas repetisi `serde_yaml_ng` tercapai lebih dulu) *(diubah 2026-11-13, lihat* YAML yang diterima*: sebelumnya anchor dan alias ditolak, dan lokasi ditulis "baris dan kolom")*. Manifest contoh ERP `crates/core/tests/fixtures/environments/erp-development.yaml` (contoh PRD bagian 13.1 dengan nama endpoint, secret field, setting, dan line yang benar benar dipakai keenam paket resmi; lihat *Manifest contoh ERP*) lolos tanpa finding terhadap catalog bawaan.
 - **AC-2** (aturan validasi, VAL-013): `environment::validate` menerapkan setiap baris tabel *Aturan validasi* dan mengembalikan semua finding, bukan hanya yang pertama: dependency cycle (pesannya menyebut jalurnya, misalnya `api -> db -> api`), `dependsOn` ke alias yang tidak ada atau ke diri sendiri, provider yang tidak ada di catalog, endpoint atau setting yang tidak dikenal paket, dan dua endpoint fixed di manifest yang memakai alamat dan port yang sama. Manifest dengan finding ber severity `error` tidak pernah bisa di plan sebagai `applicable`, diimpor, atau (lewat spec 0046) dijalankan.
 - **AC-3** (secret literal, VAL-013, spec 0011): nilai secret tidak punya tempat di manifest. Nilai `secretRefs.<field>` yang bukan reference `local:` sesuai grammar spec 0011 ditolak dengan `secret_literal`; segmen pertama `instance` atau `stackly` ditolak dengan `secret_reference_reserved`; secret field paket yang ditulis di `settings` ditolak dengan `secret_in_settings`. Pesan setiap finding dibangun dari template tetap per kode ditambah nama field, tidak pernah dari teks error parser YAML atau `SettingsSchema`, jadi pesan, `location`, log daemon, audit, registry, dan balasan tidak pernah memuat nilai dari file. Test menaruh nilai sentinel di ketiga tempat itu dan di posisi bertipe salah (angka diganti string, map diganti string), lalu mencarinya di balasan, log, registry, dan test root.
 - **AC-4** (`env.validate`): `env.validate { path }` membaca file, menjalankan AC-1 dan AC-2 terhadap catalog di memori, dan membalas `EnvValidation` (`valid`, nama, `manifestSha256`, `services` yang dideklarasikan, paling banyak 100 `findings`, `findingCount`, `omitted`). Manifest yang tidak valid tetap balasan sukses dengan `valid` false. Method ini tidak membaca atau menulis registry, tidak membuat operasi atau baris audit, dan tidak menyentuh Keychain. File yang tidak bisa dibaca menghasilkan `env.manifest_unreadable` dengan `reason`.
@@ -153,11 +153,12 @@ Tidak ada `dependsOn` di antara keenamnya (PRD: jangan mengarang dependency). Gr
 
 ### Aturan validasi
 
-Semua aturan mengembalikan `Finding { severity, code, location, service?, message }`. `location` adalah `line:column` untuk masalah sintaks dan path field (`services.postgres.endpoints.database.port`) selain itu. Di v1alpha1 setiap kode di bawah ber severity `error`; `warning` disediakan untuk spec 0045.
+Semua aturan mengembalikan `Finding { severity, code, location, service?, message }`. `location` adalah `line:column` untuk masalah sintaks yang posisinya diberi parser, `.` untuk masalah yang mengenai file secara keseluruhan (bukan UTF-8, lebih dari satu dokumen, anggaran expand), dan path field (`services.postgres.endpoints.database.port`) selain itu. Di v1alpha1 setiap kode di bawah ber severity `error`; `warning` disediakan untuk spec 0045.
 
 | Kode | Kapan |
 | --- | --- |
-| `yaml_syntax`, `unknown_field`, `missing_field`, `invalid_value`, `duplicate_key`, `yaml_alias` | bentuk dokumen |
+| `yaml_syntax`, `unknown_field`, `missing_field`, `invalid_value`, `duplicate_key` | bentuk dokumen; alias yang menunjuk anchor yang tidak ada dan file berisi lebih dari satu dokumen termasuk `yaml_syntax` |
+| `yaml_alias` | bentuk YAML yang tidak diterima manifest (*YAML yang diterima*): nilai atau key bertag, merge key, dan alias yang mengembangkan dokumen melewati anggaran expand. Anchor dan alias biasa bukan finding. Nama kodenya dipertahankan dari versi spec yang melarang alias |
 | `unsupported_api_version`, `unsupported_kind` | identitas schema |
 | `invalid_name`, `too_many_services`, `too_many_dependencies` | nama dan batas |
 | `unknown_provider`, `provider_unreadable` | provider tidak ada di catalog, atau paketnya tidak bisa dimuat |
@@ -169,6 +170,36 @@ Semua aturan mengembalikan `Finding { severity, code, location, service?, messag
 | `unknown_dependency`, `self_dependency`, `duplicate_dependency`, `dependency_cycle` | dependency |
 
 Urutan: bentuk dokumen dulu (kalau gagal, berhenti di situ), lalu aturan per service terhadap paket provider dari catalog saat ini (revision entri catalog; pin revision milik spec 0045), lalu aturan lintas service. Validasi boleh membaca paket provider yang belum disetujui: membaca bukan menjalankan (spec 0037).
+
+### YAML yang diterima
+
+*(Ditulis ulang 2026-11-13, keputusan K2. Menggantikan larangan anchor dan alias.)*
+
+Manifest adalah nilai yang dihasilkan `serde_yaml_ng` dari teks file, sesudah alias di expand. Setiap aturan di spec ini berjalan atas nilai itu. Tidak ada aturan yang bergantung pada cara teks menuliskannya, dan loader tidak memindai teks. Loader memakai `provider::raw::yaml_value`, fungsi yang sama dengan loader `provider.yaml` (spec 0009).
+
+Pemeriksaan bentuk dokumen berurutan dan berhenti di masalah pertama:
+
+| Urutan | Keadaan | Finding | `location` |
+| --- | --- | --- | --- |
+| 1 | File bukan UTF-8 | `yaml_syntax` | `.` |
+| 2 | `yaml_value` gagal karena alias mengembangkan dokumen melewati anggaran expand (di bawah) | `yaml_alias` | `.` |
+| 2 | `yaml_value` gagal karena hal lain: sintaks salah, alias ke anchor yang tidak ada, lebih dari satu dokumen, batas rekursi atau repetisi `serde_yaml_ng` | `yaml_syntax` | `line:column` dari parser, atau `.` kalau parser tidak memberi posisi |
+| 2 | `yaml_value` gagal karena key yang sama dua kali dalam satu mapping | `duplicate_key` | sama dengan baris di atas |
+| 3 | Nilai atau key bertag (`Value::Tagged`), atau key `<<`, di mana pun di nilai hasil parse; hanya yang pertama ditemukan dilaporkan | `yaml_alias` | nilai bertag: path field nilai itu; key bertag: path mapping yang memuatnya; merge key: path mapping nya ditambah `<<` (misalnya `services.web.<<`) |
+| 4 | `apiVersion`, lalu `kind`, lalu decode ketat | `missing_field`, `unsupported_api_version`, `unsupported_kind`, `unknown_field`, `invalid_value`, `duplicate_key` | path field |
+
+Di urutan 2, mana dari ketiga kegagalan yang muncul lebih dulu mengikuti `yaml_value` apa adanya; spec ini tidak mengaturnya. Bom alias bersarang (billion laughs klasik) biasanya berhenti di batas repetisi `serde_yaml_ng` dan menjadi `yaml_syntax`; satu anchor besar di balik banyak alias berhenti di anggaran expand dan menjadi `yaml_alias`.
+
+**Anggaran expand** *(aturan baru 2026-11-13)*. Pass hitung `yaml_value` memberi setiap node biaya 1, ditambah panjang byte teksnya kalau node itu string (key ikut dihitung). Batasnya tetap `yaml_node_budget`: dua per byte teks file ditambah 1024, jadi paling banyak 525.312 untuk file 256 KiB. Sebelum aturan ini, string dihitung 1 berapa pun panjangnya, sehingga satu scalar besar di balik ribuan alias lolos dari anggaran: file 45 KiB (scalar 20 KiB dan 5.000 alias, 5.005 node) dibangun menjadi 102 MB string, dan file 256 KiB bisa mencapai beberapa GiB di memori daemon. Dokumen tanpa alias tidak pernah mencapai batas baru ini, karena setiap node dan setiap byte string berasal dari paling sedikit satu byte teks (escape `\L` dan `\P` menghasilkan paling banyak 1,5 byte per byte teks). Perubahan ini ada di `provider::raw::yaml_value`, jadi `provider.yaml` dan output template `yaml` ikut terlindung; teks spec 0009 diselaraskan lewat lead (*Follow-up*).
+
+Yang diterima dan yang ditolak, supaya batasnya tidak ditebak:
+
+- **Anchor dan alias diterima.** `settings: &s {…}` di satu service dan `settings: *s` di service lain sama artinya dengan menulis map itu dua kali. Karena aturan berjalan atas nilai hasil expand, alias tidak bisa membawa nilai yang lolos dari aturan: secret literal lewat alias tetap `secret_literal`, dan dua endpoint fixed yang sama lewat alias tetap `endpoint_conflict`. Anchor yang tidak pernah dipakai bukan finding.
+- **Merge key ditolak.** `serde_yaml_ng` tidak menggabungkan `<<`; key itu muncul apa adanya di nilai hasil parse, jadi pemeriksaannya pasti. Key `"<<"` yang ditulis berkutip ikut ditolak.
+- **Nilai bertag ditolak sejauh `serde_yaml_ng` menyerahkannya sebagai `Value::Tagged`**: tag lokal (`!nama`) dan `!` tanpa nama, pada nilai maupun key. Itu mencakup setiap tag yang sesudah diselesaikan parser berawalan `!`, misalnya `!<!nama>` dan handle `%TAG` yang menunjuk awalan `!`. Tag lain diselesaikan atau dibuang parser dan tidak tampak di nilai hasil parse (misalnya `!!str`, `!!int`, `!!float`, `!!map`, `!!seq`, `!<tag:yaml.org,2002:str>`, dan handle `%TAG` yang menunjuk URI `tag:`), jadi bukan finding; nilai hasilnya tetap melewati semua aturan (`version: !!str 18` adalah string `"18"`, `version: !!int "18"` adalah angka dan ditolak `invalid_value`).
+- **String berkutip multi baris, block scalar, dan plain scalar bersambung diterima** di posisi mana pun yang YAML izinkan, termasuk kutip yang mulai di barisnya sendiri.
+
+`manifestSha256` dihitung dari byte file, jadi dua file yang hasil expand nya sama tetapi teksnya berbeda punya digest berbeda. Snapshot `services`, plan, dan `planDigest` dibangun dari nilai hasil expand.
 
 ### Aksi plan
 
@@ -411,6 +442,7 @@ Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris dari
 
 - Peer adalah user yang sama (spec 0006); registry per user, jadi `instanceRef` selalu dalam access scope user itu (VAL-014).
 - Daemon membaca path yang diberi klien hanya dengan `read_file_limited` (tanpa mengikuti symlink terakhir, hanya file biasa, paling besar 256 KiB) dan tidak pernah mengeksekusinya. Isi manifest tidak pernah ditulis ke log.
+- Alias YAML tidak bisa meledakkan memori daemon: file paling besar 256 KiB, dan `yaml_value` menghitung node dan byte string hasil expand lalu berhenti di anggaran expand (*YAML yang diterima*) sebelum nilainya dibangun, jadi nilai hasil expand paling banyak 525.312 node dan byte string. Bom alias ditolak dalam 2 detik (`yaml_alias`, atau `yaml_syntax` di batas repetisi), batas waktu yang sama dengan test spec 0009. Alias juga tidak bisa menyembunyikan nilai dari validasi atau dari plan, karena keduanya hanya melihat nilai hasil expand.
 - Pesan finding tidak pernah memuat nilai dari file: setiap kode punya template tetap, dan teks error `serde_yaml_ng` serta `SettingsSchema` hanya dipakai untuk memilih kode dan `location`. `Redactor` tidak diandalkan di sini, karena ia hanya mengenal nilai yang pernah dipelajarinya.
 - Manifest tidak bisa membawa trust: tidak ada field approval, dan provider `pending` hanya tampil sebagai blocker dengan navigasi ke alur approval spec 0037 (VAL-018).
 - Catatan audit `import_environment` dan `remove_environment` memuat nama, `manifestSha256`, dan lokasi dengan `~`, lewat `set_audit_note`.
@@ -423,6 +455,7 @@ Tidak ada variabel environment atau credential baru.
 
 - Manifest contoh ERP lolos validate dan menghasilkan plan enam install, enam create, dan enam start di root kosong; verifies **AC-1**, **AC-5**, **AC-25**.
 - Satu manifest per kode di *Aturan validasi*, termasuk cycle tiga service dengan jalurnya di pesan dan dua port fixed sama; semua finding kembali sekaligus; verifies **AC-2**.
+- YAML yang diterima: setiap bentuk di daftar *Untuk developer* (Build plan langkah 2) memberi `services` dan finding yang sama dengan kembaran yang ditulis tanpa alias; tag lokal dan merge key ditolak `yaml_alias` dengan path field; bom alias dalam file 256 KiB (anchor besar, scalar besar di balik ribuan alias, dan bersarang) ditolak dalam 2 detik tanpa membangun nilainya; kutip multi baris di posisi mana pun tetap valid; verifies **AC-1**.
 - Sentinel secret di `secretRefs`, di `settings`, dan sebagai reference `local:instance/...`: ditolak, dan sentinel tidak ada di balasan, log, registry, atau test root; verifies **AC-3**.
 - Plan dan validate terhadap test root: pohon file dan generation registry sama sebelum dan sesudah, fake downloader, supervision, dan secret write nol panggilan; verifies **AC-4**, **AC-6**.
 - Blocker: port fixed bentrok dengan instance lain, provider lokal `pending`, selector tanpa artefak, nama instance terpakai, nama environment di lokasi lain; `applicable` false dan kode sesuai; verifies **AC-7**, **AC-11**.
@@ -500,7 +533,49 @@ Urutan mengikuti pendekatan Journey: jalur "menerima `stackly.yaml`, memvalidasi
 **Milestone 1: Manifest, validate, dan plan di daemon** (needs scope 01 sampai 07 di `main`)
 
 1. Domain dan storage: migrasi `services` dan unique index nama; `DeclaredService`, `DependencyEdge`, field baru `Environment`, `set_manifest`; dua `OperationKind` dan baris tabel resume nya; `read::environments`, `WriteOp` insert, update, dan `DeleteEnvironment`; `CODED_COLUMNS` atau `FREE_CODE_COLUMNS`; `GuardView::environments()`; canonicalize folder induk di port `Filesystem` kalau belum ada; fake registry testkit. Memenuhi **AC-11**, **AC-12**, **AC-13**.
-2. Core `environment::manifest` dan `validate`: tipe raw, loader ketat, setiap aturan tabel *Aturan validasi*, template pesan tetap per kode, helper settings bersama yang dikeluarkan dari `settings_row`, fixture manifest di `crates/core/tests/fixtures/environments/` (`erp-development.yaml`, graph dengan provider `fake`, satu file per kode), dan JSON Schema lewat `cargo xtask codegen`. Memenuhi **AC-1**, **AC-2**, **AC-3**.
+2. Core `environment::manifest` dan `validate`: tipe raw, loader ketat menurut *YAML yang diterima* (tanpa pindaian teks), setiap aturan tabel *Aturan validasi*, template pesan tetap per kode, helper settings bersama yang dikeluarkan dari `settings_row`, fixture manifest di `crates/core/tests/fixtures/environments/` (`erp-development.yaml`, graph dengan provider `fake`, satu file per kode), dan JSON Schema lewat `cargo xtask codegen`. Memenuhi **AC-1**, **AC-2**, **AC-3**.
+
+   **Untuk developer (perubahan 2026-11-13 atas langkah 2 yang sudah dibangun, keputusan K2).** Yang berubah: `crates/core/src/environment/manifest.rs`, `finding.rs`, pass hitung di `crates/core/src/provider/raw.rs`, dan test serta fixture nya. Tidak ada dependency baru, dan tidak ada perubahan protokol, codegen, atau JSON Schema (kode finding tetap `yaml_alias`, dan tidak ada fixture `protocols/` yang memuatnya).
+
+   - Di `provider/raw.rs` (**Anggaran expand**): `NodeBudget::visit_str` dan `visit_bytes` memotong anggaran sebesar 1 ditambah panjang byte nilainya, bukan 1; `NodeCounter::tick` menerima biayanya. `yaml_node_budget` dan konstanta nya tidak berubah. Perbarui doc `yaml_value`, `YAML_NODES_PER_BYTE`, dan `NodeBudget` supaya menyebut byte string. Test baru di modul test file itu: scalar 20 KiB di balik 5.000 alias (`a: &a xxx…` lalu 5.000 baris `- *a`, sekitar 45 KiB teks) memberi `YamlError::TooLarge`; dokumen 256 KiB tanpa alias yang seluruhnya satu string, dan yang seluruhnya escape `\L` dalam kutip ganda, tetap diterima. Semua test `provider` yang ada dan `cargo xtask provider check` harus tetap lulus tanpa mengubah fixture.
+   - Di `manifest.rs`: hapus `anchors_and_aliases` beserta enam unit test nya dan loop yang memanggilnya di `load`; hapus cabang `"unknown anchor"` supaya error itu menjadi `yaml_syntax`; pertahankan `YamlError::TooLarge` → `yaml_alias` di `.` dan `tag_or_merge_key` → `yaml_alias`, dengan satu perbaikan: merge key dilaporkan di path mapping nya ditambah `<<` (misalnya `services.web.<<`; sekarang segmen itu menjadi `?`, padahal `<<` teks tetap, bukan nilai dari file). Lokasi nilai bertag (path nilai itu) dan key bertag (path mapping yang memuatnya) tetap seperti sekarang. Tulis ulang doc modul (daftar "anchors, aliases, tags, merge keys") dan doc `load` menurut *YAML yang diterima*.
+   - Di `finding.rs`: template `yaml_alias` menjadi `YAML tags and merge keys are not allowed, and aliases can't expand the file past its size limit`.
+   - Di `crates/core/tests/environment/validate.rs`: hapus `alias_locations` dan tiga test yang memakainya (`an_anchor_and_an_alias_after_a_block_scalar_in_a_sequence_item_are_found`, `a_quote_that_starts_a_plain_scalar_continuation_is_refused_and_hides_nothing`, `a_quote_inside_a_block_scalar_with_an_indentation_indicator_hides_nothing`); test pasangan di bawah menggantikannya. `syntax_findings_point_at_a_line_and_column` memakai `invalid/yaml_syntax.yaml`, karena `yaml_alias` tidak lagi memberi posisi. Fixture `invalid/yaml_alias.yaml` ditulis ulang memakai merge key (`web:` berisi `<<: *base`), dan test baru memeriksa lokasinya `services.web.<<`.
+   - Test pasangan (wajib): fixture di `fixtures/environments/aliases/`, tiap bentuk dua file, `<nama>.yaml` memakai alias dan `<nama>.expanded.yaml` menulis nilainya langsung. Tiap pasangan harus memberi `valid`, `services`, dan daftar finding (kode dan `location`) yang sama, tanpa `yaml_alias`. Potongan di bawah sudah diuji terhadap `serde_yaml_ng` 0.10.0 (diterima, alias di expand); lengkapi menjadi manifest utuh dengan provider fixture, dan taruh potongan `rule` di setting bertipe string milik provider itu:
+
+     ```yaml
+     # block-scalar (ronde pertama)
+     services:
+       api:
+         dependsOn:
+         - service: |-
+             db
+           condition: &c ready
+       web:
+         dependsOn:
+         - service: api
+           condition: *c
+     ---
+     # exotic3 (ronde kedua): sambungan plain scalar berawalan kutip
+     services:
+       proxy:
+         settings:
+           rule: Host(`a`) || Header(`X-A`,
+             "v)
+       cache: &c
+         provider: testing/fake
+       other: *c
+     ---
+     # by1, by2, by3 (ronde ketiga): ganti dua baris rule exotic3 dengan
+     #   by1:  rule: Host(`a`),      lalu baris sambungan  - "v
+     #   by2:  rule: Host(`a`) [     lalu baris sambungan  - "v
+     #   by3:  rule: Host(`a`),      lalu baris sambungan  - 'v
+     ```
+
+     Tiga `---` di atas hanya memisahkan contoh; tiap fixture satu dokumen. Dua pasangan lagi: `shared-settings` (`settings: &s {…}` dan `settings: *s` pada dua service provider yang sama), dan `alias-brings-a-finding` (alias yang menyalin `secretRefs` berisi nilai sentinel bukan reference memberi `secret_literal` di kedua path dan sentinel tidak muncul di finding; alias yang menyalin `endpoints` ber port fixed memberi `endpoint_conflict`).
+   - Bentuk yang harus tetap valid tanpa finding (satu test tabel): manifest contoh ERP; rule Traefik ber `&&` dan backtick; string berkutip multi baris sesudah `key: `; string berkutip multi baris yang mulai di barisnya sendiri (`rule:` lalu `"Host(...) &&` di baris berikut, yang tadinya ditolak); `'` di tengah plain scalar; `&`, `*`, dan `"` di komentar; block scalar `|`, `>`, dan `|2-`; anchor yang tidak pernah dipakai; `version: !!str 18` (atau line lain milik provider fixture).
+   - Bentuk yang harus ditolak: `!nama` pada nilai (`yaml_alias` di path nilai itu) dan pada key (`yaml_alias` di path mapping nya); `"<<"` berkutip (`yaml_alias`, path `….<<`); `*tidak-ada` (`yaml_syntax` dengan `line:column`); dua dokumen dipisah `---` (`yaml_syntax` di `.`); dan tiga bom dalam file tepat di bawah 256 KiB, masing masing ditolak dalam 2 detik: satu anchor besar di balik rantai alias (pola `large_anchor_bomb` di `provider/raw.rs`, `yaml_alias` di `.`), scalar 100 KiB di balik alias sebanyak yang muat (`yaml_alias` di `.`), dan billion laughs bersarang (`yaml_alias` atau `yaml_syntax`).
+   - Bagian `## Milestone 1` di `verify.md`: baris yang menyebut "anchor dan alias ditunjuk di `7:8` dan `9:8`" diganti dengan hasil test di atas.
 3. Core `environment::plan` dan `status`: `gather_planned` dan `CreateFacts.planned_runtime` di create (`facts`, `evaluate`) tanpa mengubah golden preflight, penulisan ulang baris secret `Bind`, pencocokan registry, tabel *Lifecycle ke aksi*, `steps`, `differences`, `detached`, urutan topologis, `planDigest`, `PlanInputs`, status environment. Memenuhi **AC-5**, **AC-7**, **AC-8**, **AC-9**, **AC-10**, **AC-14**.
 4. Protokol: modul `env`, enam method (`recovery refused`), DTO, `InstanceOwnership` dan `InstanceSummary.environments`, area kode `env` dengan hint, fixture `protocols/fixtures/env/` dan entri `instance/index.json` yang terdampak, kenaikan minor `ProtocolVersion::CURRENT`, `cargo xtask codegen`, `cargo xtask fuzz seed`. Memenuhi **AC-24**, **AC-15**.
 5. `stacklyd`: handler `env.validate`, `env.plan`, `env.list`, `env.get`; operasi `import_environment` dan `remove_environment` dengan `commit_guarded`, replay, dan `set_audit_note`; pemetaan DTO dan error per varian; cache keanggotaan di memori dan pengisian `ownership` serta `environments` di setiap pembangun `InstanceSummary` (list, get, event, doctor); test tanpa efek samping (pohon file, generation, fake), test sentinel, dan test anggaran frame. Memenuhi **AC-4**, **AC-6**, **AC-12**, **AC-13**, **AC-14**, **AC-15**.
@@ -536,6 +611,7 @@ Urutan mengikuti pendekatan Journey: jalur "menerima `stackly.yaml`, memvalidasi
 - Perbedaan manifest dengan instance yang sudah ada hanya dilaporkan. Mengubah port atau versi service yang sudah dibuat tetap lewat alur instance (spec 0029, 0025), bukan lewat manifest.
 - Plan melakukan trial bind port, jadi ia tidak sepenuhnya pasif terhadap jaringan loopback, sama seperti preflight.
 - Tanpa `EventKind` baru, GUI memuat ulang `env.list` pada event instance; murah untuk 64 environment, tetapi bukan push murni.
+- Anchor dan alias diterima, jadi satu nilai di manifest bisa berasal dari baris lain di file yang sama, dan `location` finding menunjuk path tempat nilai itu dipakai, bukan baris tempat ia ditulis. Melarang alias nanti berarti menolak file yang sudah beredar di tim, jadi keputusan ini mahal dibalik sesudah rilis. Tag yang diselesaikan parser (`!!str` dan sejenisnya) juga tidak ditolak. Anggaran expand kini menghitung byte string, dan itu mengubah `yaml_value` yang juga dipakai loader provider.
 
 **Neutral**:
 
@@ -563,6 +639,8 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain). Semuanya ditera
 - [x] Spec 0046: `env.up` dengan `expectedPlanDigest`, penulisan member dan snapshot, default `timeoutSeconds`, nasib member `detached`, tombol Up… dan Bring Up, kalimat onboarding. Dijawab spec 0046 (2026-11-13); dua usulan perilakunya (masukan `planDigest`, instance belum initialized) diterapkan di *Aksi plan*.
 - [x] Spec 0047: tombol Down, baris Lease, jawaban Follow-up spec 0026 tentang restart pada instance yang dipinjam. Dijawab spec 0047 (2026-11-13: AC-20, AC-22, AC-14); *Titik sambung* di atas sudah diselaraskan.
 - [ ] Dari spec 0047: rename instance yang dipinjam lewat `instanceRef` membuat plan environment peminjam melaporkan `env.instance_ref_not_found`, walau member nya masih terikat lewat ID. Putuskan di spec ini apakah plan mengikuti member, atau rename meminta override seperti ganti port.
+- [x] Lead, untuk spec 0045: kalimat *Loader* di `docs/specs/0045-lockfile-override-lokal/index.md` ("loader ketat spec 0044 (field tak dikenal, key ganda, anchor, alias, …ditolak)") dan baris `yaml_alias` di tabel finding nya perlu mengikuti *YAML yang diterima* di spec ini: lock dan file override memakai loader yang sama, jadi anchor dan alias diterima di sana juga. Diterapkan di spec 0045 (2026-11-13).
+- [x] Lead, untuk spec 0009: anggaran node `yaml_value` kini menghitung byte string (*YAML yang diterima*, **Anggaran expand**). Kalimat "dua node per byte teks ditambah 1024" di *Security model* dan tabel temuan `rationale.md` spec 0009 perlu menyebut biaya string, dan celah lama (scalar besar di balik ribuan alias) perlu dicatat di sana sebagai tertutup. Diterapkan di spec 0009 (2026-11-13).
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa `env.validate` dan `env.plan` read only dan bukan operasi, bahwa plan memakai `gather` dan `evaluate` create, dan perintah `stackly env`.
 
 ## Rationale
