@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d5a1-1b23-7608-a3fa-3792b9044852",
+  "covers": [
+    "BR-018",
+    "AC-080"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "export_prints_the_ports_of_the_members_and_never_a_redacted_value",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 1468
+  },
+  "status": "PASS",
+  "expected": "env.export answers HOST, PORT, and ADDRESS of the running member in dotenv and shell, skips a service without an instance, holds no path, and leaves out a value the redactor knows",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:57:47.683768Z",
+  "finishedAt": "2026-11-13T15:57:51.60961Z",
+  "evidencePath": "output.log"
+}
