@@ -102,7 +102,9 @@ struct EnvironmentDownModelTests {
         #expect(
             model.watched[FixtureEnvironmentDown.downID]
                 == EnvironmentDownModel.Watch(
-                    environment: FixtureEnvironments.erpID, name: "erp-development", kept: 2))
+                    environment: FixtureEnvironments.erpID, name: "erp-development", kept: 2,
+                    keptLine: "Keeps running: pg17-dev (used by reporting), queue (started by you)."
+                ))
     }
 
     @Test func aChangedSetOpensTheConfirmationAgainWithTheNewPreviewAndANote() async throws {
@@ -151,6 +153,10 @@ struct EnvironmentDownModelTests {
             reports.items.map(\.message) == [
                 "erp-development is down. 1 stopped, 2 kept running."
             ])
+        #expect(
+            reports.items.first?.detail
+                == "Keeps running: pg17-dev (used by reporting), queue (started by you). Shared and manually started instances keep running."
+        )
         #expect(model.watched.isEmpty)
     }
 

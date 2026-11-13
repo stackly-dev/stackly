@@ -21,6 +21,8 @@ final class EnvironmentDownModel {
         let name: String
         /// How many instances the confirmed preview kept running.
         let kept: Int
+        /// The "Keeps running: …" line of the confirmed preview, or `nil`.
+        var keptLine: String? = nil
     }
 
     /// The environments whose preview or `env.down` is on its way.
@@ -116,7 +118,9 @@ final class EnvironmentDownModel {
         switch outcome {
         case .completed(.envDown(let reply)):
             let operation = reply.operation.operation
-            let watch = Watch(environment: id, name: reply.name, kept: preview.keep.count)
+            let watch = Watch(
+                environment: id, name: reply.name, kept: preview.keep.count,
+                keptLine: EnvironmentCopy.keepLine(preview.keep))
             await store.reload()
             if EnvironmentStore.hasEnded(operation.state) {
                 show(operation, watch: watch)
@@ -155,7 +159,7 @@ final class EnvironmentDownModel {
     private func show(_ operation: OperationSummary, watch: Watch) {
         let environment = watch.environment
         let feedback = Self.feedback(
-            operation, name: watch.name, kept: watch.kept,
+            operation, name: watch.name, kept: watch.kept, keptLine: watch.keptLine,
             bringDownAgain: { [weak self] in
                 Task { await self?.begin(environment: environment) }
             },
@@ -170,10 +174,12 @@ final class EnvironmentDownModel {
     ///   - operation: The summary of the `environment_down` that ended.
     ///   - name: The environment's name.
     ///   - kept: How many instances the confirmed preview kept running.
+    ///   - keptLine: The "Keeps running: …" line of the confirmed preview, which names each
+    ///     shared or manually started instance and why it runs, or `nil`.
     ///   - bringDownAgain: Opens Down again, for a Down that left instances running.
     ///   - showOperation: Opens the operation.
     static func feedback(
-        _ operation: OperationSummary, name: String, kept: Int,
+        _ operation: OperationSummary, name: String, kept: Int, keptLine: String? = nil,
         bringDownAgain: @escaping @MainActor () -> Void,
         showOperation: @escaping @MainActor () -> Void
     ) -> Feedback? {
@@ -185,11 +191,13 @@ final class EnvironmentDownModel {
             let keptCount = kept + inUse
             if keptCount > 0 {
                 // The environment can read partially ready afterwards: a shared or manually
-                // started instance it uses still runs. The detail says so with the sentence of
-                // the confirmation.
+                // started instance it uses still runs. The detail names each one with its
+                // reason, as the confirmation did, then the confirmation's sentence.
+                let detail = [keptLine, EnvironmentCopy.downKeptDetail]
+                    .compactMap { $0 }.joined(separator: " ")
                 return .success(
                     EnvironmentCopy.downKept(name, stopped: stopped, kept: keptCount),
-                    detail: EnvironmentCopy.downKeptDetail)
+                    detail: detail)
             }
             if stopped > 0 {
                 return .success(EnvironmentCopy.downStopped(name, stopped: stopped))

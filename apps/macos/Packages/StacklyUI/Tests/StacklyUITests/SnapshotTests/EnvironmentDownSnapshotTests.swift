@@ -64,6 +64,29 @@ extension SnapshotTests {
 
         @Test(
             .evidence(
+                covers: ["REQ-022", "NFR-012"],
+                expected:
+                    "The result of a Down that kept a shared instance and one you started names each with its reason: used by reporting, started by you"
+            ))
+        @MainActor
+        func resultThatKeptSharedAndManualInstances() async throws {
+            let down = FixtureEnvironmentDown.self
+            let preview = down.preview()
+            let made = EnvironmentDownModel.feedback(
+                down.downOperation(state: .succeeded, result: down.result(stopped: 1)),
+                name: "erp-development", kept: preview.keep.count,
+                keptLine: EnvironmentCopy.keepLine(preview.keep), bringDownAgain: {},
+                showOperation: {})
+            let feedback = try #require(made)
+            try await assertSnapshot(
+                FeedbackCard(feedback: feedback, center: FeedbackCenter())
+                    .padding(Spacing.s12),
+                named: "environment-down-kept-feedback",
+                size: SnapshotSize.fitting(width: 520, narrowWidth: 400))
+        }
+
+        @Test(
+            .evidence(
                 covers: ["REQ-054", "NFR-012"],
                 expected:
                     "Operations shows Bring down environment erp-development with Partial and 1 of 2 instances stopped, and its two child stops nested under it"

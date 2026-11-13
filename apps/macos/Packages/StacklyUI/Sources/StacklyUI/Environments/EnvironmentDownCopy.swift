@@ -43,11 +43,7 @@ extension EnvironmentCopy {
         } else {
             lines.append("Stops: \(names(preview.stop.map(\.name))).")
         }
-        if preview.keep.isEmpty == false {
-            lines.append(
-                "Keeps running: \(names(preview.keep.map { "\($0.instance.name) (\(keepReason($0)))" }))."
-            )
-        }
+        if let keep = keepLine(preview.keep) { lines.append(keep) }
         if preview.blocked.isEmpty == false {
             lines.append(
                 "Can’t stop: \(names(preview.blocked.map { "\($0.instance.name) (\(blockedReason($0.code)))" }))."
@@ -55,6 +51,14 @@ extension EnvironmentCopy {
         }
         if preview.cancelsUp { lines.append(downCancelsUp) }
         return lines.joined(separator: "\n")
+    }
+
+    /// "Keeps running: {name} ({reason}), …", naming a shared instance with the environments
+    /// that use it and one you started with "started by you", or `nil` when none keeps
+    /// running. The confirmation and the result of a Down both write it.
+    static func keepLine(_ keep: [DownKeep]) -> String? {
+        guard keep.isEmpty == false else { return nil }
+        return "Keeps running: \(names(keep.map { "\($0.instance.name) (\(keepReason($0)))" }))."
     }
 
     /// At most ``downNameLimit`` names joined with ", ", then " and {n} more".
