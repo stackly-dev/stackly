@@ -46,7 +46,7 @@ Langkah 5 (handler `env.*`, cache keanggotaan, operasi import dan remove). Butuh
 - [x] `cargo test -p stacklyd --test environment membership_shows_on_every_summary_and_remove_waits_for_the_lease` → service tanpa instance `not_created`; member `dedicated` yang ditulis langsung ke registry (seperti Up spec 0046 nanti) tampil `ownership` `dedicated` dengan satu entri `environments` (`shop`, `db`, `dedicated`) yang sama persis di `instance.get`, `instance.list`, dan event `instance.state_changed`; `env.list` dan `env.get` menghitung dan menunjuk instance nya; remove dengan revision lama `resource.revision_mismatch`, dengan lease `active` `env.lease_active` (`count` 1, item berisi ID dan nama instance); sesudah lease dilepas remove berhasil, key yang sama membalas hal yang sama, `env.get` `env.not_found`, instance tetap ada dengan `ownership` `manual` dan `environments` kosong, file manifest tetap ada → AC-13, AC-14, AC-15
 - [x] `cargo test -p stacklyd --test environment get_reads_the_manifest_only_when_asked` → `checkManifest` true memberi `in_sync`, `changed`, `name_changed`, `invalid` (dengan `problems` lebih dari 0), dan `missing` sesuai isi file; `checkManifest` false tidak mengirim `manifestState` dan `problems`; plan sumber `registered` yang filenya hilang `env.manifest_unreadable`; ID yang tidak dikenal `env.not_found`; status environment tanpa instance `down` → AC-14
 - [x] `cargo test -p stacklyd --lib membership` → instance dengan member `dedicated` dan `shared` menjadi `dedicated` dengan entri dedicated lebih dulu lalu menurut nama; instance yang hanya dipinjam `shared`; instance tanpa environment `manual` → AC-15
-- [ ] `cargo test -p stacklyd --no-fail-fast` dan `cargo test -p stackly-core --no-fail-fast` → lulus; golden preflight, create, doctor, dan `instance.*` lain tidak berubah karena `ownership` dan `environments` hanya terisi untuk member → AC-15
+- [x] `cargo test -p stacklyd --no-fail-fast` dan `cargo test -p stackly-core --no-fail-fast` → lulus; golden preflight, create, doctor, dan `instance.*` lain tidak berubah karena `ownership` dan `environments` hanya terisi untuk member → AC-15 _(Dicentang 2026-11-13 atas dasar gerbang lead di `main`, tidak diulang checker: `stackly-core` 1763, `stacklyd` 737, `stackly-cli` 638, suite kecil 1135, StacklyUI dan `build-app` pada `be9ff7a3`.)_
 
 ### Catatan `/check verify` 2026-11-13 (sesi `chk-f44-m1`, kode `fa0eedcb`)
 
@@ -131,7 +131,7 @@ Tidak ada langkah manual. Semua perintah di bawah jalan tanpa terminal interakti
 - [x] `cargo test -p stackly-cli --test instance list` → kolom `ENVIRONMENT` sesudah `OWNERSHIP`: nama environment dipisah koma dalam urutan daemon (`erp-development, billing`), `-` untuk instance tanpa environment; golden `instance_list.txt`, `instance_list_failed.txt`, dan `instance_list.json` (field `environments`) diperbarui → AC-15 (bagian CLI)
 - [x] `cargo build -p stacklyd -p xtask && cargo test -p stackly-cli --test env stacklyd` → terhadap `stacklyd` dengan catalog hasil `cargo xtask catalog build`: validate mencetak `ok shop 2 services sha256:<digest>`; plan mencetak baris `install`, `create`, `start` untuk `cache` lalu `queue` dan `Plan: 2 to install, 2 to create, 2 to start, 0 to keep.`, exit 0, `registration` `new`, `order` `cache, queue`, dan tidak ada file baru di folder manifest; import mendaftarkan `shop`, import kedua mencetak `Already imported.` dan tetap menjalankan satu operasi `import_environment` lagi (dua baris audit); list `shop down 0/2`; plan lewat nama (`registration` `registered`) dan lewat UUID exit 0; remove tanpa `--yes` gagal `cli.confirmation_required`, dengan `--yes` menghapus dan menambah satu baris audit `remove_environment`, manifest tetap ada; remove kedua exit 10 `cli.environment_not_found`; provider yang tidak dikenal exit 2 `cli.env_invalid` dengan finding `unknown_provider`; file yang tidak ada exit 2 `env.manifest_unreadable` → AC-16, AC-17
 - [x] `cargo test -p stackly-cli --bin stackly` → unit test: `path::absolute` dan `home_masked`, `EnvironmentTarget` (UUID utuh dalam huruf apa pun adalah id), hitungan ringkasan plan menghitung setiap `start_instance` termasuk milik item `create`, baris finding `warning: `, dan satu constructor per kode `cli.*` (tiga kode `cli.env*` ikut) → AC-16, AC-17
-- [ ] `cargo test -p stackly-cli --no-fail-fast`, `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` → lulus
+- [x] `cargo test -p stackly-cli --no-fail-fast`, `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` → lulus _(Dicentang 2026-11-13 atas dasar gerbang lead di `main`, tidak diulang checker: `stackly-core` 1763, `stacklyd` 737, `stackly-cli` 638, suite kecil 1135, StacklyUI dan `build-app` pada `be9ff7a3`.)_
 
 ### Catatan `/check verify` 2026-11-13 (sesi `chk-f44-m2`, kode `c0005bad`)
 
@@ -200,7 +200,7 @@ _Status semua langkah di bawah: `NOT_RUN`, owner: user (langkah manual `F44-1`).
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentsSnapshotTests` → snapshot terang, gelap, dan sempit: daftar terisi, kosong, dan offline; detail partially ready, ready, dan down; empat banner manifest; Problems; sheet plan import (enam Create), plan terdaftar (Keep, Start, Create, blocker, perbedaan, approval), tidak valid, dan nama terpakai; Overview dengan seksi Environments; Instances dengan kolom Environment → AC-18 sampai AC-23
 - [x] `cargo build -p stacklyd -p stackly-fake-server && cargo build -p stacklyd --example skeleton_seed && cargo xtask build-app`, lalu `swift test --package-path apps/macos/Packages/StacklyUI --filter EnvironmentEndToEndTests` → terhadap `stacklyd` nyata dengan katalog bundel app (`STACKLY_TEST_CATALOG_DIR` atau `target/app/Debug/Stackly.app/Contents/Resources/catalog`): plan manifest contoh ERP valid, `registration` `new`, enam item `create` dengan `install_runtime`, `create_instance`, dan `start_instance`, semua provider `trusted`; pohon file test root (tanpa log dan registry) dan daftar instance sama sebelum dan sesudah plan dan import; import mendaftarkan `erp-development` dengan status `down` dan enam service; `manifestState` `in_sync`, Validate sukses, file diubah menjadi `changed`, Reload kembali `in_sync`; Remove menghapus environment dan file tetap ada; tanpa binary atau katalog test berakhir BLOCKED → AC-20, AC-21, AC-25, AC-6 (bagian GUI)
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter FixtureScenarioTests` → skenario `environment-partially-ready` ada dan tersambung → AC-24
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` dan `swift test --package-path clients/swift` → lulus (test integrasi butuh `cargo build -p stacklyd -p stackly-fake-server` dan example `skeleton_seed`, selain itu BLOCKED) → AC-22
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` dan `swift test --package-path clients/swift` → lulus (test integrasi butuh `cargo build -p stacklyd -p stackly-fake-server` dan example `skeleton_seed`, selain itu BLOCKED) → AC-22 _(Dicentang 2026-11-13 atas dasar gerbang lead di `main`, tidak diulang checker: `stackly-core` 1763, `stacklyd` 737, `stackly-cli` 638, suite kecil 1135, StacklyUI dan `build-app` pada `be9ff7a3`.)_
 - [x] `cargo xtask build-app` → build scheme Stackly lulus → AC-18
 - [x] `cargo xtask evidence check` → record manual `evidence/manual/2026-11-13-spec-0044-journey-04-import-the-erp-manifest-in.json` valid dengan status `NOT_RUN`, owner user → AC-25
 
@@ -248,3 +248,65 @@ Kesiapan Milestone 3: bagian otomatis siap dicentang; 19 langkah manual tetap `N
 - AC-24 (bagian Swift) · skenario fixture `environment-partially-ready`, `PageRig.environmentsPage`
 - AC-25 · bagian fixture lewat `EnvironmentPlanPresenterTests` dan snapshot `environment-plan-import`; bukti lewat daemon nyata menunggu langkah 5 dan langkah manual di atas (record manual `NOT_RUN`)
 - AC-1 sampai AC-17 · milik Milestone 1 dan 2
+
+## Verify penuh 2026-11-13
+
+_Sesi `chk-f44-verify`, kode `4c18ff05`. Menutup `Build it` dan `Verify it` fitur 44. Langkah yang sudah `[x]` tidak diulang; yang diperiksa adalah apakah masih berlaku sesudah merge terakhir (F46 milestone 1, F47 langkah 1 dan 2, loader YAML)._
+
+Sejak pemeriksaan terakhir tiap area tidak ada file fitur ini yang berubah (`crates/core/src/environment`, `apps/daemon/src/ipc/env`, `apps/daemon/src/membership.rs` sejak `98ae4914`; `apps/cli` sejak `c0005bad`; `apps/macos` dan `clients/swift` sejak `be9ff7a3`). Test bertarget pada `HEAD`: `cargo test -p stackly-core --test environment` 44, `cargo test -p stacklyd --test environment` 12, `cargo test -p stackly-cli --test env` 13 (termasuk binary test terhadap `stacklyd` asli), `--test instance list` 17, dan `swift test --filter "EnvironmentEndToEndTests|EnvironmentStoreTests|EnvironmentMenuTests"` 12 (E2E terhadap `stacklyd` asli, bukan BLOCKED). Tiga kotak suite penuh dicentang atas dasar gerbang lead.
+
+Verdict: semua AC lulus untuk bagian yang bisa diotomasi. Yang tersisa hanya bukti GUI nyata: langkah manual `F44-1` (18 langkah dan record evidence) dan `F44-2` (langkah 19), keduanya `NOT_RUN`, owner user.
+
+| AC | Status | Bukti utama |
+| --- | --- | --- |
+| AC-1 | PASS | loader `yaml_value`, alias sama dengan kembarannya, tag dan `<<` ditolak, bom ditolak cepat (daemon asli) |
+| AC-2 | PASS | satu fixture per kode, semua finding sekaligus, jalur cycle di pesan |
+| AC-3 | PASS | sentinel tidak ada di balasan, log, registry, root |
+| AC-4 | PASS | `env.validate` daemon asli, alasan `manifest_unreadable` |
+| AC-5 | PASS | ERP enam install, create, start; `install` false lewat probe; digest stabil |
+| AC-6 | PASS | pohon file, operasi, audit, instance, runtime, provider sama sebelum dan sesudah (socket, CLI, E2E app) |
+| AC-7 | PASS | port, nama, trust `pending` dan `revoked` satu blocker, selector; `instance.capability_unsupported` belum teruji |
+| AC-8 | PASS | `instanceRef` tidak ada, provider lain, `keep` dan `start`, tidak pernah `create` |
+| AC-9 | PASS | tabel lifecycle termasuk `retained`, `not_initialized`, `differences`, `detached` |
+| AC-10 | PASS | status secret dengan fake store; Keychain asli tidak dijalankan |
+| AC-11 | PASS | nama unik, lokasi kanonik (`/tmp`, huruf besar folder dan nama file), relink |
+| AC-12 | PASS | import, key sama, tak berubah, digest lama, tidak valid, ke 65 |
+| AC-13 | PASS | revision, `env.lease_active`, remove, file dan instance tetap |
+| AC-14 | PASS | list, get, `manifestState`, `updatedAt` dari baris |
+| AC-15 | PASS | `ownership` dan `environments` sama di get, list, event; kolom `ENVIRONMENT` CLI |
+| AC-16 | PASS | `result` `--json` sama dengan balasan daemon; exit 0, 2, 3 |
+| AC-17 | PASS | import, relink, list, remove, exit 10; konfirmasi `[y/N]` di TTY tidak diuji |
+| AC-18 | PASS otomatis + manual `NOT_RUN` | snapshot daftar, detail, sidebar; `F44-1` |
+| AC-19 | PASS otomatis + manual `NOT_RUN` | `aServiceMenuFollowsItsInstance`, snapshot sempit; `F44-1` langkah 5, `F44-2` |
+| AC-20 | PASS otomatis + manual `NOT_RUN` | snapshot sheet (Create, Start, Keep, blocker, Done saja); `F44-1` |
+| AC-21 | PASS otomatis + manual `NOT_RUN` | test model, menu More, E2E daemon asli; `F44-1` |
+| AC-22 | PASS otomatis + manual `NOT_RUN` | kosong, offline, gagal, terang, gelap, sempit; `F44-1` |
+| AC-23 | PASS otomatis + manual `NOT_RUN` | snapshot Overview, Instances, inspector, onboarding; `F44-1` |
+| AC-24 | PASS | protokol 4.2, fixture, schema, `codegen --check`, Swift contract test |
+| AC-25 | PASS otomatis + manual `NOT_RUN` | binary test CLI dan E2E app terhadap daemon asli; record manual `NOT_RUN` |
+
+**Trace** (`docs/scope/08-environment-proyek.md`): REQ-020 lewat AC-1, AC-2, AC-5, AC-6 (PASS) · REQ-028 lewat AC-16, AC-17 (PASS) · VAL-013 lewat AC-2, AC-3, AC-7 (PASS) · VAL-014 lewat AC-8 (PASS) · AC-020 lewat AC-5, AC-6 (PASS) · AC-080 bagian plan lewat AC-6 (PASS) · PAGE-10 lewat AC-18 sampai AC-22 (otomatis PASS, `F44-1` dan `F44-2` `NOT_RUN`) · NFR-012 lewat AC-22 (otomatis PASS, `F44-1` `NOT_RUN`) · JOURNEY-04 lewat AC-25 (otomatis PASS, record manual `NOT_RUN`).
+
+**Done when:**
+
+- Plan manifest baru menampilkan install, create, dan start tanpa file data, proses, perubahan trust, atau runtime: terbukti (daemon asli, CLI, E2E app).
+- Cycle, reference yang tidak ada, secret literal, dan konflik endpoint fixed ditolak sebelum mutasi: terbukti (`dependency_cycle`, `unknown_dependency`, `env.instance_ref_not_found`, `secret_literal`, `endpoint_conflict`; import ditolak tanpa operasi).
+- `stackly env validate` dan `plan` setara dengan GUI: terbukti di sisi CLI (sama persis dengan balasan daemon) dan di sisi app lewat method yang sama (E2E); perbandingan di layar nyata ada di `F44-1`.
+- Halaman Environments bisa dipakai dengan interaksi desktop: otomatis lewat test model dan snapshot; GUI nyata `F44-1` `NOT_RUN`.
+- Halaman dan sheet plan mengikuti mockup (status, tabel service, Create, Start, Keep, sidebar dengan hitungan ready): terbukti lewat snapshot terang, gelap, sempit; GUI nyata `F44-1` `NOT_RUN`.
+- Menu aksi per service (`OpenInMenu`, Copy Connection URL, Show Instance, Show Logs, Start atau Stop): terbukti lewat `EnvironmentMenuTests`; GUI nyata `F44-2` `NOT_RUN`.
+
+**Temuan rendah yang masih terbuka** (tidak menghalangi; untuk tester dan `/sync`):
+
+1. CLI mode teks: `env.name_taken` tidak menampilkan lokasi tempat nama terdaftar dan tidak menyebut `--relink`.
+2. CLI: `env remove --yes` menulis `Instances and data are kept.` ke stderr selain kalimat hasil; bagian stderr `env plan` muncul sebelum tabel.
+3. CLI: `counts` menghitung warning hanya dari finding yang dikirim; bisa meleset saat ada `omitted` dan warning (spec 0045).
+4. Daemon: RSS `stacklyd` naik ke sekitar 281 MiB sesudah ratusan `env.validate` file besar lalu datar (blok bebas yang ditahan allocator, bukan bocor).
+5. Core: `installed_fixture` (cocok lewat software, versi, target untuk artefak `fixture`) ada di kode produksi `plan.rs`, tidak di balik feature `fixture`; tidak terjangkau catalog nyata. Baris fixture ber mode `External` memberi item tanpa runtime dan tanpa blocker.
+6. AC-7: `instance.capability_unsupported` tidak punya test dan tidak bisa di probe (semua paket `multiInstance`); dua service ber provider tanpa `multiInstance` dalam satu manifest belum diatur spec.
+7. App: detail instance untuk Open In dimuat saat baris tampil (paling banyak 32 baca saat halaman dibuka), bukan saat menu dibuka.
+8. App: snapshot `shell-environments-sidebar` menggambar baris terpilih sebagai sorotan hitam tanpa teks dan path Overview sebagai `/Users/…`; referensi itu tidak mewakili tampilan asli baris terpilih.
+9. AC-10: status `present` dan `missing` terhadap Keychain login asli tidak dijalankan (hanya user); status `unknown` dan `secret.store_unsupported` belum punya test.
+10. Record manual ber `owner` kosong (kebiasaan record `NOT_RUN` di repo), sedangkan teks langkah menulis "owner user".
+
+Daftar celah test lengkap sudah dikirim ke sesi `tst-f44-test`.
