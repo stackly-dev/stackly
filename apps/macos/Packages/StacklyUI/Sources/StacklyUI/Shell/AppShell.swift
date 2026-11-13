@@ -365,6 +365,7 @@ public struct AppShell: View {
                     instances: instances,
                     catalog: catalog,
                     actions: instanceActions,
+                    operations: operations,
                     selected: navigator.environment,
                     waiting: presentation.pageFailure,
                     hasConnection: presentation.hasConnection,
@@ -409,6 +410,7 @@ public struct AppShell: View {
                     operations: operations,
                     instances: instances,
                     runtimes: runtimes,
+                    environments: environments,
                     actions: instanceActions,
                     service: daemon.map(OperationsService.live) ?? .disconnected,
                     waiting: presentation.pageFailure,
@@ -531,7 +533,7 @@ private struct EnvironmentSidebarRow: View {
     let environment: EnvironmentSummary
 
     var body: some View {
-        let appearance = StatusAppearance.environment(status: environment.status)
+        let appearance = StatusAppearance.environment(environment)
         Label {
             HStack {
                 Text(environment.name)

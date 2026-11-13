@@ -11,6 +11,9 @@ struct OperationRow: View {
     let operation: OperationSnapshot
     let title: String
     let actions: [StacklyAction]
+    /// Whether the row is a child of the row above it (spec 0046): it is indented under its
+    /// coordinator.
+    var isChild = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s8) {
@@ -33,6 +36,7 @@ struct OperationRow: View {
             }
         }
         .padding(.vertical, Spacing.s6)
+        .padding(.leading, isChild ? Spacing.s22 : 0)
     }
 
     private var texts: some View {

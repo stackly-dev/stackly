@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-31ed-73a4-88ca-e96697b818d0",
+  "covers": [
+    "REQ-021"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_up",
+    "name": "a_refused_up_starts_no_operation_and_writes_nothing",
+    "file": "apps/daemon/tests/env_up.rs",
+    "line": 196
+  },
+  "status": "PASS",
+  "expected": "env.up refuses an invalid manifest with env.manifest_invalid, a digest the client did not review with env.plan_changed, and a secretRefs reference without a value with secret.needs_secret naming it, and none of them moves the registry generation, adds an operation, or creates an instance",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:20.877574Z",
+  "finishedAt": "2026-11-13T18:25:22.38137Z",
+  "evidencePath": "output.log"
+}

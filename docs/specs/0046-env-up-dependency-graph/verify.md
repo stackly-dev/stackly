@@ -154,3 +154,45 @@ Rendah:
 - AC-17, AC-18 · belum, Milestone 3 (CLI)
 - AC-19 sampai AC-22 · belum, Milestone 4 (app)
 - AC-25 · belum, Milestone 4 langkah 11 (native)
+
+## Milestone 4: Up di app
+
+Langkah Build plan 8 sampai 11: sheet plan dengan Up… dan Bring Up, progress dan alasan belum ready, Activity dan onboarding, lalu test native dan langkah manual. Protokol tetap 4.4; GUI tidak mengubah `crates/protocol/`, `protocols/`, atau `Generated/`.
+
+### UI / manual
+
+Langkah ini hanya dijalankan kamu (GUI nyata, Keychain login, dan runtime asli). Prasyarat: Mac Apple Silicon dengan macOS 27 di sesi login GUI; build dari checkout bersih (`cargo build -p stacklyd -p stackly-cli` dan `cargo xtask build-app`); stacklyd berjalan untuk user ini; enam runtime ERP sudah terpasang (`cargo test -p stacklyd --test env_up_native -- --ignored` lulus, atau pasang lewat Runtimes); salin `crates/core/tests/fixtures/environments/erp-development.yaml` ke `~/Code/erp/stackly.yaml` dan ganti port yang bentrok dengan layanan lain di Mac ini; secret `local:erp/...` belum ada di Keychain.
+
+- [ ] Buka app → Environments → Import… → pilih `~/Code/erp/stackly.yaml` → Import → halaman detail `erp-development` terbuka; toolbar kanan berisi Up… (accent) dan tidak ada Plan… → AC-19
+- [ ] Klik Up… → sheet "Plan for erp-development" dengan Cancel dan Bring Up; enam baris Create, baris "Needs secret: local:erp/..." dengan tombol Set…; catatan kaki "Services start in dependency order and wait for readiness. If one fails, the rest stay up and the environment is marked partially ready." → AC-19, AC-21
+- [ ] Klik Set… pada `local:erp/postgres/admin` → Enter Secret sheet hanya untuk reference itu; isi nilai uji, Save, Review Plan → sheet plan dimuat ulang dan baris itu menjadi "Uses secret local:erp/postgres/admin" → AC-21
+- [ ] Biarkan reference lain kosong, klik Bring Up → Enter Secret sheet membuka semua reference yang kosong (dari `secret.needs_secret`) dan tidak ada operasi baru di Operations; isi semuanya, Review Plan → plan dimuat ulang, Bring Up aktif lagi → AC-21
+- [ ] Ubah satu port di `stackly.yaml` sesudah sheet terbuka, lalu klik Bring Up → sheet memuat plan baru dengan banner "The plan changed. Review it again." dan tidak ada yang berjalan → AC-19
+- [ ] Bring Up → sheet tertutup; halaman detail menampilkan banner "Bringing up… {done} of {total}" dengan Cancel dan Show in Activity; kolom Status memperlihatkan Queued, Installing…, Creating…, "Waiting for …", atau Starting… untuk service yang belum berakhir; sidebar dan daftar Environments menampilkan "Bringing up…"; Up… nonaktif dengan "Already bringing up" → AC-20, AC-22
+- [ ] Show in Activity → Operations memilih "Bring up environment erp-development"; operasi create dan start anak bersarang di bawahnya; Overview tidak menghitung anak sebagai operasi tersendiri → AC-22
+- [ ] Sesudah selesai → banner hilang, enam service Running, Details dan menu service memakai port yang benar benar dipakai → AC-20
+- [ ] Gagalkan satu service: hentikan app, jalankan proses lain di port `mysql` (misalnya `nc -l 127.0.0.1 <port>`), buka lagi app, Up… → Bring Up → Up berakhir; banner "{n} of 6 ready" menyebut `mysql` dengan "Start failed: …" dan Show Operation; Operations menampilkan label Partial dengan "{ready} of 6 services ready"; hentikan `nc`, Up… → Bring Up lagi → semua ready → AC-20, AC-22
+- [ ] Kosongkan satu reference (hapus item `local:erp/valkey/password` di Keychain Access) lalu Bring Up → sheet secret membuka reference itu sebelum ada perubahan; batalkan, lalu lihat halaman detail sesudah restart instance → banner menyebut "Needs secret local:erp/valkey/password" dengan Set Secret… → AC-20, AC-21
+- [ ] Tutup app di tengah Up (Quit), lalu buka lagi → halaman detail menampilkan banner progress selama Up masih berjalan di daemon, lalu hasil akhirnya; bila daemon dihentikan di tengah Up, banner "Not ready" atau "{n} of 6 ready" memuat "The last Up was interrupted. Bring it up again to continue." → AC-20, AC-15
+- [ ] Hentikan stacklyd selagi sheet plan terbuka → Bring Up dan Set… nonaktif dengan alasan di footer sheet → AC-22
+
+### Commands
+
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'EnvironmentUp'` → `EnvironmentUpPresenterTests` (Bring Up mengirim `planDigest` sheet, plan tidak `applicable` menolak dengan "Resolve the blockers above first.", `env.plan_changed` memuat ulang dengan catatan, `secret.needs_secret` membuka sheet secret lalu plan dimuat ulang, Set… satu reference, penolakan lain disimpan di sheet, alasan Up… nonaktif), `EnvironmentUpProgressTests` (tabel *Copy phase*, "Bringing up…" di daftar, kolom Status per phase, alasan dan aksi banner, teks `up_failed`, hitungan progress, skenario fixture), dan `EnvironmentUpActivityTests` (judul dengan nama environment, Partial, anak bersarang) lulus → AC-19 sampai AC-22
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'EnvironmentUpSnapshotTests|EnvironmentsSnapshotTests|OnboardingSnapshotTests'` → snapshot terang, gelap, dan sempit lulus: `environment-plan-up`, `environment-plan-changed`, `environment-plan-up-offline`, `environment-plan-blocked` (Bring Up nonaktif), `environment-bringing-up`, `environment-up-incomplete`, `environment-up-failed`, `environment-up-interrupted`, `environments-list-bringing-up`, `operations-environment-up`, dan onboarding dengan contoh perintah baru → AC-19 sampai AC-22
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'FixtureScenarioTests|FixtureShellTests'` → katalog memuat `environment-bringing-up` dan `environment-up-incomplete` dan keduanya tersambung tanpa banner → AC-23
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI --filter 'Onboarding'` → `commandExamples` `stackly instance list`, `stackly env up ~/Code/erp`, `stackly doctor`, dan baris "Environments as files" dengan "A stackly.yaml per project. Plan, then bring everything up in order." → AC-22
+- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` (penuh) dan `swift test --package-path clients/swift` → lulus
+- [ ] `cargo xtask build-app` → build scheme Stackly lulus
+- [ ] `cargo test -p stacklyd --test env_up_native -- --ignored --test-threads=1` → native: enam runtime ERP dipasang dari cache xtask tanpa unduhan, Up sampai enam service `ready` dengan port terikat, Up kedua semuanya Keep tanpa anak; tanpa artefak di cache test berakhir `BLOCKED` (`owner: user`) → AC-25
+- [ ] `cargo xtask evidence check` → lulus, termasuk record native `env_up_native` dan record fixture `env_up` di `evidence/environment/` → AC-25
+
+### Acceptance-criteria coverage
+
+- AC-19 · Up… menggantikan Plan…, sheet dengan Cancel dan Bring Up, `env.plan_changed`, "Create with Up…", catatan kaki; tes presenter dan snapshot sheet
+- AC-20 · banner "Bringing up… {done} of {total}" dengan Cancel dari `OperationSummary.cancel` dan Show in Activity, `StatusAppearance.upPhase` (tabel di `apps/macos/design.md`), banner partially ready dan "Not ready" dengan alasan dan aksi tiap service; tes dan snapshot detail
+- AC-21 · Set… di sheet plan, `secret.needs_secret` membuka `SecretEntrySheet`, plan dimuat ulang sesudahnya, Set Secret… di banner
+- AC-22 · judul "Bring up environment {name}", anak bersarang lewat `parent`, label Partial, Overview tanpa anak, "Bringing up…" di sidebar, daftar, dan Overview, onboarding, aksi baru lewat `StacklyAction` yang ter gate mutasi
+- AC-23 · bagian GUI: skenario fixture `environment-bringing-up` dan `environment-up-incomplete`
+- AC-25 · test native `apps/daemon/tests/env_up_native.rs`; langkah manual di atas untuk JOURNEY-04 di app
+- AC-1 sampai AC-18, AC-24 · milik Milestone 1 sampai 3

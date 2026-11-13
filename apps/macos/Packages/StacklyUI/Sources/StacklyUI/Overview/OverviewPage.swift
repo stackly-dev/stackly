@@ -227,7 +227,9 @@ public struct OverviewPage: View {
         OverviewOperations(
             content: operationsContent(),
             title: {
-                OperationTitle.title(for: $0, instanceNames: names, runtimes: runtimeNames)
+                OperationTitle.title(
+                    for: $0, instanceNames: names, runtimes: runtimeNames,
+                    environments: environments?.names ?? [:])
             },
             open: { navigator?.openOperation($0) },
             showAll: { navigator?.show(.operations) },
@@ -241,7 +243,7 @@ public struct OverviewPage: View {
 
     private func operationsContent() -> OverviewOperationsContent {
         Self.operationsContent(
-            running: operations.active,
+            running: operations.active.filter { $0.parent == nil },
             loaded: operations.store.loadedAt != nil,
             failed: operations.store.error != nil,
             unsupported: operations.store.unsupported,

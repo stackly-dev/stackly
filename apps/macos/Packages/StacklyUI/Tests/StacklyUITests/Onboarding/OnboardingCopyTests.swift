@@ -60,7 +60,7 @@ struct OnboardingCopyTests {
         #expect(OnboardingCopy.environmentsAsFiles.title == "Environments as files")
         #expect(
             OnboardingCopy.environmentsAsFiles.detail
-                == "A stackly.yaml per project. Review the plan before anything runs.")
+                == "A stackly.yaml per project. Plan, then bring everything up in order.")
     }
 
     @Test func theStorageAndStepTitlesAreTheTable() {
@@ -268,14 +268,15 @@ struct OnboardingCopyTests {
 
     @Test func theExampleBlockHoldsOnlyTheCommandsOfTheTableOneForEachLine() {
         #expect(OnboardingCopy.commandExamplesLabel == "Example commands")
-        // `stackly doctor` joined with spec 0034 (AC-20, spec 0016 Follow-up).
+        // `stackly doctor` joined with spec 0034 (AC-20, spec 0016 Follow-up), and
+        // `stackly env up` with spec 0046 (AC-22).
         #expect(
             OnboardingCopy.commandExamples == [
-                "stackly daemon status", "stackly provider list", "stackly doctor",
+                "stackly instance list", "stackly env up ~/Code/erp", "stackly doctor",
             ])
         #expect(
             OnboardingCopy.commandExamplesText
-                == "$ stackly daemon status\n$ stackly provider list\n$ stackly doctor")
+                == "$ stackly instance list\n$ stackly env up ~/Code/erp\n$ stackly doctor")
     }
 
     // MARK: - The source rules over Onboarding/ (AC-4, AC-9, AC-3)

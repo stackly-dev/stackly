@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-bd82-7fca-b136-bc6bd345369e",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/detailWithNothingReady()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 126
+  },
+  "status": "PASS",
+  "expected": "An Up that left no service ready shows Not ready with each dependency reason; an interrupted one adds the line to bring it up again",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:56.61Z",
+  "finishedAt": "2026-11-13T18:25:57.428Z",
+  "evidencePath": "output.log"
+}

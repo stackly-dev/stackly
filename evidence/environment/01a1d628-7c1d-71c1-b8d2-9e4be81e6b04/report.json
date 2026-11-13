@@ -1,0 +1,888 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+    "sourceDirty": false,
+    "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+    "runKind": "fixture",
+    "command": [
+      "swift",
+      "test",
+      "--package-path",
+      "apps/macos/Packages/StacklyUI",
+      "--filter",
+      "EnvironmentUp"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T18:25:39.869472Z",
+  "finishedAt": "2026-11-13T18:25:59.511464Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 13,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 13,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 13,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7038-97be-e63848a77d26",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpProgressTests/eachPhaseReadsAsTheCopyTableSays()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 173
+      },
+      "status": "PASS",
+      "expected": "Each Up phase has its label, tone, and symbol; waiting names the first dependency and how many more",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7123-839e-75d0eee26374",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpPresenterTests/aMissingSecretOpensTheSecretSheetThenReadsThePlanAgain()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 80
+      },
+      "status": "PASS",
+      "expected": "secret.needs_secret from env.up opens the secret entry sheet with its references; Continue reads the plan again",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-719a-8dac-78d56a42e529",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpProgressTests/theStatusColumnShowsThePhaseOfAServiceStillWorkedOn()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 210
+      },
+      "status": "PASS",
+      "expected": "A service the Up works on shows its phase in the Status column; a service whose phase ended shows its instance status",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7914-a631-01534bb6cd39",
+      "covers": [
+        "REQ-021",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/planWithBringUp()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 54
+      },
+      "status": "PASS",
+      "expected": "The plan sheet of a registered manifest has Cancel and Bring Up on, a Needs secret line with Set…, and the footnote about dependency order and partially ready",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:53.682Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7adb-97a7-c5d508a33675",
+      "covers": [
+        "REQ-021",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpProgressTests/theBannerNamesEachServiceWithItsReasonAndAction()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 227
+      },
+      "status": "PASS",
+      "expected": "The partially ready banner names each service with its reason and offers Set Secret…, the dependency, or Show Operation",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7c44-9403-584bc62b8967",
+      "covers": [
+        "REQ-054",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpActivityTests/anUpIsTitledMarkedPartialAndHoldsItsChildren()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 310
+      },
+      "status": "PASS",
+      "expected": "An Up is titled Bring up environment {name}, reads Partial with {ready} of {total} services ready, and its children follow it nested",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-ac99-7ed8-b6ee-a488799e8b64",
+      "covers": [
+        "REQ-021",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "EnvironmentUpPresenterTests/bringUpSendsTheDigestTheSheetShowed()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+        "line": 26
+      },
+      "status": "PASS",
+      "expected": "Bring Up sends env.up for the registered manifest with the planDigest the sheet showed, then closes the sheet",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:52.282Z",
+      "finishedAt": "2026-11-13T18:25:52.47Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-b212-7055-948c-914fc030dfe2",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/planWhileOffline()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 71
+      },
+      "status": "PASS",
+      "expected": "While stacklyd is unavailable the loaded plan sheet keeps the plan, Bring Up and Set… are off, and the footer says why",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:53.683Z",
+      "finishedAt": "2026-11-13T18:25:54.308Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-b485-732d-9ca8-8672cb3cfd01",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/detailWhileBringingUp()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 92
+      },
+      "status": "PASS",
+      "expected": "While an Up runs the detail page shows Bringing up… 1 of 4 with Cancel and Show in Activity, and each service still worked on shows its phase",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:54.31Z",
+      "finishedAt": "2026-11-13T18:25:55.444Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-b8f5-78a3-8161-381266b1c631",
+      "covers": [
+        "REQ-021",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/detailAfterAnIncompleteUp()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 110
+      },
+      "status": "PASS",
+      "expected": "After an Up the partially ready banner names each service that is not ready with its reason, Start failed with Show Operation and Needs secret with Set Secret…",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:55.445Z",
+      "finishedAt": "2026-11-13T18:25:56.609Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-bd82-7fca-b136-bc6bd345369e",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/detailWithNothingReady()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 126
+      },
+      "status": "PASS",
+      "expected": "An Up that left no service ready shows Not ready with each dependency reason; an interrupted one adds the line to bring it up again",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:56.61Z",
+      "finishedAt": "2026-11-13T18:25:57.428Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-c0b5-77a2-95dc-ce242f9b1821",
+      "covers": [
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/listWhileBringingUp()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 149
+      },
+      "status": "PASS",
+      "expected": "The Environments list shows Bringing up… for the environment whose Up runs, with its ready count",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:57.43Z",
+      "finishedAt": "2026-11-13T18:25:58.144Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    },
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d628-c380-737e-87ba-0c7c0ec97e49",
+      "covers": [
+        "REQ-054",
+        "NFR-012"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "swift",
+        "package": null,
+        "target": "StacklyUITests",
+        "name": "SnapshotTests/EnvironmentUpSnapshotTests/activityWithNestedChildren()",
+        "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+        "line": 165
+      },
+      "status": "PASS",
+      "expected": "Operations shows Bring up environment erp-development with Partial and 2 of 4 services ready, and its three child starts nested under it",
+      "actual": "all expectations passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T18:25:58.145Z",
+      "finishedAt": "2026-11-13T18:25:59.357Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+        "sourceDirty": false,
+        "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+        "runKind": "fixture",
+        "command": [
+          "swift",
+          "test",
+          "--package-path",
+          "apps/macos/Packages/StacklyUI",
+          "--filter",
+          "EnvironmentUp"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}

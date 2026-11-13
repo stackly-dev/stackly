@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-ac99-7914-a631-01534bb6cd39",
+  "covers": [
+    "REQ-021",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/planWithBringUp()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 54
+  },
+  "status": "PASS",
+  "expected": "The plan sheet of a registered manifest has Cancel and Bring Up on, a Needs secret line with Set…, and the footnote about dependency order and partially ready",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:52.282Z",
+  "finishedAt": "2026-11-13T18:25:53.682Z",
+  "evidencePath": "output.log"
+}
