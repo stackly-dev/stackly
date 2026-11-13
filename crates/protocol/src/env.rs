@@ -2,7 +2,9 @@
 //! planned (`env.plan`), listed (`env.list`, `env.get`), registered
 //! (`env.import`), and forgotten (`env.remove`); its lock written
 //! (`env.lock`) and its endpoints exported (`env.export`, spec 0045); and
-//! brought up (`env.up`, spec 0046), an `environment_up` coordinator.
+//! brought up (`env.up`, spec 0046), an `environment_up` coordinator; and
+//! brought down (`env.preview_down`, `env.down`, spec 0047), an
+//! `environment_down` coordinator.
 //!
 //! Validate and plan are reads, not operations: they never write the
 //! registry, a file, or the Keychain. Import and remove are operations that
@@ -23,7 +25,7 @@ use crate::json::{FieldCode, Validate};
 use crate::operation::{OperationAccepted, OperationKind};
 use crate::provider::{FindingSeverity, import_path_code, is_sha256};
 use crate::secret::NeedsSecretItem;
-use crate::stop_all::InstanceRef;
+use crate::stop_all::{DemandSourceKind, InstanceRef};
 use crate::wire::{Count, Revision, Timestamp};
 
 /// Most findings an [`EnvValidation`] carries; `omitted` counts the rest.
@@ -32,6 +34,8 @@ pub const ENV_FINDINGS_MAX: usize = 100;
 pub const ENV_SERVICES_MAX: usize = 32;
 /// Most environments one registry holds; `env.list` answers all of them.
 pub const ENV_LIST_MAX: usize = 64;
+/// Most IDs `env.down` takes in `expectedStopInstanceIds` (spec 0047).
+pub const DOWN_EXPECTED_IDS_MAX: usize = 256;
 
 /// Whether an environment owns a service's instance.
 #[typeshare]
@@ -943,6 +947,22 @@ pub struct EnvironmentDetail {
     /// registry afterwards (spec 0046).
     #[serde(default)]
     pub last_up: Option<EnvUpReport>,
+    /// The environment's leases, from the registry (spec 0047 AC-12);
+    /// empty only from an older daemon.
+    #[serde(default)]
+    pub lease: Option<EnvLeaseInfo>,
+}
+
+/// The active leases an environment holds (spec 0047 AC-12).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvLeaseInfo {
+    /// How many leases are active.
+    pub active_count: Count,
+    /// The oldest `acquired_at` among them; empty when none is active.
+    #[serde(default)]
+    pub held_since: Option<Timestamp>,
 }
 
 /// The lock of a registered environment.
@@ -1050,6 +1070,10 @@ pub struct InstanceEnvironment {
     pub alias: String,
     /// Whether it owns the instance.
     pub ownership: EnvOwnership,
+    /// Whether the environment's lease on the instance is active (spec
+    /// 0047 AC-12), read from the registry.
+    #[serde(default)]
+    pub lease_active: bool,
 }
 
 /// What `env.lock` picks again. Tagged `type` and `content`.
@@ -1481,6 +1505,141 @@ impl Validate for EnvUpParams {
 #[serde(rename_all = "camelCase")]
 pub struct EnvUpReply {
     /// The environment the Up works on: registered, or new.
+    pub environment_id: Uuid,
+    /// Its name.
+    pub name: String,
+    /// The operation.
+    pub operation: OperationAccepted,
+}
+
+/// Params of `env.preview_down` (spec 0047 AC-1): a read, not an
+/// operation.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvPreviewDownParams {
+    /// The environment.
+    pub id: Uuid,
+}
+
+impl Validate for EnvPreviewDownParams {
+    fn validate(&self) -> Vec<FieldError> {
+        Vec::new()
+    }
+}
+
+/// One instance of a Down preview.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownInstance {
+    /// The instance.
+    pub instance_id: Uuid,
+    /// Its name.
+    pub name: String,
+    /// Its alias in the environment; empty for an instance that holds only
+    /// a lease of it.
+    #[serde(default)]
+    pub alias: Option<String>,
+    /// How the environment holds it, when it is a member.
+    #[serde(default)]
+    pub ownership: Option<EnvOwnership>,
+    /// Its lifecycle now.
+    pub lifecycle: InstanceLifecycle,
+}
+
+/// An instance Down leaves running, and why.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownKeep {
+    /// The instance.
+    pub instance: DownInstance,
+    /// The sources of the other active leases.
+    pub demand: Vec<DemandSourceKind>,
+    /// The other environments whose lease is active, by name.
+    #[serde(default)]
+    pub environments: Vec<InstanceEnvironment>,
+}
+
+/// An instance Down can't stop.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DownBlocked {
+    /// The instance.
+    pub instance: DownInstance,
+    /// Why, such as `supervisor.identity_unproven`.
+    pub code: String,
+}
+
+/// Reply of `env.preview_down`: what Down would stop and keep now, from
+/// the one rule `env.down` uses. Each list is ordered by name.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvDownPreview {
+    /// The environment.
+    pub environment: EnvironmentRef,
+    /// The instances Down stops; the client sends their IDs back.
+    pub stop: Vec<DownInstance>,
+    /// The instances that keep running, with their reason.
+    pub keep: Vec<DownKeep>,
+    /// The instances that are stopped already.
+    pub idle: Vec<DownInstance>,
+    /// The instances Down can't stop.
+    pub blocked: Vec<DownBlocked>,
+    /// How many leases of the environment are active.
+    pub lease_count: Count,
+    /// Whether an `environment_up` of the environment has not ended, so
+    /// Down cancels it.
+    pub cancels_up: bool,
+}
+
+/// Params of `env.down`, an `environment_down` operation (spec 0047
+/// AC-2); the request carries the `idempotencyKey`.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvDownParams {
+    /// The environment.
+    pub id: Uuid,
+    /// The IDs of `EnvDownPreview.stop` the client showed; may be empty.
+    pub expected_stop_instance_ids: Vec<Uuid>,
+}
+
+impl Validate for EnvDownParams {
+    fn validate(&self) -> Vec<FieldError> {
+        let mut fields = Vec::new();
+        if self.expected_stop_instance_ids.len() > DOWN_EXPECTED_IDS_MAX {
+            fields.push(FieldError::new(
+                "expectedStopInstanceIds",
+                FieldCode::TooMany,
+            ));
+        }
+        let mut seen = std::collections::HashSet::new();
+        if !self
+            .expected_stop_instance_ids
+            .iter()
+            .take(DOWN_EXPECTED_IDS_MAX)
+            .all(|id| seen.insert(*id))
+        {
+            // An ID named twice.
+            fields.push(FieldError::new(
+                "expectedStopInstanceIds",
+                FieldCode::InvalidValue,
+            ));
+        }
+        fields
+    }
+}
+
+/// Reply of `env.down`, as soon as the operation is accepted.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvDownReply {
+    /// The environment that goes down.
     pub environment_id: Uuid,
     /// Its name.
     pub name: String,

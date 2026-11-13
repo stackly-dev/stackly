@@ -1074,6 +1074,14 @@ async fn dispatch(
             .map(Reply::EnvExport),
             None,
         ),
+        // provisional: F47 step 5 adds the handlers of Down.
+        Call::EnvPreviewDown(_) | Call::EnvDown(_) => (
+            Err(Box::new(ErrorBody::new(
+                &stackly_protocol::codes::request::UNKNOWN_METHOD,
+                "this daemon does not bring environments down yet",
+            ))),
+            None,
+        ),
         Call::DaemonHandshake(_) => (
             Err(Box::new(ErrorBody::new(
                 &protocol::HANDSHAKE_REPEATED,

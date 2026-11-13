@@ -1,0 +1,83 @@
+{
+  "type": "error",
+  "content": {
+    "requestId": "0192f3a1-0000-7000-8000-000000000e54",
+    "error": {
+      "code": "env.down_incomplete",
+      "category": "failed",
+      "message": "some instances of the environment did not stop",
+      "retryable": false,
+      "resource": null,
+      "fields": [],
+      "hint": "bring the environment down again, or stop the instances listed; nothing was deleted",
+      "details": [
+        {
+          "key": "stopped",
+          "value": "1"
+        },
+        {
+          "key": "total",
+          "value": "3"
+        },
+        {
+          "key": "count",
+          "value": "2"
+        },
+        {
+          "key": "omitted",
+          "value": "0"
+        }
+      ],
+      "operationId": "0192f3a4-0000-7000-8000-0000000000f9",
+      "rule": null,
+      "items": [
+        {
+          "kind": "instance",
+          "fields": [
+            {
+              "key": "instanceId",
+              "value": "0192f3a5-0000-7000-8000-000000000001"
+            },
+            {
+              "key": "name",
+              "value": "erp-development-postgres"
+            },
+            {
+              "key": "outcome",
+              "value": "failed"
+            },
+            {
+              "key": "code",
+              "value": "supervisor.stop_timeout"
+            },
+            {
+              "key": "operationId",
+              "value": "0192f3a4-0000-7000-8000-0000000000fa"
+            }
+          ]
+        },
+        {
+          "kind": "instance",
+          "fields": [
+            {
+              "key": "instanceId",
+              "value": "0192f3a5-0000-7000-8000-000000000006"
+            },
+            {
+              "key": "name",
+              "value": "erp-development-api"
+            },
+            {
+              "key": "outcome",
+              "value": "left_running"
+            },
+            {
+              "key": "code",
+              "value": "env.down_changed"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

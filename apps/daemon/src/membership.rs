@@ -74,6 +74,8 @@ pub fn book_of(environments: &[Environment]) -> HashMap<InstanceId, Membership> 
                     name: environment.name().to_string(),
                     alias: member.alias().to_string(),
                     ownership: env_ownership(member.ownership()),
+                    // provisional: F47 step 5 reads the leases.
+                    lease_active: false,
                 });
         }
     }

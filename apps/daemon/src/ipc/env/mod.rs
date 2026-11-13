@@ -554,6 +554,8 @@ async fn detail_of(
         lock,
         local,
         last_up: up.last_up,
+        // provisional: F47 step 5 reads the leases.
+        lease: None,
     }))
 }
 

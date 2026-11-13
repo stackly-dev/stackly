@@ -4262,6 +4262,97 @@
         }
       ]
     },
+    "DownBlocked": {
+      "description": "An instance Down can't stop.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Why, such as `supervisor.identity_unproven`.",
+          "type": "string"
+        },
+        "instance": {
+          "description": "The instance.",
+          "$ref": "#/$defs/DownInstance"
+        }
+      },
+      "required": [
+        "instance",
+        "code"
+      ]
+    },
+    "DownInstance": {
+      "description": "One instance of a Down preview.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "Its alias in the environment; empty for an instance that holds only\na lease of it.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceId": {
+          "description": "The instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "lifecycle": {
+          "description": "Its lifecycle now.",
+          "$ref": "#/$defs/InstanceLifecycle"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "ownership": {
+          "description": "How the environment holds it, when it is a member.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvOwnership"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "instanceId",
+        "name",
+        "lifecycle"
+      ]
+    },
+    "DownKeep": {
+      "description": "An instance Down leaves running, and why.",
+      "type": "object",
+      "properties": {
+        "demand": {
+          "description": "The sources of the other active leases.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemandSourceKind"
+          }
+        },
+        "environments": {
+          "description": "The other environments whose lease is active, by name.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/InstanceEnvironment"
+          }
+        },
+        "instance": {
+          "description": "The instance.",
+          "$ref": "#/$defs/DownInstance"
+        }
+      },
+      "required": [
+        "instance",
+        "demand"
+      ]
+    },
     "DriftFile": {
       "description": "One config file that drifted.",
       "type": "object",
@@ -4649,6 +4740,88 @@
         "impact"
       ]
     },
+    "EnvDownPreview": {
+      "description": "Reply of `env.preview_down`: what Down would stop and keep now, from\nthe one rule `env.down` uses. Each list is ordered by name.",
+      "type": "object",
+      "properties": {
+        "blocked": {
+          "description": "The instances Down can't stop.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DownBlocked"
+          }
+        },
+        "cancelsUp": {
+          "description": "Whether an `environment_up` of the environment has not ended, so\nDown cancels it.",
+          "type": "boolean"
+        },
+        "environment": {
+          "description": "The environment.",
+          "$ref": "#/$defs/EnvironmentRef"
+        },
+        "idle": {
+          "description": "The instances that are stopped already.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DownInstance"
+          }
+        },
+        "keep": {
+          "description": "The instances that keep running, with their reason.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DownKeep"
+          }
+        },
+        "leaseCount": {
+          "description": "How many leases of the environment are active.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "stop": {
+          "description": "The instances Down stops; the client sends their IDs back.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DownInstance"
+          }
+        }
+      },
+      "required": [
+        "environment",
+        "stop",
+        "keep",
+        "idle",
+        "blocked",
+        "leaseCount",
+        "cancelsUp"
+      ]
+    },
+    "EnvDownReply": {
+      "description": "Reply of `env.down`, as soon as the operation is accepted.",
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "description": "The environment that goes down.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "operation": {
+          "description": "The operation.",
+          "$ref": "#/$defs/OperationAccepted"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "operation"
+      ]
+    },
     "EnvExport": {
       "description": "Reply of `env.export`.",
       "type": "object",
@@ -4722,6 +4895,31 @@
         "code",
         "location",
         "message"
+      ]
+    },
+    "EnvLeaseInfo": {
+      "description": "The active leases an environment holds (spec 0047 AC-12).",
+      "type": "object",
+      "properties": {
+        "activeCount": {
+          "description": "How many leases are active.",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "heldSince": {
+          "description": "The oldest `acquired_at` among them; empty when none is active.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "required": [
+        "activeCount"
       ]
     },
     "EnvLocalInfo": {
@@ -5203,6 +5401,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/EnvUpReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lease": {
+          "description": "The environment's leases, from the registry (spec 0047 AC-12);\nempty only from an older daemon.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvLeaseInfo"
             },
             {
               "type": "null"
@@ -7682,6 +7892,11 @@
           "description": "The environment.",
           "type": "string",
           "format": "uuid"
+        },
+        "leaseActive": {
+          "description": "Whether the environment's lease on the instance is active (spec\n0047 AC-12), read from the registry.",
+          "type": "boolean",
+          "default": false
         },
         "name": {
           "description": "Its name.",
@@ -14469,6 +14684,40 @@
             "type": {
               "type": "string",
               "const": "env.up"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "What Down would do now.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvDownPreview"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.preview_down"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "The accepted Down.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvDownReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.down"
             }
           },
           "required": [

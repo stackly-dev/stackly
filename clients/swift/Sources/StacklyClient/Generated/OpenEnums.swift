@@ -557,6 +557,13 @@ extension PidFileState {
 	}
 }
 
+extension DemandSourceKind {
+	public init(from decoder: Decoder) throws {
+		let value = try decoder.singleValueContainer().decode(String.self)
+		self = Self(rawValue: value) ?? .unrecognized
+	}
+}
+
 extension EndpointPortMode {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
@@ -929,13 +936,6 @@ extension ShutdownMode {
 }
 
 extension ShutdownReason {
-	public init(from decoder: Decoder) throws {
-		let value = try decoder.singleValueContainer().decode(String.self)
-		self = Self(rawValue: value) ?? .unrecognized
-	}
-}
-
-extension DemandSourceKind {
 	public init(from decoder: Decoder) throws {
 		let value = try decoder.singleValueContainer().decode(String.self)
 		self = Self(rawValue: value) ?? .unrecognized
