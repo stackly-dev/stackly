@@ -8,8 +8,10 @@ import Testing
 /// The Environments screens of spec 0044 (AC-18 to AC-23) in light, dark, and narrow: the
 /// list filled, empty, and offline; the detail page partially ready, ready, and down; every
 /// manifest banner; the Problems section; the plan sheet with its three verbs, blockers, a
-/// name registered elsewhere, and Problems; the Overview section; and the Environment column
-/// and inspector row of Instances.
+/// name registered elsewhere, and Problems; the Overview section with Show All; and the
+/// Environment column and inspector row of Instances. From spec 0045 (AC-18, AC-19): the Lock
+/// and Local override rows in every state, a blocked lock, and the plan sheet with a lock and
+/// overrides; and the detail page while stacklyd is unavailable.
 extension SnapshotTests {
     struct EnvironmentsSnapshotTests {
         /// The pages this suite covers, named for the snapshot source rule.
@@ -180,6 +182,131 @@ extension SnapshotTests {
             try await assertSnapshot(
                 await Self.sheet(taken, .file(FixtureEnvironments.manifest("erp-copy"))),
                 named: "environment-plan-name-taken", size: Self.sheetSize, variants: [.light])
+        }
+
+        // MARK: - Lock and local override (spec 0045)
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012", "REQ-023"],
+                expected:
+                    "Details shows the Lock row in sync, out of date, not locked, and unreadable, and the Local override row with overrides, problems, or None"
+            ))
+        @MainActor
+        func lockRows() async throws {
+            let cases: [(EnvLockInfo, EnvLocalInfo, String, [SnapshotVariant])] = [
+                (
+                    FixtureEnvironments.lockInfo(.stale),
+                    FixtureEnvironments.localInfo(.invalid, problems: 2),
+                    "environment-lock-stale", [.light, .dark, .narrow]
+                ),
+                (
+                    FixtureEnvironments.lockInfo(.absent), FixtureEnvironments.localInfo(nil),
+                    "environment-lock-absent", [.light]
+                ),
+                (
+                    FixtureEnvironments.lockInfo(.unreadable),
+                    FixtureEnvironments.localInfo(.unreadable), "environment-lock-unreadable",
+                    [.light]
+                ),
+            ]
+            for (lock, local, name, variants) in cases {
+                let rig = await Self.rig()
+                rig.script.environmentDetails[FixtureEnvironments.erpID] =
+                    FixtureEnvironments.detail(FixtureEnvironments.erpID, files: (lock, local))
+                try await assertSnapshot(
+                    await rig.environmentsPage(selected: FixtureEnvironments.erpID),
+                    named: name, variants: variants)
+            }
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "A lock that a provider blocks lists the blocker with its hint in a critical banner"
+            ))
+        @MainActor
+        func lockBlocked() async throws {
+            let rig = await Self.rig()
+            rig.script.lockResult = FixtureEnvironments.lockBlocked()
+            try await assertSnapshot(
+                await rig.environmentsPage(
+                    selected: FixtureEnvironments.erpID, lock: LockRefresh.none),
+                named: "environment-lock-blocked", variants: [.light, .dark])
+        }
+
+        @Test(
+            .evidence(
+                covers: ["REQ-023", "NFR-012"],
+                expected:
+                    "The plan sheet marks creates from the lock, shows the local overrides and the lock difference, the stale lock caution, and the local file warning"
+            ))
+        @MainActor
+        func lockedPlan() async throws {
+            let rig = await Self.rig()
+            rig.script.plan = FixtureEnvironments.lockedPlan()
+            try await assertSnapshot(
+                await Self.sheet(
+                    rig, .review(environment: FixtureEnvironments.erpID, name: "erp-development")),
+                named: "environment-plan-locked", size: Self.sheetSize)
+            let blocked = await Self.rig()
+            blocked.script.plan = FixtureEnvironments.lockedBlockedPlan()
+            try await assertSnapshot(
+                await Self.sheet(
+                    blocked,
+                    .review(environment: FixtureEnvironments.erpID, name: "erp-development")),
+                named: "environment-plan-locked-blocked", size: Self.sheetSize,
+                variants: [.light, .dark])
+            // A manifest that is not valid shows only Problems: no " · locked", stale lock, or
+            // local override, though the lock reads in_sync (spec 0045 K23).
+            let invalid = await Self.rig()
+            invalid.script.plan = FixtureEnvironments.invalidLockedPlan()
+            try await assertSnapshot(
+                await Self.sheet(
+                    invalid,
+                    .review(environment: FixtureEnvironments.erpID, name: "erp-development")),
+                named: "environment-plan-invalid-locked", size: Self.sheetSize,
+                variants: [.light])
+        }
+
+        // MARK: - Offline and Show All (spec 0044)
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "An environment opened while stacklyd is unavailable shows Waiting for stacklyd"
+            ))
+        @MainActor
+        func detailOffline() async throws {
+            let rig = await Self.rig()
+            rig.script.environmentDetailFailure = .notSent(ClientErrorCatalog.notConnected())
+            try await assertSnapshot(
+                await rig.environmentsPage(
+                    selected: FixtureEnvironments.erpID,
+                    waiting: FailureContent(
+                        title: "Waiting for stacklyd", message: "stacklyd is unavailable."),
+                    hasConnection: false
+                )
+                .environment(
+                    \.mutationAvailability,
+                    .blocked(reason: "stacklyd is unavailable", since: FixtureClock.now)),
+                named: "environment-offline")
+        }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Overview lists five environments by name and Show All when there are more"
+            ))
+        @MainActor
+        func overviewShowAll() async throws {
+            let rig = await Self.rig(environments: FixtureEnvironments.manySummaries)
+            try await assertSnapshot(
+                rig.overviewPage(), named: "overview-environments-show-all",
+                variants: [.light, .dark])
         }
 
         // MARK: - Sidebar
