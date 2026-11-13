@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d5a1-1b23-7608-a3fa-3793680f11c8",
+  "covers": [
+    "AC-023",
+    "AC-080",
+    "REQ-023"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "a_lock_moved_to_another_root_picks_the_same_artifacts_and_nothing_of_the_first",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 1578
+  },
+  "status": "PASS",
+  "expected": "a second root that receives only stackly.yaml and stackly.lock plans with locked true the same artifacts as the first, holds no path, override, or reference status of the first, and a lock without an artifact for this Mac blocks with env.lock_no_artifact and no item uses another artifact",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:57:47.683738Z",
+  "finishedAt": "2026-11-13T15:57:50.423075Z",
+  "evidencePath": "output.log"
+}

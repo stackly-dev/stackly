@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d589-ef6c-77a7-9e93-48a7221e9d3c",
+  "covers": [
+    "REQ-020"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "membership_shows_on_every_summary_and_remove_waits_for_the_lease",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 977
+  },
+  "status": "PASS",
+  "expected": "a dedicated member shows ownership dedicated and its environment in instance.get, instance.list, and instance.state_changed alike; env.list and env.get count it; env.remove refuses an active lease with env.lease_active naming the instance, then removes the row and leaves the instance manual",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:32:29.165322Z",
+  "finishedAt": "2026-11-13T15:32:33.237012Z",
+  "evidencePath": "output.log"
+}

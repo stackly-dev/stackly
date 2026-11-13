@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d589-ef6c-77a7-9e93-48a86fa52c16",
+  "covers": [
+    "AC-020",
+    "REQ-020"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "environment",
+    "name": "a_plan_reads_this_mac_and_starts_no_operation",
+    "file": "apps/daemon/tests/environment.rs",
+    "line": 409
+  },
+  "status": "PASS",
+  "expected": "env.plan of the ERP manifest on a root without official runtimes answers six install, six create, and six start steps in manifest order, the graph manifest starts db, cache, api, web, and neither plan writes a file, a registry row, an operation, or an audit row, nor creates an instance",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T15:32:29.165117Z",
+  "finishedAt": "2026-11-13T15:32:31.12989Z",
+  "evidencePath": "output.log"
+}
