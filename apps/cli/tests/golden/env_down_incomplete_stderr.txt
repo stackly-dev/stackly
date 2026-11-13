@@ -1,0 +1,13 @@
+stop erp-development-nats
+stop erp-development-postgres
+keep shared-valkey: started by you; used by reporting
+skip leftover: Stackly can’t confirm this process
+waiting for operation 0192f3a4-0000-7000-8000-0000000000d1 (Ctrl+C stops waiting; the operation keeps running)
+0s failed
+failed erp-development-postgres: supervisor.stop_timeout
+left running erp-development-nats
+error: some instances of the environment did not stop
+  code: env.down_incomplete
+  hint: bring the environment down again, or stop the instances listed; nothing was deleted
+  instance: instanceId=0192f3a5-0000-7000-8000-000000000001 name=erp-development-postgres outcome=failed code=supervisor.stop_timeout operationId=0192f3a4-0000-7000-8000-0000000000d1
+  instance: instanceId=0192f3a5-0000-7000-8000-000000000002 name=erp-development-nats outcome=left_running code=env.down_changed operationId=0192f3a4-0000-7000-8000-0000000000d1

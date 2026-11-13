@@ -17,7 +17,7 @@ use stackly_protocol::events::{EventKind, SubscribeParams};
 use stackly_protocol::instance::{ListInstancesParams, StartupPolicyKind};
 use stackly_protocol::json::DecodedFrame;
 use stackly_protocol::restart::{PlanState, RestartPlanView, RestartPreview};
-use stackly_protocol::stop_all::StopAllPreview;
+use stackly_protocol::stop_all::{StopAllPreview, StopAllPreviewParams};
 use stackly_protocol::{Call, Reply};
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -152,9 +152,13 @@ pub trait DaemonProbe: Send + Sync {
         eof_limit: Duration,
     ) -> BoxFuture<'_, Result<RestartHandover, CliFailure>>;
 
-    /// Reads `instance.preview_stop_all` and counts the `at_login`
-    /// instances of `instance.list` (spec 0031).
-    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>>;
+    /// Reads `instance.preview_stop_all`, with leases overridden or not
+    /// (spec 0047 AC-19), and counts the `at_login` instances of
+    /// `instance.list` (spec 0031).
+    fn agent_off_preview(
+        &self,
+        override_leases: bool,
+    ) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>>;
 
     /// Sends `daemon.shutdown { mode: agent_off }` under the interactive
     /// time limit. When the daemon answers `exiting`, reads the connection
@@ -163,6 +167,7 @@ pub trait DaemonProbe: Send + Sync {
         &self,
         idempotency_key: &str,
         eof_limit: Duration,
+        override_leases: bool,
     ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>>;
 
     /// Follows plan `plan_id` on the daemon that runs now, connecting
@@ -453,13 +458,16 @@ impl DaemonProbe for LiveProbe {
         })
     }
 
-    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
+    fn agent_off_preview(
+        &self,
+        override_leases: bool,
+    ) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
         Box::pin(async move {
             let session = self.session().await?;
             let mut sink = StderrSink::new(Box::new(std::io::sink()), false);
             let preview = match session
                 .call(
-                    &Call::InstancePreviewStopAll(Default::default()),
+                    &Call::InstancePreviewStopAll(StopAllPreviewParams { override_leases }),
                     &CallSpec::control(),
                     &mut sink,
                     false,
@@ -507,6 +515,7 @@ impl DaemonProbe for LiveProbe {
         &self,
         idempotency_key: &str,
         eof_limit: Duration,
+        override_leases: bool,
     ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>> {
         let key = idempotency_key.to_owned();
         Box::pin(async move {
@@ -525,7 +534,10 @@ impl DaemonProbe for LiveProbe {
                 timeout: RequestTimeout::Interactive,
                 idempotency_key: Some(key),
             };
-            let call = Call::DaemonShutdown(ShutdownParams::new(ShutdownMode::AgentOff));
+            let call = Call::DaemonShutdown(ShutdownParams {
+                override_leases,
+                ..ShutdownParams::new(ShutdownMode::AgentOff)
+            });
             let accepted = match session.call_once(call, &spec, &mut sink, false).await {
                 Ok(Reply::DaemonShutdown(accepted)) => accepted,
                 Ok(_) => return Err(CliFailure::unexpected_reply(None)),

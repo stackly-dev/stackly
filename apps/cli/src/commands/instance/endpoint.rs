@@ -1,17 +1,20 @@
 //! `stackly instance endpoint set` (spec 0029, AC-14, AC-17): changes the
-//! port request of IP endpoints, with the checks of create.
+//! port request of IP endpoints, with the checks of create. A change of a
+//! port on an instance an environment holds a lease on is refused unless
+//! `--override-leases` is given, and a dry run names those environments
+//! (spec 0047 AC-19).
 
 use clap::{ArgAction, Args, Subcommand};
 use stackly_protocol::codes::lookup;
-use stackly_protocol::instance::EndpointRequest;
 use stackly_protocol::instance::config::{
     ChangeEndpointsParams, ChangeEndpointsReply, EndpointValidation,
 };
+use stackly_protocol::instance::{EndpointRequest, PortRequest};
 use stackly_protocol::{Call, ErrorBody, Reply};
 
 use super::config::{accepted_apply, mapped, read_view, request_text};
 use super::resolve::TargetArg;
-use super::{InstanceAction, Verb, conclude};
+use super::{InstanceAction, Verb, conclude, lease};
 use crate::args::PortArg;
 use crate::commands::{RunCommand, execute};
 use crate::context::Context;
@@ -27,7 +30,7 @@ use crate::wait::{Accepted, AsyncArgs};
 pub enum EndpointCommand {
     /// Change the port of one or more endpoints, then restart a running instance
     #[command(
-        after_help = "Examples:\n  stackly instance endpoint set orders-db --port postgres=5433 --wait\n  stackly instance endpoint set orders-db --port postgres=auto --dry-run --json"
+        after_help = "A port change on an instance that an environment holds a lease on exits 3 with instance.endpoints_require_override unless --override-leases is given; --dry-run names those environments.\n\nExamples:\n  stackly instance endpoint set orders-db --port postgres=5433 --wait\n  stackly instance endpoint set orders-db --port postgres=5433 --override-leases --wait\n  stackly instance endpoint set orders-db --port postgres=auto --dry-run --json"
     )]
     Set(SetArgs),
 }
@@ -53,6 +56,10 @@ pub struct SetArgs {
     /// Only judge the ports: print the verdict and change nothing
     #[arg(long)]
     pub dry_run: bool,
+    /// Change the ports even when an environment holds a lease on the
+    /// instance; the environment keeps its lease
+    #[arg(long)]
+    pub override_leases: bool,
     /// `--wait`, `--timeout`, and `--idempotency-key`.
     #[command(flatten)]
     pub run: AsyncArgs,
@@ -99,6 +106,28 @@ fn first_problem(verdict: &EndpointValidation) -> Option<CliFailure> {
     Some(CliFailure::daemon(Box::new(body), None))
 }
 
+impl SetArgs {
+    /// The command line that asks for the same ports, for the hint of a
+    /// refusal.
+    fn retry(&self) -> String {
+        let mut line = format!(
+            "stackly instance endpoint set {}",
+            escape_display(&self.instance.target.to_string())
+        );
+        for port in &self.ports {
+            let value = match port.port {
+                PortRequest::Auto => "auto".to_owned(),
+                PortRequest::Fixed(number) => number.to_string(),
+            };
+            line.push_str(&format!(
+                " --port {}={value}",
+                escape_display(&port.endpoint)
+            ));
+        }
+        line
+    }
+}
+
 impl RunCommand for SetArgs {
     type Output = SetOutput;
 
@@ -124,7 +153,7 @@ impl RunCommand for SetArgs {
             base_revision: view.revision.number,
             endpoints,
             dry_run: self.dry_run,
-            override_leases: false,
+            override_leases: self.override_leases,
         };
         if self.dry_run {
             let reply = cx
@@ -151,7 +180,10 @@ impl RunCommand for SetArgs {
                 let output = conclude(cx, submission, Verb::EndpointSet, Some(id)).await;
                 mapped(output, |action| SetOutput::Changed(Box::new(action)))
             }
-            Err(failure) => CommandOutput::failed(failure),
+            Err(failure) => {
+                let name = self.instance.target.to_string();
+                CommandOutput::failed(lease::explain(cx, failure, &name, &self.retry()))
+            }
         }
     }
 }
@@ -186,6 +218,13 @@ impl Render for SetOutput {
                         escape_display(&change.name),
                         request_text(change.old),
                         request_text(change.new)
+                    ));
+                }
+                for environment in &verdict.leases {
+                    out.line(&format!(
+                        "  used by {} ({}): applying it needs --override-leases",
+                        escape_display(&environment.name),
+                        escape_display(&environment.alias)
                     ));
                 }
             }

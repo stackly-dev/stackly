@@ -88,6 +88,7 @@ pub struct ScriptedProbe {
     off_preview: Mutex<Option<Result<AgentOffPreview, CliFailure>>>,
     off_reply: Mutex<Option<Result<AgentOffReply, CliFailure>>>,
     off_keys: Mutex<Vec<String>>,
+    off_overrides: Mutex<Vec<bool>>,
 }
 
 /// A preview with no instances for a launchd daemon.
@@ -123,6 +124,7 @@ impl ScriptedProbe {
             off_preview: Mutex::new(None),
             off_reply: Mutex::new(None),
             off_keys: Mutex::new(Vec::new()),
+            off_overrides: Mutex::new(Vec::new()),
         }
     }
 
@@ -150,6 +152,15 @@ impl ScriptedProbe {
     /// The idempotency keys of the `agent_off` requests so far.
     pub fn agent_off_keys(&self) -> Vec<String> {
         self.off_keys
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The `overrideLeases` of each Turn Off preview and `agent_off`
+    /// request so far, in order.
+    pub fn agent_off_overrides(&self) -> Vec<bool> {
+        self.off_overrides
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
@@ -356,8 +367,15 @@ impl DaemonProbe for ScriptedProbe {
         })
     }
 
-    fn agent_off_preview(&self) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
+    fn agent_off_preview(
+        &self,
+        override_leases: bool,
+    ) -> BoxFuture<'_, Result<AgentOffPreview, CliFailure>> {
         Box::pin(async move {
+            self.off_overrides
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(override_leases);
             if let Some(result) = self
                 .off_preview
                 .lock()
@@ -376,9 +394,14 @@ impl DaemonProbe for ScriptedProbe {
         &self,
         idempotency_key: &str,
         _eof_limit: Duration,
+        override_leases: bool,
     ) -> BoxFuture<'_, Result<AgentOffReply, CliFailure>> {
         let key = idempotency_key.to_owned();
         Box::pin(async move {
+            self.off_overrides
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(override_leases);
             self.off_keys
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
