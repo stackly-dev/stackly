@@ -40,7 +40,7 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 - [ ] Verify it: `/check verify lockfile & override lokal`
 - [ ] Test it: `/test lockfile & override lokal`
 
-### 46. Env up & dependency graph · needs a decision
+### 46. Env up & dependency graph · in-progress
 
 Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance yang ada lewat `instanceRef` (tanpa mengubah config, auth, port, atau autostart miliknya), mengambil lease, lalu menjalankan dependency graph berdasarkan readiness dan timeout. Partial failure menghasilkan state yang jelas, dan kompensasi hanya menyentuh resource milik operasi itu.
 
@@ -48,7 +48,16 @@ Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance y
 
 **Trace:** REQ-021, REQ-028, BR-023, VAL-014, AC-021, AC-073 (bersama fitur 47), PRD bagian 13.1 dan 13.2
 
-- [ ] Design it (spec): `/architect env up & dependency graph`
+**Pointer:** spec [0046](../specs/0046-env-up-dependency-graph/index.md)
+
+- [x] Design it (spec): `/architect env up & dependency graph`
+- [ ] Build it: `/develop env up & dependency graph`
+  - [ ] Fondasi operasi anak: kelas slot pengatur dari `OperationKind::is_coordinator()` dengan `MAX_RUNNING_COORDINATORS`, `Origin::Child` dan `parent`, `OperationEngine::wait_final`, `recover` yang menutup anak antre, kebijakan `environment_up` (tidak resumable, `CloseInterrupted`); migrasi `environments.last_up` dan `operation_journal.parent_id`, `MemberDependency`, `UpReport`, mutator `Environment`, perluasan `DeleteInstanceCreatedBy`; `EnvironmentBinding` di create (batch `register`, `input` journal, kompensasi) dan `StartTrigger::Environment` (spec 0046 AC-3, AC-4, AC-7, AC-12, AC-13, AC-15, AC-24; build steps 1 to 3; needs fitur 44 milestone 1 di `main`, dan update spec 0007 diterapkan)
+  - [ ] Up di daemon: core `environment::up` (precheck, guard `accept`, graph murni, driver dengan commit penutup, port `UpChildren`, `UpBoard`), kenaikan minor protokol dengan `env.up`, tambahan DTO `env` dan `operation`, lima kode area `env`, fixture; handler `env.up`, pemecahan handler install, create, dan start, adapter anak, tambahan `env.get` dan `env.list`, test integrasi dengan provider `fake` (spec 0046 AC-1 sampai AC-16, AC-23; build steps 4 to 6; after milestone pertama; needs fitur 45 build untuk `PlanInputs.locked` dan field lock di plan)
+  - [ ] `stackly env up` dan `status`: resolver target ber path, progress dan tabel akhir dengan port yang benar benar dipakai, `--locked`, golden dan binary test (spec 0046 AC-17, AC-18; build step 7; after build step 5 untuk golden; binary test needs build step 6; bisa paralel dengan milestone berikutnya)
+  - [ ] Up di app: tombol Up… dan Bring Up di sheet plan, `SecretEntrySheet` untuk needs secret, "Create with Up…", banner "Bringing up…" dan phase per service, alasan di banner partially ready, Activity dengan anak bersarang dan label Partial, onboarding, fixture `environment-bringing-up` dan `environment-up-incomplete`, snapshot, lalu test native ERP dari cache xtask, evidence, dan langkah manual yang butuh mata dan tangan kamu (spec 0046 AC-19 sampai AC-22, AC-25; build steps 8 to 11; after build step 5; needs fitur 44 milestone app; evidence manual needs build step 6)
+- [ ] Verify it: `/check verify env up & dependency graph`
+- [ ] Test it: `/test env up & dependency graph`
 
 ### 47. Env down, shared instance & lease · needs a decision
 

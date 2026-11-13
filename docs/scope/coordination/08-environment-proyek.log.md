@@ -16,6 +16,7 @@
 | `arc-f45-spec` | architect | F45 `Design it (spec)`, spec 0045; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0045-lockfile-override-lokal/` | `claude/arc-f45-spec-b1b5b7` | `fable-5-2 · high` | `merged` |
 | `arc-update-44` | architect (update) | spec 0044: `planDigest` tanpa `action` dan `steps` instance yang ada, blocker `env.instance_blocked` untuk member belum initialized, penyelarasan dengan 0045 dan 0046; sesi `arc-f45-spec` dipakai ulang tanpa clear | `08-environment-proyek.md` | `docs/specs/0044-manifest-environment-validate-plan/` | `claude/arc-f45-spec-b1b5b7` | `fable-5-2 · high` | `dipakai ulang`, `aktif` |
 | `arc-f46-spec` | architect | F46 `Design it (spec)`, spec 0046; mulai sesudah 0044 di-merge | `08-environment-proyek.md` | `docs/specs/0046-env-up-dependency-graph/` | `claude/arc-f46-spec-d260ff` | `fable-5-2 · high` | `merged` |
+| `arc-update-07` | architect (update) | spec 0007: kelas slot pengatur, `Origin::Child` dan `parent`, `wait_final`, `recover` menutup anak antre, baris resume `environment_up`, dua `OperationKind` spec 0044; sesi `arc-f46-spec` dipakai ulang tanpa clear | `08-environment-proyek.md` | `docs/specs/0007-operation-engine/` | `claude/arc-f46-spec-d260ff` | `fable-5-2 · high` | `dipakai ulang`, `aktif` |
 | `arc-f47-spec` | architect | F47 `Design it (spec)`, spec 0047; mulai sesudah 0046 di-merge | `08-environment-proyek.md` | `docs/specs/0047-env-down-shared-instance-lease/` | `claude/arc-f47-spec-7de0ba` | `fable-5-2 · high` | `aktif` |
 
 ## Keputusan
@@ -63,12 +64,13 @@ Keputusan spec yang diambil dari opsi rekomendasi atas nama user (SKILL.md bagia
 
 ## Blocker terbuka
 
-- F46 `Design it (spec)`: spec sudah di-merge (`d413980b`); centang menunggu blok scope usulan dari `arc-f46-spec`.
+- F47 `Design it (spec)`: sedang ditulis `arc-f47-spec`.
 
 ## Dicentang pada wave ini
 
 - F44 · `Design it (spec)` · laporan `arc-f44-spec` · `claude/arc-f44-spec-96c1cb` → `075c262e` · diff hanya `docs/specs/0044-manifest-environment-validate-plan/`, tanpa marker konflik, ID Trace tercakup · commit centang berikutnya
 - F45 · `Design it (spec)` · laporan `arc-f45-spec` · `claude/arc-f45-spec-b1b5b7` → `b428b417` · diff hanya `docs/specs/0045-lockfile-override-lokal/`, tanpa marker konflik, ID Trace tercakup
+- F46 · `Design it (spec)` · laporan `arc-f46-spec` · `claude/arc-f46-spec-d260ff` → `d413980b` · diff hanya `docs/specs/0046-env-up-dependency-graph/`, tanpa marker konflik, ID Trace tercakup
 
 ## Riwayat wave
 
