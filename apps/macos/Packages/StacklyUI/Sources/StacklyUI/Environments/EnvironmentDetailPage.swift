@@ -343,49 +343,34 @@ struct EnvironmentDetailPage: View {
         }
     }
 
-    /// The menu of a service (spec 0044, AC-19): Open In, Copy Connection String, Show
-    /// Instance and Show Logs, then Start, Stop, or Retry. A service whose instance does not
-    /// exist has only Show Plan….
+    /// The menu of a service row, from what the page holds.
     func menu(for row: ServiceRowModel) -> [[StacklyAction]] {
-        guard let id = row.instanceID else {
-            guard let planPresenter, let summary = model.summary else { return [] }
-            return [
-                [
-                    StacklyAction(
-                        id: "environment.showPlan", title: "Show Plan…", mutates: false,
-                        perform: {
-                            planPresenter.review(environment: summary.id, name: summary.name)
-                        })
-                ]
-            ]
+        let summary = model.summary
+        let planPresenter = planPresenter
+        var showPlan: (@MainActor () -> Void)?
+        if let planPresenter, let summary {
+            showPlan = { planPresenter.review(environment: summary.id, name: summary.name) }
         }
-        var sections: [[StacklyAction]] = []
-        let detail = models.model(for: id).detail
-        let content = models.openIn.content(
-            summary: row.summary, detail: detail, report: { feedbackCenter?.show($0) },
-            enterSecret: { openInNeeds = [$0] })
-        if case .sections(let openInSections) = content {
-            sections.append(contentsOf: openInSections)
-        }
-        // The copy action of the Connection card, titled as AC-19 and the mockup name it in
-        // this menu; the menu bar and Instances keep their own title.
-        var copy = ConnectionCopier.action(
-            detail: detail, secrets: models.detailService.secrets,
-            report: { feedbackCenter?.show($0) })
-        copy.title = EnvironmentCopy.copyConnectionURL
-        sections.append([copy])
-        sections.append([
-            StacklyAction(
-                id: "environment.showInstance", title: "Show Instance", mutates: false,
-                perform: { navigator?.openInstance(id) }),
-            StacklyAction(
-                id: "environment.showLogs", title: "Show Logs", mutates: false,
-                perform: { navigator?.openInstance(id, tab: .logs) }),
-        ])
-        if let summary = row.summary, let actions {
-            sections.append([actions.stacklyAction(for: summary, context: context)])
-        }
-        return sections
+        let detail = row.instanceID.flatMap { models.model(for: $0).detail }
+        let navigator = navigator
+        return ServiceMenu.sections(
+            for: row,
+            openIn: row.instanceID == nil
+                ? .hidden
+                : models.openIn.content(
+                    summary: row.summary, detail: detail, report: { feedbackCenter?.show($0) },
+                    enterSecret: { openInNeeds = [$0] }),
+            copy: row.instanceID == nil
+                ? nil
+                : ConnectionCopier.action(
+                    detail: detail, secrets: models.detailService.secrets,
+                    report: { feedbackCenter?.show($0) }),
+            lifecycle: row.summary.flatMap { summary in
+                actions?.stacklyAction(for: summary, context: context)
+            },
+            open: { navigator?.openInstance($0) },
+            openLogs: { navigator?.openInstance($0, tab: .logs) },
+            showPlan: showPlan)
     }
 
     private func notInManifest(_ detached: [DetachedMember]) -> some View {

@@ -64,6 +64,60 @@ struct ServiceRowModel: Identifiable, Equatable {
     }
 }
 
+/// The menu of a service row (spec 0044, AC-19): Open In, Copy Connection URL, Show
+/// Instance and Show Logs, then Start, Stop, or Retry. A service whose instance does not exist
+/// has only Show Plan….
+enum ServiceMenu {
+    /// The sections of the menu.
+    /// - Parameters:
+    ///   - row: The service.
+    ///   - openIn: The Open In menu of its instance (spec 0070).
+    ///   - copy: The copy action of the Connection card (spec 0021), retitled for this menu.
+    ///   - lifecycle: The main action of the instance, or `nil` when it has none here.
+    ///   - open: Opens the detail page of an instance.
+    ///   - openLogs: Opens the Logs tab of an instance.
+    ///   - showPlan: Opens the plan sheet, or `nil` where the page has none.
+    @MainActor
+    static func sections(
+        for row: ServiceRowModel, openIn: OpenInContent, copy: StacklyAction?,
+        lifecycle: StacklyAction?, open: @escaping @MainActor (UUID) -> Void,
+        openLogs: @escaping @MainActor (UUID) -> Void, showPlan: (@MainActor () -> Void)?
+    ) -> [[StacklyAction]] {
+        guard let id = row.instanceID else {
+            guard let showPlan else { return [] }
+            return [
+                [
+                    StacklyAction(
+                        id: "environment.showPlan", title: "Show Plan…", mutates: false,
+                        perform: showPlan)
+                ]
+            ]
+        }
+        var sections: [[StacklyAction]] = []
+        if case .sections(let openInSections) = openIn {
+            sections.append(contentsOf: openInSections)
+        }
+        if var copy {
+            // Titled as AC-19 and the mockup name it in this menu; the menu bar and
+            // Instances keep their own title.
+            copy.title = EnvironmentCopy.copyConnectionURL
+            sections.append([copy])
+        }
+        sections.append([
+            StacklyAction(
+                id: "environment.showInstance", title: "Show Instance", mutates: false,
+                perform: { open(id) }),
+            StacklyAction(
+                id: "environment.showLogs", title: "Show Logs", mutates: false,
+                perform: { openLogs(id) }),
+        ])
+        if let lifecycle {
+            sections.append([lifecycle])
+        }
+        return sections
+    }
+}
+
 /// Which columns the Services table shows at a width: Version goes first, then Selector
 /// (spec 0044, *Layar*).
 nonisolated enum ServiceColumnSet: Hashable, Sendable {
