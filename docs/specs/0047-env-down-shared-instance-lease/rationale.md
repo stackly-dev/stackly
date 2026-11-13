@@ -100,7 +100,7 @@ Mode keputusan sesi ini `auto`: opsi yang direkomendasikan diambil, runner up di
 
 ### K15: Down yang terputus restart daemon (`berat`, mengubah default spec 0007)
 
-- **Diambil: tidak resumable, `CloseInterrupted`, dan anak stop yang antre ditutup.** Sama dengan Up (spec 0046 K4). Lease sudah dilepas di langkah pertama, jadi tidak ada yang perlu dilanjutkan selain stop, dan stop yang menyala sendiri beberapa menit sesudah restart daemon akan mengejutkan. Down lagi menyelesaikannya.
+- **Diambil: tidak resumable, `CloseInterrupted`; anak stop yang antre sudah ditutup aturan spec 0007 AC-10 yang ada, tanpa cabang `recover` baru.** Sama dengan Up (spec 0046 K4). Lease sudah dilepas di langkah pertama, jadi tidak ada yang perlu dilanjutkan selain stop, dan stop yang menyala sendiri beberapa menit sesudah restart daemon akan mengejutkan. Down lagi menyelesaikannya.
 - Runner up: resumable seperti tertulis di tabel spec 0007. Kontra: butuh `WorkFactory` dan penyimpanan kemajuan per instance untuk keuntungan yang kecil.
 
 ### K16: keputusan kecil (`biasa`)
@@ -147,6 +147,18 @@ Dijalankan 2026-11-13 dengan model lain (Opus), baca saja, terhadap draf pertama
 - Anak stop yang antre lebih dari 120 detik di belakang start pengguna dilaporkan gagal padahal seharusnya `kept`. Diperbaiki: hasil sementara `busy` diputuskan sapuan akhir.
 - Teks yang salah: umpan balik cancel sebelum `release`, klaim `env.remove` langsung bisa dipakai, sumber `ownership` untuk instance tanpa member, daftar penyegar cache `leaseActive`, aturan tombol Down. Semuanya diperbaiki.
 - Dicatat sebagai akibat, tidak diubah: Down yang terputus restart daemon meninggalkan instance ber desired `running` tanpa lease, yang menyala lagi di sesi login yang sama (AC-10, Consequences).
+
+### Ronde kedua
+
+Lead meminta cross check ulang sebelum accept. Dijalankan 2026-11-13 dengan Opus, baca saja, terhadap commit `d9113c9d` dan kode, dibatasi pada penutupan temuan ronde pertama, jalur stop ber guard terhadap semua pemanggil stop, balapan Up dan Down beserta sapuan akhir, dan kecocokan dengan spec 0007 dan 0046. Putusannya "siap sesudah perbaikan yang didaftar", dengan empat temuan yang menghalangi (tiga hal berbeda), semuanya diterapkan:
+
+- `stop_direct` (langkah Stop All dan `agent_off`) juga membatalkan respawn sebelum commit, dan aturan *Respawn* draf sebelumnya hanya menyebut `run_stop` dan menunjuk jalur penjadwalan ulang yang tidak ada. Diperbaiki: untuk `LeaseCheck` selain `None`, `cancel_respawn` dipanggil sesudah `StopCommit::Committed` di kedua jalur; aman karena `begin_respawn` memakai `BusyPolicy::Reject` dan `pause_then_respawn` membuang dirinya sendiri.
+- Commit `exited` yang sebenarnya adalah `settle_gone_process` (lewat `commit_exit`), bukan `journal_stop`. Keputusan lease yang membatalkan seluruh commit di sana akan meninggalkan instance `stopping` tanpa proses. Diperbaiki: tiga tempat commit disebut satu per satu, dan di `settle_gone_process` keputusan lease hanya menjaga desired dan op lease.
+- Stop All dengan `overrideLeases` true tidak akan pernah menghentikan instance ber lease, karena `stop_all_step` menjalankan `select` sendiri dan `StopAllRequest` tidak membawa nilai itu. Diperbaiki: nilai itu ada di `StopAllRequest`, journal, dan `select` langkah.
+
+Temuan kecil yang juga diterapkan: guard `Manual` pada instance yang sudah diam berlaku seperti override true (AC-13 tetap); guard mengembalikan op lease supaya `startup_lease_effect` tetap terbit; baris `uninitialized` di *Precheck stop anak* disamakan dengan `select`; AC-1 dan invariant membedakan "memilih" (`select`) dari "memutuskan" (`evaluate_stop`); umpan balik cancel memakai `OperationSummary.stage`; invariant override menyebut pengecualiannya (restart, start yang dibatalkan, force stop); sapuan akhir juga melaporkan instance `kept` yang kehilangan demand lain; pembatalan Up berjalan di task terpisah supaya tahan klien putus; dan tidak ada aturan `recover` baru karena spec 0007 AC-10 sudah menutup stop yang antre. Dicatat sebagai akibat: sapuan akhir bisa melaporkan `left_running` untuk instance yang sesaat lagi diambil Up lain.
+
+Yang dikonfirmasi benar tanpa perubahan: pemetaan `LeaseCheck::None` untuk restart, sub langkah `apply_config` dan `change_endpoints`, start yang dibatalkan, rekonsiliasi, restart terencana, dan akhir sesi; wake, handover, dan handler exit tidak pernah menulis desired `stopped`; kedua urutan Up A dan Down B konsisten; dua Down, Down terhadap Up nya sendiri, dan Down terhadap start, stop, atau restart pengguna konsisten; Up ditolak selagi Down antre atau berjalan; Down yang antre tidak memegang slot pengatur. Keputusan K1 sampai K16 tidak berubah; hanya teks K15 yang disesuaikan (tanpa cabang `recover` baru).
 
 ## Bahan yang dibaca
 
