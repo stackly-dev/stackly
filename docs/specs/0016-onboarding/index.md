@@ -466,8 +466,8 @@ Diterapkan di spec 0013 (2026-10-22, `97e093f9`).
 - [ ] Fitur 18: saat milestone 3 spec 0018 masuk, set `OnboardingCopy.runtimeInstallAvailable` ke true (baris Welcome "Verified runtimes" dan kalimat digest di Catalog Trust), kalau build fitur 16 sudah lebih dulu.
 - [ ] Fitur 22: tambahkan `stackly instance list` ke `OnboardingCopy.commandExamples` saat perintah itu dibangun.
 - [x] Fitur 34: tambahkan `stackly doctor` ke `OnboardingCopy.commandExamples`. Diterapkan di spec 0034 (2026-11-10): AC-20; `OnboardingCopy.commandExamples` memuat `stackly doctor`.
-- [x] Fitur 44: tambahkan baris "Environments as files" dari mockup ke langkah Welcome. Dijawab spec 0044 (AC-23, *Layar* bagian Onboarding), diterapkan di spec 0016 (2026-11-13).
-- [x] Fitur 46: tambahkan `stackly env up ~/Code/erp` ke `OnboardingCopy.commandExamples`. Dijawab spec 0046 (AC-22; argumen posisi folder di AC-17), diterapkan di spec 0016 (2026-11-13).
+- [ ] Fitur 44: tambahkan baris "Environments as files" dari mockup ke langkah Welcome. Dirancang di spec 0044 (AC-23, *Layar* bagian Onboarding) (2026-11-13); dicentang `/sync` saat build mendarat.
+- [ ] Fitur 46: tambahkan `stackly env up ~/Code/erp` ke `OnboardingCopy.commandExamples`. Dirancang di spec 0046 (AC-22; argumen posisi folder di AC-17) (2026-11-13); dicentang `/sync` saat build mendarat.
 - [ ] Fitur 32: baris "Show Welcome…" di tab General Settings yang memanggil `OnboardingModel.present()`.
 - [x] Fitur 37: putuskan apakah langkah Catalog Trust menampilkan sumber lokal atau community dan trust per provider. Diputuskan [spec 0037](../0037-import-provider-lokal-trust/index.md) (K14, AC-16) dan dibangun fitur 37 (2026-11-11): langkah itu tidak mendapat baris atau toggle baru dan tidak menampilkan trust per provider; hanya subjudul dan satu kalimat catatannya yang berubah (`OnboardingCopy.swift`). Sumber community tetap Deferred.
 - [x] Fitur 67: umpan balik "Setup complete." dan "Copied." lewat komponen umpan balik. Diterapkan (2026-10-21): AC-11, *Tampilan di jendela utama*, dan *Kontrol Command Line* memakai `FeedbackCenter` dan `CopyButton` spec 0067.
