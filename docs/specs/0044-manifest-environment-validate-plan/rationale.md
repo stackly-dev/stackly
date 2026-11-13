@@ -149,6 +149,10 @@ Mode Update, tanpa cross check, atas permintaan lead. ID AC tidak berubah.
 - **Instance yang belum initialized menjadi blocker plan** (usulan spec 0046). `start_instance` selalu menolak instance `uninitialized`, dan instance `stopped` atau `failed` tanpa data, jadi plan yang menandainya `start` menjanjikan sesuatu yang pasti gagal. Kini keduanya blocker `env.instance_blocked` dengan `reason` `not_initialized`, seperti lifecycle `unknown` dan `retained`. `NotReadyReason` di `env.get` tidak diubah (tetap `stopped`), supaya tabel *Alasan belum ready* spec 0046 tidak ikut bergeser. Runner up: biarkan `start` dan biarkan Up melaporkan gagal di tahap start; ditolak karena kegagalannya sudah bisa dipastikan sebelum ada mutasi.
 - **Titik sambung diselaraskan** dengan nama field, kode, dan aturan final spec 0045 dan 0046. Tidak ada keputusan baru; isi build spec ini tidak bertambah (field itu dibangun spec 0045 dan 0046 dengan minor protokol masing masing).
 
+## Perubahan 2026-11-13 (sesudah spec 0047 diterima)
+
+Update `/architect` (mode Update, sesi `arc-update-all`). *Titik sambung* untuk spec 0047 diselaraskan dengan nama field dan aturan final [spec 0047](../0047-env-down-shared-instance-lease/index.md): `InstanceEnvironment.leaseActive`, `EnvironmentDetail.lease`, baris Lease, kata "· lease", aksi Bring Down… di pesan `env.lease_active`, dan `activeOperation.kind` `environment_down`. Tidak ada keputusan baru dan tidak ada AC yang berubah; field itu dibangun spec 0047 dengan minor protokolnya sendiri. Satu Follow-up baru dicatat dari spec 0047: rename instance yang dipinjam lewat `instanceRef` belum punya aturan, dan keputusannya milik spec ini.
+
 ## Bahan yang dibaca
 
 - `prd.md`: REQ-020, REQ-028, VAL-013, VAL-014, PAGE-10, AC-020, AC-080, NFR-012, JOURNEY-04, bagian 13.1 sampai 13.3 (hanya sebagai input spec).

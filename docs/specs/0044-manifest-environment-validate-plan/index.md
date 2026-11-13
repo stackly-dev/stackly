@@ -290,7 +290,7 @@ Semua method lewat handshake dan peer user yang sama (spec 0006). Modul DTO baru
 - `PlanItem { alias, ownership, action: PlanAction, steps: [PlanStep], instance: PlanInstance { id?, name }, provider, trust?: PlanTrust (hanya item `create`), runtime?: PlanRuntime { selector, version, artifactId, artifactSha256, install, runtimeId?, downloadSize? }, endpoints: [PlanEndpoint { name, host, port: PortRequest }] (item `create`: setiap endpoint IP paket dalam urutan paket, yang tidak ditulis manifest sebagai `auto`, `host` dari `defaultHost` paket; item lain: endpoint IP instance dengan port efektifnya sebagai `fixed`), secrets: [PlanSecret { field, reference?, status: PlanSecretStatus }], waitsFor: [alias], differences: [PlanDifference { field, manifest, instance }], checks: [PreflightCheck] }`; `PlanAction` `create`, `start`, `keep`; `PlanStep` `install_runtime`, `create_instance`, `start_instance`; `PlanTrust` `trusted`, `approval_required`, `revoked`; `PlanSecretStatus` `present`, `missing`, `unregistered`, `unknown`, `generated`. `PortRequest` dan `PreflightCheck` dipakai ulang dari modul `instance`.
 - `EnvironmentSummary { id, name, revision, manifestLocation?, manifestSha256?, status: EnvironmentStatus, readyCount, serviceCount, updatedAt }`.
 - `EnvironmentDetail { summary, services: [EnvironmentService], detached: [DetachedMember], manifestState?: ManifestState, problems?: Count }`; `EnvironmentService { alias, provider, ownership, selector?, instanceRef?, instance?: ServiceInstance { id, name, runtimeVersion, lifecycle, readiness, health }, notReady?: ServiceNotReady { reason: NotReadyReason, detail? } }`; `NotReadyReason` `not_created`, `stopped`, `starting`, `stopping`, `failed`, `not_ready`, `unavailable`.
-- Tambahan `instance`: `InstanceOwnership` mendapat `dedicated` dan `shared`; `InstanceSummary.environments: Vec<InstanceEnvironment { environmentId, name, alias, ownership: EnvOwnership }>` dengan `#[serde(default)]`.
+- Tambahan `instance`: `InstanceOwnership` mendapat `dedicated` dan `shared`; `InstanceSummary.environments: Vec<InstanceEnvironment { environmentId, name, alias, ownership: EnvOwnership }>` dengan `#[serde(default)]`. Spec 0047 menambah `leaseActive: bool` ke `InstanceEnvironment` dengan minor protokolnya sendiri (*Titik sambung*).
 
 `manifestLocation` dikirim sebagai path absolut (klien butuh nya untuk membuka file); klien menampilkan home sebagai `~`. Pesan error dan catatan audit memakai `home_mask`.
 
@@ -368,7 +368,7 @@ Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris dari
 
 **Validate**: sukses menampilkan feedback "{name}: schema stackly/v1alpha1 valid · no cycles · secrets referenced."; gagal membuka seksi Problems.
 
-**Remove**: `ConfirmationRequest` destructive "Remove “{name}”?" / "Stackly forgets this environment. Its instances, data, and stackly.yaml are kept." / "Remove". `env.lease_active` menampilkan "Bring it down first." dengan daftar instance.
+**Remove**: `ConfirmationRequest` destructive "Remove “{name}”?" / "Stackly forgets this environment. Its instances, data, and stackly.yaml are kept." / "Remove". `env.lease_active` menampilkan "Bring it down first." dengan daftar instance. Spec 0047 menambah aksi Bring Down… di pesan itu, yang membuka konfirmasi Down.
 
 **Overview**: `SectionCard` "Environments" di kolom kanan di atas Operations, hanya saat ada environment: paling banyak lima baris (nama, `StatusLabel`, "{ready} of {total} ready · {file}"), lalu Show All; klik membuka environment.
 
@@ -466,6 +466,13 @@ Tidak ada variabel environment atau credential baru.
 - `InstanceSummary.environments` dan `ownership` tersedia untuk pesan dampak stop, Stop Services, dan ganti endpoint.
 - Follow-up spec 0026 (restart pada instance yang dipinjam environment butuh override atau tidak) diserahkan ke spec 0047, karena jawabannya bergantung pada aturan override stop di sana.
 - UI: tombol Down di toolbar, baris Lease di seksi Details, kata "· lease" di baris Ownership inspector.
+- Diselaraskan 2026-11-13 dengan teks final [spec 0047](../0047-env-down-shared-instance-lease/index.md) (field di bawah dibangun spec 0047 dengan minor protokolnya sendiri; isi build spec ini tidak bertambah):
+  - `InstanceEnvironment` mendapat `leaseActive: bool`, dan cache keanggotaan daemon spec ini ikut menyimpan nilainya (spec 0047 AC-12, *Event*).
+  - `EnvironmentDetail` mendapat `lease?: EnvLeaseInfo { activeCount, heldSince? }`; baris "Lease" di seksi Details tampil di bawah baris Lock dan Local override dengan teks *Copy Lease* spec 0047 (AC-22).
+  - Baris Ownership inspector menampilkan "Dedicated · lease" atau "Shared · lease" saat ada entri `environments` ber `leaseActive` true, selain itu teks spec ini (spec 0047 AC-22).
+  - Tombol Down berdiri di kiri Up… di toolbar (spec 0047 AC-20). Pesan `env.lease_active` Remove mendapat aksi Bring Down…; Remove yang dicoba lagi sesudah Down memakai revision dari `env.get` yang dimuat ulang, karena Down menaikkan revision environment.
+  - `EnvironmentSummary.activeOperation.kind` (spec 0046) bisa `environment_down`, dengan teks status "Bringing down…".
+  - Restart, reload, apply config, rename, dan force stop pada instance yang dipinjam tidak meminta override (spec 0047 AC-14); stop dan ganti port memintanya (AC-13, AC-15).
 
 ### Jawaban Follow-up spec lain
 
@@ -538,7 +545,7 @@ Urutan mengikuti pendekatan Journey: jalur "menerima `stackly.yaml`, memvalidasi
 
 ### Update spec lain
 
-Usulan untuk lead (architect spec ini tidak mengubah spec lain):
+Usulan untuk lead (architect spec ini tidak mengubah spec lain). Semuanya diterapkan 2026-11-13 lewat `architect (update)` (sesi `arc-update-07` dan `arc-update-all`), kecuali tabel di `apps/macos/design.md`, yang ditulis langkah build 7:
 
 - **Spec 0004**: `Environment` mendapat `manifest_location` dan `declared`; tipe `DeclaredService`, `DependencyEdge`, `DependencyCondition`; `EnvironmentName` adalah input import.
 - **Spec 0005**: kolom `environments.services`, unique index nama, `WriteOp::DeleteEnvironment` dan isi batch nya.
@@ -554,7 +561,8 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 - [ ] Lead: tetapkan nomor minor protokol dan nomor migrasi saat build, dan terapkan *Update spec lain* lewat `architect (update)`.
 - [x] Spec 0045: isi `PlanInputs.lock` dan `overrides`, baris Lock dan Local override, schema lockfile. Dijawab spec 0045 (2026-11-13); *Titik sambung* di atas sudah diselaraskan.
 - [x] Spec 0046: `env.up` dengan `expectedPlanDigest`, penulisan member dan snapshot, default `timeoutSeconds`, nasib member `detached`, tombol Up… dan Bring Up, kalimat onboarding. Dijawab spec 0046 (2026-11-13); dua usulan perilakunya (masukan `planDigest`, instance belum initialized) diterapkan di *Aksi plan*.
-- [ ] Spec 0047: tombol Down, baris Lease, jawaban Follow-up spec 0026 tentang restart pada instance yang dipinjam.
+- [x] Spec 0047: tombol Down, baris Lease, jawaban Follow-up spec 0026 tentang restart pada instance yang dipinjam. Dijawab spec 0047 (2026-11-13: AC-20, AC-22, AC-14); *Titik sambung* di atas sudah diselaraskan.
+- [ ] Dari spec 0047: rename instance yang dipinjam lewat `instanceRef` membuat plan environment peminjam melaporkan `env.instance_ref_not_found`, walau member nya masih terikat lewat ID. Putuskan di spec ini apakah plan mengikuti member, atau rename meminta override seperti ganti port.
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa `env.validate` dan `env.plan` read only dan bukan operasi, bahwa plan memakai `gather` dan `evaluate` create, dan perintah `stackly env`.
 
 ## Rationale
