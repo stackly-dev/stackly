@@ -180,14 +180,116 @@ services:
       condition: *c
 ";
     let validation = validate(text.as_bytes(), &catalog());
-    let aliases: Vec<String> = validation
+    assert_eq!(
+        alias_locations(&validation),
+        ["15:18", "21:18"],
+        "the anchor and the alias"
+    );
+}
+
+fn alias_locations(validation: &Validation) -> Vec<String> {
+    validation
         .findings
         .list()
         .iter()
         .filter(|f| f.code() == FindingCode::YamlAlias)
         .map(|f| f.location().to_string())
-        .collect();
-    assert_eq!(aliases, ["15:18", "21:18"], "the anchor and the alias");
+        .collect()
+}
+
+// covers: AC-1 (spec 0044, K2)
+#[test]
+fn a_quote_that_starts_a_plain_scalar_continuation_is_refused_and_hides_nothing() {
+    let text = "\
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  proxy:
+    provider: official/traefik
+    version: \"3.7\"
+    settings:
+      routes:
+        - name: web
+          rule: Host(`a.localhost`) || Host(`b.localhost`) || Header(`X-A`,
+            \"v)
+          backendUrl: \"http://127.0.0.1:3000\"
+  cache: &c
+    provider: official/valkey
+  other: *c
+";
+    let validation = validate(text.as_bytes(), &catalog());
+    assert_eq!(
+        alias_locations(&validation),
+        ["13:13", "15:10", "17:10"],
+        "the open quote, the anchor, and the alias"
+    );
+}
+
+// covers: AC-1 (spec 0044, K2)
+#[test]
+fn a_quote_inside_a_block_scalar_with_an_indentation_indicator_hides_nothing() {
+    let text = "\
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  db:
+    provider: testing/fake
+    version: \"0.1\"
+    settings:
+      note: |2-
+            first
+          \"second
+  cache: &c
+    provider: testing/fake
+  other: *c
+";
+    let validation = validate(text.as_bytes(), &catalog());
+    assert_eq!(
+        alias_locations(&validation),
+        ["13:10", "15:10"],
+        "the anchor and the alias after the block"
+    );
+}
+
+// covers: AC-1 (spec 0044, K2)
+#[test]
+fn quoted_multi_line_values_quotes_in_plain_text_and_comments_stay_valid() {
+    let text = "\
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  # &not an anchor, *nor an alias, \"not a quote
+  proxy:
+    provider: official/traefik
+    version: \"3.7\"
+    endpoints:
+      web: {port: 8000}
+    settings:
+      routes:
+        - name: web
+          rule: Host(`shop.localhost`) && PathPrefix(`/it's`)
+          backendUrl: \"http://127.0.0.1:3000\"
+        - name: api
+          rule: Host(`shop.localhost`) &&
+            PathPrefix(`/api`)
+          backendUrl: 'http://127.0.0.1:3001'
+        - name: docs
+          rule: \"Host(`shop.localhost`) &&
+            PathPrefix(`/docs`)\"
+          backendUrl: \"http://127.0.0.1:3002\"  # &comment
+";
+    let validation = validate(text.as_bytes(), &catalog());
+    assert!(
+        validation.findings.list().is_empty(),
+        "{:#?}",
+        validation.findings.list()
+    );
 }
 
 // covers: AC-1 (spec 0044)
