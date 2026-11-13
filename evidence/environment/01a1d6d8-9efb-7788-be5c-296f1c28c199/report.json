@@ -1,0 +1,129 @@
+{
+  "schema": "stackly.evidence-report/v1",
+  "runId": "01a1d6d8-9efb-7788-be5c-296f1c28c199",
+  "kind": "fixture",
+  "wrapperVersion": "0.1.0",
+  "context": {
+    "sourceCommit": "01d4c1e8c648661fcf97417d4e5b8f87ca19de5c",
+    "sourceDirty": false,
+    "runId": "01a1d6d8-9efb-7788-be5c-296f1c28c199",
+    "runKind": "fixture",
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "stacklyd",
+      "--test",
+      "env_up_edges",
+      "a_dependency_whose"
+    ],
+    "host": {
+      "os": "macos",
+      "arch": "aarch64",
+      "osVersion": "27.0.1",
+      "osBuild": "26A434",
+      "hardwareModel": "Mac13,1",
+      "chip": "Apple M1 Max",
+      "memoryBytes": 34359738368,
+      "performanceCores": 8,
+      "efficiencyCores": 2,
+      "virtualized": false
+    },
+    "baseline": {
+      "matches": true,
+      "osBuildMatches": false
+    },
+    "toolchain": {
+      "rustc": "1.99.1",
+      "xcode": "27.1 (27A9275)",
+      "swift": "6.4"
+    }
+  },
+  "startedAt": "2026-11-13T21:38:03.130939Z",
+  "finishedAt": "2026-11-13T21:38:26.426504Z",
+  "commandExitCode": 0,
+  "commandSignal": null,
+  "interrupted": false,
+  "summary": {
+    "total": 1,
+    "byStatus": {
+      "NOT_RUN": 0,
+      "PASS": 1,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "DEFERRED": 0
+    },
+    "byKind": {
+      "fixture": 1,
+      "native": 0
+    }
+  },
+  "problems": [],
+  "records": [
+    {
+      "schema": "stackly.evidence/v1",
+      "id": "01a1d6d8-e5dd-72e8-88dd-dd2dd6b42abd",
+      "covers": [
+        "REQ-021",
+        "AC-021"
+      ],
+      "kind": "fixture",
+      "method": "automated",
+      "test": {
+        "language": "rust",
+        "package": "stacklyd",
+        "target": "env_up_edges",
+        "name": "a_dependency_whose_start_fails_skips_its_dependent_unstarted_and_leaves_a_healthy_one_alone",
+        "file": "apps/daemon/tests/env_up_edges.rs",
+        "line": 1051
+      },
+      "status": "PASS",
+      "expected": "env.up where db crashes before it is ready ends db failed at start and api, which waits for db, skipped with reason failed and no start operation, stopped with desired stopped and its lease kept; a borrowed running instance in the same Up is ready with no child and keeps its process, restart count, and everything Up must not change",
+      "actual": "all assertions passed",
+      "reason": null,
+      "owner": null,
+      "subjects": [],
+      "steps": null,
+      "reviewer": null,
+      "startedAt": "2026-11-13T21:38:21.277787Z",
+      "finishedAt": "2026-11-13T21:38:26.41454Z",
+      "evidencePath": "output.log",
+      "context": {
+        "sourceCommit": "01d4c1e8c648661fcf97417d4e5b8f87ca19de5c",
+        "sourceDirty": false,
+        "runId": "01a1d6d8-9efb-7788-be5c-296f1c28c199",
+        "runKind": "fixture",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "stacklyd",
+          "--test",
+          "env_up_edges",
+          "a_dependency_whose"
+        ],
+        "host": {
+          "os": "macos",
+          "arch": "aarch64",
+          "osVersion": "27.0.1",
+          "osBuild": "26A434",
+          "hardwareModel": "Mac13,1",
+          "chip": "Apple M1 Max",
+          "memoryBytes": 34359738368,
+          "performanceCores": 8,
+          "efficiencyCores": 2,
+          "virtualized": false
+        },
+        "baseline": {
+          "matches": true,
+          "osBuildMatches": false
+        },
+        "toolchain": {
+          "rustc": "1.99.1",
+          "xcode": "27.1 (27A9275)",
+          "swift": "6.4"
+        }
+      }
+    }
+  ]
+}
