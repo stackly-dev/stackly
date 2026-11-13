@@ -155,6 +155,33 @@ Rendah:
 - AC-19 sampai AC-22 · belum, Milestone 4 (app)
 - AC-25 · belum, Milestone 4 langkah 11 (native)
 
+## Milestone 3: `stackly env up` dan `status`
+
+Langkah Build plan 7: resolver target ber path (dipakai juga `stackly env plan`), `stackly env up` dengan progress per perubahan phase dan tabel akhir, `stackly env status`, golden dan binary test. Hanya `apps/cli/`; protokol tetap 4.4 dan tidak ada kode `cli.*` baru (`cli.env_invalid`, `cli.env_plan_blocked`, `cli.environment_not_found`, `cli.env_locked_unsupported`, dan `cli.wait_timeout` sudah ada di katalog).
+
+### UI / manual
+
+- [ ] Buka `apps/cli/src/commands/env/target.rs` → argumen posisi yang memuat `/`, diawali `.` atau `~`, atau berakhiran `.yaml`/`.yml` adalah path; `~` diganti folder home, folder berarti `<folder>/stackly.yaml`, file dipakai apa adanya; argumen lain nama atau UUID environment dari `env.list`; `--file` dan argumen posisi saling menolak; tanpa keduanya `./stackly.yaml`; `plan`, `up`, dan `status` memakai `TargetArgs` yang sama → AC-17, AC-18
+- [ ] Buka `apps/cli/src/commands/env/up.rs` → `env.plan` (dengan `locked`) lebih dulu; `--locked` dengan `lock.locked` bukan true berhenti `cli.env_locked_unsupported` sebelum `env.up`; manifest tidak valid `cli.env_invalid` dan plan terblokir `cli.env_plan_blocked` tanpa `env.up`; plan yang hanya terblokir reference tanpa nilai tetap dikirim dengan digest nol supaya daemon menjawab `secret.needs_secret`, lalu satu hint `stackly secret set <reference>` per reference; tanpa konfirmasi → AC-17, AC-2
+- [ ] Buka `apps/cli/src/commands/env/services.rs` dan `apps/cli/src/wait.rs` → `--wait` berlangganan semua event `operation.` (`Watch::wide`), membaca `env.get` dengan `checkManifest` false sesudah tiap `operation.get`, dan menulis satu baris per perubahan phase di `lastUp` operasi itu (`install`, `create`, `start`, `ready <instance> <host>:<port>`, `wait`, `skip <service>: waiting for <dependency>`, `failed`, `needs secret`, `cancelled`); `ENDPOINTS` memakai `ServiceInstance.endpoints` dengan port yang di bind dan `<name> -` untuk yang belum → AC-17
+- [ ] Jalankan `cargo build -p stacklyd -p stackly-cli`, lalu di root uji (`STACKLY_ROOT=$(mktemp -d)`, `STACKLY_CATALOG_DIR` dari `cargo xtask catalog build --out <dir>`) tulis `shop/stackly.yaml` dengan `official/valkey` ber `secretRefs: {password: "local:shop/valkey"}` dan `official/nats`, lalu `stackly env up ./shop --wait` → exit 6, `code: secret.needs_secret`, `hint: stackly secret set local:shop/valkey`, dan `stackly instance list` kosong; `stackly env status ./shop` → exit 10 dengan "Run stackly env up or stackly env import."; sesudah `stackly env import --file shop/stackly.yaml`, `stackly env status ./shop` → `shop  Down  0 of 2 ready  <file>`, tabel enam kolom, dan `not ready:` → AC-17, AC-18
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --bin stackly env::` → lulus: aturan path, folder ke `stackly.yaml`, `~`, digest nol hanya untuk plan yang terblokir reference saja, teks setiap alasan belum ready, satu baris per perubahan phase → AC-17, AC-18
+- [ ] `cargo test -p stackly-cli --test env -- up:: status::` → 9 test lulus dengan daemon berskrip dan fixture `protocols/fixtures/env/`: tanpa `--wait` "Started bringing up graph (operation <id>)" dan `environment` null; `--wait` lima baris progress lalu tabel dengan port `auto` 49152 sampai 49154 dan "3 of 3 ready."; `env.up_incomplete` exit 7 dengan tabel, `not ready:`, dan hint daemon; `secret.needs_secret` exit 6 dengan dua hint; terblokir 3, tidak valid 2, `--locked` 5 tanpa `env.up`; folder dan nama; `status` dengan kepala, tabel, alasan, `manifest: changed`, Up yang berjalan, path lewat plan, tidak terdaftar 10, nama tidak dikenal 10, manifest tidak valid 2; golden `env_up*.txt`, `env_up.json`, `env_status.txt`, `env_status.json` → AC-17, AC-18
+- [ ] `cargo test -p stackly-cli --test env -- stacklyd::` → 3 test lulus dengan `stacklyd` nyata dan catalog `providers/`, termasuk `a_real_daemon_refuses_an_up_that_needs_a_secret_and_shows_the_status`: Up ditolak `secret.needs_secret` tanpa instance, environment, atau operasi; `status` lewat path dan nama memberi `result` yang sama → AC-17, AC-18
+- [ ] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden `env plan` yang ada tidak berubah oleh resolver baru → AC-17
+- [ ] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask docs check` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-17 · `stackly env up`: target, plan ke stderr, digest, exit 2, 3, 5, 6, 7, tanpa dan dengan `--wait`, progress, tabel dengan port yang di bind, `--json` `{ operation, idempotencyKey, environment }`; Up yang benar benar sukses terhadap `stacklyd` nyata butuh unduhan runtime official, jadi hanya diuji dengan daemon berskrip; binary test mencakup penolakan needs secret
+- AC-18 · `stackly env status`: kepala, tabel enam kolom, alasan per service, `manifest:`, exit 0 apa pun statusnya, exit 10, `--json` `EnvironmentDetail`
+- Kolom `ENVIRONMENT` di `stackly instance list` sesudah Up (celah AC-15 spec 0044) · belum: butuh instance anggota, dan binary daemon menolak namespace `testing` sehingga create tanpa unduhan tidak mungkin; tetap di langkah manual `F46-1` Milestone 4
+- AC-1 sampai AC-16, AC-23, AC-24 · Milestone 1 dan 2
+- AC-19 sampai AC-22, AC-25 · Milestone 4
+
 ## Milestone 4: Up di app
 
 Langkah Build plan 8 sampai 11: sheet plan dengan Up… dan Bring Up, progress dan alasan belum ready, Activity dan onboarding, lalu test native dan langkah manual. Protokol tetap 4.4; GUI tidak mengubah `crates/protocol/`, `protocols/`, atau `Generated/`.
