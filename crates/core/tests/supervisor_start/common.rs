@@ -61,6 +61,7 @@ pub struct Recorded {
     pub statuses: Mutex<Vec<(InstanceId, InstanceStatus, ResourceRevision)>>,
     pub degraded: Mutex<Vec<bool>>,
     pub reconciling: Mutex<Vec<stackly_core::supervisor::ReconcilePhase>>,
+    pub startup_leases: Mutex<Vec<(InstanceId, stackly_core::session::StartupLeaseState)>>,
 }
 
 impl Recorded {
@@ -117,6 +118,17 @@ impl SupervisorEvents for Recorded {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(phase.clone());
+    }
+
+    fn startup_lease_changed(
+        &self,
+        instance: InstanceId,
+        state: stackly_core::session::StartupLeaseState,
+    ) {
+        self.startup_leases
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push((instance, state));
     }
 }
 
@@ -418,6 +430,7 @@ impl Registry for FaultyRegistry {
         environment(id: stackly_domain::EnvironmentId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Environment>>, stackly_domain::RegistryError>;
         environments() -> Result<stackly_domain::Versioned<Vec<stackly_domain::Environment>>, stackly_domain::RegistryError>;
         leases(instance: InstanceId, filter: stackly_domain::LeaseFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::Lease>>, stackly_domain::RegistryError>;
+        leases_of_environment(environment: stackly_domain::EnvironmentId, filter: stackly_domain::LeaseFilter) -> Result<stackly_domain::Versioned<Vec<stackly_domain::Lease>>, stackly_domain::RegistryError>;
         operation(id: OperationId) -> Result<stackly_domain::Versioned<Option<stackly_domain::Operation>>, stackly_domain::RegistryError>;
         operations(query: stackly_domain::OperationQuery) -> Result<stackly_domain::Versioned<stackly_domain::OperationPage>, stackly_domain::RegistryError>;
         operation_journal(id: OperationId) -> Result<stackly_domain::Versioned<Option<stackly_domain::JournalView>>, stackly_domain::RegistryError>;

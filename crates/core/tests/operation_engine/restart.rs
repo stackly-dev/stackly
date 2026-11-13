@@ -20,7 +20,7 @@ use stackly_domain::{
 use stackly_testkit::EnvironmentBuilder;
 
 use crate::common::{
-    Harness, TestError, fast, manager_request, request, wait_idle, wait_state, wait_until,
+    Harness, TestError, fast, instance, manager_request, request, wait_idle, wait_state, wait_until,
 };
 
 fn environment(harness: &Harness) -> EnvironmentId {
@@ -242,10 +242,12 @@ async fn an_interrupted_operation_that_cannot_resume_is_compensated_or_needs_rec
 async fn queued_operations_are_rebuilt_after_a_restart_or_closed_without_a_factory() {
     let harness = Harness::with_limits(fast().with_slots(1, 64)).await;
     let blocker = HoldHandle::new();
+    // A resumable kind that takes a running slot; environment down closes
+    // as interrupted and is a coordinator since spec 0047.
     let blocking = harness
         .begin(request(
-            OperationKind::EnvironmentDown,
-            OperationResource::Environment(environment(&harness)),
+            OperationKind::BackupInstance,
+            OperationResource::Instance(instance(&harness)),
             ScriptedWork::new()
                 .step("drain")
                 .repeatable()
@@ -256,8 +258,8 @@ async fn queued_operations_are_rebuilt_after_a_restart_or_closed_without_a_facto
     blocker.started().await;
     let rebuilt = harness
         .begin(request(
-            OperationKind::EnvironmentDown,
-            OperationResource::Environment(environment(&harness)),
+            OperationKind::BackupInstance,
+            OperationResource::Instance(instance(&harness)),
             ScriptedWork::new().step("drain").boxed(),
         ))
         .await;
@@ -272,7 +274,7 @@ async fn queued_operations_are_rebuilt_after_a_restart_or_closed_without_a_facto
 
     let (engine, _) = harness.restarted(fast());
     engine.register_factory(
-        OperationKind::EnvironmentDown,
+        OperationKind::BackupInstance,
         Arc::new(ScriptedFactory::always(
             ScriptedWork::new().step("drain").repeatable(),
         )),

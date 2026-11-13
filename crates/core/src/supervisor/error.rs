@@ -4,8 +4,9 @@
 
 use stackly_domain::Os;
 use stackly_domain::{
-    DetailKey, ErrorCodeName, FailureItem, InstanceId, InstanceLifecycle, LocationKind,
-    LocationRule, Pid, RegistryError, ResourceRevision,
+    DetailKey, Environment, EnvironmentId, EnvironmentMember, EnvironmentName, ErrorCodeName,
+    FailureItem, InstanceId, InstanceLifecycle, Lease, LeaseHolder, LocationKind, LocationRule,
+    MemberAlias, Ownership, Pid, ReasonCode, RegistryError, ResourceRevision,
 };
 use stackly_platform::ProcessError;
 
@@ -47,6 +48,62 @@ pub struct EndpointFault {
     /// sent as the `suggestedPort` detail; `None` without a candidate or
     /// when the other instances could not be read.
     pub suggested_port: Option<u16>,
+}
+
+/// An environment whose active lease holds an instance (spec 0047, *Stop
+/// dengan guard lease*): what a refused stop names, and what an overridden
+/// stop records in its audit note.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct EnvironmentHolder {
+    /// The environment.
+    pub environment: EnvironmentId,
+    /// Its name.
+    pub name: EnvironmentName,
+    /// The alias of the instance in it; `None` when the instance holds a
+    /// lease of an environment it is no member of.
+    pub alias: Option<MemberAlias>,
+    /// How the environment holds the instance, when it is a member.
+    pub ownership: Option<Ownership>,
+}
+
+/// The most environment items a refused stop lists (the catalog limit of
+/// `supervisor.stop_requires_override`); the rest is counted in `omitted`.
+pub const STOP_OVERRIDE_ITEMS_MAX: usize = 100;
+
+/// Returns the holders of `instance`: every environment with an active
+/// lease in `leases` on it, as `environments` describes it, ordered by name
+/// and then ID. A lease of an environment that is gone is left out.
+#[must_use]
+pub fn environment_holders(
+    instance: InstanceId,
+    leases: &[Lease],
+    environments: &[Environment],
+) -> Vec<EnvironmentHolder> {
+    let mut holders: Vec<EnvironmentHolder> = leases
+        .iter()
+        .filter(|lease| lease.instance_id() == instance && lease.is_active())
+        .filter_map(|lease| match lease.holder() {
+            LeaseHolder::Environment(id) => Some(id),
+            LeaseHolder::Manual | LeaseHolder::Startup => None,
+        })
+        .filter_map(|id| environments.iter().find(|env| env.id() == id))
+        .map(|env| {
+            let member = env
+                .members()
+                .iter()
+                .find(|member| member.instance_id() == instance);
+            EnvironmentHolder {
+                environment: env.id(),
+                name: env.name().clone(),
+                alias: member.map(|member| member.alias().clone()),
+                ownership: member.map(EnvironmentMember::ownership),
+            }
+        })
+        .collect();
+    holders.sort_by(|a, b| (a.name.as_str(), a.environment).cmp(&(b.name.as_str(), b.environment)));
+    holders.dedup_by_key(|holder| holder.environment);
+    holders
 }
 
 /// Why a supervisor operation failed.
@@ -235,9 +292,13 @@ pub enum SupervisorError {
         timeout_seconds: u64,
     },
     /// An environment lease holds the instance, so a manual stop needs the
-    /// override (BR-015).
+    /// override (BR-015, spec 0047 AC-13).
     #[error("an environment holds the instance, so stopping it needs an override")]
-    StopRequiresOverride,
+    StopRequiresOverride {
+        /// The environments whose active lease holds the instance, ordered
+        /// by name and then ID.
+        holders: Vec<EnvironmentHolder>,
+    },
     /// The stop command exited with a code it does not accept.
     #[error("the stop command exited with code {exit_code}")]
     StopCommandFailed {
@@ -445,7 +506,7 @@ impl OperationError for SupervisorError {
             Self::ReadinessTimeout { .. } => codes::READINESS_TIMEOUT,
             Self::RetryBudgetExhausted { .. } => codes::RETRY_BUDGET_EXHAUSTED,
             Self::StopTimeout { .. } => codes::STOP_TIMEOUT,
-            Self::StopRequiresOverride => codes::STOP_REQUIRES_OVERRIDE,
+            Self::StopRequiresOverride { .. } => codes::STOP_REQUIRES_OVERRIDE,
             Self::StopCommandFailed { .. } => codes::STOP_COMMAND_FAILED,
             Self::ConfigDrift { .. } => crate::instance::config::codes::DRIFT_DETECTED,
             Self::ReloadFailed { .. } => codes::RELOAD_FAILED,
@@ -610,8 +671,15 @@ impl OperationError for SupervisorError {
                 (key("expected"), expected.to_string()),
                 (key("actual"), actual.to_string()),
             ],
+            Self::StopRequiresOverride { holders } => {
+                let omitted = holders.len().saturating_sub(STOP_OVERRIDE_ITEMS_MAX);
+                if omitted == 0 {
+                    Vec::new()
+                } else {
+                    vec![(key("omitted"), omitted.to_string())]
+                }
+            }
             Self::InstanceInitializing
-            | Self::StopRequiresOverride
             | Self::InstanceStopping
             | Self::InstanceRetained
             | Self::IdentityCaptureFailed
@@ -624,6 +692,16 @@ impl OperationError for SupervisorError {
     fn items(&self) -> Vec<FailureItem> {
         match self {
             Self::Secret(error) => OperationError::items(error),
+            Self::StopRequiresOverride { holders } => holders
+                .iter()
+                .take(STOP_OVERRIDE_ITEMS_MAX)
+                .filter_map(|holder| {
+                    // provisional: F47 step 4 adds name, alias, and
+                    // ownership to the catalog entry's item fields.
+                    let fields = vec![(key("environmentId"), holder.environment.to_string())];
+                    FailureItem::new(ReasonCode::from_static("environment"), fields).ok()
+                })
+                .collect(),
             _ => Vec::new(),
         }
     }

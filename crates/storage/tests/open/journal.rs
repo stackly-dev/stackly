@@ -152,10 +152,15 @@ fn migrating_v1_keeps_the_newest_key_and_backfills_a_journal_per_operation() {
 }
 
 /// The resumable kinds as migration 2 froze them: the domain's, plus
-/// `environment_up`, which spec 0046 made close as interrupted after that
-/// migration was released. A journal keeps the flag it was created with.
+/// `environment_up` and `environment_down`, which specs 0046 and 0047 made
+/// close as interrupted after that migration was released. A journal keeps
+/// the flag it was created with.
 fn resumable_at_migration_2(kind: OperationKind) -> bool {
-    kind.resumable() || kind == OperationKind::EnvironmentUp
+    kind.resumable()
+        || matches!(
+            kind,
+            OperationKind::EnvironmentUp | OperationKind::EnvironmentDown
+        )
 }
 
 #[test]

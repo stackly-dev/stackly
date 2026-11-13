@@ -117,7 +117,10 @@ pub use config::{
 };
 pub use daemon_restart::{DaemonRestartRequest, PlanPrepared, RestartHandover};
 pub use deps::{NoSupervisorEvents, Supervisor, SupervisorDeps, SupervisorEvents, WeakSupervisor};
-pub use error::{EndpointFault, SupervisorError, UnavailableReason};
+pub use error::{
+    EndpointFault, EnvironmentHolder, STOP_OVERRIDE_ITEMS_MAX, SupervisorError, UnavailableReason,
+    environment_holders,
+};
 pub use force::ForceStopRequest;
 pub use handover::{
     HANDOVER_PROVEN, HandoverProof, PlanEntry, is_handover_proven, plan_digest, plan_entries,
@@ -138,7 +141,7 @@ pub use sink::{LogBatch, LogLine, LogSink, RunEvent, SinkOutcome, SinkSet, Spool
 pub use spool::{DrainContext, DrainOutcome, SpoolDrain};
 pub use startup::{StartRequest, StartTrigger};
 pub use status::{FailureFacts, InstanceStatus, ProcessStatus, RestartStatus};
-pub use stop::StopRequest;
+pub use stop::{ENVIRONMENT_DOWN_INPUT, INSTANCE_IN_USE, StopRequest};
 pub use stop_all::StopAllRequest;
 
 /// Longest [`ObservationDetail`], in characters.

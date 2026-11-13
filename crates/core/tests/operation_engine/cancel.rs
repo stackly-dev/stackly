@@ -10,8 +10,7 @@ use stackly_core::operation::{
     BoxFuture, CancelDisposition, OperationContext, OperationOutcome, OperationWork, StepSpec,
     WorkOutcome, WorkResult,
 };
-use stackly_domain::{OperationKind, OperationState, Registry, WriteBatch, WriteOp};
-use stackly_testkit::EnvironmentBuilder;
+use stackly_domain::{OperationKind, OperationState};
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::{Harness, fast, manager_request, request, wait_state};
@@ -129,16 +128,11 @@ async fn cancel_answers_with_the_disposition_of_the_state_the_operation_is_in() 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_resumed_queued_operation_past_its_point_of_no_return_keeps_running_on_cancel() {
     let harness = Harness::with_limits(fast().with_slots(1, 64)).await;
-    let env = EnvironmentBuilder::new().no_members();
-    let id = env.id();
-    harness
-        .registry
-        .commit(WriteBatch::new(vec![WriteOp::InsertEnvironment(
-            env.build(),
-        )]))
-        .unwrap();
+    // A resumable kind that compensates; environment down closes as
+    // interrupted since spec 0047, so it no longer stands in here.
+    let target = crate::common::instance(&harness);
     harness.engine.register_factory(
-        OperationKind::EnvironmentDown,
+        OperationKind::BackupInstance,
         Arc::new(stackly_core::operation::testing::ScriptedFactory::always(
             ScriptedWork::new()
                 .step("stop")
@@ -150,16 +144,16 @@ async fn a_resumed_queued_operation_past_its_point_of_no_return_keeps_running_on
     let blocker = HoldHandle::new();
     let blocking = harness
         .begin(request(
-            OperationKind::EnvironmentDown,
-            stackly_domain::OperationResource::Environment(id),
+            OperationKind::BackupInstance,
+            stackly_domain::OperationResource::Instance(target),
             ScriptedWork::new().step("drain").hold(&blocker).boxed(),
         ))
         .await;
     blocker.started().await;
     let failing = harness
         .begin(request(
-            OperationKind::EnvironmentDown,
-            stackly_domain::OperationResource::Environment(id),
+            OperationKind::BackupInstance,
+            stackly_domain::OperationResource::Instance(target),
             ScriptedWork::new()
                 .step("stop")
                 .irreversible()

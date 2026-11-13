@@ -992,6 +992,12 @@ pub(super) fn leases(suite: &Suite<'_>) {
         vec![WriteOp::InsertLease(manual.clone())],
     );
     let second = second.build();
+    environment_leases(
+        suite,
+        &stack,
+        &environment,
+        &[released.clone(), second.clone()],
+    );
     expect_eq(
         "leases list by acquired_at",
         suite.value(
@@ -1019,6 +1025,111 @@ pub(super) fn leases(suite: &Suite<'_>) {
                 .leases(InstanceId::generate(), LeaseFilter::All),
         ),
         Vec::new(),
+    );
+}
+
+/// The leases of an environment list across instances by `acquired_at`,
+/// and only its own, both in a plain read and inside a guarded commit
+/// (spec 0047). `held` is every lease `environment` holds so far, oldest
+/// first, the last one active and every other released.
+fn environment_leases(
+    suite: &Suite<'_>,
+    stack: &super::Stack,
+    environment: &stackly_domain::Environment,
+    held: &[stackly_domain::Lease],
+) {
+    let t = suite.loaded_at;
+    let other_instance = Suite::instance(stack).build();
+    let other = EnvironmentBuilder::new()
+        .shared(other_instance.id())
+        .build();
+    let on_other_instance = LeaseBuilder::new(other_instance.id())
+        .environment(environment.id())
+        .acquired_at(shifted(t, 4))
+        .build();
+    let of_other = LeaseBuilder::new(other_instance.id())
+        .environment(other.id())
+        .acquired_at(shifted(t, 5))
+        .build();
+    suite.commit(
+        "store a second instance and environment with leases",
+        vec![
+            WriteOp::InsertInstance(other_instance),
+            WriteOp::InsertEnvironment(other.clone()),
+            WriteOp::InsertLease(on_other_instance.clone()),
+            WriteOp::InsertLease(of_other.clone()),
+        ],
+    );
+    let mut all = held.to_vec();
+    all.push(on_other_instance.clone());
+    let unreleased: Vec<_> = all
+        .iter()
+        .filter(|lease| !matches!(lease.state(), stackly_domain::LeaseState::Released { .. }))
+        .cloned()
+        .collect();
+    expect_eq(
+        "an environment's leases list across instances by acquired_at",
+        suite.value(
+            "list the leases of an environment",
+            suite
+                .registry
+                .leases_of_environment(environment.id(), LeaseFilter::All),
+        ),
+        all,
+    );
+    expect_eq(
+        "an environment's unreleased leases skip released ones",
+        suite.value(
+            "list the unreleased leases of an environment",
+            suite
+                .registry
+                .leases_of_environment(environment.id(), LeaseFilter::Unreleased),
+        ),
+        unreleased.clone(),
+    );
+    expect_eq(
+        "an environment lists only its own leases",
+        suite.value(
+            "list the leases of the other environment",
+            suite
+                .registry
+                .leases_of_environment(other.id(), LeaseFilter::All),
+        ),
+        vec![of_other],
+    );
+    expect_eq(
+        "an unknown environment holds no lease",
+        suite.value(
+            "list the leases of an unknown environment",
+            suite
+                .registry
+                .leases_of_environment(EnvironmentId::generate(), LeaseFilter::All),
+        ),
+        Vec::new(),
+    );
+    let id = environment.id();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let slot = std::sync::Arc::clone(&seen);
+    let guard: stackly_domain::CommitGuard = Box::new(move |view| {
+        let leases = view.leases_of_environment(id, LeaseFilter::Unreleased)?;
+        *slot.lock().expect("the slot is not poisoned") = Some(leases);
+        Ok(stackly_domain::GuardDecision::Write(Vec::new()))
+    });
+    match suite.registry.commit_guarded(guard) {
+        Ok(stackly_domain::Guarded::Committed(_)) => {}
+        Ok(stackly_domain::Guarded::Refused(_)) => super::fail(
+            "a guard reads the leases of an environment",
+            "the guard refused",
+        ),
+        Err(err) => super::fail(
+            "a guard reads the leases of an environment",
+            &err.to_string(),
+        ),
+    }
+    expect_eq(
+        "a guard reads the leases of an environment",
+        seen.lock().expect("the slot is not poisoned").clone(),
+        Some(unreleased),
     );
 }
 

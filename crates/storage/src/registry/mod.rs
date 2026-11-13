@@ -303,6 +303,14 @@ impl Registry for SqliteRegistry {
         self.read(move |tx| read::leases(tx, instance, filter))
     }
 
+    fn leases_of_environment(
+        &self,
+        environment: EnvironmentId,
+        filter: LeaseFilter,
+    ) -> Result<Versioned<Vec<Lease>>, RegistryError> {
+        self.read(move |tx| read::leases_of_environment(tx, environment, filter))
+    }
+
     fn operation(&self, id: OperationId) -> Result<Versioned<Option<Operation>>, RegistryError> {
         self.read(move |tx| read::operation(tx, id))
     }

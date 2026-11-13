@@ -291,15 +291,13 @@ impl OperationKind {
 
     /// Returns whether an operation of this kind may resume after the
     /// daemon stopped while it ran (spec 0007, "Tabel resume per jenis
-    /// operasi"): installs, environment down, and backups. Every
-    /// other kind never resumes; what happens to it instead follows its
-    /// [`interrupt_policy`](Self::interrupt_policy).
+    /// operasi"): installs and backups. Every other kind never resumes;
+    /// what happens to it instead follows its
+    /// [`interrupt_policy`](Self::interrupt_policy). Environment down
+    /// closes as interrupted since spec 0047 (K15) and no longer resumes.
     #[must_use]
     pub const fn resumable(self) -> bool {
-        matches!(
-            self,
-            Self::InstallRuntime | Self::EnvironmentDown | Self::BackupInstance
-        )
+        matches!(self, Self::InstallRuntime | Self::BackupInstance)
     }
 
     /// Returns what the engine does with an operation of this kind that
@@ -309,8 +307,10 @@ impl OperationKind {
     /// daemon and the supervisor adopts it, and so do apply config and
     /// change endpoints, whose commit cannot be undone (spec 0029), and a
     /// daemon restart, whose plan the next daemon carries on (spec 0030),
-    /// and environment up, whose effects its own registry commits and its
-    /// child operations already recorded (spec 0046); every other kind is
+    /// environment up, whose effects its own registry commits and its
+    /// child operations already recorded (spec 0046), and environment
+    /// down, whose leases its first commit already released, so a new Down
+    /// only does what is left (spec 0047 AC-10); every other kind is
     /// compensated before its point of no return.
     #[must_use]
     pub const fn interrupt_policy(self) -> InterruptPolicy {
@@ -324,7 +324,8 @@ impl OperationKind {
             | Self::ChangeEndpoints
             | Self::DaemonRestart
             | Self::StopAllInstances
-            | Self::EnvironmentUp => InterruptPolicy::CloseInterrupted,
+            | Self::EnvironmentUp
+            | Self::EnvironmentDown => InterruptPolicy::CloseInterrupted,
             _ => InterruptPolicy::Compensate,
         }
     }
@@ -334,9 +335,11 @@ impl OperationKind {
     /// writes the registry, starts child operations, and waits for them.
     /// The engine runs coordinators in their own slot class, so a waiting
     /// coordinator never holds one of the running slots its children need.
+    /// Environment up and environment down (spec 0047 AC-3) are the
+    /// coordinators.
     #[must_use]
     pub const fn is_coordinator(self) -> bool {
-        matches!(self, Self::EnvironmentUp)
+        matches!(self, Self::EnvironmentUp | Self::EnvironmentDown)
     }
 }
 
@@ -1006,14 +1009,14 @@ mod tests {
     }
 
     #[test]
-    fn only_environment_up_is_a_coordinator() {
+    fn only_environment_up_and_environment_down_are_coordinators() {
         let coordinators: Vec<&str> = OperationKind::ALL
             .iter()
             .filter(|kind| kind.is_coordinator())
             .map(|kind| kind.as_code())
             .collect();
 
-        assert_eq!(coordinators, ["environment_up"]);
+        assert_eq!(coordinators, ["environment_up", "environment_down"]);
     }
 
     #[test]
@@ -1024,10 +1027,7 @@ mod tests {
             .map(|kind| kind.as_code())
             .collect();
 
-        assert_eq!(
-            resumable,
-            ["install_runtime", "backup_instance", "environment_down",]
-        );
+        assert_eq!(resumable, ["install_runtime", "backup_instance"]);
     }
 
     #[test]
@@ -1049,6 +1049,7 @@ mod tests {
                 "force_stop_instance",
                 "stop_all_instances",
                 "environment_up",
+                "environment_down",
                 "apply_config",
                 "change_endpoints",
                 "daemon_restart",

@@ -117,6 +117,14 @@ impl GuardView for TransactionView<'_> {
         read::leases(self.tx, instance, filter)
     }
 
+    fn leases_of_environment(
+        &self,
+        environment: stackly_domain::EnvironmentId,
+        filter: stackly_domain::LeaseFilter,
+    ) -> Result<Vec<Lease>, RegistryError> {
+        read::leases_of_environment(self.tx, environment, filter)
+    }
+
     fn latest_session(&self) -> Result<Option<stackly_domain::DaemonSession>, RegistryError> {
         super::session::latest(self.tx)
     }

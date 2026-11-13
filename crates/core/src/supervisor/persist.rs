@@ -3,20 +3,25 @@
 //! of an aggregate is one `UpdateInstance` per domain mutation, and an actor
 //! commit retries as AC-22 says.
 
+use std::sync::{Arc, Mutex, PoisonError};
+
 use jiff::Timestamp;
 use stackly_domain::{
-    BatchError, CommitGuard, DesiredState, ExitKind, GuardDecision, GuardView, Guarded, Instance,
-    InstanceId, InstanceLifecycle, LifecycleEvent, RegistryError, WriteBatch, WriteOp,
+    BatchError, CommitGuard, DesiredState, Environment, ExitKind, GuardDecision, GuardView,
+    Guarded, Instance, InstanceId, InstanceLifecycle, Lease, LeaseFilter, LeaseHolder,
+    LifecycleEvent, RegistryError, StopDecision, StopRequest, WriteBatch, WriteOp, evaluate_stop,
     force_intent,
 };
 use stackly_platform::ExitStatus;
 
 use super::actor::InstanceActor;
 use super::commit::{ActorCommitRetry, CommitRetry, InstanceChanges};
-use super::error::SupervisorError;
+use super::error::{EnvironmentHolder, SupervisorError, environment_holders};
 use super::status::FailureFacts;
+use super::stop::LeaseCheck;
 use super::{Supervisor, SupervisorDeps};
 use crate::operation::AuditNote;
+use crate::session::manual_stop_ops;
 
 /// Runs `call` on the blocking pool.
 ///
@@ -271,6 +276,318 @@ async fn commit_with(
             }
             (Err(_), _) => {}
         }
+    }
+    result
+}
+
+/// What the lease decision of a guarded stop commit let it write (spec
+/// 0047, *Stop dengan guard lease*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum StopCommit {
+    /// The stop committed: desired `stopped` and its lease ops. `overridden`
+    /// names the environments a person's override stopped the instance
+    /// against, for the audit note.
+    Committed {
+        /// The environments whose active lease the override passed.
+        overridden: Vec<EnvironmentHolder>,
+    },
+    /// Another lease holds the instance, so an environment that goes down
+    /// keeps it: neither desired state nor lease was written.
+    Kept,
+    /// Environments hold the instance and the person did not override them:
+    /// nothing the stop would decide was written.
+    RequiresOverride(Vec<EnvironmentHolder>),
+}
+
+/// The lease rule of one guarded stop commit: the stop's [`LeaseCheck`]
+/// (never [`LeaseCheck::None`]) and whether the commit records an instance
+/// that already does not run or whose process is gone (`quiet`). A quiet
+/// manual stop disturbs nothing, so it never needs an override (AC-13).
+#[derive(Debug, Clone)]
+pub(crate) struct StopGate {
+    pub(crate) check: LeaseCheck,
+    pub(crate) quiet: bool,
+}
+
+/// What the guard of a stop commit decided from the leases it read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LeaseDecision {
+    /// Stop, with these lease ops in the same commit.
+    Stop {
+        ops: Vec<WriteOp>,
+        overridden: Vec<EnvironmentHolder>,
+    },
+    /// Keep the instance; another lease holds it.
+    Kept,
+    /// The person must override these environments first.
+    RequiresOverride(Vec<EnvironmentHolder>),
+}
+
+/// Where the guard of a stop commit leaves its decision and the ops it
+/// wrote, for the caller off the registry thread.
+type DecisionSlot = Arc<Mutex<Option<(LeaseDecision, Vec<WriteOp>)>>>;
+
+/// Why the guard of a stop commit wrote nothing.
+enum StopRefusal {
+    /// A force stop began since the commit was built (spec 0026): build
+    /// again.
+    Force,
+    /// The lease decision is final and there was nothing to write.
+    Decided,
+}
+
+/// Decides what a stop does to the leases of `id` (spec 0047): a manual
+/// stop releases the manual leases and suppresses the startup lease of its
+/// session ([`manual_stop_ops`]), or needs an override while environments
+/// hold a live instance; an environment that goes down releases its own
+/// leases, or keeps the instance while any other lease is active
+/// ([`evaluate_stop`]). `environments` is read only when holders are named.
+fn decide_leases(
+    id: InstanceId,
+    leases: &[Lease],
+    gate: &StopGate,
+    now: Timestamp,
+    environments: impl FnOnce() -> Result<Vec<Environment>, RegistryError>,
+) -> Result<LeaseDecision, RegistryError> {
+    match &gate.check {
+        LeaseCheck::None => Ok(LeaseDecision::Stop {
+            ops: Vec::new(),
+            overridden: Vec::new(),
+        }),
+        LeaseCheck::Manual {
+            session,
+            override_leases,
+        } => {
+            let passes = *override_leases || gate.quiet;
+            match manual_stop_ops(id, leases, session.as_ref(), passes, now) {
+                Some(ops) => {
+                    // Only a live instance that environments hold is
+                    // stopped against them; a quiet one disturbs nothing.
+                    let overridden =
+                        if *override_leases && !gate.quiet && holds_environment(id, leases) {
+                            environment_holders(id, leases, &environments()?)
+                        } else {
+                            Vec::new()
+                        };
+                    Ok(LeaseDecision::Stop { ops, overridden })
+                }
+                None => Ok(LeaseDecision::RequiresOverride(environment_holders(
+                    id,
+                    leases,
+                    &environments()?,
+                ))),
+            }
+        }
+        LeaseCheck::EnvironmentDown(environment) => {
+            match evaluate_stop(id, leases, &StopRequest::EnvironmentDown(*environment)) {
+                StopDecision::KeepRunning { .. } => Ok(LeaseDecision::Kept),
+                StopDecision::Stop { release, .. } => {
+                    let ops = leases
+                        .iter()
+                        .filter(|lease| release.contains(&lease.id()))
+                        .filter_map(|lease| {
+                            let mut lease = lease.clone();
+                            lease
+                                .release(now)
+                                .ok()
+                                .map(|()| WriteOp::UpdateLease(lease))
+                        })
+                        .collect();
+                    Ok(LeaseDecision::Stop {
+                        ops,
+                        overridden: Vec::new(),
+                    })
+                }
+                // `evaluate_stop` asks an override only of a manual stop.
+                StopDecision::RequiresOverride { .. } => Ok(LeaseDecision::Kept),
+            }
+        }
+    }
+}
+
+/// Whether an environment holds an active lease on `id`.
+fn holds_environment(id: InstanceId, leases: &[Lease]) -> bool {
+    leases.iter().any(|lease| {
+        lease.instance_id() == id
+            && lease.is_active()
+            && matches!(lease.holder(), LeaseHolder::Environment(_))
+    })
+}
+
+/// One side of a stop commit, built from the instance as read: the ops,
+/// the aggregate after them, and the failure facts they wrote.
+struct BuiltSide {
+    ops: Vec<WriteOp>,
+    after: Instance,
+    failure: Option<FailureFacts>,
+}
+
+fn build_side(
+    instance: &Instance,
+    force: bool,
+    stop: bool,
+    build: &mut impl FnMut(&mut InstanceChanges, bool, bool) -> Result<Vec<WriteOp>, SupervisorError>,
+) -> Result<BuiltSide, SupervisorError> {
+    let mut changes = InstanceChanges::new(instance.clone());
+    let extra = build(&mut changes, force, stop)?;
+    let after = changes.instance().clone();
+    let failure = changes.failure().cloned();
+    let mut ops = changes.into_ops();
+    ops.extend(extra);
+    Ok(BuiltSide {
+        ops,
+        after,
+        failure,
+    })
+}
+
+/// Commits a stop's change of `id` with its lease decision in one guarded
+/// commit (spec 0047, *Stop dengan guard lease*): the guard reads the
+/// leases inside the transaction and decides once, with no rebuild.
+///
+/// `build` runs twice on the instance as read, like the build of
+/// [`commit_exit`] with one more flag: with `stop` true it returns what the
+/// stop writes when the decision lets it (desired `stopped` and the rest),
+/// and with `stop` false what the commit writes anyway when the decision
+/// keeps the instance (for a process that is gone, `stopping` to
+/// `stopped`). The lease ops come from the guard, and the startup lease
+/// effect is published from the ops it wrote. With `force_aware` the guard
+/// also reads the force stop history as [`commit_exit`] does, and only a
+/// force stop that began since the build makes it build again.
+///
+/// # Errors
+///
+/// The errors of [`commit_instance`] for a commit in
+/// [`CommitMode::Operation`].
+pub(crate) async fn commit_stop_decision(
+    sup: &Supervisor,
+    id: InstanceId,
+    gate: StopGate,
+    force_aware: bool,
+    mut build: impl FnMut(&mut InstanceChanges, bool, bool) -> Result<Vec<WriteOp>, SupervisorError>,
+) -> Result<StopCommit, SupervisorError> {
+    let deps = sup.deps();
+    let actor = sup.actor(id);
+    let mut rebuilds = 0;
+    let result = loop {
+        if sup.is_shutdown() {
+            break Err(SupervisorError::internal("the daemon is shutting down"));
+        }
+        let instance = match read_instance(deps, id).await {
+            Ok(instance) => instance,
+            Err(error) => break Err(error),
+        };
+        let (force, guarded_force) = if force_aware {
+            match read_force_history(deps, id).await {
+                Ok(history) => (force_intent(&history), !history.is_empty()),
+                Err(error) => break Err(error),
+            }
+        } else {
+            (false, false)
+        };
+        let failure_before = instance.last_failure().cloned();
+        let read = instance.revision();
+        let stopped = match build_side(&instance, force, true, &mut build) {
+            Ok(side) => side,
+            Err(error) => break Err(error),
+        };
+        let kept = match build_side(&instance, force, false, &mut build) {
+            Ok(side) => side,
+            Err(error) => break Err(error),
+        };
+        let now = deps.platform.clock().now();
+        let slot: DecisionSlot = Arc::new(Mutex::new(None));
+        let record = Arc::clone(&slot);
+        let stop_ops = stopped.ops.clone();
+        let keep_ops = kept.ops.clone();
+        // An instance the commit finds at rest disturbs nobody, whatever the
+        // caller saw before (AC-13); its revision guards the read.
+        let at_rest = matches!(
+            instance.lifecycle(),
+            InstanceLifecycle::Stopped
+                | InstanceLifecycle::Failed
+                | InstanceLifecycle::Uninitialized
+        );
+        let guard_gate = StopGate {
+            check: gate.check.clone(),
+            quiet: gate.quiet || at_rest,
+        };
+        let guard: CommitGuard = Box::new(move |view: &dyn GuardView| {
+            if guarded_force && force_intent(&view.force_stop_history(id)?) != force {
+                return Ok(GuardDecision::Refuse(Box::new(StopRefusal::Force)));
+            }
+            let leases = view.leases(id, LeaseFilter::Unreleased)?;
+            let decision = decide_leases(id, &leases, &guard_gate, now, || view.environments())?;
+            let ops = match &decision {
+                LeaseDecision::Stop { ops, .. } => {
+                    let mut all = stop_ops;
+                    all.extend(ops.iter().cloned());
+                    all
+                }
+                LeaseDecision::Kept | LeaseDecision::RequiresOverride(_) => keep_ops,
+            };
+            *record.lock().unwrap_or_else(PoisonError::into_inner) = Some((decision, ops.clone()));
+            Ok(if ops.is_empty() {
+                GuardDecision::Refuse(Box::new(StopRefusal::Decided))
+            } else {
+                GuardDecision::Write(ops)
+            })
+        });
+        let registry = deps.registry.clone();
+        let sent = match blocking(move || registry.commit_guarded(guard)).await {
+            Ok(sent) => sent,
+            Err(error) => break Err(error),
+        };
+        let wrote = match sent {
+            Ok(Guarded::Committed(_)) => true,
+            Ok(Guarded::Refused(reason)) => {
+                if matches!(
+                    reason.downcast_ref::<StopRefusal>(),
+                    Some(StopRefusal::Force)
+                ) {
+                    rebuilds += 1;
+                    if rebuilds > FORCE_REBUILD_LIMIT {
+                        break Err(SupervisorError::internal(
+                            "force stops kept beginning while a stop was recorded",
+                        ));
+                    }
+                    continue;
+                }
+                false
+            }
+            Err(error) => break Err(operation_error(id, read, &error)),
+        };
+        let Some((decision, written)) = slot.lock().unwrap_or_else(PoisonError::into_inner).take()
+        else {
+            break Err(SupervisorError::internal("the stop guard did not run"));
+        };
+        if wrote {
+            let side = if matches!(decision, LeaseDecision::Stop { .. }) {
+                &stopped
+            } else {
+                &kept
+            };
+            actor.note_revision(side.after.revision());
+            note_failure_facts(
+                deps,
+                &actor,
+                side.failure.clone(),
+                failure_before.as_ref(),
+                side.after.last_failure(),
+            );
+            if let Some(state) = crate::session::startup_lease_effect(id, &written) {
+                deps.events.startup_lease_changed(id, state);
+            }
+            deps.events.instance_changed(&side.after);
+        }
+        break Ok(match decision {
+            LeaseDecision::Stop { overridden, .. } => StopCommit::Committed { overridden },
+            LeaseDecision::Kept => StopCommit::Kept,
+            LeaseDecision::RequiresOverride(holders) => StopCommit::RequiresOverride(holders),
+        });
+    };
+    if force_aware && result.is_ok() {
+        mark_exit_unrecorded(deps, &actor, false);
     }
     result
 }

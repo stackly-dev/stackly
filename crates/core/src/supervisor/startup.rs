@@ -1667,9 +1667,14 @@ async fn cancel_cleanup(sup: &Supervisor, ctx: &OperationContext, id: InstanceId
         // No process will exit to remove what a render wrote.
         remove_material(sup, &actor).await;
     }
-    sup.journal_stop(id, !has_process, sup.cancel_intent(), Vec::new())
-        .await
-        .map_err(failed)?;
+    sup.journal_stop(
+        id,
+        !has_process,
+        sup.cancel_intent(),
+        super::stop::LeaseCheck::None,
+    )
+    .await
+    .map_err(failed)?;
     if has_process {
         let abandoned = async {
             ctx.stopped().await;

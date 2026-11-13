@@ -40,9 +40,12 @@ fn environment(harness: &Harness) -> (EnvironmentId, EnvironmentBuilder) {
     (id, builder)
 }
 
+/// An operation on environment `id` of a kind that takes a running slot
+/// and compensates (environment down is a coordinator that closes as
+/// interrupted since spec 0047, so it no longer stands in here).
 fn on_environment(id: EnvironmentId, work: ScriptedWork) -> stackly_core::operation::BeginRequest {
     request(
-        OperationKind::EnvironmentDown,
+        OperationKind::ImportEnvironment,
         OperationResource::Environment(id),
         work.boxed(),
     )
