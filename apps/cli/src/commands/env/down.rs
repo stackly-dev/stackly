@@ -547,6 +547,10 @@ mod tests {
         assert_eq!(keep_reason(&keep), "starts at login");
         keep.demand = vec![DemandSourceKind::Environment];
         assert_eq!(keep_reason(&keep), "used by an environment");
+        // A restart by you writes a manual lease (spec 0031), so Down keeps
+        // the instance and says why.
+        keep.demand = vec![DemandSourceKind::Manual];
+        assert_eq!(keep_reason(&keep), "started by you");
     }
 
     #[test]
