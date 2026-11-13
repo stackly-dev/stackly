@@ -3207,6 +3207,31 @@
         }
       ]
     },
+    "DependencyFailure": {
+      "description": "Why a dependency kept a service from starting (spec 0046). Open.",
+      "oneOf": [
+        {
+          "description": "It failed, was skipped, or was cancelled.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "It was not ready within the edge's timeout.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "Its instance was not running and ready right before the start.",
+          "type": "string",
+          "const": "not_ready"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "DependencyInfo": {
       "description": "One library an artifact links.",
       "type": "object",
@@ -4834,6 +4859,25 @@
         "changed"
       ]
     },
+    "EnvOperationRef": {
+      "description": "An operation of an environment that has not ended (spec 0046).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The operation.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "description": "What it does: `environment_up` or `environment_down`.",
+          "$ref": "#/$defs/OperationKind"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ]
+    },
     "EnvOwnership": {
       "description": "Whether an environment owns a service's instance.",
       "oneOf": [
@@ -4994,6 +5038,72 @@
         "needsSecrets"
       ]
     },
+    "EnvUpReply": {
+      "description": "Reply of `env.up`, as soon as the operation is accepted.",
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "description": "The environment the Up works on: registered, or new.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "description": "Its name.",
+          "type": "string"
+        },
+        "operation": {
+          "description": "The operation.",
+          "$ref": "#/$defs/OperationAccepted"
+        }
+      },
+      "required": [
+        "environmentId",
+        "name",
+        "operation"
+      ]
+    },
+    "EnvUpReport": {
+      "description": "The report of one Up (spec 0046 AC-16): at most 32 services.",
+      "type": "object",
+      "properties": {
+        "finishedAt": {
+          "description": "When it ended.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        },
+        "operationId": {
+          "description": "The `environment_up` operation.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "services": {
+          "description": "Every service, in manifest order.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ServiceUpState"
+          }
+        },
+        "startedAt": {
+          "description": "When its `accept` step committed.",
+          "type": "string",
+          "format": "date-time"
+        },
+        "state": {
+          "description": "Where it stands.",
+          "$ref": "#/$defs/UpState"
+        }
+      },
+      "required": [
+        "operationId",
+        "state",
+        "startedAt"
+      ]
+    },
     "EnvValidation": {
       "description": "Reply of `env.validate`: also a success for a manifest that is not\nvalid.",
       "type": "object",
@@ -5087,6 +5197,18 @@
           "items": {
             "$ref": "#/$defs/DetachedMember"
           }
+        },
+        "lastUp": {
+          "description": "The last Up: from the daemon's memory while it runs, from the\nregistry afterwards (spec 0046).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvUpReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "local": {
           "description": "The local override file; only when `lock` is sent.",
@@ -5285,6 +5407,18 @@
       "description": "One environment in a list.",
       "type": "object",
       "properties": {
+        "activeOperation": {
+          "description": "The `environment_up` or `environment_down` operation of this\nenvironment that has not ended (spec 0046).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvOperationRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
           "description": "The ID.",
           "type": "string",
@@ -9667,6 +9801,26 @@
           "const": "unavailable"
         },
         {
+          "description": "An Up runs and has not finished this service (spec 0046).",
+          "type": "string",
+          "const": "bringing_up"
+        },
+        {
+          "description": "A secret reference has no value (spec 0046).",
+          "type": "string",
+          "const": "needs_secret"
+        },
+        {
+          "description": "The last Up skipped it because a dependency was not ready (spec\n0046).",
+          "type": "string",
+          "const": "dependency_not_ready"
+        },
+        {
+          "description": "The last Up failed on it (spec 0046).",
+          "type": "string",
+          "const": "up_failed"
+        },
+        {
           "description": "A value this build does not know.",
           "type": "string",
           "const": "unrecognized"
@@ -10252,10 +10406,24 @@
           "format": "uint32",
           "minimum": 0
         },
+        "coordinators": {
+          "description": "Coordinator operations running now; `running` never counts them\n(spec 0046).",
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
+          "minimum": 0
+        },
         "interruptedAtStart": {
           "description": "Operations the daemon found interrupted when it started.",
           "type": "integer",
           "format": "uint32",
+          "minimum": 0
+        },
+        "maxCoordinators": {
+          "description": "The most coordinator operations that run at once.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
           "minimum": 0
         },
         "maxQueued": {
@@ -10429,6 +10597,15 @@
         "kind": {
           "description": "What the operation does.",
           "$ref": "#/$defs/OperationKind"
+        },
+        "parent": {
+          "description": "The coordinator of a child operation (spec 0046).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
         },
         "pointOfNoReturnAt": {
           "description": "When the first step that cannot be undone started. From then on a\ncancel no longer stops the work.",
@@ -14281,6 +14458,23 @@
             "type",
             "content"
           ]
+        },
+        {
+          "description": "The accepted Up.",
+          "type": "object",
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/EnvUpReply"
+            },
+            "type": {
+              "type": "string",
+              "const": "env.up"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
         }
       ]
     },
@@ -15734,6 +15928,14 @@
       "description": "The instance of an environment service.",
       "type": "object",
       "properties": {
+        "endpoints": {
+          "description": "Its endpoints, with the port each one really binds (spec 0046).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EndpointStatus"
+          }
+        },
         "health": {
           "description": "The health.",
           "$ref": "#/$defs/InstanceHealth"
@@ -15773,6 +15975,34 @@
       "description": "Why a service is not ready, with a redacted detail.",
       "type": "object",
       "properties": {
+        "code": {
+          "description": "The error code it failed with, for `up_failed`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependency": {
+          "description": "The dependency that was not ready, for `dependency_not_ready`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependencyReason": {
+          "description": "Why, for `dependency_not_ready`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DependencyFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "detail": {
           "description": "The readiness detail or the last failure.",
           "type": [
@@ -15781,13 +16011,145 @@
           ],
           "default": null
         },
+        "operationId": {
+          "description": "The child operation that failed, for `up_failed`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "phase": {
+          "description": "Its phase in the running Up, for `bringing_up`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpPhase"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "reason": {
           "description": "The reason.",
           "$ref": "#/$defs/NotReadyReason"
+        },
+        "references": {
+          "description": "The references that have no value, for `needs_secret`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NeedsSecretItem"
+          }
+        },
+        "stage": {
+          "description": "The stage the last Up failed in, for `up_failed`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpStage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "waitingOn": {
+          "description": "The dependencies it waits for, for `bringing_up`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
         "reason"
+      ]
+    },
+    "ServiceUpState": {
+      "description": "One service of an Up report.",
+      "type": "object",
+      "properties": {
+        "alias": {
+          "description": "The alias.",
+          "type": "string"
+        },
+        "code": {
+          "description": "The error code it ended with.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependency": {
+          "description": "The dependency that was not ready, for a skipped service.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dependencyReason": {
+          "description": "Why, for a skipped service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DependencyFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "operationId": {
+          "description": "The child operation that worked on it last.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid",
+          "default": null
+        },
+        "phase": {
+          "description": "Its phase.",
+          "$ref": "#/$defs/UpPhase"
+        },
+        "references": {
+          "description": "The references that have no value, for `needs_secret`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NeedsSecretItem"
+          }
+        },
+        "stage": {
+          "description": "The stage it ended in, when not ready.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpStage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "waitingOn": {
+          "description": "The dependencies it waits for while `waiting`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "alias",
+        "phase"
       ]
     },
     "SessionEndKind": {
@@ -16956,6 +17318,131 @@
         },
         {
           "description": "A reason this build does not know. The daemon never sends it.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UpPhase": {
+      "description": "Where one service stands in one Up (spec 0046, *Phase service*). Open.",
+      "oneOf": [
+        {
+          "description": "Not worked on yet.",
+          "type": "string",
+          "const": "pending"
+        },
+        {
+          "description": "Waiting for the install of its runtime.",
+          "type": "string",
+          "const": "installing"
+        },
+        {
+          "description": "Its create runs.",
+          "type": "string",
+          "const": "creating"
+        },
+        {
+          "description": "Waiting for a dependency.",
+          "type": "string",
+          "const": "waiting"
+        },
+        {
+          "description": "Its start runs, or its running instance is not ready yet.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "Its instance runs and is ready.",
+          "type": "string",
+          "const": "ready"
+        },
+        {
+          "description": "Its install, create, or start failed.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "It stopped for a secret that is not set.",
+          "type": "string",
+          "const": "needs_secret"
+        },
+        {
+          "description": "A dependency was not ready, so it never started.",
+          "type": "string",
+          "const": "skipped"
+        },
+        {
+          "description": "The Up was cancelled before it ended.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UpStage": {
+      "description": "The stage a service of an Up ended in (spec 0046). Open.",
+      "oneOf": [
+        {
+          "description": "Installing its runtime.",
+          "type": "string",
+          "const": "install"
+        },
+        {
+          "description": "Creating its instance.",
+          "type": "string",
+          "const": "create"
+        },
+        {
+          "description": "Starting its instance.",
+          "type": "string",
+          "const": "start"
+        },
+        {
+          "description": "Waiting for a dependency.",
+          "type": "string",
+          "const": "wait"
+        },
+        {
+          "description": "A value this build does not know.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
+    "UpState": {
+      "description": "Where one Up stands (spec 0046). Open.",
+      "oneOf": [
+        {
+          "description": "It runs now.",
+          "type": "string",
+          "const": "running"
+        },
+        {
+          "description": "Every service is ready.",
+          "type": "string",
+          "const": "succeeded"
+        },
+        {
+          "description": "At least one service is not ready.",
+          "type": "string",
+          "const": "failed"
+        },
+        {
+          "description": "It was cancelled.",
+          "type": "string",
+          "const": "cancelled"
+        },
+        {
+          "description": "The daemon stopped while it ran.",
+          "type": "string",
+          "const": "interrupted"
+        },
+        {
+          "description": "A value this build does not know.",
           "type": "string",
           "const": "unrecognized"
         }

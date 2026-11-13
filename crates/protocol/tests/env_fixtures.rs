@@ -207,3 +207,39 @@ fn every_env_code_has_a_static_hint_and_no_other_does() {
     }
     assert_eq!(codes::env::hint("provider.revoked", &[]), None);
 }
+
+// covers: AC-16, AC-23 (spec 0046)
+#[test]
+fn the_open_enums_of_up_read_a_newer_value_as_unrecognized() {
+    use stackly_protocol::env::{DependencyFailure, UpPhase, UpStage, UpState};
+
+    let newer = Value::String("from_the_future".to_owned());
+    assert_eq!(
+        serde_json::from_value::<UpState>(newer.clone()).expect("an open enum"),
+        UpState::Unrecognized
+    );
+    assert_eq!(
+        serde_json::from_value::<UpPhase>(newer.clone()).expect("an open enum"),
+        UpPhase::Unrecognized
+    );
+    assert_eq!(
+        serde_json::from_value::<UpStage>(newer.clone()).expect("an open enum"),
+        UpStage::Unrecognized
+    );
+    assert_eq!(
+        serde_json::from_value::<DependencyFailure>(newer).expect("an open enum"),
+        DependencyFailure::Unrecognized
+    );
+    for (code, reason) in [
+        ("bringing_up", NotReadyReason::BringingUp),
+        ("needs_secret", NotReadyReason::NeedsSecret),
+        ("dependency_not_ready", NotReadyReason::DependencyNotReady),
+        ("up_failed", NotReadyReason::UpFailed),
+    ] {
+        assert_eq!(
+            serde_json::from_value::<NotReadyReason>(Value::String(code.to_owned()))
+                .expect("a known reason"),
+            reason
+        );
+    }
+}

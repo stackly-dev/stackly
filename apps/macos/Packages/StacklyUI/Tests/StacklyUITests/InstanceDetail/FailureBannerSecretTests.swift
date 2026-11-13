@@ -153,6 +153,6 @@ extension OperationSummary {
             progress: progress, waitingOn: waitingOn, cancelRequestedAt: cancelRequestedAt,
             pointOfNoReturnAt: pointOfNoReturnAt, failure: planted, recovery: recovery,
             result: result, trigger: trigger, createdAt: createdAt, startedAt: startedAt,
-            updatedAt: updatedAt, revision: revision, cancel: cancel)
+            updatedAt: updatedAt, revision: revision, cancel: cancel, parent: nil)
     }
 }

@@ -124,6 +124,7 @@ pub fn summary(
         updated_at: STARTED_AT.parse().expect("a fixed time parses"),
         revision: Revision::new(revision).expect("test revisions are small"),
         cancel: None,
+        parent: None,
     }
 }
 

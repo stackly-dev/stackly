@@ -449,6 +449,7 @@ async fn detail_of(
         problems,
         lock,
         local,
+        last_up: None,
     }))
 }
 
@@ -610,6 +611,17 @@ fn journal_environment(input: &JournalPayload) -> Option<(EnvironmentId, Option<
         .and_then(serde_json::Value::as_str)
         .map(str::to_owned);
     Some((id, name))
+}
+
+/// `env.up` (spec 0046): the handler arrives with step 6.
+// provisional: F46
+pub fn up<'a>(
+    core: &'a DaemonCore,
+    context: &RequestContext,
+    params: stackly_protocol::env::EnvUpParams,
+) -> HandlerFuture<'a, Box<stackly_protocol::env::EnvUpReply>> {
+    let _ = (core, context, params);
+    Box::pin(async move { Err(unexpected("env.up is not built yet")) })
 }
 
 /// `env.import` (AC-12): the `import_environment` operation, which reads

@@ -158,7 +158,7 @@
                         resources: [ResourceRef(kind: .instance, id: $0.uuidString.lowercased())],
                         partial: nil)
                 }, trigger: OperationTriggerInfo(origin: .user, client: .gui), createdAt: at,
-                startedAt: at, updatedAt: at, revision: revision, cancel: nil)
+                startedAt: at, updatedAt: at, revision: revision, cancel: nil, parent: nil)
         }
     }
 #endif

@@ -70,7 +70,8 @@
           "startedAt": "2026-10-19T08:00:00.120Z",
           "updatedAt": "2026-10-19T08:00:05.500Z",
           "revision": 9,
-          "cancel": "paused_for_review"
+          "cancel": "paused_for_review",
+          "parent": null
         },
         "steps": [
           {

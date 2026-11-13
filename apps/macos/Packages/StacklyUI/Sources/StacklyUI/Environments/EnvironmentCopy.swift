@@ -71,7 +71,9 @@ nonisolated enum EnvironmentCopy {
         case .failed: return notReady.detail.map { "failed: \($0)" } ?? "failed"
         case .notReady: return notReady.detail ?? "not ready"
         case .unavailable: return "unavailable"
-        case .unrecognized: return notReady.detail ?? "not ready"
+        // provisional: F46, the reasons of an Up get their copy in milestone 4 (spec 0046 AC-20).
+        case .bringingUp, .needsSecret, .dependencyNotReady, .upFailed, .unrecognized:
+            return notReady.detail ?? "not ready"
         }
     }
 

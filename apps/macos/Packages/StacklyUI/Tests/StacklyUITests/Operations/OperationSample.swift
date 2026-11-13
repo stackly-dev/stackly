@@ -48,7 +48,7 @@ enum OperationSample {
             cancelRequestedAt: cancelRequestedAt, pointOfNoReturnAt: pointOfNoReturnAt,
             failure: failure, recovery: recovery, result: result, trigger: trigger,
             createdAt: created, startedAt: state == .queued ? nil : created,
-            updatedAt: created, revision: revision, cancel: cancel)
+            updatedAt: created, revision: revision, cancel: cancel, parent: nil)
     }
 
     /// A failure of `code` with `message`.

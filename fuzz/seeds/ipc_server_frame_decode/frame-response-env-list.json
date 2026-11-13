@@ -16,7 +16,8 @@
             "readyCount": 1,
             "serviceCount": 2,
             "updatedAt": "2026-11-13T09:00:00.000Z",
-            "lockSha256": null
+            "lockSha256": null,
+            "activeOperation": null
           }
         ]
       }

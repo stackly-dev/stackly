@@ -68,7 +68,8 @@
           "startedAt": "2026-11-10T08:05:00.030Z",
           "updatedAt": "2026-11-10T08:05:00.120Z",
           "revision": 6,
-          "cancel": "none"
+          "cancel": "none",
+          "parent": null
         },
         "steps": [
           {

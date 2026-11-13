@@ -449,6 +449,7 @@ pub fn summary(
         ready_count: Count::saturating(view.ready_count as u64),
         service_count: Count::saturating(view.service_count as u64),
         updated_at,
+        active_operation: None,
     }
 }
 
@@ -473,6 +474,7 @@ pub fn service(status: &ServiceStatus, summaries: &[InstanceSummary]) -> Environ
                 lifecycle: summary.lifecycle,
                 readiness: summary.readiness.clone(),
                 health: summary.health.clone(),
+                endpoints: summary.endpoints.clone(),
             }),
         not_ready: status
             .not_ready
@@ -480,6 +482,14 @@ pub fn service(status: &ServiceStatus, summaries: &[InstanceSummary]) -> Environ
             .map(|(reason, detail)| ServiceNotReady {
                 reason: wire(reason.as_code()),
                 detail: detail.clone(),
+                phase: None,
+                waiting_on: Vec::new(),
+                references: Vec::new(),
+                dependency: None,
+                dependency_reason: None,
+                stage: None,
+                code: None,
+                operation_id: None,
             }),
     }
 }

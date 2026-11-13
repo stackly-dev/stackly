@@ -363,6 +363,20 @@ area! {
             details ["service"], "env.lock named an alias that is not a dedicated service of the manifest";
         NOT_REGISTERED = "env.not_registered", NotFound, retryable false,
             details ["name"], "env.export named a file whose environment is not registered at that location";
+        PLAN_BLOCKED = "env.plan_blocked", Conflict, retryable false,
+            details ["count", "omitted"],
+            items { kind "blocker", fields ["service", "code", "message"], max 32 },
+            "an Up was asked for a plan that is not applicable; items lists each blocker (spec 0046)";
+        PLAN_CHANGED = "env.plan_changed", Conflict, retryable false,
+            details [], "the plan differs from the one the client reviewed, or an instance it binds changed before accept (spec 0046)";
+        UP_INCOMPLETE = "env.up_incomplete", Failed, retryable false,
+            details ["ready", "total", "count", "omitted"],
+            items { kind "service", fields ["service", "phase", "stage", "code", "dependency", "operationId"], max 32 },
+            "an Up ended with services that are not ready; items lists each one (spec 0046)";
+        DEPENDENCY_NOT_READY = "env.dependency_not_ready", Failed, retryable false,
+            details ["service", "dependency", "reason", "timeoutSeconds"], "the code of a skipped service in an Up report: a dependency failed, timed out, or was not ready (spec 0046)";
+        SERVICE_NOT_READY = "env.service_not_ready", Timeout, retryable false,
+            details ["service", "instance", "timeoutSeconds"], "the code of a service whose running instance did not become ready in time (spec 0046)";
 
         @functions
 
@@ -434,6 +448,15 @@ area! {
                 }
                 c if c == SERVICE_NOT_FOUND.code => "name a dedicated service of the manifest",
                 c if c == NOT_REGISTERED.code => "import the environment first",
+                c if c == PLAN_BLOCKED.code => "resolve each blocker, then plan again",
+                c if c == PLAN_CHANGED.code => "review the plan again, then bring it up",
+                c if c == UP_INCOMPLETE.code => {
+                    "fix the services listed, then bring the environment up again; services that are ready keep running"
+                }
+                c if c == DEPENDENCY_NOT_READY.code => {
+                    "fix the dependency, then bring the environment up again"
+                }
+                c if c == SERVICE_NOT_READY.code => "open the instance to see why it is not ready",
                 _ => return None,
             })
         }
@@ -1257,6 +1280,10 @@ area! {
             details ["blockers"], "the plan is valid but has blockers; the result holds the plan (spec 0044)";
         ENVIRONMENT_NOT_FOUND = "cli.environment_not_found", NotFound, retryable false,
             details ["name"], "no environment has the name the command was given (spec 0044)";
+        ENV_LOCK_BLOCKED = "cli.env_lock_blocked", Conflict, retryable false,
+            details ["blockers"], "the lock cannot be written because something blocks it; the result holds the lock result (spec 0045)";
+        ENV_LOCKED_UNSUPPORTED = "cli.env_locked_unsupported", Unsupported, retryable false,
+            details [], "the daemon does not know the locked plan mode, so the plan was not checked against the lock (spec 0045)";
     }
 }
 
@@ -1869,6 +1896,16 @@ mod tests {
                 "cli.environment_not_found",
                 ErrorCategory::NotFound,
                 &["name"],
+            ),
+            (
+                "cli.env_lock_blocked",
+                ErrorCategory::Conflict,
+                &["blockers"],
+            ),
+            (
+                "cli.env_locked_unsupported",
+                ErrorCategory::Unsupported,
+                &[],
             ),
         ];
         assert_eq!(table, expected);

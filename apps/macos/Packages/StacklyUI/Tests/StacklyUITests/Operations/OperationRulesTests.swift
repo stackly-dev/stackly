@@ -238,7 +238,7 @@ struct OperationRulesTests {
             cancelRequestedAt: nil, pointOfNoReturnAt: nil, failure: nil, recovery: nil,
             result: nil, trigger: OperationTriggerInfo(origin: .user, client: .cli),
             createdAt: OperationSample.base, startedAt: OperationSample.base,
-            updatedAt: OperationSample.base, revision: 4, cancel: .none)
+            updatedAt: OperationSample.base, revision: 4, cancel: .none, parent: nil)
         #expect(
             OperationTitle.title(
                 for: install, instanceNames: [:],

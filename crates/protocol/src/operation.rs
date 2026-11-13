@@ -35,6 +35,7 @@ pub const OPERATION_PAGE_BYTES_MAX: usize = 900 * 1024;
 /// needs an `idempotencyKey` (spec 0007, *Idempotency*). The feature that
 /// owns such a method adds it here when it adds the method.
 pub const STARTING_METHODS: &[&str] = &[
+    "env.up",
     "instance.create",
     "instance.start",
     "instance.stop",
@@ -106,6 +107,9 @@ pub struct OperationSummary {
     /// else `none`.
     #[serde(default)]
     pub cancel: Option<CancelAvailability>,
+    /// The coordinator of a child operation (spec 0046).
+    #[serde(default)]
+    pub parent: Option<Uuid>,
 }
 
 /// Whether a cancel can still stop an operation safely (spec 0035,
@@ -790,6 +794,13 @@ pub struct OperationStats {
     /// Requests refused with `operation.queue_full` since the daemon
     /// started.
     pub rejected_queue_full: Count,
+    /// Coordinator operations running now; `running` never counts them
+    /// (spec 0046).
+    #[serde(default)]
+    pub coordinators: u32,
+    /// The most coordinator operations that run at once.
+    #[serde(default)]
+    pub max_coordinators: u32,
 }
 
 /// The reply, or the part of the reply, of every method that starts an

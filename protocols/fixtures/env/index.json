@@ -39,6 +39,16 @@
       "file": "export-dotenv.json",
       "type": "EnvExport",
       "expect": "roundtrip"
+    },
+    {
+      "file": "detail-bringing-up.json",
+      "type": "EnvironmentDetail",
+      "expect": "roundtrip"
+    },
+    {
+      "file": "detail-up-incomplete.json",
+      "type": "EnvironmentDetail",
+      "expect": "roundtrip"
     }
   ]
 }
