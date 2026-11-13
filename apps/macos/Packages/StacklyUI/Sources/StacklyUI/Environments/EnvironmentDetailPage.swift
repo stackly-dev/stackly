@@ -277,7 +277,7 @@ struct EnvironmentDetailPage: View {
             TableColumn("Service") { row in
                 Text(row.alias).lineLimit(1).help(row.alias)
             }
-            .width(min: 80, ideal: 120)
+            .width(min: 70, ideal: columns.isCompact ? 90 : 120)
             if columns.showsSelector {
                 TableColumn("Selector") { row in
                     Text(row.selector).lineLimit(1).truncationMode(.middle).help(row.selector)
@@ -293,7 +293,7 @@ struct EnvironmentDetailPage: View {
                     )
                     .help(row.instanceText)
             }
-            .width(min: 100, ideal: 150)
+            .width(min: 80, ideal: columns.isCompact ? 110 : 150)
             if columns.showsVersion {
                 TableColumn("Version") { row in
                     Text(row.version).lineLimit(1)
@@ -303,21 +303,21 @@ struct EnvironmentDetailPage: View {
             TableColumn("Ownership") { row in
                 Text(row.ownership).lineLimit(1)
             }
-            .width(min: 80, ideal: 100, max: 120)
+            .width(min: 70, ideal: columns.isCompact ? 84 : 100, max: 120)
             TableColumn("Status") { row in
                 StatusLabel(row.appearance, context: .row)
                     .help(
                         row.appearance.detail.map { "\(row.appearance.label): \($0.text)" }
                             ?? row.appearance.label)
             }
-            .width(min: 100, ideal: 160, max: 240)
+            .width(min: 90, ideal: columns.isCompact ? 120 : 160, max: 240)
             TableColumn("") { row in
                 ActionMenu(menu(for: row), title: "Actions", help: "Actions for \(row.alias)")
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .task(id: row.instanceID) { await loadDetail(of: row) }
             }
-            .width(min: 44, ideal: 60, max: 80)
+            .width(min: 44, ideal: 52, max: 80)
         }
         .id(columns)
         .scrollDisabled(true)

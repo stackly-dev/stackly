@@ -94,4 +94,7 @@ nonisolated enum ServiceColumnSet: Hashable, Sendable {
     var showsVersion: Bool { self == .full }
     /// Whether Selector shows.
     var showsSelector: Bool { self != .compact }
+    /// Whether the table is at its narrowest: the columns that stay take smaller widths, so
+    /// the action column still fits.
+    var isCompact: Bool { self == .compact }
 }
