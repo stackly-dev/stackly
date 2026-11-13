@@ -6,11 +6,15 @@ import SwiftUI
 /// runtime, the providers that need approval, the differences, the secrets each create uses,
 /// the blockers above the list, and the Problems of a manifest that is not valid; from spec
 /// 0045 the creates whose version comes from the lock, the local overrides that apply, a lock
-/// that is out of date, and the warnings of the local override file. It only
-/// reads: from a detail page it has Done; from Import… it has Cancel and Import.
+/// that is out of date, and the warnings of the local override file. From a detail page it
+/// has Cancel and Bring Up (spec 0046, AC-19), and a "Needs secret" line has Set…, which opens
+/// the secret entry sheet (AC-21); from Import… it has Cancel and Import.
 struct EnvironmentPlanSheet: View {
-    let presenter: EnvironmentPlanPresenter
+    @Bindable var presenter: EnvironmentPlanPresenter
     let catalog: CatalogStore?
+    /// The secret methods behind Set… and the needs of `secret.needs_secret`, or `nil` where
+    /// the page has none: then Set… does not show.
+    var secrets: SecretsClient?
     /// The instances, for the version of a kept instance.
     let instances: InstanceStore?
     let home: String
@@ -22,30 +26,46 @@ struct EnvironmentPlanSheet: View {
             title: EnvironmentCopy.planTitle(presenter.name),
             subtitle: EnvironmentCopy.planSubtitle,
             primary: primary,
-            cancel: presenter.isImport
-                ? StacklyAction(
-                    id: "environment.plan.cancel", title: "Cancel", mutates: false,
-                    perform: { presenter.close() })
-                : nil,
-            minWidth: 560,
-            showsCancel: presenter.isImport
+            cancel: StacklyAction(
+                id: "environment.plan.cancel", title: "Cancel", mutates: false,
+                perform: { presenter.close() }),
+            minWidth: 560
         ) {
             EnvironmentPlanContent(
                 phase: presenter.phase, displayName: displayName,
                 version: { [instances] id in instances?.store.items[id]?.runtimeVersion },
                 home: home,
+                notice: presenter.notice,
                 reviewProvider: reviewProvider,
-                useThisFile: { Task { await presenter.importPlan(relink: true) } })
+                useThisFile: { Task { await presenter.importPlan(relink: true) } },
+                setSecret: secrets == nil || presenter.isImport
+                    ? nil : { presenter.setSecret($0) })
+        }
+        .sheet(isPresented: secretSheetShown) {
+            if let secrets {
+                SecretEntrySheet(
+                    needs: presenter.secretNeeds ?? [], client: secrets,
+                    actionTitle: EnvironmentCopy.reviewPlan,
+                    onContinue: { Task { await presenter.secretsEntered(saved: true) } },
+                    onCancel: { Task { await presenter.secretsEntered(saved: false) } })
+            }
         }
     }
 
-    /// Done from a detail page; Import, off with its reason, from Import….
-    private var primary: StacklyAction {
-        guard presenter.isImport else {
-            return StacklyAction(
-                id: "environment.plan.done", title: "Done", mutates: false,
-                perform: { presenter.close() })
+    private var secretSheetShown: Binding<Bool> {
+        Binding {
+            secrets != nil && presenter.secretNeeds != nil
+        } set: { shown in
+            if shown == false, presenter.secretNeeds != nil {
+                Task { await presenter.secretsEntered(saved: false) }
+            }
         }
+    }
+
+    /// Bring Up from a detail page, off with its reason; Import, off with its reason, from
+    /// Import….
+    private var primary: StacklyAction {
+        guard presenter.isImport else { return Self.bringUpAction(presenter) }
         var reason: String?
         var busy = false
         switch presenter.phase {
@@ -58,13 +78,37 @@ struct EnvironmentPlanSheet: View {
             reason = "The plan is still loading."
         case .failed:
             reason = "The plan could not be read."
-        case .idle, .choosing:
+        case .idle, .choosing, .bringingUp, .upFailed:
             reason = nil
         }
         return StacklyAction(
             id: "environment.plan.import", title: "Import", mutates: true,
             disabledReason: reason, isBusy: busy,
             perform: { Task { await presenter.importPlan() } })
+    }
+
+    /// Bring Up (spec 0046, AC-19): on only while the plan is `applicable`, busy while
+    /// `env.up` is on its way.
+    static func bringUpAction(_ presenter: EnvironmentPlanPresenter) -> StacklyAction {
+        var reason: String?
+        var busy = false
+        switch presenter.phase {
+        case .plan(let plan, _), .upFailed(let plan, _, _):
+            reason = EnvironmentPlanPresenter.upBlockedReason(plan)
+        case .bringingUp:
+            busy = true
+        case .loading, .idle, .choosing:
+            busy = true
+            reason = "The plan is still loading."
+        case .failed:
+            reason = "The plan could not be read."
+        case .importing, .importFailed:
+            reason = nil
+        }
+        return StacklyAction(
+            id: "environment.plan.bringUp", title: EnvironmentCopy.bringUp, mutates: true,
+            disabledReason: reason, isBusy: busy,
+            perform: { Task { await presenter.bringUp() } })
     }
 
     /// The software name of a provider, from the catalog, or the provider itself.
@@ -83,8 +127,12 @@ struct EnvironmentPlanContent: View {
     /// The runtime version of an existing instance, for a kept one.
     let version: (UUID) -> String?
     let home: String
+    /// The note above a plan read again after `env.plan_changed`, or `nil`.
+    var notice: String?
     let reviewProvider: @MainActor (String) -> Void
     let useThisFile: @MainActor () -> Void
+    /// Set… of a "Needs secret" line, or `nil` where the sheet has none.
+    var setSecret: (@MainActor (PlanSecret) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s16) {
@@ -100,9 +148,9 @@ struct EnvironmentPlanContent: View {
                 StateBanner(
                     tone: .critical, title: "Couldn’t Read the Plan",
                     message: DaemonText.sentence(error.message), code: error.code)
-            case .plan(let plan, _), .importing(let plan, _):
+            case .plan(let plan, _), .importing(let plan, _), .bringingUp(let plan, _):
                 planBody(plan, importError: nil)
-            case .importFailed(let plan, _, let error):
+            case .importFailed(let plan, _, let error), .upFailed(let plan, _, let error):
                 planBody(plan, importError: error)
             }
         }
@@ -110,6 +158,9 @@ struct EnvironmentPlanContent: View {
 
     @ViewBuilder
     private func planBody(_ plan: EnvPlan, importError: ErrorBody?) -> some View {
+        if let notice {
+            StateBanner(tone: .caution, title: notice)
+        }
         if let importError {
             StateBanner(
                 tone: .critical, title: DaemonText.sentence(importError.message),
@@ -153,7 +204,7 @@ struct EnvironmentPlanContent: View {
                         item: item, displayName: displayName,
                         version: item.instance.id.flatMap(version),
                         overrides: overrides.filter { $0.service == item.alias },
-                        reviewProvider: reviewProvider)
+                        reviewProvider: reviewProvider, setSecret: setSecret)
                 }
             }
             Text(EnvironmentCopy.planFootnote)
@@ -240,6 +291,8 @@ struct PlanItemRow: View {
     /// The local overrides the plan applies to this item (spec 0045).
     var overrides: [PlanOverride] = []
     let reviewProvider: @MainActor (String) -> Void
+    /// Set… of a "Needs secret" line (spec 0046, AC-21), or `nil` for none.
+    var setSecret: (@MainActor (PlanSecret) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -250,12 +303,27 @@ struct PlanItemRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             ForEach(
-                Self.notes(item, displayName: displayName, overrides: overrides), id: \.self
+                Self.notes(
+                    item, displayName: displayName, overrides: overrides, secrets: false),
+                id: \.self
             ) { note in
                 Text(note)
                     .font(.callout)
                     .foregroundStyle(StacklyColor.textSecondary)
                     .padding(.leading, Spacing.s22)
+            }
+            ForEach(Self.secretLines(item), id: \.line) { secret in
+                HStack(spacing: Spacing.s8) {
+                    Text(secret.line)
+                        .font(.callout)
+                        .foregroundStyle(StacklyColor.textSecondary)
+                    if let setSecret, Self.canSet(secret.secret) {
+                        Button(EnvironmentCopy.setSecret) { setSecret(secret.secret) }
+                            .buttonStyle(.link)
+                            .mutationGated()
+                    }
+                }
+                .padding(.leading, Spacing.s22)
             }
             if item.trust == .approvalRequired || item.trust == .revoked {
                 HStack(spacing: Spacing.s8) {
@@ -310,9 +378,10 @@ struct PlanItemRow: View {
     }
 
     /// The lines under the row: Installs, the local overrides that apply, the differences
-    /// (the lock one names the locked version), and the secrets.
+    /// (the lock one names the locked version), and, with `secrets`, the secrets.
     static func notes(
-        _ item: PlanItem, displayName: (String) -> String, overrides: [PlanOverride] = []
+        _ item: PlanItem, displayName: (String) -> String, overrides: [PlanOverride] = [],
+        secrets: Bool = true
     ) -> [String] {
         var notes: [String] = []
         if item.action == .create, let runtime = item.runtime, runtime.install {
@@ -327,9 +396,26 @@ struct PlanItemRow: View {
                     ? EnvironmentCopy.differsFromLock(difference.manifest)
                     : EnvironmentCopy.differs(difference.field))
         }
-        for secret in item.secrets ?? [] {
-            if let line = EnvironmentCopy.secretLine(secret) { notes.append(line) }
+        if secrets {
+            notes.append(contentsOf: secretLines(item).map(\.line))
         }
         return notes
+    }
+
+    /// The secret lines of the row, each with the secret it names.
+    static func secretLines(_ item: PlanItem) -> [(line: String, secret: PlanSecret)] {
+        (item.secrets ?? []).compactMap { secret in
+            EnvironmentCopy.secretLine(secret).map { ($0, secret) }
+        }
+    }
+
+    /// Whether Set… shows for `secret`: a reference with no value, or one the daemon could
+    /// not read.
+    static func canSet(_ secret: PlanSecret) -> Bool {
+        guard secret.reference != nil else { return false }
+        switch secret.status {
+        case .missing, .unregistered, .unknown: return true
+        case .present, .generated, .unrecognized: return false
+        }
     }
 }

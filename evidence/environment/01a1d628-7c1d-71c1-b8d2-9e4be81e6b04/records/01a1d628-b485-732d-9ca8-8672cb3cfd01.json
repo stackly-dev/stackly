@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-b485-732d-9ca8-8672cb3cfd01",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/detailWhileBringingUp()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 92
+  },
+  "status": "PASS",
+  "expected": "While an Up runs the detail page shows Bringing up… 1 of 4 with Cancel and Show in Activity, and each service still worked on shows its phase",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:54.31Z",
+  "finishedAt": "2026-11-13T18:25:55.444Z",
+  "evidencePath": "output.log"
+}

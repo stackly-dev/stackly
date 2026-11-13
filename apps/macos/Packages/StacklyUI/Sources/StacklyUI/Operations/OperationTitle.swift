@@ -45,10 +45,12 @@ nonisolated public enum OperationTitle {
     ///   - operation: The operation.
     ///   - instanceNames: The names of the known instances by ID.
     ///   - runtimes: The names of the known runtimes.
+    ///   - environments: The names of the known environments by ID (spec 0046).
     public static func title(
         for operation: OperationSummary,
         instanceNames: [UUID: String],
-        runtimes: RuntimeNames = .none
+        runtimes: RuntimeNames = .none,
+        environments: [UUID: String] = [:]
     ) -> String {
         let instance = resourceID(operation, kind: .instance).flatMap { instanceNames[$0] }
         let subject = instance ?? "instance"
@@ -83,7 +85,9 @@ nonisolated public enum OperationTitle {
             let runtime = resourceID(operation, kind: .runtime).flatMap { runtimes.installed[$0] }
             return runtime.map { "Remove \($0)" } ?? "Remove runtime"
         case .registerExternalRuntime: return "Register external runtime"
-        case .environmentUp: return "Bring up environment"
+        case .environmentUp:
+            let name = resourceID(operation, kind: .environment).flatMap { environments[$0] }
+            return name.map { "Bring up environment \($0)" } ?? "Bring up environment"
         case .environmentDown: return "Bring down environment"
         case .updateProviderRevision: return "Update provider"
         case .updateManager: return "Update Stackly"

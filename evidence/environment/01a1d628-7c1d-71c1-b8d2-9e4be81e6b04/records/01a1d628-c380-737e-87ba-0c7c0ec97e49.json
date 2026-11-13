@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-c380-737e-87ba-0c7c0ec97e49",
+  "covers": [
+    "REQ-054",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/activityWithNestedChildren()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 165
+  },
+  "status": "PASS",
+  "expected": "Operations shows Bring up environment erp-development with Partial and 2 of 4 services ready, and its three child starts nested under it",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:58.145Z",
+  "finishedAt": "2026-11-13T18:25:59.357Z",
+  "evidencePath": "output.log"
+}

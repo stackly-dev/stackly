@@ -23,6 +23,18 @@
             case unsupported = "operations-unsupported"
             /// The list while stacklyd is unreachable: the last data, every mutation off.
             case offline = "operations-offline"
+            /// An Up of erp-development that left 2 of 4 services ready ("Partial"), with its
+            /// three child starts nested under it, above the list (spec 0046, AC-22).
+            case environmentUp = "operations-environment-up"
+        }
+
+        /// The rows `operation.list` answers for a case.
+        static func rows(for fixture: Case) -> [OperationSummary] {
+            switch fixture {
+            case .loadFailed, .empty, .unsupported: []
+            case .list, .inspector, .offline: rows
+            case .environmentUp: FixtureEnvironmentUp.incompleteOperations + rows
+            }
         }
 
         /// The operation of row `number` (1 is the oldest): a fixed ID like a UUID v7 whose
@@ -141,14 +153,12 @@
                                 message: "the registry could not be read", retryable: false,
                                 resource: nil, fields: nil, hint: nil, details: nil,
                                 operationId: nil, rule: nil, items: nil))
-                    case .empty, .unsupported:
-                        return OperationPage(items: [], next: nil)
-                    case .list, .inspector, .offline:
-                        return OperationPage(items: rows, next: nil)
+                    case .empty, .unsupported, .list, .inspector, .offline, .environmentUp:
+                        return OperationPage(items: rows(for: fixture), next: nil)
                     }
                 },
                 get: { id throws(ClientError) in
-                    guard let found = rows.first(where: { $0.id == id }) else {
+                    guard let found = rows(for: fixture).first(where: { $0.id == id }) else {
                         throw .rejected(.fixtureNotFound(.operation, id: id.uuidString))
                     }
                     return detail(of: found)
@@ -172,7 +182,7 @@
                                 rule: nil, items: nil))
                     case .empty, .loadFailed:
                         return Page(items: [], next: nil)
-                    case .list, .inspector, .offline:
+                    case .list, .inspector, .offline, .environmentUp:
                         return Page(items: active, next: nil)
                     }
                 },

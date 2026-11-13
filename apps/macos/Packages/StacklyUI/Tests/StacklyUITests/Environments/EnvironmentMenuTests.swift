@@ -16,7 +16,7 @@ struct EnvironmentMenuTests {
         .evidence(
             covers: ["NFR-012"],
             expected:
-                "A service with an instance offers Open In, Copy Connection URL, Show Instance, Show Logs, and its lifecycle action; one not created offers only Show Plan…"
+                "A service with an instance offers Open In, Copy Connection URL, Show Instance, Show Logs, and its lifecycle action; one not created offers only Create with Up…"
         ))
     func aServiceMenuFollowsItsInstance() async throws {
         let rig = PageRig(
@@ -57,7 +57,7 @@ struct EnvironmentMenuTests {
         #expect(try menu("queue").last?.map(\.title) == ["Retry"])
 
         let search = try menu("search")
-        #expect(search.map { $0.map(\.title) } == [["Show Plan…"]])
+        #expect(search.map { $0.map(\.title) } == [["Create with Up…"]])
         search[0][0].perform()
         #expect(plans == 1)
         let row = try #require(rows.first { $0.alias == "search" })

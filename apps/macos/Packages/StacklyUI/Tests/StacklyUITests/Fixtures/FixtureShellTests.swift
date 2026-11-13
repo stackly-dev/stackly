@@ -14,6 +14,8 @@ struct FixtureShellTests {
         .connectedEmpty: nil,
         .connectedMixed: nil,
         .environmentPartiallyReady: nil,
+        .environmentBringingUp: nil,
+        .environmentUpIncomplete: nil,
         .daemonDegraded: nil,
         .daemonHealthUnrecognized: nil,
         .daemonRefreshing: nil,

@@ -1,0 +1,71 @@
+Building for debugging...
+[Using on-disk description]
+[1 / 1]
+[2 / 10] StacklyUI
+[5 / 13] StacklyUI
+[9 / 17] StacklyUI
+[10 / 17] StacklyUI
+[12 / 13] StacklyUI-product
+[12 / 13] StacklyUITests-product
+[14 / 16] StacklyUITests-product
+Build complete! (9,26 secs)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite EnvironmentUpActivityTests started.
+◇ Suite EnvironmentUpProgressTests started.
+◇ Suite EnvironmentUpPresenterTests started.
+◇ Suite SnapshotTests started.
+◇ Test theProgressCountsFromTheOperationOrElseTheReport() started.
+◇ Test theUpScenariosAnswerTheirOwnDetail() started.
+◇ Test anUpWithNoServiceReadyIsFailedNotPartial() started.
+◇ Test aReasonWithMoreThanOneReferenceOrAnUnknownCodeStillReads() started.
+◇ Suite EnvironmentUpSnapshotTests started.
+◇ Test setOfANeedsSecretLineAsksForThatReference() started.
+◇ Test anEnvironmentWithAnActiveOperationReadsBringingUpOrDown() started.
+◇ Test aRefusedUpKeepsThePlanAndSaysWhy() started.
+◇ Test upIsOffWhileAnOperationRunsOrTheManifestCantBeUsed() started.
+◇ Test aChangedPlanIsReadAgainWithANote() started.
+◇ Test aPlanThatIsNotApplicableCantBeBroughtUp() started.
+◇ Test bringUpSendsTheDigestTheSheetShowed() started.
+◇ Test aMissingSecretOpensTheSecretSheetThenReadsThePlanAgain() started.
+◇ Test theStatusColumnShowsThePhaseOfAServiceStillWorkedOn() started.
+◇ Test planWithBringUp() started.
+◇ Test eachPhaseReadsAsTheCopyTableSays() started.
+◇ Test anUpIsTitledMarkedPartialAndHoldsItsChildren() started.
+◇ Test theBannerNamesEachServiceWithItsReasonAndAction() started.
+✔ Test theUpScenariosAnswerTheirOwnDetail() passed after 0.002 seconds.
+✔ Test setOfANeedsSecretLineAsksForThatReference() passed after 0.003 seconds.
+✔ Test aChangedPlanIsReadAgainWithANote() passed after 0.004 seconds.
+✔ Test aRefusedUpKeepsThePlanAndSaysWhy() passed after 0.004 seconds.
+✔ Test aPlanThatIsNotApplicableCantBeBroughtUp() passed after 0.004 seconds.
+✔ Test aReasonWithMoreThanOneReferenceOrAnUnknownCodeStillReads() passed after 0.187 seconds.
+✔ Test theProgressCountsFromTheOperationOrElseTheReport() passed after 0.187 seconds.
+✔ Test anUpWithNoServiceReadyIsFailedNotPartial() passed after 0.187 seconds.
+✔ Test anEnvironmentWithAnActiveOperationReadsBringingUpOrDown() passed after 0.187 seconds.
+✔ Test bringUpSendsTheDigestTheSheetShowed() passed after 0.185 seconds.
+✔ Test aMissingSecretOpensTheSecretSheetThenReadsThePlanAgain() passed after 0.185 seconds.
+✔ Test anUpIsTitledMarkedPartialAndHoldsItsChildren() passed after 0.185 seconds.
+✔ Test theStatusColumnShowsThePhaseOfAServiceStillWorkedOn() passed after 0.185 seconds.
+✔ Test eachPhaseReadsAsTheCopyTableSays() passed after 0.185 seconds.
+✔ Test theBannerNamesEachServiceWithItsReasonAndAction() passed after 0.185 seconds.
+✔ Test upIsOffWhileAnOperationRunsOrTheManifestCantBeUsed() passed after 0.187 seconds.
+✔ Suite EnvironmentUpActivityTests passed after 0.189 seconds.
+✔ Suite EnvironmentUpProgressTests passed after 0.189 seconds.
+✔ Suite EnvironmentUpPresenterTests passed after 0.189 seconds.
+✔ Test planWithBringUp() passed after 1.397 seconds.
+◇ Test planWhileOffline() started.
+✔ Test planWhileOffline() passed after 0.625 seconds.
+◇ Test detailWhileBringingUp() started.
+✔ Test detailWhileBringingUp() passed after 1.133 seconds.
+◇ Test detailAfterAnIncompleteUp() started.
+✔ Test detailAfterAnIncompleteUp() passed after 1.163 seconds.
+◇ Test detailWithNothingReady() started.
+✔ Test detailWithNothingReady() passed after 0.817 seconds.
+◇ Test listWhileBringingUp() started.
+✔ Test listWhileBringingUp() passed after 0.713 seconds.
+◇ Test activityWithNestedChildren() started.
+✔ Test activityWithNestedChildren() passed after 1.211 seconds.
+✔ Suite EnvironmentUpSnapshotTests passed after 7.076 seconds.
+✔ Suite SnapshotTests passed after 7.076 seconds.
+✔ Test run with 23 tests in 5 suites passed after 7.076 seconds.

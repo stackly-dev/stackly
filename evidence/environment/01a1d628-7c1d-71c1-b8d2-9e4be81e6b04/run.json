@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "67c1e00246fb306862d7fa2dde4351aa9ac6d7ae",
+  "sourceDirty": false,
+  "runId": "01a1d628-7c1d-71c1-b8d2-9e4be81e6b04",
+  "runKind": "fixture",
+  "command": [
+    "swift",
+    "test",
+    "--package-path",
+    "apps/macos/Packages/StacklyUI",
+    "--filter",
+    "EnvironmentUp"
+  ],
+  "host": {
+    "os": "macos",
+    "arch": "aarch64",
+    "osVersion": "27.0.1",
+    "osBuild": "26A434",
+    "hardwareModel": "Mac13,1",
+    "chip": "Apple M1 Max",
+    "memoryBytes": 34359738368,
+    "performanceCores": 8,
+    "efficiencyCores": 2,
+    "virtualized": false
+  },
+  "baseline": {
+    "matches": true,
+    "osBuildMatches": false
+  },
+  "toolchain": {
+    "rustc": "1.99.1",
+    "xcode": "27.1 (27A9275)",
+    "swift": "6.4"
+  }
+}

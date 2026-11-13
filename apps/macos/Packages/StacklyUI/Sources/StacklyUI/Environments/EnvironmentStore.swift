@@ -138,6 +138,11 @@ public final class EnvironmentStore {
         }
     }
 
+    /// The names of the environments of the last snapshot by ID, for operation titles.
+    public var names: [UUID: String] {
+        store.items.mapValues(\.name)
+    }
+
     /// The environment with `id`, when the last snapshot holds it.
     public func environment(_ id: UUID) -> EnvironmentSummary? {
         store.items[id]

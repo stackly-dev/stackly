@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-ac99-7038-97be-e63848a77d26",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentUpProgressTests/eachPhaseReadsAsTheCopyTableSays()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentUpTests.swift",
+    "line": 173
+  },
+  "status": "PASS",
+  "expected": "Each Up phase has its label, tone, and symbol; waiting names the first dependency and how many more",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:52.282Z",
+  "finishedAt": "2026-11-13T18:25:52.47Z",
+  "evidencePath": "output.log"
+}

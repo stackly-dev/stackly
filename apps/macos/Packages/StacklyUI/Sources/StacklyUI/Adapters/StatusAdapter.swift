@@ -75,8 +75,30 @@ nonisolated public enum StatusAdapter {
         operation.result?.partial?.isEmpty == false
     }
 
-    /// How an operation's status looks, from the operation status table of spec 0012.
+    /// The services an Up left ready, for an `environment_up` that failed with
+    /// `env.up_incomplete` while at least one service is ready (spec 0046, *Activity*), or
+    /// `nil`.
+    public static func upIncomplete(_ operation: OperationSummary) -> (ready: Int, total: Int)? {
+        guard operation.state == .failed, let error = operation.failure?.error,
+            error.code == "env.up_incomplete"
+        else { return nil }
+        let details = Dictionary(
+            (error.details ?? []).map { ($0.key, $0.value) },
+            uniquingKeysWith: { first, _ in first })
+        guard let ready = details["ready"].flatMap(Int.init), ready > 0,
+            let total = details["total"].flatMap(Int.init)
+        else { return nil }
+        return (ready, total)
+    }
+
+    /// The "Partial" badge of an Up that left some services ready (spec 0046).
+    public static let upPartial = StatusAppearance(
+        label: "Partial", tone: .caution, symbol: Tone.caution.symbol)
+
+    /// How an operation's status looks, from the operation status table of spec 0012, with
+    /// "Partial" for an Up that left some services ready (spec 0046).
     public static func appearance(of operation: OperationSummary) -> StatusAppearance {
-        .operation(state: self.operation(operation.state), partial: isPartial(operation))
+        if upIncomplete(operation) != nil { return upPartial }
+        return .operation(state: self.operation(operation.state), partial: isPartial(operation))
     }
 }

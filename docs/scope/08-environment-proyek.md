@@ -48,7 +48,7 @@ Up memasang yang dibutuhkan, membuat instance dedicated atau meminjam instance y
 
 **Trace:** REQ-021, REQ-028, BR-023, VAL-014, AC-021, AC-073 (bersama fitur 47), PRD bagian 13.1 dan 13.2
 
-**Pointer:** spec [0046](../specs/0046-env-up-dependency-graph/index.md) · code in `crates/core/src/operation/`, `crates/core/src/instance/create/binding.rs`, `crates/domain/src/up.rs`
+**Pointer:** spec [0046](../specs/0046-env-up-dependency-graph/index.md) · code in `crates/core/src/operation/`, `crates/core/src/instance/create/binding.rs`, `crates/domain/src/up.rs`, `crates/core/src/environment/up/`, `apps/daemon/src/ipc/env/`
 
 - [x] Design it (spec): `/architect env up & dependency graph`
 - [ ] Build it: `/develop env up & dependency graph`

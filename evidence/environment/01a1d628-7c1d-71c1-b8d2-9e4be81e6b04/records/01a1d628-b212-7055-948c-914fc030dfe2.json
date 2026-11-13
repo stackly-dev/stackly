@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d628-b212-7055-948c-914fc030dfe2",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "SnapshotTests/EnvironmentUpSnapshotTests/planWhileOffline()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/SnapshotTests/EnvironmentUpSnapshotTests.swift",
+    "line": 71
+  },
+  "status": "PASS",
+  "expected": "While stacklyd is unavailable the loaded plan sheet keeps the plan, Bring Up and Set… are off, and the footer says why",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T18:25:53.683Z",
+  "finishedAt": "2026-11-13T18:25:54.308Z",
+  "evidencePath": "output.log"
+}

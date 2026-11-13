@@ -178,6 +178,28 @@
                     id, health: .fixture(),
                     data: (FixtureEnvironments.instances, operationCases, providerCases),
                     presence: .connected(health: .ready), replies: FixtureEnvironments.replies)
+            case .environmentBringingUp:
+                return connectedScenario(
+                    id, health: .fixture(),
+                    data: (
+                        FixtureEnvironments.instances,
+                        [FixtureEnvironmentUp.upOperation()] + operationCases, providerCases
+                    ),
+                    presence: .connected(health: .ready),
+                    replies: FixtureEnvironmentUp.replies(
+                        FixtureEnvironmentUp.bringingUpSummaries,
+                        detail: FixtureEnvironmentUp.bringingUpDetail()))
+            case .environmentUpIncomplete:
+                return connectedScenario(
+                    id, health: .fixture(),
+                    data: (
+                        FixtureEnvironments.instances,
+                        FixtureEnvironmentUp.incompleteOperations + operationCases, providerCases
+                    ),
+                    presence: .connected(health: .ready),
+                    replies: FixtureEnvironmentUp.replies(
+                        FixtureEnvironmentUp.incompleteSummaries,
+                        detail: FixtureEnvironmentUp.incompleteDetail()))
             case .daemonDegraded:
                 return connectedScenario(
                     id, health: .fixture(.degraded, degraded: "registry"),
