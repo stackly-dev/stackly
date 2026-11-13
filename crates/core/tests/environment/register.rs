@@ -221,3 +221,29 @@ fn manifest_location_resolves_the_parent_and_keeps_the_file_name() {
         .expect("absolute")
     );
 }
+
+// covers: AC-11 (spec 0044)
+#[test]
+fn manifest_location_spells_the_file_name_as_the_folder_stores_it() {
+    let site = Site::new();
+    let dir = site.root.path().join("proj");
+    std::fs::create_dir_all(&dir).expect("the folder can be made");
+    std::fs::write(dir.join("stackly.yaml"), "x").expect("the file writes");
+    let fs = site.platform.fs();
+    let stored = stackly_core::environment::manifest_location(fs, &dir.join("stackly.yaml"))
+        .expect("resolves");
+    let other_case = dir.join("Stackly.yaml");
+    if std::fs::symlink_metadata(&other_case).is_err() {
+        // A case sensitive volume: the two names are two files.
+        return;
+    }
+    let upper = stackly_core::environment::manifest_location(fs, &other_case).expect("resolves");
+    assert_eq!(upper, stored, "one file, one location");
+    assert!(upper.as_str().ends_with("/stackly.yaml"));
+
+    // A symlink in the folder is never followed to its target's name.
+    std::os::unix::fs::symlink(dir.join("stackly.yaml"), dir.join("linked.yaml")).expect("links");
+    let linked = stackly_core::environment::manifest_location(fs, &dir.join("linked.yaml"))
+        .expect("resolves");
+    assert!(linked.as_str().ends_with("/linked.yaml"));
+}
