@@ -5,6 +5,7 @@
 //! Nothing here touches macOS: the daemon reads the file through the
 //! `Filesystem` port and hands the bytes in.
 
+pub mod children;
 pub mod export;
 mod finding;
 pub mod local;
@@ -13,6 +14,7 @@ pub mod manifest;
 pub mod plan;
 pub mod register;
 pub mod status;
+pub mod up;
 mod validate;
 
 pub use finding::{Finding, FindingCode, FindingLocation, Findings, MAX_FINDINGS, Severity};
@@ -35,8 +37,8 @@ pub use plan::{
     BlockerKind, DetachedMember, EnvironmentRef, InstanceView, NOT_INITIALIZED, Plan, PlanAction,
     PlanBlocker, PlanDeps, PlanDifference, PlanEndpoint, PlanError, PlanInputs, PlanItem,
     PlanLocal, PlanLock, PlanOverride, PlanRuntime, PlanSecret, PlanSecretStatus, PlanStep,
-    PlanStorage, PlanTrust, Registration, RuntimeSource, draft_for, manifest_file_name, plan,
-    planned_runtime_placeholder_id, start_order,
+    PlanStorage, PlanTrust, Registration, RuntimeSource, create_draft, draft_for,
+    manifest_file_name, plan, planned_runtime_placeholder_id, start_order,
 };
 pub use register::{
     ENVIRONMENT_LIMIT, EnvOpError, ImportRequest, LEASE_ITEMS_MAX, RegisterDecision, RegisterInput,

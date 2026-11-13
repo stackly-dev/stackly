@@ -1,0 +1,25 @@
+# The graph Up runs in the core tests (spec 0046 AC-8): web waits for api,
+# api waits for db and cache, all on the fake provider. No edge stands for
+# a real dependency between databases.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: graph
+services:
+  web:
+    provider: testing/fake
+    version: "0.1"
+    dependsOn:
+      - {service: api, condition: ready, timeoutSeconds: 30}
+  api:
+    provider: testing/fake
+    version: "0.1"
+    dependsOn:
+      - {service: db}
+      - {service: cache}
+  db:
+    provider: testing/fake
+    version: "0.1"
+  cache:
+    provider: testing/fake
+    version: "0.1"
