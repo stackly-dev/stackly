@@ -3,7 +3,8 @@
 //! refusal exits 3 with one `<name> is used by <environment> (<alias>)`
 //! line per environment and hints that name the flag and `stackly env
 //! down`. A stop with the override names each environment that is no
-//! longer complete.
+//! longer complete. `stop --all` names the running instances it leaves
+//! alone and says "Nothing is running." only when nothing runs.
 
 use serde_json::{Value, json};
 use stackly_protocol::operation::{OperationKind, OperationState};
@@ -13,7 +14,7 @@ use stackly_testkit::TestRoot;
 use stackly_testkit::evidence::{Kind, evidence};
 
 use crate::common::scripted::{ScriptedDaemon, Step, error};
-use crate::common::{envelope, run};
+use crate::common::{envelope, golden, run};
 use crate::data;
 
 const ID: &str = "0192f3a5-0000-7000-8000-000000000001";
@@ -335,5 +336,140 @@ fn endpoint_set_sends_the_override_and_a_refusal_names_the_flag() {
     let calls = content(&daemon, "instance.change_endpoints");
     assert_eq!(calls[0]["overrideLeases"], false);
     assert_eq!(calls[1]["overrideLeases"], true);
+    ev.pass();
+}
+
+/// One running instance `name` that `erp` holds a lease on, left alone.
+fn held_skip(id: &str, name: &str) -> Value {
+    json!({
+        "instanceId": id,
+        "name": name,
+        "code": "supervisor.stop_requires_override",
+        "environments": [{
+            "environmentId": ERP, "name": "erp", "alias": "db",
+            "ownership": "shared", "leaseActive": true,
+        }],
+    })
+}
+
+/// A daemon whose preview is `shown` and whose stop stops `stopped`.
+fn stop_all_daemon(root: &TestRoot, shown: StopAllPreview, stopped: Vec<&str>) -> ScriptedDaemon {
+    let stopped: Vec<String> = stopped.into_iter().map(str::to_owned).collect();
+    ScriptedDaemon::serve(root, move |call, _| match call {
+        Call::InstancePreviewStopAll(_) => vec![Step::Reply(Reply::InstancePreviewStopAll(
+            Box::new(shown.clone()),
+        ))],
+        Call::InstanceStopAll(_) => {
+            let result: StopAllResult = serde_json::from_value(json!({
+                "stopped": stopped, "failed": [], "skipped": []
+            }))
+            .expect("a result decodes");
+            vec![Step::Reply(Reply::InstanceStopAll(Box::new(result)))]
+        }
+        _ => Vec::new(),
+    })
+}
+
+/// AC-19: running instances an environment holds are named, never
+/// reported as "Nothing is running.".
+#[test]
+fn stop_all_names_the_instances_environments_hold_when_nothing_else_runs() {
+    let ev = evidence!(
+        covers = ["REQ-027", "REQ-028"],
+        kind = Kind::Fixture,
+        expected = "stop --all --yes where every running instance is held by erp writes each one as <name> · won’t stop: used by erp to stderr with the --override-leases hint, prints Nothing was stopped., sends no instance.stop_all, and exits 0; with some instances free it writes the held ones beside the free ones and stops only the free ones; with nothing running it prints Nothing is running. and no rows; the --json result of each is the preview and a null or filled outcome, with nothing on stderr",
+    );
+    const OTHER: &str = "0192f3a5-0000-7000-8000-000000000002";
+    let held = preview(json!({
+        "items": [],
+        "alreadyStopping": [],
+        "skipped": [held_skip(ID, "orders-db"), held_skip(OTHER, "orders-cache")],
+        "atLoginCount": 0,
+    }));
+    let mixed = preview(json!({
+        "items": [{
+            "instanceId": OTHER,
+            "name": "scratch",
+            "lifecycle": "running",
+            "demand": ["manual"],
+            "autostart": { "policy": "manual", "session": "none" },
+        }],
+        "alreadyStopping": [],
+        "skipped": [held_skip(ID, "orders-db")],
+        "atLoginCount": 0,
+    }));
+    let idle = preview(json!({
+        "items": [],
+        "alreadyStopping": [],
+        "skipped": [],
+        "atLoginCount": 0,
+    }));
+
+    let root = TestRoot::new().expect("a test root is made");
+    let daemon = stop_all_daemon(&root, held.clone(), Vec::new());
+    let text = run(root.path(), &["instance", "stop", "--all", "--yes"]);
+    let json = run(
+        root.path(),
+        &["instance", "stop", "--all", "--yes", "--json"],
+    );
+    assert_eq!(text.code, Some(0), "{text:?}");
+    golden::check("instance_stop_all_held.txt", &text.stdout);
+    golden::check("instance_stop_all_held_stderr.txt", &text.stderr);
+    assert_eq!(text.stdout, "Nothing was stopped.\n");
+    assert!(
+        text.stderr
+            .contains("  orders-db · won’t stop: used by erp\n")
+            && text
+                .stderr
+                .contains("  orders-cache · won’t stop: used by erp\n")
+            && text
+                .stderr
+                .contains("stackly instance stop --all --override-leases"),
+        "{}",
+        text.stderr
+    );
+    assert!(!text.stdout.contains("Nothing is running"));
+    assert_eq!(json.code, Some(0), "{json:?}");
+    assert_eq!(json.stderr, "");
+    let value = envelope(&json);
+    assert_eq!(
+        value["result"]["preview"],
+        serde_json::to_value(&held).expect("the preview serializes")
+    );
+    assert!(value["result"]["outcome"].is_null());
+    assert!(content(&daemon, "instance.stop_all").is_empty());
+    drop(daemon);
+
+    let daemon = stop_all_daemon(&root, mixed, vec![OTHER]);
+    let text = run(root.path(), &["instance", "stop", "--all", "--yes"]);
+    assert_eq!(text.code, Some(0), "{text:?}");
+    golden::check("instance_stop_all_mixed_stderr.txt", &text.stderr);
+    assert_eq!(text.stdout, "Stopped 1 service. Data is kept.\n");
+    assert!(
+        text.stderr.contains("  scratch · Started by you\n")
+            && text
+                .stderr
+                .contains("  orders-db · won’t stop: used by erp\n"),
+        "{}",
+        text.stderr
+    );
+    assert_eq!(
+        content(&daemon, "instance.stop_all")[0]["expectedInstanceIds"],
+        json!([OTHER])
+    );
+    drop(daemon);
+
+    let _daemon = stop_all_daemon(&root, idle, Vec::new());
+    let text = run(root.path(), &["instance", "stop", "--all", "--yes"]);
+    let json = run(
+        root.path(),
+        &["instance", "stop", "--all", "--yes", "--json"],
+    );
+    assert_eq!(text.code, Some(0), "{text:?}");
+    golden::check("instance_stop_all_idle.txt", &text.stdout);
+    assert_eq!(text.stdout, "Nothing is running.\n");
+    assert_eq!(text.stderr, "");
+    assert_eq!(json.stderr, "");
+    assert!(envelope(&json)["result"]["outcome"].is_null());
     ev.pass();
 }

@@ -1,0 +1,9 @@
+stop erp-development-nats
+stop erp-development-postgres
+keep shared-valkey: started by you; used by reporting
+skip leftover: Stackly can’t confirm this process
+waiting for operation 0192f3a4-0000-7000-8000-0000000000d1 (Ctrl+C stops waiting; the operation keeps running)
+0s running
+0s succeeded
+stopped erp-development-nats
+stopped erp-development-postgres
