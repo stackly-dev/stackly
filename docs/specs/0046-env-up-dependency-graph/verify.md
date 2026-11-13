@@ -229,6 +229,20 @@ Rendah:
 
 **Penilaian langkah manual.** Dua belas langkah itu cukup untuk AC-19 sampai AC-22 dan bagian tampilan AC-15. Yang belum tercakup dan layak ditambah: menekan Cancel di banner saat Up berjalan; menjalankan `stackly env up` dari terminal selagi halaman detail terbuka (menguji temuan 1); dan "Create with Up…" dari menu baris service. Yang bisa otomatis tetapi belum: test unit untuk aturan muat ulang temuan 1, test penerusan `reason` dan `generateAllowed` temuan 4, dan snapshot toolbar.
 
+### Ulang temuan Milestone 4, 2026-11-14 (kode `071b55d8`)
+
+Verdict: **bagian otomatis Milestone 4 lulus dan siap dicentang lead**; 15 langkah `### UI / manual` tetap `NOT_RUN`, `owner: user` (`F46-1`). `swift test --filter 'EnvironmentStoreTests|EnvironmentUp|EnvironmentsSnapshotTests|OperationsPageSnapshotTests|FixtureScenarioTests|FixtureShellTests'` 90 test di 16 suite lulus.
+
+| Temuan lama | Hasil |
+| --- | --- |
+| 1. Aturan muat ulang *Event* | **Selesai.** `EnvironmentStore` kini berlangganan `operation.progress`; operasi environment yang belum berakhir, progress nya, dan `operation.state_changed` operasi yang `parent` nya `activeOperation` sebuah environment memuat ulang 300 ms sesudah event terakhir, digabung dengan event instance; operasi environment yang berakhir tetap memuat ulang saat itu juga. Test baru: tiga jeda 300 ms, ledakan progress satu muat ulang, anak operasi lain dan progress instance tidak memuat apa pun, dan Up dari klien lain tampil "Bringing up…" tanpa event instance. Sesuai teks *Event*. |
+| 2. `codeMessage` | **Selesai.** `runtime.digest_mismatch` menggantikan kode yang tidak ada, `supervisor.init_failed` punya kalimat, dan test memeriksa setiap kode terhadap `protocols/error-codes.json`. |
+| 3. Dua fixture | **Selesai.** `environment-up-failed`: postgres gagal di create, tiga lainnya menunggu postgres, tabel "Not created". `environment-up-interrupted`: laporan tanpa isi per service, alasan spec 0044. Snapshot dilihat. |
+| 4. `generateAllowed` false | **Selesai.** Fixture dengan `store_locked` dan false; test memastikan Set Secret… meneruskan keduanya apa adanya. |
+| 5. `runningCount` | **Selesai di kode.** Anak tidak dihitung di badge dan subjudul Operations. Spec 0035 tidak menulis lain (ia merujuk `OperationCenter.subtitle` dan baris tabelnya hanya menyebut Overview). Catatan: spec 0013 AC-18 masih mendefinisikan angka itu sebagai jumlah operasi `running` dan `cancel_requested` tanpa pengecualian anak; satu kalimat spec perlu diselaraskan. |
+| 6. Snapshot toolbar | **Ada**, terang dan gelap, Up… aktif dan nonaktif. Catatan rendah: snapshot nonaktif menggambar teks alasan di samping tombol, sedangkan toolbar asli memakai `showsReason: false` (alasan hanya sebagai tooltip); warna accent tetap hanya bisa dinilai manual. |
+| Langkah manual 13 sampai 15 | **Ada** dan cukup: Cancel di banner, Up dari terminal selagi halaman terbuka (butuh CLI Milestone 3), dan "Create with Up…". |
+
 ### Acceptance-criteria coverage
 
 - AC-19 · Up… menggantikan Plan…, sheet dengan Cancel dan Bring Up, `env.plan_changed`, "Create with Up…", catatan kaki; tes presenter dan snapshot sheet
