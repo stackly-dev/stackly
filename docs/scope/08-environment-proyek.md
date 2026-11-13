@@ -30,7 +30,7 @@ Pisahkan manifest yang dibagikan, `stackly.lock` yang menyimpan versi provider, 
 
 **Trace:** REQ-023, REQ-028, BR-018, AC-023, AC-080, PRD bagian 13.1 dan 13.3
 
-**Pointer:** spec [0045](../specs/0045-lockfile-override-lokal/index.md)
+**Pointer:** spec [0045](../specs/0045-lockfile-override-lokal/index.md) · code in `crates/core/src/environment/` (`lock.rs`, `local.rs`, `export.rs`, `plan.rs`), `apps/daemon/src/ipc/env/`
 
 - [x] Design it (spec): `/architect lockfile & override lokal`
 - [ ] Build it: `/develop lockfile & override lokal`
