@@ -1,0 +1,66 @@
+# The ERP example of spec 0044 (PRD section 13.1 with the names the six
+# official packages really use). No dependsOn: the PRD gives none.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: erp-development
+
+services:
+  postgres:
+    provider: official/postgresql
+    version: "18"
+    endpoints:
+      client: {port: 5432}
+    settings:
+      maxConnections: 200
+    secretRefs:
+      superuserPassword: "local:erp/postgres/admin"
+    storage: {mode: managed, persistent: true}
+
+  mysql:
+    provider: official/mysql
+    version: stable
+    endpoints:
+      client: {port: 3306}
+    secretRefs:
+      rootPassword: "local:erp/mysql/root"
+
+  nats:
+    provider: official/nats
+    version: "2.15"
+    endpoints:
+      client: {port: 4222}
+      monitoring: {port: 8222}
+    settings:
+      jetstream: true
+    secretRefs:
+      clientPassword: "local:erp/nats/client"
+
+  clickhouse:
+    provider: official/clickhouse
+    version: stable
+    endpoints:
+      http: {port: 8123}
+      native: {port: 9000}
+    secretRefs:
+      defaultPassword: "local:erp/clickhouse/default"
+
+  valkey:
+    provider: official/valkey
+    version: stable
+    endpoints:
+      client: {port: 6379}
+    settings:
+      persistence: aof
+    secretRefs:
+      password: "local:erp/valkey/password"
+
+  traefik:
+    provider: official/traefik
+    version: "3.7"
+    endpoints:
+      web: {port: 8000}
+      ping: {port: 8082}
+    settings:
+      routes:
+        - {name: erp-web, rule: "Host(`erp.localhost`)", backendUrl: "http://127.0.0.1:3000"}

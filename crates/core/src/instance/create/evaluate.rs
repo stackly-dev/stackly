@@ -28,7 +28,8 @@ use super::facts::{
 use super::port::{self, Slot};
 use crate::provider::{
     EndpointTransport, Location, PlanContext, PlanError, ResolvedEndpoint, RuntimeContext,
-    SettingsIssueKind, SettingsValues, ValidatedPackage,
+    SettingField, SettingsError, SettingsIssueKind, SettingsSchema, SettingsValues,
+    ValidatedPackage,
 };
 use crate::secret::SecretFieldRule;
 use crate::supervisor::BindOutcome;
@@ -768,7 +769,6 @@ impl Judge<'_> {
 
         // The secret fields of the schema and their references.
         let mut plans = Vec::new();
-        let mut doc = document.clone();
         for setting in schema.fields() {
             let Some(rule) = SecretFieldRule::from_setting(setting) else {
                 continue;
@@ -794,10 +794,6 @@ impl Judge<'_> {
                 _ => None,
             }
             .unwrap_or_else(|| SecretRef::for_instance(self.id, &purpose));
-            doc.insert(
-                setting.name().to_string(),
-                serde_json::Value::String(reference.to_string()),
-            );
             plans.push(SecretPlan {
                 field,
                 title: setting.title().to_owned(),
@@ -810,7 +806,11 @@ impl Judge<'_> {
 
         let mut values = None;
         if self.issues.len() == before {
-            match schema.validate(&serde_json::Value::Object(doc)) {
+            let references: BTreeMap<String, SecretRef> = plans
+                .iter()
+                .map(|plan| (plan.field.to_string(), plan.reference.clone()))
+                .collect();
+            match settings_with_references(schema, &document, &references, |_| None) {
                 Ok(valid) => values = Some(valid),
                 Err(error) => {
                     for issue in &error.issues {
@@ -1489,4 +1489,38 @@ fn human_bytes(bytes: u64) -> String {
     } else {
         format!("{} KB", bytes / KB)
     }
+}
+
+/// Validates a settings `document` after filling every secret field of
+/// `schema` with its reference: the one from `references` by field name,
+/// else what `fallback` gives (spec 0044, *Evaluasi create di dalam
+/// plan*). Create and the environment validate share it, so a required
+/// secret field never shows up as a false `settings_value`.
+///
+/// # Errors
+///
+/// Returns the [`SettingsError`] of [`SettingsSchema::validate`].
+pub(crate) fn settings_with_references(
+    schema: &SettingsSchema,
+    document: &serde_json::Map<String, serde_json::Value>,
+    references: &BTreeMap<String, SecretRef>,
+    fallback: impl Fn(&SettingField) -> Option<SecretRef>,
+) -> Result<SettingsValues, SettingsError> {
+    let mut filled = document.clone();
+    for setting in schema.fields() {
+        if SecretFieldRule::from_setting(setting).is_none() {
+            continue;
+        }
+        let reference = references
+            .get(setting.name().as_str())
+            .cloned()
+            .or_else(|| fallback(setting));
+        if let Some(reference) = reference {
+            filled.insert(
+                setting.name().to_string(),
+                serde_json::Value::String(reference.to_string()),
+            );
+        }
+    }
+    schema.validate(&serde_json::Value::Object(filled))
 }

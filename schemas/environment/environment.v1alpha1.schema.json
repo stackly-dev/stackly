@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment",
+  "description": "`stackly.yaml`, as it decodes.",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "description": "Always `stackly/v1alpha1`.",
+      "type": "string",
+      "pattern": "^stackly/v1alpha1$"
+    },
+    "kind": {
+      "description": "Always `Environment`.",
+      "type": "string",
+      "pattern": "^Environment$"
+    },
+    "metadata": {
+      "description": "The environment's identity.",
+      "$ref": "#/$defs/Metadata"
+    },
+    "services": {
+      "description": "The services, by alias, in document order: 1 to 32.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Service"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "services"
+  ],
+  "$defs": {
+    "Dependency": {
+      "description": "One `dependsOn` entry.",
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "Only `ready`, the default.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "pattern": "^ready$"
+        },
+        "service": {
+          "description": "The alias of another service in this manifest.",
+          "type": "string"
+        },
+        "timeoutSeconds": {
+          "description": "How long to wait, 1 to 3600 seconds; the default of Up otherwise.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null,
+          "maximum": 3600,
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "service"
+      ]
+    },
+    "Endpoint": {
+      "description": "One endpoint of a service.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "When written, the endpoint's default host.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "port": {
+          "description": "A port from 1 to 65535, or `auto`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Port"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transport": {
+          "description": "When written, the endpoint's transport.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metadata": {
+      "description": "`metadata`.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The environment name, unique on this Mac.",
+          "type": "string",
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
+    "Port": {
+      "description": "A port: a number, or the text `auto`.",
+      "anyOf": [
+        {
+          "description": "A fixed port.",
+          "type": "integer",
+          "format": "int64",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        {
+          "description": "`auto`.",
+          "type": "string",
+          "pattern": "^auto$"
+        }
+      ]
+    },
+    "Service": {
+      "description": "One service.",
+      "type": "object",
+      "properties": {
+        "dependsOn": {
+          "description": "Services that must be ready first: at most 31.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/Dependency"
+          }
+        },
+        "endpoints": {
+          "description": "Endpoint ports by endpoint name; an endpoint not written is `auto`.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Endpoint"
+          }
+        },
+        "instanceName": {
+          "description": "The name of the instance to create; `<metadata.name>-<alias>` by\ndefault.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "instanceRef": {
+          "description": "The name of an existing instance this service borrows.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ownership": {
+          "description": "`dedicated` (the default) or `shared` (only with `instanceRef`).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "pattern": "^(dedicated|shared)$"
+        },
+        "provider": {
+          "description": "`<namespace>/<name>` of a catalog provider.",
+          "type": "string",
+          "pattern": "^[a-z]([a-z0-9]*(-[a-z0-9]+)*)?/[a-z]([a-z0-9]*(-[a-z0-9]+)*)?$"
+        },
+        "secretRefs": {
+          "description": "`local:` secret references by secret field.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "settings": {
+          "description": "Settings, checked against the provider's settings schema.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "default": null
+        },
+        "storage": {
+          "description": "Only `{mode: managed, persistent: true}` in v1alpha1.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Storage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "A runtime selector, always a string: `stable`, a line, an exact\nversion, or `sha256:<hex>`. Dedicated services only.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ]
+    },
+    "Storage": {
+      "description": "`storage`.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Only `managed`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "pattern": "^managed$"
+        },
+        "persistent": {
+          "description": "Only `true`.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

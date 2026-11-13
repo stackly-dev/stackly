@@ -1,0 +1,134 @@
+# Expects at least one too_many_dependencies finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: testing/fake
+    dependsOn:
+      - service: s0
+      - service: s1
+      - service: s2
+      - service: s3
+      - service: s4
+      - service: s5
+      - service: s6
+      - service: s7
+      - service: s8
+      - service: s9
+      - service: s10
+      - service: s11
+      - service: s12
+      - service: s13
+      - service: s14
+      - service: s15
+      - service: s16
+      - service: s17
+      - service: s18
+      - service: s19
+      - service: s20
+      - service: s21
+      - service: s22
+      - service: s23
+      - service: s24
+      - service: s25
+      - service: s26
+      - service: s27
+      - service: s28
+      - service: s29
+      - service: s30
+      - service: s31
+  s0:
+    provider: testing/fake
+    instanceRef: shared-0
+  s1:
+    provider: testing/fake
+    instanceRef: shared-1
+  s2:
+    provider: testing/fake
+    instanceRef: shared-2
+  s3:
+    provider: testing/fake
+    instanceRef: shared-3
+  s4:
+    provider: testing/fake
+    instanceRef: shared-4
+  s5:
+    provider: testing/fake
+    instanceRef: shared-5
+  s6:
+    provider: testing/fake
+    instanceRef: shared-6
+  s7:
+    provider: testing/fake
+    instanceRef: shared-7
+  s8:
+    provider: testing/fake
+    instanceRef: shared-8
+  s9:
+    provider: testing/fake
+    instanceRef: shared-9
+  s10:
+    provider: testing/fake
+    instanceRef: shared-10
+  s11:
+    provider: testing/fake
+    instanceRef: shared-11
+  s12:
+    provider: testing/fake
+    instanceRef: shared-12
+  s13:
+    provider: testing/fake
+    instanceRef: shared-13
+  s14:
+    provider: testing/fake
+    instanceRef: shared-14
+  s15:
+    provider: testing/fake
+    instanceRef: shared-15
+  s16:
+    provider: testing/fake
+    instanceRef: shared-16
+  s17:
+    provider: testing/fake
+    instanceRef: shared-17
+  s18:
+    provider: testing/fake
+    instanceRef: shared-18
+  s19:
+    provider: testing/fake
+    instanceRef: shared-19
+  s20:
+    provider: testing/fake
+    instanceRef: shared-20
+  s21:
+    provider: testing/fake
+    instanceRef: shared-21
+  s22:
+    provider: testing/fake
+    instanceRef: shared-22
+  s23:
+    provider: testing/fake
+    instanceRef: shared-23
+  s24:
+    provider: testing/fake
+    instanceRef: shared-24
+  s25:
+    provider: testing/fake
+    instanceRef: shared-25
+  s26:
+    provider: testing/fake
+    instanceRef: shared-26
+  s27:
+    provider: testing/fake
+    instanceRef: shared-27
+  s28:
+    provider: testing/fake
+    instanceRef: shared-28
+  s29:
+    provider: testing/fake
+    instanceRef: shared-29
+  s30:
+    provider: testing/fake
+    instanceRef: shared-30

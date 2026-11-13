@@ -1,0 +1,25 @@
+# A dependency graph on the fake provider (spec 0044): web waits for api,
+# api waits for db and cache. Start order: db, cache, api, web.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: graph
+
+services:
+  web:
+    provider: testing/fake
+    dependsOn:
+      - {service: api, condition: ready, timeoutSeconds: 30}
+  api:
+    provider: testing/fake
+    dependsOn:
+      - {service: db}
+      - {service: cache}
+  db:
+    provider: testing/fake
+    endpoints:
+      http: {port: auto}
+  cache:
+    provider: testing/fake
+    secretRefs:
+      authToken: "local:graph/cache-token"

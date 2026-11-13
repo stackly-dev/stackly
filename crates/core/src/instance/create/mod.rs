@@ -27,7 +27,7 @@ pub use draft::{
 };
 pub use error::PinFailure;
 pub use evaluate::{Evaluation, ResolvedCreate, SecretPlan, evaluate, evaluate_for};
-pub(crate) use evaluate::{field_code, settings_path};
+pub(crate) use evaluate::{field_code, settings_path, settings_with_references};
 pub use facts::{
     CreateDeps, CreateFacts, CreateLocations, DataFacts, DirFact, FormLocations, GatherError,
     LocationFact, LocationState, PackageSource, ProbeFact, ProgramCheck, ProviderFound,

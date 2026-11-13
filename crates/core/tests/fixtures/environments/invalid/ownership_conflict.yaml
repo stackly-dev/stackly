@@ -1,0 +1,9 @@
+# Expects at least one ownership_conflict finding (spec 0044, Aturan validasi).
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: broken
+services:
+  api:
+    provider: testing/fake
+    ownership: shared

@@ -11,6 +11,7 @@ pub mod catalog;
 mod daemon;
 pub mod diagnostics;
 pub mod doctor;
+pub mod environment;
 mod error;
 pub mod instance;
 mod instance_dir;
