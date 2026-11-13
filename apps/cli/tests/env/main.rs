@@ -9,6 +9,8 @@
 mod common;
 
 mod data;
+mod export;
+mod lock;
 mod manage;
 mod plan;
 mod stacklyd;

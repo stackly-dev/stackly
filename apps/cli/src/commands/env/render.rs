@@ -1,10 +1,11 @@
-//! Text that `validate`, `plan`, and `import` share: the finding lines,
-//! the counts, the plan table, the blocker lines, and the plan sections
-//! that go to stderr. Every value comes from the daemon and is escaped
-//! before it is written.
+//! Text that `validate`, `plan`, `import`, and `lock` share: the finding
+//! lines, the counts, the plan table, the blocker lines, and the plan
+//! sections that go to stderr. Every value comes from the daemon and is
+//! escaped before it is written.
 
 use stackly_protocol::env::{
-    EnvFinding, EnvPlan, EnvValidation, PlanAction, PlanBlocker, PlanEndpoint, PlanItem, PlanStep,
+    EnvFinding, EnvPlan, EnvValidation, PlanAction, PlanBlocker, PlanEndpoint, PlanItem, PlanLocal,
+    PlanLock, PlanStep, RuntimeSource,
 };
 use stackly_protocol::instance::PortRequest;
 use stackly_protocol::provider::FindingSeverity;
@@ -97,9 +98,20 @@ fn endpoint_text(endpoint: &PlanEndpoint) -> String {
     format!("{}={}:{port}", endpoint.name, endpoint.host)
 }
 
+/// The `SOURCE` cell of an item (spec 0045 *CLI*): `lock` or `catalog`
+/// for a runtime, `-` without one.
+fn source_text(item: &PlanItem) -> Option<String> {
+    item.runtime.as_ref().map(|runtime| match runtime.source {
+        RuntimeSource::Lock => "lock".to_owned(),
+        RuntimeSource::Catalog => "catalog".to_owned(),
+        other => wire_name(&other),
+    })
+}
+
 /// The rows of one item: one per step, or one `keep` row without steps.
 fn item_rows(item: &PlanItem) -> Vec<Vec<Cell>> {
     let endpoints: Vec<String> = item.endpoints.iter().map(endpoint_text).collect();
+    let source = source_text(item);
     let row = |action: String| {
         vec![
             Cell::fixed(action),
@@ -111,6 +123,7 @@ fn item_rows(item: &PlanItem) -> Vec<Vec<Cell>> {
                     .as_ref()
                     .map(|runtime| runtime.version.as_str()),
             ),
+            Cell::optional(source.as_deref()),
             Cell::text(&endpoints.join(", ")),
         ]
     };
@@ -159,6 +172,7 @@ pub fn plan_table(out: &mut HumanWriter, plan: &EnvPlan) {
                 "instance",
                 "provider",
                 "version",
+                "source",
                 "endpoints",
             ],
             &rows,
@@ -199,9 +213,58 @@ pub fn blocker_lines(out: &mut HumanWriter, blockers: &[PlanBlocker]) {
     }
 }
 
-/// The sections for stderr: `blocked:`, `secrets:`, `differs:`, and
-/// `not in manifest:`, each left out when it is empty.
+/// `lock: <file> (<state>[, <targets>])`, then one line per alias that
+/// does not match (spec 0045 *CLI*). Nothing from a daemon that sends no
+/// lock (an empty file name).
+pub fn lock_lines(out: &mut HumanWriter, lock: &PlanLock) {
+    if lock.file.is_empty() {
+        return;
+    }
+    let mut state = wire_name(&lock.state);
+    if !lock.targets.is_empty() {
+        let targets: Vec<String> = lock.targets.iter().map(|target| esc(target)).collect();
+        state = format!("{state}, {}", targets.join(", "));
+    }
+    out.line(&format!("lock: {} ({state})", esc(&lock.file)));
+    for item in &lock.stale {
+        out.line(&format!(
+            "  {}: {}",
+            esc(&item.service),
+            wire_name(&item.reason)
+        ));
+    }
+}
+
+/// `local: <file>`, one `<service>.<field>: <value> (<state>)` line per
+/// override, then the findings of the file (spec 0045 *CLI*).
+pub fn local_lines(out: &mut HumanWriter, local: &PlanLocal) {
+    out.line(&format!("local: {}", esc(&local.file)));
+    for item in &local.overrides {
+        out.line(&format!(
+            "  {}.{}: {} ({})",
+            esc(&item.service),
+            esc(&item.field),
+            esc(&item.value),
+            wire_name(&item.state)
+        ));
+    }
+    for finding in &local.findings {
+        out.line(&format!("  {}", finding_line(&local.file, finding)));
+    }
+}
+
+/// The sections for stderr: the `lock:` and `local:` lines, then
+/// `blocked:`, `secrets:`, `differs:`, and `not in manifest:`, each left
+/// out when it is empty. A manifest that is not valid gets no `lock:` or
+/// `local:` line: its lock state was never checked against the manifest
+/// (spec 0045 K23), so only the manifest findings are shown.
 pub fn plan_sections(out: &mut HumanWriter, plan: &EnvPlan) {
+    if plan.validation.valid {
+        lock_lines(out, &plan.lock);
+        if let Some(local) = &plan.local {
+            local_lines(out, local);
+        }
+    }
     blocker_lines(out, &plan.blockers);
     let secrets: Vec<String> = plan
         .items
@@ -312,6 +375,20 @@ mod tests {
         validation.omitted = stackly_protocol::Count::saturating(0);
         validation.finding_count = stackly_protocol::Count::saturating(9);
         assert_eq!(counts(&validation), (8, 1));
+    }
+
+    #[test]
+    fn the_lock_line_names_the_state_and_targets_and_each_stale_alias() {
+        let lock = plan("plan-locked-blocked.json").lock;
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        lock_lines(&mut out, &lock);
+        assert_eq!(
+            out.into_string(),
+            "lock: stackly.lock (stale, macos-aarch64)\n  queue: not_locked\n"
+        );
+        let mut out = HumanWriter::new(false, jiff::Timestamp::UNIX_EPOCH, jiff::tz::TimeZone::UTC);
+        lock_lines(&mut out, &PlanLock::default());
+        assert_eq!(out.into_string(), "");
     }
 
     #[test]

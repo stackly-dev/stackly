@@ -1,11 +1,14 @@
-//! `stackly env plan [--file <path> | <environment>]` (spec 0044, *CLI*,
-//! AC-16): asks the daemon's `env.plan` for a file or for the manifest of
-//! a registered environment, and prints one table row per step with the
-//! summary line. The table goes to stdout first; then blockers, secrets,
-//! differences, and members no longer in the manifest go to stderr. Exit
-//! 0 when the plan can be applied, 2 with `cli.env_invalid` for a
-//! manifest that is not valid, 3 with `cli.env_plan_blocked` otherwise;
-//! the plan is the result each time.
+//! `stackly env plan [--file <path> | <environment>] [--locked]` (spec
+//! 0044, *CLI*, AC-16; spec 0045 AC-6, AC-17): asks the daemon's
+//! `env.plan` for a file or for the manifest of a registered environment,
+//! and prints one table row per step with the summary line. The table goes
+//! to stdout first; then the lock and local override lines, blockers,
+//! secrets, differences, and members no longer in the manifest go to
+//! stderr. Exit 0 when the plan can be applied, 2 with `cli.env_invalid`
+//! for a manifest that is not valid, 3 with `cli.env_plan_blocked`
+//! otherwise; the plan is the result each time. With `--locked`, a plan
+//! whose `lock.locked` is not true came from a daemon that does not know
+//! the mode and fails `cli.env_locked_unsupported` (exit 5).
 
 use std::path::PathBuf;
 
@@ -36,6 +39,10 @@ pub struct PlanArgs {
     /// A registered environment, by name or whole ID; its manifest is read
     #[arg(value_name = "ENVIRONMENT")]
     pub environment: Option<EnvironmentTarget>,
+    /// Use only the versions in stackly.lock; a missing or stale lock
+    /// blocks the plan
+    #[arg(long)]
+    pub locked: bool,
 }
 
 /// The `env plan` result: the plan as the daemon sent it, as JSON, and
@@ -67,17 +74,19 @@ impl Render for Planned {
     }
 }
 
-/// `env.plan` for `source`.
+/// `env.plan` for `source`, with the lock as the only source of versions
+/// when `locked`.
 ///
 /// # Errors
 ///
 /// The daemon's error, such as `env.manifest_unreadable` or
 /// `env.not_found`.
-pub async fn plan(cx: &mut Context, source: EnvSource) -> Result<EnvPlan, CliFailure> {
-    let call = Call::EnvPlan(EnvPlanParams {
-        source,
-        locked: false,
-    });
+pub async fn plan(
+    cx: &mut Context,
+    source: EnvSource,
+    locked: bool,
+) -> Result<EnvPlan, CliFailure> {
+    let call = Call::EnvPlan(EnvPlanParams { source, locked });
     match cx.call(call, CallSpec::control()).await? {
         Reply::EnvPlan(plan) => Ok(*plan),
         _ => Err(CliFailure::unexpected_reply(None)),
@@ -108,10 +117,13 @@ impl RunCommand for PlanArgs {
                 Err(failure) => return CommandOutput::failed(failure),
             },
         };
-        let plan = match plan(cx, source).await {
+        let plan = match plan(cx, source, self.locked).await {
             Ok(plan) => plan,
             Err(failure) => return CommandOutput::failed(failure),
         };
+        if self.locked && !plan.lock.locked {
+            return CommandOutput::failed(CliFailure::env_locked_unsupported());
+        }
         let mut planned = Planned::new(plan);
         if shows_text(cx, false) {
             cx.output.write_result_now(&planned);

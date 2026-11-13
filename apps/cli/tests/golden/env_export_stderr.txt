@@ -1,0 +1,2 @@
+skipped: postgres.socket: unix_endpoint
+skipped: cache: not_created

@@ -35,3 +35,28 @@ _Langkah diturunkan dari acceptance criteria spec 0045. `/check verify` menjalan
 - AC-20 · protokol 4.3, method, kode, fixture, schema
 - AC-21 · daemon root A ke root B; bagian "catalog tanpa target B" dibuktikan dengan lock yang hanya punya target lain (daemon) dan dengan catalog fixture dua target (core AC-7)
 - AC-16, AC-17 · Milestone 2; AC-18, AC-19 · Milestone 3
+
+## Milestone 2: `stackly env lock`, `plan --locked`, `export`
+
+### UI / manual
+
+- Tidak ada langkah manual di milestone ini; binary test berjalan terhadap `stacklyd` asli dengan catalog `providers/` tanpa unduhan.
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --test env lock::` → 7 test lulus: `env lock` atas `lock-written.json` menulis `updated postgres official/postgresql 18.5 -> 18.6` dan `removed old official/nats 2.15.1` ke stderr dan `Locked 1 services in /Users/dev/erp/stackly.lock.` ke stdout (golden `env_lock.txt`, `env_lock_stderr.txt`, `env_lock.json`), exit 0, `--json` dengan stderr kosong, `refresh` `none` dari `./stackly.yaml`; lock yang tidak berubah `<file> is up to date.` dengan baris `kept`; `--update` mengirim `all`, `--update --service a --service b` mengirim `services`, `--service` tanpa `--update` exit 2, alias tak dikenal exit 10 `env.service_not_found`, nama environment mengirim sumber `registered`; `lock-blocked.json` exit 3 `cli.env_lock_blocked` (`conflict`, `blockers` 1) dengan baris `blocked:` dan stdout kosong; manifest tidak valid exit 2 `cli.env_invalid`; `env plan --locked` mengirim `locked` true (tanpa flag false), atas `plan-locked-blocked.json` mencetak kolom `SOURCE`, `lock: stackly.lock (stale, macos-aarch64)`, alias basi, `local:` dengan finding nya, dan blocker (golden `env_plan_locked.txt`, `env_plan_locked_stderr.txt`), exit 3; balasan dengan `lock.locked` false exit 5 `cli.env_locked_unsupported` (`unsupported`) tanpa result dan tanpa tabel → AC-6, AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --test env export::` → 3 test lulus: stdout tepat `text` dari `export-dotenv.json` (golden `env_export.txt`), stderr `skipped: postgres.socket: unix_endpoint` dan `skipped: cache: not_created` (golden `env_export_stderr.txt`), exit 0; `--format shell` mengirim `shell`; `--json` membawa `EnvExport` dengan stderr kosong; `--quiet` tetap mencetak `text`; semua dilewati tetap exit 0 dengan stdout kosong; nama tak dikenal exit 10 `cli.environment_not_found`, file yang belum terdaftar exit 10 `env.not_registered` → AC-17
+- [ ] `cargo test -p stackly-cli --test env plan::` → kolom `SOURCE` (`lock`, `-`) di golden `env_plan.txt`, baris `lock:` dan `local:` dengan override di `env_plan_stderr.txt`, `lock: stackly.lock (absent)` di `env_plan_blocked_stderr.txt`; manifest tidak valid dengan lock valid dan file override tidak mencetak baris `lock:` maupun `local:`, hanya finding manifest (golden `env_plan_invalid_stderr.txt`, K23) → AC-12, AC-17
+- [ ] `cargo build -p stacklyd -p xtask && cargo test -p stackly-cli --test env stacklyd::a_real_daemon_locks` → terhadap `stacklyd` asli: `env plan --locked` tanpa lock exit 3 dengan `env.lock_missing`; `env lock` hanya menambah `stackly.lock` di folder manifest, `added cache official/valkey 9.1.*` dan `added queue official/nats 2.15.*`, `Locked 2 services in …stackly.lock.`; jalan kedua `… is up to date.`, baris `kept`, byte sama; `env plan --locked` exit 0, `SOURCE` `lock` di enam baris, `lock: stackly.lock (in_sync, …)`; `--update --service ghost` exit 10; export sebelum import exit 10 `env.not_registered`, sesudah import exit 0 dengan stdout kosong dan satu `skipped: <service>: not_created` per service → AC-6, AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --test env wording::` → perbaikan rendah verify F44: error import `env.name_taken` di mode teks `error: environment erp-development is registered at ~/old/erp/stackly.yaml` dengan hint `to use this file for it, run stackly env import --relink` (golden `env_import_name_taken_stderr.txt`), `--json` tetap membawa pesan daemon; baris `blocked: env.name_taken:` plan memakai pesan dan hint yang sama; `env remove --yes` stderr kosong; dengan stdout dan stderr di satu pipe, tabel dan baris `Plan:` muncul sebelum `blocked:` → spec 0044 AC-11, AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --bin stackly counts_add_the_omitted` dan `the_lock_line` → `counts` menambah `omitted` ke error dan menghitung warning dari finding yang dikirim; baris `lock:` dengan state, target, dan alias basi, kosong untuk daemon tanpa lock → spec 0044 AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --bin stackly there_is_one_constructor_per_cli_code` → `cli.env_lock_blocked` (`conflict`, exit 3) dan `cli.env_locked_unsupported` (`unsupported`, exit 5) mengikuti katalog protokol → AC-6, AC-16
+- [ ] `cargo run -q -p stackly-cli -- env lock --help` dan `env export --help` → `--update`, `--service <ALIAS>`, `--format <dotenv|shell>`, dan exit code di teks bantuan → AC-16, AC-17
+- [ ] `cargo xtask check-deps` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-6 · bagian CLI: `--locked` dan `cli.env_locked_unsupported` (bagian daemon di Milestone 1); `stackly env up --locked` milik spec 0046
+- AC-16 · `stackly env lock`, semua exit code dan `--json`
+- AC-17 · `stackly env plan --locked` dengan baris `lock:`, `local:`, dan kolom `SOURCE`; `stackly env export`; kesamaan dengan teks yang disalin GUI menunggu Milestone 3 (GUI menyalin `EnvExport.text` yang sama)
+- AC-18, AC-19 · Milestone 3

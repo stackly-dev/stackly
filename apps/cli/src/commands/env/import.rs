@@ -83,7 +83,7 @@ impl RunCommand for ImportArgs {
         let stackly_protocol::env::EnvSource::File(path) = source.clone() else {
             return CommandOutput::failed(CliFailure::unexpected_reply(None));
         };
-        let plan = match plan(cx, source).await {
+        let plan = match plan(cx, source, false).await {
             Ok(plan) => plan,
             Err(failure) => return CommandOutput::failed(failure),
         };
