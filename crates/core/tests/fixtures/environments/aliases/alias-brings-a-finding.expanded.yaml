@@ -1,0 +1,18 @@
+# alias-brings-a-finding.yaml with its aliases written out.
+apiVersion: stackly/v1alpha1
+kind: Environment
+metadata:
+  name: shop
+services:
+  primary:
+    provider: official/valkey
+    endpoints:
+      client: {port: 16379}
+    secretRefs:
+      password: SENTINELalias7k
+  replica:
+    provider: official/valkey
+    endpoints:
+      client: {port: 16379}
+    secretRefs:
+      password: SENTINELalias7k

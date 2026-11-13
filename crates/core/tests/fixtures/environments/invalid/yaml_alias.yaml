@@ -1,4 +1,4 @@
-# Expects at least one yaml_alias finding (spec 0044, Aturan validasi).
+# Expects a yaml_alias finding at services.web.<< (spec 0044, YAML yang diterima).
 apiVersion: stackly/v1alpha1
 kind: Environment
 metadata:
@@ -6,4 +6,5 @@ metadata:
 services:
   api: &base
     provider: testing/fake
-  web: *base
+  web:
+    <<: *base
