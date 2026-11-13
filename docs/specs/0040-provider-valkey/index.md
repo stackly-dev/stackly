@@ -1,7 +1,7 @@
 # 0040. Provider Valkey
 
 **Date**: 2026-11-12
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 

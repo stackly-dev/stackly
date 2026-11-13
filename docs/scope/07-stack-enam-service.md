@@ -4,7 +4,7 @@
 
 Lima provider wajib dibangun penuh: NATS dilanjutkan dari fitur 23, lalu Valkey, Traefik, MySQL, dan ClickHouse. Manifest dan template dibuat lewat SDK dari fase 06; probe native atau adapter bawaan yang dibutuhkan provider ditambahkan ke core lewat review, dan jumlah perubahan core per provider dicatat sebagai ukuran RISK-07. Tiap provider menjalani journey yang sama dengan PostgreSQL: catalog, install, create, start, readiness, connection, dan dua instance yang terisolasi. Fase ini selesai kalau setiap provider lulus bagian lifecycle, readiness, persistence, dan endpoint dari matrix minimum di PRD bagian 32.2 tanpa label supported palsu; bagian backup dan restore menyusul di fase 09.
 
-### 39. Provider NATS & JetStream · in-progress
+### 39. Provider NATS & JetStream · done
 
 Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring di loopback, credential, server name unik, batas resource, dan dua instance.
 
@@ -22,7 +22,7 @@ Lanjutan dari fitur 23: JetStream on/off, `store_dir` per instance, monitoring d
 - [x] Verify it: `/check verify provider NATS & JetStream`
 - [x] Test it: `/test provider NATS & JetStream`
 
-### 40. Provider Valkey · in-progress
+### 40. Provider Valkey · done
 
 Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan stop, dengan penjelasan jujur soal mode volatile versus durable.
 
@@ -41,7 +41,7 @@ Config, bind dan auth, PING, direktori persistent, kebijakan RDB/AOF, log, dan s
 - [x] Verify it: `/check verify provider Valkey`
 - [x] Test it: `/test provider Valkey`
 
-### 41. Provider Traefik & routing lokal · in-progress
+### 41. Provider Traefik & routing lokal · done
 
 Entrypoint loopback, routing lewat file provider dengan namespace per instance, health endpoint terpisah, validasi, dan apply yang aman. HTTPS hanya aktif dengan certificate yang diberikan pengguna.
 
@@ -61,7 +61,7 @@ Entrypoint loopback, routing lewat file provider dengan namespace per instance, 
 - [x] Verify it: `/check verify provider Traefik & routing lokal`
 - [x] Test it: `/test provider Traefik & routing lokal`
 
-### 42. Provider MySQL · in-progress
+### 42. Provider MySQL · done
 
 Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readiness lewat query terautentikasi berhak minimum, serta shutdown terkontrol sesuai versi MySQL yang dipilih.
 
@@ -80,7 +80,7 @@ Path data, config, temp, dan log yang terisolasi, bind dan auth eksplisit, readi
 - [x] Verify it: `/check verify provider MySQL`
 - [x] Test it: `/test provider MySQL`
 
-### 43. Provider ClickHouse · in-progress
+### 43. Provider ClickHouse · done
 
 Binary native yang dipilih, path storage, temp, log, user files, dan config per instance, port HTTP dan native TCP, auth, serta readiness lewat query. Cluster, replikasi, dan Keeper tidak diaktifkan.
 
