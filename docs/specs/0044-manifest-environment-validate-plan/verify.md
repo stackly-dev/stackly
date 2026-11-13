@@ -43,3 +43,27 @@ _Bagian ini mencakup Build plan langkah 1 sampai 4 (domain dan storage, core man
 - AC-24 · modul `env`, enam method, area `env`, fixture `protocols/fixtures/env/`, protokol 4.2, schema editor; skenario fixture `environment-partially-ready` spec 0068 milik langkah 7
 - AC-4, AC-6 (bagian socket) · menunggu langkah 5
 - AC-16 sampai AC-23, AC-25 (CLI dan GUI) · milik Milestone 2 dan 3
+
+## Milestone 2: stackly env
+
+Langkah 6 Build plan. Golden dan test di bawah memakai scripted daemon yang menjawab dengan fixture `protocols/fixtures/env/`; binary test terhadap `stacklyd` sungguhan dengan provider `fake` menunggu handler `env.*` langkah 5 masuk `main` (lihat coverage).
+
+### UI / manual
+
+Tidak ada langkah manual. Semua perintah di bawah jalan tanpa terminal interaktif, dengan root test sementara.
+
+### Commands
+
+- [ ] `cargo test -p stackly-cli --test env validate` → manifest valid mencetak `ok erp-development 2 services sha256:<digest>` dan exit 0; manifest tidak valid menulis satu baris `<file>: <location>: <code>: <message>` per finding lalu `2 error(s), 0 warning(s)` ke stderr, stdout kosong, exit 2 dengan `cli.env_invalid` (`errors` 2, `warnings` 0), dan `result` `--json` tetap `EnvValidation`; `--file` default `./stackly.yaml`, path relatif dikirim absolut dan dinormalkan (`./a/../b/./stackly.yaml` menjadi `<cwd>/b/stackly.yaml`) → AC-16
+- [ ] `cargo test -p stackly-cli --test env plan` → `plan-applicable.json` mencetak tabel `ACTION SERVICE INSTANCE PROVIDER VERSION ENDPOINTS` dengan baris `install`, `create`, `start` untuk `postgres` dan `keep` untuk `cache`, lalu `Plan: 1 to install, 1 to create, 1 to start, 1 to keep.`; `secrets:`, `differs:`, dan `not in manifest:` ke stderr; exit 0. `plan-blocked.json` exit 3 dengan `cli.env_plan_blocked` (`blockers` 2) dan satu baris `blocked:` per blocker beserta hint nya; manifest tidak valid exit 2 dengan `cli.env_invalid`; `result` `--json` selalu `EnvPlan`, stderr kosong dengan `--json`. Nama atau UUID utuh (huruf besar juga) dikirim sebagai sumber `registered`; nama yang tidak dikenal exit 10 dengan `cli.environment_not_found` sebelum `env.plan` dikirim; `--file` bersama nama ditolak sebagai usage (exit 2) → AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --test env manage` → import mengirim `env.plan` lalu `env.import` dengan `expectedManifestSha256` dari plan dan idempotency key baru setiap kali, mencetak `Imported environment erp-development.` dengan baris Name, ID, File, Status, Services, dan `Already imported.` saat revision tidak berubah; `--relink` mengirim `relinkEnvironmentId` hanya saat `registration` `name_taken`; manifest tidak valid tidak pernah dikirim ke `env.import` (exit 2). `env list` mencetak `NAME STATUS READY FILE`, `No environments.` saat kosong, dan `{ items }` dengan `--json`. `env remove` tanpa `--yes` dan tanpa terminal gagal `cli.confirmation_required` (`flag` `--yes`) sebelum `env.remove`; dengan `--yes` mengirim id dan revision dari `env.list` dan mencetak `Removed environment erp-development. Instances and data are kept.`; nama yang tidak dikenal exit 10 → AC-17
+- [ ] `cargo test -p stackly-cli --test instance list` → kolom `ENVIRONMENT` sesudah `OWNERSHIP`: nama environment dipisah koma dalam urutan daemon (`erp-development, billing`), `-` untuk instance tanpa environment; golden `instance_list.txt`, `instance_list_failed.txt`, dan `instance_list.json` (field `environments`) diperbarui → AC-15 (bagian CLI)
+- [ ] `cargo test -p stackly-cli --bin stackly` → unit test: `path::absolute` dan `home_masked`, `EnvironmentTarget` (UUID utuh dalam huruf apa pun adalah id), hitungan ringkasan plan menghitung setiap `start_instance` termasuk milik item `create`, baris finding `warning: `, dan satu constructor per kode `cli.*` (tiga kode `cli.env*` ikut) → AC-16, AC-17
+- [ ] `cargo test -p stackly-cli --no-fail-fast`, `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps` → lulus
+
+### Acceptance-criteria coverage
+
+- AC-16 · `apps/cli/src/commands/env/validate.rs` dan `plan.rs`, golden `env_validate*`, `env_plan*`; kesetaraan finding dan blocker dengan GUI terjamin karena CLI menulis apa yang `env.validate` dan `env.plan` kirim tanpa menghitung ulang
+- AC-17 · `import.rs`, `list.rs`, `remove.rs`, `target.rs`; konfirmasi memakai aturan `ConfirmArgs` spec 0008 lewat `confirm_action`
+- AC-15 · kolom `ENVIRONMENT` di `apps/cli/src/commands/instance/list.rs`; isi `environments` dari daemon menunggu cache keanggotaan langkah 5
+- Binary test `stackly env` terhadap `stacklyd` dengan provider `fake` (validate, plan, import, list, remove, dan kolom `ENVIRONMENT` pada instance yang dibuat lewat environment) · menunggu handler langkah 5 di `main`

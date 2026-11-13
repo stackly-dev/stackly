@@ -6,7 +6,7 @@
 //! Exit 0 when the package is publishable; otherwise
 //! `cli.provider_invalid` (exit 2) with the result kept.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::Args;
 use serde::Serialize;
@@ -16,6 +16,7 @@ use stackly_protocol::provider::{
 use stackly_protocol::{Call, Reply};
 
 use crate::commands::RunCommand;
+use crate::commands::path::absolute;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;
@@ -113,59 +114,4 @@ fn counts(validation: &ProviderValidation) -> (u64, u64) {
         .count() as u64;
     let total = u64::from(validation.finding_count);
     (total.saturating_sub(warnings), warnings)
-}
-
-/// `dir` joined to the current folder when relative, then normalized
-/// without touching the filesystem: `.` is dropped and `..` removes the
-/// component before it. `import` uses it too.
-///
-/// # Errors
-///
-/// `cli.usage` when the current folder cannot be read.
-pub(super) fn absolute(dir: &Path) -> Result<PathBuf, CliFailure> {
-    let joined = if dir.is_absolute() {
-        dir.to_path_buf()
-    } else {
-        let cwd = std::env::current_dir().map_err(|error| {
-            CliFailure::usage(
-                "invalid_value",
-                &format!("cannot read the current folder: {error}"),
-            )
-        })?;
-        cwd.join(dir)
-    };
-    Ok(normalize(&joined))
-}
-
-fn normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                out.pop();
-            }
-            other => out.push(other.as_os_str()),
-        }
-    }
-    out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalizing_drops_dots_and_folds_parents_without_the_filesystem() {
-        assert_eq!(
-            normalize(Path::new("/a/./b/../c/providers/./mytool")),
-            Path::new("/a/c/providers/mytool")
-        );
-        assert_eq!(normalize(Path::new("/../x")), Path::new("/x"));
-        assert_eq!(
-            absolute(Path::new("/srv/p/../q")).unwrap(),
-            Path::new("/srv/q")
-        );
-        assert!(absolute(Path::new("rel")).unwrap().is_absolute());
-    }
 }

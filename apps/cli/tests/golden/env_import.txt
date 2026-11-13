@@ -1,0 +1,6 @@
+Imported environment erp-development.
+Name      erp-development
+ID        0192f3a7-0000-7000-8000-0000000000e1
+File      /Users/dev/erp/stackly.yaml
+Status    partially_ready
+Services  1 ready of 2

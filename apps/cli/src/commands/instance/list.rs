@@ -85,6 +85,7 @@ impl Render for InstanceList {
                     "readiness",
                     "health",
                     "ownership",
+                    "environment",
                 ],
                 &rows,
             );
@@ -115,7 +116,20 @@ fn row(instance: &InstanceSummary) -> Vec<Cell> {
             health_tone(instance.health.state),
         ),
         Cell::text(&wire_name(&instance.ownership)),
+        Cell::text(&environment_names(instance)),
     ]
+}
+
+/// The names of the environments of `instance`, comma separated in the
+/// daemon's order (the `dedicated` one first), empty for none (spec 0044
+/// AC-15).
+fn environment_names(instance: &InstanceSummary) -> String {
+    instance
+        .environments
+        .iter()
+        .map(|environment| environment.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// `<state>` alone for a good state, `<state> (<reason>)` for the rest, and

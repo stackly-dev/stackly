@@ -619,6 +619,45 @@ impl CliFailure {
         )
     }
 
+    /// `cli.env_invalid` (spec 0044 AC-16): the manifest has `errors`
+    /// error findings and `warnings` warning findings. Exits 2;
+    /// `stackly env validate` and `plan` keep their result.
+    #[must_use]
+    pub fn env_invalid(errors: u64, warnings: u64) -> Self {
+        Self::local(
+            ErrorBody::new(&cli::ENV_INVALID, "the environment manifest is not valid")
+                .with_detail("errors", errors.to_string())
+                .with_detail("warnings", warnings.to_string())
+                .with_hint("Fix each finding above, then validate again."),
+        )
+    }
+
+    /// `cli.env_plan_blocked` (spec 0044 AC-16): the manifest is valid but
+    /// the plan has `blockers` blockers. Exits 3; `stackly env plan` keeps
+    /// the plan as result.
+    #[must_use]
+    pub fn env_plan_blocked(blockers: u64) -> Self {
+        Self::local(
+            ErrorBody::new(&cli::ENV_PLAN_BLOCKED, "the plan has blockers")
+                .with_detail("blockers", blockers.to_string())
+                .with_hint("Each blocker above says what stands in the way."),
+        )
+    }
+
+    /// `cli.environment_not_found` (spec 0044 AC-17): no environment has
+    /// the name (or the whole ID) `name`. Exits 10.
+    #[must_use]
+    pub fn environment_not_found(name: &str) -> Self {
+        Self::local(
+            ErrorBody::new(
+                &cli::ENVIRONMENT_NOT_FOUND,
+                format!("no environment named {name}"),
+            )
+            .with_detail("name", name)
+            .with_hint("list environments with stackly env list"),
+        )
+    }
+
     /// `cli.interrupted`: Ctrl+C stopped a daemon command at `state`
     /// (`waiting_for_daemon`, `waiting_for_instances` while a restart plan runs, `confirmation` or `restart_request` before the
     /// restart is sent or while it is sent, or `agent_call` after a macOS call that
@@ -748,6 +787,9 @@ mod tests {
             CliFailure::connection_unavailable(Some("uri"), "port_not_assigned", false),
             CliFailure::doctor_found_errors(2, 1),
             CliFailure::provider_invalid(1, 0),
+            CliFailure::env_invalid(2, 0),
+            CliFailure::env_plan_blocked(1),
+            CliFailure::environment_not_found("erp-development"),
         ]
     }
 

@@ -25,8 +25,8 @@ use super::local::{
     shows_text, to_stderr,
 };
 use super::outcome::Outcome;
-use super::validate::absolute;
 use crate::commands::RunCommand;
+use crate::commands::path::absolute;
 use crate::context::Context;
 use crate::failure::CliFailure;
 use crate::output::CommandOutput;

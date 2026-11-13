@@ -11,7 +11,7 @@ mod copy;
 mod import;
 mod inspect;
 mod list;
-mod local;
+pub(crate) mod local;
 mod outcome;
 mod remove;
 pub mod render;

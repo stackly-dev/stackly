@@ -1,0 +1,6 @@
+secrets:
+  postgres superuserPassword local:erp/postgres/admin: unregistered
+differs:
+  cache endpoint.client.port: manifest 6380, instance 6379
+not in manifest:
+  old erp-old (dedicated)
