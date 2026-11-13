@@ -167,7 +167,9 @@ pub enum ChildStart<T> {
 }
 ```
 
-`stacklyd` mengimplementasikannya (`apps/daemon/src/ipc/env/children.rs`) dengan memanggil fungsi yang sama dengan handler `runtime.install`, `instance.create`, dan `instance.start`, yang dipecah menjadi bagian "params ke permintaan internal" dan bagian "permintaan internal ke `begin`". Dengan begitu gate trust, `gather` dan `evaluate` create, `install_precheck`, dan cek data spec 0025 berjalan persis seperti untuk permintaan klien. `BusyPolicy` anak sama dengan handler nya (`Queue` untuk install dan start, `Reject` untuk create). Penolakan saat memulai anak (`Err(FailureError)`: error precheck, atau `BeginError` yang dipetakan lewat `ipc::operation::begin_error` yang sudah ada, misalnya `resource.busy`, `operation.queue_full`, `operation.recovery_required`, `daemon.restart_pending`) dan operasi anak yang berakhir `failed`, `cancelled`, atau `needs_recovery` sama sama menjadi `failed` untuk service itu, dengan kode error anak; `needs_recovery` memakai kode `operation.recovery_required`. Dua pengecualian:
+`ChildOrigin` dipakai juga oleh port `DownChildren` [spec 0047](../0047-env-down-shared-instance-lease/index.md), jadi tipenya tinggal di `crates/core/src/environment/children.rs` (`environment::children`), bukan di `environment::up::children` *(diselaraskan 2026-11-13 dengan spec 0047)*.
+
+`stacklyd` mengimplementasikannya (`apps/daemon/src/ipc/env/children.rs`) dengan memanggil fungsi yang sama dengan handler `runtime.install`, `instance.create`, dan `instance.start`, yang dipecah menjadi bagian "params ke permintaan internal" dan bagian "permintaan internal ke `begin`". Dengan begitu gate trust, `gather` dan `evaluate` create, `install_precheck`, dan cek data spec 0025 berjalan persis seperti untuk permintaan klien. `BusyPolicy` anak sama dengan handler nya (`Queue` untuk install dan start, `Reject` untuk create). Kalimat ini berlaku untuk anak Up saja: anak `stop_instance` Down memakai `Queue` dan precheck sendiri, padahal stop klien `Reject` (spec 0047, *Operasi `environment_down`*); `BusyPolicy` dan precheck sebuah anak dipilih port yang memulainya. Penolakan saat memulai anak (`Err(FailureError)`: error precheck, atau `BeginError` yang dipetakan lewat `ipc::operation::begin_error` yang sudah ada, misalnya `resource.busy`, `operation.queue_full`, `operation.recovery_required`, `daemon.restart_pending`) dan operasi anak yang berakhir `failed`, `cancelled`, atau `needs_recovery` sama sama menjadi `failed` untuk service itu, dengan kode error anak; `needs_recovery` memakai kode `operation.recovery_required`. Dua pengecualian:
 
 - Penolakan `daemon.restart_pending` (gerbang quiesce): driver berhenti memulai anak baru, menunggu anak yang berjalan, dan menandai service yang belum berakhir `cancelled`. Up berakhir `failed` dengan `env.up_incomplete`, seperti Up yang terputus.
 - Anak `start_instance` yang masih `queued` lebih lama dari `CHILD_QUEUE_TIMEOUT_SECONDS` 120 (instance nya dikunci operasi lain yang lama) dibatalkan induknya, dan service itu `failed` di tahap `start` dengan kode `resource.busy`. Dengan begitu setiap service pasti berakhir.
@@ -203,7 +205,7 @@ Fungsi murni `stackly_core::environment::up::graph` (tanpa IO, diuji tanpa fake)
    - `running` dan `ready`: `ready`.
    - `running` belum ready, `starting`, `initializing`, `recovering`, `stopping`: tunggu status instance sampai `running` dan `ready`, sampai lifecycle keluar dari lima nilai itu (lalu turunkan aksi lagi), atau sampai `SERVICE_SETTLE_TIMEOUT_SECONDS` 120 lewat sejak service ini mulai (`failed`, tahap `start`, kode `env.service_not_ready`). `stopping` ditunggu, bukan langsung di start, karena `start_instance` menolak instance yang sedang `stopping` (`supervisor.instance_stopping`).
    - `stopped`, `failed`: operasi anak `start_instance`. Hasil `succeeded` berarti `ready` sesudah status instance dibaca sekali lagi (`running` dan `ready`); selain itu `failed` atau `needs_secret` dengan kode error anak.
-   - `uninitialized`: operasi anak `start_instance` juga, yang gagal dengan kode supervisor nya (`supervisor.not_initialized`). Up tidak pernah menginisialisasi instance yang sudah ada.
+   - `uninitialized`: operasi anak `start_instance` juga, yang gagal dengan kode supervisor nya (`supervisor.not_initialized`). Up tidak pernah menginisialisasi instance yang sudah ada. Sejak update [spec 0044](../0044-manifest-environment-validate-plan/index.md) tanggal 2026-11-13, plan sudah menolak instance seperti ini sebagai blocker `env.instance_blocked` ber `reason` `not_initialized`, jadi cabang ini hanya tercapai kalau keadaan instance berubah sesudah precheck.
    - `unknown`, `retained`, atau instance ber `blocker` yang menolak start: `failed`, tahap `start`, kode `env.instance_blocked`.
 
    Lifecycle dibaca dari baris instance di registry dan readiness dari `Supervisor::status(id)` yang sudah ada, di polling setiap `UP_POLL_INTERVAL` 250 milidetik selama sebuah service menunggu; tidak ada langganan event baru. Readiness `unknown` atau `stale` berarti "belum", tidak pernah "gagal".
@@ -277,7 +279,7 @@ Satu method baru. Lewat handshake dan peer user yang sama (spec 0006).
 **DTO** (camelCase; enum terbuka berakhir `unrecognized`; field baru di tipe yang sudah ada memakai `#[serde(default)]`):
 
 - `EnvUpParams`: `locked` default false. `Validate`: aturan path `EnvSource`, digest 64 hex, key spec 0006.
-- `EnvironmentSummary` mendapat `activeOperation?: EnvOperationRef { id, kind: OperationKind }`: operasi `environment_up` (dan nanti `environment_down`) yang belum berakhir untuk environment itu, dari `OperationEngine::list` dengan `active_only` dan `resource` environment itu (satu panggilan per environment di `env.get`; untuk `env.list`, satu panggilan `active_only` yang disaring per resource).
+- `EnvironmentSummary` mendapat `activeOperation?: EnvOperationRef { id, kind: OperationKind }`: operasi `environment_up` atau `environment_down` (spec 0047) yang belum berakhir untuk environment itu, dari `OperationEngine::list` dengan `active_only` dan `resource` environment itu (satu panggilan per environment di `env.get`; untuk `env.list`, satu panggilan `active_only` yang disaring per resource).
 - `EnvironmentDetail` mendapat `lastUp?: EnvUpReport { operationId, state: UpState, startedAt, finishedAt?, services: [ServiceUpState] }`; `UpState` `running`, `succeeded`, `failed`, `cancelled`, `interrupted`; `ServiceUpState { alias, phase: UpPhase, stage?: UpStage, code?, dependency?, dependencyReason?: DependencyFailure, waitingOn: [alias], operationId?, references: [NeedsSecretItem] }`; `UpStage` `install`, `create`, `start`, `wait`; `DependencyFailure` `failed`, `timeout`, `not_ready`. `references` memakai `NeedsSecretItem` modul `secret` yang sudah ada (`reference`, `reason`, `generateAllowed`).
 - `ServiceInstance` mendapat `endpoints: [EndpointStatus]` (tipe modul `instance` yang sudah ada, dengan `port` yang benar benar di bind dan `bound`).
 - `ServiceNotReady` mendapat `phase?`, `waitingOn`, `references`, `dependency?`, `dependencyReason?`, `stage?`, `code?`, `operationId?`; `NotReadyReason` mendapat `bringing_up`, `needs_secret`, `dependency_not_ready`, `up_failed`.
@@ -320,11 +322,11 @@ Exit code hanya dari kategori (spec 0008): plan tidak valid 2, terblokir 3, `--l
 
 Semua komponen dari `Components/`, `State/`, `Status/`; copy bahasa Inggris; spec menang atas mockup untuk perilaku.
 
-**Toolbar halaman detail**: Validate, lalu kelompok kanan dengan tempat Down (spec 0047) dan tombol accent Up…. Plan… tidak lagi ada; sheet yang sama dibuka Up…. Up… nonaktif dengan alasan saat `activeOperation` terisi ("Already bringing up") atau saat `manifestState` `missing`, `unreadable`, `invalid`, atau `name_changed` (alasan dari banner manifest).
+**Toolbar halaman detail**: Validate, lalu kelompok kanan dengan tempat Down (spec 0047) dan tombol accent Up…. Plan… tidak lagi ada; sheet yang sama dibuka Up…. Up… nonaktif dengan alasan saat `activeOperation` terisi ("Already bringing up"), atau "Bringing down" saat `activeOperation.kind` `environment_down` (spec 0047), atau saat `manifestState` `missing`, `unreadable`, `invalid`, atau `name_changed` (alasan dari banner manifest).
 
 **Sheet plan** (tambahan atas spec 0044): tombol Cancel dan Bring Up (accent, tombol default). Bring Up nonaktif saat plan tidak `applicable`, dengan alasan "Resolve the blockers above first." Baris "Needs secret: {reference}" mendapat tombol Set…. Saat `needsSecrets` di atas 0 untuk reference `missing` atau `unregistered`, Bring Up tetap aktif; menekannya menghasilkan `secret.needs_secret`, yang membuka `SecretEntrySheet` (AC-21). Dari alur Import… tombolnya tetap Cancel dan Import (spec 0044); Up dilakukan dari halaman detail sesudah import.
 
-**Selama Up** (`activeOperation` terisi): `StateBanner` informative di atas halaman, judul "Bringing up… {done} of {total}", aksi Cancel hanya kalau `OperationSummary.cancel` mengizinkan, dan Show in Activity. Kolom Status tabel Services menampilkan *Copy phase* untuk service yang belum berakhir; service yang sudah berakhir menampilkan status instance seperti biasa.
+**Selama Up** (`activeOperation` terisi dengan `kind` `environment_up`; banner Down milik spec 0047): `StateBanner` informative di atas halaman, judul "Bringing up… {done} of {total}", aksi Cancel hanya kalau `OperationSummary.cancel` mengizinkan, dan Show in Activity. Kolom Status tabel Services menampilkan *Copy phase* untuk service yang belum berakhir; service yang sudah berakhir menampilkan status instance seperti biasa.
 
 **Copy phase** (`StatusAppearance.upPhase(phase:)`, ditambahkan ke `apps/macos/design.md`):
 
@@ -350,9 +352,9 @@ Banner yang sama dipakai saat `readyCount` 0 dan `lastUp.state` `failed` atau `i
 
 **Menu baris service**: untuk service yang belum dibuat, item "Create with Up…" (membuka sheet plan) menggantikan Show Plan….
 
-**Activity dan Overview**: `OperationKind.environment_up` berjudul "Bring up environment {name}" (nama dari `EnvironmentStore` lewat resource operasi; "Bring up environment" kalau tidak dikenal). Operasi dengan `parent` ditampilkan bersarang di bawah induknya dan tidak dihitung sendiri di ringkasan Overview. Label status "Partial" (nada caution) dipakai saat `failure.error.code` `env.up_incomplete` dan `details.ready` di atas 0, dengan catatan "{ready} of {total} services ready".
+**Activity dan Overview** ("Activity" di spec ini adalah halaman Operations [spec 0035](../0035-operations-activity-audit/index.md) yang dibuka lewat `openOperation`, bukan tab Activity per instance): `OperationKind.environment_up` berjudul "Bring up environment {name}" (nama dari `EnvironmentStore` lewat resource operasi; "Bring up environment" kalau tidak dikenal). Operasi dengan `parent` ditampilkan bersarang di bawah induknya dan tidak dihitung sendiri di ringkasan Overview. Label status "Partial" (nada caution) dipakai saat `failure.error.code` `env.up_incomplete` dan `details.ready` di atas 0, dengan catatan "{ready} of {total} services ready".
 
-**Sidebar, daftar, Overview Environments**: saat `activeOperation` terisi, teks status diganti "Bringing up…" (informative, `arrow.triangle.2.circlepath`); hitungan `ready/total` tetap.
+**Sidebar, daftar, Overview Environments**: saat `activeOperation` terisi, teks status diganti "Bringing up…" (informative, `arrow.triangle.2.circlepath`), atau "Bringing down…" saat `kind` nya `environment_down` (spec 0047); hitungan `ready/total` tetap.
 
 **Onboarding**: `OnboardingCopy.commandExamples` menjadi `stackly instance list`, `stackly env up ~/Code/erp`, `stackly doctor`; detail baris "Environments as files" menjadi "A stackly.yaml per project. Plan, then bring everything up in order."
 
@@ -443,12 +445,12 @@ Tidak ada variabel environment atau credential baru.
 
 - `Registry::leases(instance, LeaseFilter::Unreleased)` untuk setiap member, lalu `evaluate_stop(StopRequest::EnvironmentDown(id))` spec 0004 untuk memutuskan stop.
 - `environment_instances.ownership` dan `dependency_conditions`: edge yang dipakai Up terakhir, untuk urutan berhenti terbalik. Member tanpa edge (misalnya `detached`) tidak punya urutan.
-- `environments.last_operation_id` dan `last_up`: Down boleh menulis `last_operation_id`; kalau Down mengosongkan atau mengganti `last_up`, itu keputusan spec 0047. Alasan `dependency_not_ready` dan `up_failed` hanya ditampilkan untuk service yang sekarang diam, jadi laporan lama tidak mengganggu sesudah Down.
+- `environments.last_operation_id` dan `last_up`: Down boleh menulis `last_operation_id`; kalau Down mengosongkan atau mengganti `last_up`, itu keputusan spec 0047. Diputuskan spec 0047 (AC-4, K8): commit `release` Down mengosongkan `last_up` dan menulis `last_operation_id`. Alasan `dependency_not_ready` dan `up_failed` hanya ditampilkan untuk service yang sekarang diam, jadi laporan lama tidak mengganggu sesudah Down.
 - Start environment tidak menulis lease `manual` (`StartTrigger::Environment`). Jadi instance yang hanya dinyalakan Up tidak punya demand lain, dan `evaluate_stop` boleh menghentikannya; instance yang juga kamu start sendiri punya lease `manual` dan tetap jalan.
 
 **Serialisasi**
 
-- Up memegang `LockKey::Environment(id)` dan `LockKey::EnvironmentName(name)` selama berjalan dan menolak Up kedua dengan `BusyPolicy::Reject`. Down untuk environment yang sama memakai kunci yang sama; apakah ia antre atau membatalkan Up yang berjalan diputuskan spec 0047.
+- Up memegang `LockKey::Environment(id)` dan `LockKey::EnvironmentName(name)` selama berjalan dan menolak Up kedua dengan `BusyPolicy::Reject`. Down untuk environment yang sama memakai kunci yang sama; apakah ia antre atau membatalkan Up yang berjalan diputuskan spec 0047. Diputuskan spec 0047 (AC-3, K2): Down antre dengan `BusyPolicy::Queue` dan meminta cancel setiap Up yang belum berakhir pada environment itu; Up yang datang selagi Down berjalan atau antre ditolak `resource.busy` oleh `BusyPolicy::Reject` Up sendiri.
 - Up mencatat lease lebih dulu (commit), baru membaca lifecycle instance, dan instance `stopping` dinyalakan lagi lewat `start_instance` yang antre di lock instance. Supaya AC-073 terpenuhi dari kedua sisi, Down perlu memutuskan stop dan melepas lease nya dalam satu `commit_guarded` yang membaca lease di dalam guard, lalu menghentikan instance lewat operasi anak `stop_instance` yang mengunci instance itu.
 - Down bisa memakai mesin yang sama: `OperationKind::is_coordinator()`, `Origin::Child`, `wait_final`, `UpBoard` atau padanannya, dan port sejenis `UpChildren`. `recover` hanya menutup anak antre berjenis create dan start; kalau Down memulai anak `stop_instance`, aturan untuk jenis itu diputuskan spec 0047.
 
@@ -516,7 +518,7 @@ Urutan mengikuti pendekatan Journey: jalur "tinjau plan, Bring Up, lihat progres
 **Negative / tradeoffs**:
 
 - Engine yang sudah stabil mendapat tiga konsep baru (kelas pengatur, `Origin::Child`, `wait_final`) dan satu aturan `recover` baru, dan handler install, create, dan start harus dipecah supaya bisa dipanggil dari dalam daemon. Review langkah 1 dan 6 perlu teliti.
-- `planDigest` spec 0044 saat ini ikut memuat aksi turunan lifecycle, jadi instance yang berubah keadaan di antara plan dan Bring Up menghasilkan `env.plan_changed` dan kamu harus meninjau plan lagi, sampai usulan untuk spec 0044 di *Update spec lain* diterapkan.
+- `planDigest` spec 0044 tidak lagi memuat aksi turunan lifecycle instance yang sudah ada (update spec 0044 tanggal 2026-11-13, dari usulan spec ini), jadi instance yang berhenti atau menyala di antara plan dan Bring Up tidak menghasilkan `env.plan_changed`. Perubahan lain pada plan tetap menghasilkannya, dan kamu meninjau plan lagi.
 - Progress per service di layar bergantung pada event operasi anak, jadi phase `waiting` baru terlihat pada muat ulang berikutnya, bukan seketika.
 - Satu Up menghasilkan banyak baris operasi dan audit (satu induk ditambah sampai tiga per service). Activity harus menyarangkannya supaya tetap terbaca.
 - Up yang terputus restart daemon tidak dilanjutkan sendiri. Kamu perlu menjalankannya lagi; halaman menunjukkannya sebagai `interrupted`.
@@ -534,7 +536,7 @@ Urutan mengikuti pendekatan Journey: jalur "tinjau plan, Bring Up, lihat progres
 
 ### Update spec lain
 
-Usulan untuk lead (architect spec ini tidak mengubah spec lain):
+Usulan untuk lead (architect spec ini tidak mengubah spec lain). Semuanya diterapkan 2026-11-13 lewat `architect (update)` (spec 0007 dan dua usulan perilaku spec 0044 lebih dulu, sisanya di sesi gabungan `arc-update-all`), kecuali tabel di `apps/macos/design.md`, yang ditulis langkah build 9:
 
 - **Spec 0007**: kelas slot pengatur (`OperationKind::is_coordinator()`) dan `MAX_RUNNING_COORDINATORS` di AC-5 dan *Batas*; `Origin::Child` dan `parent`; `wait_final` di API engine; `recover` menutup anak create dan start yang antre dan induknya `interrupted`; baris tabel resume `environment_up` menjadi "tidak, kebijakan `CloseInterrupted`"; centang Follow-up L842.
 - **Spec 0004 dan 0005**: `MemberDependency`, `UpReport`, `UpPhase`, mutator `Environment`, kolom `last_up` dan `parent_id`, isi `dependency_conditions`, perluasan `DeleteInstanceCreatedBy`.
@@ -549,9 +551,9 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 ## Follow-up
 
 - [ ] Lead: tetapkan nomor minor protokol dan nomor migrasi saat build, dan terapkan *Update spec lain* lewat `architect (update)`.
-- [ ] Spec 0044: dua usulan perilaku di *Update spec lain* (masukan `planDigest` tanpa aksi turunan lifecycle; instance belum initialized sebagai blocker plan).
-- [ ] Spec 0045: sesudah di merge, cocokkan nama field di *Kontrak `--locked`* (`PlanInputs.locked`, `EnvPlan.lock.sha256`, `PlanItem.providerRevision`, `PlanItem.storage`, `CreateDraft.data_location`) dengan teks final spec 0045.
-- [ ] Spec 0047: `environment_down` di atas *Titik sambung untuk spec 0047*; baris tabel resume `environment_down`; nasib `last_up` sesudah Down; override stop pada instance ber lease.
+- [x] Spec 0044: dua usulan perilaku di *Update spec lain* (masukan `planDigest` tanpa aksi turunan lifecycle; instance belum initialized sebagai blocker plan). Diterapkan di spec 0044 (2026-11-13), *Aksi plan*.
+- [x] Spec 0045: sesudah di merge, cocokkan nama field di *Kontrak `--locked`* (`PlanInputs.locked`, `EnvPlan.lock.sha256`, `PlanItem.providerRevision`, `PlanItem.storage`, `CreateDraft.data_location`) dengan teks final spec 0045. Dicocokkan dengan spec 0045 di `main` (2026-11-13): nama nama itu sama, dan butir spec 0045 untuk spec ini (`locked` diteruskan ke plan, cek `lock.locked` di `stackly env up --locked`, `lock_sha256` dari `EnvPlan.lock.sha256`, `storage.locationId` ke `CreateDraft.data_location`, cek `providerRevision` di create anak) sudah ada di *Kontrak `--locked`* butir 2, 6, 7, dan 8.
+- [x] Spec 0047: `environment_down` di atas *Titik sambung untuk spec 0047*; baris tabel resume `environment_down`; nasib `last_up` sesudah Down; override stop pada instance ber lease. Dijawab spec 0047 (2026-11-13): pengatur tidak resumable, `last_up` dikosongkan commit `release`, override di AC-13 sampai AC-17; diselaraskan di spec ini pada tanggal yang sama (`ChildOrigin`, `BusyPolicy` anak, `activeOperation.kind`, *Titik sambung*).
 - [ ] Antrean start saat login tidak mengikuti urutan dependency environment. Kalau pengguna membutuhkannya, itu fitur baru (Up latar belakang saat login), bukan bagian fitur ini.
 - [ ] Hapus instance yang masih member environment ditahan FK `restrict` spec 0005; pesan dan alurnya milik fitur hapus instance.
 - [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa Up adalah operasi pengatur yang memulai operasi anak dan tidak pernah memanggil `ProcessSupervision`, bahwa lease environment ditulis bersama member, dan perintah `stackly env up` dan `status`.

@@ -467,6 +467,38 @@ Test yang membuktikan REQ-028, AC-028 (bagian output dan exit code), dan BR-011 
 
 *Ditambah fitur 36 dan 37 ([spec 0036](../0036-provider-sdk-test-harness/index.md), [spec 0037](../0037-import-provider-lokal-trust/index.md), 2026-11-11).* Grup `stackly provider` mendapat `validate <dir> [--json]` (spec 0036: kode `cli.provider_invalid`, kategori `invalid_input`, exit 2, dengan `result` tetap terisi) dan `import <dir> [--dry-run] [--approve [--yes]]`, `approve`, `revoke`, `remove <provider> [--yes]` (spec 0037 *CLI*). Semuanya memanggil daemon; CLI tidak pernah membaca file paket atau menjalankan binary provider. Konfirmasi, envelope `--json`, dan exit code mengikuti aturan spec ini apa adanya: `provider.approval_required` dan `provider.revoked` keluar 4, `provider.import_changed`, `provider.import_limit`, dan `provider.not_approved` keluar 3, `manifest.invalid` dan `provider.import_unreadable` keluar 2, `provider.store_failed` keluar 7, `provider.import_not_found` keluar 10. `stackly provider test` tidak dibuat (harness hanya `cargo xtask provider test`, spec 0036). AC spec ini tidak berubah.
 
+### Tambahan fitur 44 sampai 47
+
+*Ditambah fitur 44, 45, 46, dan 47 ([spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0045](../0045-lockfile-override-lokal/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* Grup baru `stackly env` (`apps/cli/src/commands/env/`) dan satu flag baru di empat perintah yang sudah ada. Perilaku lengkap tiap perintah ada di seksi *CLI* spec sumbernya; di sini hanya daftar perintah, kode lokal, dan exit code yang berbeda dari biasa. Semuanya memanggil daemon; CLI hanya membuat path absolut dari cwd dan tidak pernah menjalankan binary provider. Envelope `--json`, konfirmasi, `AsyncArgs`, dan peta exit code mengikuti aturan spec ini apa adanya. AC spec ini tidak berubah.
+
+| Perintah | Sumber | Catatan kontrak |
+| --- | --- | --- |
+| `stackly env validate [--file <path>]` | spec 0044 AC-16 | exit 0 kalau valid, 2 dengan `cli.env_invalid` kalau tidak; `result` tetap `EnvValidation` |
+| `stackly env plan [--file <path> \| <environment>] [--locked]` | spec 0044 AC-16, spec 0045 AC-6 dan AC-17 | exit 0 kalau `applicable`, 2 dengan `cli.env_invalid`, 3 dengan `cli.env_plan_blocked`; `result` tetap `EnvPlan`. Dengan `--locked`, balasan tanpa `lock.locked` true ditolak `cli.env_locked_unsupported` (exit 5). Keluaran mendapat kolom `SOURCE` dan baris `lock:` serta `local:` |
+| `stackly env import [--file <path>] [--relink]` | spec 0044 AC-17 | tanpa konfirmasi; `result` `EnvironmentDetail` |
+| `stackly env list` | spec 0044 AC-17 | tabel `NAME STATUS READY FILE` |
+| `stackly env remove <environment> [--yes]` | spec 0044 AC-17 | konfirmasi dengan aturan `ConfirmArgs` spec ini |
+| `stackly env lock [--file <path> \| <environment>] [--update] [--service <alias>]...` | spec 0045 AC-16 | manifest tidak valid keluar 2 dengan `cli.env_invalid`, blocker keluar 3 dengan `cli.env_lock_blocked`, alias `--service` yang tidak dikenal keluar 10; `result` selalu `EnvLockResult` |
+| `stackly env export [--file <path> \| <environment>] [--format dotenv\|shell]` | spec 0045 AC-17 | stdout tepat `EnvExport.text`, daftar `skipped` ke stderr, exit 0; environment yang belum terdaftar keluar 10 |
+| `stackly env up [target] [--locked] [AsyncArgs]` | spec 0046 AC-17 | `env.plan` lalu `env.up`, tanpa konfirmasi. Plan tidak valid 2, terblokir 3, `--locked` terhadap daemon yang tidak mengenalnya 5, `env.plan_changed` dan `resource.busy` 3, `secret.needs_secret` 6, `env.up_incomplete` 7, dibatalkan 9, `--wait` yang kehabisan `--timeout` 8 tanpa membatalkan Up. `result` `{ operation, idempotencyKey, environment }` |
+| `stackly env status [target]` | spec 0046 AC-18, spec 0047 AC-18 dan AC-22 | exit 0 selama environment ditemukan, apa pun statusnya; yang tidak dikenal keluar 10. `result` `EnvironmentDetail`. Baris `lease:` dari spec 0047 |
+| `stackly env down [target] [AsyncArgs]` | spec 0047 AC-18 | `env.preview_down` lalu `env.down`, tanpa konfirmasi karena tidak ada yang dihapus. `env.down_changed` diulang sekali dengan preview baru lalu keluar 3, `env.down_incomplete` 7, dibatalkan 9, `--wait` yang kehabisan `--timeout` 8 tanpa membatalkan Down. `result` `{ operation, idempotencyKey, preview, environment }` |
+| `stackly instance stop <target> [--override-leases]`, `stackly instance stop --all [--override-leases]`, `stackly instance endpoint set … [--override-leases]`, `stackly daemon uninstall [--override-leases]` | spec 0047 AC-19 | flag mengirim `overrideLeases` true. Tanpa flag, penolakan `supervisor.stop_requires_override` dan `instance.endpoints_require_override` keluar 3 dengan satu baris per environment dan hint yang menyebut flag itu serta `stackly env down <environment>`. `result` tidak berubah |
+
+**Target.** `<environment>` adalah nama persis atau UUID utuh, di resolve seperti `InstanceTarget` sebelum ada yang dikirim; nama yang tidak dikenal keluar 10 dengan `cli.environment_not_found` (spec 0044 AC-17). `--file` default `./stackly.yaml`. `up`, `status`, dan `down` memakai resolver ber path spec 0046: argumen posisi yang memuat `/`, diawali `.` atau `~`, atau berakhiran `.yaml` atau `.yml` adalah path, dan folder berarti `<folder>/stackly.yaml`. Spec 0046 memakai resolver yang sama juga untuk `stackly env plan`.
+
+**Kode lokal baru di area `cli`** (aturan tabel *Kode error area `cli`* berlaku: tidak pernah lewat wire, tidak ikut digest kontrak, masuk `protocols/error-codes.json`):
+
+| Kode | Kategori | Exit | Kapan | Kunci `details` | Sumber |
+| --- | --- | --- | --- | --- | --- |
+| `cli.env_invalid` | `invalid_input` | 2 | manifest punya finding `error` | `errors`, `warnings` | spec 0044 |
+| `cli.env_plan_blocked` | `conflict` | 3 | plan punya blocker | `blockers` | spec 0044 |
+| `cli.environment_not_found` | `not_found` | 10 | nama environment tidak dikenal | `name` | spec 0044 |
+| `cli.env_lock_blocked` | `conflict` | 3 | `env.lock` punya blocker | `blockers` | spec 0045 |
+| `cli.env_locked_unsupported` | `unsupported` | 5 | daemon tidak mengenal `locked` | | spec 0045 |
+
+Spec 0046 dan 0047 tidak menambah kode lokal. `stackly instance list` mendapat kolom `ENVIRONMENT` (nama dipisah koma, atau `-`; spec 0044 AC-15).
+
 ## Build plan
 
 Urutan mengikuti pendekatan Journey. Jalur yang dibangun lengkap adalah "script atau pengguna menjalankan `stackly` dan selalu mendapat kontrak yang sama", dimulai dari perintah yang sudah punya daemon nyata (`daemon status`) dengan semua state gagal nya, lalu jalur operasi dan `--wait`. Setiap test yang membuktikan ID PRD memakai guard evidence spec 0002.

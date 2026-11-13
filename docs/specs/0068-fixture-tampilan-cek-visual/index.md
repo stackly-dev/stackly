@@ -191,11 +191,13 @@ Nama adalah raw value `FixtureScenario.ID` dan nilai `STACKLY_UI_SCENARIO`. Kolo
 | --- | --- | --- |
 | konflik port (preflight create dan start yang gagal) | fitur 20 dan 21 | kode error dan baris preflight konflik port belum ada di kontrak `main` |
 | drift config | fitur 29 | belum ada DTO revision dan drift |
-| environment partially ready | fitur 44 | belum ada DTO environment |
+| environment partially ready | fitur 44 | belum ada DTO environment. *(Ditambah fitur 44, [spec 0044](../0044-manifest-environment-validate-plan/index.md): dijawab skenario `environment-partially-ready`, AC-24.)* |
 | runtime external | fitur 18 (DTO runtime), fitur 56 (source external) | belum ada DTO runtime |
 | onboarding per langkah | fitur 16 | `MainWindowRoot` dan `OnboardingRecordStore` belum di `main` |
 
 Kasus dan skenario yang ditambah fitur pemilik membangun handshake dan info daemon nya dari `HandshakeAccepted.fixture` dan `DaemonInfo.fixture`, tidak pernah dari `ContractInfo` hasil generate, supaya kenaikan protokol tidak menggeser referensi (*Kontrak fixture*) *(2026-10-22)*.
+
+*(Ditambah fitur 44, 46, dan 47, [spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13.)* Kasus "environment partially ready" menjadi skenario `environment-partially-ready`, ditambahkan fitur 44 di langkah GUI pertama yang memakai DTO environment (spec 0044 AC-24, build step 7). Fitur 46 menambah `environment-bringing-up` dan `environment-up-incomplete` (spec 0046 AC-23), dan fitur 47 menambah `environment-bringing-down` (spec 0047 AC-25). Keempatnya mengikuti aturan paragraf di atas dan *Key invariants*: fitur pemilik menambah skenario dan snapshot nya di commit yang sama dengan DTO nya. AC spec ini tidak berubah.
 
 ### Kontrak fixture
 

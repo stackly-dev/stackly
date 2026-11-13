@@ -34,7 +34,7 @@ Spec ini menetapkan cara kamu mengubah instance yang sudah ada: settings provide
 - **AC-11** (drift memblokir, menunggu pilihan): selama drift terpasang, start, restart, reload, apply, rollback, dan change endpoints ditolak `config.drift_detected` tanpa operasi dan tanpa menulis file. `instance.config.keep_revision` menjalankan operasi `resolve_config_drift` yang menulis ulang file dari salinan revision aktif lalu menghapus blocker. Stackly tidak pernah menimpa file yang drift tanpa aksi itu. Instance yang belum punya salinan (dibuat sebelum fitur ini) tidak pernah dilaporkan drift sampai render pertama menulis salinannya.
 - **AC-12** (histori): registry menyimpan 20 revision terbaru per instance; revision aktif dan last known good tidak pernah dihapus, dan folder salinannya ikut dihapus bersama barisnya. Nomor revision tidak pernah dipakai ulang. Restore di History memuat settings dan endpoint baris itu ke form sebagai perubahan tertunda, lalu Apply berjalan seperti biasa.
 - **AC-13** (rename, BR-003): `instance.rename` mengganti `name` lewat operasi `rename_instance` pada lifecycle apa pun kecuali `initializing` dan retained, dengan aturan VAL-001 dan keunikan yang dicek ulang di dalam `commit_guarded` (`instance.name_invalid`, `instance.name_taken`). ID, runtime, secret reference, path data, `display_name`, proses, dan config revision tidak berubah. Nama yang sama dengan nama sekarang dijawab `unchanged` tanpa operasi.
-- **AC-14** (ganti endpoint, REQ-010, AC-055, AC-056): `instance.change_endpoints` mengubah endpoint IP menjadi `Fixed(port)` atau `Auto` lewat operasi `change_endpoints`, dengan pemeriksaan create spec 0020 (rentang port, konflik di antara endpoint sendiri, konflik dengan instance lain di dalam `commit_guarded`, dan probe bind per tuple dengan wildcard dan IPv4 atau IPv6). Port yang sama dengan `bound_port` instance itu sendiri saat ini melewati probe bind tetapi tetap dicek terhadap instance lain. Port fixed yang konflik tidak pernah diganti otomatis; balasan error membawa saran port bebas. Operasi menulis revision baru (settings sama, endpoint baru) dan `instance_endpoints` dalam satu transaksi, lalu me restart instance `running` atau `recovering`, atau menyimpan untuk start berikutnya. Endpoint Unix dan host tidak bisa diubah.
+- **AC-14** (ganti endpoint, REQ-010, AC-055, AC-056): `instance.change_endpoints` mengubah endpoint IP menjadi `Fixed(port)` atau `Auto` lewat operasi `change_endpoints`, dengan pemeriksaan create spec 0020 (rentang port, konflik di antara endpoint sendiri, konflik dengan instance lain di dalam `commit_guarded`, dan probe bind per tuple dengan wildcard dan IPv4 atau IPv6). Port yang sama dengan `bound_port` instance itu sendiri saat ini melewati probe bind tetapi tetap dicek terhadap instance lain. Port fixed yang konflik tidak pernah diganti otomatis; balasan error membawa saran port bebas. Operasi menulis revision baru (settings sama, endpoint baru) dan `instance_endpoints` dalam satu transaksi, lalu me restart instance `running` atau `recovering`, atau menyimpan untuk start berikutnya. Endpoint Unix dan host tidak bisa diubah. *(Ditambah fitur 47, [spec 0047](../0047-env-down-shared-instance-lease/index.md) AC-15.)* `instance.change_endpoints` mendapat `overrideLeases` (default false). Tanpa nya, permintaan yang benar benar mengubah port pada instance ber lease environment `active` ditolak `instance.endpoints_require_override` tanpa operasi; permintaan `dryRun` tidak ditolak dan membalas `EndpointValidation.leases` berisi environment pemegang. Dengan `overrideLeases` true perubahan berjalan seperti di atas dan lease tetap `active`.
 - **AC-15** (kelas field di form, VAL-012): field `managed` tampil terkunci dengan "Set by Stackly", port tampil sebagai baris terkunci dengan "Change in Endpoints", field `apply: immutableAfterInit` terkunci dengan badge "Set once", dan field secret tampil sebagai reference read only. Setiap field yang bisa diedit menampilkan label dampaknya ("Applies on reload" atau "Requires restart") dan nilai default nya.
 - **AC-16** (schema driven, RISK-07): form Configuration memakai `SchemaFormModel` dan `SchemaFormSections` spec 0020 tanpa cabang per provider. Form, apply, dan last known good diuji pada PostgreSQL, NATS, dan Traefik, termasuk `settings.routes` Traefik sebagai daftar dengan `name` unik, tanpa patch SwiftUI khusus provider.
 - **AC-17** (CLI, REQ-028, AC-028): `stackly instance config get|validate|apply|rollback|keep-revision`, `stackly instance rename`, dan `stackly instance endpoint set` menerima target lewat `TargetArg`, `--json`, dan kode error serta exit code dari kategori `stackly-protocol`. `config apply` menerima `--set`, `--set-json`, `--unset`, `--from-revision N`, `--expect-revision N`, `--dry-run` (sama dengan `validate`), `--wait`, `--timeout`, dan `--idempotency-key`. `rollback` dan `keep-revision` meminta konfirmasi di terminal dan butuh `--yes` tanpa terminal atau dengan `--json`. Hasilnya setara dengan GUI.
@@ -81,7 +81,7 @@ Alasan dan opsi yang ditimbang: lihat [rationale.md](rationale.md).
 | Evaluator create, pemeriksaan port, `SchemaFormModel`, `EndpointPortRow`, kode field error | spec 0020 |
 | `commit_guarded` | spec 0020 Keputusan 21, spec 0007 |
 | `config_revisions`, `instance_endpoints`, `instance_paths` kind `config_history` | spec 0005 (spec ini melengkapi, sesuai catatan "fitur 29 melengkapi") |
-| Lease environment saat ganti port | fitur 47 |
+| Lease environment saat ganti port | fitur 47. *(Ditambah fitur 47.)* Ditetapkan [spec 0047](../0047-env-down-shared-instance-lease/index.md) AC-15 dan AC-23 |
 | Update provider revision dengan diff (BR-017) | fitur 59 |
 | Rotasi secret | di luar fase ini; field secret read only di spec ini |
 | Metrik dan cadence health | fitur 28 |
@@ -371,6 +371,19 @@ Tidak ada env var, secret, atau credential baru.
 - Effective File read only dengan catatan port Automatic; mockup tidak menunjukkan apakah bisa diedit.
 - Field secret tampil sebagai reference read only.
 
+### Tambahan fitur 44 dan 47
+
+*Ditambah fitur 44 dan 47 ([spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* AC-14 ditambah satu kalimat bertanda; AC lain tidak berubah.
+
+- **Params dan balasan** (spec 0047 AC-15, *API surface*): `instance.change_endpoints` mendapat params `overrideLeases: bool` (`#[serde(default)]`, default false), dan `EndpointValidation` mendapat `leases: [InstanceEnvironment]`, yaitu environment yang lease nya `active` pada instance itu.
+- **Penolakan** (spec 0047 AC-15, *Kode error di wire*): kode baru `instance.endpoints_require_override`, kategori `conflict`, `retryable` false, dengan `details` `count` dan `omitted` dan satu `items` ber `kind` `environment` per environment pemegang (`environmentId`, `name`, `alias`, `ownership`; paling banyak 100). Hint nya "change the ports anyway with the override, or bring the environment down first".
+- **Kapan diperiksa** (spec 0047 *Override pada aksi lain*): pemeriksaan lease berjalan di precheck handler dan diulang di guard `commit_guarded` operasi `change_endpoints`. "Benar benar mengubah port" berarti hasil `ChangePlan` memuat paling sedikit satu endpoint yang `port_request` nya berbeda dari yang aktif. Permintaan yang sama dengan keadaan sekarang tetap dijawab `unchanged` tanpa cek lease, dan permintaan `dryRun` tidak pernah ditolak karena lease.
+- **Dengan override** (spec 0047 AC-15): perubahan berjalan seperti AC-14, lease tetap `active`, dan catatan audit operasi (AC-20) mendapat `overriddenEnvironments` berisi nama environment. Override tidak pernah melepas lease.
+- **Yang tidak dijaga** (spec 0047 AC-14): `instance.config.apply` dan `instance.rename` pada instance ber lease environment tidak ditolak dan tidak menerima field override.
+- **Sheet port** (spec 0047 AC-23, *Layar*): saat `EndpointValidation.leases` tidak kosong, `EndpointsSheet` menampilkan `StateBanner` caution "{environment} uses this instance. Changing its ports can break that environment until you update what connects to it." (nama digabung " and "), dan tombol Apply menjadi "Change Anyway", yang mengirim `overrideLeases` true.
+- **CLI** (spec 0047 AC-19): `stackly instance endpoint set … --override-leases` mengirim `overrideLeases` true. Tanpa flag itu penolakan keluar 3 dengan satu baris per environment dan hint yang menyebut flag itu serta `stackly env down <environment>`.
+- **Area kode environment** (spec 0044 *Kode error di wire*): kode fitur environment memakai area `env` (spec 0044 sampai 0047), bukan `config.*`.
+
 ## Build plan
 
 Pendekatan Journey: journey "ubah instance yang sudah ada" diselesaikan lengkap (state, error, CLI, GUI, bukti) sebelum fitur 30. Urutannya dari dalam ke luar supaya setiap milestone bisa dites sendiri. Butuh fitur 26 (spec 0026) di main, yang sudah done.
@@ -429,12 +442,12 @@ Pendekatan Journey: journey "ubah instance yang sudah ada" diselesaikan lengkap 
 **Neutral**:
 
 - Folder `config-history/` yang sudah dibuat create kini terisi; ukurannya kecil (file config teks, paling banyak 20 revision).
-- Kode `config.*` baru membuka kategori kode untuk fitur environment (fitur 44 sampai 47).
+- Kode `config.*` baru membuka kategori kode untuk fitur environment (fitur 44 sampai 47). *(Ditambah fitur 44, [spec 0044](../0044-manifest-environment-validate-plan/index.md) *Kode error di wire*.)* Kode environment memakai area sendiri, `env`; penolakan ganti port pada instance ber lease memakai `instance.endpoints_require_override` (spec 0047).
 
 ## Follow-up
 
 - [ ] Terapkan *Usulan update untuk spec lain* ke spec 0005, 0010, 0026, 0020, 0022, 0069, dan 0021 saat milestone yang bersangkutan dibangun.
-- [ ] Fitur 47: ganti port pada instance yang dipinjam environment dengan lease aktif ditolak atau butuh override.
+- [x] Fitur 47: ganti port pada instance yang dipinjam environment dengan lease aktif ditolak atau butuh override. Ditolak `instance.endpoints_require_override`, dan bisa di override dengan dampak tampil dari `dryRun` (spec 0047 AC-15, AC-23). Dijawab spec 0047, diterapkan di spec 0029 (2026-11-13).
 - [ ] Fitur 59: update provider revision memakai diff dan revision dari spec ini (BR-017).
 - [ ] Rotasi secret sebagai fitur sendiri, kalau dibutuhkan (belum ada di scope).
 - [ ] Tentukan nomor migrasi dan minor protokol saat build, setelah spec 0028 dan 0031 merge.

@@ -212,6 +212,7 @@ fn failure_of(
         excerpt,
         &BTreeMap::new(),
         core.supervision().autostart().get(id),
+        core.supervision().membership().get(id),
     )
     .last_failure
 }

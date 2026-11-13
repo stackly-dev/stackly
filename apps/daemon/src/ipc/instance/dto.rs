@@ -18,8 +18,8 @@ use stackly_protocol::instance::{
     ConfigDriftBlocker, EndpointPortMode, EndpointStatus, EndpointTransport, IdentityBlocker,
     IdentityCheckEntry, IdentityCheckName, IdentityCheckResult, IdentityEvidence, InstanceBlocker,
     InstanceDesired, InstanceHealth, InstanceHealthChanged, InstanceHealthState,
-    InstanceLastFailure, InstanceLifecycle, InstanceLockState, InstanceOwnership, InstanceProcess,
-    InstanceReadiness, InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
+    InstanceLastFailure, InstanceLifecycle, InstanceLockState, InstanceProcess, InstanceReadiness,
+    InstanceReadinessState, InstanceRestart, InstanceSummary, ProviderPin,
 };
 use stackly_protocol::{Count, Sequence, Timestamp};
 
@@ -50,6 +50,7 @@ pub fn summary(
     excerpt: Vec<String>,
     sockets: &BTreeMap<String, String>,
     autostart: AutostartSession,
+    membership: crate::membership::Membership,
 ) -> InstanceSummary {
     let key = instance.provider_revision();
     InstanceSummary {
@@ -84,7 +85,7 @@ pub fn summary(
             .collect(),
         leftover_processes: status.leftover.iter().map(|pid| pid.get()).collect(),
         logs_unavailable: status.logs_unavailable,
-        ownership: InstanceOwnership::Manual,
+        ownership: membership.ownership,
         initialized: Some(instance.data_initialized_at().is_some()),
         capabilities: InstanceCapabilities::new(
             instance.capabilities().contains(Capability::Reload),
@@ -94,9 +95,7 @@ pub fn summary(
             policy: startup_kind(instance.startup()),
             session: autostart,
         },
-        // provisional: F44 step 5 fills ownership and environments from the
-        // membership cache.
-        environments: Vec::new(),
+        environments: membership.environments,
     }
 }
 

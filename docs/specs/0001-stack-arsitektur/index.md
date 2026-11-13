@@ -142,7 +142,8 @@ stackly/
 │   └── contract-versions.json  # digest kontrak per versi protokol (spec 0006)
 ├── schemas/
 │   ├── evidence/           # schema evidence record (spec 0002)
-│   └── provider/           # JSON Schema manifest provider, hasil codegen (fitur 9, spec 0009); environment dan lockfile menyusul (fitur 44)
+│   ├── provider/           # JSON Schema manifest provider, hasil codegen (fitur 9, spec 0009); environment dan lockfile menyusul (fitur 44)
+│   └── environment/        # ditambah fitur 44 dan 45 (spec 0044 AC-24, spec 0045 AC-20): environment.v1alpha1, lock.v1alpha1, dan local.v1alpha1 .schema.json, hasil codegen dari tipe raw di stackly-core
 ├── providers/              # paket provider; dibuat fitur 9 dengan fake, nats, dan traefik (spec 0009), provider lain di fitur 19 dan seterusnya; `catalog.toml` dan `catalog-revisions.json` untuk catalog bawaan (spec 0017)
 ├── runtimes/               # inventory.toml dan tooling runtime (spec 0003)
 ├── evidence/               # evidence run lokal (spec 0002, 0003); `compatibility/` untuk compatibility record (spec 0018)

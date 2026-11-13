@@ -126,6 +126,14 @@ Dijalankan 2026-11-13 oleh model lain (Opus) sebagai pembaca saja, sesuai aturan
 - **Celah keputusan, ditutup**: jalur tanpa operasi `start_precheck` yang menulis lease `manual`; ikatan di `input` journal create dan penutupan anak antre di `recover`; sumber lifecycle dan readiness (registry dan `Supervisor::status`, polling); `wait_final` sebagai method engine yang juga berhenti di `needs_recovery`; kelas slot dari `OperationKind`; setiap tulisan environment membaca segar di dalam guard; guard `accept` hanya memeriksa service di manifest dan tidak memberi lease baru ke member `detached`; blocker `needsSecret` pada member diubah menjadi `secret.needs_secret`; `generateAllowed` dari aturan yang ada; `activeOperation` dari `OperationEngine::list`; `UpBoard` sebagai pemilik tabel progress; `environmentId` dan `name` di `input` untuk replay; perilaku `StartTrigger::Environment` di setiap cabang; kode kegagalan `accept` dan pemetaan `BeginError`; gerbang quiesce menandai sisa service `cancelled`; batas antre anak start; alasan `not_ready` untuk dependency yang berhenti tepat sebelum dependent mulai; aturan path CLI dan `status` untuk path.
 - **Diteruskan, bukan diterapkan di sini**: dua usulan perilaku untuk spec 0044 (masukan `planDigest` tanpa aksi turunan lifecycle; instance belum initialized sebagai blocker plan), karena keduanya wilayah spec 0044. Sampai diterapkan, akibatnya dicatat di *Consequences*.
 
+## Perubahan 2026-11-13 (diselaraskan dengan spec 0045 dan 0047)
+
+Update `/architect` (mode Update, sesi `arc-update-all`) sesudah keempat spec scope 08 ada di `main`. Tidak ada keputusan K1 sampai K18 yang berubah dan tidak ada AC yang berubah.
+
+- **Dari spec 0045.** Nama field di *Kontrak `--locked`* dicocokkan dengan teks final [spec 0045](../0045-lockfile-override-lokal/index.md); semuanya sama, jadi hanya Follow-up nya yang dicentang.
+- **Dari spec 0047.** `ChildOrigin` pindah ke `environment::children` karena port `DownChildren` memakainya juga. Kalimat "`BusyPolicy` anak sama dengan handler nya" dibatasi ke anak Up, karena anak stop Down memakai `Queue`. `activeOperation.kind` bisa `environment_down`, dengan teks "Bringing down…" milik spec 0047. Dua hal yang *Titik sambung* serahkan ke spec 0047 kini dicatat jawabannya: Down mengosongkan `last_up`, dan Down antre lalu membatalkan Up yang berjalan.
+- **Dari update spec 0044.** Dua usulan spec ini (`planDigest` tanpa aksi turunan lifecycle; instance belum initialized sebagai blocker plan) sudah diterapkan di sana, jadi kalimat *Consequences* tentang `env.plan_changed` dan cabang `uninitialized` di *Phase service* disesuaikan.
+
 ## Bahan yang dibaca
 
 - `prd.md`: REQ-021, REQ-028, BR-023, VAL-014, AC-021, AC-073, bagian 13.1 dan 13.2 (hanya sebagai input spec).

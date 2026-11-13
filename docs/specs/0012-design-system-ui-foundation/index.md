@@ -425,7 +425,7 @@ Kesalahan tidak dilempar oleh API ini; semuanya view dan nilai. Error datang dar
 | Teks waktu banner | jam pendek, plus tanggal bila bukan hari ini | `StaleNote.formattedSince(now:calendar:locale:timeZone:)` dengan nilai sistem |
 | `MutationAvailability` | `.blocked(reason:since:)` | shell spec 0013 (status koneksi dan waktu snapshot terakhir) |
 | `UnsupportedContent.reason`, `.disabled(reason:)` | alasan | capability provider dari daemon (spec 0004 `CapabilitySet`, dikirim lewat `CapabilityStatus` spec 0017 untuk catalog dan form create spec 0020, dan lewat `InstanceSummary` fitur 21 atau 22 untuk instance yang sudah ada); operasi berjalan dari lock operasi (spec 0007); copy per layar |
-| `PartialNote` | ringkasan, item, aksi item | DTO layar (readiness environment di fitur 44 dan 46, hasil operasi di spec 0007); aksi dari layar |
+| `PartialNote` | ringkasan, item, aksi item | DTO layar (readiness environment di fitur 44 dan 46, hasil operasi di spec 0007); aksi dari layar. *(Ditambah fitur 44 dan 46, [spec 0044](../0044-manifest-environment-validate-plan/index.md) dan [spec 0046](../0046-env-up-dependency-graph/index.md): banner partially ready memakai `StateBanner` dengan `PartialItem`; lihat Tambahan fitur 44, 46, dan 47.)* |
 | `ConfirmationRequest` | judul, pesan, label, role | layar yang meminta, mengikuti aturan Konfirmasi; nama objek dari DTO |
 | Hasil konfirmasi saat offline | umpan balik "Nothing was sent" | jalur mutasi spec 0013 dan komponen umpan balik fitur 67 |
 | `SectionStyle` | simbol dan warna | tabel Ikon bagian di spec ini |
@@ -474,6 +474,16 @@ Tidak ada env var, secret, atau setting baru. Accent dan mode Liquid Glass mengi
 - Failure case: di dialog destructive, Return dan Escape menutup dialog tanpa menjalankan aksi; di dialog standard, Return menjalankan aksi (cek verify), memverifikasi **AC-15**.
 - Aturan sumber: test pemindai sumber gagal untuk ukuran font tetap, warna sekunder atau accent sebagai teks, glass kustom, dan dialog di luar modifier, memverifikasi **AC-2**, **AC-3**, **AC-6**, **AC-15**. *(2026-10-22, W2; dibangun `dev-f12-fix`)* Aturan warna sekunder dan accent juga menolak `controlAccentColor` di luar `Tokens/StacklyColor.swift`, dengan contoh negatif `Color(nsColor: .controlAccentColor)`.
 - Auth/permission: tidak berlaku; tidak ada peran pengguna di GUI.
+
+### Tambahan fitur 44, 46, dan 47
+
+*Ditambah fitur 44, 46, dan 47 ([spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* AC spec ini tidak berubah; komponen dan aturan spec ini dipakai apa adanya.
+
+- **Readiness environment** (baris `PartialNote` di *Value sourcing*): banner partially ready halaman Environments adalah `StateBanner` caution dengan satu `PartialItem` per service yang belum ready (spec 0044, *Layar*). Sesudah Up, alasan tiap `PartialItem` datang dari *Alasan belum ready* spec 0046 dengan aksi Set Secret…, Show Operation, atau membuka instance (spec 0046 AC-20). Banner selalu menyebut service nya dengan teks, tidak hanya warna.
+- **Status baru**: `StatusAppearance.environment(status:)` (spec 0044, *Layar*) dan `StatusAppearance.upPhase(phase:)` (spec 0046, *Copy phase*) memakai palet lima tone spec ini. Keduanya dibangun fitur 44 dan 46, dan tabelnya ditambahkan ke `apps/macos/design.md` oleh fitur itu, bukan oleh spec ini.
+- **Progress**: "Bringing up… {done} of {total}" dan "Bringing down… {done} of {total}" adalah `StateBanner` informative dengan Cancel hanya dari `OperationSummary.cancel` (spec 0046 AC-20, spec 0047 AC-21).
+- **Role konfirmasi** (aturan *Konfirmasi* di atas dikukuhkan spec 0047): Bring Down memakai role standard (spec 0047 AC-20, *Copy Down*), dan stop pada instance ber lease environment memakai role destructive dengan nama environment dari `items` error (spec 0047 AC-23, *Copy override*). Sheet port memakai `StateBanner` caution dan tombol "Change Anyway" (spec 0047 AC-23).
+- Setiap aksi baru memakai `.mutationGated()` dan `ViewState` (spec 0044 AC-22, spec 0046 AC-22, spec 0047 AC-21).
 
 ## Build plan
 

@@ -27,6 +27,10 @@ use stackly_protocol::daemon::{
 };
 use stackly_protocol::diagnostics::{BundlePreview, ExportBundleParams, ExportedBundle};
 use stackly_protocol::doctor::{DoctorParams, DoctorReport};
+use stackly_protocol::env::{
+    EnvGetParams, EnvPlan, EnvPlanParams, EnvValidateParams, EnvValidation, EnvironmentDetail,
+    EnvironmentList, ImportEnvironmentParams, RemoveEnvironmentParams, RemovedEnvironment,
+};
 use stackly_protocol::handshake::ClientInfo;
 use stackly_protocol::instance::config::{
     ApplyConfigParams, ChangeEndpointsParams, ChangeEndpointsReply, ConfigApplyAccepted,
@@ -74,7 +78,7 @@ use crate::ipc::runtime;
 use crate::ipc::secret;
 use crate::ipc::settings;
 use crate::ipc::stop_all;
-use crate::ipc::{diagnostics, doctor, provider, provider_import};
+use crate::ipc::{diagnostics, doctor, env, provider, provider_import};
 use crate::state::DaemonCore;
 use crate::{catalog, map, storage};
 
@@ -419,6 +423,69 @@ pub trait Handlers: Send + Sync + 'static {
     ) -> HandlerFuture<'a, DoctorReport> {
         let _ = context;
         doctor::run(core, params)
+    }
+
+    /// `env.validate` (spec 0044).
+    fn validate_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvValidateParams,
+    ) -> HandlerFuture<'a, Box<EnvValidation>> {
+        let _ = context;
+        env::validate(core, params)
+    }
+
+    /// `env.plan` (spec 0044).
+    fn plan_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvPlanParams,
+    ) -> HandlerFuture<'a, Box<EnvPlan>> {
+        let _ = context;
+        env::plan(core, params)
+    }
+
+    /// `env.list` (spec 0044).
+    fn list_environments<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+    ) -> HandlerFuture<'a, EnvironmentList> {
+        let _ = context;
+        env::list(core)
+    }
+
+    /// `env.get` (spec 0044).
+    fn get_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: EnvGetParams,
+    ) -> HandlerFuture<'a, Box<EnvironmentDetail>> {
+        let _ = context;
+        env::get(core, params)
+    }
+
+    /// `env.import` (spec 0044).
+    fn import_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: ImportEnvironmentParams,
+    ) -> HandlerFuture<'a, Box<EnvironmentDetail>> {
+        env::import(core, context, params)
+    }
+
+    /// `env.remove` (spec 0044).
+    fn remove_environment<'a>(
+        &'a self,
+        core: &'a DaemonCore,
+        context: &'a RequestContext,
+        params: RemoveEnvironmentParams,
+    ) -> HandlerFuture<'a, RemovedEnvironment> {
+        env::remove(core, context, params)
     }
 
     /// `provider.validate` (spec 0036).

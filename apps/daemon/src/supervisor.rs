@@ -31,6 +31,7 @@ use crate::ipc::instance::dto;
 use crate::ipc::operation::dto::revision;
 use crate::ipc::operation::starting;
 use crate::map::socket::SocketPaths;
+use crate::membership::MembershipBook;
 use crate::session::AutostartBook;
 
 /// Where the supervisor stands in this daemon run.
@@ -98,6 +99,7 @@ pub struct Supervision {
     events: Mutex<Option<Arc<BusSupervisorEvents>>>,
     sockets: Mutex<Option<Arc<SocketPaths>>>,
     autostart: Arc<AutostartBook>,
+    membership: Arc<MembershipBook>,
 }
 
 impl std::fmt::Debug for Supervision {
@@ -114,6 +116,7 @@ impl Default for Supervision {
             events: Mutex::new(None),
             sockets: Mutex::new(None),
             autostart: Arc::new(AutostartBook::default()),
+            membership: Arc::new(MembershipBook::default()),
         }
     }
 }
@@ -135,6 +138,7 @@ impl Supervision {
             report: Arc::clone(&self.report),
             sockets: Arc::clone(&sockets),
             autostart: Arc::clone(&self.autostart),
+            membership: Arc::clone(&self.membership),
         });
         let mut deps = SupervisorDeps::new(
             input.registry,
@@ -162,6 +166,12 @@ impl Supervision {
     #[must_use]
     pub fn autostart(&self) -> &Arc<AutostartBook> {
         &self.autostart
+    }
+
+    /// The environment membership of each instance (spec 0044 AC-15).
+    #[must_use]
+    pub fn membership(&self) -> &Arc<MembershipBook> {
+        &self.membership
     }
 
     /// The reader of socket paths, once the supervisor is built.
@@ -331,6 +341,7 @@ pub struct BusSupervisorEvents {
     report: Arc<Mutex<Report>>,
     sockets: Arc<SocketPaths>,
     autostart: Arc<AutostartBook>,
+    membership: Arc<MembershipBook>,
 }
 
 impl std::fmt::Debug for BusSupervisorEvents {
@@ -370,6 +381,7 @@ impl SupervisorEvents for BusSupervisorEvents {
             excerpt,
             &self.sockets.of(instance),
             self.autostart.get(instance.id()),
+            self.membership.get(instance.id()),
         );
         self.bus.publish_resource(
             EventKind::InstanceStateChanged(Box::new(InstanceStateChanged { instance: summary })),

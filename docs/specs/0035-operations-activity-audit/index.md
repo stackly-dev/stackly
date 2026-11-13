@@ -366,6 +366,38 @@ Test core dan storage memakai `TestRoot`; test daemon memakai `stacklyd::server:
 
 Dicatat di *Follow-up*; lead menerapkannya lewat `/sync` atau `/architect` update. Tidak ada ID AC atau keputusan spec lain yang berubah: semuanya tambahan.
 
+### Tambahan fitur 44 sampai 47
+
+*Ditambah fitur 44, 45, 46, dan 47 ([spec 0044](../0044-manifest-environment-validate-plan/index.md), [spec 0045](../0045-lockfile-override-lokal/index.md), [spec 0046](../0046-env-up-dependency-graph/index.md), [spec 0047](../0047-env-down-shared-instance-lease/index.md), 2026-11-13).* Aturan engine, bentuk baris audit, dan halaman spec ini dipakai apa adanya; di sini hanya yang ditambah pemilik jenis operasi baru. AC spec ini tidak berubah. Spec 0046 dan 0047 menyebut halaman Operations spec ini "Activity" (misalnya aksi "Show in Activity"); yang dimaksud adalah halaman Operations lewat `openOperation`, bukan tab Activity per instance.
+
+**Catatan audit pekerjaan** (tambahan untuk tabel di *Catatan audit pekerjaan*; semuanya lewat `set_audit_note`, dan setiap nilai lewat `Redactor`):
+
+| Jenis | Detail | Sumber |
+| --- | --- | --- |
+| `import_environment`, `remove_environment` | nama environment, `manifestSha256`, lokasi manifest dengan `~` | spec 0044 *Security model* |
+| `environment_up` | nama environment, `manifestSha256`, lokasi dengan `~`, jumlah `ready` dan `total`, alias yang tidak ready | spec 0046 *Security model* |
+| `environment_down` | nama environment, jumlah lease yang dilepas, nama instance `stopped`, `kept`, dan `failed` | spec 0047 *Security model* |
+| `stop_instance`, `stop_all_instances`, `change_endpoints`, dan stop dari `agent_off`, saat dijalankan dengan `overrideLeases` true | tambahan `overriddenEnvironments` (nama environment yang di override) | spec 0047 AC-13, AC-15, *Security model* |
+| `stop_instance` anak Down yang guard nya memutuskan instance tetap jalan | `kept: true`, supaya stop yang tidak terjadi tidak tercatat sebagai stop | spec 0047 *Operasi `environment_down`* |
+
+Operasi pengatur menulis satu baris audit sendiri, dan setiap operasi anak (`install_runtime`, `create_instance`, `start_instance`, `stop_instance`) menulis barisnya sendiri seperti biasa (spec 0046). Resource operasi environment adalah `AuditResource::Environment`, jadi barisnya tidak ber `instance_id`: seperti `stop_all_instances`, ia tidak muncul di tab Activity sebuah instance, sedangkan baris operasi anaknya muncul di instance masing masing.
+
+**Yang tidak diaudit**: `env.validate`, `env.plan`, dan `env.preview_down` baca saja dan bukan operasi (spec 0044 AC-4 dan AC-6, spec 0047 AC-1). `env.lock` menulis satu file tanpa operasi dan tanpa audit, dan `env.export` hanya membalas teks (spec 0045).
+
+**Halaman Operations**:
+
+| Hal | Aturan | Sumber |
+| --- | --- | --- |
+| Judul | `OperationTitle` (spec 0022) memberi "Bring up environment {name}" dan "Bring down environment {name}", tanpa nama kalau environment tidak dikenal | spec 0046 AC-22, spec 0047 AC-21 |
+| Operasi anak | operasi dengan `OperationSummary.parent` ditampilkan bersarang di bawah induknya, dan tidak dihitung sendiri di ringkasan Overview | spec 0046 AC-22 dan *Activity dan Overview* |
+| Label "Partial" (nada caution) untuk Up | saat `failure.error.code` `env.up_incomplete` dan `details.ready` di atas 0, dengan catatan "{ready} of {total} services ready" | spec 0046 AC-22 |
+| Label "Partial" (nada caution) untuk Down | saat `failure.error.code` `env.down_incomplete` dan `details.stopped` di atas 0, dengan catatan "{stopped} of {total} instances stopped" | spec 0047 AC-21 |
+| Cancel | hanya dari `OperationSummary.cancel`, seperti jenis lain; klien tidak punya tabel jenis sendiri | spec 0046 dan spec 0047, banner selama Up dan Down |
+
+Operasi itu sendiri tetap berstate `failed`; "Partial" hanya tampilan untuk dua kode itu. Spec 0046 dan 0047 tidak menambah baris di *Definisi tahap*, jadi `environment_up` dan `environment_down` memakai aturan jenis tanpa definisi tahap.
+
+Belum ditetapkan sumber: judul `OperationTitle` untuk `import_environment` dan `remove_environment` (dicatat di Follow-up spec 0022).
+
 ## Build plan
 
 Pendekatan Journey: milestone 1 menyelesaikan jalur "jejak operasi dari CLI" lengkap (daemon menulis, CLI membaca, retensi berlaku), milestone 2 jalur "pantau dan pulihkan operasi di app", milestone 3 jalur "riwayat instance di app", milestone 4 bukti. Prasyarat: fitur 1 sampai 32 dan 67 sampai 70 di `main`. Nomor protokol dan migrasi ditetapkan lead saat build (sementara 3.4 dan `0012`).
