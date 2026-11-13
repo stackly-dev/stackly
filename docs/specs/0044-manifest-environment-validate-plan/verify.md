@@ -23,7 +23,7 @@ _Bagian ini mencakup Build plan langkah 1 sampai 5: domain dan storage, core man
 - [x] `cargo test -p stackly-core --test environment plan::a_fixed_port_of_another_instance_and_a_taken_name_block_the_plan` dan `plan::a_port_in_use_and_an_unresolved_selector_block_the_plan` → blocker `supervisor.endpoint_conflict`, `instance.name_taken`, `supervisor.endpoint_in_use`, dan `runtime.selector_unresolved`, `applicable` false, tanpa digest → AC-7
 - [x] `cargo test -p stackly-core --test environment plan::a_name_registered_at_another_location_is_name_taken` dan `plan::a_registered_source_whose_file_declares_another_name_stops_with_manifest_renamed` → `registration` `name_taken` dengan blocker `env.name_taken`; sumber `registered` dengan nama lain berhenti dengan `env.manifest_renamed` dan `items` kosong → AC-7, AC-11
 - [x] `cargo test -p stackly-core --test environment plan::an_instance_ref_is_kept_or_started_and_never_created` → `env.instance_ref_not_found`, `keep` saat berjalan, `start` saat berhenti, `env.instance_ref_mismatch` untuk provider lain, tidak pernah `create` → AC-8
-- [ ] `cargo test -p stackly-core --test environment plan::a_member_follows_the_lifecycle_table_reports_differences_and_detached` → setiap baris *Lifecycle ke aksi* (termasuk `uninitialized` dan `stopped` tanpa data sebagai `env.instance_blocked` `not_initialized`, dan blocker instance pada `start`), `differences` `runtime` dan `endpoint.http.port` yang tidak pernah menjadi blocker, dan member `old` di `detached` → AC-9
+- [x] `cargo test -p stackly-core --test environment plan::a_member_follows_the_lifecycle_table_reports_differences_and_detached` → setiap baris *Lifecycle ke aksi* (termasuk `uninitialized` dan `stopped` tanpa data sebagai `env.instance_blocked` `not_initialized`, dan blocker instance pada `start`), `differences` `runtime` dan `endpoint.http.port` yang tidak pernah menjadi blocker, dan member `old` di `detached` → AC-9
 - [x] `cargo test -p stackly-core --test environment plan::the_digest_ignores_member_lifecycle_and_ports_but_follows_what_up_creates` → digest sama saat member pindah `stopped` ke `running` dan saat port efektifnya berubah; berbeda saat endpoint item `create` berubah dan saat member diganti instance lain → AC-5
 - [x] `cargo test -p stackly-core --test environment plan::bound_references_show_present_missing_unregistered_and_generated` → status `present`, `missing`, `unregistered`, `generated`; `needsSecrets` 2, `applicable` tetap true, nilai dari store tidak muncul di plan → AC-10
 - [x] `cargo test -p stackly-core --test environment status` → status `partially_ready` dan `down`, `readyCount` dan `serviceCount`, alasan `stopped` dan `not_created`, member yang tidak dideklarasikan; `manifestState` `missing`, `unreadable`, `in_sync`, `name_changed`, `changed`, `invalid` dengan jumlah problem → AC-14
@@ -68,6 +68,27 @@ Temuan:
 Yang dibuktikan lewat probe karena belum ada test nya (bahan `/test`): `install` false dan `runtimeId` terisi saat ada baris runtime `managed` `installed` ber digest artefak yang sama; blocker dan `trust` untuk provider lokal `pending` dan `revoked` tanpa mengubah approval; `planDigest` sama saat instance `instanceRef` benar benar di stop dan di start (port efektif ikut berganti). Belum teruji sama sekali: blocker `instance.capability_unsupported` (semua paket di catalog `multiInstance`), dan status secret `present` serta `missing` terhadap Keychain asli (hanya fake store).
 
 Catatan teks spec: AC-1 menulis "menunjuk baris dan kolom" untuk field tak dikenal dan `apiVersion` atau `kind` lain, sedangkan *Aturan validasi* dan implementasi memberi path field (`services.db.endpoint`, `apiVersion`).
+
+### Ulang `/check verify` Milestone 1, 2026-11-13 (sesi `chk-f44-m1`, kode `77d9ed02`)
+
+Sesudah empat fix `dev-f44-fix`. Dijalankan: `cargo test -p stackly-core --test environment` (38 lulus), `cargo test -p stackly-core --lib environment` (4), `cargo test -p stacklyd --test environment` (11), lalu probe terhadap `stacklyd` asli.
+
+- **Temuan 1 (AC-9, AC-14): PASS.** Member `retained` kini punya item `keep`, satu blocker `env.instance_blocked` ber `reason` `retained`, plan tidak `applicable`, dan `env.get` `unavailable` (test daemon `a_retained_member_blocks_the_plan_and_shows_unavailable`, test core `plan::a_retained_member_keeps_its_item_and_blocks_the_plan`, `status::a_retained_member_is_unavailable_and_a_retained_name_is_not_created`). `instanceRef` tidak pernah menunjuk instance `retained`. Langkah lifecycle di atas kini dicentang.
+- **Temuan 2 (AC-1), bentuk yang dilaporkan: PASS.** File dengan anchor dan alias sesudah block scalar dalam item sequence kini ditolak di daemon asli (`yaml_alias` di `14:20` dan `21:20`); manifest ERP dan rule Traefik ber `&&` tetap valid.
+- **Temuan 3 (AC-11): PASS.** Import lewat `Stackly.yaml` menyimpan lokasi `stackly.yaml`; plan lewat `STACKLY.YAML` `registered`; import lewat `STACKLY.yaml` "Already imported."; symlink tetap ditolak `env.manifest_unreadable`.
+- **Temuan 4 (AC-7): PASS.** Provider `pending` memberi satu blocker `provider.approval_required`, `revoked` satu `provider.revoked`; selector yang tidak cocok ditulis apa adanya ("acme/demo has no version matching 7.7", `selector` `7.7`).
+
+Temuan baru, rendah, masih AC-1: pindaian alias masih bisa dilewati dengan bentuk lain. Plain scalar yang bersambung ke baris berikutnya, dengan baris sambungan diawali tanda kutip (`rule: Host(...) || Header(`X-A`,` lalu baris `"v)`), membuat pindaian menganggap sisa file sebagai isi string, sehingga `cache: &c` dan `other: *c` sesudahnya tidak terlihat. `env.validate` daemon asli membalas `valid` true dengan tiga service. Sama seperti sebelumnya, nilai hasil expand tetap melewati semua aturan; yang dilanggar hanya K2. Karena ini bentuk kedua, perlu keputusan: pindaian dibuat konservatif (tidak pernah masuk mode kutip dari baris sambungan, atau menolak file bila ragu), atau teks AC-1 dan K2 dilonggarkan menjadi usaha terbaik.
+
+### Ulang kedua `/check verify` Milestone 1, 2026-11-13 (sesi `chk-f44-m1`, kode `75784ccc` dan `11d5b0f8`)
+
+Dijalankan: `cargo test -p stackly-core --lib environment` (7), `cargo test -p stackly-core --test environment` (41), `cargo test -p stacklyd --test environment` (12), lalu probe terhadap `stacklyd` asli.
+
+- **AC-14 `updatedAt`: PASS.** Di daemon asli nilainya sama sesudah import yang tidak mengubah apa pun, sesudah import yang gagal (`env.name_taken`), dan sesudah remove yang gagal (`resource.revision_mismatch`); `env.list` dan `env.get` sama; bergeser hanya saat import mengubah baris (revision 2). Nilainya dibaca dari `environments.updated_at`, jadi tidak bergantung pada baris operasi (test `updated_at_is_the_row_stamp_so_an_unchanged_import_never_moves_it`).
+- **AC-1 pindaian konservatif: contoh yang dilaporkan PASS, tetapi AC-1 masih FAIL.** `exotic3.yaml`, varian `|2-`, dan file lama kini ditolak; ERP, rule Traefik ber `&&` dan backtick, string berkutip multi baris sesudah `key: `, `'` di plain scalar, dan `&`, `*`, `"` di komentar tetap valid. Tiga bentuk baru masih lolos dengan `valid` true dan alias ter expand (empat service): plain scalar yang barisnya berakhir dengan `,` atau `[`, lalu baris sambungan diawali `- "` (atau `- '`). Pindaian menganggap `,` atau `[` di ujung baris sebagai tanda struktur, jadi baris berikutnya tidak dihitung sambungan, `- "` dianggap pembuka string multi baris yang sah, dan semua sampai tanda kutip berikutnya (termasuk `cache: &c` dan `other: *c`) tidak dipindai. Ini bentuk ketiga dari kelas yang sama, jadi pindaian teks tidak bisa dijamin lengkap; saran: deteksi lewat parser event YAML, atau longgarkan teks AC-1 dan K2.
+- **Rendah, pesan.** Kutip multi baris yang mulai di barisnya sendiri (`rule:` lalu `"Host(...) &&` di baris berikut) kini ditolak dengan `yaml_alias` "YAML anchors, aliases, tags, and merge keys are not allowed", padahal file itu tidak memakai satu pun; pengguna tidak diberi tahu bahwa kutipnya yang harus ditulis di baris `key: `.
+
+Kesiapan Milestone 1: semua temuan lain tertutup; yang tersisa hanya AC-1 di atas (butuh keputusan) dan langkah suite penuh yang tidak diulang checker.
 
 ### Acceptance-criteria coverage
 
@@ -188,6 +209,19 @@ Temuan:
 7. Record manual ber `owner` kosong, sama seperti 16 record `NOT_RUN` lain; kalimat langkah "owner user" hanya soal teks.
 
 Yang benar hanya bisa dibuktikan manual: panel `NSOpenPanel`, Open Manifest dan Reveal in Finder lewat `NSWorkspace`, clipboard, banner yang muncul saat app aktif lagi, toolbar jendela, dan mode gelap sistem. Tempat Up, Down, Lock, dan Lease hanya berupa komentar di kode, tanpa kontrol. Tidak ada tambahan aksesibilitas, shortcut, atau identifier UI test di folder Environments. Sheet plan dan Problems hanya menampilkan reference `local:` dan pesan template, tidak ada nilai secret.
+
+### Ulang `/check verify` Milestone 3 sesudah fix app, 2026-11-13 (sesi `chk-f44-m3`, kode `be9ff7a3`)
+
+Dijalankan: `swift test --package-path apps/macos/Packages/StacklyUI --filter "EnvironmentsSnapshotTests|ShellSnapshotTests|ServiceMenu|EnvironmentFileActions|EnvironmentPlanPresenterTests|EnvironmentDetailModelTests|EnvironmentCopyTests"` (35 test dalam 7 suite lulus, `EnvironmentMenuTests` ikut), dan PNG yang berubah dibaca.
+
+- **Temuan 1: PASS.** `environment-partially-ready.narrow.png` kini menampilkan kolom aksi (menu ellipsis) di setiap baris.
+- **Temuan 2: PASS.** Judul item "Copy Connection URL" (`EnvironmentCopy.copyConnectionURL`), aksi yang sama dengan `ConnectionCopier`.
+- **Temuan 4: PASS.** `environment-plan-blocked` menampilkan dua item: `search` dan `search (provider.approval_required)`; test `eachBlockerIsItsOwnBannerItem`.
+- **Temuan 5: PASS.** `aServiceMenuFollowsItsInstance`, `theMoreMenuOpensRevealsAndReloadsTheManifest`, `withoutAFileTheFileActionsSayWhy`, dan snapshot `shell-environments-sidebar` (baris anak dengan simbol status dan `0/1`, `1/4`, `1/1`).
+- **Temuan 6:** langkah manual 19 sudah ditulis; tetap `NOT_RUN`.
+- **Catatan snapshot sidebar.** Baris Overview yang terpilih tampil sebagai sorotan hitam tanpa teks. Tidak ada snapshot shell lama yang menggambar sidebar (`ShellSnapshotTests` hanya matriks banner dan halaman kosong), jadi tidak ada pembanding; kode `SidebarRow` tidak berubah di fix ini, jadi ini bukan regresi kode, tetapi referensinya tidak mewakili tampilan asli baris terpilih. Tampilan asli dibuktikan langkah manual. Di snapshot itu path seksi Environments Overview juga tampil sebagai `/Users/…` (home fixture berbeda dari home mesin), bukan `~`.
+
+Kesiapan Milestone 3: bagian otomatis siap dicentang; 19 langkah manual tetap `NOT_RUN` (owner user).
 
 ### Acceptance-criteria coverage
 
