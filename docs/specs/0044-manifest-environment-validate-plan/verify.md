@@ -314,3 +314,5 @@ Verdict: semua AC lulus untuk bagian yang bisa diotomasi. Yang tersisa hanya buk
 10. Record manual ber `owner` kosong (kebiasaan record `NOT_RUN` di repo), sedangkan teks langkah menulis "owner user".
 
 Daftar celah test lengkap sudah dikirim ke sesi `tst-f44-test`.
+
+Catatan 2026-11-14: celah AC-15 (kolom `ENVIRONMENT` di `stackly instance list` sesudah Up) tertutup lewat probe native verify spec 0046 Milestone 3: binary CLI menampilkan `shop` dan `dedicated` untuk dua instance NATS yang dinaikkan `stackly env up`.

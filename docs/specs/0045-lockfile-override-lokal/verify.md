@@ -231,3 +231,5 @@ Verdict fitur 45: **PASS untuk semua bagian otomatis** AC-1 sampai AC-21. GUI ny
 8. `stackly env up --locked` di CLI menunggu Milestone 3 spec 0046; cek `cli.env_locked_unsupported` nya harus diuji di sana.
 
 Tertutup sejak catatan milestone: `local.overrides` `applied` untuk file tidak valid (K22), `EnvLocalInfo.state` opsional (K24), dan lock `in_sync` untuk manifest tidak valid (K23, tidak ditampilkan CLI dan app).
+
+Catatan 2026-11-14: dua hal yang tadinya belum terbukti kini tertutup lewat probe native verify spec 0046 Milestone 3. `stackly env export` dengan nilai nyata lewat binary CLI sama persis dengan `text` daemon dan tanpa secret, path, atau reference (AC-15, AC-17). `stackly env up --locked` di CLI gagal jelas tanpa lock (`env.lock_missing`) dan dengan lock basi (`env.lock_stale`), exit 3, tanpa membuat instance (AC-6; temuan terbuka nomor 8).
