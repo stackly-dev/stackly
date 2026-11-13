@@ -29,5 +29,29 @@ extension SnapshotTests {
                 named: "ports-sheet-leased",
                 size: SnapshotSize.fitting(width: 520, narrowWidth: 480))
         }
+
+        @Test(
+            .evidence(
+                covers: ["NFR-012"],
+                expected:
+                    "The Ports sheet of an instance two environments hold names both in the plural caution, those environments, and its button reads Change Anyway"
+            ))
+        @MainActor
+        func portsSheetOfAnInstanceTwoEnvironmentsHold() async throws {
+            let model = await FixtureConfiguration.endpointsModel(
+                typing: "5440",
+                leases: [
+                    InstanceEnvironment(
+                        environmentId: FixtureEnvironments.erpID, name: "erp-development",
+                        alias: "postgres", ownership: .dedicated, leaseActive: true),
+                    InstanceEnvironment(
+                        environmentId: UUID(), name: "reporting", alias: "db",
+                        ownership: .shared, leaseActive: true),
+                ])
+            try await assertSnapshot(
+                EndpointsSheet(model: model, context: InstanceActionContext(report: { _ in })),
+                named: "ports-sheet-leased-two",
+                size: SnapshotSize.fitting(width: 520, narrowWidth: 480))
+        }
     }
 }
