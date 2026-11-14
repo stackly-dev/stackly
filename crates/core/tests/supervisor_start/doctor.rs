@@ -118,11 +118,14 @@ fn link_modified_ago(path: &std::path::Path, now: jiff::Timestamp, minutes: i64)
         .expect("a test time is in range")
         .strftime("%Y-%m-%dT%H:%M:%SZ")
         .to_string();
-    let status = std::process::Command::new("/usr/bin/touch")
-        .args(["-h", "-d", &when])
-        .arg(path)
-        .status()
-        .expect("touch runs");
+    let status = {
+        let _spawning = crate::common::spawning();
+        std::process::Command::new("/usr/bin/touch")
+            .args(["-h", "-d", &when])
+            .arg(path)
+            .status()
+            .expect("touch runs")
+    };
     assert!(status.success(), "touch -h sets the symlink time");
 }
 

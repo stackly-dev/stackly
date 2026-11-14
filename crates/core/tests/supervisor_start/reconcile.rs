@@ -14,7 +14,7 @@ use stackly_domain::{
 use stackly_platform::{ChildRole, ExitStatus, HoldsFile, ProviderSignal};
 use stackly_testkit::{FakeProcessState, ProcessOp};
 
-use crate::common::{Plant, Rig, Spec};
+use crate::common::{Plant, Rig, Spec, no_spawns};
 
 async fn wait_for(what: &str, mut ready: impl FnMut() -> bool) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
@@ -539,8 +539,17 @@ async fn a_stopping_instance_is_stopped_again_when_its_process_is_still_there() 
 }
 
 #[tokio::test]
+// The guard is a plain lock of this test binary that only its blocking
+// spawns wait for; reconciliation spawns nothing real.
+#[expect(
+    clippy::await_holding_lock,
+    reason = "no real child may be created between the plant and the lock probe of reconciliation"
+)]
 async fn a_stopping_instance_whose_process_is_gone_ends_stopped() {
     let rig = Rig::new().await;
+    // A child created while the fake holds the lock would keep it `Held`
+    // past the exit, and the instance would rightly read `unknown`.
+    let _no_spawns = no_spawns();
     let id = rig.instance(&spec(InstanceLifecycle::Stopping, DesiredState::Stopped));
     let identity = rig.plant(id, Plant::live());
     rig.processes().exit(identity.pid, None);
