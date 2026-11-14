@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d71b-44a9-7778-8c8c-70243f3434a0",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "instance",
+    "name": "override_leases::a_stop_with_the_override_sends_it_and_names_the_environment_left_incomplete",
+    "file": "apps/cli/tests/instance/override_leases.rs",
+    "line": 120
+  },
+  "status": "PASS",
+  "expected": "instance stop <id> --override-leases --wait sends instance.stop with overrideLeases true, follows it to succeeded, and writes orders-db stopped, readiness unknown then orders-db stopped. erp is no longer complete.",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:50:50.921471Z",
+  "finishedAt": "2026-11-13T22:50:51.206787Z",
+  "evidencePath": "output.log"
+}

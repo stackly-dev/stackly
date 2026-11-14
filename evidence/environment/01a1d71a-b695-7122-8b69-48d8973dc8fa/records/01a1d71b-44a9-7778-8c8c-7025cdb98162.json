@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d71b-44a9-7778-8c8c-7025cdb98162",
+  "covers": [
+    "REQ-028"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stackly-cli",
+    "target": "instance",
+    "name": "override_leases::endpoint_set_sends_the_override_and_a_refusal_names_the_flag",
+    "file": "apps/cli/tests/instance/override_leases.rs",
+    "line": 266
+  },
+  "status": "PASS",
+  "expected": "endpoint set <id> --port main=5556 refused with instance.endpoints_require_override writes <id> is used by erp (db), exits 3 with a hint naming stackly instance endpoint set <id> --port main=5556 --override-leases and stackly env down erp, and sent overrideLeases false; with --override-leases it sends overrideLeases true",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:50:50.921478Z",
+  "finishedAt": "2026-11-13T22:50:50.975509Z",
+  "evidencePath": "output.log"
+}

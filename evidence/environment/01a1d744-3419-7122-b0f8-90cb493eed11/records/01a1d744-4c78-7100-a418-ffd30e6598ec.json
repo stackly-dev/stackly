@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7100-a418-ffd30e6598ec",
+  "covers": [
+    "REQ-022",
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentDownEdgeTests/onlyTheWindowThatSentTheDownShowsItsResult()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 196
+  },
+  "status": "PASS",
+  "expected": "Only the window that sent a Down shows its result card; another window's Down model shows nothing when that operation ends",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.91Z",
+  "evidencePath": "output.log"
+}

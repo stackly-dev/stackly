@@ -1,0 +1,24 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling stacklyd v0.1.0 ($REPO/apps/daemon)
+    Finished `test` profile [unoptimized] target(s) in 19.92s
+     Running tests/env_down_cli_native.rs (target/debug/deps/env_down_cli_native-ce4793eb34fe778e)
+
+running 1 test
+   Compiling ring v0.17.14
+   Compiling rustls-webpki v0.103.16
+   Compiling rustls v0.23.46
+   Compiling rustls-platform-verifier v0.7.1
+   Compiling ureq v3.4.2
+   Compiling stackly-platform-macos v0.1.0 ($REPO/crates/platform-macos)
+   Compiling xtask v0.1.0 ($REPO/xtask)
+    Finished `dev` profile [unoptimized] target(s) in 8.83s
+    Finished `dev` profile [unoptimized] target(s) in 0.07s
+test stackly_env_down_keeps_a_shared_nats_instance_for_the_other_environment_then_stops_it ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.40s
+

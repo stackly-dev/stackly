@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c78-7702-9787-6149ee2203c2",
+  "covers": [
+    "NFR-012"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentStopAllEdgeTests/theStopsOfADownNestUnderItAndAnOrphanShowsOnItsOwn()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 578
+  },
+  "status": "PASS",
+  "expected": "In Operations the stops of a Down follow it, indented, the Down reads Partial, and a stop whose Down is not in the list shows on its own",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.91Z",
+  "evidencePath": "output.log"
+}

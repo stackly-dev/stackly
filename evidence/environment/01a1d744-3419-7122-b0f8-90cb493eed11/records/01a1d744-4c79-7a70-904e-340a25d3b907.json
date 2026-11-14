@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d744-4c79-7a70-904e-340a25d3b907",
+  "covers": [
+    "REQ-027",
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "swift",
+    "package": null,
+    "target": "StacklyUITests",
+    "name": "EnvironmentStopAllEdgeTests/theMenuBarSendsTheOverrideAndTheIDsOfThePreviewItShowed()",
+    "file": "apps/macos/Packages/StacklyUI/Tests/StacklyUITests/Environments/EnvironmentDownEdgeTests.swift",
+    "line": 500
+  },
+  "status": "PASS",
+  "expected": "The menu bar's own client reads instance.preview_stop_all with overrideLeases true and sends instance.stop_all with overrideLeases true and exactly the IDs of that preview",
+  "actual": "all expectations passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T23:35:39.897Z",
+  "finishedAt": "2026-11-13T23:35:39.92Z",
+  "evidencePath": "output.log"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb6-7418-b073-dfe9f3f23ff5",
+  "covers": [
+    "BR-015"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "a_lease_that_appears_between_the_dry_run_and_the_apply_refuses_the_port_change",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 1154
+  },
+  "status": "PASS",
+  "expected": "the dry run of a port change on solo, which nothing holds, lists no lease; blog then borrows solo; the apply without the override is refused instance.endpoints_require_override naming blog, and the port stays",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.13405Z",
+  "finishedAt": "2026-11-13T22:48:36.296658Z",
+  "evidencePath": "output.log"
+}

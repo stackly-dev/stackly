@@ -1,0 +1,28 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d718-6bbc-7731-8ce3-7ec9a123b06b",
+  "covers": [
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "a_changed_stop_set_or_an_unknown_environment_is_refused_without_an_operation",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 428
+  },
+  "status": "PASS",
+  "expected": "env.down whose expectedStopInstanceIds differ from the preview is refused env.down_changed with a hint and no operation or registry change, an unknown environment is env.not_found for both methods, a repeated key replays the first reply, and Down of an environment with nothing running succeeds and releases its lease",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:47:44.316887Z",
+  "finishedAt": "2026-11-13T22:47:49.875636Z",
+  "evidencePath": "output.log"
+}

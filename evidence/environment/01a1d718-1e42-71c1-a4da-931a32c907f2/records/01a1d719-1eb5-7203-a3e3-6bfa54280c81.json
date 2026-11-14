@@ -1,0 +1,30 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb5-7203-a3e3-6bfa54280c81",
+  "covers": [
+    "AC-022",
+    "REQ-022",
+    "BR-014"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "three_environments_on_one_instance_keep_it_running_until_the_last_down",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 453
+  },
+  "status": "PASS",
+  "expected": "shop creates shop-db and blog and wiki borrow it: Down of shop keeps it for blog and wiki, Down of blog keeps it for wiki, each with the same PID ready and only the down environment's lease released, env.get lease and leaseActive follow each step, and Down of wiki stops it",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.13392Z",
+  "finishedAt": "2026-11-13T22:48:39.050998Z",
+  "evidencePath": "output.log"
+}

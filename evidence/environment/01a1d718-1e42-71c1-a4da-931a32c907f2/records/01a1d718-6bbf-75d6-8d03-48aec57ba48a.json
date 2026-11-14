@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d718-6bbf-75d6-8d03-48aec57ba48a",
+  "covers": [
+    "REQ-022",
+    "BR-006"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down",
+    "name": "a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes",
+    "file": "apps/daemon/tests/env_down.rs",
+    "line": 581
+  },
+  "status": "PASS",
+  "expected": "Down of an instance that ignores SIGTERM fails env.down_incomplete with one failed item supervisor.stop_timeout, the lease stays released and the data stays, and once the process exits a second Down stops it and succeeds",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:47:44.319426Z",
+  "finishedAt": "2026-11-13T22:47:59.67585Z",
+  "evidencePath": "output.log"
+}

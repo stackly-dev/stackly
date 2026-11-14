@@ -1,0 +1,46 @@
+Building for debugging...
+[Using on-disk description]
+[1 / 3]
+Build complete! (1,74 secs)
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite EnvironmentDownEdgeTests started.
+◇ Suite EnvironmentDownEndToEndTests started.
+◇ Suite EnvironmentStopAllEdgeTests started.
+◇ Test anUpToCancelAloneStillOpensTheConfirmation() started.
+◇ Suite EnvironmentLeaseEdgeTests started.
+◇ Test aChangedSetSendsNothingMoreUntilTheNewConfirmationIsConfirmed() started.
+◇ Test aRetryAfterAnUnknownOutcomeReusesTheKeyAndANewDownTakesANewOne() started.
+◇ Test theOwnershipRowSaysLeaseForASharedInstanceAndNotForAReleasedOne() started.
+◇ Test anotherRefusalOfAStopOpensNoOverrideConfirmation() started.
+◇ Test bringDownSendsTheIDsOfThePreviewItShowedNotAFresherOne() started.
+◇ Test theGUIBringsDownAnImportedEnvironmentAgainstARealDaemonAndChangesNoFile() started.
+◇ Test theStopsOfADownNestUnderItAndAnOrphanShowsOnItsOwn() started.
+◇ Test downAndUpAreOffWithTheRightReasonInEachState() started.
+◇ Test theMenuBarSendsTheOverrideAndTheIDsOfThePreviewItShowed() started.
+◇ Test aLeaseAfterTheDryRunShowsTheCautionWithoutSendingAgain() started.
+◇ Test theConfirmationNamesEveryReasonAnInstanceKeepsRunning() started.
+◇ Test cancellingTheOverrideConfirmationSendsNothing() started.
+◇ Test onlyTheWindowThatSentTheDownShowsItsResult() started.
+◇ Test turnOffSendsTheOverrideWithThePreviewAndAgentOff() started.
+✔ Test anUpToCancelAloneStillOpensTheConfirmation() passed after 0.003 seconds.
+✔ Test bringDownSendsTheIDsOfThePreviewItShowedNotAFresherOne() passed after 0.009 seconds.
+✔ Test theOwnershipRowSaysLeaseForASharedInstanceAndNotForAReleasedOne() passed after 0.013 seconds.
+✔ Test anotherRefusalOfAStopOpensNoOverrideConfirmation() passed after 0.013 seconds.
+✔ Test theStopsOfADownNestUnderItAndAnOrphanShowsOnItsOwn() passed after 0.009 seconds.
+✔ Test onlyTheWindowThatSentTheDownShowsItsResult() passed after 0.010 seconds.
+✔ Test turnOffSendsTheOverrideWithThePreviewAndAgentOff() passed after 0.010 seconds.
+✔ Test downAndUpAreOffWithTheRightReasonInEachState() passed after 0.010 seconds.
+✔ Test theConfirmationNamesEveryReasonAnInstanceKeepsRunning() passed after 0.010 seconds.
+✔ Test aRetryAfterAnUnknownOutcomeReusesTheKeyAndANewDownTakesANewOne() passed after 0.013 seconds.
+✔ Test aLeaseAfterTheDryRunShowsTheCautionWithoutSendingAgain() passed after 0.010 seconds.
+✔ Test aChangedSetSendsNothingMoreUntilTheNewConfirmationIsConfirmed() passed after 0.014 seconds.
+✔ Suite EnvironmentDownEdgeTests passed after 0.014 seconds.
+✔ Test cancellingTheOverrideConfirmationSendsNothing() passed after 0.011 seconds.
+✔ Suite EnvironmentLeaseEdgeTests passed after 0.015 seconds.
+✔ Test theMenuBarSendsTheOverrideAndTheIDsOfThePreviewItShowed() passed after 0.020 seconds.
+✔ Suite EnvironmentStopAllEdgeTests passed after 0.024 seconds.
+✔ Test theGUIBringsDownAnImportedEnvironmentAgainstARealDaemonAndChangesNoFile() passed after 1.691 seconds.
+✔ Suite EnvironmentDownEndToEndTests passed after 1.695 seconds.
+✔ Test run with 15 tests in 4 suites passed after 1.695 seconds.

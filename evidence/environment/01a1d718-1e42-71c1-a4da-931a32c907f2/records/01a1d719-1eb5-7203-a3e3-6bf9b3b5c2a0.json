@@ -1,0 +1,29 @@
+{
+  "schema": "stackly.evidence/v1",
+  "id": "01a1d719-1eb5-7203-a3e3-6bf9b3b5c2a0",
+  "covers": [
+    "BR-015",
+    "REQ-022"
+  ],
+  "kind": "fixture",
+  "method": "automated",
+  "test": {
+    "language": "rust",
+    "package": "stacklyd",
+    "target": "env_down_edges",
+    "name": "a_persons_stop_with_the_override_keeps_every_lease_and_the_next_up_starts_it_again",
+    "file": "apps/daemon/tests/env_down_edges.rs",
+    "line": 1061
+  },
+  "status": "PASS",
+  "expected": "instance.stop with overrideLeases on shop-db, which shop and blog hold, stops it with desired stopped, keeps both leases active and leaseActive true, names both environments in the audit, leaves shop not ready; Up of shop then starts it again and Down of shop keeps it for blog",
+  "actual": "all assertions passed",
+  "reason": null,
+  "owner": null,
+  "subjects": [],
+  "steps": null,
+  "reviewer": null,
+  "startedAt": "2026-11-13T22:48:30.134294Z",
+  "finishedAt": "2026-11-13T22:48:39.047564Z",
+  "evidencePath": "output.log"
+}
