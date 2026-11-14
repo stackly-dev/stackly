@@ -670,7 +670,7 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain). Semuanya ditera
 - [ ] Dari spec 0047: rename instance yang dipinjam lewat `instanceRef` membuat plan environment peminjam melaporkan `env.instance_ref_not_found`, walau member nya masih terikat lewat ID. Putuskan di spec ini apakah plan mengikuti member, atau rename meminta override seperti ganti port.
 - [x] Lead, untuk spec 0045: kalimat *Loader* di `docs/specs/0045-lockfile-override-lokal/index.md` ("loader ketat spec 0044 (field tak dikenal, key ganda, anchor, alias, …ditolak)") dan baris `yaml_alias` di tabel finding nya perlu mengikuti *YAML yang diterima* di spec ini: lock dan file override memakai loader yang sama, jadi anchor dan alias diterima di sana juga. Diterapkan di spec 0045 (2026-11-13).
 - [x] Lead, untuk spec 0009: anggaran node `yaml_value` kini menghitung byte string (*YAML yang diterima*, **Anggaran expand**). Kalimat "dua node per byte teks ditambah 1024" di *Security model* dan tabel temuan `rationale.md` spec 0009 perlu menyebut biaya string, dan celah lama (scalar besar di balik ribuan alias) perlu dicatat di sana sebagai tertutup. Diterapkan di spec 0009 (2026-11-13).
-- [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa `env.validate` dan `env.plan` read only dan bukan operasi, bahwa plan memakai `gather` dan `evaluate` create, dan perintah `stackly env`.
+- [x] `/sync` setelah build: catat di root `AGENTS.md` bahwa `env.validate` dan `env.plan` read only dan bukan operasi, bahwa plan memakai `gather` dan `evaluate` create, dan perintah `stackly env`. *Dicentang `/sync` akhir scope 08 (2026-11-14).*
 
 ## Rationale
 

@@ -511,7 +511,7 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain):
 - [ ] Spec 0032: cara mendaftarkan lokasi data tanpa menjadikannya default, supaya override storage bisa dipakai tanpa mengubah default.
 - [ ] `/document`: panduan tim (commit `stackly.yaml` dan `stackly.lock`, masukkan `.stackly.local.yaml` ke `.gitignore`, pakai `--locked` di CI).
 - [ ] Sesudah ada permintaan nyata: connection string di export (tersamar atau dengan opt in eksplisit), dan format export berupa bundle definisi untuk dibagikan di luar repo (runner up K1).
-- [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa hanya `env.lock` yang menulis lock, bahwa lock bukan sumber artefak, dan perintah `stackly env lock` dan `export`.
+- [x] `/sync` setelah build: catat di root `AGENTS.md` bahwa hanya `env.lock` yang menulis lock, bahwa lock bukan sumber artefak, dan perintah `stackly env lock` dan `export`. *Dicentang `/sync` akhir scope 08 (2026-11-14).*
 
 ## Rationale
 

@@ -565,7 +565,7 @@ Usulan untuk lead (architect spec ini tidak mengubah spec lain). Semuanya ditera
 - [x] Spec 0047: `environment_down` di atas *Titik sambung untuk spec 0047*; baris tabel resume `environment_down`; nasib `last_up` sesudah Down; override stop pada instance ber lease. Dijawab spec 0047 (2026-11-13): pengatur tidak resumable, `last_up` dikosongkan commit `release`, override di AC-13 sampai AC-17; diselaraskan di spec ini pada tanggal yang sama (`ChildOrigin`, `BusyPolicy` anak, `activeOperation.kind`, *Titik sambung*).
 - [ ] Antrean start saat login tidak mengikuti urutan dependency environment. Kalau pengguna membutuhkannya, itu fitur baru (Up latar belakang saat login), bukan bagian fitur ini.
 - [ ] Hapus instance yang masih member environment ditahan FK `restrict` spec 0005; pesan dan alurnya milik fitur hapus instance.
-- [ ] `/sync` setelah build: catat di root `AGENTS.md` bahwa Up adalah operasi pengatur yang memulai operasi anak dan tidak pernah memanggil `ProcessSupervision`, bahwa lease environment ditulis bersama member, dan perintah `stackly env up` dan `status`.
+- [x] `/sync` setelah build: catat di root `AGENTS.md` bahwa Up adalah operasi pengatur yang memulai operasi anak dan tidak pernah memanggil `ProcessSupervision`, bahwa lease environment ditulis bersama member, dan perintah `stackly env up` dan `status`. *Dicentang `/sync` akhir scope 08 (2026-11-14).*
 
 ## Rationale
 

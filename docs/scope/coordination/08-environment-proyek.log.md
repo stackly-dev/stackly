@@ -5,7 +5,7 @@
 - **Mode keputusan:** `auto` · **Ketentuan tambahan:** tidak ada
 - **Aturan umum brief:** `08-environment-proyek.brief-umum.md` · **Langkah manual:** `08-environment-proyek.manual.md`
 - **Wave aktif:** `1`, mulai `2026-11-13`
-- **Diperbarui:** `2026-11-13 15:10`
+- **Diperbarui:** `2026-11-14 10:30`
 
 ## Sub sesi wave `1`
 
@@ -122,6 +122,8 @@
 | `2026-11-14` | Verify penuh F47 (`chk-f47-verify`, commit `c167bd36` dan `ba3b582a`, di-merge): bagian otomatis AC-1 sampai AC-26 PASS; setiap ID Trace dan ketujuh kalimat Done when tertutup AC yang lulus atau langkah manual tercatat. Laporan checker tidak tiba sebagai pesan (aplikasi menahan pesan sesi itu sesudah sekitar 20 pesan); dibaca lead dari `verify.md` di branch-nya dan dari catatan `chk-f47-verify.md`. `Build it` dan `Verify it` F47 dicentang dengan `F47-1` (13 langkah) `NOT_RUN` owner user; fitur 47 ditandai `done` (kotak terakhir; bawaan skill), spec 0047 `In Progress` → `Accepted`. Semua kotak scope 08 tercentang. Tidak dijalankan checker: `daemon uninstall --override-leases` terhadap sistem nyata (LaunchAgent pengguna; test unit saja), probe native `agent_off` dengan override. Temuan rendah terbuka sesudah perapian spec dan test ronde 2: test `a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes` tidak stabil (1 dari 12 sendirian, `env.down_changed` pada Down kedua; perilaku daemon benar, helper test tidak mengulang), diperbaiki sebagai item terakhir `dbg-f47-timeout`; `stackly env status` sesudah Down menulis `partially_ready` dengan `lease: none` tanpa penjelasan (kartu app sudah menjelaskan). | `lead` |
 | `2026-11-14` | Gerbang akhir di `main` (`f0400c3c`): fmt, clippy workspace, suite kecil 1140, `stackly-core` 1904, `stacklyd` 801, `stackly-cli` 714, `check-deps`, `codegen --check`, `evidence check`, `provider check`, `docs check`, cek target Windows, Swift klien dan StacklyUI penuh, `build-app` hijau. `cargo test -p xtask` merah: dua test interrupt `docs::walkthrough` (flaky beban yang dikenal, lulus saat diulang) dan `provider_test` `ctrl_c_ends_a_run_with_an_interrupted_report_exit_130_and_no_root`, yang gagal 3 dari 3 kali termasuk sendirian: laporan run yang terputus mencatat satu proses `stackly-fake-server` tertinggal saat cleanup (`cleanup.processesLeft` tidak kosong; proses itu tidak tertinggal permanen). Test itu lama (spec 0036) dan lulus di gerbang akhir scope 07, jadi diperlakukan sebagai kemungkinan regresi jalur stop atau shutdown dari scope ini, bukan flaky. Penutupan (ringkasan wave, `/sync`, push) ditahan; debugger mendapat item `dbg-xtask-ctrl-c` (bisect di antara merge utama scope ini) sesudah `dbg-f47-timeout`. | `lead` |
 | `2026-11-14` | `dbg-f47-timeout` di-merge (`7eeaa9aa`): test `a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes` gagal 13 dari 60 kali sendirian karena preview Down kedua diambil sebelum instance diam (`stop=[Stopping]` lalu `stop=[]`): himpunannya memang berubah, jadi penolakan `env.down_changed` daemon tepat menurut spec 0047 AC-2; kode produksi tidak diubah. Fix: test menunggu `lifecycle == Stopped` sebelum preview; 0 dari 60 sesudahnya. Gerbang lead: fmt, clippy `stacklyd`, `--test env_down --test env_down_edges` 5 dari 5 run hijau. Catatan debugger: teks `expected` evidence test itu ("a second Down stops it and succeeds") tidak tepat, karena proses berhenti oleh exit-nya sendiri; dibiarkan. | `lead` |
+| `2026-11-14` | `dbg-xtask-ctrl-c` di-merge (`d6c3854d`, merge `15f73295`): test `xtask` `ctrl_c_ends_a_run_with_an_interrupted_report_exit_130_and_no_root` adalah regresi scope 08 di harness konformitas, bukan di daemon. Bisect: `006ca4b0` lulus 5 dari 5, `a37ee6f0` dan `31b25de2` lulus, `6a41187d` gagal; penyebab `d7b2a6da` (F47 langkah 6): `instance.preview_stop_all` mendapat params opsional, socket membaca `content` yang tidak ada sebagai bawaan, tetapi harness (`apps/daemon/tests/conformance/site.rs`) men-decode `Call` bertipe lewat serde biasa dan gagal, `stop_everything` menelan error itu dan tidak menghentikan apa pun, sehingga `stackly-fake-server` masih hidup saat tabel proses dibaca. Dugaan lead tentang jalur stop daemon terbantah. Fix: `typed_call` mengikuti aturan socket, tiga unit test. Gerbang lead: fmt, clippy `stacklyd` dan `xtask`, `cargo test -p xtask` 612 tanpa gagal, test itu 3 dari 3, `provider_conformance` 22, `check-deps`. Kesalahan lead yang membuat regresi ini baru terlihat di gerbang akhir: suite `xtask` dikeluarkan dari gerbang per merge sesudah gerbang pertama karena dua test flaky-nya; aturan baru di root `AGENTS.md` (perubahan `crates/protocol` menjalankan `stackly-cli`, `xtask`, StacklyUI, `build-app`). Catatan debugger, tidak dikerjakan: `stop_everything` masih menelan error preview dan stop all tanpa jejak; layak dicatat ke `cleanup.refused`. | `lead` |
+| `2026-11-14` | `/sync` rentang `006ca4b0..15f73295` dijalankan lead (mode branch): root `AGENTS.md` mendapat tiga baris Commands (`stackly env ...`, test environment, test native environment), tujuh aturan environment (manifest dan YAML, validate dan plan read only, lock dan override, operasi pengatur dan anak, lease dan `expectedStopInstanceIds`, `LeaseCheck` dan override, cache keanggotaan), satu kalimat Tooling tentang gerbang perubahan protokol, dan satu baris alat evidence; `apps/macos/AGENTS.md` mendapat baris `Environments/` dan empat spec terkait. Sepuluh baris Follow-up dicentang dengan path kode: empat baris `/sync` spec 0044 sampai 0047, sentinel test native spec 0047, spec 0011 (export lewat `Redactor`), spec 0013 (Environments), spec 0016 (dua baris onboarding), spec 0022 (kolom dan seksi Environment). Scope dan status spec sudah diselaraskan lead per gerbang, tidak ada yang diubah `/sync`; tidak ada centang yang ditolak. Tidak ada dependency baru, jadi penemuan Agent Skill dilewati. Graph: `graphify update .` (kode); ekstraksi semantik dokumen spec scope ini tetap di antrean `--update`, tidak dijalankan tanpa permintaan user. | `lead` |
 
 ## Keputusan delegasi
 
@@ -171,7 +173,7 @@ Keputusan spec yang diambil dari opsi rekomendasi atas nama user (SKILL.md bagia
 
 
 
-- Gerbang akhir merah pada `xtask` `provider_test` `ctrl_c_ends_a_run_with_an_interrupted_report_exit_130_and_no_root` (3 dari 3): proses `stackly-fake-server` tertinggal saat cleanup run yang terputus. Dibuka oleh `dbg-xtask-ctrl-c`. Menahan penutupan dan push.
+- Tidak ada blocker kode. Terbuka untuk user: lima langkah manual `NOT_RUN` (`F44-1`, `F44-2`, `F45-1`, `F46-1`, `F47-1`) dan nilai `N1` di `08-environment-proyek.manual.md`; AC-6 spec 0046 (install runtime nyata sebagai operasi anak lewat daemon) `BLOCKED` karena unduhan, tercakup `F46-1`.
 
 ## Dicentang pada wave ini
 
@@ -204,4 +206,73 @@ Keputusan spec yang diambil dari opsi rekomendasi atas nama user (SKILL.md bagia
 
 ## Riwayat wave
 
+- Wave `1` (`2026-11-13` sampai `2026-11-14`, hash awal `006ca4b0`): satu wave menutup seluruh scope. Selesai: keempat fitur (44 sampai 47) `done`, 30 kotak dicentang, spec 0044 sampai 0047 `Accepted`, protokol 4.1 → 4.6 (4.2 manifest, 4.3 lock, 4.4 Up, 4.5 Down, 4.6 override), migrasi `0014` dan `0015`, evidence native Up dan Down ERP dari cache. Terbuka: lima langkah manual `NOT_RUN` dan `N1` (owner user), AC-6 spec 0046 `BLOCKED` (unduhan). Blocker: tidak ada. Kotak di scope lain yang terbuka karena merge wave ini: tidak ada yang dicentang; Follow-up spec 0011, 0013, 0016, 0022 untuk fitur 44 sampai 47 tertutup. Keputusan bertanda `berat` (rinci di tabel Keputusan delegasi): identitas dan pendaftaran environment, snapshot service di registry, `instanceRef`, perbedaan manifest hanya dilaporkan (0044); anchor dan alias YAML diterima dan anggaran expand menghitung byte string (0044, 0009); arti `env export`, lock bukan sumber trust, lock dipakai tanpa `--locked`, override storage (0045); Up sebagai pengatur dengan anak, lease bersama member, tidak resumable, tanpa rollback (0046) dan perubahan spec 0007; Down sebagai pengatur, lease dilepas sebelum stop, guard di commit stop, tidak resumable (0047); badge operasi tanpa anak (0013).
+
 ## Penutupan
+
+- **Semua branch hijau di-merge:** `2026-11-14`; `git branch --no-merged main` kosong (empat branch sesi dipakai ulang sepanjang wave dan seluruhnya sudah di `main`)
+- **Merge** (commit merge ke `main`, terbaru di atas; merge `main` ke branch sesi tidak dicantumkan):
+  - `15f73295` merge: the conformance harness decodes calls without params as the socket does (dbg-xtask-ctrl-c)
+  - `ba48cc9d` merge: the down timeout test waits for the instance to be at rest (dbg-f47-timeout)
+  - `10b9a72c` merge: full verify of spec 0047, automated part PASS (chk-f47-verify)
+  - `f95b2c64` merge: two old test races in the supervisor suite made deterministic (dbg-f47-reconcile)
+  - `5fad9324` merge: F47 tests and evidence, rounds 1 and 2, sentinel data across down and up (tst-f47-test)
+  - `c213e418` merge: F47 app fix, plural wording of the port sheet warning (dev-f47-app-fix)
+  - `5067fe4f` merge: specs 0013, 0022, 0044 to 0047, 0068 aligned with the build of features 44 to 47 (arc-update-end)
+  - `653714a1` merge: verify notes for spec 0047 milestone 4, automated part PASS (chk-f47-m4)
+  - `c125513c` merge: F47 CLI fix, stop --all names the instances an environment holds (dev-f47-cli-fix)
+  - `8e24b710` merge: verify notes for spec 0047 milestone 3, PASS with native CLI probe (chk-f47-m3)
+  - `a1cefc77` merge: F47 milestone 4, down, lease and override in the app, native ERP down evidence (dev-f47-m4)
+  - `be6efa46` merge: F47 milestone 3, stackly env down, lease line, --override-leases (dev-f47-m3)
+  - `bbb835ef` merge: verify notes for spec 0047 milestone 2, PASS (chk-f47-m2)
+  - `ec16d085` merge: F46 tests and evidence, 25 new tests, native CLI up run (tst-f46-test)
+  - `6a41187d` merge: F47 milestone 2, lease override for stop all, agent off and endpoint changes, protocol 4.6, three fixes (dev-f47-m2)
+  - `bb0c38f5` merge: full verify of spec 0046, automated part PASS (chk-f46-verify)
+  - `8a14e8b3` merge: F45 tests and fixture evidence, 24 new tests (tst-f45-test)
+  - `2c5ae63a` merge: verify notes for spec 0046 milestone 3, PASS with native CLI probe (chk-f46-m3)
+  - `eeb71020` merge: verify notes, spec 0046 milestone 2 PASS, spec 0047 steps 3 to 5 PASS, full verify of spec 0045 (checker)
+  - `038ce547` merge: F46 milestone 3, stackly env up and env status (dev-f46-m3)
+  - `31b25de2` merge: F47 steps 3 to 5, environment down in the daemon, protocol 4.5, seven verify and spec fixes (dev-f47-m1-s3)
+  - `134bcdee` merge: verify notes, spec 0045 milestone 2 PASS, spec 0046 milestone 4 findings closed (checker)
+  - `ee6f2594` merge: F45 milestone 2, stackly env lock, plan --locked, export, four F44 CLI fixes (dev-f45-m2)
+  - `071b55d8` merge: F46 app verify fixes, reload rule for environment operations and children (dev-f46-m4)
+  - `5574f647` merge: verify notes for spec 0046 milestone 4, automated part PASS with one medium finding (chk-f46-m4)
+  - `098b174a` merge: F46 milestone 4, environment up in the app, native ERP up evidence (dev-f46-m4)
+  - `c8f3fe7a` merge: verify notes for spec 0046 milestone 2, narrow FAIL on AC-15 and AC-10 (chk-f46-m2)
+  - `efefb6bb` merge: main 7ccd58fb (protocol 4.4) into spec 0045 milestone 2
+  - `7ccd58fb` merge: F46 milestone 2, environment up in the daemon, protocol 4.4 (dev-f46-m2)
+  - `ee1edf52` merge: evidence records of Swift tests carry repo relative paths, evidence check refuses absolute ones (dev-evidence-path)
+  - `d64f36c4` merge: verify notes for spec 0045 milestone 3, automated part PASS (chk-f45-m3)
+  - `94e34315` merge: F45 milestone 3, lock and local override in the app, two F44 snapshots (dev-f45-m3)
+  - `78051ffe` merge: spec 0044 single instance provider rule, spec 0045 override and lock state clarifications (arc-update-44c)
+  - `1d5e9331` merge: F44 tests and fixture evidence, 33 new tests (tst-f44-test)
+  - `36b338f0` merge: verify notes for spec 0045 milestone 1, PASS (chk-f45-m1)
+  - `a37ee6f0` merge: F45 milestone 1, lock, local override, export, protocol 4.3 (dev-f45-m1)
+  - `4c6c0b45` merge: main into spec 0045 milestone 1, the loader that accepts anchors and aliases
+  - `f648299b` merge: full verify of spec 0044, automated part PASS (chk-f44-verify)
+  - `f8cf4c19` merge: verify notes, spec 0044 AC-1 PASS, spec 0047 steps 1 and 2 PASS (checker)
+  - `98ae4914` merge: F44 YAML loader accepts anchors and aliases, string bytes count toward the expand budget (dev-f44-yaml)
+  - `f4b19921` merge: F47 steps 1 and 2, EnvironmentDown policy, begin_down, leases_of_environment, guarded stop (dev-f47-m1-s1)
+  - `97f97475` merge: spec 0044 accepts YAML anchors and aliases, string bytes count toward the expand budget, specs 0045 and 0009 aligned (arc-update-44b)
+  - `015f5c04` merge: verify notes, spec 0044 milestones 1 and 3 recheck, spec 0046 milestone 1 PASS (checker)
+  - `be9ff7a3` docs(scope): log F44 fixes, F46 milestone 1 gate, F45 and F47 build start
+  - `f01b3672` merge: F44 conservative anchor and alias scan (dev-f44-fix)
+  - `75784ccc` merge: F46 milestone 1, coordinator and child operations, migration 0015, environment binding, F44 updatedAt fix (dev-f46-m1)
+  - `77d9ed02` merge: F44 verify fixes, retained members, alias scan, file name case, selector messages (dev-f44-fix)
+  - `c0680777` merge: verify notes for spec 0044 milestone 3, automated part PASS (chk-f44-m3)
+  - `064f4ff6` merge: verify notes for spec 0044 milestone 2, PASS (chk-f44-m2)
+  - `dfd1f3c6` merge: F44 milestone 3, Environments page, plan sheet, sidebar, Overview and Instances (dev-f44-m3)
+  - `fbc41abb` merge: verify notes for spec 0044 milestone 1, 31 of 33 steps (chk-f44-m1)
+  - `c0005bad` merge: F44 milestone 2, stackly env validate, plan, import, list, remove (dev-f44-m2)
+  - `fa0eedcb` merge: F44 milestone 1 step 5, env handlers, import and remove operations, membership cache (dev-f44-m1-s5)
+  - `5ceec591` merge: spec updates for features 44 to 47 across 25 specs (arc-update-all)
+  - `ad0ac677` merge: F44 milestone 1 steps 1 to 4, environment manifest, validate, plan, protocol 4.2 (dev-f44-m1-s1)
+  - `f5660970` merge: main into arc-f44-spec (spec 0044 update, specs 0045 to 0047)
+  - `433a27c4` merge: spec 0047 env down, shared instance and lease (arc-f47-spec)
+  - `cb189738` merge: spec 0007 update for coordinator and child operations (arc-update-07)
+  - `e01e458f` merge: spec 0044 update, plan digest and uninitialized members (arc-update-44)
+  - `d413980b` merge: spec 0046 env up and dependency graph (arc-f46-spec)
+  - `b428b417` merge: spec 0045 lockfile and local overrides (arc-f45-spec)
+  - `075c262e` merge: spec 0044 environment manifest validate and plan (arc-f44-spec)
+- **Document:** tidak ada (keempat fitur tanpa tag `· GA`, tanpa kotak `Document it`)
+- **/sync:** `2026-11-14`, rentang `006ca4b0..15f73295`, `AGENTS.md`, `apps/macos/AGENTS.md`, sepuluh baris Follow-up di spec 0011, 0013, 0016, 0022, 0044 sampai 0047; tidak ada centang yang ditolak dari `/sync`

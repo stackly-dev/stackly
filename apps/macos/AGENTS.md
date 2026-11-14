@@ -19,6 +19,7 @@ The native macOS GUI: the `Stackly` app target plus the local `StacklyUI` packag
 | `Packages/StacklyUI/Sources/StacklyUI/Instances/Logs/`, `Instances/Metrics/` | Logs tab with `InstanceLogsModel` (spec 0027) and Metrics tab with `InstanceMetricsModel`, Swift Charts graph, and process list (spec 0028) |
 | `Packages/StacklyUI/Sources/StacklyUI/Instances/InstanceLifecycleActions.swift` | Which start, stop, restart, reload, and force stop actions an instance offers, from its capabilities (spec 0026) |
 | `Packages/StacklyUI/Sources/StacklyUI/OpenIn/` | Open In menu from the provider's `openWith` actions, behind the `AppLocator` and `WorkspaceOpener` ports (spec 0070) |
+| `Packages/StacklyUI/Sources/StacklyUI/Environments/` | Environments list and detail, plan sheet, lock and local override rows, Up and Down with their banners and confirmations, lease rows: `EnvironmentStore`, `EnvironmentDetailModel`, `EnvironmentPlanPresenter`, `EnvironmentDownModel`, and every string in `EnvironmentCopy.swift` and its siblings (specs 0044 to 0047) |
 | `Packages/StacklyUI/Sources/StacklyUI/MenuBar/`, `Notifications/` | `MenuBarModel` and popover with Stop All (spec 0032), and notifications behind `NotificationPosting` (spec 0032 AC-22) |
 | `Packages/StacklyUI/Sources/StacklyUI/Settings/` | Settings window tabs, daemon settings and storage locations, startup rows, and the planned daemon restart (specs 0030, 0031, 0032) |
 | `Packages/StacklyUI/Sources/StacklyUI/Connection/` | `DaemonModel`, `ResourceStore`, `ShellSync`, `ShellRuntime`, and `MutationPath`, the only way a screen reads or mutates (spec 0013) |
@@ -100,6 +101,10 @@ MCP servers: XcodeBuildMCP (recommended)
 - [0033 Crash loop dan error start](../../docs/specs/0033-crash-loop-error-start/index.md)
 - [0034 Doctor dan diagnostic bundle](../../docs/specs/0034-doctor-diagnostic-bundle/index.md)
 - [0035 Operations, activity, dan audit](../../docs/specs/0035-operations-activity-audit/index.md)
+- [0044 Manifest environment: validate dan plan](../../docs/specs/0044-manifest-environment-validate-plan/index.md)
+- [0045 Lockfile dan override lokal](../../docs/specs/0045-lockfile-override-lokal/index.md)
+- [0046 Env up dan dependency graph](../../docs/specs/0046-env-up-dependency-graph/index.md)
+- [0047 Env down, shared instance, dan lease](../../docs/specs/0047-env-down-shared-instance-lease/index.md)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
 
