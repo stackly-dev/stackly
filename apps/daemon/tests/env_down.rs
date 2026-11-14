@@ -622,6 +622,14 @@ async fn a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finish
     assert_eq!(data_files(&site, db), data_before);
 
     shutdown_server(port);
+    // The exit moves the instance from the stop set to the idle one. A
+    // preview taken while it still reads `stopping` no longer matches by
+    // the time `env.down` runs, and the daemon rightly refuses
+    // `env.down_changed`: wait until nothing changes any more.
+    wait_summary(&api, db, "the process is gone", |summary| {
+        summary.lifecycle == InstanceLifecycle::Stopped
+    })
+    .await;
     let (seen, reply) = down(&api, shop.environment_id).await;
     let done = api.wait_final(reply.operation.operation.id).await;
     assert_eq!(
