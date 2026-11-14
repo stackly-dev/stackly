@@ -25,8 +25,8 @@ Langkah Build plan 1 dan 2 sudah dibangun: kebijakan `environment_down`, `Enviro
 - [x] `cargo test -p stackly-storage --test open journal` → `the_resumable_kinds_of_migration_2_match_the_domain` lulus: migrasi 2 membekukan `environment_down` resumable, dan journal menyimpan flag saat dibuat → AC-10
 - [x] `cargo test -p stackly-storage` dan `cargo test -p stackly-testkit` → `registry_conformance` lulus pada SQLite dan fake, termasuk lease environment lintas instance urut `acquired_at`, yang `Unreleased` tanpa yang `released`, environment lain tidak ikut, environment tak dikenal kosong, dan baca yang sama dari dalam guard → AC-4
 - [x] `cargo test -p stackly-core --test supervisor_start guarded_stop` → 13 test lulus: Down pada instance yang dipegang environment lain selesai `succeeded` dengan item `partial` `skipped` `env.instance_in_use`, tanpa sinyal, tanpa tulisan, lease tetap `active`, dan audit `kept: true`; Down pada instance yang hanya dipegang lease nya sendiri menghentikannya dan melepas lease itu; Down pada instance yang kamu nyalakan sendiri tetap jalan; stop klien tanpa override ditolak `supervisor.stop_requires_override` dengan item `environment` ber `environmentId`; dengan override berhenti, lease tetap `active`, audit `overriddenEnvironments`; lease yang dicatat sesudah cek awal tetap menolak di guard tanpa menghentikan apa pun; stop klien pada instance yang diam tidak meminta override dan lease `startup` yang di suppress guard menerbitkan event autostart; Down `kept` pada instance `stopping` yang prosesnya sudah pergi tetap menjadi `stopped` tanpa menulis desired; instance `recovering` yang Down nya `kept` atau yang stop nya ditolak guard tetap mendapat respawn; restart tidak meminta override; langkah Stop All melewati instance yang diambil environment sesudah pilihan → AC-5, AC-11 (guard), AC-13, AC-14 (restart), AC-16 (guard)
-- [ ] `cargo test -p stackly-core --no-fail-fast` → semua test stop, restart, cancel start, Stop All, force stop, crash dan respawn, handover, dan wake yang ada lulus tanpa perubahan assertion → AC-5, AC-13, AC-14
-- [ ] `cargo test -p stacklyd --no-fail-fast` → lulus; precheck `instance.stop` menolak dengan item `environment` dari `environment_holders` → AC-13
+- [x] `cargo test -p stackly-core --no-fail-fast` → semua test stop, restart, cancel start, Stop All, force stop, crash dan respawn, handover, dan wake yang ada lulus tanpa perubahan assertion → AC-5, AC-13, AC-14
+- [x] `cargo test -p stacklyd --no-fail-fast` → lulus; precheck `instance.stop` menolak dengan item `environment` dari `environment_holders` → AC-13
 - [x] `cargo xtask check-deps`, `cargo xtask evidence check`, dan `cargo xtask codegen --check` → lulus tanpa perubahan file hasil generate
 - [x] `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → exit 0
 
@@ -131,8 +131,8 @@ Langkah Build plan 6: `StopAllOptions` di `stop_all::select`, `override_leases` 
 - [x] `cargo test -p stackly-core --test stop_all_select` → 18 lulus; `the_override_moves_an_instance_an_environment_holds_from_skipped_to_stop` memeriksa tabel aturan 6 dengan override true dan false, aturan 1 sampai 5 tetap, `demand` memuat `environment`, `environments` satu entri per environment; lease `released` tidak dihitung → AC-16
 - [x] `cargo test -p stackly-core --test supervisor_start guarded_stop` → 18 lulus; langkah Stop All dengan override menghentikan instance ber lease (juga lease yang dicatat sesudah pilihan), lease tetap `active`; ganti port yang bertemu lease di guard gagal `instance.endpoints_require_override` dengan item `environment` tanpa revision baru; dengan override berjalan dan audit `overriddenEnvironments` = `shop`; apply config pada instance ber lease tidak meminta override → AC-14, AC-15, AC-16
 - [x] `cargo test -p stacklyd --test supervisor lease_override` → 5 lulus: preview tanpa dan dengan override (skip, `environments`, `affectedEnvironments`), `expectedInstanceIds` dari preview override tanpa override ditolak `instance.stop_all_changed` tanpa operasi, Stop All dengan override menghentikan keduanya dan `leaseActive` tetap; Stop All tanpa override melewati instance ber lease; `agent_off` dengan override menghentikan semuanya dan daemon keluar; `daemon.shutdown` lewat socket membawa `overrideLeases` ke `agent_off`; ganti port tanpa override ditolak dengan `count`, hint, dan item, `dryRun` membalas `leases`, permintaan sama dengan sekarang `unchanged`, dengan override berjalan dan audit memuat nama environment → AC-15, AC-16, AC-17
-- [ ] `cargo test -p stackly-core --no-fail-fast` dan `cargo test -p stacklyd --no-fail-fast` → lulus; test stop, restart, dan Stop All lama tanpa perubahan assertion (perubahan test lama hanya argumen `StopAllOptions::default()` di `stop_all_select.rs`, field default baru di struct literal, dan `InstancePreviewStopAll(Default::default())`) → AC-14
-- [ ] `cargo test -p stackly-cli --no-fail-fast`, `-p stackly-domain`, `-p stackly-storage`, `-p stackly-testkit` → lulus
+- [x] `cargo test -p stackly-core --no-fail-fast` dan `cargo test -p stacklyd --no-fail-fast` → lulus; test stop, restart, dan Stop All lama tanpa perubahan assertion (perubahan test lama hanya argumen `StopAllOptions::default()` di `stop_all_select.rs`, field default baru di struct literal, dan `InstancePreviewStopAll(Default::default())`) → AC-14
+- [x] `cargo test -p stackly-cli --no-fail-fast`, `-p stackly-domain`, `-p stackly-storage`, `-p stackly-testkit` → lulus
 - [x] `swift test --package-path clients/swift` dan `swift build --package-path apps/macos/Packages/StacklyUI --build-tests` → lulus; perubahan Swift hanya nilai bawaan `nil` untuk field baru dan versi 4.6 di `ContractTests` → AC-25
 - [x] `cargo xtask check-deps`, `cargo xtask evidence check`, `cargo xtask codegen --check`, `cargo xtask fuzz seed` (tanpa diff), dan `cargo check --target aarch64-pc-windows-msvc -p stackly-domain -p stackly-platform -p stackly-protocol -p stackly-core` → lulus
 
@@ -194,9 +194,9 @@ Langkah Build plan 7: `stackly env down` dengan preview ke stderr, `env.down` de
 - [x] `cargo test -p stackly-cli --test env status` → golden `env_status.txt` memuat `lease: held on 1 instance since 2026-11-13T09:00:00.000Z` → AC-22
 - [x] `cargo test -p stackly-cli --test instance override_leases` → 6 lulus: stop ditolak exit 3 dengan baris dan dua hint (JSON tanpa baris), stop dengan override `--wait` mengirim `overrideLeases` true dan mencetak environment yang tidak lengkap, `--force` dengan `--override-leases` exit 2, `stop --all` dengan dan tanpa override (preview dan stop membawa nilainya, baris `Used by erp`, `affects erp (1 instance)`, hint flag), `endpoint set` ditolak exit 3 dengan hint perintah lengkap lalu dengan override mengirim `overrideLeases` true → AC-19
 - [x] `cargo test -p stackly-cli --bin stackly -- env::down env::status instance::lease instance::stop daemon::uninstall` → lulus, termasuk `override_leases_reaches_the_preview_and_agent_off_and_names_the_environments` dan hint lease pada uninstall yang diblokir → AC-18, AC-19, AC-22
-- [ ] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden lama yang berubah hanya `env_status.txt` (baris `lease:`)
+- [x] `cargo test -p stackly-cli --no-fail-fast` → lulus; golden lama yang berubah hanya `env_status.txt` (baris `lease:`)
 - [x] `cargo clippy -p stackly-cli --all-targets --locked -- -D warnings`, `cargo fmt --all --check`, `cargo xtask check-deps`, `cargo xtask docs check` → lulus
-- [x] Dengan daemon nyata dan provider `fake` (seed `skeleton_seed`, dua environment yang berbagi satu instance): `stackly env up <a> --wait`, `stackly env up <b> --wait`, lalu `stackly env down <a> --wait` → stderr `keep <shared>: used by <b>`, exit 0, dan `stackly env status <b>` masih `lease: held on ...`; `stackly instance stop <shared>` → exit 3 dengan `<shared> is used by <b> (<alias>)`; `stackly instance stop <shared> --override-leases --wait` → "<shared> stopped. <b> is no longer complete." → AC-18, AC-19, AC-22
+- [x] Native, dengan binary `stackly` dan `stacklyd` di root sementara dan runtime NATS dari cache runtime xtask tanpa unduhan (binary daemon tidak mengenal `testing/fake` di manifest, jadi provider `fake` tidak bisa dipakai di sini; runtime dipasang dari cache lebih dulu, seperti `Site::open(Serve::Binary)` di `apps/daemon/tests/nats/harness.rs`): dua folder manifest, alpha dengan `official/nats` untuk `bus` dan `edge` (`edge` bergantung pada `bus`) dan beta dengan `instanceRef: alpha-bus`; `stackly env up ./alpha --wait`, `stackly env up ./beta --wait`, lalu `stackly env down ./alpha --wait` → stderr `stop alpha-edge` dan `keep alpha-bus: used by beta`, stdout "Down. 1 stopped, 1 kept running.", exit 0, dan `stackly env status beta` masih `lease: held on 1 instance since …`; `stackly instance stop alpha-bus` → exit 3 dengan `alpha-bus is used by beta (bus)`; `stackly instance stop alpha-bus --override-leases --wait` → "alpha-bus stopped. beta is no longer complete."; tanpa artefak di cache: `BLOCKED`, `owner: user` → AC-18, AC-19, AC-22
 
 ### Catatan `/check verify` 2026-11-14 (sesi `chk-f47-m3`, kode `fe88da0b`)
 
@@ -273,8 +273,8 @@ Langkah GUI nyata ini hanya dijalankan kamu. Prasyarat: `cargo build -p stacklyd
 - [x] `swift test --package-path clients/swift --filter DaemonRestartClientTests` → `overrideLeases` true sampai di `instance.preview_stop_all`, `instance.stop_all`, dan `daemon.shutdown` `agent_off` → AC-24
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "EnvironmentDownSnapshotTests|EnvironmentLeaseSnapshotTests|EnvironmentOverrideSnapshotTests|EnvironmentUpToolbarSnapshotTests|MenuBarSnapshotTests"` → snapshot terang, gelap, dan sempit cocok: halaman saat Down berjalan, daftar "Bringing down…", Operations dengan Down Partial dan anak bersarang, baris Lease, inspector "Shared · lease", dan toolbar Validate, Down, Up… (alasan hanya tooltip, seperti toolbar asli), sheet port "Change Anyway", dan popover Stop All dengan `env-db` "Used by erp-development" → AC-20, AC-21, AC-22, AC-23, AC-24
 - [x] `swift test --package-path apps/macos/Packages/StacklyUI --filter "FixtureScenarioTests|FixtureShellTests"` → skenario `environment-bringing-down` ada dan tenang di presence-nya → AC-25
-- [ ] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
-- [ ] `cargo xtask build-app` → BUILD SUCCEEDED
+- [x] `swift test --package-path apps/macos/Packages/StacklyUI` → seluruh suite lulus
+- [x] `cargo xtask build-app` → BUILD SUCCEEDED
 - [x] `cargo xtask evidence run --kind native -- cargo test -p stacklyd --test env_down_native -- --ignored --test-threads=1` dari `HEAD` yang bersih → `PASS` dari cache runtime xtask (Up ERP enam instance, preview menghentikan enam dan menjaga nol, Down `succeeded`, enam `stopped` dengan folder data dan jumlah file data yang sama, lease 6 menjadi 0, Up kedua membawa enam instance yang sama ke `ready`), atau `BLOCKED` `owner: user` tanpa artefak; run developer `evidence/environment/01a1d6b2-8137-7226-821a-0bcd1d86b5ba` PASS (data ClickHouse `status`, `*.pid`, `*.lock`, `*.sock`, dan tablespace sementara MySQL dianggap file proses yang dihapus stop normal) → AC-26
 - [x] `cargo xtask evidence run --kind fixture -- cargo test -p stacklyd --test env_down` → record fixture `PASS` untuk AC-5, AC-7, AC-11; run developer `evidence/environment/01a1d6b4-6089-722c-8443-30f3142c6828` 7 PASS → AC-26
 - [x] `cargo xtask evidence check` → lulus
@@ -320,3 +320,79 @@ Temuan, rendah:
 - AC-24 · popover Stop All dan konfirmasi Turn Off dengan `overrideLeases` true, "Used by {environment}", kalimat environment terdampak (langkah 9)
 - AC-25 · skenario fixture `environment-bringing-down` (langkah 8)
 - AC-26 · test native `env_down_native.rs` dan record fixture `env_down` (langkah 10)
+
+## Verify penuh 2026-11-14
+
+Verdict fitur 47: **PASS untuk semua bagian otomatis** AC-1 sampai AC-26. `Build it` dan `Verify it` siap dicentang dengan sisa yang tercatat: GUI nyata `NOT_RUN` (13 langkah `### UI / manual` Milestone 4, `F47-1`, `owner: user`). Kode yang diperiksa `66bcb4e6` (protokol 4.6).
+
+**Yang dicek ulang sesudah merge terakhir** (langkah `[x]` lama tidak diulang satu per satu): `stackly-core --lib environment::down` 18, `--test environment` 132, `--test stop_all_select` 18, `--test supervisor_start guarded_stop` 18; `stackly-protocol` lulus; `stacklyd --test env_down` 7 dan `--test supervisor lease_override` 5; `stackly-cli --test env down::` 7, `--test instance override_leases` 7, test unit 26; `codegen --check` bersih dengan kontrak 4.6; `check-deps` dan `evidence check` lulus; `swift test --filter 'EnvironmentDown|EnvironmentLeaseTests|EnvironmentOverrideTests'` 30 lulus. Test native `env_down_native` terakhir dijalankan checker pada `a1cefc77` (lulus 92,36 detik); sesudah itu hanya kode CLI yang berubah.
+
+**Fix CLI `c125513c`.** `stackly instance stop --all` kini menamai tiap instance yang dipegang environment (`orders-db · won’t stop: used by erp`), menulis "Nothing was stopped." saat semuanya dilewati, dan tetap "Nothing is running." hanya saat memang tidak ada yang berjalan; empat golden baru dan test `override_leases` (7) lulus. Temuan 1 Milestone 3 tertutup.
+
+**Kotak suite penuh** dicentang atas dasar gerbang lead, tidak diulang checker: Milestone 1 dan 2 (`6a41187d`: suite kecil 1140, `stackly-core` 1881, `stacklyd` 778, `stackly-cli` 678), Milestone 3 (`be6efa46`: `stackly-cli` 704; `c125513c`: 706), dan Milestone 4 (`a1cefc77`: StacklyUI penuh dan `build-app`). Langkah terakhir Commands Milestone 3 ditulis ulang menjadi langkah native yang dijalankan checker.
+
+| AC | Hasil | Bukti utama |
+| --- | --- | --- |
+| AC-1 | PASS | `select` enam aturan, dipakai preview, precheck, driver, dan sapuan; probe preview |
+| AC-2 | PASS | `env.down_changed` tanpa tulisan; Down tanpa manifest; Down tanpa yang dihentikan |
+| AC-3 | PASS | pengatur, `BusyPolicy::Queue`, Down membatalkan Up (test daemon) |
+| AC-4 | PASS | guard `release`; lease environment lain tetap `active` (probe) |
+| AC-5 | PASS | PRD AC-022: PID sama dan `ready` sesudah Down pertama (probe `fake` dan native NATS) |
+| AC-6 | PASS | urutan terbalik (`order`, probe) |
+| AC-7 | PASS | byte file dan baris registry sama sebelum dan sesudah (probe) |
+| AC-8 | PASS | `env.down_incomplete`, sapuan akhir, `left_running` (core dan daemon) |
+| AC-9 | PASS | test cancel core |
+| AC-10 | PASS | restart daemon di tengah Down, diulang 10 kali |
+| AC-11 | PASS | Up dan Down serentak 50 putaran, diulang 4 kali |
+| AC-12 | PASS | `env.get.lease`, `leaseActive`, klien putus |
+| AC-13 | PASS | penolakan dengan `name`, `alias`, `ownership`; override; guard |
+| AC-14 | PASS | restart dan reload tanpa override, lease tetap (probe) |
+| AC-15 | PASS | dry run dengan `leases`, penolakan, override (probe) |
+| AC-16 | PASS | preview dan Stop All dengan dan tanpa override; `instance.stop_all_changed` (probe) |
+| AC-17 | PASS | `agent_off` dengan override lewat socket (test developer) |
+| AC-18 | PASS | `stackly env down`: test dan probe native binary CLI |
+| AC-19 | PASS | flag `--override-leases` di stop, stop all, endpoint set (probe native); `daemon uninstall` lewat test unit saja |
+| AC-20 sampai AC-24 | PASS (otomatis) | Milestone 4: test, snapshot, fixture; GUI nyata `NOT_RUN` |
+| AC-25 | PASS | protokol 4.5 dan 4.6, fixture, skenario `environment-bringing-down` |
+| AC-26 | PASS dengan catatan | test native dijalankan ulang, evidence sah, mutasi hapus file tertangkap; lihat temuan 1 dan 2 |
+
+**Trace.** REQ-022: AC-2, AC-4, AC-5, AC-6, AC-7, AC-8 lulus. REQ-028: AC-18, AC-19 lulus. BR-006: AC-7, AC-26 lulus. BR-014: AC-5, AC-11 lulus. BR-015: AC-13, AC-15, AC-16, AC-17 lulus; AC-23, AC-24 lulus otomatis dan GUI nya `NOT_RUN`. VAL-014: AC-7 lulus. AC-022: AC-4, AC-5 lulus. AC-073 bagian Down: AC-11 lulus. PRD 13.2: AC-4, AC-12, AC-13 lulus.
+
+**Done when**, satu per satu:
+
+| Kalimat | Hasil |
+| --- | --- |
+| Saat environment A down, lease B tetap ada dan instance tetap ready | terbukti (test fixture, probe `fake`, probe native NATS: PID sama, koneksi baru tetap dijawab) |
+| Up A dan Down B bersamaan menghasilkan lease konsisten tanpa create ganda | terbukti (test 50 putaran, empat kali) |
+| Lease per identitas environment, menutup CLI atau GUI tidak melepas lease | terbukti (klien putus di tengah Down, Ctrl-C di tengah Up, rotasi sesi, restart daemon) |
+| Stop Services dari menu bar menampilkan lease environment yang terdampak | terbukti di daemon (`environments`, `affectedEnvironments`) dan di snapshot popover; GUI nyata `NOT_RUN` |
+| Ganti port pada instance yang dipinjam ditolak atau meminta override dengan dampak yang jelas | terbukti di daemon dan CLI; sheet port lewat test dan snapshot, GUI nyata `NOT_RUN` |
+| `stackly env down` tidak pernah menghapus data atau runtime | terbukti (byte file sama di probe `fake`, ukuran file data dan runtime sama di probe native CLI, test native ERP) |
+| Konfirmasi Down menjelaskan instance yang tetap jalan, baris Lease mengikuti mockup | terbukti di CLI (`keep <instance>: used by …` dan `started by you`) dan di test serta snapshot app (teks baris Lease sama dengan mockup); GUI nyata `NOT_RUN` |
+
+**Sisa `NOT_RUN` dan yang tidak dijalankan.**
+
+- `NOT_RUN`, `owner: user`: 13 langkah `### UI / manual` Milestone 4 (`F47-1`), termasuk tombol default di dialog destructive.
+- Tidak dijalankan: `stackly daemon uninstall --override-leases` terhadap sistem nyata (menyentuh LaunchAgent pengguna; hanya test unit), Ctrl-C di tengah `stackly env down --wait`, `--wait` yang kehabisan `--timeout`, dan probe native `agent_off` dengan override.
+
+**Temuan rendah yang masih terbuka.**
+
+1. AC-26 menulis "isi yang sama jumlah file nya"; test native memeriksa "tidak ada file data yang hilang" dengan pengecualian file proses. Teks AC perlu diselaraskan.
+2. Test native Down membandingkan nama file saja (file yang dikosongkan lolos), tidak menulis dan membaca data sentinel, mengecualikan file proses per nama di kedalaman mana pun untuk semua provider, dan tidak memeriksa folder runtime.
+3. Test `a_stop_that_times_out_ends_the_down_incomplete_and_the_next_down_finishes` tidak stabil: gagal 1 dari 12 kali dijalankan sendiri dan sekali di suite, dengan `env.down_changed` pada Down kedua. Sesudah `shutdown_server`, himpunan `stop` bisa berubah di antara preview dan `env.down`, dan helper test tidak mengulang. Perilaku daemon nya benar; yang perlu diperbaiki test nya (tunggu instance diam dulu, atau ulang sekali seperti CLI dan app).
+4. `leaseActive` di summary instance bisa tertinggal sebentar selama Up atau Down masih berjalan; `env.get.lease` selalu segar.
+5. `affectedEnvironments` menghitung setiap pemegang lease, sedangkan `environments` pada item hanya yang punya baris member.
+6. Sesudah Down, environment yang instance bersamanya masih jalan tampil `partially_ready` dengan `lease: none` di `stackly env status`; kartu app sudah menjelaskannya, CLI belum.
+7. Peringatan sheet port memakai bentuk tunggal juga untuk lebih dari satu environment.
+
+Tertutup sejak catatan milestone: tiga tanda `// provisional: F47`, kode `env.*` di katalog protokol, test socket precheck `instance.stop`, dan "Nothing is running." pada `stop --all`.
+
+**Celah test untuk `/test`** (lulus di probe checker atau terbaca di kode, belum dikunci test):
+
+- Native: data sentinel sebelum Down dan sesudah Up kedua; perbandingan isi atau ukuran file, bukan hanya nama; pengecualian file proses per provider; folder runtime sama sebelum dan sesudah; Down dengan instance bersama lewat binary CLI (`env up` dua folder, `env down`, `env status` dengan `lease:`, `instance stop` tanpa dan dengan `--override-leases`, `instance endpoint set`).
+- Daemon: dua Down serentak dari dua environment pada satu instance (paling banyak satu stop, satu berakhir `left_running`); cancel Down lewat socket (saat antre dan sesudah `release`); Down sesudah restart oleh pengguna (demand `manual`, `keep`); `instance.stop_all_changed` untuk himpunan preview bawaan yang dikirim dengan override; `fixed` pada port yang sedang dipakai endpoint `auto` dihitung perubahan dan `auto` ke `auto` `unchanged`; start manual dan Up sesudah stop ber override; perbandingan byte pohon file (test sekarang membandingkan ukuran).
+- CLI: Ctrl-C di tengah `env down --wait`, `--wait` yang kehabisan `--timeout` (exit 8), `--json` `preview` terhadap daemon nyata, dan `daemon uninstall --override-leases` di luar test unit.
+- App: test ujung ke ujung Down terhadap `stacklyd` asli; peringatan sheet port untuk lebih dari satu environment.
+- Stabilitas: test `a_stop_that_times_out…` (temuan 3).
+
+**Sesudah merge `main` terakhir (`ce3e43de`, penyelarasan spec akhir wave).** Merge itu hanya membawa teks spec dan log koordinasi, tidak ada kode, jadi hasil di atas tetap berlaku. Empat temuan rendah di atas kini tercatat di `index.md` sebagai perilaku yang dibangun dan tidak lagi terbuka sebagai selisih spec: temuan 1 (teks AC-26 sudah menulis "tidak ada file data yang hilang" dengan dua kelonggarannya), temuan 4 (`leaseActive` yang tertinggal selama Up atau Down berjalan), temuan 5 (`affectedEnvironments` dan `environments` yang tidak selalu sama), dan temuan 6 (status sesudah Down yang menjaga instance). Yang masih terbuka: temuan 2 (sudah menjadi butir Follow-up di `index.md`, dikerjakan tester), temuan 3 (test tidak stabil), dan temuan 7 (teks jamak sheet port).
