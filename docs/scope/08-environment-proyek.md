@@ -76,4 +76,4 @@ Down melepas lease environment dan hanya menghentikan instance yang tidak dibutu
   - [x] `stackly env down` dan flag override: `env down` dengan preview dan `--wait`, baris `lease:` di `env status`, `--override-leases` di `instance stop`, `stop --all`, `endpoint set`, dan `daemon uninstall`, golden dan binary test (spec 0047 AC-18, AC-19, AC-22 bagian CLI; build step 7; after build step 4 untuk golden; binary test needs build steps 5 dan 6; bisa paralel dengan milestone berikutnya)
   - [x] Down, lease, dan override di app: tombol Down dan konfirmasi, banner dan umpan balik, Activity, baris Lease dan "· lease", konfirmasi override untuk semua permukaan Stop, sheet port, popover Stop All dan Turn Off, snapshot, lalu evidence native dan langkah manual yang butuh mata dan tangan kamu (spec 0047 AC-20 sampai AC-24, AC-26; build steps 8 to 10; after build step 4; needs milestone app spec 0044 dan spec 0046; evidence manual needs build steps 5 dan 6)
 - [ ] Verify it: `/check verify env down, shared instance & lease`
-- [ ] Test it: `/test env down, shared instance & lease`
+- [x] Test it: `/test env down, shared instance & lease`
