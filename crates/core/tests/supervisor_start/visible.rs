@@ -151,8 +151,11 @@ async fn a_crash_records_its_time_and_exit_a_stop_in_the_pause_keeps_them_and_a_
     let crashed_at = rig.fake_now();
     rig.processes()
         .exit(spawn.pid, Some(ExitStatus::Exited(70)));
+    // The registry row and the actor's status change in two steps: wait for
+    // both, as the assertions below read both.
     wait_for("the crash is recorded", || {
         rig.instance_row(id).lifecycle() == InstanceLifecycle::Recovering
+            && rig.sup.status(id).last_failure.is_some()
     })
     .await;
 

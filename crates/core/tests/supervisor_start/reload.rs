@@ -14,7 +14,7 @@ use stackly_domain::{
 };
 use stackly_platform::{ExitStatus, ProviderSignal};
 
-use crate::common::{LOOPBACK, Rig, Spec};
+use crate::common::{LOOPBACK, Rig, Spec, spawning};
 
 fn get(port: u16, path: &str) -> String {
     let mut stream = TcpStream::connect((LOOPBACK, port)).expect("the server accepts");
@@ -78,13 +78,14 @@ async fn a_reload_renders_again_signals_hup_and_keeps_the_pid() {
         .first()
         .map(std::process::Child::id)
         .unwrap();
-    assert!(
+    let hup = {
+        let _spawning = spawning();
         Command::new("kill")
             .args(["-HUP", &server_pid.to_string()])
             .status()
             .unwrap()
-            .success()
-    );
+    };
+    assert!(hup.success());
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
         if get(port, "/config").contains("reloaded greeting") {

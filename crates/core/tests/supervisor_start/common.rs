@@ -9,7 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::{Duration, Instant};
 
 use stackly_core::operation::testing::RecordingEvents;
@@ -604,6 +604,36 @@ impl Plant {
             holds_lock: true,
         }
     }
+}
+
+/// Keeps the real child processes of this test binary apart from the tests
+/// that read an instance lock right after its holder ended.
+///
+/// A child shares every open file of this process from the moment it is
+/// created until it has exec'd, the locked handle of a fake process among
+/// them. A lock whose holder ended in that window still reads `Held` for a
+/// few milliseconds, so reconciliation rightly answers `unknown` with
+/// `data_in_use`, and a test that expects `stopped` fails under load.
+static SPAWN_GATE: RwLock<()> = RwLock::new(());
+
+/// Held around every real spawn of this test binary (the dummy server,
+/// `kill`, `touch`, and the cargo build of the dummy server), until the
+/// child has exec'd or ended.
+pub fn spawning() -> RwLockWriteGuard<'static, ()> {
+    SPAWN_GATE.write().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Held by a test from before it plants a process until it has read the
+/// instance lock for the last time: no child of this test binary is
+/// created meanwhile, so a lock that reads `Held` is held by the fake.
+pub fn no_spawns() -> RwLockReadGuard<'static, ()> {
+    SPAWN_GATE.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The dummy server binary; the first call builds it with cargo.
+fn dummy_server() -> PathBuf {
+    let _spawning = spawning();
+    fake_server::binary()
 }
 
 /// What an instance of the fake provider is made of.
@@ -1377,15 +1407,19 @@ impl Rig {
             .find_map(|arg| arg.strip_prefix("--port="))
             .and_then(|port| port.parse::<u16>().ok())
             .expect("the serve command carries its port");
-        let child = Command::new(fake_server::binary())
-            .args(&spawn.args)
-            .current_dir(&spawn.cwd)
-            .env_clear()
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("the dummy server starts");
+        let binary = dummy_server();
+        let child = {
+            let _spawning = spawning();
+            Command::new(binary)
+                .args(&spawn.args)
+                .current_dir(&spawn.cwd)
+                .env_clear()
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("the dummy server starts")
+        };
         self.servers
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -1505,7 +1539,7 @@ fn install_runtime(layout: &PreparedLayout, package: &ValidatedPackage) -> stack
     );
     fs::create_dir_all(&dir).expect("the runtime folder is made");
     let executable = dir.join("stackly-fake-server");
-    fs::copy(fake_server::binary(), &executable).expect("the dummy server is copied");
+    fs::copy(dummy_server(), &executable).expect("the dummy server is copied");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
         .expect("the executable bit is set");
     built
