@@ -160,11 +160,7 @@ impl Daemon {
         content: Option<Value>,
         key: Option<String>,
     ) -> Result<Value, Box<ErrorBody>> {
-        let frame = match content {
-            Some(content) => json!({ "type": method, "content": content }),
-            None => json!({ "type": method }),
-        };
-        let call: Call = serde_json::from_value(frame).map_err(|err| {
+        let call = typed_call(method, content).map_err(|err| {
             Box::new(harness_error(&format!(
                 "the params of {method} do not decode: {err}"
             )))
@@ -177,6 +173,22 @@ impl Daemon {
         let value = serde_json::to_value(&reply)
             .map_err(|err| Box::new(harness_error(&format!("a reply does not encode: {err}"))))?;
         Ok(value.get("content").cloned().unwrap_or(Value::Null))
+    }
+}
+
+/// The typed call of `method` with `content`.
+///
+/// Without `content` the method is read as one without params first and
+/// then with empty params, as the wire reads the absent `content` of a
+/// method whose params are optional (`decode_optional_params`). The plain
+/// decode of [`Call`] has no such rule, so a method that gains optional
+/// params would otherwise stop decoding here while it still works on the
+/// socket.
+fn typed_call(method: &str, content: Option<Value>) -> Result<Call, serde_json::Error> {
+    match content {
+        Some(content) => serde_json::from_value(json!({ "type": method, "content": content })),
+        None => serde_json::from_value(json!({ "type": method }))
+            .or_else(|_| serde_json::from_value(json!({ "type": method, "content": {} }))),
     }
 }
 
@@ -533,4 +545,30 @@ fn own_uid() -> u32 {
     std::fs::metadata(env!("CARGO_MANIFEST_DIR"))
         .map(|meta| meta.uid())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The end of run stop calls `instance.preview_stop_all` without params.
+    // When that stopped decoding (protocol 4.6 gave it optional params), the
+    // harness stopped nothing and an interrupted run left its process to
+    // the reap.
+    #[test]
+    fn a_call_without_content_decodes_for_a_method_with_optional_params() {
+        let call = typed_call("instance.preview_stop_all", None).expect("the call decodes");
+
+        assert!(matches!(call, Call::InstancePreviewStopAll(params) if !params.override_leases));
+    }
+
+    #[test]
+    fn a_call_without_content_still_decodes_for_a_method_without_params() {
+        assert!(typed_call("daemon.restart_preview", None).is_ok());
+    }
+
+    #[test]
+    fn a_call_without_content_does_not_decode_for_a_method_with_required_params() {
+        assert!(typed_call("instance.force_stop", None).is_err());
+    }
 }
